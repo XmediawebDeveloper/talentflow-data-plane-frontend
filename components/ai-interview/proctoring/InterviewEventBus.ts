@@ -36,7 +36,12 @@ export type ProctoringEventType =
   // same way every other event here works. The specific class ("cell phone",
   // "laptop", …) travels in details.object_class / details.object_label.
   | 'phone_detected'
-  | 'unauthorized_object';
+  | 'unauthorized_object'
+  // Diagnostic, NOT a violation: the object detector could not start (no
+  // WebGPU, model missing on the server, ORT unreachable). Recorded so the
+  // recruiter can tell "no phone was seen" apart from "we never looked" —
+  // otherwise a broken detector reads as a clean interview.
+  | 'object_detection_unavailable';
 
 export interface ProctoringEvent {
   id: string;
@@ -75,6 +80,8 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   background_noise: 'Excessive background noise detected. Please move to a quieter environment for a better experience.',
   phone_detected: 'A mobile phone was detected. Please put it away — phones are not allowed during this session.',
   unauthorized_object: 'An unauthorised item was detected in view. Please remove it from your workspace.',
+  // Never shown to the candidate — see BACKEND_ONLY_EVENT_TYPES in the monitor.
+  object_detection_unavailable: '',
 };
 
 // Severity mapping — Minor / Moderate / Severe
@@ -110,6 +117,8 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'minor' | 'moderate' | 'severe
   unauthorized_object:      'moderate',
   // Advisory — not a proctoring violation, just a UX nudge (AIU-67)
   background_noise:         'minor',
+  // Diagnostic only; the backend maps this to "info" so it never scores.
+  object_detection_unavailable: 'minor',
 };
 
 type Listener = (event: ProctoringEvent) => void;

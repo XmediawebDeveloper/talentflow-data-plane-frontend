@@ -110,6 +110,10 @@ interface EventMeta {
 // are informational timeline markers the backend also omits from scoring.
 export const ADVISORY_TYPES = new Set<string>([
   'background_noise', 'voice_detected', 'session_paused', 'session_resumed',
+  // Infrastructure diagnostic, never the candidate's fault — must not count
+  // against them, but must be visible so "no phone flags" isn't misread as
+  // "we checked and found nothing".
+  'object_detection_unavailable',
 ]);
 
 export const EVENT_META: Record<string, EventMeta> = {
@@ -152,6 +156,7 @@ export const EVENT_META: Record<string, EventMeta> = {
 
   // Advisory / timeline markers
   background_noise: { category: 'advisory', label: 'Background noise' },
+  object_detection_unavailable: { category: 'advisory', label: 'Phone / item detection did not run' },
   voice_detected:   { category: 'advisory', label: 'Voice activity' },
   session_paused:   { category: 'advisory', label: 'Interview paused' },
   session_resumed:  { category: 'advisory', label: 'Interview resumed' },
@@ -424,6 +429,13 @@ export function describeViolation(v: ViolationRecord): string {
       const msg = typeof d.message === 'string' && d.message ? d.message : '';
       const reason = typeof d.reason === 'string' ? d.reason : '';
       return msg || TERM_REASON[reason] || 'The candidate left the interview screen.';
+    }
+    case 'object_detection_unavailable': {
+      // details: { reason }
+      const why = typeof d.reason === 'string' && d.reason ? d.reason : 'reason not recorded';
+      return `Phone / prohibited-item detection could not start, so nothing was checked for. ` +
+        `This does not count against the candidate — but a clean result here means "not checked", ` +
+        `not "nothing found". Technical reason: ${why}`;
     }
     case 'background_noise':
       return 'A noisy environment was detected. This does not affect the result.';

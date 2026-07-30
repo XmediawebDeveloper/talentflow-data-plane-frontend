@@ -63,7 +63,13 @@ export const DETECTABLE_OBJECTS: Record<string, DetectableObjectDef> = {
     cocoLabel: 'cell phone',
     displayLabel: 'Mobile phone',
     eventType: 'phone_detected',
-    minConfidence: 0.45,
+    // Benched on a real interview frame (public/od-test.html): a phone held up
+    // to the camera scored only 0.297. The earlier 0.45 threshold is why a
+    // blatant phone produced zero flags in production. RF-DETR is a
+    // set-prediction model whose absolute scores run low; the
+    // consecutive-frame gate below is what suppresses false positives here,
+    // NOT a high score cut-off.
+    minConfidence: 0.22,
     minBoxArea: 0.0015,
     framesToConfirm: 2,
   },
@@ -71,7 +77,11 @@ export const DETECTABLE_OBJECTS: Record<string, DetectableObjectDef> = {
     cocoLabel: 'laptop',
     displayLabel: 'Second laptop or computer',
     eventType: 'unauthorized_object',
-    minConfidence: 0.55,
+    // 0.40, not 0.55: in the same bench a phone filling the frame was
+    // classified `laptop` at 0.474 — a close-up phone is a large dark
+    // rectangle, and this class is where those land. Catching it as a moderate
+    // prohibited-item flag beats missing it entirely.
+    minConfidence: 0.40,
     minBoxArea: 0.01,
     framesToConfirm: 2,
   },
@@ -79,15 +89,19 @@ export const DETECTABLE_OBJECTS: Record<string, DetectableObjectDef> = {
     cocoLabel: 'tv',
     displayLabel: 'Second screen or monitor',
     eventType: 'unauthorized_object',
-    minConfidence: 0.55,
+    // Kept higher than the rest: the bench showed `tv` firing at ~0.22 on a
+    // full-frame box covering the entire image, i.e. it doubles as this model's
+    // "background" catch-all. Below ~0.45 it is mostly noise.
+    minConfidence: 0.45,
     minBoxArea: 0.01,
-    framesToConfirm: 3, // a monitor in the background is often legitimate
+    // A monitor in the background is often legitimate, and this class is noisy.
+    framesToConfirm: 3,
   },
   book: {
     cocoLabel: 'book',
     displayLabel: 'Book or printed notes',
     eventType: 'unauthorized_object',
-    minConfidence: 0.5,
+    minConfidence: 0.35,
     minBoxArea: 0.006,
     framesToConfirm: 2,
   },
@@ -99,7 +113,7 @@ export const DETECTABLE_OBJECTS: Record<string, DetectableObjectDef> = {
     cocoLabel: 'remote',
     displayLabel: 'Handheld device (possibly a phone)',
     eventType: 'unauthorized_object',
-    minConfidence: 0.5,
+    minConfidence: 0.30,
     minBoxArea: 0.0015,
     framesToConfirm: 2,
   },

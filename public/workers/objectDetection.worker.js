@@ -72,25 +72,35 @@ const COCO_91 = [
 /**
  * Preprocessing must match the export's preprocessor_config.json exactly.
  *
- * For onnx-community/rfdetr_nano-ONNX that config is:
- *     do_rescale: true  (1/255)   do_normalize: FALSE
+ * onnx-community/rfdetr_nano-ONNX declares `do_normalize: false`, which reads
+ * as "plain [0,1] pixels". MEASUREMENT SAYS OTHERWISE: benched against a real
+ * interview frame holding a phone (public/od-test.html), ImageNet normalisation
+ * scored the phone consistently higher —
  *
- * i.e. the model wants plain [0,1] pixels — the ImageNet mean/std listed in the
- * config are inert defaults carried by the RTDetrImageProcessor class, and the
- * normalisation is folded into the exported graph. Applying mean/std here as
- * well would double-normalise the input and collapse detection quality to
- * near-zero, which is indistinguishable at a glance from "the candidate had no
- * phone" — the most dangerous possible failure mode for this feature.
+ *     rescale-only    cell phone 0.209
+ *     imagenet-norm   cell phone 0.297
  *
- * If you swap in a different export, re-read ITS preprocessor_config.json and
- * set this accordingly rather than assuming.
+ * — with no regression on the other classes. The DINOv2 backbone convention
+ * agrees. So we normalise, and the config's flag is treated as unreliable for
+ * this export.
+ *
+ * Keep this a named flag, not an inline constant: wrong preprocessing collapses
+ * detection quality to near-zero, which is indistinguishable at a glance from
+ * "the candidate had no phone" — the most dangerous failure mode this feature
+ * has. If you swap exports, re-bench with od-test.html rather than trusting
+ * either the config or this comment.
  */
-const APPLY_IMAGENET_NORM = false;
+const APPLY_IMAGENET_NORM = true;
 const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
 
 // ── State ──────────────────────────────────────────────────────────────────
-let ort = null;
+// NOT named `ort`: importScripts() evaluates the ORT bundle in this same
+// worker global scope, and that bundle declares its own global `ort`.
+// A top-level `let ort` here makes that redeclaration a hard SyntaxError
+// ("Identifier 'ort' has already been declared"), which surfaces as the ORT
+// bundle failing to load rather than as a naming clash.
+let ortLib = null;
 let session = null;
 let inputName = null;
 let inputSize = 384;
@@ -151,7 +161,7 @@ function preprocess(bitmap) {
       out[2 * area + i] = data[p + 2] / 255;  // B plane
     }
   }
-  return new ort.Tensor('float32', out, [1, 3, inputSize, inputSize]);
+  return new ortLib.Tensor('float32', out, [1, 3, inputSize, inputSize]);
 }
 
 /**
@@ -216,6 +226,40 @@ function postprocess(logits, boxes) {
   return detections;
 }
 
+/**
+ * Top-N detections of ANY class, ignoring the allowlist and the score floor.
+ *
+ * Purely diagnostic, and worth the extra pass: without it, "no violation was
+ * recorded" is indistinguishable between "the model saw nothing", "it saw the
+ * phone but scored 0.19", and "it called the phone a laptop". All three have
+ * completely different fixes, and in production we only ever get to see the log.
+ */
+function topRaw(logits, boxes, n) {
+  const [, numQueries, numClasses] = logits.dims;
+  const L = logits.data;
+  const B = boxes.data;
+  const all = [];
+  for (let q = 0; q < numQueries; q++) {
+    let bestClass = -1;
+    let bestLogit = -Infinity;
+    const base = q * numClasses;
+    for (let c = 0; c < numClasses; c++) {
+      const v = L[base + c];
+      if (v > bestLogit) { bestLogit = v; bestClass = c; }
+    }
+    const score = sigmoid(bestLogit);
+    if (score < 0.08) continue;
+    const o = q * 4;
+    all.push({
+      label: (labels && labels[bestClass]) || `id${bestClass}`,
+      score,
+      area: B[o + 2] * B[o + 3],
+    });
+  }
+  all.sort((a, b) => b.score - a.score);
+  return all.slice(0, n);
+}
+
 async function init(msg) {
   inputSize = msg.inputSize || 384;
   watched = new Set(msg.watchedLabels || []);
@@ -255,11 +299,11 @@ async function init(msg) {
     throw new Error(`Could not load onnxruntime-web. Tried:\n  ${failures.join('\n  ')}`);
   }
 
-  ort = self.ort;
+  ortLib = self.ort;
 
   // Serve the ORT .wasm/.mjs siblings from the same directory as the bundle.
-  ort.env.wasm.wasmPaths = loadedFrom.slice(0, loadedFrom.lastIndexOf('/') + 1);
-  ort.env.wasm.numThreads = 1; // WebGPU does the work; threads would only add contention
+  ortLib.env.wasm.wasmPaths = loadedFrom.slice(0, loadedFrom.lastIndexOf('/') + 1);
+  ortLib.env.wasm.numThreads = 1; // WebGPU does the work; threads would only add contention
 
   // Preflight the weights. InferenceSession.create on a 404 surfaces as an
   // opaque protobuf parse error ("failed to load model"), which reads like a
@@ -272,10 +316,33 @@ async function init(msg) {
     );
   }
 
-  session = await ort.InferenceSession.create(msg.modelUrl, {
-    executionProviders: ['webgpu'],
-    graphOptimizationLevel: 'all',
-  });
+  // fp16 weights need the WebGPU `shader-f16` device feature, which plenty of
+  // real candidate hardware lacks (Intel Gen-9 integrated graphics, for one).
+  // Without it, session creation dies with "Program Transpose requires f16 but
+  // the device does not support it" — so check up front and say so plainly
+  // instead of surfacing that as a mystery.
+  let hasF16 = false;
+  try {
+    const adapter = await self.navigator.gpu.requestAdapter();
+    hasF16 = !!adapter && adapter.features && adapter.features.has('shader-f16');
+  } catch { /* treated as unsupported */ }
+
+  try {
+    session = await ortLib.InferenceSession.create(msg.modelUrl, {
+      executionProviders: ['webgpu'],
+      graphOptimizationLevel: 'all',
+    });
+  } catch (e) {
+    const emsg = e && e.message ? e.message : String(e);
+    if (/f16|float16/i.test(emsg) && !hasF16) {
+      throw new Error(
+        'This GPU does not support shader-f16, so an fp16 model cannot run. ' +
+        'Vendor the uint8-quantized build instead: npm run fetch:od-model -- --dtype q8. ' +
+        `(underlying: ${emsg})`,
+      );
+    }
+    throw e;
+  }
   inputName = session.inputNames[0];
 
   // Prefer the model's own static input resolution when the export pins one —
@@ -296,7 +363,7 @@ async function init(msg) {
   // ms); doing it at init keeps it out of the first real detection window.
   let labelSpace = 'unknown';
   try {
-    const zeros = new ort.Tensor(
+    const zeros = new ortLib.Tensor(
       'float32', new Float32Array(3 * inputSize * inputSize), [1, 3, inputSize, inputSize],
     );
     const out = await session.run({ [inputName]: zeros });
@@ -311,7 +378,10 @@ async function init(msg) {
     labelSpace = `warmup-failed: ${e && e.message ? e.message : e}`;
   }
 
-  self.postMessage({ type: 'ready', backend: 'webgpu', inputSize, labelSpace, ortUrl: loadedFrom });
+  self.postMessage({
+    type: 'ready', backend: 'webgpu', inputSize, labelSpace,
+    ortUrl: loadedFrom, shaderF16: hasF16,
+  });
 }
 
 async function detect(msg) {
@@ -328,6 +398,9 @@ async function detect(msg) {
       type: 'detections',
       frameId: msg.frameId,
       detections,
+      // Only computed when the hook asks (it throttles to ~1 frame/30 s), so the
+      // extra pass never rides on every cycle.
+      topRaw: msg.wantDebug && logits && boxes ? topRaw(logits, boxes, 5) : null,
       inferenceMs: performance.now() - t0,
     });
   } catch (e) {

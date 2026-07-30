@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, CheckCircle, Maximize2, Monitor, Clock, KeyRound, Mail } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, CheckCircle, XCircle, Maximize2, Monitor, Clock, KeyRound, Mail } from 'lucide-react';
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
 import { toast } from 'sonner';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
@@ -43,6 +43,7 @@ type Step =
   | 'sample_practice'
   | 'fullscreen_prompt'
   | 'final_consent'    // in-fullscreen "Yes, I accept" gate shown right before the interview starts
+  | 'hide_share_bar'   // "hide the screen-share bar" step (vision-LLM verified) before start
   | 'interview'
   | 'completed'
   | 'terminated'      // proctoring termination — candidate left the interview screen
@@ -64,6 +65,23 @@ const SCREEN_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
 const POST_VIOLATION_RECORD_MS = 4000;
 const ENTIRE_SCREEN_REQUIRED_MESSAGE = 'Please select Entire Screen. Window and Current Tab sharing are not allowed.';
 const SCREEN_SHARE_REQUIRED_MESSAGE = 'Entire Screen sharing is mandatory to continue the interview.';
+
+// The "…is sharing your screen" bar with a "Hide" button is a CHROMIUM feature
+// (Chrome / Edge / Brave). Safari shows an OS-level indicator with no in-page
+// bar to hide, and Firefox differs too — so the hide-share-bar step only makes
+// sense on Chromium. Used to skip that step on non-Chromium browsers.
+const isChromiumBrowser = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  try {
+    const brands = (navigator as any).userAgentData?.brands as Array<{ brand: string }> | undefined;
+    if (brands?.length) {
+      return brands.some((b) => /Chromium|Google Chrome|Microsoft Edge/i.test(b.brand));
+    }
+  } catch { /* fall through to UA sniff */ }
+  const ua = navigator.userAgent || '';
+  // Chrome/Edge/Brave all contain "Chrome/"; Safari does not. Exclude Firefox.
+  return /Chrome\//.test(ua) && !/Firefox|FxiOS/i.test(ua);
+};
 
 // Strict tab-switch/minimize proctoring is enforced only in PRODUCTION so that
 // developers testing on staging aren't paused/terminated. Frontend reads the
@@ -141,6 +159,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // consent gate. Blocks accepting until they return to fullscreen so the
   // interview can never start outside fullscreen.
   const [finalConsentFsExited, setFinalConsentFsExited] = useState(false);
+  // "Hide the screen-share bar" gate (vision-LLM verified) shown before start.
+  const [shareBarChecking, setShareBarChecking] = useState(false);
+  const [shareBarError, setShareBarError] = useState<string | null>(null);
+  const [shareBarAttempts, setShareBarAttempts] = useState(0);
   const [screenShareDeclined, setScreenShareDeclined] = useState(false);
   const [screenShareDeclinedReason, setScreenShareDeclinedReason] = useState('');
   // True when the pre-start check found the camera/mic already in use by another
@@ -208,9 +230,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const screenStreamRef = useRef<MediaStream | null>(null);
   const screenCheckpointInProgressRef = useRef(false);
   const isFinalizingScreenUploadRef = useRef(false);
-  // Audio mixing for screen recording (tab audio + mic)
+  // Audio mixing for screen recording (Bina's TTS tap + candidate mic)
   const recordingAudioCtxRef = useRef<AudioContext | null>(null);
   const recordingMicStreamRef = useRef<MediaStream | null>(null);
+  // Live handles on the mic leg of the mix, so the mic can be re-targeted to the
+  // device the interview actually pins (see retargetRecordingMic) without
+  // rebuilding the whole graph / restarting the recorder.
+  const recordingMicSrcRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const recordingMicChainRef = useRef<GainNode | null>(null);
+  const recordingMicDeviceIdRef = useRef<string | undefined>(undefined);
 
   // Face & voice verification — callbacks emit events via InterviewEventBus
   const faceVerification = useInterviewFaceVerification({
@@ -453,11 +481,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   useEffect(() => {
     if (POST_CHECK_STEPS.includes(step as Step)) {
       writeInterviewStep(token, step);
-    } else if (step === 'final_consent') {
-      // The final consent gate runs in fullscreen with screen sharing active,
-      // both of which are lost on reload and must be re-granted. So a refresh
-      // here must return to the fullscreen prompt (not stay on final_consent,
-      // and not drop to an earlier step). Persist it as 'fullscreen_prompt'.
+    } else if (step === 'final_consent' || step === 'hide_share_bar') {
+      // The final consent gate + hide-share-bar gate run in fullscreen with
+      // screen sharing active, both of which are lost on reload and must be
+      // re-granted. So a refresh here must return to the fullscreen prompt (not
+      // stay on this gate, and not drop to an earlier step). Persist as
+      // 'fullscreen_prompt'.
       writeInterviewStep(token, 'fullscreen_prompt');
     } else if (step === 'interview' || step === 'completed' || step === 'terminated' || step === 'error') {
       clearInterviewStep(token);
@@ -517,9 +546,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       screenRecorderRef.current = null;
       recordingMicStreamRef.current?.getTracks().forEach(t => t.stop());
       recordingMicStreamRef.current = null;
+      recordingMicSrcRef.current = null;
+      recordingMicChainRef.current = null;
+      recordingMicDeviceIdRef.current = undefined;
       recordingAudioCtxRef.current?.close().catch(() => {});
       recordingAudioCtxRef.current = null;
       (window as any).__interviewRecordingDest = null;
+      (window as any).__interviewMicDeviceId = null;
       isFinalizingScreenUploadRef.current = false;
     };
 
@@ -540,6 +573,86 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== RECORDING AUDIO HELPERS ==========
 
   /**
+   * Open the candidate mic for the recording mix and connect it to the boost
+   * chain. `deviceId` pins a specific input; when omitted (or when the exact
+   * device is gone) the OS default is used.
+   *
+   * echoCancellation/noiseSuppression are ON by design — see the note in
+   * buildRecordingStreamWithAudio. autoGainControl stays OFF so the fixed
+   * boost+limiter below is the only thing shaping level (AGC pumps between
+   * Bina's turns and the candidate's).
+   */
+  const openRecordingMic = async (deviceId?: string): Promise<boolean> => {
+    const mixCtx = recordingAudioCtxRef.current;
+    const chain = recordingMicChainRef.current;
+    if (!mixCtx || mixCtx.state === 'closed' || !chain) return false;
+
+    const baseAudio: MediaTrackConstraints = {
+      channelCount: { ideal: 1 },
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: false,
+    };
+    const attempts: MediaTrackConstraints[] = deviceId
+      ? [{ ...baseAudio, deviceId: { exact: deviceId } }, baseAudio]
+      : [baseAudio];
+
+    for (const audio of attempts) {
+      try {
+        const micStream = await navigator.mediaDevices.getUserMedia({ audio });
+        const track = micStream.getAudioTracks().find(t => t.readyState === 'live');
+        if (!track) {
+          micStream.getTracks().forEach(t => t.stop());
+          continue;
+        }
+        // Swap in only after the new capture succeeded, so a failed retarget
+        // leaves the existing mic leg untouched.
+        try { recordingMicSrcRef.current?.disconnect(); } catch { /* ignore */ }
+        recordingMicStreamRef.current?.getTracks().forEach(t => t.stop());
+
+        const src = mixCtx.createMediaStreamSource(micStream);
+        src.connect(chain);
+        recordingMicSrcRef.current = src;
+        recordingMicStreamRef.current = micStream;
+        recordingMicDeviceIdRef.current = track.getSettings?.().deviceId;
+        console.log('[Portal] Recording mic connected', {
+          label: track.label || 'unknown',
+          deviceId: recordingMicDeviceIdRef.current || 'unknown',
+          pinned: !!deviceId,
+        });
+        return true;
+      } catch (err) {
+        console.warn('[Portal] Recording mic open failed', err);
+      }
+    }
+    return false;
+  };
+
+  /**
+   * Re-point the recording mix at the microphone the interview actually pinned.
+   * The screen recorder starts BEFORE the interview step mounts, so the first
+   * capture can land on the OS default (e.g. the laptop array mic) while the
+   * candidate speaks into a headset — the recording then catches them from
+   * across the room, which is why they came out "very low". InterviewUI calls
+   * this through window.__interviewSetRecordingMic once its pin is known.
+   */
+  const retargetRecordingMic = useCallback(async (deviceId?: string) => {
+    if (!deviceId) return;
+    if (deviceId === recordingMicDeviceIdRef.current) return;
+    if (!recordingAudioCtxRef.current || !recordingMicChainRef.current) return;
+    await openRecordingMic(deviceId);
+    // openRecordingMic reads only refs, so a stable identity here is safe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Expose the retarget hook for InterviewUI (same global-handshake pattern as
+  // __interviewAudioContext / __interviewRecordingDest).
+  useEffect(() => {
+    (window as any).__interviewSetRecordingMic = retargetRecordingMic;
+    return () => { (window as any).__interviewSetRecordingMic = null; };
+  }, [retargetRecordingMic]);
+
+  /**
    * Mix Bina's voice (TalkingHead AudioContext tap) + candidate mic + optional tab audio
    * into one audio track for the MediaRecorder.
    *
@@ -550,11 +663,19 @@ export function CandidateAIInterviewPortal({ token }: Props) {
    *
    * Must be called AFTER window.__interviewAudioContext is created (in handleFullscreenReady)
    * and BEFORE setStep('interview') so the dest is in place before TalkingHead mounts.
+   *
+   * LEVELS: Bina's TTS arrives near full scale while a laptop/headset mic is far
+   * quieter, so the mic leg is boosted (gain → limiter, mirroring the webcam
+   * recording path in InterviewUI) and Bina is trimmed. Without this the
+   * candidate is barely audible next to her in the saved Interview View.
    */
   const buildRecordingStreamWithAudio = async (screenStream: MediaStream): Promise<MediaStream> => {
     // Tear down mix context from a previous recording or re-share (keeps Bina's dest alive)
     recordingMicStreamRef.current?.getTracks().forEach(t => t.stop());
     recordingMicStreamRef.current = null;
+    recordingMicSrcRef.current = null;
+    recordingMicChainRef.current = null;
+    recordingMicDeviceIdRef.current = undefined;
     recordingAudioCtxRef.current?.close().catch(() => {});
     recordingAudioCtxRef.current = null;
 
@@ -575,10 +696,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       recordingAudioCtxRef.current = mixCtx;
       const mixDest = mixCtx.createMediaStreamDestination();
 
-      // Bina's TTS voice (guaranteed path — no dependency on getDisplayMedia "Share audio")
+      // Bina's TTS voice (guaranteed path — no dependency on getDisplayMedia "Share audio").
+      // Trimmed so the boosted candidate mic sits at a comparable level.
       let lindaCaptured = false;
       if (lindaDest && lindaDest.stream.getAudioTracks().length > 0) {
-        mixCtx.createMediaStreamSource(lindaDest.stream).connect(mixDest);
+        const lindaGain = mixCtx.createGain();
+        lindaGain.gain.value = 0.75;
+        mixCtx.createMediaStreamSource(lindaDest.stream).connect(lindaGain).connect(mixDest);
         lindaCaptured = true;
       }
 
@@ -592,16 +716,27 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         ).connect(mixDest);
       }
 
-      // Candidate microphone
-      try {
-        const micStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: false, noiseSuppression: false },
-        });
-        recordingMicStreamRef.current = micStream;
-        mixCtx.createMediaStreamSource(micStream).connect(mixDest);
-      } catch {
-        // Mic unavailable — record Bina's voice only
-      }
+      // ── 3. Candidate microphone → boost → limiter → mix ──
+      // echoCancellation MUST stay on. Bina plays out of the candidate's speakers
+      // and comes straight back into the mic; since her voice is ALSO tapped
+      // directly above, disabling AEC put two copies of her in the recording —
+      // one clean, one delayed by the speaker→room→mic path — which is the
+      // doubled/echoing Bina heard in saved Interview View recordings.
+      const micBoost = mixCtx.createGain();
+      micBoost.gain.value = 3.0; // lift quiet laptop/headset speech (matches InterviewUI)
+      const micLimiter = mixCtx.createDynamicsCompressor();
+      micLimiter.threshold.value = -3;
+      micLimiter.knee.value = 0;
+      micLimiter.ratio.value = 20;
+      micLimiter.attack.value = 0.003;
+      micLimiter.release.value = 0.1;
+      micBoost.connect(micLimiter).connect(mixDest);
+      recordingMicChainRef.current = micBoost;
+
+      // Prefer the device the interview has already pinned (set by InterviewUI via
+      // __interviewMicDeviceId). Falls back to the OS default when unknown — a
+      // later retargetRecordingMic() call swaps it once the pin is known.
+      await openRecordingMic((window as any).__interviewMicDeviceId as string | undefined);
 
       return new MediaStream([
         ...screenStream.getVideoTracks(),
@@ -1013,6 +1148,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             severity: 'severe',
             details: { reason: 'candidate_stopped_sharing' },
           }).catch(() => {});
+        } else if (stepRef.current === 'final_consent' || stepRef.current === 'hide_share_bar') {
+          // Candidate stopped sharing on a pre-start gate. Screen sharing is
+          // mandatory — send them back to re-share Entire Screen; they must NOT
+          // be able to start the interview without an active share.
+          setShareBarChecking(false);
+          setStartSubmitting(false);
+          setScreenShareDeclined(true);
+          setScreenShareDeclinedReason(SCREEN_SHARE_REQUIRED_MESSAGE);
+          setStep('fullscreen_prompt');
         }
       });
       setScreenShareDeclined(false);
@@ -1047,6 +1191,126 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     setStep('final_consent');
     setStartSubmitting(false);
   }, [startSubmitting, token, requestEntireScreenShare]);
+
+  // Grab a single JPEG frame from the ENTIRE-screen share stream (used by the
+  // hide-share-bar vision check). Returns null if the stream isn't available.
+  const captureScreenFrame = useCallback(async (): Promise<Blob | null> => {
+    const stream = screenStreamRef.current;
+    const track = stream?.getVideoTracks?.()[0];
+    if (!stream || !track || track.readyState !== 'live') return null;
+    const video = document.createElement('video');
+    video.muted = true;
+    (video as HTMLVideoElement).playsInline = true;
+    video.srcObject = stream;
+    try { await video.play(); } catch { /* ignore */ }
+    await new Promise<void>((resolve) => {
+      if (video.videoWidth && video.readyState >= 2) return resolve();
+      const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
+      video.addEventListener('loadeddata', on);
+      window.setTimeout(resolve, 1500);
+    });
+    const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+    const scale = Math.min(1, 1600 / vw);
+    const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = cw; canvas.height = ch;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { try { video.pause(); } catch { /* ignore */ } video.srcObject = null; return null; }
+    ctx.drawImage(video, 0, 0, cw, ch);
+    try { video.pause(); } catch { /* ignore */ }
+    video.srcObject = null;
+    return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7));
+  }, []);
+
+  // Consume a unit + start the backend interview, then enter the interview UI.
+  // Extracted so BOTH the final-consent accept and the share-bar gate can start.
+  const startInterviewNow = useCallback(async () => {
+    // HARD REQUIREMENT: screen sharing must be ACTIVE to start. If the candidate
+    // stopped sharing on a pre-start gate, send them back to re-share Entire
+    // Screen instead of starting a shareless interview.
+    const _shareTrack = screenStreamRef.current?.getVideoTracks?.()[0];
+    if (!screenStreamRef.current || !_shareTrack || _shareTrack.readyState !== 'live') {
+      setShareBarChecking(false);
+      setStartSubmitting(false);
+      setScreenShareDeclined(true);
+      setScreenShareDeclinedReason(SCREEN_SHARE_REQUIRED_MESSAGE);
+      setStep('fullscreen_prompt');
+      return;
+    }
+    setStartSubmitting(true);
+    try {
+      await candidateAIInterviewService.recordPracticeComplete(token);
+      const result = await candidateAIInterviewService.startInterview(token);
+      setInterview(result);
+      setIsFullscreenActive(isFullscreen());
+      setStep('interview');
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || 'Failed to start interview';
+      if (detail.includes('completed') || detail.includes('cancelled') || detail.includes('expired')) {
+        await loadInterview();
+      } else {
+        toast.error(detail + ' Please try again.');
+      }
+    } finally {
+      setStartSubmitting(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  // Hide-share-bar gate: capture a screen frame → vision LLM → start only when it
+  // confirms the bar is hidden; otherwise re-prompt. Fails OPEN (starts anyway)
+  // if the frame can't be captured or the check errors, so it never bricks start.
+  const handleVerifyShareBarAndStart = useCallback(async () => {
+    if (shareBarChecking || startSubmitting) return;
+    // Screen sharing MUST still be active. If the candidate clicked "Stop
+    // sharing" on the browser bar, send them back to re-share Entire Screen —
+    // never start (or even run the vision check) without a live share.
+    const _shareTrack = screenStreamRef.current?.getVideoTracks?.()[0];
+    if (!screenStreamRef.current || !_shareTrack || _shareTrack.readyState !== 'live') {
+      setScreenShareDeclined(true);
+      setScreenShareDeclinedReason(SCREEN_SHARE_REQUIRED_MESSAGE);
+      setStep('fullscreen_prompt');
+      return;
+    }
+    // Keep the start IN fullscreen (this click is the required user gesture).
+    if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* verified in UI */ } }
+    // Resume audio (Bina TTS) on this gesture too.
+    try {
+      const ctx = (window as any).__interviewAudioContext || new AudioContext({ sampleRate: 24000 });
+      ctx.resume?.().catch(() => { /* ignore */ });
+      (window as any).__interviewAudioContext = ctx;
+    } catch { /* ignore */ }
+    setShareBarError(null);
+    setShareBarChecking(true);
+    try {
+      const frame = await captureScreenFrame();
+      const res = frame
+        ? await candidateAIInterviewService.verifyShareBarHidden(token, frame)
+        : { enabled: true, hidden: true, reason: 'no_frame' }; // can't capture → don't block
+      if (res.hidden) {
+        await startInterviewNow();
+      } else {
+        // Vision detecting the tiny collapsed pill is imperfect, so never trap a
+        // candidate who DID hide it: after a few failed checks, proceed anyway
+        // (deterministic fail-open on repeated failure — the recording still
+        // shows whether they hid it, so the recruiter can review).
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        const MAX_SHARE_BAR_ATTEMPTS = 3;
+        if (nextAttempt >= MAX_SHARE_BAR_ATTEMPTS) {
+          console.warn(`[ShareBar] ${nextAttempt} failed checks — proceeding anyway (fail-open)`);
+          await startInterviewNow();
+        } else {
+          setShareBarError('We can still see the screen-sharing bar. Click "Hide" on that bar, then press Continue again.');
+        }
+      }
+    } catch (e) {
+      console.warn('[ShareBar] verify failed — proceeding (fail-open):', e);
+      await startInterviewNow();
+    } finally {
+      setShareBarChecking(false);
+    }
+  }, [shareBarChecking, startSubmitting, shareBarAttempts, token, captureScreenFrame, startInterviewNow]);
 
   // Final in-fullscreen consent gate → actually start the interview. Runs the
   // backend start (unit consumption) only after the candidate explicitly
@@ -1090,23 +1354,24 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       console.warn('[Portal] AudioContext resume on final consent failed:', e);
     }
 
-    try {
-      await candidateAIInterviewService.recordPracticeComplete(token);
-      const result = await candidateAIInterviewService.startInterview(token);
-      setInterview(result);
-      setIsFullscreenActive(isFullscreen());
-      setStep('interview');
-    } catch (err: any) {
-      const detail = err?.response?.data?.detail || 'Failed to start interview';
-      if (detail.includes('completed') || detail.includes('cancelled') || detail.includes('expired')) {
-        await loadInterview();
-      } else {
-        toast.error(detail + ' Please try again.');
-      }
-    } finally {
+    // When the vision-LLM share-bar gate is enabled, route through it instead of
+    // starting immediately. It captures a screen frame, verifies the bar is
+    // hidden, and only then consumes a unit + starts. The whole step is inside
+    // fullscreen with the screen recorder running, so the recording captures the
+    // candidate hiding the bar → interview start.
+    // Only Chromium (Chrome/Edge/Brave) has the hideable "sharing your screen"
+    // bar; on Safari/Firefox there's nothing to hide, so skip the step and start.
+    if (interview?.verify_share_bar_hidden && isChromiumBrowser()) {
+      setShareBarError(null);
+      setShareBarAttempts(0);
       setStartSubmitting(false);
+      setStep('hide_share_bar');
+      return;
     }
-  }, [startSubmitting, token]);
+
+    await startInterviewNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startSubmitting, token, interview, startInterviewNow]);
 
   // Fullscreen enforcement (STAGING only) — 10s grace so accidental Esc presses
   // don't immediately show the pause overlay. In PRODUCTION the unified
@@ -1844,6 +2109,76 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  // ========== HIDE SCREEN-SHARE BAR (vision-LLM verified, pre-start) ==========
+  if (step === 'hide_share_bar') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-10">
+          <div className="flex items-center justify-center gap-2 bg-red-600 text-white font-semibold text-sm md:text-base rounded-xl px-4 py-3 mb-6 text-center shadow-sm">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            Do not refresh this page
+          </div>
+          <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Monitor className="w-10 h-10 text-blue-600" />
+          </div>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
+            One last step — hide the sharing bar
+          </h1>
+          <p className="text-gray-600 mb-6 text-center text-sm leading-relaxed">
+            At the bottom of your screen you&apos;ll see a bar that says
+            <b> &ldquo;…is sharing your screen&rdquo;</b>. Please click its
+            <b> Hide</b> button so it doesn&apos;t cover the interview. Screen
+            sharing stays ON — this only collapses the bar. Then press
+            <b> Continue</b> and we&apos;ll verify it before starting.
+          </p>
+
+          {/* Visual guide — a mock of the Chrome sharing bar with Hide highlighted */}
+          <div className="bg-gray-100 border border-gray-200 rounded-xl p-4 mb-6">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2 text-center">Look for this bar and click &ldquo;Hide&rdquo;</p>
+            <div className="mx-auto max-w-md flex items-center gap-3 bg-white rounded-lg shadow-md border border-gray-200 px-3 py-2.5">
+              <span className="w-4 h-4 rounded-sm bg-blue-500 shrink-0" />
+              <span className="text-sm text-gray-700 flex-1 truncate">This site is sharing your screen.</span>
+              <span className="text-xs font-semibold text-white bg-blue-600 rounded-full px-3 py-1 shrink-0">Stop sharing</span>
+              <span className="relative shrink-0">
+                <span className="text-sm font-bold text-blue-700 underline underline-offset-2 px-1.5 py-1 rounded ring-2 ring-amber-400 ring-offset-1 bg-amber-50">Hide</span>
+                <span className="absolute -top-2 -right-2 text-amber-500 text-lg animate-bounce">👆</span>
+              </span>
+            </div>
+          </div>
+
+          {shareBarError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5 flex items-start gap-2">
+              <XCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-700">{shareBarError}</p>
+                {shareBarAttempts >= 2 && (
+                  <p className="text-xs text-red-500 mt-1">Still stuck? Make sure you clicked <b>Hide</b> (not Stop sharing), then try again.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => { handleVerifyShareBarAndStart(); }}
+            disabled={shareBarChecking || startSubmitting}
+            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+          >
+            {startSubmitting ? (
+              <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
+            ) : shareBarChecking ? (
+              <><Loader2 className="w-5 h-5 animate-spin" />Checking…</>
+            ) : (
+              <><CheckCircle className="w-5 h-5" />I&apos;ve hidden it — Continue</>
+            )}
+          </button>
+          <p className="text-[11px] text-gray-400 mt-3 text-center">
+            Your screen is being recorded — this step is part of the interview session.
+          </p>
+        </div>
       </div>
     );
   }

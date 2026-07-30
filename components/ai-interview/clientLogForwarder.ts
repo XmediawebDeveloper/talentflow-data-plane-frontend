@@ -10,7 +10,7 @@
  *  - PII GUARD. Any line mentioning transcript/answer text is dropped, so the
  *    candidate's spoken words never leave the browser through this channel.
  *  - Best-effort. Never throws into the app; a logging failure must not affect the
- *    interview. Batched every few seconds + flushed via sendBeacon on unload so the
+ *    interview. Batched every few seconds + flushed via a keepalive fetch on unload so the
  *    connection-loss diagnostics survive even when the WebSocket/page is gone.
  */
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
@@ -100,15 +100,43 @@ export function startClientLogForwarder(interviewToken: string): void {
   flushTimer = setInterval(() => { void flush(); }, FLUSH_MS);
 }
 
-/** Flush whatever is buffered via sendBeacon — survives page close / WS drop. */
+/**
+ * Flush whatever is buffered in a way that survives page close / WS drop.
+ *
+ * Uses `fetch(..., { keepalive: true, credentials: 'omit' })` rather than
+ * `navigator.sendBeacon`.
+ *
+ * sendBeacon CANNOT work here: the spec sends it with credentials mode
+ * "include", and the API replies `Access-Control-Allow-Origin: *` (with
+ * allow_credentials=False, which is the correct pairing for its Bearer-token
+ * auth). A credentialed request may never accept a wildcard ACAO, so every
+ * beacon was rejected at preflight:
+ *
+ *   "The value of the 'Access-Control-Allow-Origin' header ... must not be the
+ *    wildcard '*' when the request's credentials mode is 'include'."
+ *
+ * That silently threw away the LAST batch of logs from every interview —
+ * precisely the teardown lines you most want when diagnosing a session. No
+ * amount of content-type fiddling fixes it, because credentials mode isn't
+ * configurable on sendBeacon.
+ *
+ * `keepalive: true` gives the same outlive-the-page guarantee while letting us
+ * set `credentials: 'omit'`, which the wildcard ACAO accepts. Its 64 KB body cap
+ * is comfortably above our worst case (MAX_BATCH 100 lines × 500 chars ≈ 50 KB).
+ */
 export function flushClientLogBeacon(): void {
   try {
     if (!token || buffer.length === 0) return;
-    if (typeof navigator === 'undefined' || !navigator.sendBeacon) { void flush(); return; }
+    if (typeof fetch !== 'function') { void flush(); return; }
     const batch = buffer.splice(0, MAX_BATCH);
     const url = candidateAIInterviewService.clientLogBeaconUrl(token);
-    const blob = new Blob([JSON.stringify({ lines: batch })], { type: 'application/json' });
-    navigator.sendBeacon(url, blob);
+    void fetch(url, {
+      method: 'POST',
+      keepalive: true,
+      credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lines: batch }),
+    }).catch(() => { /* best-effort logging channel */ });
   } catch {
     /* ignore */
   }

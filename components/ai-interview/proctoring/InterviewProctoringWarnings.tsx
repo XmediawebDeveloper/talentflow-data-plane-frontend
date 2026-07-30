@@ -60,6 +60,8 @@ const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   background_noise: <AudioLines className="w-6 h-6" />,
   phone_detected: <Smartphone className="w-6 h-6" />,
   unauthorized_object: <PackageX className="w-6 h-6" />,
+  // Never rendered (backend-only), but the Record must stay exhaustive.
+  object_detection_unavailable: <ShieldAlert className="w-6 h-6" />,
 };
 
 const EVENT_NAMES: Record<ProctoringEventType, string> = {
@@ -86,6 +88,7 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   background_noise: 'Background Noise Detected',
   phone_detected: 'Mobile Phone Detected',
   unauthorized_object: 'Unauthorised Item Detected',
+  object_detection_unavailable: 'Object Detection Unavailable',
 };
 
 const SEVERITY_COLORS: Record<'minor' | 'moderate' | 'severe', { bg: string; border: string; text: string; icon: string }> = {

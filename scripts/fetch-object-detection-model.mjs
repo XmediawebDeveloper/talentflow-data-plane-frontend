@@ -38,15 +38,33 @@ const DTYPE_FILES = {
 };
 
 const ORT_VERSION = '1.27.0';
-// ort.webgpu.min.js loads these siblings at runtime from the same directory.
+/**
+ * ort.webgpu.min.js dynamically imports its wasm siblings at session-create
+ * time from wasmPaths. Getting this list wrong does NOT fail at load — it fails
+ * later with "no available backend found. ERR: [webgpu] TypeError: Failed to
+ * fetch dynamically imported module", which reads like a WebGPU problem rather
+ * than a missing file. (1.27 uses the `asyncify` pair for the WebGPU EP; the
+ * `jsep` names are the older layout and are NOT what it asks for.)
+ *
+ * All four are vendored: asyncify is what WebGPU actually loads, and the plain
+ * pair covers a CPU/WASM session if one is ever created. Verify against
+ * `ls node_modules/onnxruntime-web/dist/ort-wasm*` after an ORT upgrade.
+ */
 const ORT_ASSETS = [
   'ort.webgpu.min.js',
-  'ort-wasm-simd-threaded.jsep.wasm',
-  'ort-wasm-simd-threaded.jsep.mjs',
+  'ort-wasm-simd-threaded.asyncify.mjs',
+  'ort-wasm-simd-threaded.asyncify.wasm',
+  'ort-wasm-simd-threaded.mjs',
+  'ort-wasm-simd-threaded.wasm',
 ];
 
+// q8 is the default deliberately. fp16 is smaller than fp32 and tempting, but
+// it requires the WebGPU `shader-f16` device feature, which common candidate
+// hardware (Intel Gen-9 integrated graphics, etc.) does NOT have — there, an
+// fp16 model fails session creation outright and proctoring silently does
+// nothing. q8 is both the most compatible AND the smallest download.
 const dtypeArg = process.argv.indexOf('--dtype');
-const dtype = dtypeArg !== -1 ? process.argv[dtypeArg + 1] : 'fp16';
+const dtype = dtypeArg !== -1 ? process.argv[dtypeArg + 1] : 'q8';
 
 const file = DTYPE_FILES[dtype];
 if (!file) {

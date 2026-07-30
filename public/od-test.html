@@ -1,0 +1,163 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>RF-DETR phone detection — bench</title>
+<style>
+  body { font: 13px/1.5 ui-monospace, monospace; margin: 16px; background:#111; color:#ddd; }
+  h2 { font-size: 14px; margin: 18px 0 6px; color:#fff; }
+  pre { white-space: pre-wrap; }
+  .ok { color:#5f5; } .bad { color:#f66; } .warn { color:#fb0; }
+  canvas { border:1px solid #444; max-width:380px; height:auto; image-rendering: pixelated; }
+</style>
+<h2>RF-DETR-Nano phone-detection bench</h2>
+<div id="row"></div>
+<pre id="out">starting…</pre>
+
+<script src="/ort/ort.webgpu.min.js"></script>
+<script>
+/**
+ * Standalone bench for the interview object detector.
+ *
+ * Runs the SAME model, preprocessing and decode as
+ * public/workers/objectDetection.worker.js against a still frame, so the model
+ * path can be verified without needing a live interview. Answers exactly one
+ * question: does this model, as we preprocess it, detect a phone at all?
+ *
+ * Tries BOTH preprocessing variants, because `do_normalize:false` in the
+ * export's preprocessor_config vs. RF-DETR's ImageNet-normalising upstream
+ * convention is the one genuinely ambiguous call in the worker.
+ */
+const MODEL = new URLSearchParams(location.search).get('m')
+  || '/models/object-detection/rf-detr-nano.onnx';
+// Supply your own still via ?frame=<url>. No frame is committed to the repo:
+// a real interview frame contains a candidate's face, and public/ is served
+// publicly.
+const FRAME = new URLSearchParams(location.search).get('frame') || '/od-test-frame.png';
+const SIZE = +(new URLSearchParams(location.search).get('size') || 384);
+const MEAN = [0.485, 0.456, 0.406], STD = [0.229, 0.224, 0.225];
+
+const NA = 'N/A';
+const COCO_91 = [NA,'person','bicycle','car','motorcycle','airplane','bus','train','truck','boat','traffic light','fire hydrant',NA,'stop sign','parking meter','bench','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe',NA,'backpack','umbrella',NA,NA,'handbag','tie','suitcase','frisbee','skis','snowboard','sports ball','kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket','bottle',NA,'wine glass','cup','fork','knife','spoon','bowl','banana','apple','sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair','couch','potted plant','bed',NA,'dining table',NA,NA,'toilet',NA,'tv','laptop','mouse','remote','keyboard','cell phone','microwave','oven','toaster','sink','refrigerator',NA,'book','clock','vase','scissors','teddy bear','hair drier','toothbrush'];
+
+const out = document.getElementById('out');
+const log = (s, cls) => { out.innerHTML += (cls ? `<span class="${cls}">${s}</span>` : s) + '\n'; };
+const sigmoid = x => 1 / (1 + Math.exp(-x));
+
+/** Draw a source rect of the image into a SIZE×SIZE canvas and return pixels. */
+function pixels(img, sx, sy, sw, sh, label) {
+  const c = document.createElement('canvas');
+  c.width = SIZE; c.height = SIZE;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, SIZE, SIZE);
+  const wrap = document.createElement('div');
+  wrap.style.display = 'inline-block';
+  wrap.style.marginRight = '12px';
+  wrap.appendChild(c);
+  const cap = document.createElement('div');
+  cap.textContent = label;
+  wrap.appendChild(cap);
+  document.getElementById('row').appendChild(wrap);
+  return ctx.getImageData(0, 0, SIZE, SIZE).data;
+}
+
+function tensor(data, norm) {
+  const area = SIZE * SIZE;
+  const f = new Float32Array(3 * area);
+  for (let i = 0; i < area; i++) {
+    const p = i * 4;
+    if (norm) {
+      f[i]          = (data[p]     / 255 - MEAN[0]) / STD[0];
+      f[area + i]   = (data[p + 1] / 255 - MEAN[1]) / STD[1];
+      f[2*area + i] = (data[p + 2] / 255 - MEAN[2]) / STD[2];
+    } else {
+      f[i]          = data[p]     / 255;
+      f[area + i]   = data[p + 1] / 255;
+      f[2*area + i] = data[p + 2] / 255;
+    }
+  }
+  return new ort.Tensor('float32', f, [1, 3, SIZE, SIZE]);
+}
+
+function decode(res) {
+  let logits = null, boxes = null;
+  for (const k of Object.keys(res)) {
+    const t = res[k];
+    if (!t?.dims || t.dims.length !== 3) continue;
+    if (t.dims[2] === 4) boxes = t; else logits = t;
+  }
+  if (!logits || !boxes) return [];
+  const [, Q, C] = logits.dims, L = logits.data, B = boxes.data;
+  const dets = [];
+  for (let q = 0; q < Q; q++) {
+    let best = -1, bl = -Infinity;
+    for (let c = 0; c < C; c++) { const v = L[q*C + c]; if (v > bl) { bl = v; best = c; } }
+    const score = sigmoid(bl);
+    if (score < 0.10) continue;
+    const o = q*4, cx = B[o], cy = B[o+1], w = B[o+2], h = B[o+3];
+    dets.push({ label: COCO_91[best] ?? `id${best}`, id: best, score,
+                box: [cx-w/2, cy-h/2, w, h] });
+  }
+  return dets.sort((a,b) => b.score - a.score);
+}
+
+(async () => {
+  try {
+    out.textContent = '';
+    log(`WebGPU: ${('gpu' in navigator) ? 'available' : 'MISSING'}`, ('gpu' in navigator) ? 'ok' : 'bad');
+    if (!('gpu' in navigator)) return;
+
+    // shader-f16 is the make-or-break device feature for fp16 weights.
+    const adapter = await navigator.gpu.requestAdapter();
+    const f16 = adapter?.features?.has('shader-f16');
+    log(`adapter: ${adapter?.info?.vendor ?? '?'} ${adapter?.info?.architecture ?? ''}`.trim());
+    log(`shader-f16: ${f16 ? 'SUPPORTED' : 'NOT supported (fp16 models will fail)'}`,
+        f16 ? 'ok' : 'warn');
+
+    log(`model: ${MODEL}`);
+    log(`ORT ${ort.env.versions?.common ?? '?'} — creating session (webgpu)…`);
+    ort.env.wasm.wasmPaths = '/ort/';
+    ort.env.wasm.numThreads = 1;
+    const t0 = performance.now();
+    const sess = await ort.InferenceSession.create(MODEL, {
+      executionProviders: ['webgpu'], graphOptimizationLevel: 'all',
+    });
+    log(`session ready in ${(performance.now()-t0)|0} ms`, 'ok');
+    log(`inputs=${JSON.stringify(sess.inputNames)} outputs=${JSON.stringify(sess.outputNames)}`);
+
+    const img = new Image();
+    img.src = FRAME;
+    await img.decode();
+    log(`frame ${img.naturalWidth}×${img.naturalHeight}`);
+
+    // The webcam panel inside the screenshot — this is what the real detector
+    // actually sees, so it is the faithful test. Full frame is a sanity check.
+    const crops = [
+      { name: 'webcam-crop', r: [20, 588, 726, 492] },
+      { name: 'full-frame',  r: [0, 0, img.naturalWidth, img.naturalHeight] },
+    ];
+
+    for (const crop of crops) {
+      const px = pixels(img, ...crop.r, crop.name);
+      for (const norm of [false, true]) {
+        const tag = `${crop.name} / ${norm ? 'imagenet-norm' : 'rescale-only'}`;
+        const t1 = performance.now();
+        const res = await sess.run({ [sess.inputNames[0]]: tensor(px, norm) });
+        const ms = performance.now() - t1;
+        const dets = decode(res);
+        const phone = dets.find(d => d.label === 'cell phone');
+        log(`\n── ${tag}  (${ms|0} ms)`);
+        if (!dets.length) { log('   no detections ≥0.10', 'warn'); continue; }
+        for (const d of dets.slice(0, 8)) {
+          const cls = d.label === 'cell phone' ? 'ok' : '';
+          log(`   ${d.score.toFixed(3)}  ${d.label} (id ${d.id})  box=[${d.box.map(v=>v.toFixed(3)).join(', ')}]`, cls);
+        }
+        log(phone ? `   => CELL PHONE FOUND @ ${phone.score.toFixed(3)}` : '   => no cell phone',
+            phone ? 'ok' : 'bad');
+      }
+    }
+    log('\ndone.');
+  } catch (e) {
+    log(`FAILED: ${e && e.message ? e.message : e}`, 'bad');
+    console.error(e);
+  }
+})();
+</script>

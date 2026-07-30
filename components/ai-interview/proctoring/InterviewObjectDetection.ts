@@ -16,9 +16,12 @@
  *
  * Load profile
  * ------------
- *   - Inference: one frame every DETECT_INTERVAL (2 s; 4 s on low-tier), so the
- *     detector is idle ~95% of the time. Object detection at video framerate
- *     would buy nothing — using a phone takes seconds, not milliseconds.
+ *   - Inference: one frame every DETECT_INTERVAL (3 s; 6 s on low-tier), and
+ *     automatically slower on weak GPUs — see DUTY_CYCLE_DIVISOR. Measured
+ *     inference on Intel Gen-9 integrated graphics is ~2.1 s/frame, so the
+ *     cadence has to follow the hardware rather than assume it. Object
+ *     detection at video framerate would buy nothing regardless — using a
+ *     phone takes seconds, not milliseconds.
  *   - Main thread: only `createImageBitmap` + a postMessage transfer per cycle.
  *   - WebGPU is REQUIRED. See the worker header for why WASM is not an
  *     acceptable fallback for this model family.
@@ -55,9 +58,45 @@ interface UseInterviewObjectDetectionConfig {
   onUnavailable?: (reason: string) => void;
 }
 
-const DETECT_INTERVAL = 2000;
-const DETECT_INTERVAL_LOW_TIER = 4000;
+const DETECT_INTERVAL = 3000;
+const DETECT_INTERVAL_LOW_TIER = 6000;
 const POLL_INTERVAL_MS = 250; // cheap timestamp check, same as InterviewFaceDetection
+
+/**
+ * Keep the detector's GPU duty cycle at roughly 1/N by spacing frames at
+ * N× the last measured inference time.
+ *
+ * The fixed 2 s cadence assumed inference was ~50–150 ms. Measured reality on
+ * Intel Gen-9 integrated graphics is **1.8–8.2 s per frame** — RF-DETR's
+ * deformable attention is expensive on WebGPU (cf. onnxruntime#22425). A fixed
+ * cadence there would queue frames back-to-back and starve the interview's own
+ * rendering, so the interval follows the hardware instead of assuming it.
+ */
+const DUTY_CYCLE_DIVISOR = 3;
+const MAX_DETECT_INTERVAL = 20000;
+
+/**
+ * How often to ask the worker for its top raw scores (any class, allowlist and
+ * thresholds ignored). Left ON in production deliberately: this feature has
+ * already shipped broken twice in ways only a production log could reveal, and
+ * one line per 30 s is cheap next to that.
+ */
+const DEBUG_SNAPSHOT_MS = 30000;
+
+/**
+ * If the worker reports `ready` but no frame result arrives within this window,
+ * treat the detector as dead and say so.
+ *
+ * "Ready, then silence" has been this feature's dominant failure mode: init
+ * succeeds, something in the loop throws or stalls, and the interview completes
+ * with an empty Integrity Check tab that is indistinguishable from a clean one.
+ * A generic liveness check catches that class of bug regardless of cause —
+ * including causes not yet imagined.
+ *
+ * Generous, because the first inference can take seconds on weak GPUs and the
+ * camera may not be ready the instant the model is.
+ */
+const FIRST_RESULT_TIMEOUT_MS = 60000;
 
 /**
  * Cycles a class must be ABSENT before it can raise a second event. Without
@@ -92,6 +131,19 @@ const ORT_URLS = [
 ].filter(Boolean) as string[];
 
 const DETECTOR_NAME = "rf-detr-nano";
+
+/**
+ * Cache-buster for the worker script. **Bump this whenever you edit
+ * public/workers/objectDetection.worker.js.**
+ *
+ * next.config.ts now serves /workers/* as no-store, which is the real fix — but
+ * this stays as belt-and-braces for copies already held by a browser or the
+ * Cloudflare edge from before that header existed. A stale worker is uniquely
+ * nasty here: it silently runs a known-broken detector against live interviews
+ * while the code in the repo looks correct.
+ */
+const WORKER_VERSION = "5";
+const WORKER_URL = `/workers/objectDetection.worker.js?v=${WORKER_VERSION}`;
 
 /**
  * Warm the HTTP cache with the detector weights.
@@ -134,6 +186,12 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
   const inFlightRef = useRef(false);
   const frameIdRef = useRef(0);
   const classStateRef = useRef<Record<string, ClassState>>({});
+  const lastInferenceMsRef = useRef(0);
+  const loggedTimingRef = useRef(false);
+  const lastDebugAtRef = useRef(0);
+  const pendingConfirmRef = useRef(false);
+  const watchdogRef = useRef<number | null>(null);
+  const sawResultRef = useRef(false);
 
   const callbacksRef = useRef(config);
   useEffect(() => { callbacksRef.current = config; }, [config]);
@@ -164,6 +222,29 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
     }
 
     /**
+     * Space frames at DUTY_CYCLE_DIVISOR× the last measured inference so slow
+     * GPUs back off instead of queueing. Before the first result this is just
+     * the base interval.
+     *
+     * EXCEPT while corroborating a suspicion. The confirmation gate needs
+     * `framesToConfirm` consecutive detections, and at a ~6 s idle cadence that
+     * would mean a phone had to stay in frame for ~13 s — long enough that a
+     * quick glance at a phone is missed entirely. So: poll slowly when the frame
+     * looks clean, then sample back-to-back the moment something watched shows
+     * up. Corroboration arrives in ~2 inferences instead of ~2 cadences, and the
+     * idle duty cycle is unchanged.
+     */
+    const effectiveInterval = () => {
+      if (pendingConfirmRef.current) {
+        return Math.max(500, lastInferenceMsRef.current);
+      }
+      return Math.min(
+        MAX_DETECT_INTERVAL,
+        Math.max(baseInterval, lastInferenceMsRef.current * DUTY_CYCLE_DIVISOR),
+      );
+    };
+
+    /**
      * Confirm a class across consecutive cycles before raising it. A single
      * frame is not evidence — RF-DETR will occasionally fire one confident box
      * on a dark rectangle. Requiring N consecutive cycles (~4 s at the default
@@ -171,6 +252,9 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
      */
     const consider = (detections: DetectedObjectEvent[]) => {
       const seen = new Set(detections.map(d => d.object_class));
+      // Reset each cycle; set below if some class passed its thresholds but
+      // still needs more consecutive hits. Drives the burst sampling above.
+      let awaitingCorroboration = false;
 
       // Age out classes that were not seen this cycle.
       for (const [cls, st] of Object.entries(classStateRef.current)) {
@@ -183,9 +267,20 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
       for (const det of detections) {
         const def = DETECTABLE_OBJECTS[det.object_class];
         if (!def) continue;
-        if (det.confidence < def.minConfidence) continue;
         const area = det.box[2] * det.box[3];
-        if (area < def.minBoxArea) continue;
+
+        // Log near-misses. A detection that reaches the worker but dies on a
+        // threshold here is the single most useful tuning signal there is, and
+        // it is otherwise completely invisible — the interview just ends with no
+        // flag and no explanation.
+        if (det.confidence < def.minConfidence || area < def.minBoxArea) {
+          console.log(
+            `[INTERVIEW_OBJECT_DETECTION] near-miss ${det.object_class} ` +
+            `score=${det.confidence.toFixed(3)}/${def.minConfidence} ` +
+            `area=${area.toFixed(4)}/${def.minBoxArea} — filtered`,
+          );
+          continue;
+        }
 
         const st = classStateRef.current[det.object_class] ??= {
           hits: 0, absent: 0, armed: true,
@@ -195,29 +290,51 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
 
         if (st.armed && st.hits >= def.framesToConfirm) {
           st.armed = false;
+          console.log(
+            `[INTERVIEW_OBJECT_DETECTION] FLAG ${def.eventType} ` +
+            `${det.object_class} score=${det.confidence.toFixed(3)} frames=${st.hits}`,
+          );
           callbacksRef.current?.onObjectDetected?.(def.eventType, {
             ...det,
             consecutive_frames: st.hits,
           });
+        } else if (st.armed) {
+          awaitingCorroboration = true;
         }
       }
+
+      pendingConfirmRef.current = awaitingCorroboration;
     };
 
     let worker: Worker;
     try {
-      worker = new Worker("/workers/objectDetection.worker.js");
+      worker = new Worker(WORKER_URL);
     } catch (err) {
       markUnavailable(`Worker failed to start: ${(err as Error)?.message ?? err}`);
       return;
     }
     workerRef.current = worker;
 
-    worker.onmessage = (e: MessageEvent) => {
+    // Every branch below runs inside this handler, so ANY throw in here kills
+    // the detector for the rest of the interview. That is exactly how a stale
+    // `interval` reference once stopped the loop from ever starting while the
+    // console still cheerfully reported "Ready" — init had already succeeded, so
+    // the unavailable path never fired and the interview finished with no flags
+    // and no explanation. Never let an exception in here be silent.
+    const handleMessage = (e: MessageEvent) => {
       if (!mounted) return;
       const msg = e.data;
 
       if (msg.type === "ready") {
         isReadyRef.current = true;
+        // Liveness watchdog — cleared by the first frame result.
+        watchdogRef.current = setTimeout(() => {
+          if (!mounted || sawResultRef.current) return;
+          markUnavailable(
+            `Detector reported ready but produced no frame within ` +
+            `${FIRST_RESULT_TIMEOUT_MS / 1000}s — the detection loop is not running.`,
+          );
+        }, FIRST_RESULT_TIMEOUT_MS) as unknown as number;
         console.log(
           `[INTERVIEW_OBJECT_DETECTION] Ready — ${msg.backend}, ` +
           `input ${msg.inputSize}px, labels ${msg.labelSpace}, ort ${msg.ortUrl}`,
@@ -233,6 +350,32 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
 
       if (msg.type === "detections") {
         inFlightRef.current = false;
+        sawResultRef.current = true;
+        if (watchdogRef.current !== null) {
+          clearTimeout(watchdogRef.current);
+          watchdogRef.current = null;
+        }
+        // Periodic ground truth: the model's top raw scores, allowlist ignored.
+        // This is what distinguishes "saw nothing" from "saw the phone at 0.19"
+        // from "called the phone a laptop" — three problems, three fixes.
+        if (Array.isArray(msg.topRaw) && msg.topRaw.length) {
+          console.log(
+            "[INTERVIEW_OBJECT_DETECTION] frame sees: " +
+            msg.topRaw
+              .map((d: any) => `${d.label} ${d.score.toFixed(3)}`)
+              .join(", "),
+          );
+        }
+        if (typeof msg.inferenceMs === "number") {
+          lastInferenceMsRef.current = msg.inferenceMs;
+          if (!loggedTimingRef.current) {
+            loggedTimingRef.current = true;
+            console.log(
+              `[INTERVIEW_OBJECT_DETECTION] First inference ${Math.round(msg.inferenceMs)} ms ` +
+              `→ cadence ${Math.round(effectiveInterval())} ms`,
+            );
+          }
+        }
         const mapped: DetectedObjectEvent[] = (msg.detections || []).map((d: any) => ({
           object_class: d.label,
           object_label: DETECTABLE_OBJECTS[d.label]?.displayLabel ?? d.label,
@@ -249,6 +392,18 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
       if (msg.type === "detect-failed") {
         inFlightRef.current = false;
         console.warn("[INTERVIEW_OBJECT_DETECTION] Frame failed:", msg.error);
+      }
+    };
+
+    worker.onmessage = (e: MessageEvent) => {
+      try {
+        handleMessage(e);
+      } catch (err) {
+        inFlightRef.current = false;
+        markUnavailable(
+          `Detector crashed handling '${e?.data?.type ?? "?"}': ` +
+          `${(err as Error)?.message ?? err}`,
+        );
       }
     };
 
@@ -273,7 +428,7 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
     // Self-scheduling timer rather than requestAnimationFrame — same reasoning
     // as InterviewFaceDetection's Phase 1 perf fix: rAF would wake the main
     // thread 60×/s just to read a clock.
-    const interval = lowTier ? DETECT_INTERVAL_LOW_TIER : DETECT_INTERVAL;
+    const baseInterval = lowTier ? DETECT_INTERVAL_LOW_TIER : DETECT_INTERVAL;
     const startLoop = () => {
       if (timerRef.current !== null) return;
       let lastDetect = 0;
@@ -283,7 +438,7 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
         const now = performance.now();
         const video = videoRef.current;
 
-        const due = now - lastDetect >= interval;
+        const due = now - lastDetect >= effectiveInterval();
         const capturable = video && video.readyState >= 2 && video.videoWidth > 0;
 
         // Skip rather than queue when the previous frame is still running —
@@ -294,7 +449,13 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
           try {
             const bitmap = await createImageBitmap(video as HTMLVideoElement);
             const frameId = ++frameIdRef.current;
-            workerRef.current?.postMessage({ type: "detect", bitmap, frameId }, [bitmap]);
+            // Ask for the diagnostic snapshot at most once per DEBUG_SNAPSHOT_MS
+            // so the extra decode pass stays negligible.
+            const wantDebug = now - lastDebugAtRef.current >= DEBUG_SNAPSHOT_MS;
+            if (wantDebug) lastDebugAtRef.current = now;
+            workerRef.current?.postMessage(
+              { type: "detect", bitmap, frameId, wantDebug }, [bitmap],
+            );
           } catch {
             inFlightRef.current = false; // camera not ready yet; retry next tick
           }
@@ -305,7 +466,7 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
 
       timerRef.current = setTimeout(tick, POLL_INTERVAL_MS) as unknown as number;
       console.log(
-        `[INTERVIEW_OBJECT_DETECTION] Loop started (${interval} ms cadence` +
+        `[INTERVIEW_OBJECT_DETECTION] Loop started (base ${baseInterval} ms cadence` +
         `${lowTier ? ", low-tier" : ""})`,
       );
     };
@@ -316,6 +477,10 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
+      }
+      if (watchdogRef.current !== null) {
+        clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
       }
       try {
         worker.postMessage({ type: "dispose" });

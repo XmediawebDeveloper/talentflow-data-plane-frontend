@@ -55,6 +55,9 @@ export interface CandidateInterviewInfo {
   // When true, block starting the interview if the camera/mic is already held by
   // another app (candidate already in a Teams/Zoom/Meet call).
   block_active_meeting?: boolean | null;
+  // When true, show the "hide the screen-share bar" (vision-LLM verified) step
+  // between the final consent and interview start.
+  verify_share_bar_hidden?: boolean | null;
   // Expiry timestamp for client-side expiry checks
   expires_at?: string | null;
 }
@@ -261,6 +264,23 @@ export const candidateAIInterviewService = {
     return response.json();
   },
 
+  /** Send a frame of the shared screen; the backend vision-LLM says whether
+   *  Chrome's "sharing your screen" bar is hidden/collapsed. */
+  async verifyShareBarHidden(
+    token: string,
+    blob: Blob,
+  ): Promise<{ enabled: boolean; hidden: boolean; reason?: string }> {
+    const fd = new FormData();
+    fd.append('file', blob, 'screen.jpg');
+    const url = `${API_BASE_URL}/candidate/ai-interview/${token}/verify-share-bar`;
+    const res = await fetch(url, { method: 'POST', body: fd });
+    if (!res.ok) {
+      const t = await res.text().catch(() => res.statusText);
+      throw new Error(`Share-bar verify failed (${res.status}): ${t}`);
+    }
+    return res.json();
+  },
+
   async getAvailableLanguages(token: string): Promise<AvailableLanguagesResponse> {
     const response = await candidateApi.get<AvailableLanguagesResponse>(
       `/candidate/ai-interview/${token}/languages`,
@@ -336,8 +356,9 @@ export const candidateAIInterviewService = {
     }
   },
 
-  // Absolute URL for navigator.sendBeacon (used on disconnect/unload, when the
-  // axios instance / page may be tearing down).
+  // Absolute URL for the unload-time keepalive fetch in clientLogForwarder
+  // (used on disconnect/unload, when the axios instance / page may be tearing
+  // down). NOT sendBeacon — see that file for why it can't be used here.
   clientLogBeaconUrl(token: string): string {
     return `${API_BASE_URL}/candidate/ai-interview/${token}/client-log`;
   },
