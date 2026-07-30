@@ -54,6 +54,7 @@ type OverviewCardKey = 'total' | 'active' | 'invited' | 'score';
 const CONFIG_PAGE_SIZE = 10;
 const PROCESSING_PAGE_SIZE = 10;
 const INVITATION_PAGE_SIZE = 10;
+const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 const AI_INTERVIEW_INVITE_STATUS_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
   { value: 'invited', label: 'Invited' },
@@ -92,6 +93,8 @@ export default function AIInterview() {
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const [listScrollRequest, setListScrollRequest] = useState(0);
+  const consumedListViewRedirectRef = useRef(false);
+  const handledQuickActionRef = useRef<string | null>(null);
   const [activeOverviewCard, setActiveOverviewCard] = useState<OverviewCardKey | null>(null);
   // Extra filter applied on top of the active tab — used by the "Invite Shared
   // Configs" stats card to scope the list to only configs that have actually
@@ -106,6 +109,7 @@ export default function AIInterview() {
     setPageView('list');
     setListScrollRequest((request) => request + 1);
   };
+
   const isOverviewCardActive = (cardKey: OverviewCardKey) => pageView === 'list' && activeOverviewCard === cardKey;
   const [modeFilter, setModeFilter] = useState<'all' | 'timed' | 'conversational'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -488,6 +492,30 @@ export default function AIInterview() {
   }, [listScrollRequest, pageView, activeTab, invitedOnly]);
 
   useEffect(() => {
+    if (consumedListViewRedirectRef.current || typeof window === 'undefined') return;
+    const redirectState = sessionStorage.getItem(AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY);
+    if (redirectState !== 'pending' && redirectState !== 'consumed') return;
+
+    consumedListViewRedirectRef.current = true;
+    sessionStorage.setItem(AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY, 'consumed');
+    setActiveTab('all');
+    setInvitedOnly(false);
+    setActiveOverviewCard(null);
+    setConfigListPage(1);
+    setProcessingPage(1);
+    setPageView('list');
+    setListScrollRequest((request) => request + 1);
+
+    const clearRedirectTimer = window.setTimeout(() => {
+      if (sessionStorage.getItem(AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY) === 'consumed') {
+        sessionStorage.removeItem(AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY);
+      }
+    }, 1000);
+
+    return () => window.clearTimeout(clearRedirectTimer);
+  }, []);
+
+  useEffect(() => {
     const wasPublished = searchParams.get('published') === '1';
     if (!wasPublished) return;
 
@@ -694,6 +722,127 @@ export default function AIInterview() {
     const candidateFlowStatuses = ['invited', 'consent_pending', 'system_check', 'in_progress', 'scheduled'];
     return candidateFlowStatuses.includes(status) ? 'published' : status;
   };
+
+  // Job Details Quick Actions deep-link here so they can reuse the existing
+  // create, share, and invitation status flows for the selected JD.
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (
+      action !== 'create-ai-interview' &&
+      action !== 'invite-ai-interview' &&
+      action !== 'ai-interview-status'
+    ) {
+      return;
+    }
+
+    const jdId = searchParams.get('jd_id') || searchParams.get('jdId') || searchParams.get('jobId');
+    const actionKey = `${action}:${jdId || ''}`;
+
+    if (handledQuickActionRef.current === actionKey) return;
+
+    if (!jdId) {
+      handledQuickActionRef.current = actionKey;
+      toast.error('Job description is missing for this AI interview action.');
+      router.replace('/recruitment/ai-interviews', { scroll: false });
+      return;
+    }
+
+    if (loading) return;
+
+    handledQuickActionRef.current = actionKey;
+
+    const clearQuickActionUrl = () => {
+      router.replace('/recruitment/ai-interviews', { scroll: false });
+    };
+
+    if (!aiInterviewAvailable) {
+      toast.error('AI Interviews module is not enabled for your organization.');
+      clearQuickActionUrl();
+      return;
+    }
+
+    const activeConfigs = configs.filter((config) => config.jd_id === jdId);
+    const archivedMatches = archivedConfigs.filter(
+      (config) => config.jd_id === jdId && !activeConfigs.some((active) => active.id === config.id),
+    );
+    const jdConfigs = [...activeConfigs, ...archivedMatches];
+    const publishedConfig = jdConfigs.find(
+      (config) => normalizeConfigStatus(config.status) === 'published' && config.status !== 'archived',
+    );
+    const draftConfig = jdConfigs.find((config) => config.status === 'draft');
+    const fallbackConfig = publishedConfig || draftConfig || jdConfigs.find((config) => config.status !== 'archived') || jdConfigs[0] || null;
+
+    if (action === 'create-ai-interview') {
+      if (!canCreateAIInterviews) {
+        toast.error('You do not have permission to create AI interviews.');
+        clearQuickActionUrl();
+        return;
+      }
+
+      if (publishedConfig) {
+        toast.info('An AI interview already exists for this job.');
+        router.push(`/recruitment/ai-interviews/${publishedConfig.id}`);
+        return;
+      }
+
+      if (draftConfig && canUpdateAIInterviews) {
+        router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}&config_id=${encodeURIComponent(draftConfig.id)}`);
+        return;
+      }
+
+      router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}`);
+      return;
+    }
+
+    setActiveTab('published');
+    setInvitedOnly(false);
+    setActiveOverviewCard(null);
+    setSearchQuery('');
+    setConfigListPage(1);
+    setProcessingPage(1);
+    setPageView('list');
+    setListScrollRequest((request) => request + 1);
+
+    if (!fallbackConfig || !publishedConfig) {
+      toast.error('Create and publish an AI interview for this job before inviting candidates or tracking status.');
+      clearQuickActionUrl();
+      return;
+    }
+
+    if (action === 'invite-ai-interview') {
+      if (!canShareAIInterviews && !canInviteAIInterviews) {
+        toast.error('You do not have permission to invite candidates to AI interviews.');
+        clearQuickActionUrl();
+        return;
+      }
+
+      setShareConfig(publishedConfig);
+      clearQuickActionUrl();
+      return;
+    }
+
+    if (!canViewAIInterviews && !canInviteAIInterviews) {
+      toast.error('You do not have permission to view AI interview status.');
+      clearQuickActionUrl();
+      return;
+    }
+
+    handleViewInvitations(publishedConfig);
+    clearQuickActionUrl();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    searchParams,
+    loading,
+    configs,
+    archivedConfigs,
+    aiInterviewAvailable,
+    canCreateAIInterviews,
+    canUpdateAIInterviews,
+    canShareAIInterviews,
+    canInviteAIInterviews,
+    canViewAIInterviews,
+    router,
+  ]);
 
   // List of unique creators across configs + archivedConfigs — drives the creator dropdown.
   const creatorOptions = (() => {
@@ -947,7 +1096,7 @@ export default function AIInterview() {
                   <Zap className="w-3.5 h-3.5" />
                 </div>
                 <div className="flex flex-col min-w-[88px]">
-                  <span className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-slate-500 font-semibold leading-none">Quota</span>
+                  <span className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-slate-500 font-semibold leading-none">AI Interview Quota</span>
                   {isUnlimited ? (
                     <span className="text-xs font-semibold text-brand-blue mt-0.5">Unlimited</span>
                   ) : availableUnits !== null ? (
@@ -1115,25 +1264,7 @@ export default function AIInterview() {
                     </span>
                   </div>
                 )}
-                {/* Row 1: icon (left) + count (right) */}
-                <div className="flex items-center gap-3 mb-2 sm:mb-3">
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 ${toneStyles[tone]}`}>
-                    <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </div>
-                  <div className="text-xl sm:text-3xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight tabular-nums truncate">
-                    {value}
-                  </div>
-                </div>
-                {/* Row 2: label text */}
-                <div className="min-w-0 space-y-0.5">
-                  <div className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 font-medium leading-snug whitespace-normal break-words">
-                    {label}
-                  </div>
-                  <div className="hidden sm:block text-[11px] text-gray-400 dark:text-slate-500 leading-snug whitespace-normal break-words">
-                    {hint}
-                  </div>
-                </div>
-              </button>
+              </StatsCard>
             );
           })}
         </StatsCardGrid>

@@ -699,17 +699,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
           />
 
           {/* SaaS Stats Cards — clicking a card drills into the jobs list with the matching filter applied */}
-          <div className="mb-4 rounded-xl border border-brand-blue/15 bg-brand-blue/5 p-3 sm:p-4 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
+          <div>
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                 <Briefcase className="h-5 w-5" />
               </div>
               <div>
                 <h3 className="mb-1 text-sm font-medium tracking-tight text-gray-900">Job Description Menu</h3>
-                <p className="text-sm leading-5 text-gray-600">
-                  <span className="block">A status-based view of every job description across your hiring workflow.</span>
-                  <span className="block">Review drafts, monitor published roles, and revisit archived openings from one place.</span>
-                </p>
               </div>
             </div>
           </div>

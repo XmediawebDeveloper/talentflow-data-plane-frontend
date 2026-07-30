@@ -1800,17 +1800,13 @@ export default function AITalentMatchPage({
         />
 
         {/* Stats Cards — clicking Matched Jobs drills into the list */}
-        <div className="mb-4 rounded-xl border border-brand-blue/15 bg-brand-blue/5 p-3 sm:p-4 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
+        <div>
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
               <h3 className="mb-1 text-sm font-medium tracking-tight text-gray-900 dark:text-slate-50">AI Talent Match Menu</h3>
-              <p className="text-sm leading-5 text-gray-600 dark:text-slate-400">
-                <span className="block">Review matched job sessions created by AI candidate ranking.</span>
-                <span className="block">Open matched jobs to compare candidates, scores, and next actions from one place.</span>
-              </p>
             </div>
           </div>
         </div>

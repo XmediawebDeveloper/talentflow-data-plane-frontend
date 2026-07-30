@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import QuotaBadge from '@/components/ui/quota-badge';
 
 
 const INVITATIONS_PAGE_SIZE = 10;
@@ -1328,47 +1329,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Assessment Quota Badge with color coding - use stats.units_consumed for consistency */}
             {totalUnits > 0 && (
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 shadow-sm ${
-                isUnlimited
-                  ? 'bg-brand-blue/5 ring-brand-blue/20 shadow-brand-blue/5'
-                  : (totalUnits - stats.units_consumed) <= 0
-                  ? 'bg-red-50 ring-red-200 shadow-red-500/10'
-                  : (totalUnits - stats.units_consumed) <= 2
-                  ? 'bg-brand-orange/5 ring-brand-orange/20 shadow-brand-orange/5'
-                  : 'bg-brand-blue/5 ring-brand-blue/20 shadow-brand-blue/5'
-              }`}>
-                <Zap className={`w-4 h-4 ${
-                  isUnlimited
-                    ? 'text-brand-blue'
-                    : (totalUnits - stats.units_consumed) <= 0
-                    ? 'text-red-600'
-                    : (totalUnits - stats.units_consumed) <= 2
-                    ? 'text-brand-orange'
-                    : 'text-brand-blue'
-                }`} />
-                <div className="flex flex-col">
-                  <span className="text-xs text-gray-500 dark:text-slate-500 font-medium">Assessment Quota</span>
-                  <div className="flex items-center gap-1">
-                    {isUnlimited ? (
-                      <span className="text-sm font-bold text-brand-blue">Unlimited</span>
-                    ) : availableUnits !== null ? (
-                      <>
-                        {/* Use availableUnits from API (source of truth from Control Plane) */}
-                        <span className={`text-sm font-bold ${
-                          availableUnits === 0
-                            ? 'text-red-700'
-                            : availableUnits <= 2
-                            ? 'text-brand-orange-deep'
-                            : 'text-gray-900'
-                        }`}>{availableUnits}</span>
-                        <span className="text-xs text-gray-500 dark:text-slate-500">/ {totalUnits} available</span>
-                      </>
-                    ) : (
-                      <span className="text-xs text-gray-400 dark:text-slate-500">Loading...</span>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <QuotaBadge
+                label="Assessment Quota"
+                availableUnits={availableUnits}
+                totalUnits={totalUnits}
+                isUnlimited={isUnlimited}
+                icon={Zap}
+              />
             )}
             {canAccessHRQuestionBank && (
               <button

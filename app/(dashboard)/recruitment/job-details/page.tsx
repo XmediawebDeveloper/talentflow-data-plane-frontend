@@ -34,8 +34,9 @@ function JobDetailsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobId = searchParams.get('id');
+  const fromAiInterview = searchParams.get('from') === 'ai-interview';
   const tabParam = searchParams.get('tab') as 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | null;
-  const actionParam = searchParams.get('action') as 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | null;
+  const actionParam = searchParams.get('action') as 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | 'create-ai-interview' | 'invite-ai-interview' | 'ai-interview-status' | null;
 
   // JD15: Get user role for disable/enable button visibility
   const { isTenantAdmin } = usePermissions();
@@ -82,7 +83,7 @@ function JobDetailsContent() {
       // For Draft JDs, redirect to JD creation with the current stage
       if (data.status === 'draft' || (data.status as string) === 'Draft') {
         const stage = data.creation_stage || 'create';
-        router.replace(`/recruitment/jd-creation?id=${jobId}&stage=${stage}`);
+        router.replace(`/recruitment/jd-creation?id=${jobId}&stage=${stage}${fromAiInterview ? '&from=ai-interview' : ''}`);
         return;
       }
 
@@ -182,7 +183,7 @@ function JobDetailsContent() {
   };
 
   const handleBack = () => {
-    router.push('/recruitment/job-openings');
+    router.push(fromAiInterview ? '/recruitment/ai-interviews/jd-selection' : '/recruitment/job-openings');
   };
 
   const handleEdit = (editJob: Job) => {
@@ -194,7 +195,7 @@ function JobDetailsContent() {
       return;
     }
     // Navigate to first stage (create) for editing
-    router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create`);
+    router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create${fromAiInterview ? '&from=ai-interview' : ''}`);
   };
 
   // JD13: Handle republish for edited JDs
@@ -309,6 +310,15 @@ function JobDetailsContent() {
     );
   }
 
+  const breadcrumbItems = fromAiInterview
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+        { label: 'Select Job Description', href: '/recruitment/ai-interviews/jd-selection' },
+        { label: job.title || 'Job Details' },
+      ]
+    : undefined;
+
   return (
     <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
       {/* Disable Confirmation Modal */}
@@ -382,6 +392,7 @@ function JobDetailsContent() {
         isTenantAdmin={isTenantAdmin}
         user={user}
         tenant={tenant}
+        breadcrumbItems={breadcrumbItems}
         prevId={allJDIds.indexOf(jobId ?? '') > 0 ? allJDIds[allJDIds.indexOf(jobId ?? '') - 1] : null}
         nextId={allJDIds.indexOf(jobId ?? '') >= 0 && allJDIds.indexOf(jobId ?? '') < allJDIds.length - 1 ? allJDIds[allJDIds.indexOf(jobId ?? '') + 1] : null}
         currentIndex={allJDIds.indexOf(jobId ?? '')}

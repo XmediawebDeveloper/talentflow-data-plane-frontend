@@ -21,6 +21,7 @@ import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
+import QuotaBadge from '@/components/ui/quota-badge';
 
 const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -1684,7 +1685,7 @@ export default function ResumeScoringPage({
               <History className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-gray-900 dark:text-slate-50 text-lg sm:text-xl font-semibold tracking-tight">Scored Candidates</h1>
+              <h1 className="text-gray-900 dark:text-slate-50 text-lg sm:text-xl font-semibold tracking-tight">Resume Scoring</h1>
               <p className="text-sm text-gray-600 dark:text-slate-400 truncate">View and manage previously scored resumes</p>
             </div>
           </div>
@@ -1693,20 +1694,11 @@ export default function ResumeScoringPage({
           <div className="flex items-center gap-2 flex-wrap">
             {/* Available Units Display */}
             {availableUnits !== null && (
-              <div className="bg-brand-blue rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 px-3 py-1.5 flex items-center gap-2">
-                <div className="h-7 w-7 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <DollarSign className="w-3.5 h-3.5 text-white" />
-                </div>
-                <div>
-                  <div className="text-[10px] text-blue-100 leading-tight">Available Units</div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-sm font-bold text-white leading-tight">
-                      {availableUnits.toLocaleString()}
-                    </span>
-                    <span className="text-[10px] text-blue-100">units</span>
-                  </div>
-                </div>
-              </div>
+              <QuotaBadge
+                label="Available Units"
+                availableUnits={availableUnits}
+                icon={DollarSign}
+              />
             )}
 
             {/* Progress Tables Button — commented out per request. The same
@@ -1826,17 +1818,13 @@ export default function ResumeScoringPage({
 
             {/* Action cards — "View by Job" and "View All Candidates" as two
                 separate cards. Clicking either opens its list view. */}
-            <div className="mb-4 rounded-xl border border-brand-blue/15 bg-brand-blue/5 p-3 sm:p-4 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
+            <div>
               <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                   <History className="h-5 w-5" />
                 </div>
                 <div>
                   <h3 className="mb-1 text-sm font-medium tracking-tight text-gray-900 dark:text-slate-50">Resume Scoring Menu</h3>
-                  <p className="text-sm leading-5 text-gray-600 dark:text-slate-400">
-                    <span className="block">Review scored jobs and candidate scoring history across your hiring workflow.</span>
-                    <span className="block">Open job-grouped results or all scored candidates from one place.</span>
-                  </p>
                 </div>
               </div>
             </div>
@@ -2747,9 +2735,12 @@ export default function ResumeScoringPage({
             <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Score Resumes</h1>
               {availableUnits !== null && (
-                <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 text-xs font-medium rounded-full w-fit">
-                  {availableUnits.toLocaleString()} units
-                </span>
+                <QuotaBadge
+                  label="Available Units"
+                  availableUnits={availableUnits}
+                  icon={DollarSign}
+                  className="w-fit"
+                />
               )}
             </div>
             <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5">Select a job and let AI match the best candidates</p>

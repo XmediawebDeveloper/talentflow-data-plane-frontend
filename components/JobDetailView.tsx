@@ -38,11 +38,12 @@ import { toast } from 'sonner';
 import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import PageBreadcrumb from '@/components/PageBreadcrumb';
+import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
 const formatISTDateTime = formatIST;
+type ScoredResumesMatchFilter = 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
 
 // ✅ PERMISSIONS: Reusable Quick Action Button Component
 interface QuickActionButtonProps {
@@ -113,7 +114,7 @@ interface JobDetailViewProps {
   job: ExtendedJob;
   onBack: () => void;
   initialTab?: 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match';
-  initialAction?: 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status';
+  initialAction?: 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | 'create-ai-interview' | 'invite-ai-interview' | 'ai-interview-status';
   onEdit?: (job: Job) => void;
   resumes?: any[]; // All resumes for selection
   onScoreResumes?: (resumeIds: string[], jobId: string, source: 'my-resumes' | 'internal-db') => void;
@@ -128,13 +129,14 @@ interface JobDetailViewProps {
   isTenantAdmin?: boolean; // JD15: Whether user is Owner (for disable/enable buttons)
   user?: User; // ✅ PERMISSIONS: User object for permission checking
   tenant?: Tenant; // ✅ PERMISSIONS: Tenant object for feature flag checking
+  breadcrumbItems?: BreadcrumbCrumb[];
   prevId?: string | null;
   nextId?: string | null;
   currentIndex?: number;
   totalCount?: number;
 }
 
-export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, initialTab, initialAction, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, breadcrumbItems, initialTab, initialAction, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
   const router = useRouter();
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
@@ -183,6 +185,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const niceToHaveSkills = job.niceToHaveSkills || [];
   const mustHaveComments = job.mustHaveComments || [];
   const niceToHaveComments = job.niceToHaveComments || [];
+  const jobBreadcrumbItems = breadcrumbItems ?? [
+    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+    { label: job.title || 'Job Details' },
+  ];
   const hasAnyExtractedData =
     mustHaveSkills.length > 0 || niceToHaveSkills.length > 0 ||
     mustHaveComments.length > 0 || niceToHaveComments.length > 0 ||
@@ -335,17 +342,33 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     canViewAssessments: hasPermission('canViewAssessments'),
     canUploadResumes: hasPermission('canUploadResumes'),
     canRunScoring: hasPermission('canRunScoring'),
+    canCreateAIInterviews: hasPermission('canCreateAIInterviews'),
+    canShareAIInterviews: hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews'),
+    canViewAIInterviews: hasPermission('canViewAIInterviews') || hasPermission('canRunAiInterviews') || hasPermission('canInviteAIInterviews'),
   };
 
   // ✅ PERMISSIONS: Get feature flags for Quick Actions
   const features = {
     assessment: isFeatureEnabled('assessment'),
     ai_talent_match: isFeatureEnabled('ai_talent_match'),
+    ai_interview: isFeatureEnabled('ai_interview'),
     resume_upload: isFeatureEnabled('resume_upload'),
   };
 
   // Track Invites modal state
   const [showTrackInvitesModal, setShowTrackInvitesModal] = useState(false);
+
+  const handleCreateAIInterview = () => {
+    router.push(`/recruitment/ai-interviews?action=create-ai-interview&jd_id=${encodeURIComponent(job.id)}`);
+  };
+
+  const handleInviteAIInterview = () => {
+    router.push(`/recruitment/ai-interviews?action=invite-ai-interview&jd_id=${encodeURIComponent(job.id)}`);
+  };
+
+  const handleAIInterviewStatus = () => {
+    router.push(`/recruitment/ai-interviews?action=ai-interview-status&jd_id=${encodeURIComponent(job.id)}`);
+  };
 
   // Trigger a Quick Action automatically when a caller deep-links into the
   // JD page with ?action=... (e.g. the job-openings three-dot menu).
@@ -366,6 +389,18 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     } else if (initialAction === 'assessment-status') {
       if (permissions.canViewAssessments && hasPlanFeature('assessment') && features.assessment) {
         setShowTrackInvitesModal(true);
+      }
+    } else if (initialAction === 'create-ai-interview') {
+      if (permissions.canCreateAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview && job.status !== 'Disabled') {
+        handleCreateAIInterview();
+      }
+    } else if (initialAction === 'invite-ai-interview') {
+      if (permissions.canShareAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview && job.status !== 'Disabled') {
+        handleInviteAIInterview();
+      }
+    } else if (initialAction === 'ai-interview-status') {
+      if (permissions.canViewAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview) {
+        handleAIInterviewStatus();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -702,6 +737,42 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match'>(initialTab || 'overview');
+  const overviewSectionRef = useRef<HTMLDivElement | null>(null);
+  const scoredResumesSectionRef = useRef<HTMLDivElement | null>(null);
+  const [overviewScrollRequest, setOverviewScrollRequest] = useState(0);
+  const [scoredResumesScrollRequest, setScoredResumesScrollRequest] = useState(0);
+  const [scoredResumesMatchFilter, setScoredResumesMatchFilter] = useState<ScoredResumesMatchFilter>('all');
+
+  const handleShowOverview = () => {
+    setActiveTab('overview');
+    setOverviewScrollRequest((request) => request + 1);
+  };
+
+  const handleShowScoredResumes = (matchFilter: ScoredResumesMatchFilter = 'all') => {
+    setScoredResumesMatchFilter(matchFilter);
+    setActiveTab('scored-resumes');
+    setScoredResumesScrollRequest((request) => request + 1);
+  };
+
+  useEffect(() => {
+    if (overviewScrollRequest === 0 || activeTab !== 'overview') return;
+
+    const frame = window.requestAnimationFrame(() => {
+      overviewSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [overviewScrollRequest, activeTab]);
+
+  useEffect(() => {
+    if (scoredResumesScrollRequest === 0 || activeTab !== 'scored-resumes') return;
+
+    const frame = window.requestAnimationFrame(() => {
+      scoredResumesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [scoredResumesScrollRequest, activeTab]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1072,11 +1143,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         {/* Breadcrumb */}
         <div className="mb-3">
           <PageBreadcrumb
-            items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'Job Descriptions', href: '/recruitment/job-openings' },
-              { label: job.title || 'Job Details' },
-            ]}
+            items={jobBreadcrumbItems}
           />
         </div>
 
@@ -1116,7 +1183,17 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     {job.job_id}
                   </span>
                 )}
-                <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">{job.title}</h1>
+                <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
+                  <button
+                    type="button"
+                    onClick={handleShowOverview}
+                    className="max-w-full cursor-pointer truncate rounded text-left align-baseline transition-colors hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
+                    aria-label="Show job overview"
+                    title="Show job overview"
+                  >
+                    {job.title}
+                  </button>
+                </h1>
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${getStatusBadgeClass(getDisplayStatus(job.status, job.currentVersion))}`}>
                   {getDisplayStatus(job.status, job.currentVersion)}
                 </span>
@@ -1362,7 +1439,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           </button>
           {hasPlanFeature('resume_scoring') && (
             <button
-              onClick={() => setActiveTab('scored-resumes')}
+              onClick={() => handleShowScoredResumes()}
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
                 activeTab === 'scored-resumes'
                   ? 'text-blue-600 bg-blue-50'
@@ -1431,7 +1508,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
       {/* Overview Tab Content */}
       {activeTab === 'overview' && (
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div ref={overviewSectionRef} className="grid grid-cols-1 lg:grid-cols-12 gap-5 scroll-mt-5">
         {/* Left Column - Job Details */}
         <div className="lg:col-span-8 space-y-5">
           {/* Complete Job Description */}
@@ -1773,6 +1850,56 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
+              {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews || permissions.canViewAIInterviews) && hasPlanFeature('ai_interview') && (
+                <div className="pt-2 mt-2 border-t border-gray-100 dark:border-slate-800">
+                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
+                    AI Interview
+                  </p>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+                    {/* 6. Create */}
+                    {permissions.canCreateAIInterviews && (
+                      <QuickActionButton
+                        icon={<Sparkles className="w-4 h-4" />}
+                        label="Create"
+                        onClick={handleCreateAIInterview}
+                        disabled={!features.ai_interview || job.status === 'Disabled'}
+                        disabledTooltip={
+                          !features.ai_interview
+                            ? 'AI Interviews module is not enabled for your organization'
+                            : 'AI interviews are not available for disabled JDs'
+                        }
+                      />
+                    )}
+
+                    {/* 7. Invite */}
+                    {permissions.canShareAIInterviews && (
+                      <QuickActionButton
+                        icon={<UserPlus className="w-4 h-4" />}
+                        label="Invite"
+                        onClick={handleInviteAIInterview}
+                        disabled={!features.ai_interview || job.status === 'Disabled'}
+                        disabledTooltip={
+                          !features.ai_interview
+                            ? 'AI Interviews module is not enabled for your organization'
+                            : 'AI interview invites are not available for disabled JDs'
+                        }
+                      />
+                    )}
+
+                    {/* 8. Status */}
+                    {permissions.canViewAIInterviews && (
+                      <QuickActionButton
+                        icon={<BarChart className="w-4 h-4" />}
+                        label="Status"
+                        onClick={handleAIInterviewStatus}
+                        disabled={!features.ai_interview}
+                        disabledTooltip="AI Interviews module is not enabled"
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Add Applicants - hidden */}
             </div>
           </div>
@@ -1784,7 +1911,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
                   <span className="text-gray-600 dark:text-slate-400">Total Scored Resumes</span>
-                  <span className="font-medium text-gray-900 dark:text-slate-50">{scoredResumesStats.total}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleShowScoredResumes()}
+                    className="cursor-pointer rounded font-medium text-brand-blue hover:text-brand-blue-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
+                    aria-label="View total scored resumes details"
+                    title="View scored resumes"
+                  >
+                    {scoredResumesStats.total}
+                  </button>
                 </div>
                 <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
                   <div className="bg-blue-600 h-2 rounded-full" style={{ width: scoredResumesStats.total > 0 ? '100%' : '0%' }}></div>
@@ -1793,7 +1928,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
                   <span className="text-gray-600 dark:text-slate-400">Exact Match</span>
-                  <span className="font-medium text-gray-900 dark:text-slate-50">{scoredResumesStats.exactMatch}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleShowScoredResumes('Exact Match')}
+                    className="cursor-pointer rounded font-medium text-brand-blue hover:text-brand-blue-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
+                    aria-label="View exact match scored resumes details"
+                    title="View exact match resumes"
+                  >
+                    {scoredResumesStats.exactMatch}
+                  </button>
                 </div>
                 <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
                   <div className="bg-green-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.exactMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
@@ -1802,7 +1945,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
                   <span className="text-gray-600 dark:text-slate-400">Partial Match</span>
-                  <span className="font-medium text-gray-900 dark:text-slate-50">{scoredResumesStats.partialMatch}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleShowScoredResumes('Partial Match')}
+                    className="cursor-pointer rounded font-medium text-brand-blue hover:text-brand-blue-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
+                    aria-label="View partial match scored resumes details"
+                    title="View partial match resumes"
+                  >
+                    {scoredResumesStats.partialMatch}
+                  </button>
                 </div>
                 <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
                   <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.partialMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
@@ -1811,7 +1962,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               <div>
                 <div className="flex items-center justify-between text-sm mb-2">
                   <span className="text-gray-600 dark:text-slate-400">No Match</span>
-                  <span className="font-medium text-gray-900 dark:text-slate-50">{scoredResumesStats.noMatch}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleShowScoredResumes('No Match')}
+                    className="cursor-pointer rounded font-medium text-brand-blue hover:text-brand-blue-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
+                    aria-label="View no match scored resumes details"
+                    title="View no match resumes"
+                  >
+                    {scoredResumesStats.noMatch}
+                  </button>
                 </div>
                 <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
                   <div className="bg-red-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.noMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
@@ -1882,7 +2041,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
       {/* Scored Resumes Tab Content */}
       {activeTab === 'scored-resumes' && (
-        <div className="mt-0">
+        <div ref={scoredResumesSectionRef} className="mt-0 scroll-mt-5">
           {loadingScoredResumes ? (
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 flex items-center justify-center">
               <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
@@ -1902,6 +2061,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               jobTitle={job.title}
               jobId={job.id}
               availableUnits={15}
+              initialMatchStatus={scoredResumesMatchFilter}
               onViewCandidate={(resume) => {
                 // Pass resume directly - data already formatted by fetchScoredResumes
                 // CandidateScoringDetailPage handles the same format as ResumeScoringPage
@@ -1955,7 +2115,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             const scoredIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
             return !scoredIds.has(c.resumeId);
           }))}
-          onViewCandidate={(candidate) => router.push(`/recruitment/resume-view/${candidate.resumeId}`)}
+          onViewCandidate={(candidate) => {
+            try {
+              sessionStorage.setItem('resumeNavJobId', job.id);
+              sessionStorage.setItem('resumeNavJobTab', 'scored-resumes');
+            } catch { /* ignore */ }
+            router.push(`/recruitment/resume-view/${candidate.resumeId}`);
+          }}
         />
       )}
 

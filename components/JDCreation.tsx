@@ -1051,6 +1051,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
+  const ensureJDCreationUrl = (jdId: string, creationStage: Step) => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const currentId = params.get('id');
+    const currentStage = params.get('stage');
+
+    if (currentId === jdId && currentStage === creationStage) return;
+
+    params.set('id', jdId);
+    params.set('stage', creationStage);
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    console.log('[TalentFlow] URL updated with JD progress:', { jdId, creationStage });
+  };
 
   // Determine if we're editing a draft or a published JD
   // Draft JD: can be updated directly (editingId is set)
@@ -2796,11 +2810,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           console.log('[TalentFlow] JD created with extract stage, new id:', savedJd.id);
         }
 
-        // Always ensure URL has the JD ID
-        if (jdId && !window.location.search.includes(`id=${jdId}`)) {
-          const newUrl = `${window.location.pathname}?id=${jdId}`;
-          window.history.replaceState({}, '', newUrl);
-          console.log('[TalentFlow] URL updated with JD ID:', jdId);
+        if (jdId) {
+          ensureJDCreationUrl(jdId, 'extract');
         }
       } catch (saveError) {
         console.error('[TalentFlow] Failed to save extract stage:', saveError);
@@ -3917,11 +3928,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[TalentFlow] JD created with review stage:', savedJd.id);
       }
 
-      // Always ensure URL has the JD ID
-      if (jdId && !window.location.search.includes(`id=${jdId}`)) {
-        const newUrl = `${window.location.pathname}?id=${jdId}`;
-        window.history.replaceState({}, '', newUrl);
-        console.log('[TalentFlow] URL updated with JD ID:', jdId);
+      if (jdId) {
+        ensureJDCreationUrl(jdId, 'review');
       }
     } catch (saveError) {
       console.error('[TalentFlow] Failed to save review stage:', saveError);
@@ -4811,6 +4819,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     isJobTitleValidating
   );
   const aiPromptValidationError = getAIPromptValidationError(aiPrompt);
+  const isAiInterviewFlow = breadcrumbItems?.some(item => item.href === '/recruitment/ai-interviews') ?? false;
+  const createAnotherJdUrl = isAiInterviewFlow
+    ? '/recruitment/jd-creation?from=ai-interview'
+    : '/recruitment/jd-creation';
+  const viewPublishedJdUrl = publishedJdId
+    ? `/recruitment/job-details?id=${publishedJdId}${isAiInterviewFlow ? '&from=ai-interview' : ''}`
+    : '';
 
   return (
     <>
@@ -7840,14 +7855,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             </p>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 justify-center">
               <button
-                onClick={() => { window.location.href = '/recruitment/jd-creation'; }}
+                onClick={() => router.push(createAnotherJdUrl)}
                 className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
               >
                 Create Another JD
               </button>
               {publishedJdId && (
                 <button
-                  onClick={() => router.push(`/recruitment/job-details?id=${publishedJdId}`)}
+                  onClick={() => router.push(viewPublishedJdUrl)}
                   className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
                 >
                   View JD
@@ -7857,7 +7872,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 onClick={onBack}
                 className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm"
               >
-                View All Jobs
+                {isAiInterviewFlow ? 'Select Job Description' : 'View All Jobs'}
               </button>
             </div>
           </div>
