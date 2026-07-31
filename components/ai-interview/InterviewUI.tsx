@@ -3433,6 +3433,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }
       case "greeting":
         console.log(`[WS ${timestamp}] Greeting received: text_length=${data.text?.length}`);
+        // The FIRST question ("Tell me about yourself") and the reconnect resume
+        // ack are delivered as a `greeting` (not the normal question stream), and
+        // their question_timer_started arrives LATER (via on_speaking_done) — too
+        // late to arm the pre-turn countdown before finalizePlayback opens the
+        // mic. Arm it here so Q1 gets the 5→1 "get ready" countdown like every
+        // other turn. (Nudges use interstitial_prompt, not greeting, so they
+        // still correctly get NO countdown.)
+        getReadyArmedRef.current = true;
         tokenBufferRef.current = data.text;
         revealedCharsRef.current = 0;
         isAiSpeakingRef.current = true;
@@ -3470,29 +3478,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
       case "role_intro":
-        // Opening "About the role" warm-up — spoken + rendered as an assistant
-        // bubble, but it's NOT a question: when its audio ends the mic must NOT
-        // open (the first question follows immediately). roleIntroActiveRef makes
-        // finalizePlayback skip the mic-open for this message only.
+        // Opening "About the role" warm-up. Stream + lip-sync it EXACTLY like a
+        // normal Bina turn (progressive token reveal), so it looks identical to
+        // every other message (previously it popped in as a STATIC bubble — the
+        // reported "intro doesn't work like others"). The ONLY difference: it is
+        // NOT a question — roleIntroActiveRef makes finalizePlayback COMMIT the
+        // bubble (via saveAiMessage) but SKIP the mic-open AND the pre-turn
+        // countdown for this message only.
         //
-        // COMMIT IMMEDIATELY as a STATIC chat bubble (not the live-reveal bubble).
-        // Streaming the role message via the shared live bubble reintroduced two
-        // regressions (confirmed in arun.log): the bubble VANISHED after streaming,
-        // and Q1's finalizePlayback got confused with the role turn so "Your turn"
-        // (mic_listening) did not fire for ~30s after Q1. Appending to `messages`
-        // now means it can never be wiped; clearing the token buffer makes the
-        // role finalize's saveAiMessage() a no-op (no duplicate bubble) while still
-        // clearing roleIntroActiveRef so Q1 opens the mic normally.
+        // Streaming via the shared live bubble is safe NOW because the backend
+        // defers the first question until THIS role message's playback_complete
+        // (see send_greeting's deferral). So the role's finalizePlayback — which
+        // runs saveAiMessage BEFORE the roleIntro early-return — always commits
+        // the role bubble before Q1's tokens arrive. That closes the old race
+        // that made the bubble vanish / delayed Q1's mic.
         console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}`);
         roleIntroActiveRef.current = true;
-        roleIntroTextRef.current = (data.text as string) ?? "";  // for lip-sync in speaking_started
-        setMessages(prev => [...prev, {
-          id: crypto.randomUUID(),
-          role: "assistant" as const,
-          content: (data.text as string) ?? "",
-          timestamp: nowIST(),
-        }]);
-        tokenBufferRef.current = "";
+        roleIntroTextRef.current = (data.text as string) ?? "";  // lip-sync fallback in speaking_started
+        tokenBufferRef.current = (data.text as string) ?? "";     // STREAM it, like the greeting / questions
         revealedCharsRef.current = 0;
         currentAiTextRef.current = "";
         setCurrentAiText("");
@@ -3502,6 +3505,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         audioEndReceivedRef.current = false;
         talkingHeadEndedEarlyRef.current = false;
         setStatus("Bina is speaking...");
+        startRevealingTokens();
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
       case "server_end_turn": {
@@ -3995,10 +3999,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           }
         }
         // Feed accumulated text for phoneme lip sync before starting audio.
-        // For the ROLE intro turn tokenBufferRef is intentionally empty (static
-        // bubble, no streaming) — so fall back to the stashed role text, else
-        // TalkingHead gets "" and Bina's mouth stays still while the audio
-        // plays ("audio plays, Bina silent" bug).
+        // The role intro now streams like any other turn (tokenBufferRef holds
+        // its text), so this normally uses tokenBufferRef. The roleIntroTextRef
+        // fallback is kept as a belt-and-suspenders in case speaking_started
+        // races ahead of the role_intro message (else TalkingHead would get ""
+        // and Bina's mouth would stay still — the "audio plays, Bina silent" bug).
         talkingHeadRef.current?.setText(
           tokenBufferRef.current || (roleIntroActiveRef.current ? roleIntroTextRef.current : "")
         );
@@ -6948,6 +6953,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     messages, currentAiText, currentTranscript, isCandidateTranscriptProcessing,
     isRecording, isAiSpeaking, isProcessing, questionNumber, isClosing,
     showNowSpeakBanner, showSilenceBanner, questionTimerExpired,
+    // Re-pin to the bottom when a countdown overlay appears/disappears (it toggles
+    // the reserved bottom padding via bannerVisible).
+    preTurnCountdown, midSilenceCountdown,
   ]);
 
   // Flush proctoring events when the page is about to close (tab close, refresh, etc.)
@@ -7614,7 +7622,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // is tied to THIS (not a separate condition) so content is ALWAYS cleared
   // above the banner, including during the "Ending…" closing state where the
   // goodbye message + loading bubble were previously rendering behind it.
-  const bannerVisible = turnBanner !== null;
+  // Keep the reserved bottom padding stable while a big countdown overlay is up,
+  // even though turnBanner is suppressed then — otherwise the padding collapses
+  // (pb-52→pb-4), scrollHeight drops ~192px and the chat un-pins from the bottom
+  // (reported: "auto scroll at bottom not working" during the countdown).
+  const bannerVisible = turnBanner !== null || preTurnCountdown != null || midSilenceCountdown != null;
 
   return (
     <>
@@ -8414,36 +8426,37 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               const isLastQ = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
               const title = isPre ? 'Get ready to answer' : 'Are you still there?';
               const subtitle = isPre
-                ? 'Your turn is about to begin — speak when it says “Your turn”.'
+                ? 'Speak when it’s your turn.'
                 : isLastQ
-                  ? 'We can’t hear you. Keep speaking to continue, otherwise the interview will end when the count reaches zero.'
-                  : 'We can’t hear you. Keep speaking to continue — or press “Skip to next question” below.';
+                  ? 'Keep talking, or the interview will end.'
+                  : 'Keep talking to continue, or tap Next.';
               const accent = isPre ? 'text-emerald-300' : 'text-amber-300';
               const ring = isPre ? 'ring-emerald-400/40' : 'ring-amber-400/40';
               return (
                 <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 z-[104] flex flex-col items-center justify-center px-4">
                   <style>{`@keyframes cdPulse {0%{opacity:0;transform:scale(0.5)}22%{opacity:1;transform:scale(1.08)}68%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.85)}}`}</style>
-                  <div className="text-center">
-                    <div className={`text-sm sm:text-base font-bold ${accent} mb-2 drop-shadow-lg`}>{title}</div>
+                  <div className="flex flex-col items-center text-center">
+                    {/* Title in a dark chip so it reads on the light chat background */}
+                    <div className={`mb-3 px-4 py-1.5 rounded-full bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-sm sm:text-base font-bold ${accent} shadow-lg`}>{title}</div>
                     <div
                       key={`${isPre ? 'p' : 's'}-${num}`}
-                      className={`mx-auto flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-black/60 backdrop-blur-md ring-4 ${ring} shadow-2xl`}
+                      className={`flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-black/70 backdrop-blur-md ring-4 ${ring} shadow-2xl`}
                       style={{ animation: 'cdPulse 1s ease-in-out' }}
                     >
                       <span className={`font-black tabular-nums ${accent}`} style={{ fontSize: '5rem', lineHeight: 1 }}>{num}</span>
                     </div>
                     {!isPre && !isLastQ && (
-                      <div className="mt-4">
-                        <button
-                          type="button"
-                          onClick={() => handleNextQuestion()}
-                          className="pointer-events-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/90 hover:bg-white text-gray-900 text-sm font-semibold shadow-lg ring-1 ring-black/10 transition-colors"
-                        >
-                          Skip to next question →
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleNextQuestion()}
+                        className="pointer-events-auto mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-gray-900 text-sm font-semibold shadow-lg ring-1 ring-black/10 hover:bg-gray-100 transition-colors"
+                      >
+                        Next question →
+                      </button>
                     )}
-                    <div className="mt-3 max-w-sm mx-auto text-white/90 text-xs sm:text-sm leading-snug drop-shadow-lg">{subtitle}</div>
+                    {/* Subtitle in a dark chip — plain white text was invisible on
+                        the light chat background (reported). */}
+                    <div className="mt-3 max-w-sm px-3.5 py-2 rounded-xl bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-white text-xs sm:text-sm leading-snug shadow-lg">{subtitle}</div>
                   </div>
                 </div>
               );

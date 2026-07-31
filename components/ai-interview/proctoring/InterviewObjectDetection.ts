@@ -288,14 +288,25 @@ export function useInterviewObjectDetection(config?: UseInterviewObjectDetection
         st.hits += 1;
         st.absent = 0;
 
-        if (st.armed && st.hits >= def.framesToConfirm) {
+        // Pick the tier from THIS detection's score. A weak score must never be
+        // reported with the confident tier's label or severity.
+        const tier = def.escalate && det.confidence >= def.escalate.above
+          ? def.escalate
+          : null;
+        const eventType = tier?.eventType ?? def.eventType;
+        const displayLabel = tier?.displayLabel ?? def.displayLabel;
+        const needFrames = tier?.framesToConfirm ?? def.framesToConfirm;
+
+        if (st.armed && st.hits >= needFrames) {
           st.armed = false;
           console.log(
-            `[INTERVIEW_OBJECT_DETECTION] FLAG ${def.eventType} ` +
-            `${det.object_class} score=${det.confidence.toFixed(3)} frames=${st.hits}`,
+            `[INTERVIEW_OBJECT_DETECTION] FLAG ${eventType} ` +
+            `${det.object_class} score=${det.confidence.toFixed(3)} frames=${st.hits}` +
+            `${tier ? " (escalated)" : ""}`,
           );
-          callbacksRef.current?.onObjectDetected?.(def.eventType, {
+          callbacksRef.current?.onObjectDetected?.(eventType, {
             ...det,
+            object_label: displayLabel,
             consecutive_frames: st.hits,
           });
         } else if (st.armed) {
