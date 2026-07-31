@@ -1,6 +1,6 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Briefcase } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, ArrowRight, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Briefcase } from 'lucide-react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -726,11 +726,11 @@ const DraggableSkill = ({
         </>
       ) : (
         <>
-          <div className="flex items-center gap-2 flex-1">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
             {!readOnly && (
               <div
                 ref={drag as unknown as React.Ref<HTMLDivElement>}
-                className="cursor-move opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600"
+                className="cursor-move opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-600 flex-shrink-0"
                 title="Drag to move"
               >
                 <GripVertical className="w-4 h-4" />
@@ -738,9 +738,9 @@ const DraggableSkill = ({
             )}
             <CheckCircle className={`w-4 h-4 ${tickColor} flex-shrink-0`} />
             <span
-              className={`text-sm text-gray-700 dark:text-slate-300 flex-1 ${readOnly ? '' : 'cursor-pointer hover:text-gray-900'}`}
+              className={`text-sm text-gray-700 dark:text-slate-300 flex-1 min-w-0 truncate ${readOnly ? '' : 'cursor-pointer hover:text-gray-900'}`}
               onClick={() => !readOnly && onStartEdit(category, index, skill)}
-              title={readOnly ? '' : 'Click to edit'}
+              title={skill}
             >
               {skill}
             </span>
@@ -756,10 +756,11 @@ const DraggableSkill = ({
               </button>
               <button
                 onClick={() => onMove(skill, category, isMustHave ? 'niceToHaveSkills' : 'mustHaveSkills')}
-                className="text-xs text-gray-800 hover:text-gray-900 px-2"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                aria-label={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
                 title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
               >
-                {isMustHave ? '→' : '←'}
+                {isMustHave ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowLeft className="h-3.5 w-3.5" />}
               </button>
               <button
                 onClick={() => onRemove(category, index)}
@@ -802,7 +803,7 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
   return (
     <div
       ref={drop as unknown as React.Ref<HTMLDivElement>}
-      className={`space-y-2 min-h-[100px] p-3 rounded-lg border-2 border-dashed transition-all ${
+      className={`space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
         isActive
           ? isMustHave
             ? 'border-red-400 bg-red-50'
@@ -926,10 +927,11 @@ const DraggableComment = ({
               </button>
               <button
                 onClick={() => onMove(comment, category, isMustHave ? 'niceToHaveComments' : 'mustHaveComments')}
-                className="text-xs text-gray-800 hover:text-gray-900 px-2"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                aria-label={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
                 title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
               >
-                {isMustHave ? '→' : '←'}
+                {isMustHave ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowLeft className="h-3.5 w-3.5" />}
               </button>
               <button
                 onClick={() => onRemove(category, index)}
@@ -972,7 +974,7 @@ const DroppableCommentsContainer = ({ category, onDrop, children }: DroppableCom
   return (
     <div
       ref={drop as unknown as React.Ref<HTMLDivElement>}
-      className={`space-y-2 min-h-[100px] p-3 rounded-lg border-2 border-dashed transition-all ${
+      className={`space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
         isActive
           ? isMustHave
             ? 'border-orange-400 bg-orange-50'
@@ -1052,6 +1054,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
+  const ensureJDCreationUrl = (jdId: string, creationStage: Step) => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const currentId = params.get('id');
+    const currentStage = params.get('stage');
+
+    if (currentId === jdId && currentStage === creationStage) return;
+
+    params.set('id', jdId);
+    params.set('stage', creationStage);
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    console.log('[TalentFlow] URL updated with JD progress:', { jdId, creationStage });
+  };
 
   // Determine if we're editing a draft or a published JD
   // Draft JD: can be updated directly (editingId is set)
@@ -1277,6 +1293,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Track if we've loaded from editingJD to prevent re-initialization on re-renders
   const hasLoadedFromEditingJD = useRef(false);
+
+  // The single scroll container wraps all steps. Since it stays mounted across
+  // step changes, its scroll position is retained — so moving to the next step
+  // would otherwise leave the view scrolled down where the Next button was.
+  // We reset it to the top whenever the step changes.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Scroll the step container back to the top whenever the step changes so each
+  // step (create / extract / review) opens from the top instead of wherever the
+  // previous step's Next button left the scroll position.
+  useEffect(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [step]);
 
   // Track original values from last extraction to skip re-extraction if unchanged
   const [lastExtractedJD, setLastExtractedJD] = useState<string>('');
@@ -2797,11 +2826,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           console.log('[TalentFlow] JD created with extract stage, new id:', savedJd.id);
         }
 
-        // Always ensure URL has the JD ID
-        if (jdId && !window.location.search.includes(`id=${jdId}`)) {
-          const newUrl = `${window.location.pathname}?id=${jdId}`;
-          window.history.replaceState({}, '', newUrl);
-          console.log('[TalentFlow] URL updated with JD ID:', jdId);
+        if (jdId) {
+          ensureJDCreationUrl(jdId, 'extract');
         }
       } catch (saveError) {
         console.error('[TalentFlow] Failed to save extract stage:', saveError);
@@ -3918,11 +3944,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[TalentFlow] JD created with review stage:', savedJd.id);
       }
 
-      // Always ensure URL has the JD ID
-      if (jdId && !window.location.search.includes(`id=${jdId}`)) {
-        const newUrl = `${window.location.pathname}?id=${jdId}`;
-        window.history.replaceState({}, '', newUrl);
-        console.log('[TalentFlow] URL updated with JD ID:', jdId);
+      if (jdId) {
+        ensureJDCreationUrl(jdId, 'review');
       }
     } catch (saveError) {
       console.error('[TalentFlow] Failed to save review stage:', saveError);
@@ -4812,10 +4835,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     isJobTitleValidating
   );
   const aiPromptValidationError = getAIPromptValidationError(aiPrompt);
+  const isAiInterviewFlow = breadcrumbItems?.some(item => item.href === '/recruitment/ai-interviews') ?? false;
+  const createAnotherJdUrl = isAiInterviewFlow
+    ? '/recruitment/jd-creation?from=ai-interview'
+    : '/recruitment/jd-creation';
+  const viewPublishedJdUrl = publishedJdId
+    ? `/recruitment/job-details?id=${publishedJdId}${isAiInterviewFlow ? '&from=ai-interview' : ''}`
+    : '';
 
   return (
     <>
-      <div className="h-full overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div ref={scrollContainerRef} className="h-full overflow-x-hidden overflow-y-auto bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px] space-y-4 md:space-y-5">
 
         {/* Content Card: Breadcrumb + Title + Step Indicator + warning + step content (AI-Generated JD, Manual Input, Job Details, Generated JD) */}
@@ -5441,12 +5471,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 {/* Column 1: Must-Have Skills */}
                 <div>
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="section-header-row">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Must-Have Skills <span className="text-red-500">*</span> ({extractedData.mustHaveSkills?.length || 0})</h3>
                     {!isRegenerating && (
                       <button
                         onClick={() => setEditingCategory('mustHave')}
-                        className="text-sm text-gray-800 dark:text-slate-100 hover:text-gray-900 flex items-center gap-1"
+                        className="btn-add"
                       >
                         <Plus className="w-4 h-4" />
                         Add
@@ -5504,12 +5534,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                 {/* Column 2: Nice-to-Have Skills */}
                 <div>
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="section-header-row">
                     <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Nice-to-Have Skills ({extractedData.niceToHaveSkills?.length || 0})</h3>
                     {!isRegenerating && (
                       <button
                         onClick={() => setEditingCategory('niceToHave')}
-                        className="text-sm text-gray-800 dark:text-slate-100 hover:text-gray-900 flex items-center gap-1"
+                        className="btn-add"
                       >
                         <Plus className="w-4 h-4" />
                         Add
@@ -5563,12 +5593,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <div className="space-y-6">
                   {/* Must-Have Comments */}
                   <div>
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="section-header-row">
                       <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Must-Have Additional Requirements ({extractedData.mustHaveComments?.length || 0})</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('comments')}
-                          className="text-sm text-gray-800 dark:text-slate-100 hover:text-gray-900 flex items-center gap-1"
+                          className="btn-add"
                         >
                           <Plus className="w-4 h-4" />
                           Add
@@ -5627,12 +5657,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* Nice-to-Have Comments */}
                   <div>
                     {(() => { console.log('[DEBUG] Rendering Nice-to-Have Comments, count:', extractedData.niceToHaveComments?.length, 'data:', extractedData.niceToHaveComments); return null; })()}
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="section-header-row">
                       <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Nice-to-Have Additional Requirements ({extractedData.niceToHaveComments?.length || 0})</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('nice-comments')}
-                          className="text-sm text-gray-800 dark:text-slate-100 hover:text-gray-900 flex items-center gap-1"
+                          className="btn-add"
                         >
                           <Plus className="w-4 h-4" />
                           Add
@@ -5688,7 +5718,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 {/* Experience */}
                 <div>
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Experience <span className="text-red-500">*</span></h3>
+                  <div className="mb-3 sm:mb-4 flex items-center justify-between gap-3">
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Experience <span className="text-red-500">*</span></h3>
+                    <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(extractedData.experienceRequired)}
+                        onChange={(e) => { setExtractedData(prev => ({ ...prev, experienceRequired: e.target.checked })); markExtractedDataModified(); }}
+                        className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                        disabled={isRegenerating}
+                      />
+                      <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
+                    </label>
+                  </div>
                   <select
                     value={experienceSelectValue}
                     onChange={(e) => {
@@ -5774,21 +5816,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {validationErrors.experience}
                     </p>
                   )}
-                  <label className={`flex items-center gap-2 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(extractedData.experienceRequired)}
-                      onChange={(e) => { setExtractedData(prev => ({ ...prev, experienceRequired: e.target.checked })); markExtractedDataModified(); }}
-                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
-                      disabled={isRegenerating}
-                    />
-                    <span className="text-sm text-gray-700 dark:text-slate-300">Required</span>
-                  </label>
                 </div>
 
                 {/* Education */}
                 <div>
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Education <span className="text-red-500">*</span></h3>
+                  <div className="mb-3 sm:mb-4 flex items-center justify-between gap-3">
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Education <span className="text-red-500">*</span></h3>
+                    <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(extractedData.educationRequired)}
+                        onChange={(e) => { setExtractedData(prev => ({ ...prev, educationRequired: e.target.checked })); markExtractedDataModified(); }}
+                        className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                        disabled={isRegenerating}
+                      />
+                      <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
+                    </label>
+                  </div>
                   <select
                     value={extractedData.education}
                     onChange={(e) => {
@@ -5815,21 +5859,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {validationErrors.education}
                     </p>
                   )}
-                  <label className={`flex items-center gap-2 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(extractedData.educationRequired)}
-                      onChange={(e) => { setExtractedData(prev => ({ ...prev, educationRequired: e.target.checked })); markExtractedDataModified(); }}
-                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
-                      disabled={isRegenerating}
-                    />
-                    <span className="text-sm text-gray-700 dark:text-slate-300">Required</span>
-                  </label>
                 </div>
 
                 {/* Industry Type */}
                 <div>
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Industry Type <span className="text-red-500">*</span></h3>
+                  <div className="mb-3 sm:mb-4 flex items-center justify-between gap-3">
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Industry Type <span className="text-red-500">*</span></h3>
+                    <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(extractedData.industryTypeRequired)}
+                        onChange={(e) => { setExtractedData(prev => ({ ...prev, industryTypeRequired: e.target.checked })); markExtractedDataModified(); }}
+                        className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                        disabled={isRegenerating}
+                      />
+                      <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
+                    </label>
+                  </div>
                   <select
                     value={extractedData.industryType}
                     onChange={(e) => {
@@ -5856,23 +5902,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {validationErrors.industryType}
                     </p>
                   )}
-                  <label className={`flex items-center gap-2 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(extractedData.industryTypeRequired)}
-                      onChange={(e) => { setExtractedData(prev => ({ ...prev, industryTypeRequired: e.target.checked })); markExtractedDataModified(); }}
-                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
-                      disabled={isRegenerating}
-                    />
-                    <span className="text-sm text-gray-700 dark:text-slate-300">Required</span>
-                  </label>
                 </div>
               </div>
 
               {/* Salary */}
               <div className="mb-6 sm:mb-8">
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-3">
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50">Salary Range</h3>
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Salary Range</h3>
                   <div className="flex items-center gap-4">
                     <label className={`flex items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                       <input
@@ -5947,7 +5983,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <select
                       value={extractedData.compensationType}
                       onChange={(e) => { setExtractedData(prev => ({ ...prev, compensationType: e.target.value as 'hourly' | 'daily' | 'monthly' | 'yearly' })); markExtractedDataModified(); }}
-                      className={`px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      className={`px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                       disabled={isRegenerating}
                     >
                       <option value="hourly">Hourly</option>
@@ -5968,7 +6004,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               {/* Locations Section */}
               <div>
                 <div className="flex items-center gap-3 mb-4">
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50">Locations</h3>
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Locations</h3>
                   <label className={`flex items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
@@ -7044,7 +7080,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Employment Type */}
                 <div>
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-2">Employment Type</h3>
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-2">Employment Type</h3>
                   <select
                     value={extractedData.employmentType}
                     onChange={(e) => { setExtractedData(prev => ({
@@ -7064,7 +7100,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                 {/* Work Model */}
                 <div>
-                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-2">Work Mode</h3>
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-2">Work Mode</h3>
                   <select
                     value={extractedData.workModel}
                     onChange={(e) => { setExtractedData(prev => ({
@@ -7086,7 +7122,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1">Allow Overqualified Candidates</h3>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">Allow Overqualified Candidates</h3>
                     <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Accept candidates who exceed the required qualifications</p>
                   </div>
                   <label className={`relative inline-flex items-center ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
@@ -7226,7 +7262,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Assessment Guidance - Left */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50">Assessment Guidance</h3>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Assessment Guidance</h3>
                     <span className="text-xs text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded">Optional</span>
                   </div>
                   <p className="text-sm text-gray-600 dark:text-slate-400 mb-3 flex items-center gap-1">
@@ -7253,7 +7289,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Internal Recruiter Notes - Right */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50">Internal Recruiter Notes</h3>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Internal Recruiter Notes</h3>
                     <span className="text-xs text-gray-500 dark:text-slate-500 bg-yellow-100 px-2 py-0.5 rounded flex items-center gap-1">
                       🔒 Private
                     </span>
@@ -7841,14 +7877,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             </p>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 justify-center">
               <button
-                onClick={() => { window.location.href = '/recruitment/jd-creation'; }}
+                onClick={() => router.push(createAnotherJdUrl)}
                 className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
               >
                 Create Another JD
               </button>
               {publishedJdId && (
                 <button
-                  onClick={() => router.push(`/recruitment/job-details?id=${publishedJdId}`)}
+                  onClick={() => router.push(viewPublishedJdUrl)}
                   className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
                 >
                   View JD
@@ -7858,7 +7894,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 onClick={onBack}
                 className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm"
               >
-                View All Jobs
+                {isAiInterviewFlow ? 'Select Job Description' : 'View All Jobs'}
               </button>
             </div>
           </div>

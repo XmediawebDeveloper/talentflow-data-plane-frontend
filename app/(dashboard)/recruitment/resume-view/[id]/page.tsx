@@ -233,18 +233,25 @@ export default function ResumeViewPage() {
   // to the right place ("My Resumes" vs "Internal Database"). The originating
   // list stores this in sessionStorage as `resumeNavSource`.
   const [viewSource, setViewSource] = useState<'my-resumes' | 'resume-database' | 'ai-talent-match' | 'job-details'>('resume-database');
+  const [jobDetailsReturnUrl, setJobDetailsReturnUrl] = useState<string | null>(null);
   useEffect(() => {
     try {
       const s = sessionStorage.getItem('resumeNavSource');
       if (s === 'my-resumes' || s === 'resume-database' || s === 'ai-talent-match' || s === 'job-details') {
         setViewSource(s);
       }
+
+      const jobId = sessionStorage.getItem('resumeNavJobId');
+      const jobTab = sessionStorage.getItem('resumeNavJobTab') || 'scored-resumes';
+      if (jobId) {
+        setJobDetailsReturnUrl(`/recruitment/job-details?id=${encodeURIComponent(jobId)}&tab=${encodeURIComponent(jobTab)}`);
+      }
     } catch { /* ignore */ }
   }, []);
   const sourceCrumb =
     viewSource === 'my-resumes' ? { label: 'My Resumes', href: '/recruitment/my-resumes' }
     : viewSource === 'ai-talent-match' ? { label: 'AI Talent Match', href: '/recruitment/ai-talent-match' }
-    : viewSource === 'job-details' ? { label: 'Job Descriptions', href: '/recruitment/job-openings' }
+    : viewSource === 'job-details' ? { label: 'Scored Resumes', href: jobDetailsReturnUrl || '/recruitment/job-openings' }
     : { label: 'Internal Database', href: '/recruitment/resume-database' };
 
   // Apply to Job modal state
@@ -685,6 +692,10 @@ Best regards`);
     }
   };
 
+  const handleOpenScoredResumes = () => {
+    router.push(jobDetailsReturnUrl || '/recruitment/job-openings');
+  };
+
   const handleVersionSelectForApply = async (versionId: string) => {
     setSelectedVersionForApply(versionId);
     setShowVersionSelectModal(false);
@@ -867,7 +878,15 @@ Best regards`);
               </button>
             )}
           </div>
-          {canApplyResumeToJob && (
+          {viewSource === 'job-details' ? (
+            <button
+              onClick={handleOpenScoredResumes}
+              className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+            >
+              <FileText className="w-4 h-4" />
+              Scored Resumes
+            </button>
+          ) : canApplyResumeToJob && (
             <button
               onClick={handleApplyToJob}
               className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"

@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ArrowUpRight, ClipboardList, Mic, Ban } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban } from 'lucide-react';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -22,6 +22,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import ListPagination from '@/components/ListPagination';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 
 // Returns the effective interview duration string.
 // New configs store the real 30 / 35 / N value in duration_minutes.
@@ -49,9 +50,11 @@ const ROUND_LABELS: Record<string, string> = {
 };
 
 type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'processing' | 'audit' | 'consent' | 'settings';
+type OverviewCardKey = 'total' | 'active' | 'invited' | 'score';
 const CONFIG_PAGE_SIZE = 10;
 const PROCESSING_PAGE_SIZE = 10;
 const INVITATION_PAGE_SIZE = 10;
+const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 const AI_INTERVIEW_INVITE_STATUS_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
   { value: 'invited', label: 'Invited' },
@@ -88,15 +91,26 @@ export default function AIInterview() {
   // Two-step view: 'cards' shows only the stat tiles; 'list' shows the tabs + filters + list.
   // Mirrors the Job Openings page pattern — fresh visit lands on the cards overview.
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
+  const [listScrollRequest, setListScrollRequest] = useState(0);
+  const consumedListViewRedirectRef = useRef(false);
+  const handledQuickActionRef = useRef<string | null>(null);
+  const [activeOverviewCard, setActiveOverviewCard] = useState<OverviewCardKey | null>(null);
   // Extra filter applied on top of the active tab — used by the "Invite Shared
   // Configs" stats card to scope the list to only configs that have actually
   // had invitations shared.
   const [invitedOnly, setInvitedOnly] = useState(false);
-  const openListView = (tab: TabKey, opts?: { invitedOnly?: boolean }) => {
+  const openListView = (tab: TabKey, opts?: { invitedOnly?: boolean; cardKey?: OverviewCardKey }) => {
     setActiveTab(tab);
     setInvitedOnly(!!opts?.invitedOnly);
+    setActiveOverviewCard(opts?.cardKey ?? null);
+    setConfigListPage(1);
+    setProcessingPage(1);
     setPageView('list');
+    setListScrollRequest((request) => request + 1);
   };
+
+  const isOverviewCardActive = (cardKey: OverviewCardKey) => pageView === 'list' && activeOverviewCard === cardKey;
   const [modeFilter, setModeFilter] = useState<'all' | 'timed' | 'conversational'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'active' | 'draft'>('newest');
@@ -446,11 +460,10 @@ export default function AIInterview() {
   const rootRef = useScrollRestoration('ai-interviews', !loading, [pageView]);
   useListStatePersistence(
     'ai-interviews',
-    { pageView, activeTab, invitedOnly, modeFilter, searchQuery, sortBy,
+    { activeTab, invitedOnly, modeFilter, searchQuery, sortBy,
       creatorFilter, dateFilter, customDateFrom, customDateTo,
       configListPage, configListItemsPerPage, processingPage, processingItemsPerPage },
     (s) => {
-      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
       // 'consent' tab was removed — never restore onto it.
       if (typeof s.activeTab === 'string' && s.activeTab !== 'consent') setActiveTab(s.activeTab as TabKey);
       if (typeof s.invitedOnly === 'boolean') setInvitedOnly(s.invitedOnly);
@@ -467,6 +480,40 @@ export default function AIInterview() {
       if (typeof s.processingItemsPerPage === 'number') setProcessingItemsPerPage(s.processingItemsPerPage);
     },
   );
+
+  useEffect(() => {
+    if (listScrollRequest === 0 || pageView !== 'list') return;
+
+    const frame = window.requestAnimationFrame(() => {
+      listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [listScrollRequest, pageView, activeTab, invitedOnly]);
+
+  useEffect(() => {
+    if (consumedListViewRedirectRef.current || typeof window === 'undefined') return;
+    const redirectState = sessionStorage.getItem(AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY);
+    if (redirectState !== 'pending' && redirectState !== 'consumed') return;
+
+    consumedListViewRedirectRef.current = true;
+    sessionStorage.setItem(AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY, 'consumed');
+    setActiveTab('all');
+    setInvitedOnly(false);
+    setActiveOverviewCard(null);
+    setConfigListPage(1);
+    setProcessingPage(1);
+    setPageView('list');
+    setListScrollRequest((request) => request + 1);
+
+    const clearRedirectTimer = window.setTimeout(() => {
+      if (sessionStorage.getItem(AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY) === 'consumed') {
+        sessionStorage.removeItem(AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY);
+      }
+    }, 1000);
+
+    return () => window.clearTimeout(clearRedirectTimer);
+  }, []);
 
   useEffect(() => {
     const wasPublished = searchParams.get('published') === '1';
@@ -675,6 +722,127 @@ export default function AIInterview() {
     const candidateFlowStatuses = ['invited', 'consent_pending', 'system_check', 'in_progress', 'scheduled'];
     return candidateFlowStatuses.includes(status) ? 'published' : status;
   };
+
+  // Job Details Quick Actions deep-link here so they can reuse the existing
+  // create, share, and invitation status flows for the selected JD.
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (
+      action !== 'create-ai-interview' &&
+      action !== 'invite-ai-interview' &&
+      action !== 'ai-interview-status'
+    ) {
+      return;
+    }
+
+    const jdId = searchParams.get('jd_id') || searchParams.get('jdId') || searchParams.get('jobId');
+    const actionKey = `${action}:${jdId || ''}`;
+
+    if (handledQuickActionRef.current === actionKey) return;
+
+    if (!jdId) {
+      handledQuickActionRef.current = actionKey;
+      toast.error('Job description is missing for this AI interview action.');
+      router.replace('/recruitment/ai-interviews', { scroll: false });
+      return;
+    }
+
+    if (loading) return;
+
+    handledQuickActionRef.current = actionKey;
+
+    const clearQuickActionUrl = () => {
+      router.replace('/recruitment/ai-interviews', { scroll: false });
+    };
+
+    if (!aiInterviewAvailable) {
+      toast.error('AI Interviews module is not enabled for your organization.');
+      clearQuickActionUrl();
+      return;
+    }
+
+    const activeConfigs = configs.filter((config) => config.jd_id === jdId);
+    const archivedMatches = archivedConfigs.filter(
+      (config) => config.jd_id === jdId && !activeConfigs.some((active) => active.id === config.id),
+    );
+    const jdConfigs = [...activeConfigs, ...archivedMatches];
+    const publishedConfig = jdConfigs.find(
+      (config) => normalizeConfigStatus(config.status) === 'published' && config.status !== 'archived',
+    );
+    const draftConfig = jdConfigs.find((config) => config.status === 'draft');
+    const fallbackConfig = publishedConfig || draftConfig || jdConfigs.find((config) => config.status !== 'archived') || jdConfigs[0] || null;
+
+    if (action === 'create-ai-interview') {
+      if (!canCreateAIInterviews) {
+        toast.error('You do not have permission to create AI interviews.');
+        clearQuickActionUrl();
+        return;
+      }
+
+      if (publishedConfig) {
+        toast.info('An AI interview already exists for this job.');
+        router.push(`/recruitment/ai-interviews/${publishedConfig.id}`);
+        return;
+      }
+
+      if (draftConfig && canUpdateAIInterviews) {
+        router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}&config_id=${encodeURIComponent(draftConfig.id)}`);
+        return;
+      }
+
+      router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}`);
+      return;
+    }
+
+    setActiveTab('published');
+    setInvitedOnly(false);
+    setActiveOverviewCard(null);
+    setSearchQuery('');
+    setConfigListPage(1);
+    setProcessingPage(1);
+    setPageView('list');
+    setListScrollRequest((request) => request + 1);
+
+    if (!fallbackConfig || !publishedConfig) {
+      toast.error('Create and publish an AI interview for this job before inviting candidates or tracking status.');
+      clearQuickActionUrl();
+      return;
+    }
+
+    if (action === 'invite-ai-interview') {
+      if (!canShareAIInterviews && !canInviteAIInterviews) {
+        toast.error('You do not have permission to invite candidates to AI interviews.');
+        clearQuickActionUrl();
+        return;
+      }
+
+      setShareConfig(publishedConfig);
+      clearQuickActionUrl();
+      return;
+    }
+
+    if (!canViewAIInterviews && !canInviteAIInterviews) {
+      toast.error('You do not have permission to view AI interview status.');
+      clearQuickActionUrl();
+      return;
+    }
+
+    handleViewInvitations(publishedConfig);
+    clearQuickActionUrl();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    searchParams,
+    loading,
+    configs,
+    archivedConfigs,
+    aiInterviewAvailable,
+    canCreateAIInterviews,
+    canUpdateAIInterviews,
+    canShareAIInterviews,
+    canInviteAIInterviews,
+    canViewAIInterviews,
+    router,
+  ]);
 
   // List of unique creators across configs + archivedConfigs — drives the creator dropdown.
   const creatorOptions = (() => {
@@ -928,7 +1096,7 @@ export default function AIInterview() {
                   <Zap className="w-3.5 h-3.5" />
                 </div>
                 <div className="flex flex-col min-w-[88px]">
-                  <span className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-slate-500 font-semibold leading-none">Quota</span>
+                  <span className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-slate-500 font-semibold leading-none">AI Interview Quota</span>
                   {isUnlimited ? (
                     <span className="text-xs font-semibold text-brand-blue mt-0.5">Unlimited</span>
                   ) : availableUnits !== null ? (
@@ -1014,7 +1182,7 @@ export default function AIInterview() {
         </div>
 
         {/* Stats Cards — clicking a card drills into the list with the matching tab applied */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-5 sm:mb-8">
+        <StatsCardGrid className="mb-5 sm:mb-8">
           {[
             {
               label: 'Total Configs',
@@ -1023,6 +1191,7 @@ export default function AIInterview() {
               tone: 'slate',
               hint: 'All interview templates',
               tab: 'all' as TabKey,
+              cardKey: 'total' as OverviewCardKey,
             },
             {
               label: 'Active',
@@ -1040,6 +1209,7 @@ export default function AIInterview() {
               hint: 'Published & live',
               trend: 'up' as const,
               tab: 'published' as TabKey,
+              cardKey: 'active' as OverviewCardKey,
             },
             {
               label: 'Invite Shared Configs',
@@ -1063,6 +1233,7 @@ export default function AIInterview() {
               trend: 'up' as const,
               tab: 'all' as TabKey,
               invitedOnly: true,
+              cardKey: 'invited' as OverviewCardKey,
             },
             {
               label: 'Avg. Score',
@@ -1071,76 +1242,51 @@ export default function AIInterview() {
               tone: 'amber',
               hint: 'Weighted across rounds',
               tab: 'all' as TabKey,
+              cardKey: 'score' as OverviewCardKey,
             },
-          ].map(({ label, value, icon: Icon, tone, hint, trend, tab, invitedOnly: cardInvitedOnly }: any) => {
-            const toneStyles: Record<string, string> = {
-              slate: 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue',
-              emerald: 'bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 text-green-600',
-              blue: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15 text-brand-cyan',
-              amber: 'bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 ring-1 ring-brand-orange/15 text-brand-orange-deep',
-            };
+          ].map(({ label, value, icon: Icon, hint, trend, tab, invitedOnly: cardInvitedOnly, cardKey }) => {
             return (
-              <button
+              <StatsCard
                 key={label}
-                onClick={() => openListView(tab, { invitedOnly: !!cardInvitedOnly })}
-                className="group relative text-left bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-5 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 hover:border-brand-blue/30 transition-all duration-200 cursor-pointer min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
+                tone="neutral"
+                active={isOverviewCardActive(cardKey)}
+                showClickArrow
+                icon={Icon}
+                label={label}
+                value={value}
+                sparkline={false}
+                onClick={() => openListView(tab, { invitedOnly: !!cardInvitedOnly, cardKey })}
               >
                 {trend === 'up' && (
-                  <div className="flex justify-end mb-1.5">
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-green-100 text-green-700 text-[10px] font-semibold ring-1 ring-green-200 flex-shrink-0">
-                      <ArrowUpRight className="w-3 h-3" />
+                  <div className="mt-1.5">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-brand-blue/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue ring-1 ring-brand-blue/20">
                       Live
                     </span>
                   </div>
                 )}
-                {/* Row 1: icon (left) + count (right) */}
-                <div className="flex items-center gap-3 mb-2 sm:mb-3">
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 ${toneStyles[tone]}`}>
-                    <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </div>
-                  <div className="text-xl sm:text-3xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight tabular-nums truncate">
-                    {value}
-                  </div>
-                </div>
-                {/* Row 2: label text */}
-                <div className="min-w-0 space-y-0.5">
-                  <div className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 font-medium leading-snug whitespace-normal break-words">
-                    {label}
-                  </div>
-                  <div className="hidden sm:block text-[11px] text-gray-400 dark:text-slate-500 leading-snug whitespace-normal break-words">
-                    {hint}
-                  </div>
-                </div>
-              </button>
+              </StatsCard>
             );
           })}
-        </div>
+        </StatsCardGrid>
 
         {pageView === 'list' && (
         <>
-        {/* Back to cards button */}
-        <div className="mb-4 flex items-center justify-between gap-2 flex-wrap">
-          <button
-            onClick={() => { setPageView('cards'); setInvitedOnly(false); }}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to overview
-          </button>
-          {invitedOnly && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
-              <Users className="w-3 h-3" />
-              Showing only configs with invitations
-              <button
-                onClick={() => setInvitedOnly(false)}
-                className="ml-1 hover:text-brand-cyan/80"
-                aria-label="Clear invited filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          )}
+        <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
+        {invitedOnly && (
+        <div className="mb-4 flex items-center justify-end gap-2 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+            <Users className="w-3 h-3" />
+            Showing only configs with invitations
+            <button
+              onClick={() => setInvitedOnly(false)}
+              className="ml-1 hover:text-brand-cyan/80"
+              aria-label="Clear invited filter"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </span>
         </div>
+        )}
 
         {/* Main Content */}
         <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">

@@ -8,6 +8,8 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import JDCreation from '@/components/JDCreation';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 
+const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
+
 // Error display component for pre-condition failures
 function AccessBlockedError({
   errorCode,
@@ -167,6 +169,7 @@ function JDCreationContent() {
   const searchParams = useSearchParams();
   const jdId = searchParams.get('id');
   const stageFromUrl = searchParams.get('stage') as 'create' | 'extract' | 'review' | null;
+  const fromAiInterview = searchParams.get('from') === 'ai-interview';
 
   // Check multiple sources to determine if coming from assessments
   const fromUrlParam = searchParams.get('from') === 'assessment';
@@ -302,18 +305,39 @@ function JDCreationContent() {
   }, [jdId]);
 
   const handleViewAllJobs = () => {
-    router.push('/recruitment/job-openings');
+    router.push(fromAiInterview ? '/recruitment/ai-interviews/jd-selection' : '/recruitment/job-openings');
   };
 
+  const breadcrumbItems = fromAiInterview
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+        { label: 'Select Job Description', href: '/recruitment/ai-interviews/jd-selection' },
+      ]
+    : [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+        { label: editingJD ? 'Edit Job Description' : 'Create Job Description' },
+      ];
+
   // Handle successful JD publish.
+  // AI Interview starts from its JD picker, so publishing there returns to the
+  // AI Interviews list.
   // Per product decision: publishing a JD never auto-redirects to Assessment —
-  // the user stays on the JD success screen (View Job Details / Create another
+  // other entry points stay on the JD success screen (View Job Details / Create another
   // JD). We also clear the sticky `jd_return_to_assessments` intent so any
   // leftover flag from a prior assessment-initiated session can't bounce a
   // normal publish to the Assessments page.
-  const handleJDPublish = (_publishedJD: any) => {
+  const handleJDPublish = () => {
     if (typeof window !== 'undefined') {
       sessionStorage.removeItem('jd_return_to_assessments');
+      if (fromAiInterview) {
+        sessionStorage.setItem(AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY, 'pending');
+      }
+    }
+
+    if (fromAiInterview) {
+      router.push('/recruitment/ai-interviews');
     }
   };
 
@@ -393,11 +417,7 @@ function JDCreationContent() {
           editingJD={memoizedEditingJD}
           isJDInUse={isJDInUse}
           jdUsageMessage={jdUsageMessage}
-          breadcrumbItems={[
-            { label: 'Dashboard', href: '/dashboard' },
-            { label: 'Job Descriptions', href: '/recruitment/job-openings' },
-            { label: editingJD ? 'Edit Job Description' : 'Create Job Description' },
-          ]}
+          breadcrumbItems={breadcrumbItems}
         />
       </div>
     </DndProvider>
