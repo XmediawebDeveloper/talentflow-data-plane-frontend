@@ -29,9 +29,9 @@ export default function QuickActions({ isOpen, onClose, actions }: QuickActionsP
 
       {/* Quick Actions Panel */}
       <div className="fixed inset-x-0 top-20 z-50 flex justify-center px-4">
-        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-2xl animate-scale-in">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-7rem)] flex flex-col overflow-hidden animate-scale-in">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Zap className="w-5 h-5 text-gray-800" />
@@ -50,7 +50,7 @@ export default function QuickActions({ isOpen, onClose, actions }: QuickActionsP
           </div>
 
           {/* Actions Grid */}
-          <div className="p-6">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6">
             <div className="grid grid-cols-2 gap-3">
               {actions.map((action) => {
                 const Icon = action.icon;

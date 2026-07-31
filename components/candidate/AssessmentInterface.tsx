@@ -1594,7 +1594,7 @@ export function AssessmentInterface({
       {/* DISQUALIFICATION Modal - Shows when fullscreen is exited */}
       {showDisqualificationModal && (
         <div className="fixed inset-0 bg-black/98 backdrop-blur-lg flex items-center justify-center z-[10000]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-10 text-center border-8 border-red-700">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full mx-4 p-10 text-center border-8 border-red-700">
             {/* Disqualification Icon */}
             <div className="w-32 h-32 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-8">
               <ShieldAlert className="w-20 h-20 text-white" />
@@ -1648,7 +1648,7 @@ export function AssessmentInterface({
       {/* Auto-Submit Modal - Shows on 3rd violation (NO CONTINUE BUTTON) */}
       {showViolationWarning && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 p-8 text-center border-4 border-red-600">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full mx-4 p-8 text-center border-4 border-red-600">
             {/* Skull/Warning Icon */}
             <div className="w-24 h-24 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
               <ShieldAlert className="w-16 h-16 text-white" />
@@ -2146,7 +2146,7 @@ export function AssessmentInterface({
         const answeredCount = lockedCount + draftCount; // anything with content
         return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full p-6 relative">
             {/* Close Button */}
             <button
               onClick={() => setShowCompleteConfirm(false)}

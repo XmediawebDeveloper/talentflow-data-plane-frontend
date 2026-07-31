@@ -13,6 +13,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import ListToolbar from '@/components/ui/list-toolbar';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -191,6 +192,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       departmentFilter, industryFilter, experienceFilter, employmentTypeFilter,
       applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter,
       sortBy, sortOrder, currentPage, itemsPerPage,
+      // Persist alongside the filters themselves, otherwise returning to this page
+      // restores the filters but resets the applied flag — the More Filters button
+      // loses its highlight and Clear vanishes while results are still filtered.
+      filtersApplied,
     },
     (s) => {
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
@@ -210,6 +215,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       if (s.sortOrder === 'asc' || s.sortOrder === 'desc') setSortOrder(s.sortOrder);
       if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
+      if (typeof s.filtersApplied === 'boolean') setFiltersApplied(s.filtersApplied);
     },
   );
 
@@ -738,7 +744,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   {onCreateNew && (
                     <button
                       onClick={handleCreateNewJob}
-                      className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium"
+                      className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Create New Job</span>
@@ -800,77 +806,20 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
         {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort */}
         <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
-          {/* Row 1: Search + View toggle + More Filters */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search jobs..."
-                className="w-full pl-9 pr-4 py-2 text-sm text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              {/* View Toggle */}
-              <div className="flex items-center gap-1 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-1 rounded-lg">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded transition-all ${
-                    viewMode === 'grid'
-                      ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
-                      : 'text-gray-600 hover:text-brand-blue'
-                  }`}
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-1.5 rounded transition-all ${
-                    viewMode === 'list'
-                      ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
-                      : 'text-gray-600 hover:text-brand-blue'
-                  }`}
-                >
-                  <List className="w-4 h-4" />
-                </button>
-              </div>
-              {/* More Filters Button — highlighted when filters are applied */}
-              <button
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className={`px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
-                  filtersActive
-                    ? 'bg-brand-blue text-white border border-brand-blue shadow-sm shadow-brand-blue/25'
-                    : showAdvancedFilters
-                    ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20'
-                    : 'bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
-                }`}
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-                <span className="hidden sm:inline">More Filters</span>
-                <span className="sm:hidden">Filters</span>
-                {activeFiltersCount > 0 && (
-                  <span className={`px-1.5 py-0.5 rounded text-xs ${
-                    filtersActive ? 'bg-white text-brand-blue' : 'bg-brand-blue text-white'
-                  }`}>
-                    {activeFiltersCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Clear — shown only after filters are applied via "Done" */}
-              {filtersActive && (
-                <button
-                  onClick={clearAllFilters}
-                  className="px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
-                >
-                  <XCircle className="w-4 h-4" />
-                  Clear
-                </button>
-              )}
-            </div>
-          </div>
+          {/* Row 1: Search + View toggle + More Filters — the canonical toolbar,
+              now shared via <ListToolbar> so other list pages match this one. */}
+          <ListToolbar
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search jobs..."
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onToggleFilters={() => setShowAdvancedFilters(!showAdvancedFilters)}
+            filtersOpen={showAdvancedFilters}
+            activeFilterCount={activeFiltersCount}
+            filtersApplied={filtersActive}
+            onClearFilters={clearAllFilters}
+          />
 
           {/* Row 2: Status tabs + AI/Manual + Clear */}
           <div className="flex items-center gap-2 flex-wrap mb-3">
@@ -1856,7 +1805,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
               ) : (
                 <button
                   onClick={handleCreateNewJob}
-                  className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30 transition-all text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
+                  className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30 transition-all text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
                 >
                   <Plus className="w-4 h-4" />
                   Create Job
@@ -1968,7 +1917,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       {/* Quota Exceeded Modal */}
       {showQuotaModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] max-w-md w-full shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-2rem)] flex flex-col">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-2rem)] flex flex-col">
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Insufficient Units</h3>
@@ -2006,7 +1955,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   setShowQuotaModal(false);
                   window.location.href = '/subscription/current-plan';
                 }}
-                className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 text-sm font-medium transition-all"
+                className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 text-sm font-medium transition-all"
               >
                 Upgrade Plan
               </button>

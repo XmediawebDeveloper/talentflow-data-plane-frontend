@@ -620,7 +620,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             <button
               type="button"
               onClick={addSkill}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add
@@ -1054,7 +1054,7 @@ function HRSection({
                 <button
                   onClick={saveNewQuestion}
                   disabled={savingQ || !newQText.trim()}
-                  className="flex items-center gap-1 text-xs bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white px-3 py-1.5 rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white px-3 py-1.5 rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingQ ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                   Save
@@ -2770,7 +2770,7 @@ export default function AIInterviewConfig() {
                         {!cameraReady && !isRecording && !recordedPreviewUrl && (
                           <button
                             onClick={startCamera}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                           >
                             <Camera className="w-3.5 h-3.5" />
                             Open Camera
@@ -2788,7 +2788,7 @@ export default function AIInterviewConfig() {
                         {isRecording && (
                           <button
                             onClick={stopRecordingAndSave}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                           >
                             <span className="w-2.5 h-2.5 rounded-sm bg-white" />
                             Stop & Save
@@ -3073,7 +3073,7 @@ export default function AIInterviewConfig() {
                     aria-disabled={!canContinueToClusters}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
                       canContinueToClusters
-                        ? 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                        ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                         : 'bg-slate-200 text-gray-400 cursor-not-allowed'
                     }`}
                   >
@@ -3142,7 +3142,7 @@ export default function AIInterviewConfig() {
             <button onClick={handleDiscardAndNavigate} className="px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors">
               Discard
             </button>
-            <button onClick={handleSaveAndNavigate} disabled={savingDraft} className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 flex items-center gap-2">
+            <button onClick={handleSaveAndNavigate} disabled={savingDraft} className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 flex items-center gap-2">
               {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {savingDraft ? 'Saving…' : 'Save Draft'}
             </button>

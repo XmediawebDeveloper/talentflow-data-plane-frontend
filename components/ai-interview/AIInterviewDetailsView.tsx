@@ -2023,7 +2023,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       {/* Confirmation Dialog */}
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-blue/30 backdrop-blur-sm p-4 sm:p-6">
-          <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-2 tracking-tight">{confirmAction.title}</h3>
             <p className="text-sm text-gray-600 mb-6">{confirmAction.message}</p>
             <div className="flex items-center justify-end gap-3">
@@ -2037,7 +2037,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 onClick={confirmAction.onConfirm}
                 disabled={actionLoading}
                 className={`px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-50 ring-1 ring-white/10 ${
-                  confirmAction.type === 'delete' ? 'bg-red-600 hover:bg-red-700 shadow-md shadow-red-600/25' : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue shadow-md shadow-brand-blue/25'
+                  confirmAction.type === 'delete' ? 'bg-red-600 hover:bg-red-700 shadow-md shadow-red-600/25' : 'bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25'
                 }`}
               >
                 {actionLoading ? 'Processing...' : 'Confirm'}

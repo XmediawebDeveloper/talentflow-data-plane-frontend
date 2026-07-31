@@ -151,21 +151,21 @@ export default function InviteShareModal({ candidate, jobId, jobTitle, onClose }
   if (phase === 'no-assessment') {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white rounded-xl max-w-md w-full shadow-xl">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div className="bg-white rounded-xl max-w-[95vw] sm:max-w-md w-full shadow-xl max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+          <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <h3 className="text-base font-semibold text-gray-900">No Published Assessment</h3>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div className="px-6 py-6 flex items-start gap-3">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-gray-600">
               There is no published assessment for <span className="font-medium">{jobTitle}</span> yet.
               Please create and publish an assessment before inviting candidates.
             </p>
           </div>
-          <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+          <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 flex justify-end">
             <button
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
@@ -181,7 +181,7 @@ export default function InviteShareModal({ candidate, jobId, jobTitle, onClose }
   // phase === 'picker' — JD has multiple published assessments; choose one.
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl max-w-lg w-full shadow-xl max-h-[80vh] flex flex-col">
+      <div className="bg-white rounded-xl max-w-[95vw] sm:max-w-2xl w-full shadow-xl max-h-[80vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h3 className="text-base font-semibold text-gray-900">Select an Assessment</h3>

@@ -498,7 +498,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-6">
-        <div className="w-full max-w-2xl rounded-xl border border-gray-100 bg-white ring-1 ring-black/[0.02] shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+        <div className="w-full max-w-[95vw] sm:max-w-2xl rounded-xl border border-gray-100 bg-white ring-1 ring-black/[0.02] shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
           <div className="flex-shrink-0 flex items-center justify-between border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
             <div className="flex items-center gap-3 min-w-0">
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
@@ -1767,7 +1767,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       <div className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb className="mb-4 md:mb-8" items={[
+            <PageBreadcrumb className="mb-4 md:mb-6" items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'Assessments', href: '/recruitment/assessments' },
               { label: 'Create Assessment' },
@@ -1804,7 +1804,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 {canCreateJd && (
                   <button
                     onClick={handleCreateNewJD}
-                    className="px-3 sm:px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 text-sm flex-shrink-0"
+                    className="px-3 sm:px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 text-sm flex-shrink-0"
                   >
                     <Plus className="w-4 h-4" />
                     <span className="hidden sm:inline">Create New Job</span>
@@ -1965,7 +1965,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               <span className="sm:hidden">Created</span>
                             </span>
                           ) : (
-                            <button className="px-3 py-1.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-xs transition-all">
+                            <button className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-xs transition-all">
                               Select
                             </button>
                           )}
@@ -1989,7 +1989,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     {canCreateJd && availableJobs.length === 0 && (
                       <button
                         onClick={handleCreateNewJD}
-                        className="mt-4 px-3 sm:px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 mx-auto text-sm"
+                        className="mt-4 px-3 sm:px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 mx-auto text-sm"
                       >
                         <Plus className="w-4 h-4" />
                         Create New Job
@@ -2067,7 +2067,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb className="mb-4 md:mb-8" items={[
+            <PageBreadcrumb className="mb-4 md:mb-6" items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'Assessments', href: '/recruitment/assessments' },
               { label: 'Create Assessment' },
@@ -2472,7 +2472,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           />
                           <button
                             onClick={() => addTopic(section.name)}
-                            className="px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center justify-center gap-1 text-sm flex-shrink-0"
+                            className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center justify-center gap-1 text-sm flex-shrink-0"
                           >
                             <Plus className="w-4 h-4" />
                             <span className="hidden sm:inline">Add Topic</span>
@@ -2622,7 +2622,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           ? 'Select at least one HR question before publishing'
                           : ''
                     }
-                    className="flex-1 px-3 sm:px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
+                    className="flex-1 px-3 sm:px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     {isGenerating ? 'Publishing...' : 'Publish'}
@@ -2636,7 +2636,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         {/* Coding Confirmation Popup */}
         {showCodingConfirm && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
-            <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
               {/* Header */}
               <div className={`${codingPopupMode === 'disable' ? 'bg-red-50 border-b border-red-200' : 'bg-gray-50 border-b border-brand-blue/15'} px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl`}>
                 <div className="flex items-center gap-2 sm:gap-3">
@@ -2659,7 +2659,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
 
               {/* Content */}
-              <div className="p-4 sm:p-6">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
                 {codingPopupMode === 'disable' ? (
                   <>
                     <p className="text-sm sm:text-base text-gray-600 mb-4">
@@ -2740,7 +2740,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
 
               {/* Actions */}
-              <div className="bg-slate-50 px-4 sm:px-6 py-3 rounded-b-xl flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <div className="flex-shrink-0 bg-slate-50 px-4 sm:px-6 py-3 rounded-b-xl flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
                   onClick={handleCancelCodingAction}
                   className="flex-1 px-4 py-2 border border-gray-200 bg-white text-sm text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
@@ -2766,9 +2766,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         {/* Minimum Round Required Popup */}
         {showMinRoundPopup && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
-            <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-sm w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
               {/* Header */}
-              <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
+              <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
                     <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
@@ -2781,14 +2781,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               </div>
 
               {/* Content */}
-              <div className="p-4 sm:p-6">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
                 <p className="text-sm sm:text-base text-gray-600">
                   At least one assessment round must be enabled. Please enable another round before disabling this one.
                 </p>
               </div>
 
               {/* Actions */}
-              <div className="bg-slate-50 px-4 sm:px-6 py-3 rounded-b-xl">
+              <div className="flex-shrink-0 bg-slate-50 px-4 sm:px-6 py-3 rounded-b-xl">
                 <button
                   onClick={() => setShowMinRoundPopup(false)}
                   className="w-full px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm rounded-lg transition-colors"
@@ -2802,7 +2802,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         {showPublishSuccessModal && (
           <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="assessment-published-title">
-            <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col">
+            <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col">
               <div className="px-6 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between shrink-0">
                 <h2 id="assessment-published-title" className="text-lg font-bold text-gray-900 tracking-tight">Assessment Published</h2>
                 <button
@@ -2874,7 +2874,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       <div className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb className="mb-4 md:mb-8" items={[
+            <PageBreadcrumb className="mb-4 md:mb-6" items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'Assessments', href: '/recruitment/assessments' },
               { label: 'Create Assessment' },

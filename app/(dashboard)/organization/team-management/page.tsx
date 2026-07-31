@@ -407,7 +407,7 @@ export default function TeamManagementPage() {
   return (
     <FeatureGate feature="teams">
       <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
+        <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />
           <OrganizationTabs />

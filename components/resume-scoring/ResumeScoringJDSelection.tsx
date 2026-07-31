@@ -116,7 +116,7 @@ export default function ResumeScoringJDSelection() {
             {canCreateJD && (
               <button
                 onClick={() => router.push('/recruitment/jd-creation?from=resume-scoring')}
-                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                 Create Job Description
@@ -211,7 +211,7 @@ export default function ResumeScoringJDSelection() {
                     {canViewScoring ? (
                       <button
                         onClick={() => handleSelectJd(jd)}
-                        className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                       >
                         <Target className="w-4 h-4" />
                         Score Resumes

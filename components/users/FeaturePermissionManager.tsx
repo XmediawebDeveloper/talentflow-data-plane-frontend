@@ -300,7 +300,7 @@ export default function FeaturePermissionManager({
 
   return (
     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-brand-blue/[0.04] via-white to-brand-cyan/[0.04] flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -515,7 +515,7 @@ export default function FeaturePermissionManager({
           <button
             onClick={handleSave}
             disabled={isSaving || isExpansionBlocked}
-            className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             {isSaving ? (
               <>

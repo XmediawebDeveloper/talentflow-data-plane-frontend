@@ -235,7 +235,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           {canCreateAssessments && assessmentAvailable && (
             <button
               onClick={handleCreateAssessment}
-              className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm font-medium transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Plus className="w-4 h-4" />
               Create Assessment
@@ -290,7 +290,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           {canCreateAssessments && assessmentAvailable && activeTab !== 'archived' && (
             <button
               onClick={handleCreateAssessment}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Plus className="w-4 h-4" />
               Create Assessment
@@ -556,7 +556,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                   <div className="flex items-center gap-2 pt-4 border-t border-gray-100">
                     <button
                       onClick={() => handleViewResults(assessment)}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       <Eye className="w-4 h-4" />
                       View Results

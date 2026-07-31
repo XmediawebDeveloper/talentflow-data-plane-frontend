@@ -2,6 +2,7 @@ import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, C
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
+import ListToolbar from '@/components/ui/list-toolbar';
 import InviteShareModal from './InviteShareModal';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { scoringService } from '@/lib/services/scoringService';
@@ -85,6 +86,14 @@ interface ScoredResumesTableProps {
   onSelectResume?: (resumeId: string) => void;
   onSelectAll?: (resumeIds: string[]) => void;
   isGlobalView?: boolean; // Show job title column in global view
+  /**
+   * Extra controls rendered on the right of the search/filter row — used by
+   * ResumeScoringPage to put "Select candidates" + "Download N Scorecards (ZIP)"
+   * on the same row as the search instead of in a separate bar above the table.
+   * Passed down rather than lifting this component's seven filter states up,
+   * which would force the same plumbing on JobDetailView, which has no bulk bar.
+   */
+  toolbarActions?: React.ReactNode;
 }
 
 export default function ScoredResumesTable({
@@ -97,7 +106,8 @@ export default function ScoredResumesTable({
   selectedResumes: externalSelectedResumes = [],
   onSelectResume,
   onSelectAll,
-  isGlobalView = false
+  isGlobalView = false,
+  toolbarActions
 }: ScoredResumesTableProps) {
   const { tenant, isTenantAdmin, user } = useAuth();  // Get tenant info from auth context
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
@@ -499,7 +509,7 @@ export default function ScoredResumesTable({
     setSearchTerm('');
   };
 
-  const hasActiveFilters = 
+  const hasActiveFilters =
     filterMatchStatus !== 'all' ||
     filterScoreMin > 0 ||
     filterScoreMax < 100 ||
@@ -507,6 +517,16 @@ export default function ScoredResumesTable({
     filterDateTo ||
     filterRecruiter !== 'all' ||
     searchTerm;
+
+  // Count for the toolbar badge. Score min/max is one logical "Score range"
+  // filter, so it counts once rather than twice.
+  const activeFilterCount = [
+    filterMatchStatus !== 'all',
+    filterScoreMin > 0 || filterScoreMax < 100,
+    Boolean(filterDateFrom),
+    Boolean(filterDateTo),
+    filterRecruiter !== 'all',
+  ].filter(Boolean).length;
 
   // Function to handle row click and open detail view
   const handleRowClick = (resumeId: string, event: React.MouseEvent) => {
@@ -596,48 +616,22 @@ export default function ScoredResumesTable({
 
       {/* Search and Filter Bar */}
       <div className="mb-4 space-y-3">
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-          {/* Search */}
-          <div className="flex-1 relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name, email, or phone..."
-              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black palaceholder-gray-500 bg-white"
-            />
-          </div>
-          
-
-          {/* Filter and Clear buttons row */}
-          <div className="flex gap-2">
-            {/* Filter Toggle */}
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex-1 sm:flex-none px-4 py-2 text-sm border rounded-md transition-colors flex items-center justify-center gap-2 ${
-                showFilters || hasActiveFilters
-                  ? 'bg-gray-50 border-gray-300 text-gray-900'
-                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Filter className="w-4 h-4" />
-              <span>Filters</span>
-              {hasActiveFilters && !showFilters && (
-                <span className="w-2 h-2 bg-gray-800 rounded-full"></span>
-              )}
-            </button>
-
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="px-4 py-2 text-sm text-red-600 border border-red-300 rounded-md hover:bg-red-50 transition-colors whitespace-nowrap"
-              >
-                Clear All
-              </button>
-            )}
-          </div>
-        </div>
+        {/* Canonical search + filters row (same component as job-openings). The
+            previous hand-rolled version used grey focus rings, rounded-md and a
+            `palaceholder-gray-500` typo, so it matched no other list in the app. */}
+        <ListToolbar
+          searchValue={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchPlaceholder="Search by name, email, or phone..."
+          onToggleFilters={() => setShowFilters(!showFilters)}
+          filtersOpen={showFilters}
+          activeFilterCount={activeFilterCount}
+          filtersApplied={Boolean(hasActiveFilters)}
+          onClearFilters={clearFilters}
+          className="mb-0"
+        >
+          {toolbarActions}
+        </ListToolbar>
 
         {/* Advanced Filters */}
         {showFilters && (
@@ -1240,7 +1234,7 @@ export default function ScoredResumesTable({
       {/* Export Format Selection Modal */}
       {showExportModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
             <div className="flex items-center justify-between p-5 border-b border-gray-200 shrink-0">
               <div>
                 <h3 className="text-lg font-medium text-gray-900">Export Scored Resumes</h3>
@@ -1444,7 +1438,7 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
   if (isLoadingAssessments) {
     return (
       <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full p-6 sm:p-8 text-center">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 text-center">
           <Loader2 className="w-12 h-12 animate-spin text-gray-600 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Assessments...</h3>
           <p className="text-gray-500 text-sm">Checking for existing assessments</p>
@@ -1456,7 +1450,7 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
   if (assessments.length === 0) {
     return (
       <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+        <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90vh] flex flex-col">
           {/* Header */}
           <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
             <h3 className="text-gray-900 text-lg font-medium">No Assessment Found</h3>
@@ -1498,7 +1492,7 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">

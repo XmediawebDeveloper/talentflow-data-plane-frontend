@@ -14,6 +14,14 @@ import SkillsList from '@/components/ui/SkillsList';
 import UploadModal from './UploadModal';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 
+// Folder-tree pane sizing. Min keeps the row chrome (checkbox + chevron +
+// folder icon + count badge) legible; max stops the pane from crowding out the
+// resume list inside a max-w-6xl dialog.
+const FOLDER_PANE_MIN = 200;
+const FOLDER_PANE_MAX = 520;
+const FOLDER_PANE_DEFAULT = 280;
+const FOLDER_PANE_STORAGE_KEY = 'selectSourceModal:folderPaneWidth';
+
 // Progress item interface (internal)
 interface ProgressItem {
   resumeId: string;
@@ -61,6 +69,80 @@ export default function SelectSourceModal({
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
 
+  // Folder-tree sidebar width. Was a fixed w-56 (224px), which left deep folder
+  // names only ~45px after the indent + checkbox + chevron + icon, so they were
+  // truncated to a couple of characters. Now user-resizable and remembered.
+  const [sidebarWidth, setSidebarWidth] = useState<number>(FOLDER_PANE_DEFAULT);
+  const sidebarWidthRef = useRef<number>(FOLDER_PANE_DEFAULT);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = Number(localStorage.getItem(FOLDER_PANE_STORAGE_KEY));
+      if (Number.isFinite(saved) && saved >= FOLDER_PANE_MIN && saved <= FOLDER_PANE_MAX) {
+        setSidebarWidth(saved);
+        sidebarWidthRef.current = saved;
+      }
+    } catch { /* ignore unavailable storage */ }
+  }, []);
+
+  const persistSidebarWidth = (width: number) => {
+    try { localStorage.setItem(FOLDER_PANE_STORAGE_KEY, String(width)); } catch { /* ignore */ }
+  };
+
+  // Drag the divider between the folder pane and the resume list. Pointer events
+  // cover mouse + touch + pen with one handler.
+  const handleSidebarResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidthRef.current;
+    setIsResizingSidebar(true);
+
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.min(
+        FOLDER_PANE_MAX,
+        Math.max(FOLDER_PANE_MIN, startWidth + (ev.clientX - startX)),
+      );
+      sidebarWidthRef.current = next;
+      setSidebarWidth(next);
+    };
+    const onUp = () => {
+      setIsResizingSidebar(false);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      persistSidebarWidth(sidebarWidthRef.current);
+    };
+
+    // Kill text selection while dragging, otherwise the folder labels highlight.
+    document.body.style.userSelect = 'none';
+    // Pin the resize cursor for the whole drag. Without this the pointer leaves
+    // the 6px handle on the first move and picks up whatever cursor is under it
+    // (I-beam over the folder labels), so the drag looks like it dropped.
+    document.body.style.cursor = 'col-resize';
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    // Pointer cancellation (touch interrupted, window blur) must clean up too,
+    // or the cursor and text-selection lock stick after the drag ends.
+    document.addEventListener('pointercancel', onUp);
+  };
+
+  // Safety net: if the modal unmounts mid-drag, the pointerup that would have
+  // restored these never reaches us and the page is left uncursored/unselectable.
+  useEffect(() => () => {
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+  }, []);
+
+  // Double-click the divider to snap back to the default width.
+  const handleSidebarResizeReset = () => {
+    sidebarWidthRef.current = FOLDER_PANE_DEFAULT;
+    setSidebarWidth(FOLDER_PANE_DEFAULT);
+    persistSidebarWidth(FOLDER_PANE_DEFAULT);
+  };
+
   // Progress modal state
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressItems, setProgressItems] = useState<ProgressItem[]>([]);
@@ -68,11 +150,38 @@ export default function SelectSourceModal({
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
 
-  // Hide global floating widget while this modal is open (overlay covers everything)
+  // Minimized state for the bulk-scoring progress popup. Kept here (not inside
+  // BulkScoringProgressModal) so "expand" from the floating indicator can bring
+  // the popup back — see the restore-callback effect below.
+  const [isBulkProgressMinimized, setIsBulkProgressMinimized] = useState(false);
+  // Mirror into a ref so the long-lived polling closure below reads the current
+  // value instead of the one captured when scoring started.
+  const isBulkProgressMinimizedRef = useRef(false);
+  useEffect(() => { isBulkProgressMinimizedRef.current = isBulkProgressMinimized; }, [isBulkProgressMinimized]);
+
+  // Hide the global floating widget only while the progress popup is actually
+  // on screen. Once minimized we must release it, otherwise
+  // GlobalScoringProgressIndicator bails out on `isMainPanelOpen` and the user
+  // gets no floating pill at all.
   useEffect(() => {
-    setMainPanelOpen(showProgressModal);
+    setMainPanelOpen(showProgressModal && !isBulkProgressMinimized);
     return () => { setMainPanelOpen(false); };
-  }, [showProgressModal, setMainPanelOpen]);
+  }, [showProgressModal, isBulkProgressMinimized, setMainPanelOpen]);
+
+  // Register how the floating indicator restores this popup. Without this the
+  // indicator falls back to setMinimized(false) and only ever shows its own
+  // small card — the popup the user minimized never comes back.
+  useEffect(() => {
+    if (showProgressModal && isBulkProgressMinimized) {
+      setOnRestorePanel(() => () => {
+        setIsBulkProgressMinimized(false);
+        setMinimized(false);
+      });
+    } else {
+      setOnRestorePanel(undefined);
+    }
+    return () => setOnRestorePanel(undefined);
+  }, [showProgressModal, isBulkProgressMinimized, setOnRestorePanel, setMinimized]);
 
   // Fetch resumes and folders on mount and tab change
   useEffect(() => {
@@ -356,8 +465,13 @@ export default function SelectSourceModal({
             setSubmitting(false);
             // Refresh header quota dropdown — RS deductions landed on CP
             dispatchUnitsConsumed();
-            // Redirect to Scored Resumes tab after a short delay so user sees final state
+            // Redirect to Scored Resumes tab after a short delay so user sees final state.
+            // If the user minimised the popup they are working elsewhere — tearing
+            // this component down would destroy the popup's owner (and its restore
+            // callback), so "expand" would have nothing to reopen. Stay mounted and
+            // let them come back to the finished result.
             setTimeout(() => {
+              if (isBulkProgressMinimizedRef.current) return;
               setShowProgressModal(false);
               if (onScoringComplete) {
                 onScoringComplete();
@@ -761,7 +875,8 @@ export default function SelectSourceModal({
                 ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue font-medium'
                 : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
             }`}
-            style={{ paddingLeft: `${level * 16 + 12}px` }}
+            style={{ paddingLeft: `${level * 12 + 12}px` }}
+            title={folder.name}
           >
             {/* Folder selection checkbox: adds/removes ALL of this folder's
                 (and descendants') resumes from selection, without changing the
@@ -794,33 +909,50 @@ export default function SelectSourceModal({
             )}
 
             {hasChildren && (
-              <button
+              // Must not be a <button>: the whole folder row is already a
+              // <button>, and nesting them is invalid HTML that breaks
+              // hydration. Same span+role approach as the checkbox above.
+              <span
+                role="button"
+                tabIndex={0}
+                aria-expanded={isExpanded}
+                aria-label={isExpanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleFolder(folder.id);
                 }}
-                className="p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700 rounded"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleFolder(folder.id);
+                  }
+                }}
+                className="flex-shrink-0 cursor-pointer p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700 rounded"
               >
                 {isExpanded ? (
                   <ChevronDown className="w-4 h-4" />
                 ) : (
                   <ChevronRight className="w-4 h-4" />
                 )}
-              </button>
+              </span>
             )}
-            {!hasChildren && <div className="w-5" />}
+            {!hasChildren && <div className="w-5 flex-shrink-0" />}
             {isExpanded ? (
-              <FolderOpen className="w-4 h-4" />
+              <FolderOpen className="w-4 h-4 flex-shrink-0" />
             ) : (
-              <Folder className="w-4 h-4" />
+              <Folder className="w-4 h-4 flex-shrink-0" />
             )}
-            <span className="flex-1 text-left truncate">{folder.name}</span>
+            {/* Wraps rather than truncates: a folder name is never hidden, at any
+                nesting depth or pane width. min-w-0 lets it shrink inside the flex
+                row instead of shoving the count badges out. */}
+            <span className="flex-1 min-w-0 text-left break-words">{folder.name}</span>
             {selectedInFolder > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+              <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                 {selectedInFolder} sel
               </span>
             )}
-            <span className={`text-xs px-2 py-0.5 rounded-full ${
+            <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full ${
               isSelected
                 ? 'bg-brand-blue/15 text-brand-blue'
                 : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
@@ -839,8 +971,11 @@ export default function SelectSourceModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-6xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+    // While the progress popup is minimized this component stays mounted (it owns
+    // progressItems and the restore callback) but its overlay must not block the
+    // page — hide it rather than unmounting, so "expand" can bring it straight back.
+    <div className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm ${isBulkProgressMinimized ? 'hidden' : 'flex'} items-center justify-center z-50 p-3 sm:p-6`}>
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-6xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex items-start gap-2 sm:gap-4 min-w-0">
@@ -893,7 +1028,7 @@ export default function SelectSourceModal({
                 onClick={() => handleTabChange('internal-db')}
                 className={`px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
                   activeTab === 'internal-db'
-                    ? 'bg-white dark:bg-slate-900 text-brand-cyan border-b-2 border-brand-cyan shadow-sm'
+                    ? 'bg-white dark:bg-slate-900 text-brand-blue border-b-2 border-brand-blue shadow-sm'
                     : 'text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-slate-50'
                 }`}
               >
@@ -902,7 +1037,7 @@ export default function SelectSourceModal({
                 <span className="sm:hidden">Internal DB</span>
                 <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs ${
                   activeTab === 'internal-db'
-                    ? 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15 text-brand-cyan'
+                    ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
                     : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                 }`}>
                   {activeTab === 'internal-db' ? resumes.length : '...'}
@@ -916,9 +1051,24 @@ export default function SelectSourceModal({
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar - Folder Tree (Only for My Resumes) - hidden on mobile */}
           {activeTab === 'my-resumes' && (
-            <div className="hidden lg:block w-56 border-r border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 overflow-y-auto flex-shrink-0">
+            <>
+            <div
+              className="hidden lg:block border-r border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 overflow-y-auto flex-shrink-0"
+              style={{ width: `${sidebarWidth}px` }}
+            >
               <div className="p-4">
-                <h3 className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase mb-3 px-3">Folders</h3>
+                <div className="flex items-center justify-between mb-3 px-3">
+                  <h3 className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase">Folders</h3>
+                  {sidebarWidth !== FOLDER_PANE_DEFAULT && (
+                    <button
+                      onClick={handleSidebarResizeReset}
+                      className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-brand-blue transition-colors cursor-pointer"
+                      title="Reset folder pane width"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
 
                 {/* All Resumes */}
                 {(() => {
@@ -956,14 +1106,14 @@ export default function SelectSourceModal({
                           <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                         )}
                       </span>
-                      <FolderOpen className="w-4 h-4" />
-                      <span className="flex-1 text-left">All Resumes</span>
+                      <FolderOpen className="w-4 h-4 flex-shrink-0" />
+                      <span className="flex-1 min-w-0 text-left break-words">All Resumes</span>
                       {allSelectedCount > 0 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                        <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
                           {allSelectedCount} sel
                         </span>
                       )}
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full ${
                         selectedFolder === 'all'
                           ? 'bg-brand-blue/15 text-brand-blue'
                           : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
@@ -987,6 +1137,26 @@ export default function SelectSourceModal({
                 )}
               </div>
             </div>
+
+            {/* Drag handle — resize the folder pane; double-click resets it. */}
+            <div
+              onPointerDown={handleSidebarResizeStart}
+              onDoubleClick={handleSidebarResizeReset}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize folder panel"
+              title="Drag to resize · double-click to reset"
+              className={`hidden lg:flex w-1.5 flex-shrink-0 cursor-col-resize items-center justify-center border-r transition-colors ${
+                isResizingSidebar
+                  ? 'bg-brand-blue/20 border-brand-blue/40'
+                  : 'bg-transparent border-transparent hover:bg-brand-blue/10'
+              }`}
+            >
+              <span className={`h-8 w-0.5 rounded-full transition-colors ${
+                isResizingSidebar ? 'bg-brand-blue' : 'bg-gray-300 dark:bg-slate-700'
+              }`} />
+            </div>
+            </>
           )}
 
           {/* Main Content */}
@@ -1009,7 +1179,7 @@ export default function SelectSourceModal({
                   {activeTab === 'my-resumes' && canUploadResumes && (
                     <button
                       onClick={() => setShowUploadModal(true)}
-                      className="px-4 py-2 text-sm bg-brand-cyan hover:bg-brand-cyan/90 text-white rounded-lg shadow-md shadow-brand-cyan/25 ring-1 ring-white/10 transition-colors font-medium flex items-center gap-1.5 sm:gap-2"
+                      className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors font-medium flex items-center gap-1.5 sm:gap-2"
                     >
                       <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span className="hidden sm:inline">Upload Resume</span>
@@ -1059,16 +1229,19 @@ export default function SelectSourceModal({
             </div>
 
             {/* Resume List */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+            {/* Column layout: the table header is a fixed row and only the list
+                below it scrolls. Previously everything scrolled together and the
+                header relied on `sticky top-0 z-10`, which the rows painted over. */}
+            <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-6">
               {loading ? (
                 <div className="flex items-center justify-center py-10 sm:py-16">
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
                   <span className="ml-2 sm:ml-3 text-xs sm:text-base text-gray-600 dark:text-slate-400">Loading resumes...</span>
                 </div>
               ) : filteredResumes.length > 0 ? (
-                <div className="space-y-2">
+                <div className="flex flex-col min-h-0 flex-1">
                   {/* Desktop Table Header - hidden on mobile */}
-                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 rounded-lg text-xs font-medium text-gray-600 dark:text-slate-400 uppercase sticky top-0 z-10">
+                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 mb-2 bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 rounded-lg text-xs font-medium text-gray-600 dark:text-slate-400 uppercase flex-shrink-0">
                     <div className="col-span-1 flex items-center justify-center">
                       {(() => {
                         const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
@@ -1098,7 +1271,8 @@ export default function SelectSourceModal({
                     <div className="col-span-2">Skills</div>
                   </div>
 
-                  {/* Resume Items */}
+                  {/* Resume Items — the scrolling region (the "tbody") */}
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
                   {filteredResumes.map((resume) => {
                     const isSelected = selectedResumes.includes(resume.id);
                     const selectedFolderData = folders.find(f => f.id === selectedFolder);
@@ -1293,6 +1467,7 @@ export default function SelectSourceModal({
                       </div>
                     );
                   })}
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-10 sm:py-16">
@@ -1396,13 +1571,14 @@ export default function SelectSourceModal({
           onRetryFailed={async (scoringItem) => {
             await handleRetryFailed(scoringItem.resumeId);
           }}
+          minimized={isBulkProgressMinimized}
           onMinimize={() => {
-            // Close the full-screen overlay so the user can navigate freely.
-            // The context keeps the job alive and GlobalScoringProgressIndicator
-            // shows the small floating button in the bottom-right corner.
+            // Hide the overlay so the user can navigate freely, but stay mounted:
+            // this component owns progressItems, so unmounting here is what used
+            // to make the popup unrestorable. The restore-callback effect above
+            // wires the floating indicator's expand back to this state.
+            setIsBulkProgressMinimized(true);
             setMinimized(true);
-            setOnRestorePanel(undefined);
-            onClose();
           }}
         />
       )}

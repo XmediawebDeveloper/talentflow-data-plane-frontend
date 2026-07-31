@@ -881,7 +881,7 @@ Best regards`);
           {viewSource === 'job-details' ? (
             <button
               onClick={handleOpenScoredResumes}
-              className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <FileText className="w-4 h-4" />
               Scored Resumes
@@ -889,7 +889,7 @@ Best regards`);
           ) : canApplyResumeToJob && (
             <button
               onClick={handleApplyToJob}
-              className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Send className="w-4 h-4" />
               Apply to Job
@@ -1403,7 +1403,7 @@ Best regards`);
                     disabled={compareChecked.length !== 2}
                     className={`ml-auto px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                       compareChecked.length === 2
-                        ? 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                        ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                         : 'bg-slate-100 text-gray-400 cursor-not-allowed'
                     }`}
                   >
@@ -1922,7 +1922,7 @@ Best regards`);
                     setShowCompareModal(false);
                     setCompareChecked([]);
                   }}
-                  className="px-5 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="px-5 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Close
                 </button>
@@ -1963,7 +1963,7 @@ Best regards`);
 
         return (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90vh] flex flex-col overflow-hidden">
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
                 <div className="flex items-center gap-3">
@@ -2036,9 +2036,9 @@ Best regards`);
       {/* Version Selection Modal for Apply to Job */}
       {showVersionSelectModal && resume && resume.versions && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-scale-in">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50">
+            <div className="flex-shrink-0 flex items-center justify-between p-6 border-b border-gray-100 bg-gray-50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                   <History className="w-5 h-5 text-white" />
@@ -2057,7 +2057,7 @@ Best regards`);
             </div>
 
             {/* Version List */}
-            <div className="p-6 max-h-96 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6">
               <div className="space-y-3">
                 {/* Current Version */}
                 <label
@@ -2149,7 +2149,7 @@ Best regards`);
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-100 bg-slate-50">
+            <div className="flex-shrink-0 flex items-center justify-end gap-3 p-6 border-t border-gray-100 bg-slate-50">
               <button
                 onClick={() => setShowVersionSelectModal(false)}
                 className="px-4 py-2 text-sm text-gray-700 border border-gray-200 bg-white rounded-lg hover:bg-slate-100 transition-colors"
@@ -2159,7 +2159,7 @@ Best regards`);
               <button
                 onClick={() => selectedVersionForApply && handleVersionSelectForApply(selectedVersionForApply)}
                 disabled={!selectedVersionForApply}
-                className="px-4 py-2 text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Send className="w-4 h-4" />
                 Continue to Job Selection
@@ -2185,7 +2185,7 @@ Best regards`);
       {/* Share via Email Modal */}
       {isShareModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -2266,7 +2266,7 @@ Best regards`);
                 <button
                   onClick={handleSendEmail}
                   disabled={isSendingEmail || !shareEmail.trim()}
-                  className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   {isSendingEmail ? (
                     <>

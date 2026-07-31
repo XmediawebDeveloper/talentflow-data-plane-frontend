@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useScoringProgress, ScoringJob } from '@/contexts/ScoringProgressContext';
 import { Target, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -19,6 +19,22 @@ export default function GlobalScoringProgressIndicator() {
   } = useScoringProgress();
 
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+
+  // Auto-dismiss 10s after everything finishes, so the "Scoring Complete" widget
+  // doesn't sit in the corner until manually closed. Declared before the early
+  // returns below — hooks must run on every render.
+  //
+  // Skipped while the main popup is open: the countdown should only run when the
+  // widget is actually on screen, and clearing jobs underneath an open popup
+  // would leave nothing to re-minimise into.
+  useEffect(() => {
+    if (isMainPanelOpen || activeScoringJobs.length === 0) return;
+    const stillRunning = activeScoringJobs.some(job => job.queued > 0 || job.processing > 0);
+    if (stillRunning) return;
+
+    const timer = setTimeout(() => clearCompletedJobs(), 10000);
+    return () => clearTimeout(timer);
+  }, [activeScoringJobs, isMainPanelOpen, clearCompletedJobs]);
 
   // Don't render if no active or recent jobs
   if (activeScoringJobs.length === 0) {
@@ -167,6 +183,14 @@ export default function GlobalScoringProgressIndicator() {
             onToggle={() => setExpandedJobId(expandedJobId === job.jobId ? null : job.jobId)}
             onClear={() => clearJob(job.jobId)}
             onNavigate={() => {
+              // If the page that owns the progress popup is still mounted, bring
+              // that popup back in place. Previously this always navigated away
+              // and then immediately re-minimised, so "View Details" looked like
+              // it did nothing.
+              if (onRestorePanel) {
+                onRestorePanel();
+                return;
+              }
               router.push(job.returnUrl || `/recruitment/resume-scoring?jd_id=${job.jobId}`);
               setMinimized(true);
             }}

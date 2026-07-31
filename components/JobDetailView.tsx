@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2 } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -72,14 +72,20 @@ function QuickActionButton({
           w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all text-left flex items-center gap-2.5
           ${disabled
             ? 'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed border border-gray-200 dark:border-slate-700'
-            : className || 'bg-brand-blue text-white hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+            : `cursor-pointer ${className || 'bg-brand-blue text-white hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10'}`
           }
         `}
         title={disabled ? disabledTooltip : undefined}
       >
-        {icon}
-        <span className="flex-1">{label}</span>
-        {disabled && <Lock className="w-3 h-3" />}
+        <span className="shrink-0">{icon}</span>
+        <span className="flex-1 min-w-0 truncate">{label}</span>
+        {/* Trailing affordance: lock when gated, otherwise the same diagonal
+            arrow StatsCard/job-openings use for "this opens something", nudged
+            up-and-right on hover. */}
+        {disabled
+          ? <Lock className="w-3 h-3 shrink-0" />
+          : <ArrowUpRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+        }
       </button>
 
       {/* Tooltip on hover when disabled */}
@@ -2149,7 +2155,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           User selects which one(s) before the Share modal opens. */}
       {showAssessmentPicker && pickerAssessments.length > 0 && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-lg w-full max-h-[80vh] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Choose an assessment</h3>
@@ -2298,7 +2304,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {/* JD History Modal */}
       {showJDHistory && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-4xl w-full max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
             {/* Header */}
             <div className="bg-gray-800 px-4 py-3 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2 min-w-0">

@@ -476,7 +476,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   if (showSuccess) {
     return (
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="w-16 h-16 bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-10 h-10 text-brand-blue" />
           </div>
@@ -493,8 +493,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   if (showDuplicateError) {
     return (
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-md w-full p-6 sm:p-8 max-h-[calc(100dvh-2rem)] overflow-y-auto">
-          <div className="text-center mb-6">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
+          <div className="flex-shrink-0 text-center mb-6">
             <div className="w-16 h-16 bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-10 h-10 text-brand-orange-deep" />
             </div>
@@ -504,7 +504,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             </p>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-950 rounded-lg p-4 mb-6">
+          <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50 dark:bg-slate-950 rounded-lg p-4 mb-6">
             <p className="text-sm text-gray-700 dark:text-slate-300 mb-2">You can:</p>
             <ul className="text-sm text-gray-600 dark:text-slate-400 space-y-1">
               <li>• Try a <span className="font-medium">different email address</span></li>
@@ -513,13 +513,13 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             </ul>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex-shrink-0 flex gap-3">
             <button
               onClick={() => {
                 setShowDuplicateError(false);
                 setDuplicateEmail('');
               }}
-              className="flex-1 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors"
+              className="flex-1 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors"
             >
               Try Different Email
             </button>
@@ -541,7 +541,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-6 py-5 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
@@ -988,7 +988,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       <button
                         onClick={handleAddFromDatabase}
                         disabled={selectedResumes.length === 0}
-                        className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-sm transition-colors disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-sm transition-colors disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed"
                       >
                         <Users className="w-4 h-4" />
                         Add Selected
@@ -1136,7 +1136,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             <button
               onClick={handleSend}
               disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
-              className="px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSubmitting ? (
                 <>
