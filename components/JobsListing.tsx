@@ -114,6 +114,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  // True once the user clicks "Done" in the More Filters panel. Gates the Clear
+  // button next to the More Filters button so it appears only after filters are
+  // applied (not live while the user is still picking options).
+  const [filtersApplied, setFiltersApplied] = useState(false);
   const [showAIMatchModal, setShowAIMatchModal] = useState(false);
   const [selectedJobForAIMatch, setSelectedJobForAIMatch] = useState<Job | null>(null);
   const listSectionRef = useRef<HTMLDivElement | null>(null);
@@ -585,6 +589,45 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     datePostedToFilter !== ''
   ].filter(Boolean).length;
 
+  // "Applied" = the user selected at least one filter AND confirmed via "Done".
+  // Drives both the highlighted More Filters button and the Clear button.
+  const filtersActive = filtersApplied && activeFiltersCount > 0;
+
+  // Reset every filter (and the search box) back to its default. Shared by the
+  // "Clear" control in the toolbar row and the "Clear Filters" control inside
+  // the More Filters panel so both stay in sync.
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setCreationMethodFilter(null);
+    setLocationFilter('all');
+    setDepartmentFilter('all');
+    setIndustryFilter('all');
+    setExperienceFilter('all');
+    setEmploymentTypeFilter('all');
+    setApplicantsFilter('all');
+    setDatePostedFromFilter('');
+    setDatePostedToFilter('');
+    setSalaryRangeFilter('all');
+    setFiltersApplied(false);
+  };
+
+  // Create New Job. Before navigating away, drop this list's saved view-state so
+  // returning from the Create Job page starts clean (no stale More Filters).
+  // Unlike the job-details drill-down — which intentionally restores state — a
+  // fresh "Create" should not carry the previous filter selection back.
+  const handleCreateNewJob = () => {
+    if (quotaInfo && quotaInfo.remaining <= 0) {
+      setShowQuotaModal(true);
+      return;
+    }
+    try {
+      sessionStorage.removeItem('listState:job-openings-list');
+      sessionStorage.removeItem('listScroll:job-openings');
+    } catch { /* ignore unavailable storage */ }
+    onCreateNew();
+  };
+
   // NEW: Pagination logic
   const totalPages = Math.ceil(sortedJobs.length / itemsPerPage);
   const currentJobs = sortedJobs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -674,41 +717,67 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   <span>Job publishing limit reached ({quotaInfo.used}/{quotaInfo.limit}). <a href="/subscription/current-plan" className="underline font-medium">Upgrade your plan</a></span>
                 </div>
               )}
-              {onCreateNew && (
-                <button
-                  onClick={() => {
-                    if (quotaInfo && quotaInfo.remaining <= 0) {
-                      setShowQuotaModal(true);
-                      return;
-                    }
-                    onCreateNew();
-                  }}
-                  className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create New Job</span>
-                </button>
+              {(masterDataLinks?.length || onCreateNew) && (
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+                  {masterDataLinks && masterDataLinks.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowConfig(!showConfig)}
+                      aria-expanded={showConfig}
+                      className={`inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition-all sm:w-auto ${
+                        showConfig
+                          ? 'bg-brand-blue text-white border-brand-blue shadow-md shadow-brand-blue/25'
+                          : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue'
+                      }`}
+                    >
+                      <SlidersHorizontal className="w-4 h-4" />
+                      Config
+                      <ChevronDown className={`w-4 h-4 transition-transform ${showConfig ? 'rotate-180' : ''}`} />
+                    </button>
+                  )}
+                  {onCreateNew && (
+                    <button
+                      onClick={handleCreateNewJob}
+                      className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Create New Job</span>
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>
+
+          {/* Config Panel (collapsible) - Experience/Education/Industry quick links */}
+          {showConfig && masterDataLinks && masterDataLinks.length > 0 && (
+            <div className="mb-5 flex justify-end">
+              <div className="grid w-full grid-cols-1 gap-2.5 sm:w-auto sm:grid-cols-3 sm:gap-3">
+                {masterDataLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <Link
+                      key={link.id}
+                      href={link.href}
+                      className="group flex items-center gap-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 shadow-sm transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/40 hover:shadow-md sm:min-w-48"
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 dark:text-slate-200 group-hover:text-brand-blue">{link.label}</span>
+                      <ArrowUpRight className="h-4 w-4 shrink-0 text-gray-300 dark:text-slate-500 transition-colors group-hover:text-brand-blue" />
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <ModuleInfoBanner
             icon={<FileText className="h-4 w-4" />}
             title="AI-Powered Job Descriptions"
             description="Create clear, role-specific job descriptions with responsibilities, required skills, experience, location, and hiring criteria. Published jobs become the foundation for AI Talent Match, Resume Scoring, Assessments, and AI Interviews."
           />
-
-          {/* SaaS Stats Cards — clicking a card drills into the jobs list with the matching filter applied */}
-          <div>
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                <Briefcase className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="mb-1 text-sm font-medium tracking-tight text-gray-900">Job Description Menu</h3>
-              </div>
-            </div>
-          </div>
 
           <StatsCardGrid>
             <StatsCard tone="neutral" active={isOverviewCardActive('all')} showClickArrow icon={Briefcase} label="Total Jobs" value={stats.total} sparkline={false} onClick={() => openListView('all')} />
@@ -767,11 +836,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   <List className="w-4 h-4" />
                 </button>
               </div>
-              {/* More Filters Button */}
+              {/* More Filters Button — highlighted when filters are applied */}
               <button
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
                 className={`px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-2 text-sm ${
-                  activeFiltersCount > 0 || showAdvancedFilters
+                  filtersActive
+                    ? 'bg-brand-blue text-white border border-brand-blue shadow-sm shadow-brand-blue/25'
+                    : showAdvancedFilters
                     ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20'
                     : 'bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
                 }`}
@@ -780,11 +851,24 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 <span className="hidden sm:inline">More Filters</span>
                 <span className="sm:hidden">Filters</span>
                 {activeFiltersCount > 0 && (
-                  <span className="px-1.5 py-0.5 bg-brand-blue text-white rounded text-xs">
+                  <span className={`px-1.5 py-0.5 rounded text-xs ${
+                    filtersActive ? 'bg-white text-brand-blue' : 'bg-brand-blue text-white'
+                  }`}>
                     {activeFiltersCount}
                   </span>
                 )}
               </button>
+
+              {/* Clear — shown only after filters are applied via "Done" */}
+              {filtersActive && (
+                <button
+                  onClick={clearAllFilters}
+                  className="px-3 py-2 rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
+                >
+                  <XCircle className="w-4 h-4" />
+                  Clear
+                </button>
+              )}
             </div>
           </div>
 
@@ -831,70 +915,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 </button>
               </div>
             </div>
-            {/* Config — Experience / Education / Industry quick links (pushed to the right end of the tab row). */}
-            {masterDataLinks && masterDataLinks.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowConfig(!showConfig)}
-                aria-expanded={showConfig}
-                className={`ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all border ${
-                  showConfig
-                    ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25'
-                    : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue'
-                }`}
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                Config
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showConfig ? 'rotate-180' : ''}`} />
-              </button>
-            )}
-            {(searchQuery || activeFiltersCount > 0) && (
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setStatusFilter('all');
-                  setCreationMethodFilter(null);
-                  setLocationFilter('all');
-                  setDepartmentFilter('all');
-                  setIndustryFilter('all');
-                  setExperienceFilter('all');
-                  setEmploymentTypeFilter('all');
-                  setApplicantsFilter('all');
-                  setDatePostedFromFilter('');
-                  setDatePostedToFilter('');
-                  setSalaryRangeFilter('all');
-                }}
-                className="ml-auto text-sm text-red-600 hover:text-red-700 flex items-center gap-1"
-              >
-                <XCircle className="w-4 h-4" />
-                Clear
-              </button>
-            )}
           </div>
-
-          {/* Config Panel (collapsible) — Experience/Education/Industry quick links */}
-          {showConfig && masterDataLinks && masterDataLinks.length > 0 && (
-            <div className="mb-3 pt-3 border-t border-brand-blue/10">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
-                {masterDataLinks.map((link) => {
-                  const Icon = link.icon;
-                  return (
-                    <Link
-                      key={link.id}
-                      href={link.href}
-                      className="group flex items-center gap-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 shadow-sm transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/40 hover:shadow-md"
-                    >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30">
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 dark:text-slate-200 group-hover:text-brand-blue">{link.label}</span>
-                      <ArrowUpRight className="h-4 w-4 shrink-0 text-gray-300 dark:text-slate-500 transition-colors group-hover:text-brand-blue" />
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* More Filters Panel (collapsible) */}
           {showAdvancedFilters && (
@@ -994,6 +1015,17 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
                   />
                 </div>
+              </div>
+
+              {/* Panel footer: "Done" applies the selected filters and reveals
+                  the Clear button next to the More Filters button. */}
+              <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => { setShowAdvancedFilters(false); setFiltersApplied(true); }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+                >
+                  Done
+                </button>
               </div>
             </div>
           )}
@@ -1823,13 +1855,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 </button>
               ) : (
                 <button
-                  onClick={() => {
-                    if (quotaInfo && quotaInfo.remaining <= 0) {
-                      setShowQuotaModal(true);
-                      return;
-                    }
-                    onCreateNew();
-                  }}
+                  onClick={handleCreateNewJob}
                   className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30 transition-all text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
                 >
                   <Plus className="w-4 h-4" />

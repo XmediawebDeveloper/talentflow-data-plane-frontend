@@ -1426,7 +1426,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         <div className="flex items-center border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2.5 text-sm transition-colors relative whitespace-nowrap ${
+            className={`px-4 py-2.5 text-sm transition-colors relative whitespace-nowrap rounded-t-[11px] ${
               activeTab === 'overview'
                 ? 'text-blue-600 bg-blue-50'
                 : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
@@ -1437,6 +1437,28 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
             )}
           </button>
+          {hasPlanFeature('ai_talent_match') && (
+            <button
+              onClick={() => setActiveTab('ai-talent-match')}
+              className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
+                activeTab === 'ai-talent-match'
+                  ? 'text-blue-600 bg-blue-50'
+                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              AI Talent Match Results
+              <span className={`px-2 py-0.5 rounded-full text-xs ${
+                activeTab === 'ai-talent-match'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
+              }`}>
+                {aiMatchCandidates.length}
+              </span>
+              {activeTab === 'ai-talent-match' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              )}
+            </button>
+          )}
           {hasPlanFeature('resume_scoring') && (
             <button
               onClick={() => handleShowScoredResumes()}
@@ -1477,28 +1499,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {assessmentResults.length}
               </span>
               {activeTab === 'assessment-results' && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
-              )}
-            </button>
-          )}
-          {hasPlanFeature('ai_talent_match') && (
-            <button
-              onClick={() => setActiveTab('ai-talent-match')}
-              className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                activeTab === 'ai-talent-match'
-                  ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
-              }`}
-            >
-              AI Talent Match Results
-              <span className={`px-2 py-0.5 rounded-full text-xs ${
-                activeTab === 'ai-talent-match'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-              }`}>
-                {aiMatchCandidates.length}
-              </span>
-              {activeTab === 'ai-talent-match' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
               )}
             </button>
