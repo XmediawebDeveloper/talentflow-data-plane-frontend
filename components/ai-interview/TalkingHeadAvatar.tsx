@@ -758,6 +758,13 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           // ── Fallback: play audio directly via Web Audio API ──
           console.warn("[TalkingHead] head not ready — using Web Audio API fallback");
           fbActiveRef.current = true;
+          // This path plays each chunk at max(now, nextTime) — audible essentially
+          // IMMEDIATELY, with no worklet init and no pre-buffering. Tell InterviewUI
+          // so its caption anchor doesn't wait out TALKING_HEAD_BUFFER_MS (which is
+          // only real for the worklet path); otherwise the text trails the voice by
+          // ~1 s for the whole turn. Set per turn, because `head` may become ready
+          // later in the session and flip us back to the worklet path.
+          (window as any).__interviewAudibleDelayMs = 0;
           try {
             // Reuse or create fallback AudioContext
             const preCreated = (window as any).__interviewAudioContext as AudioContext | undefined;
@@ -777,6 +784,11 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           for (const buf of queued) fbPlayChunk(buf);
           return;
         }
+
+        // Worklet path — TalkingHead buffers before its speaker goes audible, so
+        // clear any 0 left by a previous fallback turn and let InterviewUI apply
+        // TALKING_HEAD_BUFFER_MS again.
+        (window as any).__interviewAudibleDelayMs = null;
 
         // Pre-resume AudioContext if suspended BEFORE calling head.streamStart.
         // TalkingHead's streamStart has a 1-second resume timeout — if we don't

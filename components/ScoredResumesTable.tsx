@@ -79,6 +79,7 @@ interface ScoredResumesTableProps {
   jobTitle: string;
   jobId?: string;
   availableUnits?: number;
+  initialMatchStatus?: 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
   onViewCandidate?: (resume: ScoredResume) => void;
   selectedResumes?: string[];
   onSelectResume?: (resumeId: string) => void;
@@ -91,6 +92,7 @@ export default function ScoredResumesTable({
   jobTitle,
   jobId = 'jd-1',
   availableUnits = 10,
+  initialMatchStatus = 'all',
   onViewCandidate,
   selectedResumes: externalSelectedResumes = [],
   onSelectResume,
@@ -116,12 +118,16 @@ export default function ScoredResumesTable({
   const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
 
   // Filter states
-  const [filterMatchStatus, setFilterMatchStatus] = useState<string>('all');
+  const [filterMatchStatus, setFilterMatchStatus] = useState<string>(initialMatchStatus);
   const [filterScoreMin, setFilterScoreMin] = useState<number>(0);
   const [filterScoreMax, setFilterScoreMax] = useState<number>(100);
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
   const [filterRecruiter, setFilterRecruiter] = useState<string>('all');
+
+  useEffect(() => {
+    setFilterMatchStatus(initialMatchStatus);
+  }, [initialMatchStatus]);
 
   // Column configuration - initialize with defaults, then load from localStorage
   const [availableColumns, setAvailableColumns] = useState(DEFAULT_COLUMNS);

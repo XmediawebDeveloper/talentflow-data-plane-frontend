@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Clock, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ChevronLeft } from 'lucide-react';
+import { Plus, Clock, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2 } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import QuotaBadge from '@/components/ui/quota-badge';
 
 
 const INVITATIONS_PAGE_SIZE = 10;
@@ -72,10 +73,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'completed-candidates' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   // Two-step view: 'cards' shows only the 3 stat tiles; 'list' shows tabs + filters + assessments list.
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
-  const openAssessmentsList = (tab: 'all' | 'active' | 'draft' | 'completed' | 'completed-candidates' | 'archived' = 'all') => {
-    setActiveTab(tab);
-    setPageView('list');
-  };
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
+  const [listScrollRequest, setListScrollRequest] = useState(0);
   // Proctoring settings are a staging-only testing menu — in production it's
   // hidden, so land on Topics instead.
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>(IS_PRODUCTION_ENV ? 'topics' : 'proctoring');
@@ -184,6 +183,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [completedCandidatesPage, setCompletedCandidatesPage] = useState(1);
   const COMPLETED_PAGE_SIZE = 20;
 
+  const openAssessmentsList = (tab: 'all' | 'active' | 'draft' | 'completed' | 'completed-candidates' | 'archived' = 'all') => {
+    try {
+      window.sessionStorage.removeItem('listScroll:assessments');
+    } catch {
+      /* Ignore unavailable sessionStorage. */
+    }
+    setActiveTab(tab);
+    setAssessmentCurrentPage(1);
+    setCompletedCandidatesPage(1);
+    setPageView('list');
+    setListScrollRequest((request) => request + 1);
+  };
+
+  const isOverviewCardActive = (tab: typeof activeTab) => pageView === 'list' && activeTab === tab;
+
   // Proctoring settings from API
   const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings | null>(null);
   const [isLoadingProctoring, setIsLoadingProctoring] = useState(false);
@@ -237,9 +251,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const rootRef = useScrollRestoration('assessments', !isLoading, [pageView]);
   useListStatePersistence(
     'assessments',
-    { pageView, activeTab, settingsSubTab, viewMode, assessmentCurrentPage, assessmentItemsPerPage },
+    { activeTab, settingsSubTab, viewMode, assessmentCurrentPage, assessmentItemsPerPage },
     (s) => {
-      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
       if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as typeof activeTab);
       if (s.settingsSubTab === 'proctoring' || s.settingsSubTab === 'topics') setSettingsSubTab(s.settingsSubTab);
       if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
@@ -247,6 +260,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       if (typeof s.assessmentItemsPerPage === 'number') setAssessmentItemsPerPage(s.assessmentItemsPerPage);
     },
   );
+
+  useEffect(() => {
+    if (listScrollRequest === 0 || pageView !== 'list') return;
+
+    let nestedFrame = 0;
+    const frame = window.requestAnimationFrame(() => {
+      nestedFrame = window.requestAnimationFrame(() => {
+        listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (nestedFrame) window.cancelAnimationFrame(nestedFrame);
+    };
+  }, [listScrollRequest, pageView, activeTab]);
 
   const getAssessmentStatusFilter = (tab: typeof activeTab) => {
     if (tab === 'active') return 'published';
@@ -1300,47 +1329,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Assessment Quota Badge with color coding - use stats.units_consumed for consistency */}
             {totalUnits > 0 && (
-              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 shadow-sm ${
-                isUnlimited
-                  ? 'bg-brand-blue/5 ring-brand-blue/20 shadow-brand-blue/5'
-                  : (totalUnits - stats.units_consumed) <= 0
-                  ? 'bg-red-50 ring-red-200 shadow-red-500/10'
-                  : (totalUnits - stats.units_consumed) <= 2
-                  ? 'bg-brand-orange/5 ring-brand-orange/20 shadow-brand-orange/5'
-                  : 'bg-brand-blue/5 ring-brand-blue/20 shadow-brand-blue/5'
-              }`}>
-                <Zap className={`w-4 h-4 ${
-                  isUnlimited
-                    ? 'text-brand-blue'
-                    : (totalUnits - stats.units_consumed) <= 0
-                    ? 'text-red-600'
-                    : (totalUnits - stats.units_consumed) <= 2
-                    ? 'text-brand-orange'
-                    : 'text-brand-blue'
-                }`} />
-                <div className="flex flex-col">
-                  <span className="text-xs text-gray-500 dark:text-slate-500 font-medium">Assessment Quota</span>
-                  <div className="flex items-center gap-1">
-                    {isUnlimited ? (
-                      <span className="text-sm font-bold text-brand-blue">Unlimited</span>
-                    ) : availableUnits !== null ? (
-                      <>
-                        {/* Use availableUnits from API (source of truth from Control Plane) */}
-                        <span className={`text-sm font-bold ${
-                          availableUnits === 0
-                            ? 'text-red-700'
-                            : availableUnits <= 2
-                            ? 'text-brand-orange-deep'
-                            : 'text-gray-900'
-                        }`}>{availableUnits}</span>
-                        <span className="text-xs text-gray-500 dark:text-slate-500">/ {totalUnits} available</span>
-                      </>
-                    ) : (
-                      <span className="text-xs text-gray-400 dark:text-slate-500">Loading...</span>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <QuotaBadge
+                label="Assessment Quota"
+                availableUnits={availableUnits}
+                totalUnits={totalUnits}
+                isUnlimited={isUnlimited}
+                icon={Zap}
+              />
             )}
             {canAccessHRQuestionBank && (
               <button
@@ -1494,7 +1489,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           {/* Row 2: Current State Metrics — click a card to drill into the matching list */}
           <StatsCardGrid>
             <StatsCard
-              tone="blue"
+              tone="neutral"
+              active={isOverviewCardActive('all')}
+              showClickArrow
               icon={FileText}
               label="Total Assessments"
               value={isLoadingStats ? '...' : stats.total_assessments.toLocaleString()}
@@ -1502,7 +1499,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               onClick={() => openAssessmentsList('all')}
             />
             <StatsCard
-              tone="emerald"
+              tone="neutral"
+              active={isOverviewCardActive('active')}
+              showClickArrow
               icon={Play}
               label="Active"
               value={isLoadingStats ? '...' : stats.active_assessments.toLocaleString()}
@@ -1510,7 +1509,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               onClick={() => openAssessmentsList('active')}
             />
             <StatsCard
-              tone="cyan"
+              tone="neutral"
+              active={isOverviewCardActive('completed-candidates')}
+              showClickArrow
               icon={Users}
               label="Candidates Assessed"
               value={isLoadingStats ? '...' : stats.total_candidates_completed.toLocaleString()}
@@ -1518,7 +1519,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               onClick={() => openAssessmentsList('completed-candidates')}
             />
             <StatsCard
-              tone="orange"
+              tone="neutral"
+              active={isOverviewCardActive('draft')}
+              showClickArrow
               icon={Pencil}
               label="Drafts"
               value={isLoadingStats ? '...' : stats.draft_assessments.toLocaleString()}
@@ -1530,16 +1533,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {pageView === 'list' && (
         <>
-        {/* Back to cards button */}
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <button
-            onClick={() => setPageView('cards')}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to overview
-          </button>
-        </div>
+        <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
         {/* Tabs */}
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">

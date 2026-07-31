@@ -608,16 +608,27 @@ function indexHistoryByText(questionHistory: any[]): Map<string, any> {
 function isMetaAssistantTurn(content: string): boolean {
   const t = (content || '').toLowerCase().trim();
   if (!t) return false;
-  // Unambiguous silence / nudge / move-on phrases — these NEVER appear in a
-  // real interview question, so match them even if the turn has a "?" (e.g.
-  // "Are you there? Take your time…").
+  // Unambiguous silence nudges — these NEVER carry a real question, so match
+  // them even if the turn has a "?" (e.g. "Are you there? Take your time…").
   const ALWAYS = [
     'are you there', "didn't get any response", 'did not get any response',
     "couldn't get any response", 'could not get any response',
     'if you’re there, please start speaking', "if you're there, please start speaking",
-    'move on to the next question', "let's move on to the next", 'lets move on to the next',
   ];
   if (ALWAYS.some(m => t.includes(m))) return true;
+  // "Let's move on to the next question" is a nudge ONLY when it stands alone.
+  // As a PREAMBLE to a real question ("…let's move on to the next question.
+  // What is your expected salary?") it introduces a genuine turn — the HR salary
+  // question was being dropped because it matched here. Treat it as meta only
+  // when NO real question follows the phrase.
+  const MOVE_ON = ['move on to the next question', "let's move on to the next", 'lets move on to the next'];
+  for (const m of MOVE_ON) {
+    const idx = t.indexOf(m);
+    if (idx < 0) continue;
+    const after = t.slice(idx + m.length);
+    const hasTrailingQuestion = after.includes('?') && /[a-z]{3,}/.test(after);
+    if (!hasTrailingQuestion) return true; // bare nudge with nothing real after it
+  }
   // Statement-only meta (role warm-up, deflection, farewell, resume ack). A real
   // question that merely quotes one of these still has a "?" and is kept.
   if (t.includes('?')) return false;

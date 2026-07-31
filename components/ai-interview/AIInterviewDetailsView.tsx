@@ -1959,12 +1959,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           <div className="flex items-center gap-3 sm:gap-4 flex-wrap pl-11 sm:pl-0">
                             {statusPill(a.status)}
 
-                            {displayScore != null && (
-                              <div className="text-right">
-                                <div className="text-[10px] text-gray-500">Score</div>
-                                <div className="text-sm font-semibold text-green-600">{Number(displayScore)}%</div>
-                              </div>
-                            )}
+                            {displayScore != null && (() => {
+                              // Round to whole number so this matches the detail
+                              // page (17.5 → 18). Pass ≥ 60% → green, else red.
+                              const rounded = Math.round(Number(displayScore));
+                              const scoreColor = rounded >= 60 ? 'text-green-600' : 'text-red-600';
+                              return (
+                                <div className="text-right">
+                                  <div className="text-[10px] text-gray-500">Score</div>
+                                  <div className={`text-sm font-semibold ${scoreColor}`}>{rounded}%</div>
+                                </div>
+                              );
+                            })()}
 
                             <div className="hidden sm:flex items-center gap-3 text-[10px] text-gray-400">
                               {a.created_at && (

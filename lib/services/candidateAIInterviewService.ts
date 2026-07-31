@@ -356,8 +356,9 @@ export const candidateAIInterviewService = {
     }
   },
 
-  // Absolute URL for navigator.sendBeacon (used on disconnect/unload, when the
-  // axios instance / page may be tearing down).
+  // Absolute URL for the unload-time keepalive fetch in clientLogForwarder
+  // (used on disconnect/unload, when the axios instance / page may be tearing
+  // down). NOT sendBeacon — see that file for why it can't be used here.
   clientLogBeaconUrl(token: string): string {
     return `${API_BASE_URL}/candidate/ai-interview/${token}/client-log`;
   },

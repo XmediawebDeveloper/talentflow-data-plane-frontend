@@ -32,7 +32,7 @@ import {
   UserX,
   Sparkles,
   Info,
-  ChevronLeft,
+  ArrowUpRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -499,11 +499,20 @@ export default function UserManagement() {
   // list is pre-filtered.
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const listSectionRef = useRef<HTMLDivElement | null>(null);
+  const [listScrollRequest, setListScrollRequest] = useState(0);
   const openListView = (filter: 'all' | 'active' | 'inactive') => {
+    try {
+      window.sessionStorage.removeItem('listScroll:org-user-management');
+    } catch {
+      /* Ignore unavailable sessionStorage. */
+    }
     setStatusFilter(filter);
     setPageView('list');
     setCurrentPage(1);
+    setListScrollRequest((request) => request + 1);
   };
+  const isOverviewCardActive = (filter: typeof statusFilter) => pageView === 'list' && statusFilter === filter;
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -597,9 +606,8 @@ export default function UserManagement() {
   const rootRef = useScrollRestoration<HTMLElement>('org-user-management', !isLoading, [pageView]);
   useListStatePersistence(
     'org-user-management',
-    { pageView, statusFilter, searchQuery, itemsPerPage },
+    { statusFilter, searchQuery, itemsPerPage },
     (s) => {
-      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
       if (s.statusFilter === 'all' || s.statusFilter === 'active' || s.statusFilter === 'inactive') {
         setStatusFilter(s.statusFilter as typeof statusFilter);
       }
@@ -607,6 +615,22 @@ export default function UserManagement() {
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
     },
   );
+
+  useEffect(() => {
+    if (listScrollRequest === 0 || pageView !== 'list') return;
+
+    let nestedFrame = 0;
+    const frame = window.requestAnimationFrame(() => {
+      nestedFrame = window.requestAnimationFrame(() => {
+        listSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (nestedFrame) window.cancelAnimationFrame(nestedFrame);
+    };
+  }, [listScrollRequest, pageView, statusFilter]);
 
   // Permission guard - check if user has access to User Management
   useEffect(() => {
@@ -2059,15 +2083,15 @@ export default function UserManagement() {
       </div>
 
       {/* Stats Cards — clickable; clicking drills into the users list filtered by status */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3 mb-5">
         {/* Total Users card with quota breakdown */}
         <button
           type="button"
           onClick={() => openListView('all')}
-          className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3 sm:p-4 lg:p-6 hover:shadow-md hover:border-brand-blue/30 transition-all ${pageView === 'list' && statusFilter === 'all' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-200 dark:border-slate-700'}`}
+          className={`group relative flex flex-col items-stretch justify-start overflow-hidden text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3.5 sm:p-4 hover:shadow-md hover:border-brand-blue/30 transition-all ${isOverviewCardActive('all') ? 'border-brand-blue/55 bg-brand-blue/5 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/20' : 'border-brand-blue/15 dark:border-brand-blue/25'}`}
         >
-          <div className="flex items-start justify-between">
-            <div>
+          <div>
+            <div className="pr-24">
               <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Total Users</p>
               <div className="flex items-baseline gap-1 mt-1">
                 <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50">
@@ -2078,8 +2102,24 @@ export default function UserManagement() {
                 </span>
               </div>
             </div>
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-              <UsersIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+            <div className="absolute right-3 top-3 flex items-center gap-2 sm:right-4 sm:top-4">
+              <div className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl shadow-sm ring-1 ${
+                isOverviewCardActive('all')
+                  ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                  : 'bg-brand-blue/5 text-gray-700 ring-brand-blue/15 dark:bg-brand-blue/10 dark:text-slate-300 dark:ring-brand-blue/25'
+              }`}>
+                <UsersIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <span
+                className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all duration-200 group-hover:translate-x-0.5 ${
+                  isOverviewCardActive('all')
+                    ? 'border-brand-blue/25 bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                    : 'border-brand-blue/15 bg-white text-gray-500 shadow-sm group-hover:border-brand-blue/30 group-hover:text-brand-blue dark:border-brand-blue/25 dark:bg-slate-900 dark:text-slate-400'
+                }`}
+                aria-hidden="true"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </span>
             </div>
           </div>
           {/* Progress bar */}
@@ -2131,34 +2171,66 @@ export default function UserManagement() {
         <button
           type="button"
           onClick={() => openListView('active')}
-          className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3 sm:p-4 lg:p-6 hover:shadow-md hover:border-brand-blue/30 transition-all ${pageView === 'list' && statusFilter === 'active' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-200 dark:border-slate-700'}`}
+          className={`group relative flex flex-col items-stretch justify-start overflow-hidden text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3.5 sm:p-4 hover:shadow-md hover:border-brand-blue/30 transition-all ${isOverviewCardActive('active') ? 'border-brand-blue/55 bg-brand-blue/5 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/20' : 'border-brand-blue/15 dark:border-brand-blue/25'}`}
         >
-          <div className="flex items-start justify-between">
-            <div>
+          <div>
+            <div className="pr-24">
               <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Active Users</p>
-              <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-600 mt-1">
+              <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1">
                 {users.filter(u => u.is_active).length}
               </p>
             </div>
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 text-white shadow-sm shadow-green-500/25 ring-1 ring-white/10">
-              <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+            <div className="absolute right-3 top-3 flex items-center gap-2 sm:right-4 sm:top-4">
+              <div className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl shadow-sm ring-1 ${
+                isOverviewCardActive('active')
+                  ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                  : 'bg-brand-blue/5 text-gray-700 ring-brand-blue/15 dark:bg-brand-blue/10 dark:text-slate-300 dark:ring-brand-blue/25'
+              }`}>
+                <UserCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <span
+                className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all duration-200 group-hover:translate-x-0.5 ${
+                  isOverviewCardActive('active')
+                    ? 'border-brand-blue/25 bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                    : 'border-brand-blue/15 bg-white text-gray-500 shadow-sm group-hover:border-brand-blue/30 group-hover:text-brand-blue dark:border-brand-blue/25 dark:bg-slate-900 dark:text-slate-400'
+                }`}
+                aria-hidden="true"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </span>
             </div>
           </div>
         </button>
         <button
           type="button"
           onClick={() => openListView('inactive')}
-          className={`text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3 sm:p-4 lg:p-6 hover:shadow-md hover:border-brand-blue/30 transition-all ${pageView === 'list' && statusFilter === 'inactive' ? 'border-brand-blue ring-2 ring-brand-blue/20' : 'border-gray-200 dark:border-slate-700'}`}
+          className={`group relative flex flex-col items-stretch justify-start overflow-hidden text-left w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border p-3.5 sm:p-4 hover:shadow-md hover:border-brand-blue/30 transition-all ${isOverviewCardActive('inactive') ? 'border-brand-blue/55 bg-brand-blue/5 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/20' : 'border-brand-blue/15 dark:border-brand-blue/25'}`}
         >
-          <div className="flex items-start justify-between">
-            <div>
+          <div>
+            <div className="pr-24">
               <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Inactive Users</p>
-              <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-500 mt-1">
+              <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1">
                 {users.filter(u => !u.is_active).length}
               </p>
             </div>
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-sm shadow-red-500/25 ring-1 ring-white/10">
-              <UserX className="w-4 h-4 sm:w-5 sm:h-5" />
+            <div className="absolute right-3 top-3 flex items-center gap-2 sm:right-4 sm:top-4">
+              <div className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl shadow-sm ring-1 ${
+                isOverviewCardActive('inactive')
+                  ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                  : 'bg-brand-blue/5 text-gray-700 ring-brand-blue/15 dark:bg-brand-blue/10 dark:text-slate-300 dark:ring-brand-blue/25'
+              }`}>
+                <UserX className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <span
+                className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all duration-200 group-hover:translate-x-0.5 ${
+                  isOverviewCardActive('inactive')
+                    ? 'border-brand-blue/25 bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                    : 'border-brand-blue/15 bg-white text-gray-500 shadow-sm group-hover:border-brand-blue/30 group-hover:text-brand-blue dark:border-brand-blue/25 dark:bg-slate-900 dark:text-slate-400'
+                }`}
+                aria-hidden="true"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </span>
             </div>
           </div>
         </button>
@@ -2166,15 +2238,8 @@ export default function UserManagement() {
 
       {pageView === 'list' && (
       <>
-      {/* Back to overview */}
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <button
-          onClick={() => { setPageView('cards'); setSearchQuery(''); }}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          Back to overview
-        </button>
+      <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
+      <div className="mb-4 flex items-center justify-end gap-2">
         <span className="text-xs text-gray-500 dark:text-slate-400">
           {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'}
         </span>

@@ -160,9 +160,17 @@ candidate holding a phone up to the webcam:
 
 Two things follow, and both are load-bearing:
 
-**1. The cadence must adapt.** ~2.1 s/frame against the original fixed 2 s
-cadence would have queued frames back-to-back. `DUTY_CYCLE_DIVISOR` now spaces
-frames at 3× the last measured inference, capped at 20 s.
+**1. The cadence must adapt — and burst on suspicion.** ~2.1 s/frame against the
+original fixed 2 s cadence would have queued frames back-to-back.
+`DUTY_CYCLE_DIVISOR` now spaces frames at 3× the last measured inference (capped
+20 s). But that alone broke recall: the 2-frame confirmation gate at a ~6 s idle
+cadence needed an object to stay in frame ~13 s, so a quick glance at a phone was
+missed entirely. So the loop polls slowly while the frame looks clean, then
+samples **back-to-back** as soon as a watched class appears — corroboration in
+~2 inferences instead of ~2 cadences, with the idle duty cycle unchanged.
+
+That combination is what makes the 2-frame gate affordable. Don't lower
+`framesToConfirm` to buy recall; the burst already bought it.
 
 **2. A phone held close to the lens is often classified `laptop`, not
 `cell phone`.** Up close it is just a large dark rectangle. That means it lands
@@ -222,6 +230,31 @@ Then confirm per-frame `inferenceMs` on both a typical and a low-tier machine,
 and **hold a phone up to the camera** to confirm end-to-end that a violation is
 written. If WebGPU inference is not comfortably under ~500 ms, revisit the
 model choice.
+
+## Reading the log (this is how you tune it)
+
+All lines use the `[INTERVIEW_OBJECT_DETECTION]` prefix, which is on
+`clientLogForwarder`'s allowlist, so they reach the server log too.
+
+```
+Ready — webgpu, input 384px, labels coco91, ort /ort/ort.webgpu.min.js
+First inference 2134 ms → cadence 6402 ms
+frame sees: person 0.684, laptop 0.474, tv 0.238      ← every 30 s, ANY class,
+                                                        thresholds ignored
+near-miss cell phone score=0.190/0.22 area=0.021/0.0015 — filtered
+FLAG unauthorized_object laptop score=0.431 frames=2
+```
+
+`frame sees:` is the ground truth and exists specifically to separate three
+failure modes that otherwise look identical from the outside — an interview with
+no flags:
+
+| Log says | Meaning | Fix |
+|---|---|---|
+| no watched class at all | model isn't seeing it | resolution / fine-tune |
+| `near-miss … filtered` | seen, scored below threshold | lower that threshold |
+| `laptop` where you expect a phone | class confusion, working as designed | fine-tune |
+| no lines at all | detector never ran | check the advisory row's reason |
 
 ## Tuning
 
