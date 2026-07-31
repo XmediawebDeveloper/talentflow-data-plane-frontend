@@ -866,6 +866,39 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Keep isClarificationRef in sync with state — used as a gate in timer intervals
   useEffect(() => { isClarificationRef.current = isClarification; }, [isClarification]);
 
+  // ── Pre-turn "get ready" countdown (Change 1) ────────────────────────────
+  // After Bina finishes speaking, before the mic opens, we show a big 5→1
+  // countdown under the question ("Get ready… 5,4,3,2,1 → Now it's your turn").
+  // The mic and the per-question answer timer stay OFF until it reaches 0.
+  const [preTurnCountdown, setPreTurnCountdown] = useState<number | null>(null);
+  const preTurnCountdownRef = useRef<number | null>(null);
+  const preTurnCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const PRE_TURN_COUNTDOWN_FROM = 5; // seconds
+  // Assigned in a useEffect (like startRecordingInternalRef) so finalizePlayback
+  // and message handlers always call the freshest closure.
+  const runPreTurnCountdownRef = useRef<(onComplete: () => void) => void>(() => {});
+  const cancelPreTurnCountdownRef = useRef<() => void>(() => {});
+  // Armed by every `question_timer_started` (a real question / follow-up /
+  // clarification / repeat turn) and CONSUMED when the pre-turn countdown runs.
+  // Silence-ladder nudges ("Are you there?" / move-on) do NOT send
+  // question_timer_started, so this stays false for them and the mic reopens
+  // immediately with no get-ready countdown after a nudge.
+  const getReadyArmedRef = useRef(false);
+  // ── Mid-speech silence countdown (Change 2) ──────────────────────────────
+  // Once the candidate has spoken and then pauses, the first ~8s is silent
+  // (normal listening, no counter). For the LAST 7s of the 15s silence window
+  // we show a big 7→1 countdown; if they resume speaking it disappears and we
+  // go back to normal listening; if it reaches 0 the turn ends and we move on.
+  const [midSilenceCountdown, setMidSilenceCountdown] = useState<number | null>(null);
+  const midSilenceCountdownRef = useRef<number | null>(null);
+  const SILENCE_COUNTDOWN_WINDOW_MS = 7000; // show the counter for the final 7s of the silence window
+  const setMidSilenceCountdown_ = useCallback((val: number | null) => {
+    if (midSilenceCountdownRef.current !== val) {
+      midSilenceCountdownRef.current = val;
+      setMidSilenceCountdown(val);
+    }
+  }, []);
+
   // "Now Speak" banner — shown when mic opens for candidate after Bina stops
   const [showNowSpeakBanner, setShowNowSpeakBanner] = useState(false);
   const nowSpeakShownForSessionRef = useRef(false); // prevents re-show within same recording session
@@ -3822,6 +3855,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         break;
       case "speaking_started":
         console.log(`[WS ${timestamp}] Speaking started`);
+        // Bina is speaking again — abort any in-progress pre-turn "get ready"
+        // countdown and any pending mic-open timer (they belong to a turn that
+        // is no longer opening) + the mid-speech silence countdown.
+        cancelPreTurnCountdownRef.current();
+        if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
+        setMidSilenceCountdown_(null);
         // Bina is speaking (question / repeat / prompt) — PAUSE the per-question
         // answer clock. It resumes when the candidate's turn reopens (mic start).
         // For a brand-new question the pause is harmless — the incoming
@@ -4046,14 +4085,34 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             // Point 4: clarification ends the moment Bina finishes speaking
             setIsClarification(false);
             isClarificationRef.current = false;
-            setStatus("Your turn - speak now...");
-            // 800ms delay before opening mic — lets room echo of Bina's TTS fully decay
-            // so Whisper doesn't transcribe Bina's audio as the candidate's speech.
+            // Run the 5→1 "get ready" countdown ONLY for a real question turn
+            // (armed by question_timer_started). After a silence nudge ("Are you
+            // there?") there's no new timer, so we skip the countdown and reopen
+            // the mic immediately. Consume the arm flag either way.
+            const _runGetReady = getReadyArmedRef.current;
+            getReadyArmedRef.current = false;
+            const _openMic = () => {
+              setStatus("Your turn - speak now...");
+              if (wsRef.current?.readyState === WebSocket.OPEN
+                  && !isAiSpeakingRef.current
+                  && !isRecordingRef.current) {
+                startRecordingInternalRef.current();
+              }
+            };
+            setStatus(_runGetReady ? "Get ready…" : "Your turn - speak now...");
+            // 800ms echo-decay delay (lets Bina's TTS tail fade so Whisper doesn't
+            // transcribe it), THEN — for a real turn — the 5→1 "get ready"
+            // countdown (Change 1). ONLY when it reaches 0 do we open the mic +
+            // start the answer timer. Mic + per-question timer stay OFF during it.
             if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
             startRecordingTimerRef.current = setTimeout(() => {
               startRecordingTimerRef.current = null;
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
-                startRecordingInternalRef.current();
+              if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+              if (isAiSpeakingRef.current || isRecordingRef.current) return; // turn changed
+              if (_runGetReady) {
+                runPreTurnCountdownRef.current(_openMic);
+              } else {
+                _openMic();
               }
             }, 800);
           };
@@ -4160,6 +4219,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // Backend cancelled current generation (e.g. skip_question during answer).
         // Stop any playing audio immediately and clear ALL state so the next
         // pipeline (skip question) starts from a clean slate.
+        cancelPreTurnCountdownRef.current();
+        if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
+        setMidSilenceCountdown_(null);
         talkingHeadRef.current?.streamStop();
         isPlayingRef.current = false;
         isAiSpeakingRef.current = false;
@@ -4351,6 +4413,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         break;
       }
       case "question_timer_started": {
+        // A real question turn is about to open (main / follow-up / clarification
+        // / repeat) — arm the pre-turn "get ready" 5→1 countdown. Consumed by
+        // finalizePlayback when the mic is about to open. Nudges never send this.
+        getReadyArmedRef.current = true;
         console.log('[INTERVIEW-DEBUG] question_timer_started received', {
           seconds: data.seconds,
           total_seconds: data.total_seconds,
@@ -6305,7 +6371,69 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     startRecordingInternalRef.current = () => {
       void startRecordingInternal();
     };
+    // ── Pre-turn "get ready" countdown drivers (Change 1) ──────────────────
+    cancelPreTurnCountdownRef.current = () => {
+      if (preTurnCountdownTimerRef.current) {
+        clearInterval(preTurnCountdownTimerRef.current);
+        preTurnCountdownTimerRef.current = null;
+      }
+      if (preTurnCountdownRef.current !== null) {
+        preTurnCountdownRef.current = null;
+        setPreTurnCountdown(null);
+      }
+    };
+    runPreTurnCountdownRef.current = (onComplete: () => void) => {
+      cancelPreTurnCountdownRef.current();
+      let n = PRE_TURN_COUNTDOWN_FROM;              // 5
+      preTurnCountdownRef.current = n;
+      setPreTurnCountdown(n);
+      setStatus("Get ready…");
+      preTurnCountdownTimerRef.current = setInterval(() => {
+        n -= 1;
+        if (n >= 1) {
+          // Show 4, 3, 2, 1 — one per second (5 was shown immediately above).
+          preTurnCountdownRef.current = n;
+          setPreTurnCountdown(n);
+        } else {
+          // Countdown finished → open the mic / start the answer timer now.
+          if (preTurnCountdownTimerRef.current) {
+            clearInterval(preTurnCountdownTimerRef.current);
+            preTurnCountdownTimerRef.current = null;
+          }
+          preTurnCountdownRef.current = null;
+          setPreTurnCountdown(null);
+          try { onComplete(); } catch { /* no-op */ }
+        }
+      }, 1000);
+    };
   });
+
+  // ── Mid-speech silence countdown driver (Change 2) ─────────────────────────
+  // While the candidate's turn is open, poll the VAD's silenceStartRef every
+  // 200ms. Show a big 7→1 countdown ONLY for the final 7s of the (15s) silence
+  // window; show nothing for the first ~8s of a pause. The instant the candidate
+  // resumes speaking, the VAD resets silenceStartRef → we clear the countdown and
+  // it's back to normal listening. The actual end-turn is still driven by the VAD
+  // itself (this is display-only). Uses Date.now() to match the VAD's clock.
+  useEffect(() => {
+    if (!isRecording) { setMidSilenceCountdown_(null); return; }
+    const id = setInterval(() => {
+      if (!isRecordingRef.current || isAiSpeakingRef.current || isProcessingRef.current) {
+        setMidSilenceCountdown_(null);
+        return;
+      }
+      const start = silenceStartRef.current;
+      if (start == null) { setMidSilenceCountdown_(null); return; }
+      const eff = silenceDurationMsRef.current * (micSilenceMultiplierRef.current || 1);
+      const remaining = eff - (Date.now() - start);
+      if (remaining > 0 && remaining <= SILENCE_COUNTDOWN_WINDOW_MS) {
+        setMidSilenceCountdown_(Math.max(1, Math.ceil(remaining / 1000)));
+      } else {
+        setMidSilenceCountdown_(null);
+      }
+    }, 200);
+    return () => { clearInterval(id); setMidSilenceCountdown_(null); };
+  }, [isRecording, setMidSilenceCountdown_]);
 
   const disconnect = useCallback(() => {
     const wasCompleted = isClosingRef.current || shouldDisconnectAfterAudioRef.current;
@@ -6313,6 +6441,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     stopVisemeLoop();
     stopRecording();
     clearNoResponseTimer();
+    cancelPreTurnCountdownRef.current();
+    setMidSilenceCountdown_(null);
+    if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
     if (micPopupTimerRef.current) {
       clearTimeout(micPopupTimerRef.current);
       micPopupTimerRef.current = null;
@@ -7407,6 +7538,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // it sits in the middle of the chat window and never overlaps the candidate
   // video. Gradient + frosted-glass styling; exactly one state shows.
   const turnBanner = (() => {
+    // The big pre-turn "get ready" countdown owns the screen — suppress the small
+    // banner while it runs so we don't show two "getting ready" messages at once.
+    if (preTurnCountdown != null) return null;
     let variant: 'silence' | 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
     if (showSilenceBanner) variant = 'silence';
     else if (questionTimerExpired) variant = 'timesup';
@@ -8268,6 +8402,52 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 interactive so it never blocks scrolling or clicks. Sits under
                 the fixed banner (which is z-105) but above the scrolling text. */}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent via-gray-50/70 to-gray-50" />
+            {/* ── Big countdown overlays (under the question, high visibility) ──
+                Change 1: pre-turn "get ready" 5→1 before the mic opens.
+                Change 2: mid-speech silence 7→1 (final 7s of the 15s window).
+                pointer-events-none so the Repeat/Next action buttons underneath
+                stay fully clickable — the candidate can press Next to skip the
+                silence countdown without waiting for it to finish. */}
+            {(preTurnCountdown != null || midSilenceCountdown != null) && (() => {
+              const isPre = preTurnCountdown != null;
+              const num = isPre ? preTurnCountdown : midSilenceCountdown;
+              const isLastQ = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
+              const title = isPre ? 'Get ready to answer' : 'Are you still there?';
+              const subtitle = isPre
+                ? 'Your turn is about to begin — speak when it says “Your turn”.'
+                : isLastQ
+                  ? 'We can’t hear you. Keep speaking to continue, otherwise the interview will end when the count reaches zero.'
+                  : 'We can’t hear you. Keep speaking to continue — or press “Skip to next question” below.';
+              const accent = isPre ? 'text-emerald-300' : 'text-amber-300';
+              const ring = isPre ? 'ring-emerald-400/40' : 'ring-amber-400/40';
+              return (
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 z-[104] flex flex-col items-center justify-center px-4">
+                  <style>{`@keyframes cdPulse {0%{opacity:0;transform:scale(0.5)}22%{opacity:1;transform:scale(1.08)}68%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.85)}}`}</style>
+                  <div className="text-center">
+                    <div className={`text-sm sm:text-base font-bold ${accent} mb-2 drop-shadow-lg`}>{title}</div>
+                    <div
+                      key={`${isPre ? 'p' : 's'}-${num}`}
+                      className={`mx-auto flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-black/60 backdrop-blur-md ring-4 ${ring} shadow-2xl`}
+                      style={{ animation: 'cdPulse 1s ease-in-out' }}
+                    >
+                      <span className={`font-black tabular-nums ${accent}`} style={{ fontSize: '5rem', lineHeight: 1 }}>{num}</span>
+                    </div>
+                    {!isPre && !isLastQ && (
+                      <div className="mt-4">
+                        <button
+                          type="button"
+                          onClick={() => handleNextQuestion()}
+                          className="pointer-events-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/90 hover:bg-white text-gray-900 text-sm font-semibold shadow-lg ring-1 ring-black/10 transition-colors"
+                        >
+                          Skip to next question →
+                        </button>
+                      </div>
+                    )}
+                    <div className="mt-3 max-w-sm mx-auto text-white/90 text-xs sm:text-sm leading-snug drop-shadow-lg">{subtitle}</div>
+                  </div>
+                </div>
+              );
+            })()}
             {/* Turn banner — centred within the CHAT panel (never overlaps the
                 video), sitting above the fade mask. All chat content stays above
                 it via the reserved bottom padding. */}

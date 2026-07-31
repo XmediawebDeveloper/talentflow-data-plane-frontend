@@ -1,0 +1,138 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Live phone-detection bench</title>
+<style>
+  body{font:13px/1.5 ui-monospace,monospace;margin:14px;background:#111;color:#ddd}
+  #wrap{position:relative;display:inline-block;vertical-align:top}
+  video,canvas{display:block;border-radius:6px}
+  #ov{position:absolute;inset:0}
+  #side{display:inline-block;vertical-align:top;margin-left:16px;min-width:460px}
+  .ok{color:#5f5}.bad{color:#f66}.warn{color:#fb0}.dim{color:#888}
+  pre{white-space:pre-wrap;margin:6px 0}
+  h3{margin:0 0 8px}
+  #verdict{font-size:18px;font-weight:700;padding:8px 12px;border-radius:6px;background:#222;display:inline-block}
+</style>
+<h3>Live phone-detection bench — real worker, real thresholds</h3>
+<div id="wrap"><video id="v" width="640" height="480" autoplay muted playsinline></video><canvas id="ov" width="640" height="480"></canvas></div>
+<div id="side">
+  <div id="verdict" class="dim">starting…</div>
+  <pre id="status"></pre>
+  <pre id="raw"></pre>
+  <pre id="hits"></pre>
+</div>
+<script type="module">
+/**
+ * Point your webcam at yourself, hold a phone up, and watch the numbers.
+ *
+ * Exists because diagnosing this through full interviews is a ~5-minute loop
+ * with a stale-deploy risk at every step. This drives the SAME worker the
+ * interview uses, with the same thresholds, straight off the live camera — so
+ * "can this model see this phone, in this room, on this hardware?" gets a
+ * definitive answer in seconds.
+ *
+ * Keep WATCHED in sync with detectableObjects.ts (a plain .html can't import TS).
+ */
+const WATCHED = {
+  'cell phone': { minConfidence: 0.22, minBoxArea: 0.0015, event: 'phone_detected' },
+  laptop:       { minConfidence: 0.40, minBoxArea: 0.01,   event: 'unauthorized_object' },
+  tv:           { minConfidence: 0.45, minBoxArea: 0.01,   event: 'unauthorized_object' },
+  book:         { minConfidence: 0.35, minBoxArea: 0.006,  event: 'unauthorized_object' },
+  remote:       { minConfidence: 0.30, minBoxArea: 0.0015, event: 'unauthorized_object' },
+};
+const SCORE_FLOOR = Math.min(...Object.values(WATCHED).map(o => o.minConfidence));
+
+const v = document.getElementById('v');
+const ov = document.getElementById('ov');
+const g = ov.getContext('2d');
+const $status = document.getElementById('status');
+const $raw = document.getElementById('raw');
+const $hits = document.getElementById('hits');
+const $verdict = document.getElementById('verdict');
+
+let frames = 0, everSawPhone = false, everFired = false, bestPhone = 0;
+
+function setVerdict() {
+  if (everFired) { $verdict.textContent = '✅ WOULD FLAG — detection works'; $verdict.className = 'ok'; }
+  else if (everSawPhone) { $verdict.textContent = `⚠ phone seen but below threshold (best ${bestPhone.toFixed(3)})`; $verdict.className = 'warn'; }
+  else { $verdict.textContent = `… ${frames} frames, no phone class yet`; $verdict.className = 'dim'; }
+}
+
+try {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+  v.srcObject = stream;
+  await v.play();
+  $status.textContent = `camera ${v.videoWidth}×${v.videoHeight}`;
+} catch (e) {
+  $verdict.textContent = 'camera denied: ' + e.message; $verdict.className = 'bad';
+  throw e;
+}
+
+const w = new Worker('/workers/objectDetection.worker.js');
+w.onerror = e => { $verdict.textContent = 'WORKER ERROR ' + e.message; $verdict.className = 'bad'; };
+
+let busy = false;
+w.onmessage = async ({ data: m }) => {
+  if (m.type === 'init-failed') { $verdict.textContent = 'INIT FAILED: ' + m.error; $verdict.className = 'bad'; return; }
+
+  if (m.type === 'ready') {
+    $status.textContent += `\nready — ${m.backend}, input ${m.inputSize}px, labels ${m.labelSpace}, shaderF16=${m.shaderF16}`;
+    tick();
+    return;
+  }
+
+  if (m.type === 'detect-failed') { busy = false; $status.textContent += `\nframe failed: ${m.error}`; tick(); return; }
+
+  if (m.type === 'detections') {
+    busy = false; frames++;
+
+    $raw.textContent = 'top raw (any class, no thresholds):\n' +
+      (m.topRaw || []).map(d => `  ${d.score.toFixed(3)}  ${d.label}`).join('\n');
+
+    const phone = (m.topRaw || []).find(d => d.label === 'cell phone');
+    if (phone) { everSawPhone = true; bestPhone = Math.max(bestPhone, phone.score); }
+
+    g.clearRect(0, 0, ov.width, ov.height);
+    const lines = [];
+    for (const d of m.detections) {
+      const def = WATCHED[d.label];
+      const area = d.box[2] * d.box[3];
+      const pass = d.score >= def.minConfidence && area >= def.minBoxArea;
+      if (pass) everFired = true;
+      lines.push(`  ${d.score.toFixed(3)} ${d.label} area=${area.toFixed(4)} ${pass ? '→ ' + def.event : 'filtered'}`);
+      const [x, y, bw, bh] = d.box;
+      g.strokeStyle = pass ? '#5f5' : '#fb0';
+      g.lineWidth = 2;
+      g.strokeRect(x * ov.width, y * ov.height, bw * ov.width, bh * ov.height);
+      g.fillStyle = g.strokeStyle;
+      g.font = '13px monospace';
+      g.fillText(`${d.label} ${d.score.toFixed(2)}`, x * ov.width + 3, y * ov.height + 14);
+    }
+    $hits.textContent = `allowlisted this frame (${m.detections.length}):\n` + (lines.join('\n') || '  none');
+    $status.textContent = `camera ${v.videoWidth}×${v.videoHeight}\nframe ${frames} — inference ${Math.round(m.inferenceMs)} ms`;
+    setVerdict();
+    tick();
+  }
+};
+
+async function tick() {
+  if (busy) return;
+  busy = true;
+  try {
+    const bmp = await createImageBitmap(v);
+    // wantDebug on EVERY frame here — this page exists to be watched live.
+    w.postMessage({ type: 'detect', bitmap: bmp, frameId: frames, wantDebug: true }, [bmp]);
+  } catch (e) {
+    busy = false;
+    setTimeout(tick, 500);
+  }
+}
+
+w.postMessage({
+  type: 'init',
+  modelUrl: '/models/object-detection/rf-detr-nano.onnx',
+  ortUrls: ['/ort/ort.webgpu.min.js'],
+  inputSize: 384,
+  watchedLabels: Object.keys(WATCHED),
+  scoreFloor: SCORE_FLOOR,
+});
+</script>
