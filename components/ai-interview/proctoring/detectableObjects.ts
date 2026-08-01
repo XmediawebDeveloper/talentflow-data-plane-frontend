@@ -28,6 +28,28 @@
 /** Which proctoring event a detected class raises. Severity follows the type. */
 export type ObjectEventType = 'phone_detected' | 'unauthorized_object';
 
+/**
+ * Optional stronger tier for a class: at/above `above`, raise the escalated
+ * event instead of the base one.
+ *
+ * This exists because a single threshold cannot work for phones. Measured on
+ * this model (see OBJECT_DETECTION.md): a real phone held to the camera scored
+ * **0.297**, while a false positive on window blinds scored **0.33** — the false
+ * positive outscored the real thing. So one cut-off either floods recruiters
+ * with false SEVERE flags or misses real phones entirely.
+ *
+ * Two tiers make the uncertainty explicit instead of hiding it: a confident
+ * detection is a severe "Mobile phone", a weak one is a moderate "Possible
+ * phone" the recruiter is told to verify in the recording. Same shape as the
+ * existing face/voice `_mismatch` vs `_identity_changed` split.
+ */
+export interface EscalationTier {
+  above: number;
+  eventType: ObjectEventType;
+  displayLabel: string;
+  framesToConfirm?: number;
+}
+
 export interface DetectableObjectDef {
   /** EXACT label emitted by the model — this is what we persist verbatim. */
   cocoLabel: string;
@@ -35,6 +57,8 @@ export interface DetectableObjectDef {
   displayLabel: string;
   /** phone_detected → severe; unauthorized_object → moderate. */
   eventType: ObjectEventType;
+  /** Stronger tier, applied when the score clears `escalate.above`. */
+  escalate?: EscalationTier;
   /**
    * Minimum sigmoid score to consider. Phones sit lower than the rest on
    * purpose: a phone held at chest height is small, often half-occluded by a
@@ -61,17 +85,26 @@ export interface DetectableObjectDef {
 export const DETECTABLE_OBJECTS: Record<string, DetectableObjectDef> = {
   'cell phone': {
     cocoLabel: 'cell phone',
-    displayLabel: 'Mobile phone',
-    eventType: 'phone_detected',
-    // Benched on a real interview frame (public/od-test.html): a phone held up
-    // to the camera scored only 0.297. The earlier 0.45 threshold is why a
-    // blatant phone produced zero flags in production. RF-DETR is a
-    // set-prediction model whose absolute scores run low; the
-    // consecutive-frame gate below is what suppresses false positives here,
-    // NOT a high score cut-off.
-    minConfidence: 0.22,
+    // BASE tier is deliberately hedged. At 0.22 this class fired SEVERE on
+    // window blinds at 0.33 — while a genuine phone measured 0.297. Anything in
+    // this band is a coin flip, so it must not read as a confirmed phone.
+    displayLabel: 'Possible phone (unconfirmed)',
+    eventType: 'unauthorized_object',
+    minConfidence: 0.30,
     minBoxArea: 0.0015,
-    framesToConfirm: 2,
+    // 3 rather than 2: the extra corroboration is what makes this band tolerable
+    // at all, and burst sampling means it still resolves in a few seconds.
+    framesToConfirm: 3,
+    escalate: {
+      // Only a clearly-confident detection earns the severe, self-assured
+      // "Mobile phone" flag. Nothing in the bench reached this, which is the
+      // honest signal that this model needs fine-tuning for reliable phone
+      // calls — see OBJECT_DETECTION.md.
+      above: 0.50,
+      eventType: 'phone_detected',
+      displayLabel: 'Mobile phone',
+      framesToConfirm: 2,
+    },
   },
   laptop: {
     cocoLabel: 'laptop',

@@ -216,6 +216,31 @@ export function confidenceOf(eventType: string): Confidence | undefined {
   return EVENT_META[eventType]?.confidence;
 }
 
+/** Score at/above which an object detection may be shown as high-confidence. */
+const OBJECT_HIGH_CONFIDENCE = 0.5;
+
+/**
+ * Per-RECORD confidence tag.
+ *
+ * Object detections must derive this from the ACTUAL detection score, not from
+ * the event type. A static per-type tag produced a genuinely misleading row in
+ * production: a 33%-confidence phone detection rendered as
+ * "Mobile phone in view — HIGH CONFIDENCE — Serious". A recruiter could
+ * reasonably reject a candidate on that, and the underlying detection was a
+ * false positive on window blinds.
+ *
+ * Everything else keeps the per-type tag, where the type genuinely encodes the
+ * tier (face/voice `_mismatch` vs `_identity_changed`).
+ */
+export function confidenceOfViolation(v: ViolationRecord): Confidence | undefined {
+  if (v.event_type === 'phone_detected' || v.event_type === 'unauthorized_object') {
+    const c = num((v.details as Record<string, unknown> | undefined)?.confidence);
+    if (c == null) return 'possible';
+    return c >= OBJECT_HIGH_CONFIDENCE ? 'high' : 'possible';
+  }
+  return confidenceOf(v.event_type);
+}
+
 /**
  * Key the Integrity Check tab groups records by.
  *
@@ -416,6 +441,12 @@ export function describeViolation(v: ViolationRecord): string {
         parts.push(conf != null ? `, seen in ${frames} consecutive checks.` : ` Seen in ${frames} consecutive checks.`);
       } else if (conf != null) {
         parts.push('.');
+      }
+      // Below the high-confidence line this detector is genuinely unreliable —
+      // it has scored a window blind as a phone at 33%. Say so on the row rather
+      // than letting a recruiter read a low percentage as a confirmed finding.
+      if (conf != null && conf < OBJECT_HIGH_CONFIDENCE) {
+        parts.push(' This is a low-confidence detection — please confirm in the recording before acting on it.');
       }
       return parts.join('');
     }

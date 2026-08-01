@@ -80,6 +80,9 @@ interface JobsListingProps {
   onArchiveJob?: (job: Job) => void;
   onUnarchiveJob?: (job: Job) => void;
   onDeleteJob?: (job: Job) => void;
+  // Bulk delete: given the selected jobs, actually delete them (single confirm is
+  // handled here in JobsListing before this is called).
+  onBulkDelete?: (jobs: Job[]) => void | Promise<void>;
   // Quota information for showing limit reached message
   quotaInfo?: {
     remaining: number;
@@ -92,7 +95,7 @@ interface JobsListingProps {
   masterDataLinks?: { id: string; label: string; href: string; icon: LucideIcon }[];
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onInviteAssessment, onAssessmentStatus, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, quotaInfo, initialStatusFilter, masterDataLinks }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onInviteAssessment, onAssessmentStatus, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, masterDataLinks }: JobsListingProps) {
   const dialog = useGlobalDialog();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJd ?? false);
@@ -413,9 +416,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   };
 
   const handleBulkDelete = async () => {
-    if (await dialog.confirm({ title: 'Delete Jobs', message: `Are you sure you want to delete ${selectedJobs.size} job(s)? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) {
-      // In a real implementation, you'd call a delete handler
-      console.log('Deleting jobs:', Array.from(selectedJobs));
+    if (!onBulkDelete) return;
+    const selectedJobsData = sortedJobs.filter(job => selectedJobs.has(job.id));
+    if (selectedJobsData.length === 0) return;
+    if (await dialog.confirm({ title: 'Delete Jobs', message: `Are you sure you want to delete ${selectedJobsData.length} job(s)? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) {
+      await onBulkDelete(selectedJobsData);
       setSelectedJobs(new Set());
       setShowBulkActions(false);
     }
@@ -1049,7 +1054,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             Archive Selected
                           </button>
                         )}
-                        {(canExportJd || canDeleteJd) && <div className="border-t border-gray-200 my-2" />}
+                        {(canExportJd || (canDeleteJd && onBulkDelete)) && <div className="border-t border-gray-200 my-2" />}
                         {canExportJd && (
                           <button
                             onClick={handleBulkExport}
@@ -1059,7 +1064,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             Export Selected to CSV
                           </button>
                         )}
-                        {canDeleteJd && (
+                        {canDeleteJd && onBulkDelete && (
                           <button
                             onClick={handleBulkDelete}
                             className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"

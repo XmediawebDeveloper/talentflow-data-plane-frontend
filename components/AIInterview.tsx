@@ -2457,10 +2457,15 @@ export default function AIInterview() {
                             const capScore = inv.ai_evaluation?.capability_score;
                             const displayScore = capScore != null ? capScore : inv.score;
                             if (displayScore == null) return null;
+                            // Round to a whole number so this matches the detail
+                            // page (which shows Math.round) — 17.5 → 18, not 17.5.
+                            const rounded = Math.round(Number(displayScore));
+                            // Pass ≥ 60% → green, otherwise red.
+                            const scoreColor = rounded >= 60 ? 'text-green-600' : 'text-red-600';
                             return (
                               <div className="text-right">
                                 <div className="text-[10px] text-gray-500 dark:text-slate-500">Score</div>
-                                <div className="text-sm font-semibold text-green-600">{Number(displayScore)}%</div>
+                                <div className={`text-sm font-semibold ${scoreColor}`}>{rounded}%</div>
                               </div>
                             );
                           })()}

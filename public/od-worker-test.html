@@ -20,7 +20,7 @@
  * Keep in sync with detectableObjects.ts if you change thresholds.
  */
 const WATCHED = {
-  'cell phone': { minConfidence: 0.22, minBoxArea: 0.0015, event: 'phone_detected' },
+  'cell phone': { minConfidence: 0.30, minBoxArea: 0.0015, event: 'unauthorized_object (severe phone_detected only >=0.50)' },
   laptop:       { minConfidence: 0.40, minBoxArea: 0.01,   event: 'unauthorized_object' },
   tv:           { minConfidence: 0.45, minBoxArea: 0.01,   event: 'unauthorized_object' },
   book:         { minConfidence: 0.35, minBoxArea: 0.006,  event: 'unauthorized_object' },

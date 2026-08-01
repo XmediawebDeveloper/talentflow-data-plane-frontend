@@ -22,7 +22,7 @@ import {
 import {
   type ViolationRecord, type RecruiterSeverity, type CategoryKey,
   CATEGORIES, CATEGORY_ORDER,
-  recruiterSeverity, categoryOf, labelOfViolation, groupKeyOf, confidenceOf,
+  recruiterSeverity, categoryOf, labelOfViolation, groupKeyOf, confidenceOfViolation,
   describeViolation, summarizeViolations,
 } from './violationTaxonomy';
 
@@ -89,7 +89,12 @@ const CATEGORY_ICON: Record<CategoryKey, ReactNode> = {
 };
 
 const CATEGORY_TONE: Record<CategoryKey, Tone> = {
-  ended: 'critical', someone_else: 'critical', prohibited_item: 'critical',
+  ended: 'critical', someone_else: 'critical',
+  // 'warning', not 'critical': most prohibited-item hits are the hedged
+  // "possible phone" tier, and painting those red overstates a coin-flip
+  // detection. A confirmed phone still shows a Serious pill on its own row and
+  // still drives the critical verdict banner.
+  prohibited_item: 'warning',
   device: 'warning', capture: 'warning', attention: 'info', advisory: 'neutral',
 };
 
@@ -99,8 +104,10 @@ const CARD_ACCENT: Record<Tone, string> = {
 };
 
 /* ── confidence tag ───────────────────────────────────────────────────────── */
-function ConfidenceTag({ type }: { type: string }) {
-  const c = confidenceOf(type);
+// Takes the RECORD, not the event type: object detections derive their tier from
+// the stored detection score, so a 33% hit can never render "HIGH CONFIDENCE".
+function ConfidenceTag({ record }: { record: ViolationRecord }) {
+  const c = confidenceOfViolation(record);
   if (!c) return null;
   return c === 'high' ? (
     <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 ring-1 ring-red-200">HIGH CONFIDENCE</span>
@@ -294,7 +301,7 @@ export default function IntegrityCheckTab({
                     <span key={g.key} className="inline-flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 text-gray-600 ring-1 ring-gray-100">
                       <span className="font-semibold text-gray-800">{g.label}</span>
                       <span className="tabular-nums text-gray-500">{g.count}×</span>
-                      <ConfidenceTag type={g.event_type} />
+                      <ConfidenceTag record={g.records[0]} />
                     </span>
                   ))}
                 </div>
@@ -395,7 +402,7 @@ export default function IntegrityCheckTab({
                             {CATEGORY_ICON[g.category]}
                             {g.label}
                           </span>
-                          <ConfidenceTag type={g.event_type} />
+                          <ConfidenceTag record={g.records[0]} />
                         </div>
                       </td>
                       <td className="px-4 py-3 align-top text-xs text-gray-600 max-w-[34ch]">
