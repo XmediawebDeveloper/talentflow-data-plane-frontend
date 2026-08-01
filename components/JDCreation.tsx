@@ -1054,6 +1054,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
+  // Mirror of `step` for use inside async callbacks (streaming generation
+  // completes after the user may have already advanced past Step 1).
+  const stepRef = useRef<Step>(step);
+  useEffect(() => { stepRef.current = step; }, [step]);
   const ensureJDCreationUrl = (jdId: string, creationStage: Step) => {
     if (typeof window === 'undefined') return;
 
@@ -2237,6 +2241,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         }
           setGeneratedJD(response.description);
 
+          // Skip re-fill + toast if the user already advanced past Step 1 (same
+          // late-completion guard as the streaming path).
+          if (stepRef.current !== 'create') {
+            console.log('[TalentFlow] Fallback generation completed after user advanced — skipping re-fill + toast');
+            return;
+          }
+
           // Pre-fill step 2 form with extracted params (salary, skills, etc.)
           if (response.extracted_params) {
             processExtractedParams(response.extracted_params, response.description);
@@ -2305,6 +2316,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           // Then set final content
           if (response?.description) {
             setGeneratedJD(response.description);
+
+            // If the stream finished AFTER the user already advanced past Step 1
+            // (e.g. they clicked Next as soon as text streaming completed), do NOT
+            // re-fill Step 2 or show a "generated / click Next" toast — the extraction
+            // already ran. This was the confusing "JD Generated Successfully" toast
+            // appearing on the Extract step.
+            if (stepRef.current !== 'create') {
+              console.log('[TalentFlow] Generation completed after user advanced past Step 1 — skipping re-fill + toast');
+              return;
+            }
 
             // Pre-fill step 2 form with extracted params (salary, skills, etc.)
             if (response.extracted_params) {
