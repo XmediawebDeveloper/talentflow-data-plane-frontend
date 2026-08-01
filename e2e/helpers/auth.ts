@@ -328,6 +328,62 @@ export async function mockQuotaStatus(page: Page, features: string[] = PLAN_FEAT
       json: {
         features: features.map((feature_key) => ({ feature_key, is_enabled: true, quota_key: null })),
         quotas: {},
+        // Header.tsx:476 falls back to "No plan data" and raises a Complete
+        // Payment banner without these, which leaves every page in a degraded
+        // state a test could mistake for the real one.
+        plan_name: "Growth",
+        is_trial: false,
+        units_remaining: 5000,
+        units_total: 5000,
+      },
+    }),
+  );
+}
+
+/** Blocking codes GET /jd/access-check can return, as the JD pages read them. */
+export type JdAccessCode =
+  | "SUBSCRIPTION_INACTIVE"
+  | "UNAUTHENTICATED"
+  | "UNAUTHORIZED"
+  | "INSUFFICIENT_UNITS"
+  | "JOB_QUOTA_EXCEEDED"
+  | "ACCOUNT_SUSPENDED";
+
+/**
+ * Mock GET /jd/access-check — the pre-condition gate on /recruitment/jd-creation.
+ *
+ * This one was silently wrong for a long time. The generic fallback has no
+ * `all_checks_passed`, so it read as false and the page rendered "Access
+ * Denied" — while a `page_loads` assertion still passed, because an access
+ * wall is a perfectly well-rendered page. Every jd-creation test was green
+ * against a screen the feature never reaches. Pass a code to assert the
+ * blocked states deliberately instead of hitting them by accident.
+ */
+export async function mockJdAccessCheck(page: Page, code?: JdAccessCode) {
+  const messages: Record<JdAccessCode, string> = {
+    SUBSCRIPTION_INACTIVE: "Your subscription is not active.",
+    UNAUTHENTICATED: "You are not signed in.",
+    UNAUTHORIZED: "You do not have permission to create job descriptions.",
+    INSUFFICIENT_UNITS: "You do not have enough units.",
+    JOB_QUOTA_EXCEEDED: "You have reached your job posting limit.",
+    ACCOUNT_SUSPENDED: "This account is suspended.",
+  };
+  const ok = !code;
+  await page.route(/\/api\/v\d+\/jd\/access-check(\?|$)/, (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        all_checks_passed: ok,
+        can_create_jd: ok,
+        blocking_error: ok ? undefined : messages[code],
+        blocking_error_code: ok ? undefined : code,
+        subscription: { valid: ok || code !== "SUBSCRIPTION_INACTIVE", status: "active" },
+        authentication: { valid: ok || code !== "UNAUTHENTICATED" },
+        authorization: { valid: ok || code !== "UNAUTHORIZED" },
+        units: { valid: ok || code !== "INSUFFICIENT_UNITS", available: ok ? 5000 : 0, required: 10 },
+        job_quota: { valid: ok || code !== "JOB_QUOTA_EXCEEDED", used: 3, limit: 50 },
+        failed_checks: ok ? [] : [code],
+        warnings: [],
       },
     }),
   );

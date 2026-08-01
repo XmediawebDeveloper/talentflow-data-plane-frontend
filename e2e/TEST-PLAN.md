@@ -76,26 +76,65 @@ decision, 146 unmapped. Confidence on the active rows: 194 high, 91 medium,
 Audit 35, AI Interview T1 17, AI Interview T2 15, Enhancements 20, Team 7,
 Sprint 12 6, BUGS 4, API 1.
 
-### What these 319 tests actually assert — read this before quoting the number
+### What these 319 tests actually assert
 
-All 319 currently carry `assert_kind: page_loads`. Each one logs in with the
-row's role, navigates to the row's route, and asserts the page rendered:
-the app shell is present, the React error boundary did **not** fire, and the
-feature gate did **not** block it. Where the row's page starts in cards mode,
-it also clicks through to the list.
+| `assert_kind` | Rows | What it checks |
+|---|---|---|
+| `text_visible` | 85 | a specific string the feature renders |
+| `placeholder_visible` | 24 | a specific input exists (search, skill entry) |
+| `control_visible` | 20 | a named button or link is present |
+| `all_text_visible` | 18 | several strings together (e.g. every status filter) |
+| `element_absent` | 1 | a control the role must **not** see |
+| `page_loads` | 171 | shell renders, no error boundary, no feature gate, URL held |
+| | **319** | of which **148 assert real behaviour**, 171 are still shell-only |
 
-That is a real regression net — it covers 40+ routes across every module and
-already caught four crashes that shipped (`/recruitment/my-resumes`,
-`/settings/api-management`, `/organization/team-management`, `/audits/trail`
-all died on unguarded `.toFixed()` / `.toLowerCase()` / `.length` against
-absent API fields). But it is **not** verification of the specific behaviour
-each sheet row describes. Saying "319 test cases automated" overstates it;
-"319 sheet rows have their page under a crash-and-gate regression check" is
-accurate.
+**146 of the 194 high-confidence rows** now carry a behavioural assertion.
+8 of them drive a backend pre-condition first (see below).
 
-Deepening these into real behavioural assertions — `text_visible`,
-`element_absent`, `redirected_to`, `api_called`, all already supported by the
-runner's vocabulary — is the next body of work, not something already done.
+Every asserted string was taken from **what the page actually renders**,
+captured by driving each route with the standard mocks and dumping its
+headings, button names, table headers, labels and placeholders. Not from the
+sheet's prose and not from grepping source — both were wrong in practice: the
+sheet says the button reads "Create New JD" while the app renders
+"Create New Job", and a source grep for "Job Title" matches the help page
+rather than the JD form.
+
+#### Pre-conditions: driving the state instead of hoping for it
+
+`/recruitment/jd-creation` sits behind `GET /jd/access-check`. A row can name
+a `precondition` (e.g. `jd_access:SUBSCRIPTION_INACTIVE`) and the runner
+installs that mock variant before navigating, so the row asserts the exact wall
+its case describes. TC-0002/3/4/5 and TC-0007/8/9/10 use this.
+
+This also fixed a **false green**. Before the endpoint was mocked, the generic
+fallback had no `all_checks_passed`, the page rendered "Access Denied", and all
+29 jd-creation tests still passed — an access wall is a perfectly well-rendered
+page, and `page_loads` cannot tell the difference.
+
+#### Proof the assertions can fail
+
+`smoke-tier1-discrimination.spec.ts` pins this directly: the happy path must
+render the form and **none** of the four blocked titles; the blocked path must
+render the wall and **not** the form; and a locator for the sheet's wording
+("Create New JD") must resolve to zero elements. If a later change weakens a
+mock or loosens a locator, these turn red rather than letting real coverage
+quietly become theatre.
+
+#### The 171 still on `page_loads`
+
+Left deliberately, each with a note in `tier1-cases.xlsx` saying why. Weak
+assertions are worse than none. The recurring reasons:
+
+- populated tables needed (column customisation, per-row action menus, scored
+  candidate rows) — the mocked lists render empty
+- viewport switching needed (responsive card/table layouts)
+- a typed form needed (JD character-count validation)
+- **the control does not appear to exist** — e.g. no HR-topic control renders on
+  the AI interview config page, and the interview-mode selection screen did not
+  render. Worth checking against the feature before writing any test.
+
+Seeding fixture data into the list endpoints is the single change that unlocks
+the largest block of these.
 
 ## 4. Suite composition and runtime
 

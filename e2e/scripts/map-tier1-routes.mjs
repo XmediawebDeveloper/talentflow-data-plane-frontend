@@ -367,6 +367,109 @@ const cellText = (row, name) => {
   return v == null ? "" : typeof v === "object" ? v.text || v.result || "" : String(v);
 };
 
+// ---------------------------------------------------------- assertions ------
+// Every `value` below was taken from what the page ACTUALLY renders, captured
+// by driving each route with the standard mocks and dumping its headings,
+// button names, table headers, labels and placeholders — not from grepping
+// source and not from the sheet's prose. That distinction matters: the sheet
+// says the button reads "Create New JD"; the app renders "Create New Job", and
+// a grep for "Job Title" hits the help page rather than the JD form.
+//
+// A row keeps `page_loads` when the behaviour it describes needs something the
+// mocked page cannot produce — populated tables, viewport switching, a typed
+// form, or a control that does not exist. Those carry a note saying so. An
+// assertion that would pass on any page is worse than none.
+//
+//   route  — guard: the assertion only applies if the row mapped here
+//   pre    — mock variant to install first (see PRECONDITIONS in helpers/tier1)
+//   kind   — page_loads | text_visible | all_text_visible | control_visible
+//            | placeholder_visible | element_absent
+const ASSERT_BY_CASE = {
+  // JD01 pre-condition gate. GET /jd/access-check decides which wall renders;
+  // each code is driven deliberately and the matching title asserted.
+  "TC-0002": { route: "/recruitment/jd-creation", pre: "jd_access:SUBSCRIPTION_INACTIVE", kind: "text_visible", value: "Subscription Inactive" },
+  "TC-0007": { route: "/recruitment/jd-creation", pre: "jd_access:SUBSCRIPTION_INACTIVE", kind: "text_visible", value: "Subscription Inactive" },
+  "TC-0003": { route: "/recruitment/jd-creation", pre: "jd_access:UNAUTHENTICATED", kind: "text_visible", value: "Authentication Required" },
+  "TC-0008": { route: "/recruitment/jd-creation", pre: "jd_access:UNAUTHENTICATED", kind: "text_visible", value: "Authentication Required" },
+  "TC-0004": { route: "/recruitment/jd-creation", pre: "jd_access:UNAUTHORIZED", kind: "text_visible", value: "User Not Authorized" },
+  "TC-0009": { route: "/recruitment/jd-creation", pre: "jd_access:UNAUTHORIZED", kind: "text_visible", value: "User Not Authorized" },
+  "TC-0005": { route: "/recruitment/jd-creation", pre: "jd_access:INSUFFICIENT_UNITS", kind: "text_visible", value: "Insufficient Units" },
+  "TC-0010": { route: "/recruitment/jd-creation", pre: "jd_access:INSUFFICIENT_UNITS", kind: "text_visible", value: "Insufficient Units" },
+  // The happy path of the same gate: all checks pass, the form is reached.
+  "TC-0001": { route: "/recruitment/jd-creation", kind: "text_visible", value: "Job Description Creation" },
+  "TC-0006": { route: "/recruitment/jd-creation", kind: "text_visible", value: "Job Description Creation" },
+
+  // Recruiter dashboard shows a smaller tile set than tenant_admin — the one
+  // permission difference these rows can actually observe on a mocked page.
+  "TC-0142": { route: "/dashboard", kind: "element_absent", value: "Users & roles" },
+};
+
+const ASSERT_BY_TITLE = {
+  "Environment & Access Pre-Condition Validation": { route: "/recruitment/jd-creation", kind: "text_visible", value: "Job Description Creation" },
+  "JD Module Navigation & Access": { route: "/recruitment/job-openings", kind: "control_visible", value: "Create New Job" },
+  "JD Module Navigation & Access Recruiter Login": { route: "/recruitment/job-openings", kind: "control_visible", value: "Create New Job" },
+  "Build JD List View (Published + Draft)": { route: "/recruitment/job-openings", kind: "all_text_visible", value: "Published|Draft|Archived" },
+  "JD Disable Function": { route: "/recruitment/job-openings", kind: "control_visible", value: "Disabled" },
+  "Manual JD Creation": { route: "/recruitment/jd-creation", kind: "text_visible", value: "Manual Input" },
+  "Enable JD Creation Entry Point": { route: "/recruitment/jd-creation", kind: "text_visible", value: "AI Prompt" },
+  "AII10 - Manual Job Description Content Validation": { route: "/recruitment/jd-creation", kind: "text_visible", value: "Manual Input",
+    note: "Character-count validation needs a typed description — only the Manual Input entry point is asserted here" },
+  "Tenant Admin Login & Dashboard View": { route: "/dashboard", kind: "text_visible", value: "Quick access" },
+  "Recruiter Login & Dashboard View": { route: "/dashboard", kind: "text_visible", value: "Quick access" },
+
+  "Advanced Resume Search Engine (My Resumes)": { route: "/recruitment/my-resumes", kind: "placeholder_visible",
+    value: "Search by name, email, phone, skills, title, or company...",
+    note: "Asserts the search control exists; matching behaviour needs seeded resumes" },
+  "My Resumes Dashboard – Entry Screen": { route: "/recruitment/my-resumes", kind: "text_visible", value: "My Resume Database" },
+  "Folder CRUD Actions": { route: "/recruitment/my-resumes", kind: "text_visible", value: "Folders" },
+  "Resume Folder System – User Level": { route: "/recruitment/my-resumes", kind: "text_visible", value: "Folders" },
+  "My Resumes – User Isolation Rules": { route: "/recruitment/my-resumes", kind: "text_visible", value: "My Resume Database" },
+
+  "Scored Resumes List View": { route: "/recruitment/resume-scoring", kind: "text_visible", value: "Scored Candidates" },
+  "JD-wise Scored Resume Repository": { route: "/recruitment/resume-scoring", kind: "text_visible", value: "Scored Candidates" },
+  "JD Selection Module": { route: "/recruitment/resume-scoring/jd-selection", kind: "text_visible", value: "Select Job Description" },
+  "Mandatory JD Selection for Assessment Creation": { route: "/recruitment/assessments/create", kind: "text_visible", value: "Select Job Description" },
+
+  "Skill Configuration in Conversational Mode": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config",
+    kind: "placeholder_visible", value: "Add a must-have skill" },
+  "Skill Customization - Timed Mode Approach": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config",
+    kind: "placeholder_visible", value: "Add a nice-to-have skill" },
+  "Cluster Generation for Conversation Mode": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters",
+    kind: "text_visible", value: "Skill Clusters" },
+  "Cluster Generation by AI - Timed Mode Approach": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters",
+    kind: "text_visible", value: "Skill Clusters" },
+  "System Cluster Sorting": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters",
+    kind: "text_visible", value: "Must-To-Have Skills" },
+
+  "TM05 - User in Multiple Teams + UI/UX": { route: "/organization/team-management", kind: "text_visible", value: "Total Teams" },
+  "HR Question": { route: "/recruitment/hr-question-bank", kind: "text_visible", value: "HR Question Bank" },
+};
+
+// Rows the probe proved cannot be deepened yet, with the reason. Left as
+// page_loads deliberately rather than given a weak assertion.
+const NOT_YET = {
+  "Responsive Scored Resume List": "Needs viewport switching plus seeded rows — the mocked list renders empty",
+  "Dynamic Column Customization": "The Customize Columns control only appears once the table has rows",
+  "Search Result Actions": "Per-row action menus need seeded resumes",
+  "Advanced Search & Filtering": "Filter results need seeded resumes",
+  "Pre-Condition Validation for Resume Scoring": "No mockable endpoint drives these blocked states yet",
+  "HR Topic Configuration": "No HR-topic control is rendered on the config page — verify the feature exists before asserting",
+  "Interview Duration Configuration": "The interview-mode selection screen did not render on the mocked config page",
+};
+
+function assertionFor(tcId, title, route) {
+  const a = ASSERT_BY_CASE[tcId] || ASSERT_BY_TITLE[norm(title)] ||
+    Object.entries(ASSERT_BY_TITLE).find(([k]) => norm(title).includes(norm(k)))?.[1];
+  // Guard: an assertion is only valid for the route it was captured on.
+  if (!a || a.route !== route) return null;
+  return a;
+}
+
+function notYetFor(title) {
+  const hit = Object.entries(NOT_YET).find(([k]) => norm(title).includes(norm(k)));
+  return hit ? hit[1] : "";
+}
+
 const out = [];
 ws.eachRow((row, i) => {
   if (i === 1) return;
@@ -395,31 +498,37 @@ ws.eachRow((row, i) => {
   const grep = grepRoute(expected, appFiles);
   if (grep) {
     const g1 = matchGroup(sheet, title);
+    const a = assertionFor(base.tc_id, title, grep.route);
     out.push({ ...base, route: grep.route, query: ROUTE_QUERY[grep.route] || "", open_card: g1?.openCard || "", role: g1?.role || "tenant_admin",
-      assert_kind: "page_loads", assert_value: grep.literal,
+      precondition: a?.pre || "",
+      assert_kind: a?.kind || "page_loads", assert_value: a?.value || grep.literal,
       confidence: "high", layer: "grep", status: "active",
-      note: `route confirmed by "${grep.literal}" in ${grep.file}` });
+      note: [`route confirmed by "${grep.literal}" in ${grep.file}`, a?.note, a ? "" : notYetFor(title)]
+        .filter(Boolean).join(" — ") });
     return;
   }
 
   // Layer 2 — group -> route.
   const g = matchGroup(sheet, title);
   if (g && !g.block) {
+    const a = assertionFor(base.tc_id, title, g.route);
     out.push({ ...base, route: g.route, query: ROUTE_QUERY[g.route] || "", open_card: g.openCard || "", role: g.role || "tenant_admin",
-      assert_kind: "page_loads", assert_value: "",
-      confidence: g.confidence, layer: "group", status: "active", note: g.note || "" });
+      precondition: a?.pre || "",
+      assert_kind: a?.kind || "page_loads", assert_value: a?.value || "",
+      confidence: g.confidence, layer: "group", status: "active",
+      note: [g.note, a?.note, a ? "" : notYetFor(title)].filter(Boolean).join(" — ") });
     return;
   }
 
   // Layer 3 — blocked, with the reason. Never a silent pass.
-  out.push({ ...base, route: "", query: "", open_card: "", role: "",
+  out.push({ ...base, route: "", query: "", open_card: "", role: "", precondition: "",
     assert_kind: "blocked", assert_value: "",
     confidence: "", layer: "none", status: "blocked",
     note: g?.block || "No route mapping — needs a human read" });
 });
 
 const COLS = ["tc_id", "scrum_id", "source_sheet", "title", "what_to_check", "expected_result",
-  "route", "query", "open_card", "role", "assert_kind", "assert_value", "confidence", "layer", "status", "note"];
+  "route", "query", "open_card", "role", "precondition", "assert_kind", "assert_value", "confidence", "layer", "status", "note"];
 
 const wb2 = new ExcelJS.Workbook();
 const ws2 = wb2.addWorksheet("Tier1");

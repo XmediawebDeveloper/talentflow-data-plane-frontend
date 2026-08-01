@@ -8,8 +8,12 @@
  *
  * Rows come from e2e/data/tier1-cases.xlsx — see e2e/helpers/tier1.ts.
  */
-import { loadTier1Rows, runTier1Cases } from "./helpers/tier1";
+import { assertEveryRowClaimed, loadTier1Rows, runTier1Cases } from "./helpers/tier1";
 
-const blocked = loadTier1Rows().filter((r) => r.status !== "active");
+const rows = loadTier1Rows();
+const blocked = rows.filter((r) => r.status !== "active");
 
 runTier1Cases("Tier 1 — blocked (not automatable as a mocked page test)", blocked);
+
+// Runs here because this spec already loads every row, active and blocked.
+assertEveryRowClaimed(rows);

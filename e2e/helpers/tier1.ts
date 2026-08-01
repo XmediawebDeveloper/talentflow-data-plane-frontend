@@ -18,6 +18,7 @@ import {
   mockAiInterviewFixtures,
   mockLoginApi,
   mockDashboardApis,
+  mockJdAccessCheck,
   loginViaUi,
   openListView,
   resetViewState,
@@ -35,6 +36,8 @@ export interface Tier1Row {
   query: string;
   open_card: string;
   role: string;
+  /** Named mock variant applied before navigation — see PRECONDITIONS. */
+  precondition: string;
   assert_kind: string;
   assert_value: string;
   confidence: string;
@@ -53,11 +56,27 @@ export function loadTier1Rows(): Tier1Row[] {
  * Order matters: Playwright resolves routes in reverse registration order, so
  * the catch-all has to go first for the specific handlers to win.
  */
+/**
+ * Named mock variants a row can request via its `precondition` column.
+ *
+ * These are what turn "the page rendered" into "the page rendered the state
+ * this test case describes" — the row drives the backend condition instead of
+ * hoping to stumble into it.
+ */
+const PRECONDITIONS: Record<string, (page: Page) => Promise<void>> = {
+  "jd_access:SUBSCRIPTION_INACTIVE": (p) => mockJdAccessCheck(p, "SUBSCRIPTION_INACTIVE"),
+  "jd_access:UNAUTHENTICATED": (p) => mockJdAccessCheck(p, "UNAUTHENTICATED"),
+  "jd_access:UNAUTHORIZED": (p) => mockJdAccessCheck(p, "UNAUTHORIZED"),
+  "jd_access:INSUFFICIENT_UNITS": (p) => mockJdAccessCheck(p, "INSUFFICIENT_UNITS"),
+  "jd_access:JOB_QUOTA_EXCEEDED": (p) => mockJdAccessCheck(p, "JOB_QUOTA_EXCEEDED"),
+};
+
 async function installMocks(page: Page, role: string) {
   await mockApiFallback(page);
   await mockQuotaStatus(page);
   await mockModuleStats(page);
   await mockAiInterviewFixtures(page);
+  await mockJdAccessCheck(page);
   await mockLoginApi(page, { role: role || "tenant_admin" });
   await mockDashboardApis(page);
 }
@@ -135,6 +154,12 @@ export function runTier1Cases(suite: string, rows: Tier1Row[]) {
         });
 
         await installMocks(page, row.role);
+        if (row.precondition) {
+          const apply = PRECONDITIONS[row.precondition];
+          if (!apply) throw new Error(`unknown precondition "${row.precondition}" for ${row.tc_id}`);
+          // After installMocks so this variant wins — later routes take priority.
+          await apply(page);
+        }
         await loginViaUi(page);
         await resetViewState(page);
 
@@ -152,18 +177,74 @@ export function runTier1Cases(suite: string, rows: Tier1Row[]) {
           await openListView(page, new RegExp(row.open_card.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
         }
 
+        const why = `${row.tc_id}: ${row.expected_result || row.what_to_check}`;
+
         switch (row.assert_kind) {
           case "page_loads":
             await expectPageUsable(page, row.route);
             break;
           case "text_visible":
-            await expect(page.getByText(row.assert_value, { exact: false }).first()).toBeVisible();
+            await expect(page.getByText(row.assert_value, { exact: false }).first(), why).toBeVisible();
+            break;
+          case "all_text_visible":
+            for (const part of row.assert_value.split("|")) {
+              await expect(page.getByText(part, { exact: false }).first(), `${why} [${part}]`).toBeVisible();
+            }
+            break;
+          case "control_visible":
+            // Substring match: accessible names often concatenate a label with
+            // a short mobile variant ("Upload ResumeUpload") or a count badge.
+            await expect(
+              page.getByRole("button", { name: row.assert_value })
+                .or(page.getByRole("link", { name: row.assert_value }))
+                .first(),
+              why,
+            ).toBeVisible();
+            break;
+          case "placeholder_visible":
+            await expect(page.getByPlaceholder(row.assert_value).first(), why).toBeVisible();
+            break;
+          case "element_absent":
+            await expect(page.getByText(row.assert_value, { exact: false }), why).toHaveCount(0);
             break;
           default:
             throw new Error(`unknown assert_kind "${row.assert_kind}" for ${row.tc_id}`);
         }
       });
     }
+  });
+}
+
+/**
+ * Which spec owns which routes.
+ *
+ * Kept here rather than inline in each spec so ROUTE_GROUPS can be checked
+ * against the workbook: a route present in tier1-cases.xlsx but absent from
+ * every prefix list produces no tests at all and no error — exactly how two
+ * /recruitment/job-details rows went missing when a spec listed the legacy
+ * /recruitment/jd-details path instead. assertEveryRowClaimed() closes that.
+ */
+export const ROUTE_GROUPS = {
+  jd: ["/recruitment/job-openings", "/recruitment/jd-creation", "/recruitment/job-details", "/recruitment/jd-details", "/dashboard"],
+  resume: ["/recruitment/my-resumes", "/recruitment/resume-database", "/recruitment/resume-scoring", "/recruitment/ai-talent-match"],
+  assessment: ["/recruitment/assessments", "/recruitment/hr-question-bank"],
+  aiInterview: ["/recruitment/ai-interviews"],
+  admin: ["/audits", "/organization", "/settings", "/reports"],
+};
+
+/**
+ * Guard: every active row must be claimed by exactly one spec.
+ *
+ * Registers a failing test when a row would otherwise be dropped silently.
+ */
+export function assertEveryRowClaimed(rows: Tier1Row[]) {
+  const prefixes = Object.values(ROUTE_GROUPS).flat();
+  const orphans = rows.filter(
+    (r) => r.status === "active" && !prefixes.some((p) => r.route.startsWith(p)),
+  );
+  test("every active Tier-1 row is claimed by a spec", () => {
+    const detail = orphans.map((r) => `${r.tc_id} -> ${r.route}`).join(", ");
+    expect(orphans.length, `unclaimed rows would run nowhere and report nothing: ${detail}`).toBe(0);
   });
 }
 

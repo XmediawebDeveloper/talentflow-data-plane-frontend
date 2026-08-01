@@ -5,8 +5,8 @@
  *
  * Rows come from e2e/data/tier1-cases.xlsx — see e2e/helpers/tier1.ts.
  */
-import { loadTier1Rows, byRoute, runTier1Cases } from "./helpers/tier1";
+import { loadTier1Rows, byRoute, runTier1Cases, ROUTE_GROUPS } from "./helpers/tier1";
 
 const rows = loadTier1Rows();
 
-runTier1Cases("Tier 1 — AI Interview (recruiter)", byRoute(rows, "/recruitment/ai-interviews"));
+runTier1Cases("Tier 1 — AI Interview (recruiter)", byRoute(rows, ...ROUTE_GROUPS.aiInterview));
