@@ -8,6 +8,7 @@ import { Resume, Folder } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
+import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import { EmptyState } from './ui/empty-state';
 import Pagination from './Pagination';
 import { usePagination } from '@/lib/hooks/usePagination';
@@ -457,8 +458,9 @@ export default function ResumeTable({
               </td>
               <td className="px-4 py-3 align-middle min-w-[220px]">
                 <div className="flex flex-wrap gap-1">
+                  {/* Same set the Resume Details "Skills" section shows */}
                   <SkillsList
-                    skills={resume.skills}
+                    skills={getDisplaySkills(resume)}
                     highlight={(s) => (highlightQuery ? highlightText(s, highlightQuery) : s)}
                   />
                 </div>
@@ -717,10 +719,10 @@ export default function ResumeTable({
                   <span>{resume.experience} years exp.</span>
                 </div>
               )}
-              {resume.skills && resume.skills.length > 0 && (
+              {getDisplaySkills(resume).length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   <SkillsList
-                    skills={resume.skills}
+                    skills={getDisplaySkills(resume)}
                     chipClassName="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs ring-1 ring-brand-blue/20"
                     moreClassName="px-2 py-0.5 text-brand-blue text-xs font-medium rounded hover:bg-brand-blue/10 transition-colors cursor-pointer"
                   />

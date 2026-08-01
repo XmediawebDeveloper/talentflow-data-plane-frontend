@@ -1314,7 +1314,7 @@ export default function ResumeScoringPage({
             setViewMode('details');
             router.push(`/recruitment/resume-scoring?jd_id=${selectedHistoryItem.jobId}`, { scroll: false });
           } },
-          { label: 'Candidate Details' },
+          { label: selectedCandidateForView.candidateName || 'Candidate' },
         ]}
         onBack={() => {
           setSelectedCandidateForView(null);
@@ -1361,7 +1361,7 @@ export default function ResumeScoringPage({
             setViewMode('history');
             router.push(`/recruitment/resume-scoring`, { scroll: false });
           } },
-          { label: 'Candidate Details' },
+          { label: selectedCandidateForView.candidateName || 'Candidate' },
         ]}
         onBack={() => {
           setSelectedCandidateForView(null);

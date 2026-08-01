@@ -1,13 +1,22 @@
 'use client';
 
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Eye, Sparkles, UserPlus } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
-import { useState, useEffect } from 'react';
+import ResumeDetailView from './ResumeDetailView';
+import ShareAssessmentModal from './ShareAssessmentModal';
+import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
+import { useState, useEffect, useRef } from 'react';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { handleUnauthorized } from '@/lib/services/api';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { formatJobExperienceText, formatJobExperienceBadge } from '@/lib/utils/jobExperience';
+import { formatSalaryRange } from '@/lib/utils/salary';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 
 interface ScoredResume {
@@ -91,7 +100,38 @@ interface CandidateScoringDetailPageProps {
 
 export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user } = useAuth();
+  const { hasPlanFeature } = usePlanFeatures();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
+
+  // Same permission shape the JD page uses for its invite actions.
+  const hasPermission = (permission: string): boolean => {
+    if (!user) return false;
+    if (isTenantAdmin || user.role === 'tenant_admin') return true;
+    if (!user.permissions) return false;
+    return user.permissions[permission as keyof typeof user.permissions] === true;
+  };
+  const canInviteAssessment = hasPermission('canCreateAssessments') && hasPlanFeature('assessment');
+  const canInviteAIInterview =
+    (hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews')) && hasPlanFeature('ai_interview');
+  const canInvite = canInviteAssessment || canInviteAIInterview;
+
+  const [showInviteMenu, setShowInviteMenu] = useState(false);
+  const inviteMenuRef = useRef<HTMLDivElement>(null);
+
+  // In-page resume view — swaps the candidate body for the resume, keeping the
+  // page (and its breadcrumb) instead of routing to /recruitment/resume-view.
+  const [view, setView] = useState<'candidate' | 'resume'>('candidate');
+  const [resumeDetail, setResumeDetail] = useState<any>(null);
+  const [loadingResumeDetail, setLoadingResumeDetail] = useState(false);
+
+  // Invite flows — both render their existing modal over this page.
+  const [shareAssessments, setShareAssessments] = useState<any[]>([]);
+  const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
+  const [pickerAssessments, setPickerAssessments] = useState<any[]>([]);
+  const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
+  const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
+  const [loadingInvite, setLoadingInvite] = useState<'assessment' | 'ai-interview' | null>(null);
+  const [shareAIConfig, setShareAIConfig] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo' | 'viewjd'>('overview');
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
@@ -386,6 +426,178 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     return educationLabel(degree);
   })();
 
+  // Header-card values, mapped the same way the published JD page maps them.
+  const jdLocation: string = jdDetails?.location
+    || (jdDetails?.locations?.length ? jdDetails.locations.map((l: any) => l.city).filter(Boolean).join(', ') : '');
+  const jdExperienceBadge = formatJobExperienceBadge({
+    jobLevel: jdDetails?.experience_level || jdDetails?.job_level,
+    experienceText: formatJobExperienceText({
+      jobLevel: jdDetails?.job_level || jdDetails?.experience_level,
+      experienceMin: jdDetails?.experience_min,
+      experienceMax: jdDetails?.experience_max,
+    }),
+  });
+  const jdSalary = formatSalaryRange({
+    min: jdDetails?.salary_min,
+    max: jdDetails?.salary_max,
+    currency: jdDetails?.salary_currency,
+  });
+  const jdPostedDate: string | undefined = jdDetails?.published_at || jdDetails?.created_at;
+  const jdInternalNotes: string[] = jdDetails?.internal_comments ? [jdDetails.internal_comments] : [];
+
+  const jdStatusBadgeClass = (status?: string) => {
+    switch ((status || '').toLowerCase()) {
+      case 'published': return 'bg-green-100 text-green-700 border-green-300';
+      case 'draft': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+      case 'archived': return 'bg-gray-100 text-gray-700 border-gray-300';
+      case 'disabled': return 'bg-red-100 text-red-700 border-red-300';
+      default: return 'bg-gray-100 text-gray-700 border-gray-300';
+    }
+  };
+
+  // The published JD page strips empty "Certifications: None" blocks before
+  // rendering the description markdown — same treatment here.
+  const jdDescriptionMarkdown: string = (jdDetails?.description || '')
+    .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match: string) =>
+      match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
+    )
+    .replace(/\*\*Certifications\*\*[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
+    .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '');
+
+  // Close the Invite menu on outside click / Escape.
+  useEffect(() => {
+    if (!showInviteMenu) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (inviteMenuRef.current && !inviteMenuRef.current.contains(e.target as Node)) {
+        setShowInviteMenu(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowInviteMenu(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showInviteMenu]);
+
+  // The resume this score belongs to — the API returns the score id as `id`
+  // and the resume id separately, so prefer the explicit resume id.
+  const viewResumeId = fullResumeData.resumeId || resume.resumeId || resume.id;
+
+  const handleViewResume = async () => {
+    if (!viewResumeId) {
+      toast.error('Resume is not available for this candidate');
+      return;
+    }
+    setView('resume');
+    if (resumeDetail || loadingResumeDetail) return;
+
+    setLoadingResumeDetail(true);
+    try {
+      const { resumeService } = await import('@/lib/services/resumeService');
+      const { convertApiResume } = await import('@/lib/utils/resumeMapper');
+      // The API record is snake_case — ResumeDetailView needs the mapped shape.
+      const [data, versions] = await Promise.all([
+        resumeService.get(viewResumeId),
+        resumeService.getVersions(viewResumeId).catch(() => []),
+      ]);
+      setResumeDetail(convertApiResume(data, versions || []));
+    } catch (err) {
+      console.error('[CandidateScoringDetailPage] Failed to load resume:', err);
+      toast.error('Could not load the resume. Please try again.');
+      setView('candidate');
+    } finally {
+      setLoadingResumeDetail(false);
+    }
+  };
+
+  // Invite for assessment — same selection rules the JD page uses: only
+  // published, non-revoked assessments for this JD are invitable.
+  const handleInviteForAssessment = async () => {
+    setShowInviteMenu(false);
+    if (loadingInvite) return;
+
+    setLoadingInvite('assessment');
+    try {
+      const { assessmentService } = await import('@/lib/services/assessmentService');
+      const { isAssessmentRevoked, getLocallyRevokedAssessmentIds } = await import('@/lib/utils/assessmentUtils');
+
+      const resp = await assessmentService.list({ jd_id: jobId, status: 'published', page_size: 100 });
+      const revokedIds = getLocallyRevokedAssessmentIds();
+      const items: any[] = (resp?.items || []).filter((a: any) => {
+        const status = String(a?.status || '').toLowerCase();
+        if (status !== 'published' && status !== 'active') return false;
+        return !isAssessmentRevoked(a, revokedIds);
+      });
+
+      if (items.length === 0) {
+        toast.error(
+          'No invitable assessment is available for this job. Published assessments whose invites have been revoked are excluded — duplicate one to start a fresh invite round.',
+          { duration: 6000 }
+        );
+        return;
+      }
+
+      if (items.length === 1) {
+        setShareAssessments(items);
+        setShowShareAssessmentModal(true);
+        return;
+      }
+
+      setPickerAssessments(items);
+      setPickerSelectedIds([]);
+      setShowAssessmentPicker(true);
+    } catch (err) {
+      console.error('[CandidateScoringDetailPage] Failed to load assessments:', err);
+      toast.error('Could not load assessments. Please try again.');
+    } finally {
+      setLoadingInvite(null);
+    }
+  };
+
+  const handleConfirmAssessmentPick = () => {
+    if (pickerSelectedIds.length === 0) {
+      toast.error('Please select at least one assessment.');
+      return;
+    }
+    setShareAssessments(pickerAssessments.filter(a => pickerSelectedIds.includes(a.id)));
+    setShowAssessmentPicker(false);
+    setShowShareAssessmentModal(true);
+  };
+
+  // Invite for AI interview — needs a published interview config on this JD,
+  // the same precondition the AI Interviews page enforces.
+  const handleInviteForAIInterview = async () => {
+    setShowInviteMenu(false);
+    if (loadingInvite) return;
+
+    setLoadingInvite('ai-interview');
+    try {
+      const { aiInterviewService } = await import('@/lib/services/aiInterviewService');
+      const resp = await aiInterviewService.list({ page_size: 100 });
+      const forThisJd = (resp?.items || []).filter((c: any) => c.jd_id === jobId);
+      const published = forThisJd.find((c: any) => {
+        const status = String(c?.status || '').toLowerCase();
+        return status === 'published' || status === 'active';
+      });
+
+      if (!published) {
+        toast.error('Create and publish an AI interview for this job before inviting candidates.', { duration: 6000 });
+        return;
+      }
+
+      setShareAIConfig(published);
+    } catch (err) {
+      console.error('[CandidateScoringDetailPage] Failed to load AI interviews:', err);
+      toast.error('Could not load AI interviews. Please try again.');
+    } finally {
+      setLoadingInvite(null);
+    }
+  };
+
   const handleDownloadScorecard = async () => {
     const toastId = toast.loading('Generating scorecard PDF...');
 
@@ -472,62 +684,163 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* In the resume view the Candidate Details crumb becomes clickable
+              (onClick, not href — we never left this route). */}
           <PageBreadcrumb
             className="mb-4 md:mb-6"
-            items={breadcrumbItems ?? [
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
-              { label: 'Candidate Details' },
-            ]}
+            items={(() => {
+              // Deepest crumb names the record being viewed (the candidate),
+              // not a generic page label.
+              const base = breadcrumbItems ?? [
+                { label: 'Dashboard', href: '/dashboard' },
+                { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
+                { label: jobTitle, href: `/recruitment/resume-scoring?jd_id=${jobId}` },
+                { label: resume.candidateName || 'Candidate' },
+              ];
+              if (view !== 'resume') return base;
+              return [
+                ...base.slice(0, -1),
+                { ...base[base.length - 1], onClick: () => setView('candidate') },
+                { label: 'Resume' },
+              ];
+            })()}
           />
+
+          {view === 'resume' ? (
+            loadingResumeDetail || !resumeDetail ? (
+              <div className="flex items-center justify-center gap-2 text-gray-500 py-20">
+                <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+                <span className="text-sm">Loading resume...</span>
+              </div>
+            ) : (
+              <ResumeDetailView
+                embedded
+                resume={resumeDetail}
+                onClose={() => setView('candidate')}
+              />
+            )
+          ) : (
+          <>
 
       {/* Header */}
       <div>
         <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4 sm:mb-6">
-            <div className="flex-1 min-w-0">
+          {/* Row 1: candidate identity on the left, record pager on the right */}
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <div className="min-w-0">
               <h1 className="text-xl sm:text-2xl text-gray-900 font-bold mb-2 truncate">{resume.candidateName}</h1>
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
-                  <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
-                  {resume.resumeVersion && (
-                    <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                      Version {resume.resumeVersion}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600">
-                  <span className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200 min-w-0">
-                    <Mail className="w-4 h-4 text-gray-800 flex-shrink-0" />
-                    <span className={`truncate ${resume.email ? 'text-gray-900' : 'text-gray-400'}`}>{resume.email || '-'}</span>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
+                {resume.resumeVersion && (
+                  <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                    Version {resume.resumeVersion}
                   </span>
-                  <span className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200">
-                    <Phone className="w-4 h-4 text-green-600 flex-shrink-0" />
-                    <span className={resume.phone ? 'text-gray-900' : 'text-gray-400'}>{resume.phone || '-'}</span>
-                  </span>
-                  {resume.location && (
-                    <span className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200">
-                      <MapPin className="w-4 h-4 text-red-500 flex-shrink-0" />
-                      <span className="text-gray-900">{resume.location}</span>
-                    </span>
-                  )}
-                </div>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="flex-shrink-0">
               <RecordPager
                 currentIndex={currentIndex}
                 totalCount={totalCount}
                 onPrev={onPrev}
                 onNext={onNext}
               />
-              {canExport && (
+            </div>
+          </div>
+
+          {/* Row 2: contact badges and actions share one line — badges left,
+              actions right (Invite primary > View Resume > Download quiet). */}
+          <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-6 text-sm text-gray-600">
+            <span className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 min-w-0 max-w-full">
+              <Mail className="w-4 h-4 text-gray-800 flex-shrink-0" />
+              <span className={`truncate ${resume.email ? 'text-gray-900' : 'text-gray-400'}`}>{resume.email || '-'}</span>
+            </span>
+            <span className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
+              <Phone className="w-4 h-4 text-green-600 flex-shrink-0" />
+              <span className={`whitespace-nowrap ${resume.phone ? 'text-gray-900' : 'text-gray-400'}`}>{resume.phone || '-'}</span>
+            </span>
+            {resume.location && (
+              <span className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 min-w-0">
+                <MapPin className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <span className="text-gray-900 truncate">{resume.location}</span>
+              </span>
+            )}
+
+            {/* ml-auto keeps the actions right-aligned on one line, and simply
+                wraps to the next line when the badges run out of room. */}
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
+              {canInvite && (
+                <div className="relative" ref={inviteMenuRef}>
+                  <button
+                    onClick={() => setShowInviteMenu(!showInviteMenu)}
+                    disabled={!!loadingInvite}
+                    aria-haspopup="menu"
+                    aria-expanded={showInviteMenu}
+                    className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium text-white bg-brand-blue rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    {loadingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                    Invite
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showInviteMenu ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {showInviteMenu && (
+                    <div
+                      role="menu"
+                      className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
+                    >
+                      {canInviteAssessment && (
+                        <button
+                          role="menuitem"
+                          onClick={handleInviteForAssessment}
+                          className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors"
+                        >
+                          <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                            <Mail className="w-4 h-4 text-brand-blue" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium text-gray-900">Assessment Invite</span>
+                            <span className="block text-xs text-gray-500">Send a skills assessment for this job</span>
+                          </span>
+                        </button>
+                      )}
+                      {canInviteAIInterview && (
+                        <button
+                          role="menuitem"
+                          onClick={handleInviteForAIInterview}
+                          className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors"
+                        >
+                          <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
+                            <Sparkles className="w-4 h-4 text-brand-cyan" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium text-gray-900">AI Interview</span>
+                            <span className="block text-xs text-gray-500">Invite the candidate to an AI interview</span>
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button
-                onClick={handleDownloadScorecard}
-                className="w-full sm:w-auto px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 border-2 border-gray-300 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
+                onClick={handleViewResume}
+                className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium text-brand-blue bg-white border border-brand-blue/40 rounded-lg hover:bg-brand-blue/5 transition-colors flex items-center gap-1.5 whitespace-nowrap"
               >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Download Scorecard</span>
-                <span className="sm:hidden">Download</span>
+                <Eye className="w-4 h-4" />
+                View Resume
               </button>
+
+              {canExport && (
+                <button
+                  onClick={handleDownloadScorecard}
+                  title="Download scorecard PDF"
+                  className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm text-gray-700 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="hidden lg:inline">Download Scorecard</span>
+                  <span className="lg:hidden">Scorecard</span>
+                </button>
               )}
             </div>
           </div>
@@ -540,7 +853,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                 {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
               </span>
               <span className="hidden sm:inline text-gray-400">|</span>
-              <span className="text-xs sm:text-sm text-gray-700 truncate">{jobTitle}</span>
+              <span className="text-xs sm:text-sm font-normal text-gray-700 truncate"><span className="font-bold text-gray-800">Job Title :</span> {jobTitle}</span>
             </div>
             <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
               {fullResumeData.scoredDate && !isNaN(new Date(fullResumeData.scoredDate).getTime())
@@ -1328,18 +1641,10 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
             </div>
           )}
 
-          {/* View JD — the JD's Extracted Data Summary, same content the JD
-              detail page shows, scoped to the JD this candidate was scored against. */}
+          {/* View JD — the full job description as the published JD page shows
+              it, scoped to the JD this candidate was scored against. */}
           {activeTab === 'viewjd' && (
             <div className="space-y-6">
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-gray-700" />
-                <h3 className="text-lg font-semibold text-gray-900">
-                  📊 Extracted Data Summary
-                  <span className="block text-sm font-normal text-gray-600 mt-0.5">{jobTitle}</span>
-                </h3>
-              </div>
-
               {!jdDetails ? (
                 <div className="flex items-center gap-2 text-gray-500 py-6">
                   <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />
@@ -1347,6 +1652,124 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                 </div>
               ) : (
                 <>
+                  {/* JD header card — JD ID, title, status, and the meta row */}
+                  <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-5">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      {jdDetails.job_id && (
+                        <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
+                          {jdDetails.job_id}
+                        </span>
+                      )}
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-900">{jdDetails.title || jobTitle}</h3>
+                      {jdDetails.status && (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${jdStatusBadgeClass(jdDetails.status)}`}>
+                          {prettifyCode(jdDetails.status)}
+                        </span>
+                      )}
+                      {jdDetails.creation_method === 'ai_generated' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                          <Zap className="w-3 h-3" />
+                          AI-Generated
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600">
+                      {jdLocation && (
+                        <>
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="w-4 h-4 text-purple-600" />
+                            <span>{jdLocation}</span>
+                          </div>
+                          <span className="text-gray-300">•</span>
+                        </>
+                      )}
+                      {jdDetails.department && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                          <Building2 className="w-3.5 h-3.5" />
+                          {jdDetails.department}
+                        </span>
+                      )}
+                      {jdExperienceBadge && (
+                        <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                          {jdExperienceBadge}
+                        </span>
+                      )}
+                      {jdEducationLabel !== 'Not specified' && (
+                        <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                          {jdEducationLabel}
+                        </span>
+                      )}
+                      {jdDetails.employment_type && (
+                        <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                          {employmentTypeLabel(jdDetails.employment_type)}
+                        </span>
+                      )}
+                      {jdDetails.remote_type && (
+                        <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                          {workModeLabel(jdDetails.remote_type)}
+                        </span>
+                      )}
+                      {jdSalary && (
+                        <span className="inline-flex items-center px-2.5 py-1 bg-green-50 text-green-700 rounded-md text-xs font-medium">
+                          {jdSalary}{jdDetails.compensation_type ? ` / ${jdDetails.compensation_type}` : ''}
+                        </span>
+                      )}
+                      <span className="text-gray-300">•</span>
+                      <span>Posted {jdPostedDate ? formatIST(jdPostedDate) : 'N/A'}</span>
+                      <span className="text-gray-300">•</span>
+                      <span>By {jdDetails.created_by_name || 'System'}</span>
+                      <span className="text-gray-300">•</span>
+                      <span className="inline-flex items-center px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium">
+                        v{jdDetails.current_version && jdDetails.current_version > 0 ? jdDetails.current_version : 1}.0
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Job Description */}
+                  <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-6">
+                    <h4 className="text-base font-semibold text-gray-900 mb-3">Job Description</h4>
+                    <div className="h-px bg-gray-200 mb-3"></div>
+                    {jdDescriptionMarkdown.trim() ? (
+                      <div className="markdown-content prose prose-sm max-w-none text-gray-700">
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{jdDescriptionMarkdown}</ReactMarkdown>
+                      </div>
+                    ) : (
+                      <div className="text-gray-500 italic text-center py-8">No job description provided</div>
+                    )}
+                  </div>
+
+                  {/* Internal Recruiter Notes & Assessment Guidance */}
+                  <div className={`grid ${jdDetails.assessment_guidance ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-4`}>
+                    <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">Internal Recruiter Notes</h4>
+                      <div className="text-sm text-gray-600 space-y-2">
+                        {jdInternalNotes.length > 0 ? (
+                          <ul className="list-disc list-inside space-y-1">
+                            {jdInternalNotes.map((note, index) => (
+                              <li key={index}>{note}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-gray-500 italic">No internal notes added</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {jdDetails.assessment_guidance && (
+                      <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Assessment Guidance</h4>
+                        <p className="text-sm text-gray-600 whitespace-pre-wrap">{jdDetails.assessment_guidance}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Extracted Data Summary */}
+                  <div className="flex items-center gap-2 pt-2">
+                    <BookOpen className="w-5 h-5 text-gray-700" />
+                    <h3 className="text-lg font-semibold text-gray-900">📊 Extracted Data Summary</h3>
+                  </div>
+
                   {/* Skills & Requirements */}
                   <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-6">
                     <h4 className="text-base font-semibold text-gray-900 mb-4">Skills &amp; Requirements</h4>
@@ -1455,6 +1878,138 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
           )}
         </div>
       </div>
+          </>
+          )}
+
+          {/* Assessment picker — only when this JD has more than one invitable
+              published assessment. */}
+          {showAssessmentPicker && pickerAssessments.length > 0 && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80vh] flex flex-col">
+                <div className="flex items-center justify-between p-5 border-b border-gray-200 shrink-0">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Choose an assessment</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      This job has {pickerAssessments.length} published assessments. Select which one(s) to invite {resume.candidateName} to.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowAssessmentPicker(false)}
+                    className="p-1 hover:bg-gray-100 rounded"
+                    aria-label="Close"
+                  >
+                    <XCircle className="w-5 h-5 text-gray-500" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3">
+                  {pickerAssessments.map((a: any) => {
+                    const isPicked = pickerSelectedIds.includes(a.id);
+                    const sections = (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0);
+                    return (
+                      <label
+                        key={a.id}
+                        className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer border mb-2 transition-colors ${
+                          isPicked ? 'border-brand-blue bg-brand-blue/5' : 'border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isPicked}
+                          onChange={() => {
+                            setPickerSelectedIds(prev =>
+                              prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id]
+                            );
+                          }}
+                          className="mt-1"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900 truncate">
+                            {a.title || a.short_id || 'Untitled assessment'}
+                            {typeof a.version === 'number' ? ` - Version ${a.version}` : ''}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                            {a.short_id && <span>{a.short_id}</span>}
+                            <span>{a.duration_minutes || 30} min</span>
+                            <span>{sections} section{sections !== 1 ? 's' : ''}</span>
+                            {a.jd_version && <span>JD v{a.jd_version}</span>}
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3 shrink-0">
+                  <span className="text-xs text-gray-600">
+                    {pickerSelectedIds.length} of {pickerAssessments.length} selected
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowAssessmentPicker(false)}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleConfirmAssessmentPick}
+                      disabled={pickerSelectedIds.length === 0}
+                      className="px-4 py-2 text-sm font-medium text-white bg-brand-blue rounded-lg hover:bg-brand-blue-2 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Share Assessment via Email — the same modal the JD and assessment
+              pages use, opened here without leaving the candidate page. */}
+          {showShareAssessmentModal && shareAssessments.length > 0 && (
+            <ShareAssessmentModal
+              isOpen={showShareAssessmentModal}
+              onClose={() => {
+                setShowShareAssessmentModal(false);
+                setShareAssessments([]);
+              }}
+              assessment={{
+                id: shareAssessments[0].id,
+                title: shareAssessments[0].title,
+                duration: `${shareAssessments[0].duration_minutes || 30} min`,
+                questions: (shareAssessments[0].hr_enabled ? 1 : 0)
+                  + (shareAssessments[0].technical_enabled ? 1 : 0)
+                  + (shareAssessments[0].coding_enabled ? 1 : 0),
+                type: 'AI-Generated',
+                short_id: shareAssessments[0].short_id,
+                version: shareAssessments[0].version,
+                jd_short_id: jobId,
+                jd_title: jobTitle,
+                jd_version: shareAssessments[0].jd_version,
+              }}
+              additionalAssessments={shareAssessments.slice(1).map((a: any) => ({
+                id: a.id,
+                title: a.title,
+                duration: `${a.duration_minutes || 30} min`,
+                questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
+                type: 'AI-Generated',
+                short_id: a.short_id,
+                version: a.version,
+                jd_short_id: jobId,
+                jd_title: jobTitle,
+                jd_version: a.jd_version,
+              }))}
+              inviteSource="JD"
+            />
+          )}
+
+          {/* Share AI Interview — same modal the AI Interviews page opens. */}
+          {shareAIConfig && (
+            <ShareAIInterviewModal
+              isOpen={!!shareAIConfig}
+              onClose={() => setShareAIConfig(null)}
+              config={shareAIConfig}
+              onInviteSent={() => setShareAIConfig(null)}
+            />
+          )}
         </div>
       </div>
     </main>

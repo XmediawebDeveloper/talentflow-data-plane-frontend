@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import {
@@ -8,7 +8,7 @@ import {
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ChevronLeft, ExternalLink, Linkedin, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
-  AlignLeft, Hash, X, Eye
+  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search
 } from 'lucide-react';
 
 // Full Resume Content Component with better UI
@@ -196,8 +196,13 @@ function FullResumeContent({ text }: { text: string }) {
 import { Resume, Job } from '@/lib/types/types';
 import { resumeService, Resume as ApiResume } from '@/lib/services/resumeService';
 import { jdService } from '@/lib/services/jdService';
-import { scoringService } from '@/lib/services/scoringService';
+import { scoringService, BatchScoringStatus } from '@/lib/services/scoringService';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
+import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
+import AITalentMatchProgressPanel from '@/components/AITalentMatchProgressPanel';
+import ScoringJobProgressModal, { JobScoringProgress } from '@/components/ScoringJobProgressModal';
+import ShareAssessmentModal from '@/components/ShareAssessmentModal';
+import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import FeatureGate from '@/components/shared/FeatureGate';
@@ -234,6 +239,7 @@ export default function ResumeViewPage() {
   // list stores this in sessionStorage as `resumeNavSource`.
   const [viewSource, setViewSource] = useState<'my-resumes' | 'resume-database' | 'ai-talent-match' | 'job-details'>('resume-database');
   const [jobDetailsReturnUrl, setJobDetailsReturnUrl] = useState<string | null>(null);
+  const [aiMatchDetailsReturnUrl, setAiMatchDetailsReturnUrl] = useState<string | null>(null);
   useEffect(() => {
     try {
       const s = sessionStorage.getItem('resumeNavSource');
@@ -246,17 +252,32 @@ export default function ResumeViewPage() {
       if (jobId) {
         setJobDetailsReturnUrl(`/recruitment/job-details?id=${encodeURIComponent(jobId)}&tab=${encodeURIComponent(jobTab)}`);
       }
+
+      const aiMatchJobId = sessionStorage.getItem('resumeNavAIMatchJobId');
+      if (aiMatchJobId) {
+        setAiMatchDetailsReturnUrl(`/recruitment/ai-talent-match?jdId=${encodeURIComponent(aiMatchJobId)}&view=details`);
+      }
     } catch { /* ignore */ }
   }, []);
-  const sourceCrumb =
-    viewSource === 'my-resumes' ? { label: 'My Resumes', href: '/recruitment/my-resumes' }
-    : viewSource === 'ai-talent-match' ? { label: 'AI Talent Match', href: '/recruitment/ai-talent-match' }
-    : viewSource === 'job-details' ? { label: 'Scored Resumes', href: jobDetailsReturnUrl || '/recruitment/job-openings' }
-    : { label: 'Internal Database', href: '/recruitment/resume-database' };
+  const sourceCrumbs =
+    viewSource === 'my-resumes' ? [{ label: 'My Resumes', href: '/recruitment/my-resumes' }]
+    : viewSource === 'ai-talent-match' ? [
+      { label: 'AI Talent Match', href: '/recruitment/ai-talent-match' },
+      { label: 'Match Details', href: aiMatchDetailsReturnUrl || '/recruitment/ai-talent-match' },
+    ]
+    : viewSource === 'job-details' ? [{ label: 'Scored Resumes', href: jobDetailsReturnUrl || '/recruitment/job-openings' }]
+    : [{ label: 'Internal Database', href: '/recruitment/resume-database' }];
 
   // Apply to Job modal state
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
   const [publishedJobs, setPublishedJobs] = useState<Job[]>([]);
+  const [showAITalentMatchModal, setShowAITalentMatchModal] = useState(false);
+  const [aiTalentMatchJob, setAiTalentMatchJob] = useState<Job | null>(null);
+  const [showScoringProgressModal, setShowScoringProgressModal] = useState(false);
+  const [isScoringProgressMinimized, setIsScoringProgressMinimized] = useState(false);
+  const [scoringProgressData, setScoringProgressData] = useState<JobScoringProgress[]>([]);
+  const [scoringProgressKey, setScoringProgressKey] = useState(0);
+  const scoringPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Version selection state for Apply to Job
   const [showVersionSelectModal, setShowVersionSelectModal] = useState(false);
@@ -285,6 +306,118 @@ export default function ResumeViewPage() {
   const canApplyResumeToJob =
     hasPlanFeature('resume_scoring') &&
     (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')));
+  const hasAITalentMatchSourcePermission =
+    viewSource === 'resume-database'
+      ? hasPermissionCode('internal_db:ai_match')
+      : viewSource === 'my-resumes'
+        ? hasPermissionCode('my_resumes:ai_match')
+        : true;
+  const canRunAITalentMatch =
+    hasPlanFeature('ai_talent_match') &&
+    (isTenantAdmin || (hasPermission('canRunAiMatch') && hasAITalentMatchSourcePermission));
+
+  // ── Invite (Assessment / AI Interview) ──────────────────────────────────
+  // Same two flows the Resume Scoring candidate page offers. A resume has no
+  // job context here, so the user picks the JD first.
+  const canInviteAssessment = (isTenantAdmin || hasPermission('canCreateAssessments')) && hasPlanFeature('assessment');
+  const canInviteAIInterview =
+    (isTenantAdmin || hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews')) &&
+    hasPlanFeature('ai_interview');
+  const canInvite = canInviteAssessment || canInviteAIInterview;
+
+  const [showInviteMenu, setShowInviteMenu] = useState(false);
+  const inviteMenuRef = useRef<HTMLDivElement>(null);
+  const [inviteIntent, setInviteIntent] = useState<'assessment' | 'ai-interview' | null>(null);
+  const [showInviteJobPicker, setShowInviteJobPicker] = useState(false);
+  const [inviteJobQuery, setInviteJobQuery] = useState('');
+  const [loadingInvite, setLoadingInvite] = useState(false);
+  const [shareAssessments, setShareAssessments] = useState<any[]>([]);
+  const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
+  const [shareAIConfig, setShareAIConfig] = useState<any>(null);
+  const [inviteJobTitle, setInviteJobTitle] = useState('');
+
+  useEffect(() => {
+    if (!showInviteMenu) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (inviteMenuRef.current && !inviteMenuRef.current.contains(e.target as Node)) setShowInviteMenu(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowInviteMenu(false); };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showInviteMenu]);
+
+  const startInvite = async (intent: 'assessment' | 'ai-interview') => {
+    setShowInviteMenu(false);
+    setInviteIntent(intent);
+    setInviteJobQuery('');
+    if (publishedJobs.length === 0) await fetchPublishedJobs();
+    setShowInviteJobPicker(true);
+  };
+
+  // Assessment invite for the chosen JD — mirrors the JD page's rules: only
+  // published, non-revoked assessments can be invited to.
+  const openAssessmentInvite = async (job: Job) => {
+    setLoadingInvite(true);
+    try {
+      const { assessmentService } = await import('@/lib/services/assessmentService');
+      const { isAssessmentRevoked, getLocallyRevokedAssessmentIds } = await import('@/lib/utils/assessmentUtils');
+      const resp = await assessmentService.list({ jd_id: job.id, status: 'published', page_size: 100 });
+      const revokedIds = getLocallyRevokedAssessmentIds();
+      const items: any[] = (resp?.items || []).filter((a: any) => {
+        const status = String(a?.status || '').toLowerCase();
+        if (status !== 'published' && status !== 'active') return false;
+        return !isAssessmentRevoked(a, revokedIds);
+      });
+
+      if (items.length === 0) {
+        toast.error(`No invitable assessment is available for "${job.title}".`, { duration: 6000 });
+        return;
+      }
+      setShareAssessments(items);
+      setInviteJobTitle(job.title);
+      setShowShareAssessmentModal(true);
+      setShowInviteJobPicker(false);
+    } catch (err) {
+      console.error('[ResumeView] Failed to load assessments:', err);
+      toast.error('Could not load assessments. Please try again.');
+    } finally {
+      setLoadingInvite(false);
+    }
+  };
+
+  // AI interview invite — needs a published interview config on that JD.
+  const openAIInterviewInvite = async (job: Job) => {
+    setLoadingInvite(true);
+    try {
+      const { aiInterviewService } = await import('@/lib/services/aiInterviewService');
+      const resp = await aiInterviewService.list({ page_size: 100 });
+      const published = (resp?.items || []).find((c: any) => {
+        const status = String(c?.status || '').toLowerCase();
+        return c.jd_id === job.id && (status === 'published' || status === 'active');
+      });
+
+      if (!published) {
+        toast.error(`Create and publish an AI interview for "${job.title}" before inviting candidates.`, { duration: 6000 });
+        return;
+      }
+      setShareAIConfig(published);
+      setShowInviteJobPicker(false);
+    } catch (err) {
+      console.error('[ResumeView] Failed to load AI interviews:', err);
+      toast.error('Could not load AI interviews. Please try again.');
+    } finally {
+      setLoadingInvite(false);
+    }
+  };
+
+  const handleInviteJobPicked = (job: Job) => {
+    if (inviteIntent === 'assessment') openAssessmentInvite(job);
+    else if (inviteIntent === 'ai-interview') openAIInterviewInvite(job);
+  };
 
   const handleCompareCheck = (versionId: string) => {
     setCompareChecked(prev => {
@@ -347,7 +480,9 @@ export default function ResumeViewPage() {
         setFetchedPreviewText(data.extracted_text);
         setVersionPreviewUrl(versionId);
       } else {
-        toast.info('Preview not available. Use the download button.');
+        setFetchedPreviewText('');
+        setVersionPreviewUrl(versionId);
+        toast.info('Preview not available for this file.');
       }
     } catch (err) {
       console.error('Failed to fetch preview text:', err);
@@ -564,19 +699,23 @@ export default function ResumeViewPage() {
     additionalInfo: r.additional_info,
   });
 
-  const handleDownload = async () => {
+  const handleDownload = async (
+    targetResumeId: string = resumeId,
+    targetFileName: string = resume?.fileName || `resume-${resumeId}.${resume?.fileType || 'pdf'}`,
+    errorMessage: string = 'Failed to download resume'
+  ) => {
     try {
-      const blob = await resumeService.download(resumeId);
+      const blob = await resumeService.download(targetResumeId);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = resume?.fileName || `resume-${resumeId}.${resume?.fileType || 'pdf'}`;
+      link.download = targetFileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      toast.error('Failed to download resume');
+    } catch {
+      toast.error(errorMessage);
     }
   };
 
@@ -696,6 +835,12 @@ Best regards`);
     router.push(jobDetailsReturnUrl || '/recruitment/job-openings');
   };
 
+  const handleAITalentMatch = async () => {
+    if (!resume) return;
+    await fetchPublishedJobs();
+    setShowAITalentMatchModal(true);
+  };
+
   const handleVersionSelectForApply = async (versionId: string) => {
     setSelectedVersionForApply(versionId);
     setShowVersionSelectModal(false);
@@ -703,38 +848,120 @@ Best regards`);
     setIsApplyToJobModalOpen(true);
   };
 
+  const clearScoringPoll = () => {
+    if (scoringPollRef.current) {
+      clearInterval(scoringPollRef.current);
+      scoringPollRef.current = null;
+    }
+  };
+
+  const getCandidateName = () =>
+    resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown Candidate';
+
+  const buildScoringProgress = (
+    jobId: string,
+    jobTitle: string,
+    resumeIdToScore: string,
+    candidateName: string,
+    status?: BatchScoringStatus
+  ): JobScoringProgress => {
+    const items: Array<{
+      resume_id: string;
+      candidate_name?: string;
+      status: 'queued' | 'processing' | 'completed' | 'failed';
+      overall_score?: number;
+      error_message?: string;
+    }> = status?.items?.length
+      ? status.items
+      : [{ resume_id: resumeIdToScore, candidate_name: candidateName, status: 'queued' as const }];
+
+    return {
+      jobId: status?.jd_id || jobId,
+      jobTitle: status?.jd_title || jobTitle,
+      total: status?.total || items.length || 1,
+      queued: status?.queued ?? items.filter(item => item.status === 'queued').length,
+      inProgress: status?.processing ?? items.filter(item => item.status === 'processing').length,
+      completed: status?.completed ?? items.filter(item => item.status === 'completed').length,
+      failed: status?.failed ?? items.filter(item => item.status === 'failed').length,
+      items: items.map(item => ({
+        resumeId: item.resume_id || resumeIdToScore,
+        candidateName: item.candidate_name || candidateName,
+        status: item.status,
+        score: item.overall_score,
+        errorMessage: item.error_message,
+      })),
+    };
+  };
+
+  const pollScoringBatch = (
+    batchId: string,
+    jobId: string,
+    jobTitle: string,
+    resumeIdToScore: string,
+    candidateName: string
+  ) => {
+    clearScoringPoll();
+
+    const poll = async () => {
+      try {
+        const status = await scoringService.getBatchStatus(batchId);
+        setScoringProgressData([buildScoringProgress(jobId, jobTitle, resumeIdToScore, candidateName, status)]);
+
+        const isComplete = status.total > 0 && status.queued === 0 && status.processing === 0;
+        if (isComplete) {
+          clearScoringPoll();
+          if (status.failed > 0 && status.completed === 0) {
+            toast.error('Resume scoring failed');
+          } else {
+            toast.success(`Resume scored for "${status.jd_title || jobTitle}"`);
+          }
+        }
+      } catch (pollError) {
+        console.error('[ResumeView] Failed to poll scoring batch:', pollError);
+      }
+    };
+
+    scoringPollRef.current = setInterval(poll, 2000);
+    void poll();
+  };
+
+  useEffect(() => () => clearScoringPoll(), []);
+
   // Handle applying resume to selected job (scoring) - using async Celery
   const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setIsApplyToJobModalOpen(false);
+    setIsScoringProgressMinimized(false);
 
     const jobId = jobIds[0];
     // Use selected version if available, otherwise use current resume
     const resumeIdToScore = selectedVersionForApply || resumeId;
+    const selectedJob = publishedJobs.find(job => job.id === jobId);
+    const fallbackJobTitle = selectedJob?.title || 'Selected Job';
+    const candidateName = getCandidateName();
 
     try {
+      setScoringProgressKey(prev => prev + 1);
+      setScoringProgressData([buildScoringProgress(jobId, fallbackJobTitle, resumeIdToScore, candidateName)]);
+      setShowScoringProgressModal(true);
+
       // Start async bulk scoring via Celery
       const response = await scoringService.startBulkScoringAsync(jobId, [resumeIdToScore]);
-
-      // Get candidate name for fallback display
-      const resumeItems = [{
-        resumeId: resumeIdToScore,
-        candidateName: resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown',
-      }];
-
-      // Store batch info for the resume-scoring page to poll (including resume items for fallback)
-      const scoringData = {
-        batchId: response.batch_id,
-        jobId: response.jd_id,
-        jobTitle: response.jd_title,
-        totalResumes: response.total_resumes,
-        resumeItems: resumeItems,
-      };
-      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
-
-      // Navigate to resume scoring page to show progress
-      router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
+      const responseJobId = response.jd_id || jobId;
+      const responseJobTitle = response.jd_title || fallbackJobTitle;
+      setScoringProgressData([{
+        ...buildScoringProgress(responseJobId, responseJobTitle, resumeIdToScore, candidateName),
+        queued: 0,
+        inProgress: response.total_resumes || 1,
+        items: [{
+          resumeId: resumeIdToScore,
+          candidateName,
+          status: 'processing',
+        }],
+      }]);
+      pollScoringBatch(response.batch_id, responseJobId, responseJobTitle, resumeIdToScore, candidateName);
+      setSelectedVersionForApply(null);
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
 
@@ -743,6 +970,18 @@ Best regards`);
       } else {
         toast.error(error.message || 'Failed to start scoring');
       }
+      setScoringProgressData([{
+        ...buildScoringProgress(jobId, fallbackJobTitle, resumeIdToScore, candidateName),
+        queued: 0,
+        failed: 1,
+        items: [{
+          resumeId: resumeIdToScore,
+          candidateName,
+          status: 'failed',
+          errorMessage: error?.message || 'Failed to start scoring',
+        }],
+      }]);
+      setShowScoringProgressModal(true);
     }
   };
 
@@ -799,8 +1038,9 @@ Best regards`);
             className="mb-4 md:mb-6"
             items={[
               { label: 'Dashboard', href: '/dashboard' },
-              sourceCrumb,
-              { label: 'Resume Details' },
+              ...sourceCrumbs,
+              // Name the candidate whose resume is open, not a generic label.
+              { label: resume?.name || 'Resume Details' },
             ]}
           />
       {/* Header */}
@@ -841,8 +1081,11 @@ Best regards`);
         </div>
       </div>
 
-      {/* Action Bar */}
-      <div className="border-b border-gray-100 py-2.5 sm:py-3 mb-4 overflow-x-auto scrollbar-hide">
+      {/* Action Bar — the horizontal scroll clips absolutely-positioned
+          children, so drop it while the Invite menu is open. */}
+      <div className={`relative border-b border-gray-100 py-2.5 sm:py-3 mb-4 ${
+        showInviteMenu ? 'overflow-visible' : 'overflow-x-auto scrollbar-hide'
+      }`}>
         <div className="flex items-center justify-between gap-3 min-w-max sm:min-w-0">
           <div className="flex items-center gap-2">
             <button
@@ -852,13 +1095,6 @@ Best regards`);
               <Eye className="w-4 h-4" />
               View
             </button>
-            <button
-              onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
-            >
-              <Download className="w-4 h-4" />
-              Download
-            </button>
             {canShareResume && (
               <button
                 onClick={handleShare}
@@ -866,6 +1102,65 @@ Best regards`);
               >
                 <Share2 className="w-4 h-4" />
                 Share
+              </button>
+            )}
+            {canInvite && (
+              <div className="relative" ref={inviteMenuRef}>
+                <button
+                  onClick={() => setShowInviteMenu(!showInviteMenu)}
+                  disabled={loadingInvite}
+                  aria-haspopup="menu"
+                  aria-expanded={showInviteMenu}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-brand-blue/40 text-brand-blue rounded-lg hover:bg-brand-blue/5 transition-colors text-sm font-medium"
+                >
+                  {loadingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                  Invite
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showInviteMenu ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showInviteMenu && (
+                  <div role="menu" className="absolute left-0 top-full mt-2 w-64 bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]">
+                    {canInviteAssessment && (
+                      <button
+                        role="menuitem"
+                        onClick={() => startInvite('assessment')}
+                        className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors"
+                      >
+                        <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                          <Mail className="w-4 h-4 text-brand-blue" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-gray-900">Assessment Invite</span>
+                          <span className="block text-xs text-gray-500">Pick a job, then send its assessment</span>
+                        </span>
+                      </button>
+                    )}
+                    {canInviteAIInterview && (
+                      <button
+                        role="menuitem"
+                        onClick={() => startInvite('ai-interview')}
+                        className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors"
+                      >
+                        <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
+                          <Sparkles className="w-4 h-4 text-brand-cyan" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-gray-900">AI Interview</span>
+                          <span className="block text-xs text-gray-500">Pick a job, then invite to its interview</span>
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {canRunAITalentMatch && (
+              <button
+                onClick={handleAITalentMatch}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-brand-cyan/40 text-brand-cyan rounded-lg hover:bg-brand-cyan/5 transition-colors text-sm font-medium"
+              >
+                <Sparkles className="w-4 h-4" />
+                AI Talent Match
               </button>
             )}
             {canDeleteResume && (
@@ -892,7 +1187,7 @@ Best regards`);
               className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Send className="w-4 h-4" />
-              Apply to Job
+              Score Resume
             </button>
           )}
         </div>
@@ -1945,8 +2240,8 @@ Best regards`);
 
       {versionPreviewUrl && (() => {
         const previewVersion = resume?.versions?.find(v => v.id === versionPreviewUrl);
-        const previewText = previewVersion?.extractedText || resume?.extractedText || fetchedPreviewText || '';
-        if (!previewText) return null;
+        const isCurrentPreview = versionPreviewUrl === resumeId;
+        const previewText = previewVersion?.extractedText || (isCurrentPreview ? (resume?.extractedText || fetchedPreviewText) : fetchedPreviewText) || '';
 
         // Parse text into sections for document-like display
         const lines = previewText.split('\n');
@@ -1965,32 +2260,46 @@ Best regards`);
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90vh] flex flex-col overflow-hidden">
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-                <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
                   <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     <Eye className="w-5 h-5 text-white" />
                   </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900 tracking-tight">{versionPreviewLabel}</h2>
-                    <p className="text-sm text-gray-500">{previewVersion?.name || resume?.fileName}</p>
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">{versionPreviewLabel}</h2>
+                    <p className="text-sm text-gray-500 truncate">{previewVersion?.name || resume?.fileName}</p>
                   </div>
                 </div>
-                <button
-                  onClick={() => {
-                    setVersionPreviewUrl(null);
-                    setVersionPreviewLabel('');
-                    setFetchedPreviewText(null);
-                  }}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                 aria-label="Close">
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => handleDownload(
+                      versionPreviewUrl,
+                      previewVersion?.fileName || previewVersion?.name || resume?.fileName || `resume-${versionPreviewUrl}.${resume?.fileType || 'pdf'}`,
+                      previewVersion ? 'Failed to download version' : 'Failed to download resume'
+                    )}
+                    className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">Download</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setVersionPreviewUrl(null);
+                      setVersionPreviewLabel('');
+                      setFetchedPreviewText(null);
+                    }}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                   aria-label="Close">
+                    <X className="w-5 h-5 text-gray-500" />
+                  </button>
+                </div>
               </div>
 
               {/* Resume content - document style */}
               <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full">
-                  {lines.map((line, idx) => {
+                {previewText ? (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full">
+                    {lines.map((line, idx) => {
                     const trimmed = line.trim();
                     if (!trimmed) return <div key={idx} className="h-3" />;
 
@@ -2025,8 +2334,15 @@ Best regards`);
                     return (
                       <p key={idx} className="text-sm text-gray-700 leading-relaxed mb-0.5">{trimmed}</p>
                     );
-                  })}
-                </div>
+                    })}
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center text-center">
+                    <FileText className="w-10 h-10 text-gray-400 mb-3" />
+                    <p className="text-sm font-medium text-gray-900">Preview not available</p>
+                    <p className="text-sm text-gray-500 mt-1">Download the resume to view the original file.</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2162,7 +2478,7 @@ Best regards`);
                 className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Send className="w-4 h-4" />
-                Continue to Job Selection
+                Continue to Score Resume
               </button>
             </div>
           </div>
@@ -2174,11 +2490,185 @@ Best regards`);
         <ApplyToJobModal
           resumes={[resume]}
           jobs={publishedJobs}
+          mode="scoring"
+          stayOnCurrentPage
           onClose={() => {
             setIsApplyToJobModalOpen(false);
             setSelectedVersionForApply(null);
           }}
           onApply={handleApplyToJobSubmit}
+        />
+      )}
+
+      {showScoringProgressModal && (
+        <ScoringJobProgressModal
+          key={scoringProgressKey}
+          isOpen={showScoringProgressModal}
+          isMinimized={isScoringProgressMinimized}
+          jobProgressData={scoringProgressData}
+          onClose={() => {
+            setShowScoringProgressModal(false);
+            setIsScoringProgressMinimized(false);
+          }}
+          onMinimize={() => setIsScoringProgressMinimized(prev => !prev)}
+        />
+      )}
+
+      {/* AI Talent Match Modal */}
+      {showAITalentMatchModal && resume && (
+        <AITalentMatchSelectJobModal
+          resumes={[resume]}
+          jobs={publishedJobs}
+          stayOnCurrentPage
+          confirmLabel="Run AI Talent Match"
+          onClose={() => setShowAITalentMatchModal(false)}
+          onMatch={(resumeIds, jobId) => {
+            if (resumeIds.length === 0) return;
+            const selectedJob = publishedJobs.find(job => job.id === jobId);
+
+            if (!selectedJob) {
+              toast.error('Selected job is no longer available');
+              return;
+            }
+
+            setShowAITalentMatchModal(false);
+            setAiTalentMatchJob(selectedJob);
+          }}
+        />
+      )}
+
+      {/* AI Talent Match Progress - stays on the resume-view page */}
+      {aiTalentMatchJob && (
+        <AITalentMatchProgressPanel
+          jobTitle={aiTalentMatchJob.title}
+          jobId={aiTalentMatchJob.id}
+          onComplete={(results) => {
+            toast.success(`AI Talent Match completed for "${aiTalentMatchJob.title}" with ${results.length} match${results.length === 1 ? '' : 'es'}.`);
+            setAiTalentMatchJob(null);
+          }}
+          onError={(error) => {
+            toast.error(error || 'Failed to run AI Talent Match');
+            setAiTalentMatchJob(null);
+          }}
+        />
+      )}
+
+      {/* Invite — step 1: choose the job the invite belongs to */}
+      {showInviteJobPicker && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-start justify-between p-5 border-b border-gray-200 shrink-0">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {inviteIntent === 'assessment' ? 'Invite for Assessment' : 'Invite to AI Interview'}
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Choose the job to invite {resume?.name || 'this candidate'} for.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowInviteJobPicker(false)}
+                className="p-1 hover:bg-gray-100 rounded"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="p-3 border-b border-gray-100 shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={inviteJobQuery}
+                  onChange={(e) => setInviteJobQuery(e.target.value)}
+                  placeholder="Search jobs..."
+                  className="w-full pl-9 pr-4 py-2 text-sm text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3">
+              {publishedJobs.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-8">No published jobs available.</p>
+              ) : (
+                publishedJobs
+                  .filter(job => !inviteJobQuery.trim() ||
+                    job.title?.toLowerCase().includes(inviteJobQuery.trim().toLowerCase()) ||
+                    (job as any).job_id?.toLowerCase().includes(inviteJobQuery.trim().toLowerCase()))
+                  .map(job => (
+                    <button
+                      key={job.id}
+                      onClick={() => handleInviteJobPicked(job)}
+                      disabled={loadingInvite}
+                      className="w-full flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 mb-2 text-left hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-colors disabled:opacity-60"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          {(job as any).job_id && (
+                            <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20">
+                              {(job as any).job_id}
+                            </span>
+                          )}
+                          <span className="text-sm font-medium text-gray-900 truncate">{job.title}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3">
+                          {job.department && <span>{job.department}</span>}
+                          {job.location && <span>{job.location}</span>}
+                        </div>
+                      </div>
+                      {loadingInvite ? <Loader2 className="w-4 h-4 animate-spin text-brand-blue" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                    </button>
+                  ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invite — step 2a: share the JD's assessment */}
+      {showShareAssessmentModal && shareAssessments.length > 0 && (
+        <ShareAssessmentModal
+          isOpen={showShareAssessmentModal}
+          onClose={() => {
+            setShowShareAssessmentModal(false);
+            setShareAssessments([]);
+          }}
+          assessment={{
+            id: shareAssessments[0].id,
+            title: shareAssessments[0].title,
+            duration: `${shareAssessments[0].duration_minutes || 30} min`,
+            questions: (shareAssessments[0].hr_enabled ? 1 : 0)
+              + (shareAssessments[0].technical_enabled ? 1 : 0)
+              + (shareAssessments[0].coding_enabled ? 1 : 0),
+            type: 'AI-Generated',
+            short_id: shareAssessments[0].short_id,
+            version: shareAssessments[0].version,
+            jd_title: inviteJobTitle,
+            jd_version: shareAssessments[0].jd_version,
+          }}
+          additionalAssessments={shareAssessments.slice(1).map((a: any) => ({
+            id: a.id,
+            title: a.title,
+            duration: `${a.duration_minutes || 30} min`,
+            questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
+            type: 'AI-Generated',
+            short_id: a.short_id,
+            version: a.version,
+            jd_title: inviteJobTitle,
+            jd_version: a.jd_version,
+          }))}
+          inviteSource="JD"
+        />
+      )}
+
+      {/* Invite — step 2b: share the JD's AI interview */}
+      {shareAIConfig && (
+        <ShareAIInterviewModal
+          isOpen={!!shareAIConfig}
+          onClose={() => setShareAIConfig(null)}
+          config={shareAIConfig}
+          onInviteSent={() => setShareAIConfig(null)}
         />
       )}
 

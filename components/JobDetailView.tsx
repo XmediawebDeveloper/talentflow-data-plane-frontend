@@ -1093,7 +1093,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Job Descriptions', href: '/recruitment/job-openings' },
           { label: job.title || 'Job Details', onClick: () => setViewingScoredResume(null) },
-          { label: 'Candidate Details' },
+          { label: viewingScoredResume.candidateName || 'Candidate Details' },
         ]}
         currentIndex={_scoredIdx >= 0 ? _scoredIdx : undefined}
         totalCount={scoredResumes.length}
@@ -1122,7 +1122,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Job Descriptions', href: '/recruitment/job-openings' },
           { label: job.title || 'Job Details', onClick: () => setViewingAssessmentResult(null) },
-          { label: 'Candidate Details' },
+          { label: viewingAssessmentResult.candidateName || 'Candidate Details' },
         ]}
         assessmentId={aId}
         assessmentShortId={viewingAssessmentResult.assessmentShortId}

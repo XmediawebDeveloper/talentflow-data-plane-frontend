@@ -1385,7 +1385,8 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   ? { label: 'AI Interviews', onClick: onNavigateToList }
                   : { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
                 ...(breadcrumbTrail ?? []),
-                { label: 'Candidate Results' },
+                // Deepest crumb names the candidate whose results are open.
+                { label: interview.candidate_name || 'Candidate Results' },
               ]}
             />
             <RecordPager

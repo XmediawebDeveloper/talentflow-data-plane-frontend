@@ -584,7 +584,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
             items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-              { label: 'Results' },
+              // Name the interview these results belong to when we know it.
+              { label: configTitle || jdTitle || 'Results' },
             ]}
           />
           {body}

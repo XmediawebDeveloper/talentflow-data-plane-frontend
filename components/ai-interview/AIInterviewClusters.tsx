@@ -2401,7 +2401,8 @@ export default function AIInterviewClusters() {
               items={[
                 { label: 'Dashboard', href: '/dashboard' },
                 { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-                { label: 'Clusters' },
+                // Name the JD whose clusters are being edited.
+                { label: config?.jd_title || config?.position || 'Clusters' },
               ]}
             />
           {/* Header */}

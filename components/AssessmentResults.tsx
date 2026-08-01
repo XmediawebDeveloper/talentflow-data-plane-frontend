@@ -995,7 +995,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           <PageBreadcrumb className="mb-4 md:mb-6" items={[
             { label: 'Dashboard', href: '/dashboard' },
             { label: 'Assessments', href: '/recruitment/assessments' },
-            { label: 'Results' },
+            // Name the assessment these results belong to, not just "Results".
+            ...(assessmentTitle ? [{ label: assessmentTitle }] : [{ label: 'Results' }]),
           ]} />
       {/* Header */}
       <div className="mb-4 sm:mb-6">

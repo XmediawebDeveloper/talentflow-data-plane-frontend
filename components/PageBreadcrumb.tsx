@@ -46,7 +46,7 @@ export default function PageBreadcrumb({
 }) {
   const router = useRouter();
   return (
-    <Breadcrumb className={`${sticky ? 'sticky top-0 z-10 ' : ''}bg-slate-50 ring-1 ring-slate-200/80 px-3 py-2 ${className}`}>
+    <Breadcrumb className={`${sticky ? 'sticky top-0 z-30 ' : ''}bg-slate-50 ring-1 ring-slate-200/80 px-3 py-2 ${className}`}>
       <BreadcrumbList>
         {items.map((crumb, idx) => {
           const isLast = idx === items.length - 1;

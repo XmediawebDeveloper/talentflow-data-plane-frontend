@@ -1770,7 +1770,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             <PageBreadcrumb className="mb-4 md:mb-6" items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'Assessments', href: '/recruitment/assessments' },
-              { label: 'Create Assessment' },
+              { label: isEditMode ? 'Edit Assessment' : 'Create Assessment' },
             ]} />
             <div className="w-full">
           <div className="mb-6 sm:mb-8">
@@ -2070,7 +2070,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             <PageBreadcrumb className="mb-4 md:mb-6" items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'Assessments', href: '/recruitment/assessments' },
-              { label: 'Create Assessment' },
+              // A JD is chosen by this step — name it instead of the step.
+              { label: selectedJob?.title || (isEditMode ? 'Edit Assessment' : 'Create Assessment') },
             ]} />
             <div className="w-full">
           <button
@@ -2877,7 +2878,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             <PageBreadcrumb className="mb-4 md:mb-6" items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'Assessments', href: '/recruitment/assessments' },
-              { label: 'Create Assessment' },
+              { label: selectedJob?.title || (isEditMode ? 'Edit Assessment' : 'Create Assessment') },
             ]} />
             <div className="w-full">
           <div className="mb-6 sm:mb-8">

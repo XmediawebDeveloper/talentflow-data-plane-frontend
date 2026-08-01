@@ -2331,7 +2331,8 @@ export default function AIInterviewConfig() {
             items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-              { label: 'Configure Interview' },
+              // Name the JD being configured so the trail identifies the record.
+              { label: selectedJd?.title || 'Configure Interview' },
             ]}
           />
 

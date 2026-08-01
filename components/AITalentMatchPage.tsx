@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
+import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -27,6 +27,7 @@ import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
+import ListToolbar from '@/components/ui/list-toolbar';
 
 interface Job {
   id: string;
@@ -60,6 +61,20 @@ interface MatchHistory {
   matchedCandidates: MatchedCandidateWithVersions[];
 }
 
+/** One candidate, plus every job they were matched against. */
+interface CandidateMatchRow {
+  key: string;
+  name: string;
+  title?: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  experience?: string;
+  resumeId?: string;
+  bestScore: number;
+  jobs: Array<{ historyId: string; jobId: string; jobTitle: string; score: number; matchedAt: Date }>;
+}
+
 interface AITalentMatchPageProps {
   jobs: Job[];
   matchHistory?: MatchHistory[];
@@ -85,7 +100,7 @@ export default function AITalentMatchPage({
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
 
 
-  const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'results'>('history');
+  const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'results' | 'matching'>('history');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<MatchHistory | null>(null);
   const [selectedJob, setSelectedJob] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -167,6 +182,67 @@ export default function AITalentMatchPage({
     }
   };
 
+  // Build the "Match by Candidate" roll-up: pull each session's candidates
+  // (cached per session by loadHistoryCandidates) and group them by person, so
+  // one row shows every job that candidate matched.
+  const openCandidatesView = async () => {
+    setHistoryPageView('candidates');
+    setCandidateSearchQuery('');
+    setHistoryListScrollRequest((request) => request + 1);
+
+    if (matchHistory.length === 0) {
+      setCandidateRows([]);
+      return;
+    }
+
+    setLoadingCandidateRows(true);
+    try {
+      const perJob = await Promise.all(
+        matchHistory.map(async (item) => ({ item, candidates: await loadHistoryCandidates(item) }))
+      );
+
+      const byKey = new Map<string, CandidateMatchRow>();
+      for (const { item, candidates } of perJob) {
+        for (const candidate of candidates || []) {
+          const key = candidate.resumeId || candidate.email || candidate.name;
+          if (!key) continue;
+          const jobEntry = {
+            historyId: item.id,
+            jobId: item.jobId,
+            jobTitle: item.jobTitle,
+            score: candidate.matchScore ?? 0,
+            matchedAt: item.matchedAt,
+          };
+          const existing = byKey.get(key);
+          if (existing) {
+            existing.jobs.push(jobEntry);
+            existing.bestScore = Math.max(existing.bestScore, jobEntry.score);
+          } else {
+            byKey.set(key, {
+              key,
+              name: candidate.name,
+              title: candidate.title,
+              email: candidate.email,
+              phone: candidate.phone,
+              location: candidate.location,
+              experience: candidate.experience,
+              resumeId: candidate.resumeId,
+              bestScore: jobEntry.score,
+              jobs: [jobEntry],
+            });
+          }
+        }
+      }
+
+      // Most-matched first, then strongest match.
+      setCandidateRows(
+        [...byKey.values()].sort((a, b) => b.jobs.length - a.jobs.length || b.bestScore - a.bestScore)
+      );
+    } finally {
+      setLoadingCandidateRows(false);
+    }
+  };
+
   // Helper to update URL params - use shallow routing to prevent full page reload
   const updateUrlParams = (params: { jdId?: string; view?: string }) => {
     const url = new URL(window.location.href);
@@ -196,10 +272,61 @@ export default function AITalentMatchPage({
   const [historyFilterExpMax, setHistoryFilterExpMax] = useState<number | ''>('');
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
   const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
-  // Two-step view: 'cards' shows just the Matched Jobs stats card; clicking it reveals 'list'.
-  const [historyPageView, setHistoryPageView] = useState<'cards' | 'list'>('cards');
+  // Two-step view: 'cards' shows just the stats cards; clicking one reveals the
+  // job list ('list') or the candidate-centric roll-up ('candidates').
+  const [historyPageView, setHistoryPageView] = useState<'cards' | 'list' | 'candidates'>('cards');
   const historyListSectionRef = useRef<HTMLDivElement | null>(null);
   const [historyListScrollRequest, setHistoryListScrollRequest] = useState(0);
+
+  // "Match by Candidate" roll-up: every matched candidate across all jobs, with
+  // the jobs they matched. Built in-page — no navigation away.
+  const [candidateRows, setCandidateRows] = useState<CandidateMatchRow[]>([]);
+  const [loadingCandidateRows, setLoadingCandidateRows] = useState(false);
+  const [candidateSearchQuery, setCandidateSearchQuery] = useState('');
+  // Rows whose job chips are expanded past the single-line "+N more" cutoff.
+  const [expandedJobChips, setExpandedJobChips] = useState<Set<string>>(new Set());
+
+  // Candidate roll-up filters (mirrors the job-openings "More Filters" panel)
+  const [showCandidateFilters, setShowCandidateFilters] = useState(false);
+  const [candidateFilterLocation, setCandidateFilterLocation] = useState('all');
+  const [candidateFilterJob, setCandidateFilterJob] = useState('all');
+  const [candidateFilterMinScore, setCandidateFilterMinScore] = useState(0);
+  const [candidateFilterMultiJob, setCandidateFilterMultiJob] = useState(false);
+
+  // How many job chips a candidate row shows before "+N more".
+  const CANDIDATE_CHIP_LIMIT = 2;
+
+  const openCandidateMatch = (historyId: string) => {
+    const item = matchHistory.find(h => h.id === historyId);
+    if (!item) return;
+    setSelectedHistoryItem(item);
+    setSelectedJob(item.jobId);
+    setViewMode('details');
+  };
+
+  const toggleCandidateChips = (e: React.MouseEvent, rowKey: string) => {
+    e.stopPropagation();
+    setExpandedJobChips(prev => {
+      const next = new Set(prev);
+      if (next.has(rowKey)) next.delete(rowKey); else next.add(rowKey);
+      return next;
+    });
+  };
+
+  // Match-score badge colours mirror the Scored Resumes match-status pills.
+  const candidateScoreBadgeClass = (score: number) => {
+    if (score >= 80) return 'bg-green-100 text-green-700 border-green-300';
+    if (score >= 60) return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+    return 'bg-red-100 text-red-700 border-red-300';
+  };
+
+  const clearCandidateFilters = () => {
+    setCandidateFilterLocation('all');
+    setCandidateFilterJob('all');
+    setCandidateFilterMinScore(0);
+    setCandidateFilterMultiJob(false);
+    setCandidateSearchQuery('');
+  };
 
   const openHistoryListView = () => {
     setHistoryCurrentPage(1);
@@ -272,14 +399,18 @@ export default function AITalentMatchPage({
   );
 
   useEffect(() => {
-    if (historyListScrollRequest === 0 || historyPageView !== 'list') return;
+    if (historyListScrollRequest === 0) return;
+    if (historyPageView !== 'list' && historyPageView !== 'candidates') return;
+    // For the candidate roll-up, wait until the rows are in — scrolling to a
+    // spinner would land the user above the list once it renders.
+    if (historyPageView === 'candidates' && loadingCandidateRows) return;
 
     const frame = window.requestAnimationFrame(() => {
       historyListSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [historyListScrollRequest, historyPageView]);
+  }, [historyListScrollRequest, historyPageView, loadingCandidateRows]);
 
   // Fetch scored resumes when viewing details or results for a JD
   useEffect(() => {
@@ -430,8 +561,13 @@ export default function AITalentMatchPage({
     const isMatching = urlView === 'matching';
 
     if (isMatching) {
-      // User is in matching mode - don't change view, matching panel will handle it
-      // Just make sure job is selected, but don't change the current view mode
+      isMatchingInProgress.current = true;
+      setSelectedHistoryItem(null);
+      setSelectedCandidates([]);
+      setMatchedCandidates([]);
+      setMatchError(null);
+      setViewMode('matching');
+      setShowMatchingPanel(true);
       return;
     } else if (shouldShowDetails) {
       // User clicked from history list - show details view
@@ -540,7 +676,7 @@ export default function AITalentMatchPage({
     });
 
     // Save to history
-    if (onSaveMatch && selectedJobData) {
+    if (selectedJobData) {
       const newMatchHistory: MatchHistory = {
         id: Date.now().toString(),
         jobId: selectedJob,
@@ -549,7 +685,11 @@ export default function AITalentMatchPage({
         totalMatches: results.length,
         matchedCandidates: candidatesWithVersions
       };
-      onSaveMatch(newMatchHistory);
+      if (selectedHistoryItem?.jobId === selectedJob) {
+        setSelectedHistoryItem(newMatchHistory);
+        setHistoryCandidatesById(prev => ({ ...prev, [newMatchHistory.id]: candidatesWithVersions }));
+      }
+      onSaveMatch?.(newMatchHistory);
     }
   };
 
@@ -951,6 +1091,61 @@ export default function AITalentMatchPage({
     historyFilterExpMax !== '',
   ].filter(Boolean).length;
 
+  // View: Matching in Progress (direct flow from resume-view / deep link)
+  if (viewMode === 'matching') {
+    return (
+      <main className="flex-1 overflow-x-hidden bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+            <PageBreadcrumb
+              className="mb-4 md:mb-6"
+              items={[
+                { label: 'Dashboard', href: '/dashboard' },
+                { label: 'AI Talent Match', onClick: () => setViewMode('history') },
+                { label: selectedJobData?.title || 'Matching' },
+              ]}
+            />
+            <div className="min-h-[50vh] flex items-center justify-center">
+              {matchError ? (
+                <div className="text-center max-w-md">
+                  <div className="w-12 h-12 bg-red-50 ring-1 ring-red-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <XCircle className="w-6 h-6 text-red-600" />
+                  </div>
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Matching failed</h2>
+                  <p className="text-sm text-gray-600 mb-4">{matchError}</p>
+                  <button
+                    onClick={() => selectedJob && handleRunAIMatch(selectedJob)}
+                    disabled={!selectedJob}
+                    className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Run AI Match
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 text-gray-600">
+                  <Loader2 className="w-5 h-5 animate-spin text-brand-blue" />
+                  <span className="text-sm font-medium">Preparing AI Talent Match...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {showMatchingPanel && selectedJob && (
+          <AITalentMatchProgressPanel
+            jobTitle={selectedJobData?.title || 'Job Description'}
+            jobId={selectedJob}
+            onComplete={handleMatchingComplete}
+            onError={(error) => {
+              setMatchError(error);
+              setShowMatchingPanel(false);
+            }}
+          />
+        )}
+      </main>
+    );
+  }
+
   // View: History Details
   if (viewMode === 'details' && selectedHistoryItem) {
     const detailCandidates = getResolvedHistoryCandidates(selectedHistoryItem);
@@ -960,6 +1155,14 @@ export default function AITalentMatchPage({
     const goodCount = detailCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
     const moderateCount = detailCandidates.filter(c => c.matchScore < 70).length;
     const isLoadingSelectedHistory = loadingHistorySessionId === selectedHistoryItem.id;
+    const _matchIdx = matchHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
+    const _prevMatch = _matchIdx > 0 ? matchHistory[_matchIdx - 1] : null;
+    const _nextMatch = _matchIdx >= 0 && _matchIdx < matchHistory.length - 1 ? matchHistory[_matchIdx + 1] : null;
+    const _goToMatch = (item: MatchHistory) => {
+      setSelectedHistoryItem(item);
+      setSelectedCandidates([]);
+      setSelectedJob('');
+    };
 
     return (
       <>
@@ -973,33 +1176,15 @@ export default function AITalentMatchPage({
                 items={[
                   { label: 'Dashboard', href: '/dashboard' },
                   { label: 'AI Talent Match', onClick: () => setViewMode('history') },
-                  { label: 'Match Details' },
+                  // Deepest crumb names the job this match belongs to.
+                  { label: selectedHistoryItem?.jobTitle || 'Match Details' },
                 ]}
               />
-              {(() => {
-                const _matchIdx = matchHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
-                const _prevMatch = _matchIdx > 0 ? matchHistory[_matchIdx - 1] : null;
-                const _nextMatch = _matchIdx >= 0 && _matchIdx < matchHistory.length - 1 ? matchHistory[_matchIdx + 1] : null;
-                const _goToMatch = (item: MatchHistory) => {
-                  setSelectedHistoryItem(item);
-                  setSelectedCandidates([]);
-                  setSelectedJob('');
-                };
-                if (matchHistory.length <= 1) return null;
-                return (
-                  <RecordPager
-                    currentIndex={_matchIdx >= 0 ? _matchIdx : 0}
-                    totalCount={matchHistory.length}
-                    onPrev={_prevMatch ? () => _goToMatch(_prevMatch) : undefined}
-                    onNext={_nextMatch ? () => _goToMatch(_nextMatch) : undefined}
-                  />
-                );
-              })()}
             </div>
         {/* Header Section */}
         <div className="border-b border-gray-200 dark:border-slate-700 mb-4 pb-4">
           <div className="w-full">
-          {/* Back Button & Title */}
+          {/* Actions */}
           {(() => {
             // Check if job is disabled
             const jobData = jobs.find(j => j.id === selectedHistoryItem.jobId);
@@ -1010,46 +1195,43 @@ export default function AITalentMatchPage({
 
             return (
               <>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-                  <button
-                    onClick={() => {
-                      setViewMode('history');
-                      setSelectedHistoryItem(null);
-                      setSelectedJob('');
-                      setSelectedCandidates([]);
-                      router.push('/recruitment/ai-talent-match', { scroll: false });
-                    }}
-                    className="flex items-center gap-2 text-sm text-brand-blue hover:text-brand-blue-2 font-medium transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back to Matched Jobs
-                  </button>
-                  {/* Run AI Match — right side of the Back row */}
-                  {canRunAIMatch && (
-                    <button
-                      onClick={() => {
-                        if (!canRunAiMatch) {
-                          toast.error('You do not have permission to run AI matching operations');
-                          return;
-                        }
-                        const jobId = selectedJob || selectedHistoryItem?.jobId;
-                        if (jobId) {
-                          handleRunAIMatch(jobId);
-                          setSelectedCandidates([]);
-                        }
-                      }}
-                      disabled={!canRunAiMatch}
-                      className={`px-3 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 w-full sm:w-auto ${
-                        canRunAiMatch
-                          ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 cursor-pointer'
-                          : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                      }`}
-                      title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Run AI Match
-                    </button>
-                  )}
+                <div className="flex justify-end mb-4">
+                  <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
+                    {/* Run AI Match — sits before the Previous/Next pager */}
+                    {canRunAIMatch && (
+                      <button
+                        onClick={() => {
+                          if (!canRunAiMatch) {
+                            toast.error('You do not have permission to run AI matching operations');
+                            return;
+                          }
+                          const jobId = selectedJob || selectedHistoryItem?.jobId;
+                          if (jobId) {
+                            handleRunAIMatch(jobId);
+                            setSelectedCandidates([]);
+                          }
+                        }}
+                        disabled={!canRunAiMatch}
+                        className={`px-3 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 w-full sm:w-auto ${
+                          canRunAiMatch
+                            ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 cursor-pointer'
+                            : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                        }`}
+                        title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Run AI Match
+                      </button>
+                    )}
+                    {matchHistory.length > 1 && (
+                      <RecordPager
+                        currentIndex={_matchIdx >= 0 ? _matchIdx : 0}
+                        totalCount={matchHistory.length}
+                        onPrev={_prevMatch ? () => _goToMatch(_prevMatch) : undefined}
+                        onNext={_nextMatch ? () => _goToMatch(_nextMatch) : undefined}
+                      />
+                    )}
+                  </div>
                 </div>
 
                 {/* Job Info Card */}
@@ -1205,10 +1387,32 @@ export default function AITalentMatchPage({
               Loading matched candidates...
             </div>
           </div>
+        ) : detailCandidates.length === 0 ? (
+          <div className="mx-auto w-full max-w-[1400px] py-8">
+            <div className="border-2 border-dashed border-brand-blue/20 rounded-xl p-8 sm:p-10 text-center bg-white dark:bg-slate-900">
+              <div className="w-12 h-12 rounded-xl bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-4">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">No matched candidates found</h3>
+              <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
+                There are no AI match results available for this job yet. Run AI Match to generate candidate matches.
+              </p>
+            </div>
+          </div>
+        ) : filteredCandidates.length === 0 ? (
+          <div className="mx-auto w-full max-w-[1400px] py-8">
+            <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-8 text-center bg-white dark:bg-slate-900">
+              <Search className="w-8 h-8 text-gray-400 dark:text-slate-500 mx-auto mb-3" />
+              <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-2">No candidates match the current filters</h3>
+              <p className="text-sm text-gray-600 dark:text-slate-400">
+                Adjust the search or filter values to view matched candidates for this job.
+              </p>
+            </div>
+          </div>
         ) : (
         <div className="flex-1 overflow-x-auto">
           <div className="mx-auto w-full max-w-[1400px] py-4">
-          <table className="w-full min-w-[1300px] table-auto">
+          <table className="w-full min-w-[1450px] table-auto">
             <thead className="bg-gray-50 dark:bg-slate-800/50 sticky top-0">
               <tr>
                 <th className="w-12 px-4 py-3 align-middle">
@@ -1230,6 +1434,9 @@ export default function AITalentMatchPage({
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
                   Candidate Name
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
+                  Job Title
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
                   Email
@@ -1272,6 +1479,7 @@ export default function AITalentMatchPage({
                       try {
                         sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidatesMemo.map((c: any) => c.resumeId).filter(Boolean)));
                         sessionStorage.setItem('resumeNavSource', 'ai-talent-match');
+                        sessionStorage.setItem('resumeNavAIMatchJobId', selectedHistoryItem.jobId);
                       } catch { /* ignore */ }
                       router.push(`/recruitment/resume-view/${candidate.resumeId}`);
                     }
@@ -1304,6 +1512,11 @@ export default function AITalentMatchPage({
                         <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{candidate.name || 'Unknown'}</div>
                       </div>
                     </div>
+                  </td>
+                  <td className="px-4 py-3 align-middle whitespace-nowrap">
+                    <span className="block max-w-[220px] truncate text-sm text-gray-700 dark:text-slate-300">
+                      {selectedHistoryItem.jobTitle || selectedJobData?.title || '-'}
+                    </span>
                   </td>
                   <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                     {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
@@ -1724,10 +1937,46 @@ export default function AITalentMatchPage({
 
   // View: History List
   if (viewMode === 'history') {
+    const totalMatchedCandidates = matchHistory.reduce((sum, item) => sum + (item.totalMatches || 0), 0);
+
+    // Candidate roll-up search matches the person or any job they matched.
+    const candidateQuery = candidateSearchQuery.trim().toLowerCase();
+    const filteredCandidateRows = candidateRows.filter(row => {
+      const matchesSearch = !candidateQuery ||
+        row.name?.toLowerCase().includes(candidateQuery) ||
+        row.email?.toLowerCase().includes(candidateQuery) ||
+        row.title?.toLowerCase().includes(candidateQuery) ||
+        row.jobs.some(job => job.jobTitle?.toLowerCase().includes(candidateQuery));
+
+      const matchesLocation = candidateFilterLocation === 'all' || row.location === candidateFilterLocation;
+      const matchesJob = candidateFilterJob === 'all' || row.jobs.some(job => job.jobTitle === candidateFilterJob);
+      const matchesScore = row.bestScore >= candidateFilterMinScore;
+      const matchesMultiJob = !candidateFilterMultiJob || row.jobs.length > 1;
+
+      return matchesSearch && matchesLocation && matchesJob && matchesScore && matchesMultiJob;
+    });
+
+    // Options come from the loaded rows, so only real values are offered.
+    const candidateLocations = Array.from(
+      new Set(candidateRows.map(row => row.location).filter(Boolean) as string[])
+    ).sort();
+    const candidateJobTitles = Array.from(
+      new Set(candidateRows.flatMap(row => row.jobs.map(job => job.jobTitle)).filter(Boolean))
+    ).sort();
+
+    const candidateFiltersCount =
+      (candidateFilterLocation !== 'all' ? 1 : 0) +
+      (candidateFilterJob !== 'all' ? 1 : 0) +
+      (candidateFilterMinScore > 0 ? 1 : 0) +
+      (candidateFilterMultiJob ? 1 : 0);
+    const candidateFiltersApplied = candidateFiltersCount > 0 || candidateQuery.length > 0;
+
     return (
       <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        {/* The candidate roll-up is an in-page view on this same route, so the
+            trail stays at the module level — no extra step is added. */}
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Talent Match' }]} />
         {/* Header */}
         <div className="mb-5">
@@ -1799,7 +2048,9 @@ export default function AITalentMatchPage({
           description="Use AI to compare your candidate pool with each job's skills, experience, and requirements. Review ranked matches, understand fit signals, and launch a new match whenever a role needs fresh candidates."
         />
 
-        {/* Stats Cards — clicking Matched Jobs drills into the list */}
+        {/* Stats Cards */}
+        {/* Default 4-column grid (same as /recruitment/job-openings) keeps the
+            cards at the standard width instead of stretching them to half-page. */}
         <StatsCardGrid className="mb-5">
           <StatsCard
             tone="neutral"
@@ -1811,7 +2062,284 @@ export default function AITalentMatchPage({
             sparkline={false}
             onClick={openHistoryListView}
           />
+          <StatsCard
+            tone="neutral"
+            active={historyPageView === 'candidates'}
+            showClickArrow
+            icon={User}
+            label="Match by Candidate"
+            value={totalMatchedCandidates}
+            sparkline={false}
+            onClick={openCandidatesView}
+          />
         </StatsCardGrid>
+
+        {/* ── Match by Candidate (in-page) ───────────────────────────────── */}
+        {historyPageView === 'candidates' && (
+          <>
+            <div ref={historyListSectionRef} className="scroll-mt-4" aria-hidden="true" />
+
+            {/* Count + toolbar, laid out like /recruitment/job-openings */}
+            <div className="mb-4 flex items-center justify-end gap-2">
+              <span className="text-xs text-gray-500 dark:text-slate-400">
+                {filteredCandidateRows.length} {filteredCandidateRows.length === 1 ? 'candidate' : 'candidates'}
+              </span>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+              <ListToolbar
+                className={showCandidateFilters ? 'mb-3' : 'mb-0'}
+                searchValue={candidateSearchQuery}
+                onSearchChange={setCandidateSearchQuery}
+                searchPlaceholder="Search candidates by name, email or job..."
+                onToggleFilters={() => setShowCandidateFilters(!showCandidateFilters)}
+                filtersOpen={showCandidateFilters}
+                activeFilterCount={candidateFiltersCount}
+                filtersApplied={candidateFiltersApplied}
+                onClearFilters={clearCandidateFilters}
+              />
+
+              {showCandidateFilters && (
+                <div className="pt-3 border-t border-brand-blue/10">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    {candidateLocations.length > 0 && (
+                      <div>
+                        <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Location</label>
+                        <select
+                          value={candidateFilterLocation}
+                          onChange={(e) => setCandidateFilterLocation(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                        >
+                          <option value="all">All Locations</option>
+                          {candidateLocations.map(loc => (
+                            <option key={loc} value={loc}>{loc}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {candidateJobTitles.length > 0 && (
+                      <div>
+                        <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Matched Job</label>
+                        <select
+                          value={candidateFilterJob}
+                          onChange={(e) => setCandidateFilterJob(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                        >
+                          <option value="all">All Jobs</option>
+                          {candidateJobTitles.map(title => (
+                            <option key={title} value={title}>{title}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Minimum Match</label>
+                      <select
+                        value={candidateFilterMinScore}
+                        onChange={(e) => setCandidateFilterMinScore(Number(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                      >
+                        <option value={0}>Any score</option>
+                        <option value={50}>50% and above</option>
+                        <option value={70}>70% and above</option>
+                        <option value={80}>80% and above</option>
+                        <option value={90}>90% and above</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Job Count</label>
+                      <label className="flex items-center gap-2 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer bg-white dark:bg-slate-900">
+                        <input
+                          type="checkbox"
+                          checked={candidateFilterMultiJob}
+                          onChange={(e) => setCandidateFilterMultiJob(e.target.checked)}
+                        />
+                        <span className="text-sm text-gray-700 dark:text-slate-300">Matched 2+ jobs</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {loadingCandidateRows ? (
+              <div className="flex items-center justify-center gap-2 text-gray-500 py-16">
+                <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+                <span className="text-sm">Loading matched candidates...</span>
+              </div>
+            ) : filteredCandidateRows.length === 0 ? (
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-8 sm:p-10 text-center">
+                <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
+                  <User className="w-5 h-5" />
+                </div>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">
+                  {candidateFiltersApplied ? 'No candidates match your filters' : 'No matched candidates yet'}
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
+                  {candidateFiltersApplied
+                    ? 'Try a different name, job, location, or lower the minimum match.'
+                    : 'Run AI Match on a job to see matched candidates here.'}
+                </p>
+                {candidateFiltersApplied && (
+                  <button
+                    onClick={clearCandidateFilters}
+                    className="mt-4 px-3 py-2 rounded-lg text-sm font-medium text-brand-blue bg-brand-blue/5 border border-brand-blue/20 hover:bg-brand-blue/10 transition-colors"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            ) : (
+              /* Table format, matching the Resume Scoring "Scored Resumes"
+                 table: desktop table + mobile card fallback. */
+              <>
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full min-w-[1100px] table-auto">
+                    {/* Sticky header — background/border live on the cells, since
+                        a sticky <tr> doesn't paint them reliably. */}
+                    <thead className="sticky top-0 z-10">
+                      <tr>
+                        {['Candidate Name', 'Role', 'Email', 'Phone', 'Location', 'Experience', 'Best Match', 'Matched Jobs', 'Last Matched'].map((label) => (
+                          <th
+                            key={label}
+                            className="text-left py-3 px-4 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700"
+                          >
+                            {label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCandidateRows.map((row, index) => {
+                        const chipsExpanded = expandedJobChips.has(row.key);
+                        const visibleJobs = chipsExpanded ? row.jobs : row.jobs.slice(0, CANDIDATE_CHIP_LIMIT);
+                        const hiddenJobCount = row.jobs.length - visibleJobs.length;
+                        const topJob = row.jobs.reduce((best, job) => (job.score > best.score ? job : best), row.jobs[0]);
+
+                        return (
+                          <tr
+                            key={row.key}
+                            onClick={() => topJob && openCandidateMatch(topJob.historyId)}
+                            className={`border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer ${
+                              index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50/50 dark:bg-slate-800/30'
+                            }`}
+                          >
+                            <td className="py-3 px-4 align-middle whitespace-nowrap">
+                              <span className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                                {row.name}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 align-middle whitespace-nowrap">
+                              <span className="text-sm text-gray-700 dark:text-slate-300">{row.title || '-'}</span>
+                            </td>
+                            <td className="py-3 px-4 align-middle whitespace-nowrap">
+                              <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-slate-400">
+                                <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+                                {row.email || '-'}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 align-middle whitespace-nowrap">
+                              <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-slate-400">
+                                <Phone className="w-3.5 h-3.5 flex-shrink-0" />
+                                {row.phone || '-'}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 align-middle whitespace-nowrap">
+                              <div className="flex items-center gap-1 text-sm text-gray-600 dark:text-slate-400">
+                                <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                                {row.location || '-'}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 align-middle whitespace-nowrap">
+                              <span className="text-sm text-gray-700 dark:text-slate-300">{row.experience || '-'}</span>
+                            </td>
+                            <td className="py-3 px-4 align-middle whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${candidateScoreBadgeClass(row.bestScore)}`}>
+                                {Math.round(row.bestScore)}%
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 align-middle">
+                              <div className={`flex items-center gap-2 ${chipsExpanded ? 'flex-wrap' : ''}`}>
+                                {visibleJobs.map((job) => (
+                                  <button
+                                    key={`${row.key}-${job.historyId}`}
+                                    onClick={(e) => { e.stopPropagation(); openCandidateMatch(job.historyId); }}
+                                    className="flex items-center gap-1 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-md text-xs text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors flex-shrink-0 whitespace-nowrap"
+                                    title={`Open ${job.jobTitle} match`}
+                                  >
+                                    <Briefcase className="w-3 h-3 text-gray-400" />
+                                    <span className="max-w-[160px] truncate">{job.jobTitle}</span>
+                                    <span className="text-gray-300">·</span>
+                                    <span className="tabular-nums font-medium">{Math.round(job.score)}%</span>
+                                  </button>
+                                ))}
+                                {hiddenJobCount > 0 && (
+                                  <button
+                                    onClick={(e) => toggleCandidateChips(e, row.key)}
+                                    className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium text-brand-blue bg-brand-blue/5 border border-brand-blue/20 hover:bg-brand-blue/10 transition-colors flex-shrink-0 whitespace-nowrap"
+                                    title={`Show ${hiddenJobCount} more matched job${hiddenJobCount !== 1 ? 's' : ''}`}
+                                  >
+                                    +{hiddenJobCount} more
+                                  </button>
+                                )}
+                                {chipsExpanded && row.jobs.length > CANDIDATE_CHIP_LIMIT && (
+                                  <button
+                                    onClick={(e) => toggleCandidateChips(e, row.key)}
+                                    className="flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:text-brand-blue hover:border-brand-blue/30 transition-colors flex-shrink-0 whitespace-nowrap"
+                                  >
+                                    Show less
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 align-middle whitespace-nowrap">
+                              <span className="text-sm text-gray-600 dark:text-slate-400">
+                                {topJob?.matchedAt ? formatISTDate(topJob.matchedAt as any) : '-'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards — the table is too wide below md */}
+                <div className="md:hidden space-y-3">
+                  {filteredCandidateRows.map((row) => {
+                    const topJob = row.jobs.reduce((best, job) => (job.score > best.score ? job : best), row.jobs[0]);
+                    return (
+                      <div
+                        key={row.key}
+                        onClick={() => topJob && openCandidateMatch(topJob.historyId)}
+                        className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-3 shadow-sm cursor-pointer"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
+                            {row.title && <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.title}</div>}
+                          </div>
+                          <span className={`inline-flex px-2 py-1 rounded-full text-xs border flex-shrink-0 ${candidateScoreBadgeClass(row.bestScore)}`}>
+                            {Math.round(row.bestScore)}%
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-400">
+                          {row.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{row.email}</span></span>}
+                          {row.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{row.phone}</span>}
+                          {row.location && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 flex-shrink-0" /><span className="truncate">{row.location}</span></span>}
+                          <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" />{row.jobs.length} {row.jobs.length === 1 ? 'job' : 'jobs'}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </>
+        )}
 
         {historyPageView === 'list' && (
         <>
@@ -2165,6 +2693,13 @@ export default function AITalentMatchPage({
             items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'AI Talent Match', onClick: () => setViewMode('history') },
+              ...(selectedHistoryItem?.jobId === selectedJob ? [{
+                label: 'Match Details',
+                onClick: () => {
+                  setViewMode('details');
+                  updateUrlParams({ jdId: selectedJob, view: 'details' });
+                },
+              }] : []),
               { label: selectedJobData?.title || 'Results' },
             ]}
           />
@@ -2197,12 +2732,14 @@ export default function AITalentMatchPage({
               <div className="flex flex-col sm:items-end gap-2">
                 <button
                   onClick={() => {
-                    if (selectedJob) {
-                      isMatchingInProgress.current = true;
-                      setSelectedCandidates([]);
-                      setMatchedCandidates([]);
-                      setShowMatchingPanel(true);
-                    }
+                    setViewMode('new');
+                    setSelectedJob('');
+                    setSelectedCandidates([]);
+                    setMatchedCandidates([]);
+                    setSelectedHistoryItem(null);
+                    setShowMatchingPanel(false);
+                    setMatchError(null);
+                    router.push('/recruitment/ai-talent-match', { scroll: false });
                   }}
                   className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium"
                 >
@@ -2338,29 +2875,10 @@ export default function AITalentMatchPage({
               <p className="text-sm text-gray-600 dark:text-slate-400 text-center max-w-md mb-4">
                 AI Talent Match has not been run for this job yet. Run AI matching to find candidates that match this job description.
               </p>
-              <button
-                onClick={() => {
-                  if (!canRunAiMatch) {
-                    toast.error('You do not have permission to run AI matching operations');
-                    return;
-                  }
-                  setShowMatchingPanel(true);
-                }}
-                disabled={!canRunAiMatch}
-                className={`px-4 py-2 rounded-lg transition-all font-medium flex items-center gap-2 shadow-md text-sm ${
-                  canRunAiMatch
-                    ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 cursor-pointer'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                }`}
-                title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
-              >
-                <Sparkles className="w-4 h-4" />
-                Run AI Talent Match
-              </button>
             </div>
           ) : (
           <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
-            <table className="w-full">
+            <table className="w-full min-w-[1450px]">
               <thead className="bg-slate-50 dark:bg-slate-800/50 sticky top-0 border-b border-gray-200 dark:border-slate-700">
                 <tr>
                   <th className="w-12 px-4 py-3">
@@ -2382,6 +2900,9 @@ export default function AITalentMatchPage({
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Candidate Name
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    Job Title
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Email
@@ -2424,6 +2945,7 @@ export default function AITalentMatchPage({
                         try {
                           sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidatesMemo.map((c: any) => c.resumeId).filter(Boolean)));
                           sessionStorage.setItem('resumeNavSource', 'ai-talent-match');
+                          sessionStorage.setItem('resumeNavAIMatchJobId', selectedJob);
                         } catch { /* ignore */ }
                         router.push(`/recruitment/resume-view/${candidate.resumeId}`);
                       }
@@ -2456,6 +2978,11 @@ export default function AITalentMatchPage({
                           <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{candidate.name || 'Unknown'}</div>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                      <span className="block max-w-[220px] truncate">
+                        {selectedJobData?.title || selectedHistoryItem?.jobTitle || '-'}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}

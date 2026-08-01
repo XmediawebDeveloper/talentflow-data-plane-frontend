@@ -35,6 +35,11 @@ interface CandidateResultDetailsProps {
    * results/details route wraps its own breadcrumb externally and omits this.
    */
   breadcrumbItems?: BreadcrumbCrumb[];
+  /**
+   * Fired once the candidate record loads, so a parent that owns the breadcrumb
+   * can name its deepest crumb after the candidate instead of a generic label.
+   */
+  onCandidateLoaded?: (name: string) => void;
 }
 
 interface CandidateBasicInfo {
@@ -159,6 +164,7 @@ export default function CandidateResultDetails({
   onNext,
   showRecordPager = true,
   breadcrumbItems,
+  onCandidateLoaded,
 }: CandidateResultDetailsProps) {
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
@@ -258,6 +264,7 @@ export default function CandidateResultDetails({
         // Use overall score from API
         const overallScore = details.overall_score ?? 0;
 
+        onCandidateLoaded?.(details.candidate_name || '');
         setCandidateData({
           name: details.candidate_name || 'Unknown',
           email: details.candidate_email || '',
@@ -455,10 +462,9 @@ export default function CandidateResultDetails({
           />
         </div>
       )}
-      {/* Sticky Header — Back + Title + Export Results in one gradient bar so the
-          inner Question-Analysis tab nav (z-20) can no longer climb on top of it
-          during scroll. */}
-      <div className="bg-brand-blue border-b border-brand-blue-2/40 sticky top-0 z-40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
+      {/* Sticky Header — kept below the shared breadcrumb (z-30), but above the
+          inner Question-Analysis tab nav. */}
+      <div className="bg-brand-blue border-b border-brand-blue-2/40 sticky top-0 z-20 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
@@ -1214,10 +1220,10 @@ export default function CandidateResultDetails({
               {/* Tab Navigation — sticky so the candidate viewer can switch
                   between HR / Technical / Coding / Violations without
                   scrolling all the way back up on long question lists.
-                  z-20 keeps it above question cards but BELOW the page-level
-                  brand header (z-40), so it can never overlap the title /
+                  z-10 keeps it above question cards but BELOW the page-level
+                  brand header (z-20), so it can never overlap the title /
                   Prev/Next / Export Results bar during scroll. */}
-              <div className="sticky top-[64px] sm:top-[80px] z-20 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm">
+              <div className="sticky top-[64px] sm:top-[80px] z-10 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm">
                 <div className="flex flex-wrap gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3">
                   {detailedResult.round_scores.map((round, idx) => {
                     const isActive = activeTab === round.round_type;

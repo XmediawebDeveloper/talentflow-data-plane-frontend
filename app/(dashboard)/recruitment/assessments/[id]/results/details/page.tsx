@@ -26,6 +26,9 @@ function DetailsContent() {
   const [jdId, setJdId] = useState<string>('');
   const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Reported by CandidateResultDetails once the result loads, so the deepest
+  // crumb can name the candidate rather than saying "Candidate Details".
+  const [candidateName, setCandidateName] = useState<string>('');
 
   // Prev/Next navigation: AssessmentResults stores the visible candidate list
   // in sessionStorage when the user opens the details view, so the user can
@@ -85,8 +88,9 @@ function DetailsContent() {
         items={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Assessments', href: '/recruitment/assessments' },
-          { label: 'Results', href: `/recruitment/assessments/${assessmentId}/results` },
-          { label: 'Candidate Details' },
+          // Name the assessment, then the candidate record being viewed.
+          { label: assessmentTitle || 'Results', href: `/recruitment/assessments/${assessmentId}/results` },
+          { label: candidateName || candidateDisplayId || 'Candidate Details' },
         ]}
       />
       <RecordPager
@@ -157,6 +161,7 @@ function DetailsContent() {
         onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
         onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
         showRecordPager={false}
+        onCandidateLoaded={setCandidateName}
       />
         </div>
       </div>
