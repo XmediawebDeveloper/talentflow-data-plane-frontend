@@ -172,6 +172,36 @@ samples **back-to-back** as soon as a watched class appears — corroboration in
 That combination is what makes the 2-frame gate affordable. Don't lower
 `framesToConfirm` to buy recall; the burst already bought it.
 
+### ⚠ The accuracy ceiling — read before tuning thresholds
+
+Measured on this model:
+
+| Scene | Class | Score |
+|---|---|---|
+| Real phone held to the camera | `cell phone` | **0.297** |
+| **Window blinds, no phone present** | `cell phone` | **0.33** |
+
+**The false positive outscored the real phone.** No single threshold separates
+them. A cut-off low enough to catch real phones fires SEVERE on background
+clutter; one high enough to be safe misses real phones. Both failure modes have
+been observed in production.
+
+This is a capability limit of RF-DETR-Nano at 384 px, **not** a tuning bug.
+Tuning only moves the damage around. The genuine fixes are, in order:
+
+1. **Fine-tune on webcam-perspective phone images** — by far the biggest win
+2. Larger input / larger RF-DETR variant — costs latency, already ~2.1 s/frame
+3. Accept phone detection as advisory-only corroboration
+
+Until one of those happens, the two-tier scheme below is damage control, not a
+solution. Do not "fix" this by lowering `minConfidence`.
+
+**How the two tiers work:** `cell phone` ≥ 0.50 → severe `phone_detected`
+("Mobile phone"); 0.30–0.50 → moderate `unauthorized_object`
+("Possible phone (unconfirmed)") with an explicit *confirm in the recording*
+note. Nothing in the bench reached 0.50 — that is the honest signal about how
+often this model can confidently call a phone.
+
 **2. A phone held close to the lens is often classified `laptop`, not
 `cell phone`.** Up close it is just a large dark rectangle. That means it lands
 as a **moderate** `unauthorized_object` ("Second laptop or computer in view"),

@@ -866,6 +866,39 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Keep isClarificationRef in sync with state — used as a gate in timer intervals
   useEffect(() => { isClarificationRef.current = isClarification; }, [isClarification]);
 
+  // ── Pre-turn "get ready" countdown (Change 1) ────────────────────────────
+  // After Bina finishes speaking, before the mic opens, we show a big 5→1
+  // countdown under the question ("Get ready… 5,4,3,2,1 → Now it's your turn").
+  // The mic and the per-question answer timer stay OFF until it reaches 0.
+  const [preTurnCountdown, setPreTurnCountdown] = useState<number | null>(null);
+  const preTurnCountdownRef = useRef<number | null>(null);
+  const preTurnCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const PRE_TURN_COUNTDOWN_FROM = 5; // seconds
+  // Assigned in a useEffect (like startRecordingInternalRef) so finalizePlayback
+  // and message handlers always call the freshest closure.
+  const runPreTurnCountdownRef = useRef<(onComplete: () => void) => void>(() => {});
+  const cancelPreTurnCountdownRef = useRef<() => void>(() => {});
+  // Armed by every `question_timer_started` (a real question / follow-up /
+  // clarification / repeat turn) and CONSUMED when the pre-turn countdown runs.
+  // Silence-ladder nudges ("Are you there?" / move-on) do NOT send
+  // question_timer_started, so this stays false for them and the mic reopens
+  // immediately with no get-ready countdown after a nudge.
+  const getReadyArmedRef = useRef(false);
+  // ── Mid-speech silence countdown (Change 2) ──────────────────────────────
+  // Once the candidate has spoken and then pauses, the first ~8s is silent
+  // (normal listening, no counter). For the LAST 7s of the 15s silence window
+  // we show a big 7→1 countdown; if they resume speaking it disappears and we
+  // go back to normal listening; if it reaches 0 the turn ends and we move on.
+  const [midSilenceCountdown, setMidSilenceCountdown] = useState<number | null>(null);
+  const midSilenceCountdownRef = useRef<number | null>(null);
+  const SILENCE_COUNTDOWN_WINDOW_MS = 7000; // show the counter for the final 7s of the silence window
+  const setMidSilenceCountdown_ = useCallback((val: number | null) => {
+    if (midSilenceCountdownRef.current !== val) {
+      midSilenceCountdownRef.current = val;
+      setMidSilenceCountdown(val);
+    }
+  }, []);
+
   // "Now Speak" banner — shown when mic opens for candidate after Bina stops
   const [showNowSpeakBanner, setShowNowSpeakBanner] = useState(false);
   const nowSpeakShownForSessionRef = useRef(false); // prevents re-show within same recording session
@@ -3400,6 +3433,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }
       case "greeting":
         console.log(`[WS ${timestamp}] Greeting received: text_length=${data.text?.length}`);
+        // The FIRST question ("Tell me about yourself") and the reconnect resume
+        // ack are delivered as a `greeting` (not the normal question stream), and
+        // their question_timer_started arrives LATER (via on_speaking_done) — too
+        // late to arm the pre-turn countdown before finalizePlayback opens the
+        // mic. Arm it here so Q1 gets the 5→1 "get ready" countdown like every
+        // other turn. (Nudges use interstitial_prompt, not greeting, so they
+        // still correctly get NO countdown.)
+        getReadyArmedRef.current = true;
         tokenBufferRef.current = data.text;
         revealedCharsRef.current = 0;
         isAiSpeakingRef.current = true;
@@ -3437,29 +3478,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
       case "role_intro":
-        // Opening "About the role" warm-up — spoken + rendered as an assistant
-        // bubble, but it's NOT a question: when its audio ends the mic must NOT
-        // open (the first question follows immediately). roleIntroActiveRef makes
-        // finalizePlayback skip the mic-open for this message only.
+        // Opening "About the role" warm-up. Stream + lip-sync it EXACTLY like a
+        // normal Bina turn (progressive token reveal), so it looks identical to
+        // every other message (previously it popped in as a STATIC bubble — the
+        // reported "intro doesn't work like others"). The ONLY difference: it is
+        // NOT a question — roleIntroActiveRef makes finalizePlayback COMMIT the
+        // bubble (via saveAiMessage) but SKIP the mic-open AND the pre-turn
+        // countdown for this message only.
         //
-        // COMMIT IMMEDIATELY as a STATIC chat bubble (not the live-reveal bubble).
-        // Streaming the role message via the shared live bubble reintroduced two
-        // regressions (confirmed in arun.log): the bubble VANISHED after streaming,
-        // and Q1's finalizePlayback got confused with the role turn so "Your turn"
-        // (mic_listening) did not fire for ~30s after Q1. Appending to `messages`
-        // now means it can never be wiped; clearing the token buffer makes the
-        // role finalize's saveAiMessage() a no-op (no duplicate bubble) while still
-        // clearing roleIntroActiveRef so Q1 opens the mic normally.
+        // Streaming via the shared live bubble is safe NOW because the backend
+        // defers the first question until THIS role message's playback_complete
+        // (see send_greeting's deferral). So the role's finalizePlayback — which
+        // runs saveAiMessage BEFORE the roleIntro early-return — always commits
+        // the role bubble before Q1's tokens arrive. That closes the old race
+        // that made the bubble vanish / delayed Q1's mic.
         console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}`);
         roleIntroActiveRef.current = true;
-        roleIntroTextRef.current = (data.text as string) ?? "";  // for lip-sync in speaking_started
-        setMessages(prev => [...prev, {
-          id: crypto.randomUUID(),
-          role: "assistant" as const,
-          content: (data.text as string) ?? "",
-          timestamp: nowIST(),
-        }]);
-        tokenBufferRef.current = "";
+        roleIntroTextRef.current = (data.text as string) ?? "";  // lip-sync fallback in speaking_started
+        tokenBufferRef.current = (data.text as string) ?? "";     // STREAM it, like the greeting / questions
         revealedCharsRef.current = 0;
         currentAiTextRef.current = "";
         setCurrentAiText("");
@@ -3469,6 +3505,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         audioEndReceivedRef.current = false;
         talkingHeadEndedEarlyRef.current = false;
         setStatus("Bina is speaking...");
+        startRevealingTokens();
         talkingHeadRef.current?.setText((data.text as string) ?? "");
         break;
       case "server_end_turn": {
@@ -3822,6 +3859,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         break;
       case "speaking_started":
         console.log(`[WS ${timestamp}] Speaking started`);
+        // Bina is speaking again — abort any in-progress pre-turn "get ready"
+        // countdown and any pending mic-open timer (they belong to a turn that
+        // is no longer opening) + the mid-speech silence countdown.
+        cancelPreTurnCountdownRef.current();
+        if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
+        setMidSilenceCountdown_(null);
         // Bina is speaking (question / repeat / prompt) — PAUSE the per-question
         // answer clock. It resumes when the candidate's turn reopens (mic start).
         // For a brand-new question the pause is harmless — the incoming
@@ -3956,10 +3999,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           }
         }
         // Feed accumulated text for phoneme lip sync before starting audio.
-        // For the ROLE intro turn tokenBufferRef is intentionally empty (static
-        // bubble, no streaming) — so fall back to the stashed role text, else
-        // TalkingHead gets "" and Bina's mouth stays still while the audio
-        // plays ("audio plays, Bina silent" bug).
+        // The role intro now streams like any other turn (tokenBufferRef holds
+        // its text), so this normally uses tokenBufferRef. The roleIntroTextRef
+        // fallback is kept as a belt-and-suspenders in case speaking_started
+        // races ahead of the role_intro message (else TalkingHead would get ""
+        // and Bina's mouth would stay still — the "audio plays, Bina silent" bug).
         talkingHeadRef.current?.setText(
           tokenBufferRef.current || (roleIntroActiveRef.current ? roleIntroTextRef.current : "")
         );
@@ -4046,14 +4090,34 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             // Point 4: clarification ends the moment Bina finishes speaking
             setIsClarification(false);
             isClarificationRef.current = false;
-            setStatus("Your turn - speak now...");
-            // 800ms delay before opening mic — lets room echo of Bina's TTS fully decay
-            // so Whisper doesn't transcribe Bina's audio as the candidate's speech.
+            // Run the 5→1 "get ready" countdown ONLY for a real question turn
+            // (armed by question_timer_started). After a silence nudge ("Are you
+            // there?") there's no new timer, so we skip the countdown and reopen
+            // the mic immediately. Consume the arm flag either way.
+            const _runGetReady = getReadyArmedRef.current;
+            getReadyArmedRef.current = false;
+            const _openMic = () => {
+              setStatus("Your turn - speak now...");
+              if (wsRef.current?.readyState === WebSocket.OPEN
+                  && !isAiSpeakingRef.current
+                  && !isRecordingRef.current) {
+                startRecordingInternalRef.current();
+              }
+            };
+            setStatus(_runGetReady ? "Get ready…" : "Your turn - speak now...");
+            // 800ms echo-decay delay (lets Bina's TTS tail fade so Whisper doesn't
+            // transcribe it), THEN — for a real turn — the 5→1 "get ready"
+            // countdown (Change 1). ONLY when it reaches 0 do we open the mic +
+            // start the answer timer. Mic + per-question timer stay OFF during it.
             if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
             startRecordingTimerRef.current = setTimeout(() => {
               startRecordingTimerRef.current = null;
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
-                startRecordingInternalRef.current();
+              if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+              if (isAiSpeakingRef.current || isRecordingRef.current) return; // turn changed
+              if (_runGetReady) {
+                runPreTurnCountdownRef.current(_openMic);
+              } else {
+                _openMic();
               }
             }, 800);
           };
@@ -4160,6 +4224,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // Backend cancelled current generation (e.g. skip_question during answer).
         // Stop any playing audio immediately and clear ALL state so the next
         // pipeline (skip question) starts from a clean slate.
+        cancelPreTurnCountdownRef.current();
+        if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
+        setMidSilenceCountdown_(null);
         talkingHeadRef.current?.streamStop();
         isPlayingRef.current = false;
         isAiSpeakingRef.current = false;
@@ -4351,6 +4418,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         break;
       }
       case "question_timer_started": {
+        // A real question turn is about to open (main / follow-up / clarification
+        // / repeat) — arm the pre-turn "get ready" 5→1 countdown. Consumed by
+        // finalizePlayback when the mic is about to open. Nudges never send this.
+        getReadyArmedRef.current = true;
         console.log('[INTERVIEW-DEBUG] question_timer_started received', {
           seconds: data.seconds,
           total_seconds: data.total_seconds,
@@ -6305,7 +6376,69 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     startRecordingInternalRef.current = () => {
       void startRecordingInternal();
     };
+    // ── Pre-turn "get ready" countdown drivers (Change 1) ──────────────────
+    cancelPreTurnCountdownRef.current = () => {
+      if (preTurnCountdownTimerRef.current) {
+        clearInterval(preTurnCountdownTimerRef.current);
+        preTurnCountdownTimerRef.current = null;
+      }
+      if (preTurnCountdownRef.current !== null) {
+        preTurnCountdownRef.current = null;
+        setPreTurnCountdown(null);
+      }
+    };
+    runPreTurnCountdownRef.current = (onComplete: () => void) => {
+      cancelPreTurnCountdownRef.current();
+      let n = PRE_TURN_COUNTDOWN_FROM;              // 5
+      preTurnCountdownRef.current = n;
+      setPreTurnCountdown(n);
+      setStatus("Get ready…");
+      preTurnCountdownTimerRef.current = setInterval(() => {
+        n -= 1;
+        if (n >= 1) {
+          // Show 4, 3, 2, 1 — one per second (5 was shown immediately above).
+          preTurnCountdownRef.current = n;
+          setPreTurnCountdown(n);
+        } else {
+          // Countdown finished → open the mic / start the answer timer now.
+          if (preTurnCountdownTimerRef.current) {
+            clearInterval(preTurnCountdownTimerRef.current);
+            preTurnCountdownTimerRef.current = null;
+          }
+          preTurnCountdownRef.current = null;
+          setPreTurnCountdown(null);
+          try { onComplete(); } catch { /* no-op */ }
+        }
+      }, 1000);
+    };
   });
+
+  // ── Mid-speech silence countdown driver (Change 2) ─────────────────────────
+  // While the candidate's turn is open, poll the VAD's silenceStartRef every
+  // 200ms. Show a big 7→1 countdown ONLY for the final 7s of the (15s) silence
+  // window; show nothing for the first ~8s of a pause. The instant the candidate
+  // resumes speaking, the VAD resets silenceStartRef → we clear the countdown and
+  // it's back to normal listening. The actual end-turn is still driven by the VAD
+  // itself (this is display-only). Uses Date.now() to match the VAD's clock.
+  useEffect(() => {
+    if (!isRecording) { setMidSilenceCountdown_(null); return; }
+    const id = setInterval(() => {
+      if (!isRecordingRef.current || isAiSpeakingRef.current || isProcessingRef.current) {
+        setMidSilenceCountdown_(null);
+        return;
+      }
+      const start = silenceStartRef.current;
+      if (start == null) { setMidSilenceCountdown_(null); return; }
+      const eff = silenceDurationMsRef.current * (micSilenceMultiplierRef.current || 1);
+      const remaining = eff - (Date.now() - start);
+      if (remaining > 0 && remaining <= SILENCE_COUNTDOWN_WINDOW_MS) {
+        setMidSilenceCountdown_(Math.max(1, Math.ceil(remaining / 1000)));
+      } else {
+        setMidSilenceCountdown_(null);
+      }
+    }, 200);
+    return () => { clearInterval(id); setMidSilenceCountdown_(null); };
+  }, [isRecording, setMidSilenceCountdown_]);
 
   const disconnect = useCallback(() => {
     const wasCompleted = isClosingRef.current || shouldDisconnectAfterAudioRef.current;
@@ -6313,6 +6446,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     stopVisemeLoop();
     stopRecording();
     clearNoResponseTimer();
+    cancelPreTurnCountdownRef.current();
+    setMidSilenceCountdown_(null);
+    if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
     if (micPopupTimerRef.current) {
       clearTimeout(micPopupTimerRef.current);
       micPopupTimerRef.current = null;
@@ -6817,6 +6953,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     messages, currentAiText, currentTranscript, isCandidateTranscriptProcessing,
     isRecording, isAiSpeaking, isProcessing, questionNumber, isClosing,
     showNowSpeakBanner, showSilenceBanner, questionTimerExpired,
+    // Re-pin to the bottom when a countdown overlay appears/disappears (it toggles
+    // the reserved bottom padding via bannerVisible).
+    preTurnCountdown, midSilenceCountdown,
   ]);
 
   // Flush proctoring events when the page is about to close (tab close, refresh, etc.)
@@ -7407,6 +7546,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // it sits in the middle of the chat window and never overlaps the candidate
   // video. Gradient + frosted-glass styling; exactly one state shows.
   const turnBanner = (() => {
+    // The big pre-turn "get ready" countdown owns the screen — suppress the small
+    // banner while it runs so we don't show two "getting ready" messages at once.
+    if (preTurnCountdown != null) return null;
     let variant: 'silence' | 'timesup' | 'hold' | 'turn' | 'prepare' | null = null;
     if (showSilenceBanner) variant = 'silence';
     else if (questionTimerExpired) variant = 'timesup';
@@ -7480,7 +7622,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // is tied to THIS (not a separate condition) so content is ALWAYS cleared
   // above the banner, including during the "Ending…" closing state where the
   // goodbye message + loading bubble were previously rendering behind it.
-  const bannerVisible = turnBanner !== null;
+  // Keep the reserved bottom padding stable while a big countdown overlay is up,
+  // even though turnBanner is suppressed then — otherwise the padding collapses
+  // (pb-52→pb-4), scrollHeight drops ~192px and the chat un-pins from the bottom
+  // (reported: "auto scroll at bottom not working" during the countdown).
+  const bannerVisible = turnBanner !== null || preTurnCountdown != null || midSilenceCountdown != null;
 
   return (
     <>
@@ -8268,6 +8414,53 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 interactive so it never blocks scrolling or clicks. Sits under
                 the fixed banner (which is z-105) but above the scrolling text. */}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent via-gray-50/70 to-gray-50" />
+            {/* ── Big countdown overlays (under the question, high visibility) ──
+                Change 1: pre-turn "get ready" 5→1 before the mic opens.
+                Change 2: mid-speech silence 7→1 (final 7s of the 15s window).
+                pointer-events-none so the Repeat/Next action buttons underneath
+                stay fully clickable — the candidate can press Next to skip the
+                silence countdown without waiting for it to finish. */}
+            {(preTurnCountdown != null || midSilenceCountdown != null) && (() => {
+              const isPre = preTurnCountdown != null;
+              const num = isPre ? preTurnCountdown : midSilenceCountdown;
+              const isLastQ = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
+              const title = isPre ? 'Get ready to answer' : 'Are you still there?';
+              const subtitle = isPre
+                ? 'Speak when it’s your turn.'
+                : isLastQ
+                  ? 'Keep talking, or the interview will end.'
+                  : 'Keep talking to continue, or tap Next.';
+              const accent = isPre ? 'text-emerald-300' : 'text-amber-300';
+              const ring = isPre ? 'ring-emerald-400/40' : 'ring-amber-400/40';
+              return (
+                <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 z-[104] flex flex-col items-center justify-center px-4">
+                  <style>{`@keyframes cdPulse {0%{opacity:0;transform:scale(0.5)}22%{opacity:1;transform:scale(1.08)}68%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(0.85)}}`}</style>
+                  <div className="flex flex-col items-center text-center">
+                    {/* Title in a dark chip so it reads on the light chat background */}
+                    <div className={`mb-3 px-4 py-1.5 rounded-full bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-sm sm:text-base font-bold ${accent} shadow-lg`}>{title}</div>
+                    <div
+                      key={`${isPre ? 'p' : 's'}-${num}`}
+                      className={`flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-black/70 backdrop-blur-md ring-4 ${ring} shadow-2xl`}
+                      style={{ animation: 'cdPulse 1s ease-in-out' }}
+                    >
+                      <span className={`font-black tabular-nums ${accent}`} style={{ fontSize: '5rem', lineHeight: 1 }}>{num}</span>
+                    </div>
+                    {!isPre && !isLastQ && (
+                      <button
+                        type="button"
+                        onClick={() => handleNextQuestion()}
+                        className="pointer-events-auto mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-gray-900 text-sm font-semibold shadow-lg ring-1 ring-black/10 hover:bg-gray-100 transition-colors"
+                      >
+                        Next question →
+                      </button>
+                    )}
+                    {/* Subtitle in a dark chip — plain white text was invisible on
+                        the light chat background (reported). */}
+                    <div className="mt-3 max-w-sm px-3.5 py-2 rounded-xl bg-black/75 backdrop-blur-sm ring-1 ring-white/10 text-white text-xs sm:text-sm leading-snug shadow-lg">{subtitle}</div>
+                  </div>
+                </div>
+              );
+            })()}
             {/* Turn banner — centred within the CHAT panel (never overlaps the
                 video), sitting above the fade mask. All chat content stays above
                 it via the reserved bottom padding. */}
