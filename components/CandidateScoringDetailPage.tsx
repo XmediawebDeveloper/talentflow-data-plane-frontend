@@ -1,6 +1,6 @@
 'use client';
 
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, Code, Languages, ArrowLeft, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -74,7 +74,8 @@ interface CandidateScoringDetailPageProps {
   resume: ScoredResume;
   jobTitle: string;
   jobId: string;
-  onBack: () => void;
+  /** Kept for callers; navigation back now happens via the breadcrumb. */
+  onBack?: () => void;
   onMinimize?: () => void;
   currentIndex?: number;
   totalCount?: number;
@@ -88,10 +89,10 @@ interface CandidateScoringDetailPageProps {
   breadcrumbItems?: BreadcrumbCrumb[];
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onBack, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user } = useAuth();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo' | 'viewjd'>('overview');
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
   const [fullResumeLoaded, setFullResumeLoaded] = useState(false);
@@ -323,6 +324,68 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     return 'bg-red-100 text-red-700 border-red-300';
   };
 
+  // ---- Read-only label helpers for the View JD tab (mirrors JobDetailView's
+  // "Extracted Data Summary" so both surfaces read the same) ----
+  const prettifyCode = (value?: string): string =>
+    (value || '')
+      .replace(/[_-]+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  const educationLabelMap: Record<string, string> = {
+    diploma: 'Diploma',
+    associate: 'Associate Degree',
+    bachelors: "Bachelor's Degree",
+    masters: "Master's Degree",
+    doctorate: 'Doctorate / PhD',
+    none: 'No formal education required',
+    others: 'Others',
+  };
+  const educationLabel = (value?: string): string =>
+    value ? (educationLabelMap[value.toLowerCase()] || prettifyCode(value)) : 'Not specified';
+
+  const employmentTypeLabel = (value?: string): string => {
+    switch (value) {
+      case 'full_time': return 'Full Time';
+      case 'part_time': return 'Part Time';
+      case 'contract': return 'Contract';
+      case 'internship': return 'Internship';
+      case 'temporary': return 'Temporary / Seasonal';
+      default: return value ? prettifyCode(value) : 'Not specified';
+    }
+  };
+  const workModeLabel = (value?: string): string => {
+    switch (value) {
+      case 'onsite': return 'Onsite';
+      case 'remote': return 'Remote';
+      case 'hybrid': return 'Hybrid';
+      case 'field_based': return 'Field-based / Travel';
+      default: return value ? prettifyCode(value) : 'Not specified';
+    }
+  };
+
+  // JD lists / requirement values, read straight off the fetched JD record.
+  const jdMustHaveSkills: string[] = jdDetails?.must_have_skills || [];
+  const jdNiceToHaveSkills: string[] = jdDetails?.nice_to_have_skills || [];
+  const jdMustHaveComments: string[] = jdDetails?.must_have_comments || [];
+  const jdNiceToHaveComments: string[] = jdDetails?.nice_to_have_comments || [];
+
+  const jdExperienceLabel = (() => {
+    const min = jdDetails?.experience_min;
+    const max = jdDetails?.experience_max;
+    if (min != null && max != null) return `${min}–${max} years`;
+    if (min != null) return `${min}+ years`;
+    if (max != null) return `Up to ${max} years`;
+    return 'Not specified';
+  })();
+
+  const jdEducationLabel = (() => {
+    const req = jdDetails?.education_requirements;
+    if (!req) return 'Not specified';
+    const degree = typeof req === 'object' ? req.degree : req;
+    return educationLabel(degree);
+  })();
+
   const handleDownloadScorecard = async () => {
     const toastId = toast.loading('Generating scorecard PDF...');
 
@@ -417,26 +480,9 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               { label: 'Candidate Details' },
             ]}
           />
-      {/* Back Button + Prev/Next Navigation */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors text-sm sm:text-base cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-          Back to Scored Resumes
-        </button>
-
-        <RecordPager
-          currentIndex={currentIndex}
-          totalCount={totalCount}
-          onPrev={onPrev}
-          onNext={onNext}
-        />
-      </div>
 
       {/* Header */}
-      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <div>
         <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4 sm:mb-6">
             <div className="flex-1 min-w-0">
@@ -467,6 +513,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                 </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
+              <RecordPager
+                currentIndex={currentIndex}
+                totalCount={totalCount}
+                onPrev={onPrev}
+                onNext={onNext}
+              />
               {canExport && (
               <button
                 onClick={handleDownloadScorecard}
@@ -500,13 +552,14 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       </div>
 
       {/* Tabs */}
-      <div className="px-4 sm:px-6 lg:px-8">
+      <div className="pt-4 sm:pt-6">
         <div className="bg-white rounded-t-xl border-x-2 border-t-2 border-gray-200">
           <div className="flex gap-1 px-3 sm:px-6 pt-2 overflow-x-auto scrollbar-hide">
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'scoretable', label: 'Score Table' },
               { id: 'personalinfo', label: 'Personal Info' },
+              { id: 'viewjd', label: 'View JD' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -525,7 +578,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       </div>
 
       {/* Content */}
-      <div className="px-4 sm:px-6 lg:px-8 pb-6 sm:pb-8">
+      <div>
         <div className="bg-white rounded-b-xl border-x-2 border-b-2 border-gray-200 p-4 sm:p-6 lg:p-8">
           {/* {activeTab === 'comparison' && (
             <div className="space-y-6">
@@ -1271,6 +1324,132 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                   </div>
                   <p className="text-gray-700 leading-relaxed">{fullResumeData.objective}</p>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* View JD — the JD's Extracted Data Summary, same content the JD
+              detail page shows, scoped to the JD this candidate was scored against. */}
+          {activeTab === 'viewjd' && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-gray-700" />
+                <h3 className="text-lg font-semibold text-gray-900">
+                  📊 Extracted Data Summary
+                  <span className="block text-sm font-normal text-gray-600 mt-0.5">{jobTitle}</span>
+                </h3>
+              </div>
+
+              {!jdDetails ? (
+                <div className="flex items-center gap-2 text-gray-500 py-6">
+                  <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />
+                  <span className="text-sm">Loading job details...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Skills & Requirements */}
+                  <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-6">
+                    <h4 className="text-base font-semibold text-gray-900 mb-4">Skills &amp; Requirements</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                      {/* Left: Skills */}
+                      <div className="space-y-4 sm:space-y-6">
+                        <div>
+                          <h5 className="text-sm text-gray-700 mb-3">Must-Have Skills ({jdMustHaveSkills.length})</h5>
+                          {jdMustHaveSkills.length > 0 ? (
+                            <div className="space-y-2">
+                              {jdMustHaveSkills.map((skill, index) => (
+                                <div key={index} className="flex items-center gap-2 text-sm text-gray-700">
+                                  <CheckCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                                  {skill}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 italic text-sm">None</p>
+                          )}
+                        </div>
+                        <div>
+                          <h5 className="text-sm text-gray-700 mb-3">Nice-to-Have Skills ({jdNiceToHaveSkills.length})</h5>
+                          {jdNiceToHaveSkills.length > 0 ? (
+                            <div className="space-y-2">
+                              {jdNiceToHaveSkills.map((skill, index) => (
+                                <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
+                                  <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
+                                  {skill}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 italic text-sm">None</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Comments */}
+                      <div className="space-y-4 sm:space-y-6">
+                        <div>
+                          <h5 className="text-sm text-gray-700 mb-3">Must-Have Comments ({jdMustHaveComments.length})</h5>
+                          {jdMustHaveComments.length > 0 ? (
+                            <div className="space-y-2">
+                              {jdMustHaveComments.map((comment, index) => (
+                                <div key={index} className="flex items-start gap-2 text-sm text-gray-700">
+                                  <CheckCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                                  <span>{comment}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 italic text-sm">None</p>
+                          )}
+                        </div>
+                        <div>
+                          <h5 className="text-sm text-gray-700 mb-3">Nice-to-Have Comments ({jdNiceToHaveComments.length})</h5>
+                          {jdNiceToHaveComments.length > 0 ? (
+                            <div className="space-y-2">
+                              {jdNiceToHaveComments.map((comment, index) => (
+                                <div key={index} className="flex items-start gap-2 text-sm text-gray-600">
+                                  <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                                  <span>{comment}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 italic text-sm">None</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Requirements */}
+                  <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-6">
+                    <h4 className="text-base font-semibold text-gray-900 mb-4">Requirements</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
+                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Experience</h5>
+                        <p className="text-sm sm:text-base text-gray-900">{jdExperienceLabel}</p>
+                      </div>
+                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
+                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Education</h5>
+                        <p className="text-sm sm:text-base text-gray-900">{jdEducationLabel}</p>
+                      </div>
+                      {jdDetails.industry_type && (
+                        <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
+                          <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Industry Type</h5>
+                          <p className="text-sm sm:text-base text-gray-900">{prettifyCode(jdDetails.industry_type)}</p>
+                        </div>
+                      )}
+                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
+                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Employment Type</h5>
+                        <p className="text-sm sm:text-base text-gray-900">{employmentTypeLabel(jdDetails.employment_type)}</p>
+                      </div>
+                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
+                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Work Mode</h5>
+                        <p className="text-sm sm:text-base text-gray-900">{workModeLabel(jdDetails.remote_type)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           )}

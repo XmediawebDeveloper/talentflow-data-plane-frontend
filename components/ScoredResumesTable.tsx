@@ -815,8 +815,8 @@ export default function ScoredResumesTable({
                             {(() => {
                               const numbers = splitPhoneNumbers(resume.phone, 2);
                               return numbers.length > 0
-                                ? numbers.map((num, i) => <span key={i}>{num}</span>)
-                                : <span>-</span>;
+                                ? numbers.map((num, i) => <span key={i} className="whitespace-nowrap">{num}</span>)
+                                : <span className="whitespace-nowrap">-</span>;
                             })()}
                           </div>
                         </div>
@@ -1072,7 +1072,12 @@ export default function ScoredResumesTable({
                 <div className="flex items-start gap-2 text-gray-600">
                   <Phone className="w-4 h-4 mt-0.5 shrink-0" />
                   <div className="flex flex-col gap-0.5">
-                    {splitPhoneNumbers(resume.phone, 2).map((num, i) => <span key={i}>{num}</span>)}
+                    {(() => {
+                      const numbers = splitPhoneNumbers(resume.phone, 2);
+                      return numbers.length > 0
+                        ? numbers.map((num, i) => <span key={i} className="whitespace-nowrap">{num}</span>)
+                        : <span className="whitespace-nowrap">-</span>;
+                    })()}
                   </div>
                 </div>
               )}

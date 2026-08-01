@@ -190,8 +190,6 @@ export default function BulkScoringProgressModal({
   const skippedCount = progressData.filter(item => item.status === 'Already Scored - Skipped').length;
   const failedCount = progressData.filter(item => item.status === 'Failed').length;
 
-  // Calculate progress percentage
-  const progressPercentage = totalResumes > 0 ? Math.round(((completedCount + skippedCount + failedCount) / totalResumes) * 100) : 0;
   const isAllComplete = queuedCount === 0 && inProgressCount === 0 && totalResumes > 0;
 
   // Filter data
@@ -334,28 +332,8 @@ export default function BulkScoringProgressModal({
             </div>
           </div>
 
-          {/* Progress bar + ETA - below title */}
-          <div className="mt-3 flex items-center gap-3">
-            <div className="flex-1 h-2 bg-white/15 rounded-full overflow-hidden">
-              <div className="h-full flex">
-                <div
-                  className="bg-green-400 transition-[width] duration-500"
-                  style={{ width: `${totalResumes > 0 ? (completedCount / totalResumes) * 100 : 0}%` }}
-                />
-                <div
-                  className="bg-brand-cyan transition-[width] duration-500"
-                  style={{ width: `${totalResumes > 0 ? (skippedCount / totalResumes) * 100 : 0}%` }}
-                />
-                <div
-                  className="bg-red-400 transition-[width] duration-500"
-                  style={{ width: `${totalResumes > 0 ? (failedCount / totalResumes) * 100 : 0}%` }}
-                />
-                <div
-                  className="bg-brand-orange animate-pulse transition-[width] duration-500"
-                  style={{ width: `${totalResumes > 0 ? (inProgressCount / totalResumes) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
+          {/* ETA - below title */}
+          <div className="mt-3 flex items-center justify-end gap-3 empty:mt-0">
             {eta && !isAllComplete && (
               <div className="flex items-center gap-1 text-white/85 text-xs font-medium flex-shrink-0">
                 <Clock className="w-3 h-3" />
@@ -507,19 +485,20 @@ export default function BulkScoringProgressModal({
         </div>
 
         {/* Table / Cards */}
-        <div className="flex-1 overflow-auto p-3 sm:p-5 min-h-[200px] scrollbar-visible">
+        {/* pt lives on the children so the sticky table header can pin flush to the scrollport top */}
+        <div className="flex-1 overflow-auto px-3 sm:px-5 pb-3 sm:pb-5 min-h-[200px] scrollbar-visible">
           {filteredData.length > 0 ? (
             <>
               {/* Desktop table */}
               <table className="hidden sm:table w-full">
-                <thead>
-                  <tr className="border-b-2 border-gray-200 dark:border-slate-700">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Candidate Name</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Source</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Status</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Scored Date & Time</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">Match Result</th>
-                    {onRetryFailed && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300">Actions</th>}
+                <thead className="sticky top-0 z-10">
+                  <tr>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate Name</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Scored Date &amp; Time</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Result</th>
+                    {onRetryFailed && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -604,7 +583,7 @@ export default function BulkScoringProgressModal({
               </table>
 
               {/* Mobile card list */}
-              <div className="sm:hidden space-y-2">
+              <div className="sm:hidden space-y-2 pt-3">
                 {filteredData.map((item) => (
                   <div key={item.id} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-3 shadow-sm">
                     {/* Name + Status */}
