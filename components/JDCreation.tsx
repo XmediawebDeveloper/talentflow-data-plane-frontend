@@ -2746,6 +2746,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         niceToHaveComments: extraction.niceToHaveComments
       });
       setExtractedData(extraction);
+      // We now hold the authoritative extracted data in state. Saving below sets
+      // the JD id into the URL (ensureJDCreationUrl), which makes the page re-fetch
+      // the JD and re-populate `editingJD`. Without this flag, the load effect would
+      // then RELOAD from that re-fetched JD a couple seconds later and overwrite the
+      // just-extracted data — the reported bug where the Additional Requirements
+      // (comments) sections vanished after extraction. Mark as already loaded so
+      // that reload is suppressed and the extraction result is preserved.
+      hasLoadedFromEditingJD.current = true;
       setExtractedDataModified(false);  // Reset after fresh extraction - no user modifications yet
       step2DataSnapshot.current = JSON.stringify(extraction);  // Snapshot for change detection
       setLastExtractedJD(jdText);  // Track JD text to skip extraction if unchanged on next "Next" click
@@ -3040,7 +3048,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (newComment.trim()) {
       const commentToAdd = newComment.trim();
 
-      if (!validateEnglishOnlyExtractedValue(commentToAdd, 'Must-have comments')) {
+      if (!validateEnglishOnlyExtractedValue(commentToAdd, 'Must-have additional requirements')) {
         return;
       }
 
@@ -3162,7 +3170,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (editingCommentIndex !== null && editingCommentValue.trim()) {
       const newValue = editingCommentValue.trim();
 
-      if (!validateEnglishOnlyExtractedValue(newValue, 'Must-have comments')) {
+      if (!validateEnglishOnlyExtractedValue(newValue, 'Must-have additional requirements')) {
         return;
       }
 
@@ -3206,7 +3214,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (newComment.trim()) {
       const commentToAdd = newComment.trim();
 
-      if (!validateEnglishOnlyExtractedValue(commentToAdd, 'Nice-to-have comments')) {
+      if (!validateEnglishOnlyExtractedValue(commentToAdd, 'Nice-to-have additional requirements')) {
         return;
       }
 
@@ -3254,7 +3262,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (editingNiceCommentIndex !== null && editingNiceCommentValue.trim()) {
       const newValue = editingNiceCommentValue.trim();
 
-      if (!validateEnglishOnlyExtractedValue(newValue, 'Nice-to-have comments')) {
+      if (!validateEnglishOnlyExtractedValue(newValue, 'Nice-to-have additional requirements')) {
         return;
       }
 
@@ -3579,8 +3587,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const englishOnlyChecks: Array<{ valid: boolean; fieldLabel: string }> = [
       { valid: validateEnglishOnlyExtractedList(extractedData.mustHaveSkills, 'Must-have skills'), fieldLabel: 'Must-have skills' },
       { valid: validateEnglishOnlyExtractedList(extractedData.niceToHaveSkills, 'Nice-to-have skills'), fieldLabel: 'Nice-to-have skills' },
-      { valid: validateEnglishOnlyExtractedList(extractedData.mustHaveComments, 'Must-have comments'), fieldLabel: 'Must-have comments' },
-      { valid: validateEnglishOnlyExtractedList(extractedData.niceToHaveComments, 'Nice-to-have comments'), fieldLabel: 'Nice-to-have comments' },
+      { valid: validateEnglishOnlyExtractedList(extractedData.mustHaveComments, 'Must-have additional requirements'), fieldLabel: 'Must-have additional requirements' },
+      { valid: validateEnglishOnlyExtractedList(extractedData.niceToHaveComments, 'Nice-to-have additional requirements'), fieldLabel: 'Nice-to-have additional requirements' },
       { valid: validateEnglishOnlyExtractedList(extractedData.internalRecruiterComments, 'Internal recruiter notes'), fieldLabel: 'Internal recruiter notes' },
       { valid: validateEnglishOnlyExtractedList(extractedData.certifications, 'Certifications'), fieldLabel: 'Certifications' },
       { valid: validateEnglishOnlyExtractedList(extractedData.domainKeywords, 'Domain keywords'), fieldLabel: 'Domain keywords' },
@@ -5610,9 +5618,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <input
                           type="text"
                           value={newComment}
-                          onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Must-have comments', setNewComment)}
+                          onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Must-have additional requirements', setNewComment)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-                          placeholder="Enter comment..."
+                          placeholder="Enter additional requirement..."
                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                           autoFocus
                         />
@@ -5639,7 +5647,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onStartEdit={handleStartEditCommentByCategory}
                           isEditing={editingCommentIndex === index}
                           editingValue={editingCommentValue}
-                          onEditChange={(value) => applyEnglishOnlyInputChange(value, 'Must-have comments', setEditingCommentValue)}
+                          onEditChange={(value) => applyEnglishOnlyInputChange(value, 'Must-have additional requirements', setEditingCommentValue)}
                           onSaveEdit={handleSaveEditComment}
                           onCancelEdit={handleCancelEditComment}
                           readOnly={isRegenerating}
@@ -5674,9 +5682,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <input
                           type="text"
                           value={newComment}
-                          onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Nice-to-have comments', setNewComment)}
+                          onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Nice-to-have additional requirements', setNewComment)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddNiceComment()}
-                          placeholder="Enter nice-to-have comment..."
+                          placeholder="Enter nice-to-have additional requirement..."
                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                           autoFocus
                         />
@@ -5703,7 +5711,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onStartEdit={handleStartEditCommentByCategory}
                           isEditing={editingNiceCommentIndex === index}
                           editingValue={editingNiceCommentValue}
-                          onEditChange={(value) => applyEnglishOnlyInputChange(value, 'Nice-to-have comments', setEditingNiceCommentValue)}
+                          onEditChange={(value) => applyEnglishOnlyInputChange(value, 'Nice-to-have additional requirements', setEditingNiceCommentValue)}
                           onSaveEdit={handleSaveEditNiceComment}
                           onCancelEdit={handleCancelEditNiceComment}
                           readOnly={isRegenerating}

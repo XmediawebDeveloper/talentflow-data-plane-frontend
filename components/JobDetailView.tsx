@@ -1713,7 +1713,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       {/* Right: Comments */}
                       <div className="space-y-4 sm:space-y-6">
                         <div>
-                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Comments ({mustHaveComments.length})</h4>
+                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Additional Requirements ({mustHaveComments.length})</h4>
                           {mustHaveComments.length > 0 ? (
                             <div className="space-y-2">
                               {mustHaveComments.map((comment, index) => (
@@ -1728,7 +1728,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                           )}
                         </div>
                         <div>
-                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Comments ({niceToHaveComments.length})</h4>
+                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Additional Requirements ({niceToHaveComments.length})</h4>
                           {niceToHaveComments.length > 0 ? (
                             <div className="space-y-2">
                               {niceToHaveComments.map((comment, index) => (
