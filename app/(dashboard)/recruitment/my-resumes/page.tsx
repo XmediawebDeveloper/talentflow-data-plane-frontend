@@ -2047,6 +2047,7 @@ export default function MyResumesPage() {
         duplicated: 0,
         versioned: 0,
         errors: 0,
+        cancelled: 0,
         status: 'uploading',
         source: 'my-resumes' as const,
         statuses: files.map((f, idx) => ({
@@ -3698,6 +3699,10 @@ export default function MyResumesPage() {
                               const isUploading = record.status === 'uploading';
                               const isProcessing = record.status === 'processing' || record.pending > 0;
                               const isCancelled = cancelledCount > 0;
+                              // Optimistic pre-API record: its id and item ids are `temp-*`
+                              // placeholders, not UUIDs. Every retry/cancel endpoint takes UUID
+                              // path params, so any action fired against it 422s on uuid_parsing.
+                              const isTempRecord = record.id.startsWith('temp-');
                               const hasErrors = record.errors > 0;
                               const hasIssues = record.duplicated > 0 || (record.versioned || 0) > 0 || record.errors > 0 || cancelledCount > 0;
 
@@ -3871,7 +3876,7 @@ export default function MyResumesPage() {
                                   {/* Retry / Cancel Batch actions — hidden until the optimistic
                                       temp record is swapped for the real server batch_id, since
                                       both endpoints require a UUID path param. */}
-                                  {(isProcessing || hasErrors || isCancelled) && !record.id.startsWith('temp-') && (
+                                  {(isProcessing || hasErrors || isCancelled) && !isTempRecord && (
                                     <div className="flex items-center gap-2 mb-3 sm:mb-4" onClick={e => e.stopPropagation()}>
                                       {/* Retry — stuck in pending, failed, or cancelled (re-queues the files) */}
                                       {(isProcessing || hasErrors || isCancelled) && (
@@ -4128,8 +4133,12 @@ export default function MyResumesPage() {
                                                   that is exactly how 77 cancelled files read as queued. */
                                                `? ${String(file.status ?? 'unknown')}`}
                                             </span>
-                                            {/* Per-item Retry / Cancel */}
-                                            {file.id && (file.status === 'pending' || file.status === 'error' || file.status === 'cancelled') && (
+                                            {/* Per-item Retry / Cancel — same temp-record guard as the
+                                                batch-level actions above. Without it the optimistic
+                                                record renders these buttons over `temp-file-N` ids and
+                                                the request 422s on uuid_parsing for both path params. */}
+                                            {file.id && !isTempRecord && !String(file.id).startsWith('temp-')
+                                              && (file.status === 'pending' || file.status === 'error' || file.status === 'cancelled') && (
                                               <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
                                                 <button
                                                   disabled={retryingItems.has(file.id)}
