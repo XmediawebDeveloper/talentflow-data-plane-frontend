@@ -497,6 +497,18 @@ const ASSERT_BY_TITLE = {
 
   "Mandatory JD Selection for Assessment Creation ": { route: "/recruitment/assessments/create",
     kind: "placeholder_visible", value: "Search by JD ID or title..." },
+
+  "JD Version History": { route: "/recruitment/job-details", kind: "control_visible", value: "View JD History" },
+  "AII12 - View Extracted Skills after JD published": { route: "/recruitment/job-details",
+    kind: "text_visible", value: "Extracted Data Summary" },
+  "Review & Publish Screen: Final Preview": { route: "/recruitment/jd-creation",
+    kind: "control_visible", value: "Generate Job Description" },
+  "Parameter Review Screen": { route: "/recruitment/jd-creation", kind: "text_visible", value: "Job Details",
+    note: "The review step is inside the wizard; this asserts the parameter form it is reached from" },
+  "AIU99 - Cluster Refinement": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters",
+    kind: "control_visible", value: "Regenerate with AI" },
+  "Interview Configuration Finalization": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config/preview",
+    kind: "control_visible", value: "Publish Interview" },
 };
 
 /**
@@ -510,6 +522,13 @@ const ASSERT_BY_TITLE = {
  */
 const ASSERT_BY_ROUTE = {
   "/recruitment/job-openings": { kind: "text_visible", value: "Job Openings" },
+  // The wizard's own entry screen. The 8 pre-condition rows on this route carry
+  // explicit ASSERT_BY_CASE entries and are route-guarded, so they still assert
+  // their wall rather than falling through to this.
+  "/recruitment/jd-creation": { kind: "all_text_visible", value: "Job Description Creation|Manual Input" },
+  "/recruitment/job-details": { kind: "all_text_visible", value: "Job Description|Quick Actions|Applicant Statistics" },
+  "/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters": { kind: "all_text_visible", value: "Skill Clusters|Must-To-Have Skills" },
+  "/recruitment/ai-interviews/jd-selection/ai-interview-config/preview": { kind: "all_text_visible", value: "Review & Publish|Interview Mode" },
   "/recruitment/my-resumes": { kind: "text_visible", value: "My Resume Database" },
   "/recruitment/resume-database": { kind: "text_visible", value: "Resume Database" },
   "/recruitment/resume-scoring": { kind: "text_visible", value: "AI-Powered Resume Scoring" },

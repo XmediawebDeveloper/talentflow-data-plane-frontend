@@ -80,13 +80,13 @@ Sprint 12 6, BUGS 4, API 1.
 
 | `assert_kind` | Rows | What it checks |
 |---|---|---|
-| `text_visible` | 137 | a specific string the feature renders |
-| `all_text_visible` | 70 | several strings together (e.g. every table column) |
-| `control_visible` | 54 | a named button or link is present |
+| `text_visible` | 145 | a specific string the feature renders |
+| `all_text_visible` | 83 | several strings together (e.g. every table column) |
+| `control_visible` | 57 | a named button or link is present |
 | `placeholder_visible` | 29 | a specific input exists (search, skill entry) |
 | `element_absent` | 1 | a control the role must **not** see |
-| `page_loads` | 28 | shell renders, no error boundary, no feature gate, URL held |
-| | **319** | of which **291 assert real behaviour**, 28 are still shell-only |
+| `page_loads` | 4 | shell renders, no error boundary, no feature gate, URL held |
+| | **319** | of which **315 assert real behaviour**, 4 are still shell-only |
 
 8 rows drive a backend pre-condition first (see below).
 
@@ -154,20 +154,12 @@ columns must all be visible. A regression that stopped serving fixtures would
 otherwise turn ~140 column assertions back into "the page rendered" without
 anything going red.
 
-#### The 28 still on `page_loads`
+#### The 4 still on `page_loads`
 
-Left deliberately, each with a note in `tier1-cases.xlsx` saying why:
-
-| Rows | Route | Why |
-|---|---|---|
-| 13 | `/recruitment/jd-creation` | steps inside the creation wizard — need a typed form, not a load |
-| 9 | `…/ai-interview-config/clusters` | cluster screen needs a saved config first |
-| 3 | `/recruitment/resume-scoring` | blocked pre-condition states with no mockable endpoint |
-| 2 | `/recruitment/job-details` | JD version history needs a versioned JD fixture |
-| 1 | `…/ai-interview-config/preview` | needs a completed configuration |
-
-Weak assertions are worse than none, so these stay shell-only until the state
-behind them can actually be driven.
+TC-0233, TC-0234, TC-0236 and TC-0238 — "Pre-Condition Validation for Resume
+Scoring". No mockable endpoint drives the blocked states they describe, so
+there is nothing to assert beyond the shell. Weak assertions are worse than
+none; these stay shell-only until that state can actually be driven.
 
 #### Where the route-level fallback is used, and what it is worth
 

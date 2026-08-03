@@ -59,7 +59,7 @@ lint:
 #                              (rows needing a live interview/assessment
 #                              runtime, real proctoring hardware, or a database
 #                              assertion — none of them counted as passing).
-#                              291 of the 319 active rows assert real rendered
+#                              315 of the 319 active rows assert real rendered
 #                              behaviour, not just that the page loaded.
 #                              Includes the KI-13 test.fail() pin. ~3 min.
 #                              A skipped row is tracked in e2e/TEST-PLAN.md.
