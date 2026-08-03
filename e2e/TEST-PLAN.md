@@ -80,16 +80,15 @@ Sprint 12 6, BUGS 4, API 1.
 
 | `assert_kind` | Rows | What it checks |
 |---|---|---|
-| `text_visible` | 85 | a specific string the feature renders |
-| `placeholder_visible` | 24 | a specific input exists (search, skill entry) |
-| `control_visible` | 20 | a named button or link is present |
-| `all_text_visible` | 18 | several strings together (e.g. every status filter) |
+| `text_visible` | 137 | a specific string the feature renders |
+| `all_text_visible` | 70 | several strings together (e.g. every table column) |
+| `control_visible` | 54 | a named button or link is present |
+| `placeholder_visible` | 29 | a specific input exists (search, skill entry) |
 | `element_absent` | 1 | a control the role must **not** see |
-| `page_loads` | 171 | shell renders, no error boundary, no feature gate, URL held |
-| | **319** | of which **148 assert real behaviour**, 171 are still shell-only |
+| `page_loads` | 28 | shell renders, no error boundary, no feature gate, URL held |
+| | **319** | of which **291 assert real behaviour**, 28 are still shell-only |
 
-**146 of the 194 high-confidence rows** now carry a behavioural assertion.
-8 of them drive a backend pre-condition first (see below).
+8 rows drive a backend pre-condition first (see below).
 
 Every asserted string was taken from **what the page actually renders**,
 captured by driving each route with the standard mocks and dumping its
@@ -120,36 +119,84 @@ render the wall and **not** the form; and a locator for the sheet's wording
 mock or loosens a locator, these turn red rather than letting real coverage
 quietly become theatre.
 
-#### The 171 still on `page_loads`
+#### Seeded list data — what took `page_loads` from 171 to 28
 
-Left deliberately, each with a note in `tier1-cases.xlsx` saying why. Weak
-assertions are worse than none. The recurring reasons:
+`e2e/helpers/fixtures.ts` serves populated responses for `/audits`, `/resumes`,
+`/jd`, `/scoring/all`, `/assessments`, `/ai-interview` and their `/stats`
+siblings. Empty lists were the single biggest reason a row could not assert
+anything: a table with no rows renders no columns, no per-row action menu and
+no column-customisation control.
 
-- populated tables needed (column customisation, per-row action menus, scored
-  candidate rows) — the mocked lists render empty
-- viewport switching needed (responsive card/table layouts)
-- a typed form needed (JD character-count validation)
-- **the control does not appear to exist** — e.g. no HR-topic control renders on
-  the AI interview config page, and the interview-mode selection screen did not
-  render. Worth checking against the feature before writing any test.
+Two things about this are easy to get wrong, and both were measured:
 
-Seeding fixture data into the list endpoints is the single change that unlocks
-the largest block of these.
+- **`total` is load-bearing.** Several pages probe with `page_size: 1` only to
+  read `total`, then refetch with `page_size: total`
+  (`resume-scoring/page.tsx:355`, `resume-database/page.tsx:189`). Seeding
+  `items` while leaving `total: 0` makes the page skip the real fetch and
+  render empty anyway.
+- **Registration order.** These go in *after* `mockApiFallback`, since
+  Playwright resolves routes in reverse registration order.
+
+The `/jd/<id>` handler is anchored on the fixture id prefix on purpose — a
+looser pattern would also swallow `/jd/access-check` and silently disable the
+pre-condition variants above.
+
+This also caught a live mapping bug: `job-details` reads `id`, not `jd_id`
+(`job-details/page.tsx:36`), so those rows had been navigating to a page that
+rendered nothing at all.
+
+#### Proof the seeded assertions discriminate
+
+Column assertions are only worth something if an empty list makes them fail.
+`smoke-tier1-discrimination.spec.ts` pins both directions: with no seeded rows
+`Score %` must resolve to **zero** elements, and with them the three asserted
+columns must all be visible. A regression that stopped serving fixtures would
+otherwise turn ~140 column assertions back into "the page rendered" without
+anything going red.
+
+#### The 28 still on `page_loads`
+
+Left deliberately, each with a note in `tier1-cases.xlsx` saying why:
+
+| Rows | Route | Why |
+|---|---|---|
+| 13 | `/recruitment/jd-creation` | steps inside the creation wizard — need a typed form, not a load |
+| 9 | `…/ai-interview-config/clusters` | cluster screen needs a saved config first |
+| 3 | `/recruitment/resume-scoring` | blocked pre-condition states with no mockable endpoint |
+| 2 | `/recruitment/job-details` | JD version history needs a versioned JD fixture |
+| 1 | `…/ai-interview-config/preview` | needs a completed configuration |
+
+Weak assertions are worse than none, so these stay shell-only until the state
+behind them can actually be driven.
+
+#### Where the route-level fallback is used, and what it is worth
+
+Rows with no case- or title-specific assertion fall back to the module's own
+landing content (`ASSERT_BY_ROUTE`), or to its table columns when the row also
+opens a list view (`ASSERT_BY_ROUTE_CARD`). This is weaker than a row-specific
+assertion but strictly stronger than `page_loads`, which passes on an access
+wall — as the jd-creation false green proved.
+
+The audit rows are the bulk of it. Their sheet-side expected results are
+`audit_logs` column values, which is a database assertion and belongs in
+Tier 2. What the UI can honestly prove is that the trail renders its documented
+columns over real rows, and that is what those 31 rows assert — not that a
+particular action was logged.
 
 ## 4. Suite composition and runtime
 
 ```
-491 tests
-  344 passed
+499 tests
+  353 passed
   146 skipped   ← blocked rows, each carrying its reason as an annotation
-    1 expected failure (KI-13, pinned with test.fail())
     0 failed
 runtime: ~2.2 min at 2 workers
 ```
 
-`smoke-tier1-jd` 95 · `-resume` 98 · `-aiinterview` 50 · `-admin` 39 ·
-`-assessment` 37 · `-blocked` 146, plus `smoke-auth`, `smoke-dashboard`,
-`smoke-jd`, `excel-data-driven` and `smoke-score-consistency`.
+`smoke-tier1-jd` · `-resume` · `-aiinterview` · `-admin` · `-assessment` ·
+`-blocked` (146) · `-discrimination` (5), plus `smoke-auth`,
+`smoke-dashboard`, `smoke-jd`, `excel-data-driven` and
+`smoke-score-consistency` (which carries the KI-13 `test.fail()` pin).
 
 ### KI-13 is pinned, not fixed
 

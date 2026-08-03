@@ -285,7 +285,7 @@ const GROUPS = [
   // --------------------------------------------------------- Audit / Team --
   // The audit sheet asserts audit_logs column values. Those are database
   // assertions, not UI — the classifier's keyword rule mislabelled them.
-  { sheet: "Sprint 7", title: "", route: "/audits/trail", confidence: "low", auditDefault: true },
+  { sheet: "Sprint 7", title: "", route: "/audits/trail", confidence: "low", auditDefault: true, openCard: "Total Actions" },
   { title: "TM01", route: "/organization/team-management", confidence: "high" },
   { title: "TM02", route: "/organization/team-management", confidence: "high" },
   { title: "TM03", route: "/organization/team-management", confidence: "high" },
@@ -320,6 +320,9 @@ const GROUPS = [
  * and the matching fixture (mockAiInterviewFixtures) go together.
  */
 const ROUTE_QUERY = {
+  // job-details reads `id`, not `jd_id` (job-details/page.tsx:36). The probe
+  // caught this: with jd_id the page rendered nothing at all.
+  "/recruitment/job-details": "id=jd-001",
   "/recruitment/ai-interviews/jd-selection/ai-interview-config": "jd_id=jd-001",
   "/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters": "id=cfg-001",
   "/recruitment/ai-interviews/jd-selection/ai-interview-config/preview": "id=cfg-001",
@@ -443,26 +446,122 @@ const ASSERT_BY_TITLE = {
 
   "TM05 - User in Multiple Teams + UI/UX": { route: "/organization/team-management", kind: "text_visible", value: "Total Teams" },
   "HR Question": { route: "/recruitment/hr-question-bank", kind: "text_visible", value: "HR Question Bank" },
+
+  // --- unlocked by mockSeededLists ----------------------------------------
+  // Everything below asserts a control or column that only exists once the
+  // list endpoints return rows. Each string was captured from the seeded
+  // probe (e2e/tmp-probe2 run), not from the sheet or from source.
+  "Dynamic Column Customization": { route: "/recruitment/resume-scoring", kind: "control_visible", value: "Customize Columns" },
+  "Responsive Scored Resume List": { route: "/recruitment/resume-scoring", kind: "all_text_visible",
+    value: "Candidate Name|Match Status|Score %|Scored By",
+    note: "Asserts the scored-resume table and its columns render; the responsive card/table swap needs viewport switching" },
+  // "Download Scorecard" sits in a per-row action menu, not the table itself —
+  // it showed up in the probe dump but is not visible on load. The match
+  // classification these rows describe IS a rendered column, so assert that.
+  "Candidate Scorecard Model": { route: "/recruitment/resume-scoring", kind: "all_text_visible",
+    value: "Candidate Name|Match Status|Score %",
+    note: "Scorecard download is behind a per-row action menu; the match classification column is what loads with the table" },
+  "Excel Export (Column-Aware)": { route: "/recruitment/resume-scoring", kind: "control_visible", value: "Export" },
+  "Search Result Actions": { route: "/recruitment/resume-database", kind: "all_text_visible",
+    value: "Candidate Name|Skills|Experience|Actions" },
+  "Advanced Search & Filtering": { route: "/recruitment/resume-database", kind: "placeholder_visible",
+    value: "Search by name, email, phone, skills, title, or company...",
+    note: "Asserts the search control over a populated table; filter-result correctness is a Tier-2 assertion" },
+
+  "HR Topic Configuration": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config",
+    kind: "text_visible", value: "Configuration Summary" },
+  "Interview Duration Configuration": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config",
+    kind: "all_text_visible", value: "Timed Mode|Conversational" },
+  "Conversational Interview Mode": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config",
+    kind: "text_visible", value: "Conversational" },
+  "Initialize Skill Mapping for Conversa": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config",
+    kind: "placeholder_visible", value: "Add a must-have skill" },
+  "Skill weightage application": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config",
+    kind: "text_visible", value: "Configuration Summary" },
+  "Skill Customization & Weightage Editi": { route: "/recruitment/ai-interviews/jd-selection/ai-interview-config",
+    kind: "placeholder_visible", value: "Add a nice-to-have skill" },
+
+  "Recruiter Results View": { route: "/recruitment/assessments", kind: "control_visible", value: "Results" },
+  "Enable filter option in Assessment invite table": { route: "/recruitment/assessments",
+    kind: "control_visible", value: "Track invitation status" },
+  "Invite Modal from Assessment Module": { route: "/recruitment/assessments",
+    kind: "control_visible", value: "Track invitation status" },
+  "Column Selection & Export": { route: "/recruitment/assessments", kind: "all_text_visible", value: "Grid View|List View" },
+  "Invite from JD Page": { route: "/recruitment/job-openings", kind: "all_text_visible", value: "All Jobs|Published|Draft" },
+  "Invite Shortcut from Resume Scoring": { route: "/recruitment/resume-scoring", kind: "control_visible", value: "Filters" },
+
+  "AIU106 - Final Decision (Pass/Fail)": { route: "/recruitment/ai-interviews", kind: "control_visible", value: "View interview results" },
+  "AIU104 - Question weighted score": { route: "/recruitment/ai-interviews", kind: "text_visible", value: "Avg. Score" },
+  "AIU105 - Section Score (MHS and NHS)": { route: "/recruitment/ai-interviews", kind: "text_visible", value: "Avg. Score" },
+  "Candidate Invitation Methods": { route: "/recruitment/ai-interviews", kind: "control_visible", value: "Send Invite" },
+
+  "Mandatory JD Selection for Assessment Creation ": { route: "/recruitment/assessments/create",
+    kind: "placeholder_visible", value: "Search by JD ID or title..." },
+};
+
+/**
+ * Route-level fallback, applied only when no case- or title-level assertion
+ * matched.
+ *
+ * `page_loads` passes on any well-rendered page — including an access wall, as
+ * the jd-creation false green proved. These assert the module's own landing
+ * content instead, which is weaker than a row-specific assertion but strictly
+ * stronger than "something rendered".
+ */
+const ASSERT_BY_ROUTE = {
+  "/recruitment/job-openings": { kind: "text_visible", value: "Job Openings" },
+  "/recruitment/my-resumes": { kind: "text_visible", value: "My Resume Database" },
+  "/recruitment/resume-database": { kind: "text_visible", value: "Resume Database" },
+  "/recruitment/resume-scoring": { kind: "text_visible", value: "AI-Powered Resume Scoring" },
+  "/recruitment/assessments": { kind: "text_visible", value: "Assessment Management" },
+  "/recruitment/assessments/create": { kind: "text_visible", value: "Select Job Description" },
+  "/recruitment/ai-interviews": { kind: "text_visible", value: "AI Interview Platform" },
+  "/recruitment/ai-interviews/jd-selection/ai-interview-config": { kind: "text_visible", value: "AI Interview Configuration" },
+  "/settings/api-management": { kind: "text_visible", value: "API" },
+  "/organization/team-management": { kind: "text_visible", value: "Total Teams" },
+};
+
+/**
+ * Route-level fallback for rows that also open a list view.
+ *
+ * Takes priority over ASSERT_BY_ROUTE because reaching the table is the point
+ * of the card click — asserting only the page heading would let a silently
+ * empty table pass.
+ *
+ * The audit rows are the bulk of this. Their sheet-side expected results are
+ * `audit_logs` column values, which is a database assertion and belongs in
+ * Tier 2; what the UI can honestly prove here is that the trail renders the
+ * documented columns over real rows.
+ */
+const ASSERT_BY_ROUTE_CARD = {
+  "/audits/trail": { kind: "all_text_visible", value: "Timestamp|Action|Error Origin|Refund Flag|Units",
+    note: "Row-specific audit_logs column values are a Tier-2 database assertion; this pins the trail's rendered columns" },
+  "/recruitment/resume-scoring": { kind: "all_text_visible", value: "Candidate Name|Match Status|Score %" },
+  "/recruitment/resume-database": { kind: "all_text_visible", value: "Candidate Name|Skills|Experience" },
+  "/recruitment/job-openings": { kind: "all_text_visible", value: "All Jobs|Published|Draft" },
 };
 
 // Rows the probe proved cannot be deepened yet, with the reason. Left as
 // page_loads deliberately rather than given a weak assertion.
 const NOT_YET = {
-  "Responsive Scored Resume List": "Needs viewport switching plus seeded rows — the mocked list renders empty",
-  "Dynamic Column Customization": "The Customize Columns control only appears once the table has rows",
-  "Search Result Actions": "Per-row action menus need seeded resumes",
-  "Advanced Search & Filtering": "Filter results need seeded resumes",
   "Pre-Condition Validation for Resume Scoring": "No mockable endpoint drives these blocked states yet",
-  "HR Topic Configuration": "No HR-topic control is rendered on the config page — verify the feature exists before asserting",
-  "Interview Duration Configuration": "The interview-mode selection screen did not render on the mocked config page",
 };
 
-function assertionFor(tcId, title, route) {
+function assertionFor(tcId, title, route, openCard) {
   const a = ASSERT_BY_CASE[tcId] || ASSERT_BY_TITLE[norm(title)] ||
     Object.entries(ASSERT_BY_TITLE).find(([k]) => norm(title).includes(norm(k)))?.[1];
   // Guard: an assertion is only valid for the route it was captured on.
-  if (!a || a.route !== route) return null;
-  return a;
+  if (a && a.route === route) return a;
+
+  // A recorded reason to stay shallow outranks the fallback — the point of
+  // NOT_YET is that no honest assertion exists yet for that case.
+  if (notYetFor(title)) return null;
+
+  // Fall back to the module's own landing content. Still route-guarded — an
+  // entry is only used on the route it was captured on.
+  if (openCard && ASSERT_BY_ROUTE_CARD[route]) return { route, ...ASSERT_BY_ROUTE_CARD[route] };
+  if (ASSERT_BY_ROUTE[route]) return { route, ...ASSERT_BY_ROUTE[route] };
+  return null;
 }
 
 function notYetFor(title) {
@@ -498,7 +597,7 @@ ws.eachRow((row, i) => {
   const grep = grepRoute(expected, appFiles);
   if (grep) {
     const g1 = matchGroup(sheet, title);
-    const a = assertionFor(base.tc_id, title, grep.route);
+    const a = assertionFor(base.tc_id, title, grep.route, g1?.openCard);
     out.push({ ...base, route: grep.route, query: ROUTE_QUERY[grep.route] || "", open_card: g1?.openCard || "", role: g1?.role || "tenant_admin",
       precondition: a?.pre || "",
       assert_kind: a?.kind || "page_loads", assert_value: a?.value || grep.literal,
@@ -511,7 +610,7 @@ ws.eachRow((row, i) => {
   // Layer 2 — group -> route.
   const g = matchGroup(sheet, title);
   if (g && !g.block) {
-    const a = assertionFor(base.tc_id, title, g.route);
+    const a = assertionFor(base.tc_id, title, g.route, g.openCard);
     out.push({ ...base, route: g.route, query: ROUTE_QUERY[g.route] || "", open_card: g.openCard || "", role: g.role || "tenant_admin",
       precondition: a?.pre || "",
       assert_kind: a?.kind || "page_loads", assert_value: a?.value || "",

@@ -23,6 +23,7 @@ import {
   openListView,
   resetViewState,
 } from "./auth";
+import { mockSeededLists } from "./fixtures";
 
 export interface Tier1Row {
   tc_id: string;
@@ -79,6 +80,11 @@ async function installMocks(page: Page, role: string) {
   await mockJdAccessCheck(page);
   await mockLoginApi(page, { role: role || "tenant_admin" });
   await mockDashboardApis(page);
+  // Last, so the populated lists beat the empty envelopes above. Without rows
+  // the tables, per-row action menus and column-customisation controls never
+  // render, and every row on those pages is stuck asserting only that the
+  // shell loaded.
+  await mockSeededLists(page);
 }
 
 /**

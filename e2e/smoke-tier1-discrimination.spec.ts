@@ -25,6 +25,7 @@ import {
   resetViewState,
   JdAccessCode,
 } from "./helpers/auth";
+import { mockSeededLists } from "./helpers/fixtures";
 
 /** The four blocking titles the JD01 pre-condition rows assert. */
 const BLOCKED_TITLES = [
@@ -34,7 +35,7 @@ const BLOCKED_TITLES = [
   "Insufficient Units",
 ];
 
-async function setUp(page: Page, code?: JdAccessCode) {
+async function setUp(page: Page, code?: JdAccessCode, seeded = false) {
   await mockApiFallback(page);
   await mockQuotaStatus(page);
   await mockModuleStats(page);
@@ -42,8 +43,16 @@ async function setUp(page: Page, code?: JdAccessCode) {
   await mockJdAccessCheck(page, code);
   await mockLoginApi(page, { role: "tenant_admin" });
   await mockDashboardApis(page);
+  if (seeded) await mockSeededLists(page);
   await loginViaUi(page);
   await resetViewState(page);
+}
+
+/** Drive the scored-resume list to the table the Tier-1 rows assert against. */
+async function openScoredTable(page: Page) {
+  await page.goto("/recruitment/resume-scoring");
+  await page.getByRole("button", { name: /View All Candidates/ }).first().click();
+  await page.waitForTimeout(1500);
 }
 
 test.describe("Tier 1 — assertion discrimination", () => {
@@ -83,5 +92,28 @@ test.describe("Tier 1 — assertion discrimination", () => {
       page.getByRole("button", { name: "Create New JD" }),
       "a control matching the sheet's wording now exists — re-check which one the tests should assert",
     ).toHaveCount(0);
+  });
+
+  // The seeded-list assertions are only worth something if an empty list makes
+  // them fail. Without this pair, a regression that silently stopped serving
+  // fixtures would turn ~140 column assertions back into "the page rendered"
+  // and nothing would go red.
+  test("scored-table columns are absent when the list is empty", async ({ page }) => {
+    await setUp(page, undefined, false);
+    await openScoredTable(page);
+
+    await expect(
+      page.getByText("Score %", { exact: false }),
+      "the scored-resume columns render without any rows — the column assertions would pass with no data behind them",
+    ).toHaveCount(0);
+  });
+
+  test("scored-table columns render once the list is seeded", async ({ page }) => {
+    await setUp(page, undefined, true);
+    await openScoredTable(page);
+
+    for (const column of ["Candidate Name", "Match Status", "Score %"]) {
+      await expect(page.getByText(column, { exact: false }).first(), `seeded column "${column}"`).toBeVisible();
+    }
   });
 });
