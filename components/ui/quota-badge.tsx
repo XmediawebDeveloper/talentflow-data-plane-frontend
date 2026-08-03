@@ -90,7 +90,7 @@ export default function QuotaBadge({
             )}>
               {availableUnits.toLocaleString()}
             </span>
-            <span className="text-[11px] text-gray-500 dark:text-slate-400 leading-none">Quota Left</span>
+            <span className="text-[11px] text-gray-500 dark:text-slate-400 leading-none">Units Left</span>
           </>
         ) : (
           <span className="text-xs text-gray-400 dark:text-slate-500 leading-none">Loading...</span>

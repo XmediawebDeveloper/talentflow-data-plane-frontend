@@ -240,6 +240,7 @@ export default function ResumeViewPage() {
   const [viewSource, setViewSource] = useState<'my-resumes' | 'resume-database' | 'ai-talent-match' | 'job-details'>('resume-database');
   const [jobDetailsReturnUrl, setJobDetailsReturnUrl] = useState<string | null>(null);
   const [aiMatchDetailsReturnUrl, setAiMatchDetailsReturnUrl] = useState<string | null>(null);
+  const [aiMatchJobTitle, setAiMatchJobTitle] = useState('');
   useEffect(() => {
     try {
       const s = sessionStorage.getItem('resumeNavSource');
@@ -256,14 +257,21 @@ export default function ResumeViewPage() {
       const aiMatchJobId = sessionStorage.getItem('resumeNavAIMatchJobId');
       if (aiMatchJobId) {
         setAiMatchDetailsReturnUrl(`/recruitment/ai-talent-match?jdId=${encodeURIComponent(aiMatchJobId)}&view=details`);
+        // The crumb reads as the job the candidate was matched against.
+        setAiMatchJobTitle(sessionStorage.getItem('resumeNavAIMatchJobTitle') || '');
       }
     } catch { /* ignore */ }
   }, []);
   const sourceCrumbs =
     viewSource === 'my-resumes' ? [{ label: 'My Resumes', href: '/recruitment/my-resumes' }]
+    // The "Match Details" step only exists when the resume was opened from a
+    // specific job's match list. The candidate roll-up spans jobs and stores no
+    // job id, so it goes straight from AI Talent Match to the candidate.
     : viewSource === 'ai-talent-match' ? [
       { label: 'AI Talent Match', href: '/recruitment/ai-talent-match' },
-      { label: 'Match Details', href: aiMatchDetailsReturnUrl || '/recruitment/ai-talent-match' },
+      ...(aiMatchDetailsReturnUrl
+        ? [{ label: aiMatchJobTitle || 'Match Details', href: aiMatchDetailsReturnUrl }]
+        : []),
     ]
     : viewSource === 'job-details' ? [{ label: 'Scored Resumes', href: jobDetailsReturnUrl || '/recruitment/job-openings' }]
     : [{ label: 'Internal Database', href: '/recruitment/resume-database' }];

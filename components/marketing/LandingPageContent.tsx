@@ -2,408 +2,825 @@
 
 import {
   ArrowRight,
+  ArrowUpRight,
   Play,
-  Sparkles,
-  TrendingUp,
-  Users,
   Shield,
-  Zap,
-  Clock,
   CheckCircle2,
   Star,
-  BarChart3,
   Video,
-  FileText,
   X,
-  Volume2,
-  VolumeX,
-  Maximize,
-  Minimize,
   Upload,
   Search,
   Send,
+  Users,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { displayFont, dataFont } from "./fonts";
+import { FeatureShowcase } from "./FeatureShowcase";
+import { PlanCard } from "./PlanCard";
+import { fetchMarketingPlans, type MarketingPlan } from "./plans";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+const TRIAL_LINK =`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`;
+
+/* ------------------------------------------------------------------ *
+ * Motion helpers
+ * ------------------------------------------------------------------ */
+
+const MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
+function subscribeToMotionPreference(onChange: () => void) {
+  const query = window.matchMedia(MOTION_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function usePrefersReducedMotion() {
+  return useSyncExternalStore(
+    subscribeToMotionPreference,
+    () => window.matchMedia(MOTION_QUERY).matches,
+    () => false
+  );
+}
+
+/** Fires once when the element first scrolls into view. */
+function useInView<T extends HTMLElement>(enabled = true) {
+  const ref = useRef<T>(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [enabled]);
+
+  return { ref, inView };
+}
+
+function Reveal({
+  children,
+  delay = 0,
+  className = "",
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  className?: string;
+}) {
+  const reduced = usePrefersReducedMotion();
+  const { ref, inView } = useInView<HTMLDivElement>(!reduced);
+  const shown = reduced || inView;
+
+  return (
+    <div
+      ref={ref}
+      style={{ transitionDelay: shown ? `${delay}ms` : "0ms" }}
+      className={`transition-[opacity,transform] duration-700 ease-out ${
+        shown ? "opacity-100 translate-y-0" : "opacity-0 translate-y-5"
+      } ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Counts to `target` once `active` turns true. */
+function useCountUp(target: number, active: boolean, delay = 0) {
+  const reduced = usePrefersReducedMotion();
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (reduced || !active) return;
+    let frame = 0;
+    let startTime = 0;
+    const timer = window.setTimeout(() => {
+      const step = (now: number) => {
+        if (!startTime) startTime = now;
+        const progress = Math.min(1, (now - startTime) / 900);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setValue(Math.round(target * eased));
+        if (progress < 1) frame = window.requestAnimationFrame(step);
+      };
+      frame = window.requestAnimationFrame(step);
+    }, delay);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.cancelAnimationFrame(frame);
+    };
+  }, [target, active, delay, reduced]);
+
+  return reduced ? target : value;
+}
+
+/* ------------------------------------------------------------------ *
+ * Shared section furniture
+ * ------------------------------------------------------------------ */
+
+/** One measure for every section: gutters grow with the viewport, and the
+ *  column widens past 1200px only on genuinely large displays. */
+const SHELL =
+  "container mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8 xl:max-w-[1320px] 2xl:max-w-[1480px]";
+
+/** Vertical rhythm, shared so sections can't drift apart. */
+const SECTION_Y = "py-16 sm:py-24 2xl:py-32";
+
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="font-data text-[11px] sm:text-xs uppercase tracking-[0.22em] text-[#0F3C99] dark:text-[#7BA4FF]">
+      {children}
+    </span>
+  );
+}
+
+function SectionHeading({
+  eyebrow,
+  title,
+  lead,
+  align = "left",
+}: {
+  eyebrow: string;
+  title: React.ReactNode;
+  lead?: string;
+  align?: "left" | "center";
+}) {
+  return (
+    <div className={align === "center" ? "text-center max-w-2xl 2xl:max-w-3xl mx-auto" : "max-w-2xl 2xl:max-w-3xl"}>
+      <Eyebrow>{eyebrow}</Eyebrow>
+      <h2 className="font-display mt-3 text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl font-bold tracking-[-0.03em] text-[#08132E] dark:text-white text-balance">
+        {title}
+      </h2>
+      {lead && (
+        <p className="mt-4 text-base sm:text-lg 2xl:text-xl text-slate-600 dark:text-slate-400 leading-relaxed">
+          {lead}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Hero signature — the screening lane
+ * ------------------------------------------------------------------ */
+
+const SHORTLIST = [
+  { initials: "AR", name: "Ananya Rao", role: "Senior React Engineer · 8 yrs", score: 94 },
+  { initials: "KM", name: "Krish Menon", role: "Frontend Lead · 7 yrs", score: 91 },
+  { initials: "DS", name: "Diego Santos", role: "Full-stack Engineer · 6 yrs", score: 87 },
+  { initials: "LW", name: "Lena Weber", role: "React Native Engineer · 5 yrs", score: 82 },
+  { initials: "TN", name: "Tomas Nowak", role: "UI Engineer · 4 yrs", score: 78 },
+];
+
+function ShortlistRow({
+  candidate,
+  index,
+  active,
+}: {
+  candidate: (typeof SHORTLIST)[number];
+  index: number;
+  active: boolean;
+}) {
+  const reduced = usePrefersReducedMotion();
+  const score = useCountUp(candidate.score, active, 280 + index * 110);
+  const top = index === 0;
+
+  return (
+    <li
+      style={{ transitionDelay: `${index * 110}ms` }}
+      className={`flex items-center gap-3 sm:gap-4 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 transition-[opacity,transform] duration-500 ease-out ${
+        active || reduced ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"
+      } ${
+        top
+          ? "bg-[#ED881C]/10 ring-1 ring-[#ED881C]/30 dark:bg-[#ED881C]/[0.14]"
+          : "bg-slate-50/80 dark:bg-white/[0.04]"
+      }`}
+    >
+      <span className="font-data text-xs tabular-nums text-slate-400 dark:text-slate-500 w-5">
+        {String(index + 1).padStart(2, "0")}
+      </span>
+      <span
+        className={`grid h-9 w-9 sm:h-10 sm:w-10 shrink-0 place-items-center rounded-full text-xs font-semibold ${
+          top
+            ? "bg-[#ED881C] text-white"
+            : "bg-[#0F3C99]/10 text-[#0F3C99] dark:bg-white/10 dark:text-slate-200"
+        }`}
+      >
+        {candidate.initials}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium text-[#08132E] dark:text-white">
+          {candidate.name}
+        </span>
+        <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
+          {candidate.role}
+        </span>
+      </span>
+      <span className="flex items-center gap-2 sm:gap-3">
+        <span
+          aria-hidden="true"
+          className="hidden sm:block h-1.5 w-16 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"
+        >
+          <span
+            className={`block h-full rounded-full transition-[width] duration-700 ease-out ${
+              top ? "bg-[#ED881C]" : "bg-[#079CC4]"
+            }`}
+            style={{ width: `${active || reduced ? candidate.score : 0}%` }}
+          />
+        </span>
+        <span
+          className={`font-data text-sm sm:text-base font-medium tabular-nums ${
+            top ? "text-[#B45B0C] dark:text-[#F0A44E]" : "text-[#08132E] dark:text-white"
+          }`}
+        >
+          {score}
+          <span className="text-[0.7em] text-slate-400 dark:text-slate-500">%</span>
+        </span>
+      </span>
+    </li>
+  );
+}
+
+function ScreeningPanel() {
+  const reduced = usePrefersReducedMotion();
+  const [started, setStarted] = useState(false);
+  const active = reduced || started;
+  const screened = useCountUp(1284, active, 120);
+
+  useEffect(() => {
+    if (reduced) return;
+    const timer = window.setTimeout(() => setStarted(true), 260);
+    return () => window.clearTimeout(timer);
+  }, [reduced]);
+
+  return (
+    <div className="relative">
+      <div
+        aria-hidden="true"
+        className="absolute -inset-3 sm:-inset-4 rounded-[28px] bg-gradient-to-br from-[#0F3C99]/10 via-[#079CC4]/10 to-transparent blur-xl"
+      />
+      <div className="relative rounded-2xl border border-slate-200/80 bg-white/95 p-4 sm:p-5 shadow-[0_24px_60px_-24px_rgba(8,19,46,0.35)] backdrop-blur dark:border-white/10 dark:bg-[#0C1732]/95">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-white/10">
+          <span className="font-data text-[10px] sm:text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+            Screening · Senior React Engineer
+          </span>
+          <span className="flex items-center gap-1.5 rounded-full bg-[#079CC4]/10 px-2 py-1 font-data text-[10px] font-medium uppercase tracking-wider text-[#0A7A99] dark:text-[#5CC8E6]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#079CC4] motion-safe:animate-pulse" />
+            Live
+          </span>
+        </div>
+
+        <ul className="mt-3 space-y-1.5 sm:space-y-2">
+          {SHORTLIST.map((candidate, index) => (
+            <ShortlistRow
+              key={candidate.name}
+              candidate={candidate}
+              index={index}
+              active={active}
+            />
+          ))}
+        </ul>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 font-data text-[11px] sm:text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
+          <span className="tabular-nums">
+            {screened.toLocaleString()} resumes screened
+          </span>
+          <span className="tabular-nums text-[#08132E] dark:text-white">
+            12 shortlisted · 3m 40s
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Static content
+ * ------------------------------------------------------------------ */
+
+const STATS = [
+  { value: "2,500+", label: "Active customers" },
+  { value: "5M+", label: "Resumes processed" },
+  { value: "40%", label: "Faster hiring" },
+  { value: "98%", label: "Satisfaction" },
+];
+
+const STEPS = [
+  {
+    title: "Create your account",
+    description: "Sign up in under two minutes. No credit card required.",
+  },
+  {
+    title: "Post your jobs",
+    description: "Add a job description and the AI parses the requirements for you.",
+  },
+  {
+    title: "Start hiring",
+    description: "Ranked candidates arrive with scores. Schedule interviews the same day.",
+  },
+];
+
+const ABOUT_FIGURES = [
+  { value: "2020", label: "Founded" },
+  { value: "50+", label: "Countries" },
+  { value: "100+", label: "Team members" },
+  { value: "5M+", label: "Resumes a year" },
+];
+
+
+/* ------------------------------------------------------------------ *
+ * Page
+ * ------------------------------------------------------------------ */
 
 export function LandingPageContent() {
   const [demoModalOpen, setDemoModalOpen] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
+  const [plans, setPlans] = useState<MarketingPlan[]>([]);
+  const [plansFailed, setPlansFailed] = useState(false);
+  // Annual is the pricing page default, so the landing page opens the same way.
+  const [isYearly, setIsYearly] = useState(true);
+  const reducedMotion = usePrefersReducedMotion();
 
-  // Fetch trial days from API
+  // Menu items on this route are anchors, so the page itself owns the scrolling
+  // behaviour — but never animate it for people who asked for less motion.
   useEffect(() => {
-    const fetchTrialDays = async () => {
+    if (reducedMotion) return;
+    const root = document.documentElement;
+    root.classList.add("scroll-smooth");
+    return () => root.classList.remove("scroll-smooth");
+  }, [reducedMotion]);
+
+  // Plans and the trial length come from the same endpoints the full pricing
+  // page reads, through one shared loader, so the two can never disagree.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const load = async () => {
       try {
-        const response = await fetch(`${API_URL}/addons/free-trial`);
-        if (response.ok) {
-          const data = await response.json();
-          const settings = data.data || data;
-          if (settings.trial_days) {
-            setTrialDays(settings.trial_days);
-          }
-        }
+        const { plans: loaded, trialDays: days } = await fetchMarketingPlans(controller.signal);
+        setPlans(loaded);
+        setPlansFailed(loaded.length === 0);
+        if (days) setTrialDays(days);
       } catch (error) {
-        console.log('Could not fetch trial days, using default');
+        if ((error as Error).name !== "AbortError") setPlansFailed(true);
       }
     };
-    fetchTrialDays();
+
+    load();
+    return () => controller.abort();
   }, []);
 
+
+
   return (
-    <div className="min-h-screen overflow-hidden">
-      {/* Hero Section */}
-      <section className="relative min-h-[80vh] sm:min-h-[85vh] md:min-h-[90vh] flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#667EEA] via-[#764BA2] to-[#F093FB] opacity-10 dark:opacity-20"></div>
-
-        <div className="absolute top-20 left-10 w-72 h-72 bg-gray-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse hidden sm:block"></div>
+    <div
+      className={`${displayFont.variable} ${dataFont.variable} bg-[#F7F8FB] text-[#08132E] dark:bg-[#08132E] dark:text-white`}
+    >
+      {/* ---------------------------------------------------------- Hero */}
+      <section id="home" className="relative scroll-mt-16 overflow-hidden sm:scroll-mt-20">
         <div
-          className="absolute top-40 right-20 w-96 h-96 bg-gray-600 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse hidden md:block"
-          style={{ animationDelay: "2s" }}
-        ></div>
-        <div
-          className="absolute -bottom-20 left-1/2 w-80 h-80 bg-pink-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse hidden sm:block"
-          style={{ animationDelay: "4s" }}
-        ></div>
-
-        <div className="container relative mx-auto max-w-[1400px] px-4 sm:px-6 py-12 sm:py-16 md:py-20">
-          <div className="text-center space-y-5 sm:space-y-6 md:space-y-8">
-            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-full bg-gray-50 border border-gray-200 dark:border-white/20 backdrop-blur-md">
-              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#667EEA] dark:text-[#A78BFA]" />
-              <span className="text-xs sm:text-sm font-medium text-gray-700">
-                Rated 4.9/5 by 2,500+ recruitment teams
-              </span>
-              <div className="flex gap-0.5">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-[#667EEA] text-[#667EEA]"
-                  />
-                ))}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_15%_0%,rgba(15,60,153,0.10),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.10),transparent_60%)] dark:bg-[radial-gradient(60%_50%_at_15%_0%,rgba(76,123,232,0.18),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.14),transparent_60%)]"
+        />
+        <div className={`${SHELL} relative py-14 sm:py-20 lg:py-28 2xl:py-36`}>
+          {/* grid-cols-1 keeps the single-column track from sizing to the
+              widest child — without it the hero overflows on 320px screens. */}
+          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-14 2xl:gap-20">
+            <div>
+              {/* Arbitrary hex rather than bg-white: globals.css repaints the
+                  literal .bg-white / .bg-white\/80 classes in dark mode. */}
+              <div className="inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-slate-200 bg-[#FFFFFF]/80 px-3 py-1.5 dark:border-white/10 dark:bg-white/[0.05]">
+                <span className="flex gap-0.5">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className="h-3 w-3 fill-[#ED881C] text-[#ED881C]" />
+                  ))}
+                </span>
+                <span className="font-data text-[11px] tracking-wide text-slate-600 dark:text-slate-300">
+                  4.9/5 from 2,500+ recruitment teams
+                </span>
               </div>
-            </div>
 
-            <h1 className="text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-bold leading-[1.1] tracking-tight">
-              <span className="text-gray-900 dark:text-white">
-                Hire Smarter with
-              </span>
-              <br />
-              <span className="bg-gradient-to-r from-[#667EEA] to-[#764BA2] bg-clip-text text-transparent">
-                AI-Powered Recruiting
-              </span>
-            </h1>
+              <h1 className="font-display mt-6 text-[2.1rem] font-bold leading-[1.02] tracking-[-0.04em] min-[400px]:text-[2.6rem] min-[400px]:leading-[0.98] sm:text-6xl lg:text-7xl">
+                <span className="block text-[#08132E] dark:text-white">Hire smarter with</span>
+                <span className="block text-[#0F3C99] dark:text-[#7BA4FF]">
+                  AI-powered recruiting
+                </span>
+              </h1>
 
-            <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto leading-relaxed px-2 sm:px-0">
-              Transform your hiring process with intelligent resume screening,
-              automated assessments, and AI-powered interviews. Save{" "}
-              <span className="font-semibold text-[#667EEA]">
-                15+ hours per week
-              </span>
-              .
-            </p>
+              <p className="mt-6 max-w-xl 2xl:max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-lg 2xl:text-xl">
+                Intelligent resume screening, automated assessments and AI-assisted
+                interviews in one place. Recruiting teams save{" "}
+                <span className="font-semibold text-[#08132E] dark:text-white">
+                  15+ hours every week
+                </span>
+                .
+              </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-4 sm:pt-6 px-4 sm:px-0">
-              <Button
-                size="lg"
-                className="w-full sm:w-auto h-12 sm:h-14 md:h-16 px-6 sm:px-8 md:px-10 text-base sm:text-lg rounded-xl sm:rounded-2xl bg-gradient-to-r from-[#667EEA] to-[#764BA2] hover:opacity-90 shadow-lg"
-                asChild
-              >
-                <Link href="/signup">
-                  Get Started Free
-                  <ArrowRight className="w-5 h-5 ml-2" />
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Link
+                  href="/signup"
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#0F3C99] px-6 text-sm font-semibold text-white shadow-lg shadow-[#0F3C99]/25 transition-colors hover:bg-[#0E3B98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ED881C] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#08132E] sm:text-base"
+                >
+                  Get started free
+                  <ArrowRight className="h-4 w-4" />
                 </Link>
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full sm:w-auto h-12 sm:h-14 md:h-16 px-6 sm:px-8 md:px-10 text-base sm:text-lg rounded-xl sm:rounded-2xl bg-gray-50 border-2"
-                onClick={() => setDemoModalOpen(true)}
-              >
-                <Play className="w-5 h-5 mr-2" />
-                Watch Demo
-              </Button>
-            </div>
-
-            <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-8 text-xs sm:text-sm text-gray-600 dark:text-gray-400 pt-3 sm:pt-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
-                <span>{trialDays}-{trialDays === 1 ? 'day' : 'days'} free trial</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
-                <span>No credit card required</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
-                <span>Setup in 5 minutes</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce hidden sm:block">
-          <div className="w-6 h-10 border-2 border-gray-400 dark:border-gray-600 rounded-full flex items-start justify-center p-2">
-            <div className="w-1 h-2 bg-gray-400 dark:bg-gray-600 rounded-full"></div>
-          </div>
-        </div>
-      </section>
-
-      {/* Demo Video Modal */}
-      {demoModalOpen && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
-          <div
-            className={`relative w-full ${isFullscreen ? "h-full max-w-full" : "max-w-5xl"} transition-all duration-300`}
-          >
-            <Card className="overflow-hidden relative bg-white dark:bg-gray-900">
-              <div className="absolute top-0 left-0 right-0 z-10 bg-gradient-to-b from-black/80 to-transparent p-3 sm:p-6 flex items-center justify-between">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br from-gray-700 to-pink-500 flex items-center justify-center">
-                    <Play className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white text-sm sm:text-lg">
-                      TalentFlow Product Demo
-                    </h3>
-                    <p className="text-xs sm:text-sm text-white/80 hidden sm:block">
-                      See how TalentFlow transforms recruiting
-                    </p>
-                  </div>
-                </div>
                 <button
-                  onClick={() => setDemoModalOpen(false)}
-                  className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                 aria-label="Close">
-                  <X className="w-6 h-6 text-white" />
+                  type="button"
+                  onClick={() => setDemoModalOpen(true)}
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-[#FFFFFF] px-6 text-sm font-semibold text-[#08132E] transition-colors hover:border-[#0F3C99]/40 hover:text-[#0F3C99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F3C99] dark:border-white/15 dark:bg-white/[0.04] dark:text-white dark:hover:border-white/30 sm:text-base"
+                >
+                  <Play className="h-4 w-4" />
+                  Watch demo
                 </button>
               </div>
 
-              <div
-                className={`relative ${isFullscreen ? "h-screen" : "aspect-video"} bg-gradient-to-br from-gray-900 via-gray-800 to-gray-700`}
-              >
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center space-y-6 p-8">
-                    <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-gray-700 to-pink-500 flex items-center justify-center animate-pulse">
-                      <Video className="w-16 h-16 text-white" />
-                    </div>
-                    <div className="space-y-3">
-                      <h4 className="text-3xl font-bold text-white">
-                        Product Demo Video
-                      </h4>
-                      <p className="text-lg text-white/80 max-w-2xl">
-                        Watch how TalentFlow streamlines your entire recruiting
-                        process from resume upload to final hiring decision
-                      </p>
-                    </div>
+              <ul className="mt-7 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600 dark:text-slate-400">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-[#079CC4]" />
+                  {trialDays}-day free trial
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-[#079CC4]" />
+                  No credit card required
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-[#079CC4]" />
+                  Setup in 5 minutes
+                </li>
+              </ul>
+            </div>
 
-                    <div className="grid md:grid-cols-2 gap-4 max-w-3xl mx-auto mt-8">
-                      {[
-                        { icon: Upload, text: "Bulk Resume Upload & Parsing" },
-                        { icon: Search, text: "AI-Powered Candidate Scoring" },
-                        { icon: Send, text: "Automated Assessment Delivery" },
-                        { icon: Video, text: "AI Video Interview Analysis" },
-                      ].map((feature, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-xl p-4"
-                        >
-                          <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-                            <feature.icon className="w-5 h-5 text-white" />
-                          </div>
-                          <p className="text-white text-sm font-medium text-left">
-                            {feature.text}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
+            <ScreeningPanel />
+          </div>
+        </div>
 
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
-                      <Button
-                        size="lg"
-                        className="bg-gradient-to-r from-gray-700 to-pink-500 h-12 px-8 rounded-2xl shadow-lg"
-                        onClick={() => setDemoModalOpen(false)}
-                        asChild
-                      >
-                        <Link href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`} prefetch={false}>
-                          Start Free Trial
-                          <ArrowRight className="w-5 h-5 ml-2" />
-                        </Link>
-                      </Button>
-                      <Button
-                        size="lg"
-                        variant="outline"
-                        className="h-12 px-8 rounded-2xl border-2 border-white text-white hover:bg-white/10"
-                        onClick={() => setDemoModalOpen(false)}
-                        asChild
-                      >
-                        <Link href="/contact" prefetch={false}>Schedule Live Demo</Link>
-                      </Button>
-                    </div>
-                  </div>
+        {/* Stat band — the page's proof line, set as data rather than cards. */}
+        <div className="border-y border-slate-200/80 bg-white/70 dark:border-white/10 dark:bg-white/[0.03]">
+          <div className={SHELL}>
+            <dl className="grid grid-cols-2 divide-slate-200/80 md:grid-cols-4 md:divide-x dark:divide-white/10">
+              {STATS.map((stat) => (
+                <div key={stat.label} className="px-2 py-6 text-center md:py-8 2xl:py-10">
+                  <dt className="sr-only">{stat.label}</dt>
+                  <dd>
+                    <span className="font-data block text-2xl font-medium tabular-nums text-[#08132E] dark:text-white sm:text-3xl">
+                      {stat.value}
+                    </span>
+                    <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+                      {stat.label}
+                    </span>
+                  </dd>
                 </div>
-              </div>
-            </Card>
-          </div>
-        </div>
-      )}
-
-      {/* Stats Section */}
-      <section className="relative py-10 sm:py-14 md:py-20 bg-white dark:bg-[#0F172A]">
-        <div className="container mx-auto max-w-[1400px] px-4 sm:px-6">
-          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-            {[
-              { number: "2,500+", label: "Active Customers", icon: Users, gradient: "from-gray-700 to-gray-700" },
-              { number: "5M+", label: "Resumes Processed", icon: FileText, gradient: "from-gray-700 to-pink-500" },
-              { number: "40%", label: "Faster Hiring", icon: TrendingUp, gradient: "from-green-500 to-teal-500" },
-              { number: "98%", label: "Satisfaction", icon: Star, gradient: "from-orange-500 to-red-500" },
-            ].map((stat, index) => {
-              const Icon = stat.icon;
-              return (
-                <Card key={index} className="p-4 sm:p-6 md:p-8 text-center sm:text-center group hover:shadow-lg transition-shadow flex flex-row sm:flex-col items-center sm:items-center gap-3 sm:gap-0">
-                  <div className={`w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 min-w-[2.5rem] sm:min-w-0 rounded-xl sm:rounded-2xl bg-gradient-to-br ${stat.gradient} flex items-center justify-center sm:mx-auto sm:mb-4 group-hover:scale-110 transition-transform`}>
-                    <Icon className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-white" />
-                  </div>
-                  <div className="text-left sm:text-center">
-                    <div className="text-xl sm:text-2xl md:text-4xl font-bold text-gray-900 dark:text-white sm:mb-2">{stat.number}</div>
-                    <div className="text-xs sm:text-sm md:text-base text-gray-600 dark:text-gray-400">{stat.label}</div>
-                  </div>
-                </Card>
-              );
-            })}
+              ))}
+            </dl>
           </div>
         </div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-12 sm:py-16 md:py-24 bg-gray-50 dark:bg-[#1E293B]/50">
-        <div className="container mx-auto max-w-[1400px] px-4 sm:px-6">
-          <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <Badge className="mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-gray-800/30 text-gray-900 dark:text-gray-300 border-0 text-xs sm:text-sm">
-              <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
-              Powerful Features
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">
-              Everything You Need to Hire Better
-            </h2>
-            <p className="text-base sm:text-lg md:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto px-2 sm:px-0">
-              AI-powered tools that streamline every step of your recruitment process
-            </p>
-          </div>
+      {/* ------------------------------------------------------ Features */}
+      <section id="features" className={`scroll-mt-16 sm:scroll-mt-20 ${SECTION_Y}`}>
+        <div className={SHELL}>
+          <Reveal>
+            <SectionHeading
+              eyebrow="Features"
+              title="Everything you need to hire better"
+              lead="AI-powered tools for every step of recruitment — from the first resume to the signed offer."
+            />
+          </Reveal>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
-            {[
-              { icon: Sparkles, title: "AI Resume Scoring", description: "Automatically rank candidates based on job requirements with 95% accuracy", gradient: "from-gray-700 to-gray-700" },
-              { icon: Video, title: "Video Interviews", description: "Conduct and record video interviews with AI-powered sentiment analysis", gradient: "from-gray-700 to-pink-500" },
-              { icon: BarChart3, title: "Advanced Analytics", description: "Get insights into your hiring pipeline with real-time dashboards", gradient: "from-green-500 to-teal-500" },
-              { icon: FileText, title: "Smart Assessments", description: "Create custom tests and quizzes with automatic grading", gradient: "from-orange-500 to-red-500" },
-              { icon: Users, title: "Team Collaboration", description: "Work together with hiring managers and interviewers in real-time", gradient: "from-pink-500 to-gray-700" },
-              { icon: Shield, title: "Enterprise Security", description: "SOC 2 Type II certified with bank-level encryption", gradient: "from-teal-500 to-gray-500" },
-            ].map((feature, index) => {
-              const Icon = feature.icon;
-              return (
-                <Card key={index} className="group p-5 sm:p-6 md:p-8 hover:shadow-lg transition-shadow">
-                  <div className={`w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-4 sm:mb-5 md:mb-6 group-hover:scale-110 transition-transform shadow-lg`}>
-                    <Icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-white" />
-                  </div>
-                  <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-2 sm:mb-3">{feature.title}</h3>
-                  <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 leading-relaxed">{feature.description}</p>
-                </Card>
-              );
-            })}
+          <Reveal delay={80}>
+            <div className="mt-10 sm:mt-14">
+              <FeatureShowcase />
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* -------------------------------------------------- How it works */}
+      <section
+        id="how-it-works"
+        className={`scroll-mt-16 border-y border-slate-200/80 bg-[#FFFFFF] dark:border-white/10 dark:bg-white/[0.02] sm:scroll-mt-20 ${SECTION_Y}`}
+      >
+        <div className={SHELL}>
+          <Reveal>
+            <SectionHeading
+              eyebrow="How it works"
+              title="Three steps to your first shortlist"
+              lead="Most teams run their first AI match within an hour of signing up."
+            />
+          </Reveal>
+
+          <div className="relative mt-10 sm:mt-14">
+            <ol className="grid gap-8 sm:grid-cols-3 sm:gap-6">
+              {STEPS.map((step, index) => (
+                <li key={step.title} className="relative">
+                  {/* The rule links one step to the next — it stops at the last. */}
+                  {index < STEPS.length - 1 && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-12 -right-6 top-5 hidden border-t border-dashed border-slate-300 dark:border-white/15 sm:block"
+                    />
+                  )}
+                  <Reveal delay={index * 100}>
+                    <span className="font-data relative z-10 inline-grid h-10 w-10 place-items-center rounded-full border border-slate-300 bg-[#F7F8FB] text-sm font-medium tabular-nums text-[#0F3C99] dark:border-white/15 dark:bg-[#0C1732] dark:text-[#7BA4FF]">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <h3 className="font-display mt-5 text-xl font-bold tracking-[-0.02em] text-[#08132E] dark:text-white">
+                      {step.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                      {step.description}
+                    </p>
+                  </Reveal>
+                </li>
+              ))}
+            </ol>
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="py-12 sm:py-16 md:py-24 bg-white dark:bg-[#0F172A]">
-        <div className="container mx-auto max-w-[1400px] px-4 sm:px-6">
-          <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <Badge className="mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-0 text-xs sm:text-sm">
-              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
-              Simple Process
-            </Badge>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">
-              Get Started in Minutes
-            </h2>
-            <p className="text-base sm:text-lg md:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto px-2 sm:px-0">
-              Three simple steps to transform your hiring process
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-8 md:gap-12 max-w-5xl mx-auto">
-            {[
-              { step: "01", title: "Create Your Account", description: "Sign up in under 2 minutes with no credit card required", gradient: "from-gray-700 to-gray-700" },
-              { step: "02", title: "Post Your Jobs", description: "Add job descriptions and let our AI automatically parse requirements", gradient: "from-gray-700 to-pink-500" },
-              { step: "03", title: "Start Hiring", description: "Receive ranked candidates and schedule interviews instantly", gradient: "from-pink-500 to-orange-500" },
-            ].map((item, index) => (
-              <div key={index} className="text-center group">
-                <div className={`text-5xl sm:text-6xl md:text-8xl font-bold bg-gradient-to-br ${item.gradient} bg-clip-text text-transparent mb-3 sm:mb-4 md:mb-6 group-hover:scale-110 transition-transform`}>
-                  {item.step}
-                </div>
-                <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-2 sm:mb-3 md:mb-4">{item.title}</h3>
-                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 leading-relaxed">{item.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="relative py-12 sm:py-16 md:py-24 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-[#667EEA] to-[#764BA2] opacity-90"></div>
-        <div className="absolute top-0 left-0 w-full h-full">
-          <div className="absolute top-20 left-20 w-64 h-64 bg-white rounded-full mix-blend-overlay filter blur-3xl opacity-20 animate-pulse hidden sm:block"></div>
-          <div className="absolute bottom-20 right-20 w-96 h-96 bg-pink-400 rounded-full mix-blend-overlay filter blur-3xl opacity-20 animate-pulse hidden md:block" style={{ animationDelay: "3s" }}></div>
-        </div>
-
-        <div className="container relative mx-auto max-w-[1400px] px-4 sm:px-6 text-center">
-          <div className="max-w-4xl mx-auto space-y-5 sm:space-y-6 md:space-y-8">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-white leading-tight">
-              Ready to Transform Your Hiring?
-            </h2>
-            <p className="text-base sm:text-lg md:text-xl text-white/90 max-w-2xl mx-auto leading-relaxed px-2 sm:px-0">
-              Join 2,500+ companies using TalentFlow to build amazing teams faster
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-4 sm:pt-6 px-4 sm:px-0">
+      {/* ------------------------------------------------------- Pricing */}
+      <section id="pricing" className={`scroll-mt-16 sm:scroll-mt-20 ${SECTION_Y}`}>
+        <div className={SHELL}>
+          <Reveal>
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <SectionHeading
+                eyebrow="Pricing"
+                title="Plans that scale with your hiring"
+                lead={`Start on a ${trialDays}-day free trial. Move to a paid plan when your pipeline outgrows it.`}
+              />
               <Link
-                href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`}
-                prefetch={false}
-                className="w-full sm:w-auto inline-flex items-center justify-center h-12 sm:h-14 md:h-16 px-8 sm:px-10 md:px-12 text-base sm:text-lg rounded-xl sm:rounded-2xl bg-white text-gray-900 font-semibold hover:bg-gray-100 shadow-2xl transition-colors"
+                href="/pricing"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-[#0F3C99] hover:underline dark:text-[#7BA4FF]"
               >
-                Start Free Trial
-                <ArrowRight className="w-5 h-5 ml-2" />
+                Compare every plan
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </Reveal>
+
+          {plans.length > 0 ? (
+            <>
+              {/* Billing period — the price, quotas and signup link all follow it. */}
+              <Reveal>
+                <div className="mt-8 flex items-center justify-center gap-3 sm:mt-10">
+                  <span
+                    className={`text-sm ${
+                      !isYearly
+                        ? "font-medium text-[#08132E] dark:text-white"
+                        : "text-slate-500 dark:text-slate-400"
+                    }`}
+                  >
+                    Monthly
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isYearly}
+                    aria-label="Bill yearly"
+                    onClick={() => setIsYearly(!isYearly)}
+                    className={`relative h-7 w-12 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F3C99] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#08132E] ${
+                      isYearly ? "bg-[#0F3C99]" : "bg-slate-300 dark:bg-white/20"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-1 left-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                        isYearly ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                  <span
+                    className={`text-sm ${
+                      isYearly
+                        ? "font-medium text-[#08132E] dark:text-white"
+                        : "text-slate-500 dark:text-slate-400"
+                    }`}
+                  >
+                    Yearly
+                  </span>
+                </div>
+              </Reveal>
+
+              <div className="mt-8 grid gap-4 sm:mt-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {plans.map((plan, index) => (
+                  <Reveal key={plan.id} delay={index * 80} className="h-full">
+                    <PlanCard plan={plan} isYearly={isYearly} />
+                  </Reveal>
+                ))}
+              </div>
+            </>
+          ) : (
+            <Reveal>
+              <div className="mt-10 rounded-2xl border border-slate-200/80 bg-[#FFFFFF] p-8 text-center dark:border-white/10 dark:bg-white/[0.03] sm:mt-14 sm:p-10">
+                <p className="text-base text-slate-600 dark:text-slate-300">
+                  {plansFailed
+                    ? "Plan details live on the pricing page."
+                    : "Loading plans…"}
+                </p>
+                <Link
+                  href="/pricing"
+                  className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0F3C99] px-6 text-sm font-semibold text-white transition-colors hover:bg-[#0E3B98]"
+                >
+                  View pricing
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </Reveal>
+          )}
+        </div>
+      </section>
+
+      {/* --------------------------------------------------------- About */}
+      <section
+        id="about"
+        className={`scroll-mt-16 border-y border-slate-200/80 bg-[#FFFFFF] dark:border-white/10 dark:bg-white/[0.02] sm:scroll-mt-20 ${SECTION_Y}`}
+      >
+        <div className={SHELL}>
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)] lg:gap-16">
+            <Reveal>
+              <SectionHeading
+                eyebrow="About"
+                title="We're on a mission to transform hiring"
+              />
+              <div className="mt-6 space-y-4 text-base leading-relaxed text-slate-600 dark:text-slate-400">
+                <p>
+                  TalentFlow started when our founders experienced the challenges of
+                  modern recruitment firsthand. As hiring managers at growing tech
+                  companies, they spent countless hours sifting through resumes,
+                  coordinating interviews and managing candidate pipelines.
+                </p>
+                <p>
+                  They knew there had to be a better way, so they built TalentFlow — an
+                  AI-powered platform that automates the tedious parts of recruiting while
+                  keeping the human element at its core.
+                </p>
+                <p>
+                  Today TalentFlow helps thousands of companies find and hire the best
+                  talent, processing millions of resumes a year for teams that range from
+                  startups to Fortune 500 enterprises.
+                </p>
+              </div>
+              <Link
+                href="/about"
+                className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F3C99] hover:underline dark:text-[#7BA4FF]"
+              >
+                Read our story
+                <ArrowUpRight className="h-4 w-4" />
+              </Link>
+            </Reveal>
+
+            <Reveal delay={120}>
+              <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-200/80 dark:border-white/10 dark:bg-white/10">
+                {ABOUT_FIGURES.map((figure) => (
+                  <div
+                    key={figure.label}
+                    className="bg-[#FFFFFF] p-6 dark:bg-[#0C1732] sm:p-8"
+                  >
+                    <dt className="font-data text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                      {figure.label}
+                    </dt>
+                    <dd className="font-data mt-2 text-2xl font-medium tabular-nums text-[#08132E] dark:text-white sm:text-3xl">
+                      {figure.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
+      {/* ----------------------------------------------------- Final CTA */}
+      <section className={`relative overflow-hidden bg-[#08132E] text-white ${SECTION_Y}`}>
+        <div className={`${SHELL} relative text-center`}>
+          <Reveal>
+            <h2 className="font-display mx-auto max-w-3xl text-3xl font-bold tracking-[-0.03em] sm:text-5xl">
+              Ready to transform your hiring?
+            </h2>
+            <p className="mx-auto mt-5 max-w-xl text-base text-white/75 sm:text-lg">
+              Join 2,500+ companies using TalentFlow to build great teams faster.
+            </p>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link
+                href={TRIAL_LINK}
+                prefetch={false}
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FFFFFF] px-7 text-sm font-semibold text-[#08132E] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ED881C] focus-visible:ring-offset-2 focus-visible:ring-offset-[#08132E] dark:bg-[#ED881C] dark:text-[#08132E] dark:hover:bg-[#F0A44E] dark:focus-visible:ring-white sm:w-auto sm:text-base"
+              >
+                Start free trial
+                <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/pricing"
-                prefetch={false}
-                className="w-full sm:w-auto inline-flex items-center justify-center h-12 sm:h-14 md:h-16 px-8 sm:px-10 md:px-12 text-base sm:text-lg rounded-xl sm:rounded-2xl border-2 border-white text-white font-semibold hover:bg-white/10 transition-colors"
+                className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-white/25 px-7 text-sm font-semibold text-white transition-colors hover:bg-white/10 sm:w-auto sm:text-base"
               >
-                View Pricing
+                View pricing
               </Link>
             </div>
+            <ul className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 font-data text-xs uppercase tracking-[0.16em] text-white/60">
+              <li className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                SOC 2 certified
+              </li>
+              <li className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                2,500+ customers
+              </li>
+              <li className="flex items-center gap-2">
+                <Star className="h-4 w-4 fill-current" />
+                4.9/5 rating
+              </li>
+            </ul>
+          </Reveal>
+        </div>
+      </section>
 
-            <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-8 text-sm sm:text-base text-white/80 pt-4 sm:pt-8">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span>SOC 2 Certified</span>
+      {/* ---------------------------------------------------- Demo modal */}
+      {demoModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="TalentFlow product demo"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#08132E]/90 p-3 backdrop-blur-sm sm:p-6"
+          onClick={() => setDemoModalOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[#0C1732] text-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
+              <div>
+                <p className="font-data text-[11px] uppercase tracking-[0.18em] text-white/60">
+                  Product demo
+                </p>
+                <h3 className="font-display mt-1 text-lg font-bold tracking-[-0.02em]">
+                  See TalentFlow end to end
+                </h3>
               </div>
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span>2,500+ Customers</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Star className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
-                <span>4.9/5 Rating</span>
+              <button
+                type="button"
+                onClick={() => setDemoModalOpen(false)}
+                className="rounded-lg p-2 transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                aria-label="Close demo"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="px-5 py-6 sm:px-8 sm:py-8">
+              <p className="text-sm text-white/70">
+                Watch how TalentFlow moves a role from resume upload to hiring decision.
+              </p>
+              <ul className="mt-5 grid gap-3 sm:grid-cols-2">
+                {[
+                  { icon: Upload, text: "Bulk resume upload and parsing" },
+                  { icon: Search, text: "AI-powered candidate scoring" },
+                  { icon: Send, text: "Automated assessment delivery" },
+                  { icon: Video, text: "AI video interview analysis" },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <li
+                      key={item.text}
+                      className="flex items-center gap-3 rounded-xl bg-white/[0.06] px-4 py-3"
+                    >
+                      <span className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/10">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="text-sm">{item.text}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                <Link
+                  href={TRIAL_LINK}
+                  prefetch={false}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#FFFFFF] px-6 text-sm font-semibold text-[#08132E] transition-colors hover:bg-slate-100"
+                >
+                  Start free trial
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href="/contact"
+                  prefetch={false}
+                  className="inline-flex h-11 items-center justify-center rounded-xl border border-white/25 px-6 text-sm font-semibold transition-colors hover:bg-white/10"
+                >
+                  Schedule a live demo
+                </Link>
               </div>
             </div>
           </div>
         </div>
-      </section>
+      )}
     </div>
   );
 }

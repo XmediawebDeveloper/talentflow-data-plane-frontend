@@ -203,6 +203,18 @@ export default function HRQuestionBank() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  // The question bank is opened from Assessments or from AI Interviews, and the
+  // trail names whichever module the user came through. Assessments is the
+  // default for a direct visit, since the bank feeds assessments first.
+  const [openedFrom, setOpenedFrom] = useState<'assessments' | 'ai-interviews'>('assessments');
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('questionBankSource') === 'ai-interviews') {
+        setOpenedFrom('ai-interviews');
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   // Persist + restore the list's scroll position and view state so returning
   // from a detail page lands the user exactly where they left off.
   const rootRef = useScrollRestoration<HTMLElement>('hr-question-bank', !loading);
@@ -390,6 +402,9 @@ export default function HRQuestionBank() {
             className="mb-4 md:mb-6"
             items={[
               { label: 'Dashboard', href: '/dashboard' },
+              openedFrom === 'ai-interviews'
+                ? { label: 'AI Interviews', href: '/recruitment/ai-interviews' }
+                : { label: 'Assessments', href: '/recruitment/assessments' },
               { label: 'HR Question Bank' },
             ]}
           />

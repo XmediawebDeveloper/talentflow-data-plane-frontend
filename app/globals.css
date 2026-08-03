@@ -442,6 +442,12 @@
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Marketing faces — loaded by components/marketing/fonts.ts and scoped to the
+     landing page wrapper, so font-display / font-data fall back to the product
+     stacks anywhere else. */
+  --font-display: var(--font-display-face), var(--font-sans), system-ui, sans-serif;
+  --font-data: var(--font-data-face), var(--font-mono);
 }
 
 .dark {

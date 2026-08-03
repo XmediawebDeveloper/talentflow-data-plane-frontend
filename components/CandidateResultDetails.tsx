@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
@@ -467,15 +467,8 @@ export default function CandidateResultDetails({
       <div className="bg-brand-blue border-b border-brand-blue-2/40 sticky top-0 z-20 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
+            {/* No back arrow here — the breadcrumb above owns the way back. */}
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <button
-                onClick={onBack}
-                className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white ring-1 ring-white/25 transition-colors flex-shrink-0"
-                title="Back to Results"
-                aria-label="Back to Results"
-              >
-                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
               <div className="w-9 h-9 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ring-white/20">
                 <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>

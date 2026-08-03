@@ -1107,7 +1107,11 @@ export default function AIInterview() {
             )}
             {canAccessHRQuestionBank && (
               <button
-                onClick={() => router.push('/recruitment/hr-question-bank')}
+                onClick={() => {
+                  // Tells the question bank which module to name in its breadcrumb.
+                  try { sessionStorage.setItem('questionBankSource', 'ai-interviews'); } catch { /* ignore */ }
+                  router.push('/recruitment/hr-question-bank');
+                }}
                 className="inline-flex items-center gap-1.5 border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue px-3.5 py-2 rounded-lg hover:bg-brand-blue/5 transition-all duration-200 text-xs font-medium shadow-sm"
               >
                 <ClipboardList className="w-3.5 h-3.5 flex-shrink-0" />

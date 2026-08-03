@@ -453,22 +453,28 @@ export default function AssessmentDetailsView({
     <div className="flex-1 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
       {/* Breadcrumb */}
       <div className="px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-5">
-        <div className="flex items-center justify-between gap-3">
-          <PageBreadcrumb
-            className="mb-4 flex-1"
-            items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'Assessments', href: '/recruitment/assessments' },
-              { label: stripVersionFromTitle(assessment.title) || assessment.short_id || 'Assessment Details' },
-            ]}
-          />
-          <RecordPager
-            currentIndex={currentIndex}
-            totalCount={totalCount}
-            onPrev={onPrev}
-            onNext={onNext}
-          />
-        </div>
+        <PageBreadcrumb
+          className="mb-3"
+          items={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Assessments', href: '/recruitment/assessments' },
+            { label: stripVersionFromTitle(assessment.title) || assessment.short_id || 'Assessment Details' },
+          ]}
+        />
+
+        {/* Previous / Next navigation — sits below the breadcrumb, as on
+            job-details. The row is dropped entirely when there is no list to
+            page through, so it leaves no empty gap. */}
+        {totalCount != null && totalCount > 0 && (
+          <div className="flex items-center justify-end mb-4">
+            <RecordPager
+              currentIndex={currentIndex}
+              totalCount={totalCount}
+              onPrev={onPrev}
+              onNext={onNext}
+            />
+          </div>
+        )}
       </div>
 
       {/* Sticky Header */}

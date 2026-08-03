@@ -48,6 +48,9 @@ export default function AITalentMatchPageJobsList({
   const [locationFilter, setLocationFilter] = useState('');
   const [employmentTypeFilter, setEmploymentTypeFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  // True once the user confirms the More Filters panel with "Done" — mirrors
+  // job-openings, so Clear appears only after filters are applied.
+  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [jobsView, setJobsView] = useState<'grid' | 'list'>('list');
   const [currentPage, setCurrentPage] = useState(1);
@@ -56,6 +59,14 @@ export default function AITalentMatchPageJobsList({
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, departmentFilter, locationFilter, employmentTypeFilter]);
+
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setDepartmentFilter('');
+    setLocationFilter('');
+    setEmploymentTypeFilter('');
+    setFiltersConfirmed(false);
+  };
 
   // Filter jobs: Only show Published/Active jobs, exclude Disabled jobs
   const publishedJobs = jobs.filter(j =>
@@ -163,7 +174,8 @@ export default function AITalentMatchPageJobsList({
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
           activeFilterCount={activeFiltersCount}
-          filtersApplied={activeFiltersCount > 0}
+          filtersApplied={filtersConfirmed && activeFiltersCount > 0}
+          onClearFilters={clearAllFilters}
           className="mb-0"
         >
           <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
@@ -223,21 +235,18 @@ export default function AITalentMatchPageJobsList({
                 </select>
               </div>
 
-              <div className="flex items-end">
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setDepartmentFilter('');
-                    setLocationFilter('');
-                    setEmploymentTypeFilter('');
-                  }}
-                  disabled={activeFiltersCount === 0}
-                  className="w-full px-4 py-2 sm:py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-medium text-sm"
-                >
-                  <X className="w-4 h-4" />
-                  Clear All
-                </button>
-              </div>
+            </div>
+
+            {/* Panel footer: "Done" applies the selection and reveals the
+                toolbar Clear — same flow as job-openings. Clearing lives on the
+                toolbar so there is exactly one clear control. */}
+            <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+              <button
+                onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+              >
+                Done
+              </button>
             </div>
           </div>
         )}
@@ -491,12 +500,7 @@ export default function AITalentMatchPageJobsList({
               No jobs match your current filters. Try adjusting your search criteria.
             </p>
             <button
-              onClick={() => {
-                setSearchQuery('');
-                setDepartmentFilter('');
-                setLocationFilter('');
-                setEmploymentTypeFilter('');
-              }}
+              onClick={clearAllFilters}
               className="px-4 sm:px-6 py-2.5 sm:py-3 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-2 text-sm sm:text-base"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />

@@ -123,6 +123,9 @@ export default function ScoredResumesTable({
     } : setInternalSelectedResumes;
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  // True once the user confirms the More Filters panel with "Done" — mirrors
+  // job-openings, so Clear appears only after filters are applied.
+  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCandidate, setInviteCandidate] = useState<ScoredResume | null>(null);
   const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
@@ -507,6 +510,7 @@ export default function ScoredResumesTable({
     setFilterDateTo('');
     setFilterRecruiter('all');
     setSearchTerm('');
+    setFiltersConfirmed(false);
   };
 
   const hasActiveFilters =
@@ -626,7 +630,7 @@ export default function ScoredResumesTable({
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
           activeFilterCount={activeFilterCount}
-          filtersApplied={Boolean(hasActiveFilters)}
+          filtersApplied={filtersConfirmed && activeFilterCount > 0}
           onClearFilters={clearFilters}
           className="mb-0"
         >
@@ -712,6 +716,17 @@ export default function ScoredResumesTable({
                   className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 />
               </div>
+            </div>
+
+            {/* Panel footer: "Done" applies the selection and reveals the
+                toolbar Clear — same flow as job-openings. */}
+            <div className="mt-4 pt-3 border-t border-gray-200 flex items-center justify-end gap-2">
+              <button
+                onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+              >
+                Done
+              </button>
             </div>
           </div>
         )}
