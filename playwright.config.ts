@@ -18,6 +18,15 @@ export default defineConfig({
   retries: 1,           // retry once on flaky failures (dev-server recompile, etc.)
   expect: { timeout: 15_000 },
 
+  // Playwright defaults to half the logical cores — 6 on this 12-core runner.
+  // Six Firefox instances plus a `next dev` compiling on demand exhausted the
+  // VM's memory on the first CI run: the kernel OOM-killed Firefox at 08:02 and
+  // 08:12, thrashed for twenty minutes, and rebooted the whole box at 08:28,
+  // taking staging down with it. There is no swap, so memory pressure goes
+  // straight to a kill. Two workers is what the suite was measured at (~2.7
+  // min); the cap only applies in CI so local runs still use the machine.
+  workers: process.env.CI ? 2 : "50%",
+
   // Auto-start Next.js dev server before running tests (skipped for external targets).
   webServer: external
     ? undefined

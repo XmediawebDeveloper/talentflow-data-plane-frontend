@@ -453,8 +453,21 @@ const ASSERT_BY_TITLE = {
   "Resume Folder System – User Level": { route: "/recruitment/my-resumes", kind: "text_visible", value: "Folders" },
   "My Resumes – User Isolation Rules": { route: "/recruitment/my-resumes", kind: "text_visible", value: "My Resume Database" },
 
-  "Scored Resumes List View": { route: "/recruitment/resume-scoring", kind: "text_visible", value: "Scored Candidates" },
-  "JD-wise Scored Resume Repository": { route: "/recruitment/resume-scoring", kind: "text_visible", value: "Scored Candidates" },
+  // NOT "Scored Candidates". That string exists in the source only as
+  // "No Scored Candidates" (the empty state) and "Back to Scored Candidates"
+  // (a drilled-in detail view) — so asserting it passed only while the list was
+  // empty, and broke the moment seeded rows made the real table render. The
+  // table's own columns are what the populated list actually shows.
+  "Scored Resumes List View": { route: "/recruitment/resume-scoring", kind: "all_text_visible",
+    value: "Candidate Name|Match Status|Score %" },
+  // These rows open "View by Job", which is a per-JD card grid — no candidate
+  // table at all (measured: 0 <th>, 0 rows). Asserting the table's columns here
+  // was my error: I carried them over from the "View All Candidates" probe
+  // without measuring this path, and all seven rows failed. What this view
+  // genuinely shows is the scored JD itself.
+  "JD-wise Scored Resume Repository": { route: "/recruitment/resume-scoring", kind: "text_visible",
+    value: "Senior Backend Engineer 1",
+    note: "Asserts the scored JD appears in the by-job repository; the per-JD candidate list needs a further click into the JD card" },
   "JD Selection Module": { route: "/recruitment/resume-scoring/jd-selection", kind: "text_visible", value: "Select Job Description" },
   "Mandatory JD Selection for Assessment Creation": { route: "/recruitment/assessments/create", kind: "text_visible", value: "Select Job Description" },
 

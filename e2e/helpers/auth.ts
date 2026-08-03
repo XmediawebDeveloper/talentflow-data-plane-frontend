@@ -414,6 +414,12 @@ export async function resetViewState(page: Page) {
  * assertion has to come through here first.
  */
 export async function openListView(page: Page, cardName: string | RegExp) {
+  // Deliberately just a click. An earlier version waited for a "Back" control
+  // as proof the view had changed; that control only exists on /audits/trail,
+  // so the wait failed on the other four card pages and buried the real cause
+  // of their failures. There is no marker common to all of them — each page
+  // reveals different controls — so the row's own assertion is what verifies
+  // the click landed, and Playwright's auto-retrying expect covers the wait.
   await page.getByRole("button", { name: cardName }).first().click();
 }
 

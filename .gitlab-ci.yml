@@ -19,9 +19,12 @@
 # NOTE: the frontend build needs ~8GB RAM (NODE_OPTIONS in the Dockerfile).
 # =============================================================================
 
+# Order matters: e2e tests the image build-image produces, so build runs first.
+# A job may only `needs:` a job in an earlier stage.
 stages:
-  - test
+  - lint
   - build
+  - test
   - deploy
 
 # NOTE: gitlab.mo.vc has no instance-level Container Registry configured
@@ -38,7 +41,7 @@ variables:
 
 # ---------------------------------------------------------------- test ------
 lint:
-  stage: test
+  stage: lint
   tags: [talentflow]
   script:
     # --user: run as the runner's uid so no root-owned files land in the
@@ -71,9 +74,43 @@ lint:
 #
 # Backend APIs are mocked inside the specs, so no live services are needed.
 # The Playwright image tag must match @playwright/test in package.json.
+#
+# --memory / --shm-size are not tuning, they are a blast radius limit. This
+# runner shares its VM with the staging containers it deploys to, and the first
+# run of the full suite exhausted the host: the kernel OOM-killed Firefox twice,
+# thrashed for twenty minutes and rebooted the box, taking staging down with it.
+# Capping the container means a runaway test run dies on its own instead of
+# taking production with it. Serving the built image instead of `next dev` is
+# what makes 8g comfortable: the standalone server holds no compiler state,
+# where `next dev` reached 3.3GB RSS compiling 19 routes and was OOM-killed.
+# --shm-size is Playwright's documented requirement (the 64m default crashes
+# browsers under load).
+
+# Start the image that is about to be deployed, on a scratch port, and wait for
+# it to answer. Nothing about the real staging deployment is touched: this is a
+# throwaway container that the job's after_script removes either way.
+#
+# `needs` uses optional:true because only one of the two build jobs exists in a
+# given pipeline — build-image on ci/cd-staging, build-image:production on aws.
+.serve-built-image:
+  script:
+    - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
+    - docker run -d --name "e2e-app-$CI_JOB_ID" -p "$APP_PORT:3000" "$IMAGE:$TAG-e2e"
+    - |
+      for i in $(seq 1 24); do
+        curl -fsS "http://localhost:$APP_PORT/" >/dev/null 2>&1 && echo "app up on $APP_PORT" && break
+        [ "$i" = 24 ] && { echo "built image never answered on $APP_PORT"; docker logs --tail=50 "e2e-app-$CI_JOB_ID"; exit 1; }
+        sleep 5
+      done
+
 .playwright: &playwright
   stage: test
   tags: [talentflow]
+  needs:
+    - job: build-image
+      optional: true
+    - job: build-image:production
+      optional: true
   artifacts:
     when: always
     expire_in: 1 week
@@ -85,35 +122,54 @@ lint:
 
 e2e:
   <<: *playwright
+  variables:
+    APP_PORT: "3999"
   script:
-    - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+    - !reference [.serve-built-image, script]
+    - docker run --rm --network=host --user "$(id -u):$(id -g)"
+        -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+        -e E2E_EXTERNAL=1 -e BASE_URL="http://localhost:$APP_PORT"
+        --memory=8g --memory-swap=8g --shm-size=1g
         -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy
         sh -c "npm ci --no-audit --no-fund
                && npx playwright install firefox
                && npx playwright test smoke-tier1 smoke-score-consistency
                     smoke-auth smoke-dashboard smoke-jd excel-data-driven
                     --reporter=line,html"
+  after_script:
+    - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
   allow_failure: false   # a red suite stops the deploy
 
 e2e:quarantine:
   <<: *playwright
+  variables:
+    APP_PORT: "3998"
   script:
-    - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+    - !reference [.serve-built-image, script]
+    - docker run --rm --network=host --user "$(id -u):$(id -g)"
+        -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+        -e E2E_EXTERNAL=1 -e BASE_URL="http://localhost:$APP_PORT"
+        --memory=8g --memory-swap=8g --shm-size=1g
         -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy
         sh -c "npm ci --no-audit --no-fund
                && npx playwright install firefox
                && npx playwright test ai-interview-pipeline timer-slot-based timer-speaking
                     --reporter=line,html"
+  after_script:
+    - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
   allow_failure: true    # known-red today — reported, but does not gate the deploy
 
 # --------------------------------------------------------------- build ------
-# `needs: [e2e]` is the deploy gate: a red Playwright run stops the pipeline
-# here, so nothing is built or shipped. Stage order alone would not be enough —
-# it has to be an explicit dependency for the failure to block.
+# This runs BEFORE e2e now. Building is not deploying: it only writes an image
+# to the VM's local docker. e2e then starts a throwaway container from that
+# image and tests it, and `deploy:staging` needs a green e2e before anything
+# replaces the running staging container. So the gate is unchanged — what
+# changed is that the tests now exercise the artifact that will actually ship,
+# instead of a `next dev` server that ships to nobody.
 build-image:
   stage: build
   tags: [talentflow]
-  needs: ["e2e"]
+  needs: []            # builds first; e2e tests the artifact this produces
   script:
     - docker build --pull
         --build-arg NEXT_PUBLIC_ENVIRONMENT="$NEXT_PUBLIC_ENVIRONMENT"
@@ -126,7 +182,8 @@ build-image:
         --build-arg NEXT_PUBLIC_BASE_DOMAIN="$NEXT_PUBLIC_BASE_DOMAIN"
         --build-arg NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED="$NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED"
         --build-arg NEXT_PUBLIC_RAZORPAY_KEY_ID="$NEXT_PUBLIC_RAZORPAY_KEY_ID"
-        -t "$IMAGE:$TAG-$CI_ENVIRONMENT_SLUG" .
+        -t "$IMAGE:$TAG-$CI_ENVIRONMENT_SLUG"
+        -t "$IMAGE:$TAG-e2e" .
   environment:
     name: staging
     action: prepare
@@ -137,7 +194,7 @@ build-image:
 # prod image must be built with prod-scoped variable values.
 build-image:production:
   extends: build-image
-  needs: ["e2e"]
+  needs: []
   environment:
     name: production
     action: prepare
@@ -169,7 +226,7 @@ build-image:production:
 
 deploy:staging:
   <<: *deploy
-  needs: ["build-image"]          # which in turn needs a green e2e
+  needs: ["build-image", "e2e"]   # e2e is the gate; build-image supplies the image
   variables:
     DEPLOY_DIR: /opt/talentflow/staging/frontend
     COMPOSE_PROJECT_NAME: tf-frontend-staging
@@ -182,7 +239,7 @@ deploy:staging:
 
 deploy:production:
   <<: *deploy
-  needs: ["build-image:production"]   # which in turn needs a green e2e
+  needs: ["build-image:production", "e2e"]   # e2e is the gate
   variables:
     DEPLOY_DIR: /opt/talentflow/frontend
     COMPOSE_PROJECT_NAME: tf-frontend-prod
