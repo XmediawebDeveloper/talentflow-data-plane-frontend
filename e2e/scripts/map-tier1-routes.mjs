@@ -84,6 +84,17 @@ const RUNTIME_ASSESSMENT = "Candidate assessment runtime — needs a live instan
 const BACKEND_ONLY = "Asserts a database row or backend contract, not anything the UI renders — Tier 2, not Tier 1";
 const PROCTORING = "Proctoring/device behaviour — needs real camera, fullscreen and focus events";
 
+/**
+ * Per-row block reasons for cases no group can reach.
+ *
+ * These rows have a blank title in the sheet, so group matching has nothing to
+ * match on. Naming the actual obstacle beats leaving "needs a human read" on a
+ * row somebody already read.
+ */
+const BLOCK_BY_CASE = {
+  "TC-0399": "Version activation state lives in the per-resume version panel; needs a /resumes/{id}/versions fixture plus the panel opened — Tier 2",
+};
+
 const GROUPS = [
   // ---------------------------------------------------------------- JD -----
   { title: "Environment & Access Pre-Condition Validation", sheet: "Sprint 2", route: "/recruitment/jd-creation", confidence: "high" },
@@ -405,6 +416,20 @@ const ASSERT_BY_CASE = {
   // Recruiter dashboard shows a smaller tile set than tenant_admin — the one
   // permission difference these rows can actually observe on a mocked page.
   "TC-0142": { route: "/dashboard", kind: "element_absent", value: "Users & roles" },
+
+  // Resume-scoring pre-conditions (RS group). Clicking "Score Resumes" leaves
+  // the scored-list overview for the scoring entry step, which is where these
+  // cases are actually decided — the overview itself says nothing about them.
+  "TC-0233": { route: "/recruitment/resume-scoring", openCard: "Score Resumes",
+    kind: "control_visible", value: "Choose a published job",
+    note: "The scoring entry step gates on a published JD — this is the prompt the case describes" },
+  "TC-0238": { route: "/recruitment/resume-scoring", openCard: "Score Resumes",
+    kind: "control_visible", value: "Choose a published job",
+    note: "All pre-conditions met: the workflow proceeds to JD selection" },
+  // Grep put this on jd-creation because that is where the literal lives; the
+  // access-check mock drives the same wall deliberately rather than hoping for it.
+  "TC-0236": { route: "/recruitment/jd-creation", pre: "jd_access:INSUFFICIENT_UNITS",
+    kind: "text_visible", value: "Insufficient Units" },
 };
 
 const ASSERT_BY_TITLE = {
@@ -563,7 +588,11 @@ const ASSERT_BY_ROUTE_CARD = {
 // Rows the probe proved cannot be deepened yet, with the reason. Left as
 // page_loads deliberately rather than given a weak assertion.
 const NOT_YET = {
-  "Pre-Condition Validation for Resume Scoring": "No mockable endpoint drives these blocked states yet",
+  // Only TC-0234 still lands here — the other three rows in this group now
+  // carry case-level assertions. Resume availability is decided per resume id
+  // inside the scoring request, and nothing the list endpoints serve changes
+  // what the entry screen renders, so there is no distinct state to assert.
+  "Pre-Condition Validation for Resume Scoring": "Resume availability is decided per resume id at scoring time — no mocked list state renders a distinct error",
 };
 
 function assertionFor(tcId, title, route, openCard) {
@@ -617,7 +646,7 @@ ws.eachRow((row, i) => {
   if (grep) {
     const g1 = matchGroup(sheet, title);
     const a = assertionFor(base.tc_id, title, grep.route, g1?.openCard);
-    out.push({ ...base, route: grep.route, query: ROUTE_QUERY[grep.route] || "", open_card: g1?.openCard || "", role: g1?.role || "tenant_admin",
+    out.push({ ...base, route: grep.route, query: ROUTE_QUERY[grep.route] || "", open_card: a?.openCard || g1?.openCard || "", role: g1?.role || "tenant_admin",
       precondition: a?.pre || "",
       assert_kind: a?.kind || "page_loads", assert_value: a?.value || grep.literal,
       confidence: "high", layer: "grep", status: "active",
@@ -630,7 +659,7 @@ ws.eachRow((row, i) => {
   const g = matchGroup(sheet, title);
   if (g && !g.block) {
     const a = assertionFor(base.tc_id, title, g.route, g.openCard);
-    out.push({ ...base, route: g.route, query: ROUTE_QUERY[g.route] || "", open_card: g.openCard || "", role: g.role || "tenant_admin",
+    out.push({ ...base, route: g.route, query: ROUTE_QUERY[g.route] || "", open_card: a?.openCard || g.openCard || "", role: g.role || "tenant_admin",
       precondition: a?.pre || "",
       assert_kind: a?.kind || "page_loads", assert_value: a?.value || "",
       confidence: g.confidence, layer: "group", status: "active",
@@ -642,7 +671,7 @@ ws.eachRow((row, i) => {
   out.push({ ...base, route: "", query: "", open_card: "", role: "", precondition: "",
     assert_kind: "blocked", assert_value: "",
     confidence: "", layer: "none", status: "blocked",
-    note: g?.block || "No route mapping — needs a human read" });
+    note: g?.block || BLOCK_BY_CASE[base.tc_id] || "No route mapping — needs a human read" });
 });
 
 const COLS = ["tc_id", "scrum_id", "source_sheet", "title", "what_to_check", "expected_result",

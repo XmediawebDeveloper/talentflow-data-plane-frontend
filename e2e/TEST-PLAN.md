@@ -70,7 +70,10 @@ decision, 146 unmapped. Confidence on the active rows: 194 high, 91 medium,
 | 20 | Proctoring — real camera, fullscreen and focus events |
 | 17 | Candidate assessment runtime — live instance from a real invite token |
 | 14 | Asserts a database row or backend contract, not anything the UI renders |
-| 1 | No route mapping — needs a human read |
+| 1 | Version activation state — needs a `/resumes/{id}/versions` fixture and the version panel opened |
+
+No blocked row is left saying "needs a human read": every one names the
+specific obstacle.
 
 **Active rows, by source sheet:** JD 66, ResumeDB 70, Assessment 34, RBAC 44,
 Audit 35, AI Interview T1 17, AI Interview T2 15, Enhancements 20, Team 7,
@@ -80,13 +83,13 @@ Sprint 12 6, BUGS 4, API 1.
 
 | `assert_kind` | Rows | What it checks |
 |---|---|---|
-| `text_visible` | 145 | a specific string the feature renders |
+| `text_visible` | 146 | a specific string the feature renders |
 | `all_text_visible` | 83 | several strings together (e.g. every table column) |
-| `control_visible` | 57 | a named button or link is present |
+| `control_visible` | 59 | a named button or link is present |
 | `placeholder_visible` | 29 | a specific input exists (search, skill entry) |
 | `element_absent` | 1 | a control the role must **not** see |
-| `page_loads` | 4 | shell renders, no error boundary, no feature gate, URL held |
-| | **319** | of which **315 assert real behaviour**, 4 are still shell-only |
+| `page_loads` | 1 | shell renders, no error boundary, no feature gate, URL held |
+| | **319** | of which **318 assert real behaviour**, 1 is still shell-only |
 
 8 rows drive a backend pre-condition first (see below).
 
@@ -154,12 +157,17 @@ columns must all be visible. A regression that stopped serving fixtures would
 otherwise turn ~140 column assertions back into "the page rendered" without
 anything going red.
 
-#### The 4 still on `page_loads`
+#### The 1 still on `page_loads`
 
-TC-0233, TC-0234, TC-0236 and TC-0238 — "Pre-Condition Validation for Resume
-Scoring". No mockable endpoint drives the blocked states they describe, so
-there is nothing to assert beyond the shell. Weak assertions are worse than
-none; these stay shell-only until that state can actually be driven.
+TC-0234 — "select a deleted, inactive or inaccessible resume". Availability is
+decided per resume id inside the scoring request, and no state the mocked list
+endpoints can serve changes what the entry screen renders. Weak assertions are
+worse than none, so it stays shell-only.
+
+Its three siblings were unblocked rather than left alone: TC-0233 and TC-0238
+now click through to the scoring entry step and assert the published-JD
+selector the cases describe, and TC-0236 drives `jd_access:INSUFFICIENT_UNITS`
+to assert the real "Insufficient Units" wall instead of hoping for it.
 
 #### Where the route-level fallback is used, and what it is worth
 
