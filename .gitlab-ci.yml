@@ -86,23 +86,16 @@ lint:
 # --shm-size is Playwright's documented requirement (the 64m default crashes
 # browsers under load).
 
-# Start the image that is about to be deployed, on a scratch port, and wait for
-# it to answer. Nothing about the real staging deployment is touched: this is a
-# throwaway container that the job's after_script removes either way.
+# Each e2e job starts the image that is about to be deployed on a scratch port
+# and tests that, then removes it in after_script. Nothing about the real
+# staging deployment is touched.
+#
+# The serve steps are written out in both jobs rather than shared through a
+# !reference: this config has to run on whatever GitLab version the instance is
+# on, and a plain script list is the one form every version accepts.
 #
 # `needs` uses optional:true because only one of the two build jobs exists in a
 # given pipeline — build-image on ci/cd-staging, build-image:production on aws.
-.serve-built-image:
-  script:
-    - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
-    - docker run -d --name "e2e-app-$CI_JOB_ID" -p "$APP_PORT:3000" "$IMAGE:$TAG-e2e"
-    - |
-      for i in $(seq 1 24); do
-        curl -fsS "http://localhost:$APP_PORT/" >/dev/null 2>&1 && echo "app up on $APP_PORT" && break
-        [ "$i" = 24 ] && { echo "built image never answered on $APP_PORT"; docker logs --tail=50 "e2e-app-$CI_JOB_ID"; exit 1; }
-        sleep 5
-      done
-
 .playwright: &playwright
   stage: test
   tags: [talentflow]
@@ -125,7 +118,24 @@ e2e:
   variables:
     APP_PORT: "3999"
   script:
-    - !reference [.serve-built-image, script]
+    - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
+    - docker run -d --name "e2e-app-$CI_JOB_ID" -p "$APP_PORT:3000" "$IMAGE:$TAG-e2e"
+    # Shaped like .deploy-template's smoke check: `if` guards the probe and the
+    # give-up branch lives after the loop, so nothing in the retry path can trip
+    # the runner's `set -e`.
+    - |
+      for i in $(seq 1 24); do
+        if curl -fsS "http://localhost:$APP_PORT/" >/dev/null 2>&1; then
+          echo "app up on $APP_PORT after $((i * 5))s"
+          break
+        fi
+        sleep 5
+      done
+      if ! curl -fsS "http://localhost:$APP_PORT/" >/dev/null 2>&1; then
+        echo "built image never answered on $APP_PORT"
+        docker logs --tail=50 "e2e-app-$CI_JOB_ID"
+        exit 1
+      fi
     - docker run --rm --network=host --user "$(id -u):$(id -g)"
         -e HOME=/tmp -e npm_config_cache=/tmp/.npm
         -e E2E_EXTERNAL=1 -e BASE_URL="http://localhost:$APP_PORT"
@@ -145,7 +155,24 @@ e2e:quarantine:
   variables:
     APP_PORT: "3998"
   script:
-    - !reference [.serve-built-image, script]
+    - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
+    - docker run -d --name "e2e-app-$CI_JOB_ID" -p "$APP_PORT:3000" "$IMAGE:$TAG-e2e"
+    # Shaped like .deploy-template's smoke check: `if` guards the probe and the
+    # give-up branch lives after the loop, so nothing in the retry path can trip
+    # the runner's `set -e`.
+    - |
+      for i in $(seq 1 24); do
+        if curl -fsS "http://localhost:$APP_PORT/" >/dev/null 2>&1; then
+          echo "app up on $APP_PORT after $((i * 5))s"
+          break
+        fi
+        sleep 5
+      done
+      if ! curl -fsS "http://localhost:$APP_PORT/" >/dev/null 2>&1; then
+        echo "built image never answered on $APP_PORT"
+        docker logs --tail=50 "e2e-app-$CI_JOB_ID"
+        exit 1
+      fi
     - docker run --rm --network=host --user "$(id -u):$(id -g)"
         -e HOME=/tmp -e npm_config_cache=/tmp/.npm
         -e E2E_EXTERNAL=1 -e BASE_URL="http://localhost:$APP_PORT"
