@@ -148,11 +148,6 @@ e2e:
                     --reporter=line,html"
   after_script:
     - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
-    # Drop the throwaway tag. It points at the same image as -$CI_ENVIRONMENT_SLUG,
-    # so this frees the tag, not the layers — but left alone it accumulates one
-    # entry per pipeline, and an out-of-disk runner is what broke this job:
-    # `git clone` had 56MB to work with and failed in 26s.
-    - docker rmi "$IMAGE:$TAG-e2e" >/dev/null 2>&1 || true
   allow_failure: false   # a red suite stops the deploy
 
 e2e:quarantine:
@@ -189,11 +184,6 @@ e2e:quarantine:
                     --reporter=line,html"
   after_script:
     - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
-    # Drop the throwaway tag. It points at the same image as -$CI_ENVIRONMENT_SLUG,
-    # so this frees the tag, not the layers — but left alone it accumulates one
-    # entry per pipeline, and an out-of-disk runner is what broke this job:
-    # `git clone` had 56MB to work with and failed in 26s.
-    - docker rmi "$IMAGE:$TAG-e2e" >/dev/null 2>&1 || true
   allow_failure: true    # known-red today — reported, but does not gate the deploy
 
 # --------------------------------------------------------------- build ------
