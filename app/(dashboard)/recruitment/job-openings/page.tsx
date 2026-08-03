@@ -396,6 +396,53 @@ export default function JobOpeningsPage() {
     }
   };
 
+  // Bulk delete: JobsListing has already shown a single confirmation. Delete each
+  // selected job, skipping any that are in use (same rule as single delete), and
+  // report a summary. Runs sequentially to keep error handling clear.
+  const handleBulkDeleteJobs = async (jobsToDelete: Job[]) => {
+    const deletedIds: string[] = [];
+    const skipped: string[] = [];
+    let failed = 0;
+
+    for (const job of jobsToDelete) {
+      try {
+        const usageStatus = await jdService.getUsageStatus(job.id);
+        if (usageStatus && usageStatus.is_used) {
+          skipped.push(job.title);
+          continue;
+        }
+      } catch (error) {
+        // Usage check failed — let the backend validate on delete rather than block.
+        console.error('Failed to check JD usage status during bulk delete:', error);
+      }
+      try {
+        await jdService.delete(job.id);
+        deletedIds.push(job.id);
+      } catch (error) {
+        failed++;
+      }
+    }
+
+    if (deletedIds.length > 0) {
+      setJobs(prev => prev.filter(j => !deletedIds.includes(j.id)));
+    }
+
+    if (deletedIds.length > 0 && skipped.length === 0 && failed === 0) {
+      toast.success(`${deletedIds.length} job(s) deleted`);
+    } else {
+      const summary = [
+        deletedIds.length ? `${deletedIds.length} deleted` : '',
+        skipped.length ? `${skipped.length} skipped (in use)` : '',
+        failed ? `${failed} failed` : '',
+      ].filter(Boolean).join(' · ');
+      if (deletedIds.length > 0) {
+        toast.success(summary || 'Done');
+      } else {
+        toast.error(summary || 'No jobs deleted');
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50">
@@ -424,6 +471,7 @@ export default function JobOpeningsPage() {
         onArchiveJob={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchiveJob : undefined}
         onUnarchiveJob={hasPermission('canArchiveJD') || isTenantAdmin ? handleUnarchiveJob : undefined}
         onDeleteJob={hasPermission('canDeleteJD') || isTenantAdmin ? handleDeleteJob : undefined}
+        onBulkDelete={hasPermission('canDeleteJD') || isTenantAdmin ? handleBulkDeleteJobs : undefined}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
         masterDataLinks={canManageMasters ? MASTER_DATA_LINKS : undefined}
