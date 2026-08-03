@@ -1402,6 +1402,11 @@ export default function AIInterviewClusters() {
           // not pull them into THIS bucket (e.g. Git typed in NTH must not
           // be absorbed into MTH expansion).
           const mthOtherBucket = nthSkillNames;
+          // Symmetric: NHS's other bucket is the MTH seed skills. (This was
+          // referenced below as `nthOtherBucket` but never defined → the
+          // "nthOtherBucket is not defined" ReferenceError that crashed
+          // handleGenerateClusters.)
+          const nthOtherBucket = mthSkillNames;
           // SEQUENTIAL expansion (2026-08-01) — NOT Promise.all. Expanding both
           // buckets in parallel let each one only see the OTHER bucket's ORIGINAL
           // seed skills, so MHS coined "Familiarity with API testing" while NHS
