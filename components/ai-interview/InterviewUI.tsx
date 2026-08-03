@@ -873,7 +873,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const [preTurnCountdown, setPreTurnCountdown] = useState<number | null>(null);
   const preTurnCountdownRef = useRef<number | null>(null);
   const preTurnCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const PRE_TURN_COUNTDOWN_FROM = 5; // seconds
+  const PRE_TURN_COUNTDOWN_FROM = 3; // seconds (per user story: "3..2..1…You may speak now")
   // Assigned in a useEffect (like startRecordingInternalRef) so finalizePlayback
   // and message handlers always call the freshest closure.
   const runPreTurnCountdownRef = useRef<(onComplete: () => void) => void>(() => {});
@@ -3845,9 +3845,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           setStatus("Bina is thinking...");
         }
         break;
+      case "tts_failed":
+        // TTS produced no audio even after a backend retry. Per the sync
+        // requirement, do NOT leave silent question text on screen — SUPPRESS it:
+        // clear the live token buffer so nothing is revealed and saveAiMessage()
+        // on finalize commits no bubble. The audio_end that follows still opens
+        // the mic; the backend's silence ladder handles the (rare) blank turn.
+        console.warn(`[WS ${timestamp}] tts_failed — suppressing silent question text`);
+        if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
+        tokenBufferRef.current = "";
+        currentAiTextRef.current = "";
+        revealedCharsRef.current = 0;
+        setCurrentAiText("");
+        break;
       case "llm_correction":
-        // Backend replaced the streamed response (flexible-mode validation retry/fallback).
-        // Swap the token buffer so the displayed text matches what Bina actually says.
+        // Backend replaced the streamed response (validation retry/fallback OR a
+        // post-processed skip-path question). Swap the token buffer so the
+        // displayed text matches what Bina actually says.
         console.log(`[WS ${timestamp}] LLM correction received: text_length=${data.text?.length}`);
         if (data.text) {
           tokenBufferRef.current = data.text;
@@ -8424,12 +8438,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               const isPre = preTurnCountdown != null;
               const num = isPre ? preTurnCountdown : midSilenceCountdown;
               const isLastQ = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
-              const title = isPre ? 'Get ready to answer' : 'Are you still there?';
+              const _sec = `${num} second${num === 1 ? '' : 's'}`;
+              const title = isPre ? 'Get ready to answer' : 'No further response detected';
               const subtitle = isPre
                 ? 'Speak when it’s your turn.'
                 : isLastQ
-                  ? 'Keep talking, or the interview will end.'
-                  : 'Keep talking to continue, or tap Next.';
+                  ? `Ending the interview in ${_sec}. Keep talking to continue.`
+                  : `Moving to the next question in ${_sec}. Keep talking to continue, or tap Next.`;
               const accent = isPre ? 'text-emerald-300' : 'text-amber-300';
               const ring = isPre ? 'ring-emerald-400/40' : 'ring-amber-400/40';
               return (

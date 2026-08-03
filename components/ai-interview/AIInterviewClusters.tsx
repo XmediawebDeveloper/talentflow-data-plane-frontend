@@ -1402,29 +1402,39 @@ export default function AIInterviewClusters() {
           // not pull them into THIS bucket (e.g. Git typed in NTH must not
           // be absorbed into MTH expansion).
           const mthOtherBucket = nthSkillNames;
-          const nthOtherBucket = mthSkillNames;
-          const [mthExpandRes, nthExpandRes] = await Promise.all([
-            (mthShort || mthRecover)
-              ? aiInterviewService.expandSkills({
-                  mainSkills: mthExpandInput,
-                  targetSkillCount: mthTarget,
-                  bucket: 'MTH',
-                  jdTitle: config?.position,
-                  jdDescription: jdDescription || undefined,
-                  otherBucketSkills: mthOtherBucket,
-                })
-              : Promise.resolve({ flat_skills: mthSkillNames, expanded_skills: [] as { parent: string; sub_skills: string[] }[] }),
-            (nthShort || nthRecover)
-              ? aiInterviewService.expandSkills({
-                  mainSkills: nthExpandInput,
-                  targetSkillCount: nthTarget,
-                  bucket: 'NTH',
-                  jdTitle: config?.position,
-                  jdDescription: jdDescription || undefined,
-                  otherBucketSkills: nthOtherBucket,
-                })
-              : Promise.resolve({ flat_skills: nthSkillNames, expanded_skills: [] as { parent: string; sub_skills: string[] }[] }),
-          ]);
+          // SEQUENTIAL expansion (2026-08-01) — NOT Promise.all. Expanding both
+          // buckets in parallel let each one only see the OTHER bucket's ORIGINAL
+          // seed skills, so MHS coined "Familiarity with API testing" while NHS
+          // independently coined "API Testing" — the same skill, worded two ways,
+          // in both buckets (recruiter-reported after Regenerate). We now expand
+          // MHS FIRST, then feed MHS's FULL EXPANDED list into NHS's exclusion set
+          // so NHS never generates a variant of a skill MHS already produced.
+          const mthExpandRes = (mthShort || mthRecover)
+            ? await aiInterviewService.expandSkills({
+                mainSkills: mthExpandInput,
+                targetSkillCount: mthTarget,
+                bucket: 'MTH',
+                jdTitle: config?.position,
+                jdDescription: jdDescription || undefined,
+                otherBucketSkills: mthOtherBucket,
+              })
+            : { flat_skills: mthSkillNames, expanded_skills: [] as { parent: string; sub_skills: string[] }[] };
+          // NHS exclusion = the OTHER bucket's now-EXPANDED MHS skills (not just
+          // the seed), deduped, so a paraphrase can't be re-invented here.
+          const nthOtherBucketExpanded = Array.from(new Set([
+            ...nthOtherBucket,
+            ...(mthExpandRes.flat_skills || []),
+          ].map(s => s.trim()).filter(Boolean)));
+          const nthExpandRes = (nthShort || nthRecover)
+            ? await aiInterviewService.expandSkills({
+                mainSkills: nthExpandInput,
+                targetSkillCount: nthTarget,
+                bucket: 'NTH',
+                jdTitle: config?.position,
+                jdDescription: jdDescription || undefined,
+                otherBucketSkills: nthOtherBucketExpanded,
+              })
+            : { flat_skills: nthSkillNames, expanded_skills: [] as { parent: string; sub_skills: string[] }[] };
           const buildEntries = (existing: SkillEntry[], names: string[]): SkillEntry[] => {
             const byName = new Map(existing.map(e => [e.name.toLowerCase(), e]));
             return names.map(n => byName.get(n.toLowerCase()) ?? { name: n, comment: '', type: 'Skill' as SkillType });

@@ -4,7 +4,7 @@
 # Runner: shell executor on the AWS VM, tag "talentflow", docker CLI available.
 #
 # Branches:
-#   staging → lint → build → deploy:staging   (automatic)
+#   ci/cd-staging → lint → build → deploy:staging   (automatic)
 #   aws     → lint → build → deploy:production (MANUAL button in GitLab UI)
 #
 # REQUIRED GitLab CI/CD variables (Settings → CI/CD → Variables) — these are
@@ -48,7 +48,7 @@ lint:
         sh -c "npm ci --no-audit --no-fund && npx eslint . || true"
   allow_failure: true
   rules:
-    - if: '$CI_COMMIT_BRANCH == "staging" || $CI_COMMIT_BRANCH == "aws"'
+    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'
 
 # ---------------------------------------------------------------- e2e -------
 # Playwright runs in two jobs so the whole suite still executes on every push
@@ -73,7 +73,7 @@ lint:
       - playwright-report
       - test-results
   rules:
-    - if: '$CI_COMMIT_BRANCH == "staging" || $CI_COMMIT_BRANCH == "aws"'
+    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'
 
 e2e:
   <<: *playwright
@@ -122,7 +122,7 @@ build-image:
     name: staging
     action: prepare
   rules:
-    - if: '$CI_COMMIT_BRANCH == "staging"'
+    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging"'
 
 # Separate build for production: NEXT_PUBLIC_* are environment-scoped, so the
 # prod image must be built with prod-scoped variable values.
@@ -169,7 +169,7 @@ deploy:staging:
   environment:
     name: staging
   rules:
-    - if: '$CI_COMMIT_BRANCH == "staging"'
+    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging"'
 
 deploy:production:
   <<: *deploy

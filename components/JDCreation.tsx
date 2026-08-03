@@ -1054,6 +1054,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
+  // Mirror of `step` for use inside async callbacks (streaming generation
+  // completes after the user may have already advanced past Step 1).
+  const stepRef = useRef<Step>(step);
+  useEffect(() => { stepRef.current = step; }, [step]);
   const ensureJDCreationUrl = (jdId: string, creationStage: Step) => {
     if (typeof window === 'undefined') return;
 
@@ -1768,10 +1772,75 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return 'entry';
     };
 
+    // Disambiguate overlapping open-ended (10+) levels like Architect vs Management
+    // using JD keywords, against whatever master levels tie.
+    const disambiguateSeniorLevel = (candidates: ExperienceLevel[], text: string): string => {
+      const t = (text || '').toLowerCase();
+      const isArchitect = t.includes('architect') || t.includes('architecture') || t.includes('system design') || t.includes('technical design') || t.includes('solution design');
+      const isManagement = t.includes('management') || t.includes('leadership') || t.includes('strategic planning') || t.includes('team lead') || t.includes('director') || t.includes('head of');
+      const find = (kw: string) => candidates.find(l => `${l.code} ${l.label}`.toLowerCase().includes(kw));
+      if (isArchitect && !isManagement) { const a = find('architect'); if (a) return a.code; }
+      if (isManagement) { const m = find('manage'); if (m) return m.code; }
+      const s = find('senior'); if (s) return s.code;
+      return candidates[0].code;
+    };
+
+    // DYNAMIC: snap the extracted years to the MASTER experience level whose
+    // [min_years, max_years] range contains the value. Tightest range wins, so a
+    // custom "Fresher (0-0)" level is chosen over "Entry Level (0-2)" for 0 years.
+    // Adding/renaming a level in the master table is reflected here automatically.
+    const matchExperienceCodeByYears = (min: number | null, max: number | null, text: string): string => {
+      const levels = experienceLevels || [];
+      if (!levels.length) return '';
+      const value = (min != null && !Number.isNaN(min)) ? min : ((max != null && !Number.isNaN(max)) ? max : null);
+      if (value == null) return '';
+      const rangeOf = (l: ExperienceLevel) => ({ lo: l.min_years ?? 0, hi: l.max_years == null ? Number.POSITIVE_INFINITY : l.max_years });
+
+      let candidates = levels.filter(l => { const { lo, hi } = rangeOf(l); return value >= lo && value <= hi; });
+      if (candidates.length === 0) {
+        // Above every finite range → the highest level(s) (greatest min_years).
+        const byMin = [...levels].sort((a, b) => (b.min_years ?? 0) - (a.min_years ?? 0));
+        const topMin = byMin[0].min_years ?? 0;
+        const top = byMin.filter(l => (l.min_years ?? 0) === topMin);
+        return top.length > 1 ? disambiguateSeniorLevel(top, text) : byMin[0].code;
+      }
+      if (candidates.length > 1) {
+        candidates = [...candidates].sort((a, b) => {
+          const ra = rangeOf(a); const rb = rangeOf(b);
+          const wa = ra.hi - ra.lo; const wb = rb.hi - rb.lo;
+          if (wa !== wb) return wa - wb;         // tightest range first
+          return ra.lo - rb.lo;                  // then lowest floor
+        });
+        const r0 = rangeOf(candidates[0]);
+        const tied = candidates.filter(l => { const r = rangeOf(l); return (r.hi - r.lo) === (r0.hi - r0.lo) && r.lo === r0.lo; });
+        if (tied.length > 1) return disambiguateSeniorLevel(tied, text);
+      }
+      return candidates[0].code;
+    };
+
+    // DYNAMIC: match an extracted level WORD (e.g. "senior", "fresher") to a master
+    // level by code or label. Falls through to the legacy alias map below.
+    const matchExperienceCodeByWord = (word: string): string => {
+      const levels = experienceLevels || [];
+      if (!levels.length || !word) return '';
+      const norm = word.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!norm) return '';
+      const exact = levels.find(l => l.code.toLowerCase().replace(/[^a-z0-9]/g, '') === norm);
+      if (exact) return exact.code;
+      const partial = levels.find(l => {
+        const lbl = l.label.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const code = l.code.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return lbl.includes(norm) || norm.includes(code);
+      });
+      return partial ? partial.code : '';
+    };
+
     if (hasExpMin || hasExpMax) {
       const min = hasExpMin ? expMin! : 0;
       const max = hasExpMax ? expMax : null;
-      experienceValue = mapToExperienceCode(min, max, jdText);
+      // Master-driven range match first; fall back to the hardcoded thresholds.
+      experienceValue = matchExperienceCodeByYears(hasExpMin ? min : null, max, jdText)
+        || mapToExperienceCode(min, max, jdText);
     }
 
     const rawExperienceValue = (params.job_level || params.experience_level || '').trim();
@@ -1813,7 +1882,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       };
 
       const normalizedLevel = rawExperienceValue.toLowerCase().replace(/[^a-z]/g, '');
-      experienceValue = levelMap[normalizedLevel] || '';
+      // Master-driven word match first; fall back to the hardcoded alias map.
+      experienceValue = matchExperienceCodeByWord(rawExperienceValue) || levelMap[normalizedLevel] || '';
 
       if (!experienceValue) {
         if (normalizedLevel.includes('entry')) experienceValue = 'entry';
@@ -2171,6 +2241,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         }
           setGeneratedJD(response.description);
 
+          // Skip re-fill + toast if the user already advanced past Step 1 (same
+          // late-completion guard as the streaming path).
+          if (stepRef.current !== 'create') {
+            console.log('[TalentFlow] Fallback generation completed after user advanced — skipping re-fill + toast');
+            return;
+          }
+
           // Pre-fill step 2 form with extracted params (salary, skills, etc.)
           if (response.extracted_params) {
             processExtractedParams(response.extracted_params, response.description);
@@ -2239,6 +2316,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           // Then set final content
           if (response?.description) {
             setGeneratedJD(response.description);
+
+            // If the stream finished AFTER the user already advanced past Step 1
+            // (e.g. they clicked Next as soon as text streaming completed), do NOT
+            // re-fill Step 2 or show a "generated / click Next" toast — the extraction
+            // already ran. This was the confusing "JD Generated Successfully" toast
+            // appearing on the Extract step.
+            if (stepRef.current !== 'create') {
+              console.log('[TalentFlow] Generation completed after user advanced past Step 1 — skipping re-fill + toast');
+              return;
+            }
 
             // Pre-fill step 2 form with extracted params (salary, skills, etc.)
             if (response.extracted_params) {
@@ -2566,6 +2653,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const mapToEducationCode = (degree: string | undefined): string => {
         if (!degree) return '';
         const normalized = degree.toLowerCase().replace(/[^a-z]/g, '');
+        // DYNAMIC: match against the MASTER education levels first (code or label),
+        // so any level added/renamed in the master table is honored. Falls back to
+        // the legacy alias map below only when master data has no match.
+        const masterLevels = educationLevels || [];
+        const exactMaster = masterLevels.find(l => l.code.toLowerCase().replace(/[^a-z]/g, '') === normalized);
+        if (exactMaster) return exactMaster.code;
+        const partialMaster = masterLevels.find(l => {
+          const lbl = l.label.toLowerCase().replace(/[^a-z]/g, '');
+          return lbl === normalized || lbl.includes(normalized) || normalized.includes(l.code.toLowerCase().replace(/[^a-z]/g, ''));
+        });
+        if (partialMaster) return partialMaster.code;
         const educationMap: Record<string, string> = {
           'diploma': 'diploma',
           'associate': 'associate',
@@ -2605,8 +2703,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[TalentFlow] Mapped education:', { degree: params.education_requirements?.degree, code: educationValue });
       }
 
-      // Map industry to valid Odoo codes (matching backend extraction and database)
-      const validIndustryCodes = [
+      // DYNAMIC: valid industry codes come from the MASTER industry types when
+      // loaded (so anything added there is honored). The built-in list is only a
+      // fallback for when master data hasn't loaded yet.
+      const HARDCODED_INDUSTRY_CODES = [
         'agriculture', 'forestry', 'fishing', 'mining', 'oil_gas',
         'manufacturing', 'construction', 'textiles', 'food_processing',
         'chemical', 'steel', 'energy', 'retail_wholesale', 'transportation',
@@ -2619,7 +2719,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         'blockchain_and_cryptocurrency', 'electric_vehicles', 'space',
         'cybersecurity', 'green_technology', 'others'
       ];
-      // Map common variations to valid Odoo codes
+      const masterIndustryTypes = industryTypes || [];
+      const validIndustryCodes = masterIndustryTypes.length
+        ? masterIndustryTypes.map(t => t.code)
+        : HARDCODED_INDUSTRY_CODES;
+      const defaultIndustryCode = validIndustryCodes.includes('others') ? 'others' : (validIndustryCodes[0] || '');
+      // Map common variations to valid codes (only used when the alias target
+      // actually exists in the current (master) code set).
       const industryMapping: Record<string, string> = {
         'technology': 'information_technology',
         'it': 'information_technology',
@@ -2654,15 +2760,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       let industryValue = '';
 
       if (rawIndustry) {
-        // First check if it's already a valid Odoo code
+        const strip = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const rawStripped = strip(rawIndustry);
+        const aliasTarget = industryMapping[rawIndustry];
+        // 1) exact master/valid code, 2) known alias (if target exists in code set),
+        // 3) match a master label, 4) default ("others").
         if (validIndustryCodes.includes(rawIndustry)) {
           industryValue = rawIndustry;
-        } else if (industryMapping[rawIndustry]) {
-          // Map known variations to valid Odoo codes
-          industryValue = industryMapping[rawIndustry];
+        } else if (aliasTarget && validIndustryCodes.includes(aliasTarget)) {
+          industryValue = aliasTarget;
         } else {
-          // Default to 'others' for unknown industries
-          industryValue = 'others';
+          const byLabel = masterIndustryTypes.find(t => strip(t.label) === rawStripped);
+          industryValue = byLabel ? byLabel.code : defaultIndustryCode;
         }
         console.log('[TalentFlow] Mapped industry:', { raw: params.industry_type, normalized: rawIndustry, code: industryValue });
       } else {
