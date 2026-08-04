@@ -3465,8 +3465,9 @@ export default function MyResumesPage() {
                         </button>
                       </div>
 
-                      {/* 6-card stats grid — same layout in both tabs, scoped to
-                          the tab's records. All six use the brand palette. When
+                      {/* 7-card stats grid — same layout in both tabs, scoped to
+                          the tab's records. Brand palette throughout, except the
+                          neutral Cancelled card. When
                           every number is zero the grid is replaced by a single
                           "nothing here" card, so a wall of zeros never shows. */}
                       {(() => {
@@ -3476,6 +3477,7 @@ export default function MyResumesPage() {
                           { key: 'versioned', label: 'Versioned', value: versionedCount, icon: GitBranch, tone: 'brand-blue-2' },
                           { key: 'error', label: 'Failed', value: failedCount, icon: AlertCircle, tone: 'brand-orange-deep' },
                           { key: 'pending', label: 'Pending', value: pendingCount, icon: Clock, tone: 'brand-teal' },
+                          { key: 'cancelled', label: 'Cancelled', value: cancelledTotal, icon: Ban, tone: 'gray' },
                         ] as const;
 
                         // Tailwind needs whole class names, so map tone → classes.
@@ -3522,6 +3524,15 @@ export default function MyResumesPage() {
                             tile: 'bg-brand-orange-deep',
                             value: 'text-brand-orange-deep',
                           },
+                          // Cancelled is deliberately off-palette: it's an
+                          // absence of work, not a result.
+                          'gray': {
+                            card: 'from-gray-100 to-gray-200/50',
+                            active: 'border-gray-700 ring-2 ring-gray-400 shadow-md',
+                            idle: 'border-gray-300',
+                            tile: 'bg-gray-600',
+                            value: 'text-gray-800',
+                          },
                         };
 
                         const allZero = statCards.every(card => (card.value || 0) === 0) && totalFiles === 0;
@@ -3565,22 +3576,6 @@ export default function MyResumesPage() {
                                   </div>
                                   <div className={`text-lg sm:text-xl lg:text-2xl font-bold tracking-tight ${t.value}`}>{value}</div>
                                 </div>
-
-                        {/* Cancelled */}
-                        <div
-                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'cancelled' ? null : 'cancelled')}
-                          className={`bg-gradient-to-br from-gray-100 to-gray-200/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
-                            uploadHistoryFilter === 'cancelled' ? 'border-gray-700 ring-2 ring-gray-400 shadow-md' : 'border-gray-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <Ban className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
-                            </div>
-                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Cancelled</span>
-                          </div>
-                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-800">{cancelledTotal}</div>
-                        </div>
                               );
                             })}
 
