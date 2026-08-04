@@ -154,6 +154,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const urlJdId = searchParams.get('jd_id');
   const editAssessmentId = searchParams.get('edit'); // Edit mode: assessment ID to edit
 
+  // Entered from a JD's Job Details page (Quick Actions → Assessment → Create).
+  // Mirrors the AI Interview config flow: the breadcrumb stays anchored to that
+  // job instead of resetting to the Assessments trail, and `from`/`returnUrl`
+  // survive every in-flow URL rewrite so the anchor holds across steps.
+  const fromJobDetails = searchParams.get('from') === 'job-details';
+  const returnUrl = searchParams.get('returnUrl');
+  // JD title carried in the URL. The JD list is fetched async, so without this
+  // the JD crumb would render a placeholder on first paint and visibly swap to
+  // the real title a moment later.
+  const urlJdTitle = searchParams.get('jd_title');
+
   const [step, setStepState] = useState<'select-jd' | 'configure' | 'preview'>(urlStep || 'select-jd');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [duration, setDuration] = useState(30); // Assessment duration in minutes (15-180)
@@ -166,9 +177,20 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     setStepState(newStep);
     const params = new URLSearchParams();
 
-    // When going back to select-jd, clear all params
+    // Origin params ride along on every rewrite. Without this the breadcrumb
+    // would fall back to the Assessments trail the moment the user advanced a
+    // step, and Back would lose the job it came from.
+    const withOrigin = (p: URLSearchParams) => {
+      if (fromJobDetails) p.set('from', 'job-details');
+      if (returnUrl) p.set('returnUrl', returnUrl);
+      if (urlJdTitle) p.set('jd_title', urlJdTitle);
+      return p;
+    };
+
+    // When going back to select-jd, clear step/jd params (but keep the origin)
     if (newStep === 'select-jd') {
-      router.replace('/recruitment/assessments/create', { scroll: false });
+      const q = withOrigin(new URLSearchParams()).toString();
+      router.replace(`/recruitment/assessments/create${q ? `?${q}` : ''}`, { scroll: false });
       return;
     }
 
@@ -176,8 +198,29 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     if (jobId || selectedJob?.id) {
       params.set('jd_id', jobId || selectedJob?.id || '');
     }
-    const queryString = params.toString();
+    const queryString = withOrigin(params).toString();
     router.replace(`/recruitment/assessments/create${queryString ? `?${queryString}` : ''}`, { scroll: false });
+  };
+
+  // Breadcrumb trail — Job Details anchored when the flow was entered from a
+  // JD page, otherwise the standard Assessments trail.
+  const buildBreadcrumbItems = (leafLabel: string) => {
+    const jdId = selectedJob?.id || preSelectedJobId || urlJdId;
+    if (fromJobDetails && jdId) {
+      return [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+        // urlJdTitle before the fetched title: identical text, but available on
+        // the very first paint, so the crumb never changes under the user.
+        { label: urlJdTitle || selectedJob?.title || 'Job Details', href: returnUrl || `/recruitment/job-details?id=${encodeURIComponent(jdId)}` },
+        { label: leafLabel },
+      ];
+    }
+    return [
+      { label: 'Dashboard', href: '/dashboard' },
+      { label: 'Assessments', href: '/recruitment/assessments' },
+      { label: leafLabel },
+    ];
   };
 
   // Calculate Technical vs Coding percentage based on skills and experience
@@ -631,8 +674,74 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // appear in the Technical round as MCQ / text-based questions.
   const programmingLanguages = [...COMPILABLE_LANGUAGES];
 
-  const redirectForExistingAssessment = () => {
-    router.replace('/recruitment/assessments');
+  // Guards against a second toast/redirect: the auto-select effect can re-run
+  // before the router navigates away (selectedJob stays null on this path).
+  const existingAssessmentRedirectRef = useRef(false);
+
+  const redirectForExistingAssessment = (jdIdOverride?: string) => {
+    if (existingAssessmentRedirectRef.current) return;
+    existingAssessmentRedirectRef.current = true;
+
+    if (!fromJobDetails) {
+      router.replace('/recruitment/assessments');
+      return;
+    }
+
+    // Entered from a JD (Job Details → Assessment → Create). Open the assessment
+    // that already exists instead of dumping the recruiter on the Assessments
+    // list — which both resets the breadcrumb to Dashboard › Assessments and
+    // leaves them hunting for the record the toast just told them about. Mirrors
+    // the AI Interview flow, which lands on the existing interview's details.
+    const jdId = jdIdOverride || preSelectedJobId || urlJdId;
+    const fallback = returnUrl
+      || (jdId ? `/recruitment/job-details?id=${encodeURIComponent(jdId)}` : '/recruitment/assessments');
+
+    if (!jdId) {
+      toast.info('An assessment already exists for this job.');
+      router.replace(fallback);
+      return;
+    }
+
+    // Fire-and-forget: callers are sync (a render effect and a click handler).
+    // The `resolvingPreselectedJd` loader stays on screen for the duration, so
+    // this reads as one continuous navigation rather than a pause on a form.
+    //
+    // The toast is deliberately raised AFTER the lookup settles, not before it.
+    // Announcing "an assessment already exists" up front and only then trying to
+    // find it meant a failed or empty lookup left the recruiter back on the job
+    // with a message about a page they never got — the toast promised something
+    // the navigation didn't deliver. Now the message always matches where they
+    // actually land.
+    (async () => {
+      let target: any = null;
+      try {
+        const resp: any = await assessmentService.list({ jd_id: jdId, page_size: 100 });
+        const items: any[] = Array.isArray(resp) ? resp : (resp?.items ?? []);
+        // Prefer a live assessment; otherwise the most recently updated one, so
+        // a JD with several versions opens the one the recruiter cares about.
+        const rank = (a: any) => {
+          const s = String(a?.status || '').toLowerCase();
+          return s === 'published' || s === 'active' ? 0 : 1;
+        };
+        const time = (a: any) => new Date(a?.updated_at || a?.created_at || 0).getTime();
+        target = [...items].sort((a, b) => rank(a) - rank(b) || time(b) - time(a))[0] ?? null;
+      } catch {
+        target = null;
+      }
+
+      if (target?.id) {
+        toast.info('An assessment already exists for this job.');
+        router.replace(`/recruitment/assessments/${target.id}?from=job-details`);
+        return;
+      }
+
+      // The eligibility index says this JD has an assessment but the lookup
+      // couldn't produce one — a transient failure, or the index disagreeing
+      // with /assessments (e.g. the record was since deleted). Say that, rather
+      // than pointing at a page we can't open.
+      toast.error('This job already has an assessment, but it could not be opened. Please try again.');
+      router.replace(fallback);
+    })();
   };
 
   // Auto-select job if preSelectedJobId or urlJdId is provided
@@ -650,7 +759,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
 
     if (!editAssessmentId && jdsWithAssessments.has(job.id)) {
-      redirectForExistingAssessment();
+      redirectForExistingAssessment(job.id);
       return;
     }
 
@@ -1047,7 +1156,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   const handleJobSelect = (job: Job) => {
     if (jdsWithAssessments.has(job.id)) {
-      redirectForExistingAssessment();
+      redirectForExistingAssessment(job.id);
       return;
     }
 
@@ -1761,17 +1870,59 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     return null;
   }
 
+  // Deep-linked with a JD already chosen (Job Details → Assessment → Create,
+  // which lands on ?step=configure&jd_id=…). The auto-select effect can only run
+  // once the JD list AND the assessment-eligibility set have resolved, and it is
+  // what sets `selectedJob` and/or redirects to an existing assessment. Rendering
+  // normally through that window shows either the "Select Job Description" picker
+  // or a Configure form with no JD behind it, then swaps — the route/breadcrumb
+  // glitch. Hold on a loader instead, whichever step the URL asked for.
+  //
+  // The `preselectedJobResolvable` term matters: eligibility flips to true one
+  // render BEFORE the effect runs, so without it the picker would still show for
+  // a single frame. If the JD isn't in the list at all (unpublished, or not the
+  // user's JD), this is false and we fall through to the picker as before rather
+  // than spinning forever.
+  const preselectedJdId = preSelectedJobId || urlJdId;
+  const preselectedJobResolvable =
+    !!preselectedJdId && (localJobs.length > 0 ? localJobs : jobs).some(j => j.id === preselectedJdId);
+  const resolvingPreselectedJd =
+    !!preselectedJdId &&
+    !selectedJob &&
+    !isEditMode &&
+    (!hasLoadedAssessmentEligibility || isLoadingJobs || preselectedJobResolvable);
+
+  // Not scoped to `step === 'select-jd'`: with ?step=configure the Configure
+  // form would otherwise render against a null selectedJob until the effect lands.
+  if (resolvingPreselectedJd) {
+    return (
+      <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <PageBreadcrumb
+              className="mb-3"
+              items={buildBreadcrumbItems(isEditMode ? 'Edit Assessment' : 'Create Assessment')}
+            />
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
+              <span className="ml-3 text-sm text-gray-600">Loading assessment configuration...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Step 1: Select JD
   if (step === 'select-jd') {
     return (
-      <div className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb className="mb-4 md:mb-6" items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'Assessments', href: '/recruitment/assessments' },
-              { label: isEditMode ? 'Edit Assessment' : 'Create Assessment' },
-            ]} />
+            <PageBreadcrumb
+              className="mb-3"
+              items={buildBreadcrumbItems(isEditMode ? 'Edit Assessment' : 'Create Assessment')}
+            />
             <div className="w-full">
           <div className="mb-6 sm:mb-8">
             <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-2 tracking-tight">{isEditMode ? 'Edit Assessment' : 'Create New Assessment'}</h1>
@@ -2054,7 +2205,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     const hasValidHRSelection = !hrEnabled || selectedHRQuestions.length > 0;
 
     return (
-      <div className="flex-1 overflow-x-hidden bg-slate-50 relative">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 relative">
         {/* Auto-saving overlay */}
         {isAutoSaving && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -2067,22 +2218,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb className="mb-4 md:mb-6" items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'Assessments', href: '/recruitment/assessments' },
-              // A JD is chosen by this step — name it instead of the step.
-              { label: selectedJob?.title || (isEditMode ? 'Edit Assessment' : 'Create Assessment') },
-            ]} />
+            {/* A JD is chosen by this step. On the Assessments trail the JD name
+                is the leaf; entered from Job Details the JD already owns its own
+                crumb, so the leaf names the step instead. */}
+            <PageBreadcrumb
+              className="mb-3"
+              items={buildBreadcrumbItems(
+                fromJobDetails
+                  ? (isEditMode ? 'Edit Assessment' : 'Create Assessment')
+                  : (selectedJob?.title || (isEditMode ? 'Edit Assessment' : 'Create Assessment'))
+              )}
+            />
             <div className="w-full">
-          <button
-            onClick={() => handleAutoSaveDraft(() => setStep('select-jd'))}
-            disabled={isAutoSaving}
-            className="flex items-center gap-2 text-sm sm:text-base text-gray-600 hover:text-brand-blue mb-4 sm:mb-6 transition-colors disabled:opacity-50"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            Back to Job Selection
-          </button>
-
           <div className="mb-4 sm:mb-6">
             <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-1 tracking-tight">Configure Assessment</h1>
             <p className="text-sm sm:text-base text-gray-600">
@@ -2872,14 +3019,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
 
     return (
-      <div className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb className="mb-4 md:mb-6" items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'Assessments', href: '/recruitment/assessments' },
-              { label: selectedJob?.title || (isEditMode ? 'Edit Assessment' : 'Create Assessment') },
-            ]} />
+            <PageBreadcrumb
+              className="mb-3"
+              items={buildBreadcrumbItems(
+                fromJobDetails
+                  ? (isEditMode ? 'Edit Assessment' : 'Create Assessment')
+                  : (selectedJob?.title || (isEditMode ? 'Edit Assessment' : 'Create Assessment'))
+              )}
+            />
             <div className="w-full">
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center gap-2 sm:gap-3 mb-2">

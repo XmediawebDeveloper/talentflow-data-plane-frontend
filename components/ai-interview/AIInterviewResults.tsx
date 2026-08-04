@@ -12,13 +12,17 @@ import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/lib/services/aiInterviewService';
 import { formatISTDate, formatIST, parseIST } from '@/lib/utils/dateUtils';
-import PageBreadcrumb from '@/components/PageBreadcrumb';
+import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 
 interface AIInterviewResultsProps {
   configId: string;
   configTitle?: string;
   jdTitle?: string;
   onBack: () => void;
+  /** Overrides the default AI Interviews trail. Set when these results are
+   *  opened from a JD's Job Details page, so the breadcrumb stays anchored to
+   *  that job instead of resetting to the AI Interviews trail. */
+  breadcrumbItems?: BreadcrumbCrumb[];
   /** When true, render only the results content (stats + filters + table),
    *  without the page <main>/breadcrumb/back-button chrome. Used when the
    *  results view is embedded as a tab inside the interview details page. */
@@ -111,7 +115,7 @@ function formatDuration(session: AIInterviewResponse): string {
   return `${mins}m ${secs}s`;
 }
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate, breadcrumbItems }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -250,47 +254,52 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-          <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-              <Users className="w-4 h-4 text-brand-blue" />
+      {/* Stats — standalone page only. Embedded as the Job Details "AI Interview
+          Result" tab, the summary cards are dropped: that page already carries
+          its own counts and Quick Actions, and the tab leads with the candidate
+          table instead. */}
+      {!embedded && (
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <Users className="w-4 h-4 text-brand-blue" />
+              </div>
+              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Invited</span>
             </div>
-            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Invited</span>
+            <div className="text-2xl font-bold text-gray-900 tracking-tight">{totalSessions}</div>
           </div>
-          <div className="text-2xl font-bold text-gray-900 tracking-tight">{totalSessions}</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-          <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center">
-              <CheckCircle className="w-4 h-4 text-green-600" />
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+              </div>
+              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Completed</span>
             </div>
-            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Completed</span>
+            <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.completed}</div>
           </div>
-          <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.completed}</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-          <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
-              <Clock className="w-4 h-4 text-brand-orange-deep" />
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+                <Clock className="w-4 h-4 text-brand-orange-deep" />
+              </div>
+              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">In Progress</span>
             </div>
-            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">In Progress</span>
+            <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.inProgress}</div>
           </div>
-          <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.inProgress}</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-          <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
-              <BarChart3 className="w-4 h-4 text-brand-cyan" />
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                <BarChart3 className="w-4 h-4 text-brand-cyan" />
+              </div>
+              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Avg Score</span>
             </div>
-            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Avg Score</span>
-          </div>
-          <div className="text-2xl font-bold text-gray-900 tracking-tight">
-            {summary.avgScore !== null ? `${summary.avgScore}%` : '—'}
+            <div className="text-2xl font-bold text-gray-900 tracking-tight">
+              {summary.avgScore !== null ? `${summary.avgScore}%` : '—'}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Search + Filter bar */}
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
@@ -581,7 +590,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
-            items={[
+            items={breadcrumbItems ?? [
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
               // Name the interview these results belong to when we know it.

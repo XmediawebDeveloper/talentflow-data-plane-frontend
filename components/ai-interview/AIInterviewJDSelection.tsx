@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Briefcase, Plus, Loader2, Building2, MapPin, Clock, TrendingUp, Calendar, User, Users } from 'lucide-react';
+import { Briefcase, Plus, Loader2, Building2, MapPin, Clock, TrendingUp, Calendar, User, Users } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -72,8 +72,6 @@ export default function AIInterviewJDSelection() {
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-        {/* Step indicator */}
-        <AIInterviewStepIndicator currentStep={1} />
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
@@ -83,15 +81,13 @@ export default function AIInterviewJDSelection() {
               { label: 'Select Job Description' },
             ]}
           />
+        {/* Step indicator — inside the card, below the breadcrumb, matching the
+            other steps. Sitting outside the card left it flush against the top
+            of the scroll container, where it got clipped out of view. */}
+        <AIInterviewStepIndicator currentStep={1} />
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push('/recruitment/ai-interviews')}
-              className="p-2 hover:bg-brand-blue/5 rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-600" />
-            </button>
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                 <Briefcase className="w-5 h-5 text-brand-blue" />

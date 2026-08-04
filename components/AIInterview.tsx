@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, useCallback, type ComponentType } from 're
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import AIInterviewFlowLoader from '@/components/ai-interview/AIInterviewFlowLoader';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { useQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -803,12 +804,16 @@ export default function AIInterview() {
         return;
       }
 
+      // Preserve where the quick action was launched from (e.g. from=job-details)
+      // so the config flow can keep its breadcrumb anchored to the JD.
+      const originParam = searchParams.get('from') === 'job-details' ? '&from=job-details' : '';
+
       if (draftConfig && canUpdateAIInterviews) {
-        router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}&config_id=${encodeURIComponent(draftConfig.id)}`);
+        router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}&config_id=${encodeURIComponent(draftConfig.id)}${originParam}`);
         return;
       }
 
-      router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}`);
+      router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}${originParam}`);
       return;
     }
 
@@ -1041,15 +1046,21 @@ export default function AIInterview() {
     );
   }
 
-  // Loading state
-  if (loading) {
+  // A create quick-action (Job Details → "AI Interview → Create") always leaves
+  // this page for the config flow. Hold the loader while it's pending, or the
+  // list — breadcrumb included — paints for a frame before the effect above
+  // redirects, which reads as a flash of the wrong page. This can't get stuck:
+  // that effect either navigates away or strips the param via clearQuickActionUrl.
+  const redirectingToConfig = searchParams.get('action') === 'create-ai-interview';
+
+  // Loading state. While redirecting, use the SAME message the config page
+  // shows so the chained loaders read as one continuous screen rather than a
+  // spinner that restarts with different text.
+  if (loading || redirectingToConfig) {
     return (
-      <div className="flex-1 flex items-center justify-center overflow-y-auto bg-slate-50 dark:bg-slate-950">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
-          <p className="text-sm text-gray-500 dark:text-slate-500">Loading AI interviews...</p>
-        </div>
-      </div>
+      <AIInterviewFlowLoader
+        message={redirectingToConfig ? 'Loading configuration…' : 'Loading AI interviews…'}
+      />
     );
   }
 

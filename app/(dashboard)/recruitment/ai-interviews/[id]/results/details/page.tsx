@@ -98,18 +98,23 @@ function DetailsContent() {
     );
   }
 
+  // Rendered WITHOUT a wrapper div, deliberately. CandidateResultsView's own
+  // <main> is `flex-1 … overflow-y-auto`, which only resolves to a real scroll
+  // container when it's a direct child of the dashboard layout's flex column.
+  // Nested inside a plain div it had no height constraint and never scrolled, so
+  // the sticky breadcrumb pinned to a scrollport that never moved. The wrapper
+  // was also a second max-w-[1400px] mx-auto on top of the one the component
+  // already applies.
   return (
-    <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8">
-      <CandidateResultsView
-        interview={session}
-        onBack={handleBack}
-        breadcrumbTrail={[{ label: 'Results', href: `/recruitment/ai-interviews/${configId}/results` }]}
-        currentIndex={navIndex >= 0 ? navIndex : undefined}
-        totalCount={navList.length || undefined}
-        onPrev={prevSession ? () => router.replace(buildNavUrl(prevSession)) : undefined}
-        onNext={nextSession ? () => router.replace(buildNavUrl(nextSession)) : undefined}
-      />
-    </div>
+    <CandidateResultsView
+      interview={session}
+      onBack={handleBack}
+      breadcrumbTrail={[{ label: 'Results', href: `/recruitment/ai-interviews/${configId}/results` }]}
+      currentIndex={navIndex >= 0 ? navIndex : undefined}
+      totalCount={navList.length || undefined}
+      onPrev={prevSession ? () => router.replace(buildNavUrl(prevSession)) : undefined}
+      onNext={nextSession ? () => router.replace(buildNavUrl(nextSession)) : undefined}
+    />
   );
 }
 
