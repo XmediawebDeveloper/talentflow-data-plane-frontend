@@ -42,6 +42,30 @@ export default defineConfig({
     headless: true,
     // Note: Firefox doesn't support "camera"/"microphone" permissions via CDP.
     // Fake media stream flags handle this instead (--use-fake-ui-for-media-stream).
+
+    // Evidence on failure, and only on failure.
+    //
+    // A Tier-1 row that fails says "expected 'Match Status' to be visible" —
+    // true, but it does not say what WAS on the page, and the run is gone by the
+    // time anyone reads it. A screenshot answers that in one look: wrong route,
+    // session-expired modal, empty state, or a genuinely missing column.
+    //
+    // "only-on-failure" rather than "on": a green run writes nothing. That
+    // matters here — this runner filled its disk to 100% once already and took
+    // the pipeline down with it, and a passing 1,268-test run would otherwise
+    // leave a screenshot per test behind every push.
+    screenshot: "only-on-failure",
+
+    // The trace is the heavier artifact — DOM snapshots, network, console, a
+    // step timeline — so it is spent only on the retry of something that already
+    // failed once. `retries: 1` above means a flaky test produces exactly one,
+    // and a consistently-failing one produces exactly one too.
+    trace: "on-first-retry",
+
+    // Video stays off deliberately. It is recorded for the whole run rather than
+    // on demand, costs far more disk than a screenshot, and shows less than the
+    // trace does for a headless assertion failure.
+    video: "off",
   },
   projects: [
     {
