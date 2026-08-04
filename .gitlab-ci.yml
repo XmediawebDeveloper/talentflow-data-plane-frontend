@@ -186,6 +186,214 @@ e2e:quarantine:
     - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
   allow_failure: true    # known-red today — reported, but does not gate the deploy
 
+# --------------------------------------------------------------- tier2 ------
+# Tier 2 is the half of the suite a mock cannot express: state that has to really
+# exist. A JD that survives a reload, an audit row written as a side effect,
+# units that actually came off a balance, a viewer who really gets a 403. So this
+# job stands up a real backend — and the entire design below is about making sure
+# it is never the *live* one.
+#
+# The runner is a shell executor. It shares this VM, this docker daemon and this
+# disk with the staging containers it deploys to, and the staging backend points
+# at `talentflow_landlord` — the database real clients read. A Tier-2 run creates
+# records, consumes units and writes audit rows. Pointed one field wrong it would
+# do all of that in front of customers.
+#
+# Three things keep that from happening:
+#   1. A throwaway backend on port 8199. The systemd services on 8000/8001 that
+#      real clients use are never touched, and neither is the staging container
+#      on 8101 — that one points at the live database.
+#   2. DATABASE_NAME=talentflow_e2e, asserted rather than assumed. Both
+#      e2e/helpers/tier2-backend.ts and e2e/scripts/tier2-provision.py refuse to
+#      start if the port or the database name looks live, so a mistake here fails
+#      on the first line instead of on the hundredth write.
+#   3. Everything the live databases give up is read-only: one schema-only
+#      pg_dump and one data dump of reference tables (plans, roles, permissions,
+#      countries — no tenant rows). Nothing is ever written back.
+#
+# Credentials and the backend image come from the running staging container
+# rather than from new CI variables. That is deliberate: it adds no secret to
+# GitLab, and it guarantees Tier 2 tests the backend build that is actually
+# deployed rather than a tag someone pinned here months ago.
+#
+# Bootstrap is idempotent — it costs a few seconds when the database is already
+# in place, so re-running the job is always safe.
+#
+# `alembic upgrade head` is NOT how the database is created: the first migration
+# is a baseline over an existing schema, so on an empty database the second
+# migration immediately dies with `relation "users" does not exist`. Hence the
+# schema dump.
+tier2:
+  stage: test
+  tags: [talentflow]
+  needs:
+    - job: build-image
+      optional: true
+    - job: build-image:production
+      optional: true
+  variables:
+    TIER2_PORT: "8199"
+    TIER2_DB_NAME: talentflow_e2e
+    # The container whose image and environment this job borrows.
+    STAGING_API: tf-backend-staging-api-1
+    PG_IMAGE: postgres:17-alpine
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - playwright-report
+      - test-results
+  script:
+    - |
+      set -e
+      if ! docker inspect "$STAGING_API" >/dev/null 2>&1; then
+        echo "Tier 2 needs the staging backend container ($STAGING_API) to be running:"
+        echo "it is where the database credentials and the backend image come from."
+        exit 1
+      fi
+      BACKEND_IMAGE=$(docker inspect "$STAGING_API" --format '{{.Config.Image}}')
+      echo "borrowing backend image: $BACKEND_IMAGE"
+
+      # Reuse the staging environment wholesale, then override only the two
+      # variables that decide which database is written. Listing ~100 variables
+      # by hand here would rot the moment the backend gains one.
+      ENVFILE="$CI_PROJECT_DIR/.tier2.env"
+      docker inspect "$STAGING_API" --format '{{range .Config.Env}}{{println .}}{{end}}' \
+        | grep -vE '^(DATABASE_NAME|SHARED_DATABASE_NAME|PATH|HOSTNAME|HOME|LANG|GPG_KEY|PYTHON_|_=|$)' \
+        > "$ENVFILE"
+      printf 'DATABASE_NAME=%s\nSHARED_DATABASE_NAME=%s_shared\n' \
+        "$TIER2_DB_NAME" "$TIER2_DB_NAME" >> "$ENVFILE"
+      chmod 600 "$ENVFILE"
+
+      PGHOST=$(grep -m1 '^DATABASE_HOST=' "$ENVFILE" | cut -d= -f2-)
+      PGUSER=$(grep -m1 '^DATABASE_USER=' "$ENVFILE" | cut -d= -f2-)
+      PGPASSWORD=$(docker inspect "$STAGING_API" --format '{{range .Config.Env}}{{println .}}{{end}}' \
+        | grep -m1 '^DATABASE_PASSWORD=' | cut -d= -f2-)
+      export PGPASSWORD
+      psql() { docker run --rm -i -e PGPASSWORD "$PG_IMAGE" psql -h "$PGHOST" -U "$PGUSER" "$@"; }
+
+      # A last guard in the job itself, in case someone edits TIER2_DB_NAME.
+      case "$TIER2_DB_NAME" in
+        talentflow_landlord|talentflow_shared|talentflow_trail|postgres|machine)
+          echo "TIER2_DB_NAME=$TIER2_DB_NAME is a live database. Refusing."; exit 1 ;;
+      esac
+    - |
+      set -e
+      for db in "$TIER2_DB_NAME" "${TIER2_DB_NAME}_shared"; do
+        if [ "$(psql -d postgres -tAc "select 1 from pg_database where datname='$db'")" != "1" ]; then
+          psql -d postgres -c "CREATE DATABASE $db"
+          echo "created $db"
+        fi
+      done
+
+      # Schema: copied from the landlord database, which is the only authority on
+      # what this backend build expects. Read-only — pg_dump never writes.
+      TABLES=$(psql -d "$TIER2_DB_NAME" -tAc \
+        "select count(*) from information_schema.tables where table_schema='public'")
+      if [ "$TABLES" -lt 50 ]; then
+        echo "bootstrapping schema into $TIER2_DB_NAME (had $TABLES tables)"
+        docker run --rm -e PGPASSWORD "$PG_IMAGE" pg_dump -h "$PGHOST" -U "$PGUSER" \
+          -d talentflow_landlord --schema-only --no-owner --no-privileges \
+          > "$CI_PROJECT_DIR/.tier2-schema.sql"
+        psql -d "$TIER2_DB_NAME" -q < "$CI_PROJECT_DIR/.tier2-schema.sql"
+      fi
+
+      # Reference data only. Tenant provisioning fails without it —
+      # `fk_tenants_plan_id` needs plans row 1 to exist. Every table listed here
+      # is master data; no tenant, user, invoice or audit row is copied.
+      PLANS=$(psql -d "$TIER2_DB_NAME" -tAc "select count(*) from plans")
+      if [ "$PLANS" = "0" ]; then
+        echo "seeding reference tables"
+        SEED="countries permissions roles role_permissions plans features plan_features
+              ai_models ai_model_assignments add_ons terms_and_conditions plan_setting
+              global_ai_budget_thresholds alembic_version alembic_version_dataplane"
+        ARGS=""
+        for t in $SEED; do ARGS="$ARGS -t public.$t"; done
+        docker run --rm -e PGPASSWORD "$PG_IMAGE" pg_dump -h "$PGHOST" -U "$PGUSER" \
+          -d talentflow_landlord --data-only --no-owner --no-privileges \
+          --disable-triggers $ARGS > "$CI_PROJECT_DIR/.tier2-seed.sql"
+        psql -d "$TIER2_DB_NAME" -q < "$CI_PROJECT_DIR/.tier2-seed.sql"
+      fi
+    - |
+      set -e
+      docker rm -f "tier2-api-$CI_JOB_ID" >/dev/null 2>&1 || true
+      docker run -d --name "tier2-api-$CI_JOB_ID" --env-file "$CI_PROJECT_DIR/.tier2.env" \
+        -p "127.0.0.1:$TIER2_PORT:8001" --memory=2g "$BACKEND_IMAGE" >/dev/null
+      for i in $(seq 1 36); do
+        if curl -fsS "http://127.0.0.1:$TIER2_PORT/health" >/dev/null 2>&1; then
+          echo "tier2 backend up after $((i * 5))s"
+          break
+        fi
+        sleep 5
+      done
+      if ! curl -fsS "http://127.0.0.1:$TIER2_PORT/health" >/dev/null 2>&1; then
+        echo "throwaway backend never answered on $TIER2_PORT"
+        docker logs --tail=60 "tier2-api-$CI_JOB_ID"
+        exit 1
+      fi
+    - |
+      set -e
+      # Provision the tenant the suite logs in as. This does NOT go over HTTP:
+      # POST /api/v1/tenants/register raises TypeError in the backend and 500s on
+      # every request (the router passes one argument to a two-argument service).
+      # The script drives ProvisioningService directly instead — same code path
+      # the control plane uses — and lives in this repo so the backend source
+      # stays untouched.
+      docker run --rm --env-file "$CI_PROJECT_DIR/.tier2.env" \
+        -v "$CI_PROJECT_DIR/e2e/scripts/tier2-provision.py:/app/tier2-provision.py:ro" \
+        "$BACKEND_IMAGE" python /app/tier2-provision.py \
+        > "$CI_PROJECT_DIR/.tier2-tenant.json"
+      tail -1 "$CI_PROJECT_DIR/.tier2-tenant.json" > "$CI_PROJECT_DIR/.tier2-tenant.tmp"
+      mv "$CI_PROJECT_DIR/.tier2-tenant.tmp" "$CI_PROJECT_DIR/.tier2-tenant.json"
+      echo "provisioned tenant: $(python3 -c "import json;print(json.load(open('$CI_PROJECT_DIR/.tier2-tenant.json'))['subdomain'])")"
+    - |
+      set -e
+      SUB=$(python3 -c "import json;print(json.load(open('$CI_PROJECT_DIR/.tier2-tenant.json'))['subdomain'])")
+      MAIL=$(python3 -c "import json;print(json.load(open('$CI_PROJECT_DIR/.tier2-tenant.json'))['adminEmail'])")
+      PASS=$(python3 -c "import json;print(json.load(open('$CI_PROJECT_DIR/.tier2-tenant.json'))['adminPassword'])")
+      # BASE_URL is required by playwright.config.ts but unused here: every Tier-2
+      # assertion is an API call, so no page is ever opened.
+      docker run --rm --network=host --user "$(id -u):$(id -g)" \
+        -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
+        -e E2E_EXTERNAL=1 -e BASE_URL="http://127.0.0.1:$TIER2_PORT" \
+        -e TIER2_API_URL="http://127.0.0.1:$TIER2_PORT" \
+        -e TIER2_DB_NAME="$TIER2_DB_NAME" \
+        -e TIER2_TENANT_SUBDOMAIN="$SUB" \
+        -e TIER2_ADMIN_EMAIL="$MAIL" \
+        -e TIER2_ADMIN_PASSWORD="$PASS" \
+        --memory=8g --memory-swap=8g --shm-size=1g \
+        -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy \
+        sh -c "npm ci --no-audit --no-fund \
+               && npx playwright install firefox \
+               && npx playwright test smoke-tier2- --reporter=line,html"
+  after_script:
+    # Runs even when the suite fails, so a red run never leaves a backend holding
+    # a port or a pile of tenant databases behind.
+    - docker rm -f "tier2-api-$CI_JOB_ID" >/dev/null 2>&1 || true
+    - |
+      PGPASSWORD=$(docker inspect "$STAGING_API" --format '{{range .Config.Env}}{{println .}}{{end}}' \
+        | grep -m1 '^DATABASE_PASSWORD=' | cut -d= -f2- 2>/dev/null) || true
+      PGHOST=$(docker inspect "$STAGING_API" --format '{{range .Config.Env}}{{println .}}{{end}}' \
+        | grep -m1 '^DATABASE_HOST=' | cut -d= -f2- 2>/dev/null) || true
+      PGUSER=$(docker inspect "$STAGING_API" --format '{{range .Config.Env}}{{println .}}{{end}}' \
+        | grep -m1 '^DATABASE_USER=' | cut -d= -f2- 2>/dev/null) || true
+      if [ -n "$PGHOST" ]; then
+        export PGPASSWORD
+        # Only databases this suite creates match `tenant_e2e%`; the live ones are
+        # talentflow_*. Dropping them keeps the shared postgres server from
+        # accumulating one database per pipeline run.
+        for db in $(docker run --rm -e PGPASSWORD "$PG_IMAGE" psql -h "$PGHOST" -U "$PGUSER" -d postgres \
+                      -tAc "select datname from pg_database where datname like 'tenant_e2e%'" 2>/dev/null); do
+          docker run --rm -e PGPASSWORD "$PG_IMAGE" psql -h "$PGHOST" -U "$PGUSER" -d postgres \
+            -c "DROP DATABASE IF EXISTS $db WITH (FORCE)" >/dev/null 2>&1 || true
+        done
+      fi
+    - rm -f "$CI_PROJECT_DIR/.tier2.env" "$CI_PROJECT_DIR/.tier2-schema.sql"
+        "$CI_PROJECT_DIR/.tier2-seed.sql" "$CI_PROJECT_DIR/.tier2-tenant.json"
+  allow_failure: false   # a red Tier-2 stops the deploy, same as e2e
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'
+
 # --------------------------------------------------------------- build ------
 # This runs BEFORE e2e now. Building is not deploying: it only writes an image
 # to the VM's local docker. e2e then starts a throwaway container from that
@@ -253,7 +461,7 @@ build-image:production:
 
 deploy:staging:
   <<: *deploy
-  needs: ["build-image", "e2e"]   # e2e is the gate; build-image supplies the image
+  needs: ["build-image", "e2e", "tier2"]   # both suites gate; build-image supplies the image
   variables:
     DEPLOY_DIR: /opt/talentflow/staging/frontend
     COMPOSE_PROJECT_NAME: tf-frontend-staging
@@ -266,7 +474,7 @@ deploy:staging:
 
 deploy:production:
   <<: *deploy
-  needs: ["build-image:production", "e2e"]   # e2e is the gate
+  needs: ["build-image:production", "e2e", "tier2"]   # both suites gate
   variables:
     DEPLOY_DIR: /opt/talentflow/frontend
     COMPOSE_PROJECT_NAME: tf-frontend-prod
