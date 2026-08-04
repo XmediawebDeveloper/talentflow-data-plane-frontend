@@ -54,3 +54,4 @@ e2e/data/*.json
 .tier2-tenant.json
 junit-*.xml
 report.json
+qa-cases-*.json

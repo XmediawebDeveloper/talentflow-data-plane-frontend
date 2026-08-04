@@ -110,6 +110,7 @@ lint:
     paths:
       - playwright-report
       - test-results
+      - qa-cases-*.json
     # Feeds GitLab's Tests tab: per-test pass/fail/skip, searchable, with the
     # failing tc_id named. Reading a 1,268-line job log to find one red row is
     # not a reporting strategy.
@@ -145,13 +146,17 @@ e2e:
         -e HOME=/tmp -e npm_config_cache=/tmp/.npm
         -e E2E_EXTERNAL=1 -e BASE_URL="http://localhost:$APP_PORT"
         -e PLAYWRIGHT_JUNIT_OUTPUT_NAME="junit-$CI_JOB_NAME_SLUG.xml"
+        -e PLAYWRIGHT_JSON_OUTPUT_NAME="report.json"
         --memory=8g --memory-swap=8g --shm-size=1g
         -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy
         sh -c "npm ci --no-audit --no-fund
                && npx playwright install firefox
                && npx playwright test smoke-tier1 smoke-score-consistency
                     smoke-auth smoke-dashboard smoke-jd excel-data-driven
-                    --reporter=line,html,junit"
+                    --reporter=line,html,junit,json
+               ; rc=\$?
+               ; node e2e/scripts/build-report.mjs --only tier1 --out qa-cases-tier1.json
+               ; exit \$rc"
   after_script:
     - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
   allow_failure: false   # a red suite stops the deploy
@@ -183,12 +188,13 @@ e2e:quarantine:
         -e HOME=/tmp -e npm_config_cache=/tmp/.npm
         -e E2E_EXTERNAL=1 -e BASE_URL="http://localhost:$APP_PORT"
         -e PLAYWRIGHT_JUNIT_OUTPUT_NAME="junit-$CI_JOB_NAME_SLUG.xml"
+        -e PLAYWRIGHT_JSON_OUTPUT_NAME="report.json"
         --memory=8g --memory-swap=8g --shm-size=1g
         -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy
         sh -c "npm ci --no-audit --no-fund
                && npx playwright install firefox
                && npx playwright test ai-interview-pipeline timer-slot-based timer-speaking
-                    --reporter=line,html,junit"
+                    --reporter=line,html,junit,json"
   after_script:
     - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
   allow_failure: true    # known-red today — reported, but does not gate the deploy
@@ -250,6 +256,7 @@ tier2:
     paths:
       - playwright-report
       - test-results
+      - qa-cases-*.json
     # Feeds GitLab's Tests tab: per-test pass/fail/skip, searchable, with the
     # failing tc_id named. Reading a 1,268-line job log to find one red row is
     # not a reporting strategy.
@@ -374,11 +381,15 @@ tier2:
         -e TIER2_ADMIN_EMAIL="$MAIL" \
         -e TIER2_ADMIN_PASSWORD="$PASS" \
         -e PLAYWRIGHT_JUNIT_OUTPUT_NAME="junit-tier2.xml" \
+        -e PLAYWRIGHT_JSON_OUTPUT_NAME="report.json" \
         --memory=8g --memory-swap=8g --shm-size=1g \
         -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy \
         sh -c "npm ci --no-audit --no-fund \
                && npx playwright install firefox \
-               && npx playwright test smoke-tier2- --reporter=line,html,junit"
+               && npx playwright test smoke-tier2- --reporter=line,html,junit,json \
+               ; rc=\$? \
+               ; node e2e/scripts/build-report.mjs --only tier2 --out qa-cases-tier2.json \
+               ; exit \$rc"
   after_script:
     # Runs even when the suite fails, so a red run never leaves a backend holding
     # a port or a pile of tenant databases behind.
