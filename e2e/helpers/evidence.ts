@@ -75,11 +75,48 @@ function redact(value: unknown, depth = 0): unknown {
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[k] = isSecret(k) ? REDACTED : redact(v, depth + 1);
+      out[k] = isSecret(k) && !isHarmless(v) ? REDACTED : redact(v, depth + 1);
     }
     return out;
   }
   return value;
+}
+
+/**
+ * Values that cannot be a credential whatever the key is called.
+ *
+ * The key list matches on substrings, so `must_reset_password: false` and
+ * `has_api_key: true` were being blanked out — the reader loses a fact and
+ * nothing is protected, because a boolean is not a secret. Strings, arrays and
+ * objects stay redacted: `api_keys: ["glpat-…"]` is exactly the shape that
+ * would leak.
+ */
+function isHarmless(value: unknown): boolean {
+  return typeof value === "boolean" || typeof value === "number" || value === null;
+}
+
+/**
+ * Blank out secret-looking query parameters.
+ *
+ * Found the hard way: the app opens its notification socket at
+ * `/api/v1/ws/notifications?token=eyJhbGciOi…`, and a recorder that only
+ * redacts bodies published that JWT in full. Redaction has to follow the data,
+ * not the field it usually arrives in.
+ */
+function redactUrl(url: string): string {
+  const at = url.indexOf("?");
+  if (at < 0) return url;
+  const [path, query] = [url.slice(0, at), url.slice(at + 1)];
+  const cleaned = query
+    .split("&")
+    .map((pair) => {
+      const eq = pair.indexOf("=");
+      if (eq < 0) return pair;
+      const key = pair.slice(0, eq);
+      return isSecret(key) ? `${key}=${REDACTED}` : pair;
+    })
+    .join("&");
+  return `${path}?${cleaned}`;
 }
 
 /**
@@ -176,7 +213,7 @@ export function recordExchange(e: {
     n: ev.exchanges.length + 1,
     method: e.method.toUpperCase(),
     // Strip the origin: it is the same for every row and is noise in a table.
-    url: e.url.replace(/^https?:\/\/[^/]+/, ""),
+    url: redactUrl(e.url.replace(/^https?:\/\/[^/]+/, "")),
     requestBody: summarise(e.requestBody),
     status: e.status,
     responseBody: summarise(e.responseBody),
@@ -209,4 +246,4 @@ export async function attachEvidence(): Promise<void> {
  * Authorization and password and find nothing", and that check is worth having
  * as a unit-level assertion too — it is the one bug here that ships secrets.
  */
-export const __testing = { redact, summarise, isSecret, MAX_BODY };
+export const __testing = { redact, summarise, isSecret, redactUrl, isHarmless, MAX_BODY };

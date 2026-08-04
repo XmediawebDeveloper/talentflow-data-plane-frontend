@@ -24,7 +24,7 @@ import {
   resetViewState,
 } from "./auth";
 import { mockSeededLists } from "./fixtures";
-import { attachEvidence, recordAssertion, recordStep } from "./evidence";
+import { attachEvidence, recordAssertion, recordExchange, recordStep } from "./evidence";
 
 /** What the row claims to prove, without the reader knowing the vocabulary. */
 function describeAssertion(kind: string, value: string): string {
@@ -60,15 +60,55 @@ function describeAssertion(kind: string, value: string): string {
  */
 function watchMockTraffic(page: Page): void {
   const seen = new Map<string, number>();
-  page.on("response", (res) => {
+  page.on("response", async (res) => {
     const url = res.url();
     if (!/\/api\/v\d+\//.test(url)) return;
+    const request = res.request();
     const path = url.replace(/^https?:\/\/[^/]+/, "").split("?")[0];
-    const key = `${res.request().method()} ${path}`;
+    const key = `${request.method()} ${path}`;
     const count = (seen.get(key) ?? 0) + 1;
     seen.set(key, count);
     if (count > 1) return;
-    recordStep("mock", `${key}`, String(res.status()));
+
+    // Status alone answers "was it called". It does not answer the two things a
+    // reader actually asks: what did we send, and what did the mock hand back?
+    // A row asserting "Insufficient Units" is on screen is only meaningful
+    // because /jd/access-check returned the insufficient-units variant — and
+    // without the body, the evidence showed a bare 200 and explained nothing.
+    let sent: unknown;
+    const post = request.postData();
+    if (post) {
+      try {
+        sent = JSON.parse(post);
+      } catch {
+        sent = post;
+      }
+    }
+
+    // Best effort: a redirect or an aborted request has no readable body, and a
+    // recorder must never be the reason a test fails.
+    let got: unknown;
+    try {
+      const text = await res.text();
+      if (text) {
+        try {
+          got = JSON.parse(text);
+        } catch {
+          got = text;
+        }
+      }
+    } catch {
+      got = undefined;
+    }
+
+    recordExchange({
+      method: request.method(),
+      url: url.replace(/^https?:\/\/[^/]+/, ""),
+      requestBody: sent,
+      status: res.status(),
+      responseBody: got,
+      ms: 0, // a mock has no meaningful latency; the number would be noise
+    });
   });
 }
 
@@ -211,6 +251,12 @@ export function runTier1Cases(suite: string, rows: Tier1Row[]) {
         });
 
         recordAssertion(describeAssertion(row.assert_kind, row.assert_value));
+        // Which principal, and which pre-condition variant of the mocks. These
+        // decide what the page is shown, so a reader cannot interpret the rest
+        // without them — TC-0010 only sees "Insufficient Units" because its
+        // precondition swaps the /jd/access-check response.
+        recordStep("note", `signed in as: ${row.role || "tenant_admin"}`);
+        if (row.precondition) recordStep("note", `pre-condition: ${row.precondition}`);
 
         // One listener instead of instrumenting every page.route() handler in
         // auth.ts. `response` fires for fulfilled mocks too, so this records
