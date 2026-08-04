@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical, RefreshCw } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical, RefreshCw, Ban } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
@@ -344,11 +344,13 @@ export default function MyResumesPage() {
   const [uploadHistoryTab, setUploadHistoryTab] = useState<'current' | 'completed'>('current');
   const [allResumesTotal, setAllResumesTotal] = useState(0);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
-  const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | null>(null);
+  const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | 'cancelled' | null>(null);
   const [retryingBatches, setRetryingBatches] = useState<Set<string>>(new Set());
   const [cancellingBatches, setCancellingBatches] = useState<Set<string>>(new Set());
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
   const [cancellingItems, setCancellingItems] = useState<Set<string>>(new Set());
+  const [cancelBatchConfirm, setCancelBatchConfirm] = useState<{ isOpen: boolean; batchId: string; pendingCount: number }>({ isOpen: false, batchId: '', pendingCount: 0 });
+  const [cancelItemConfirm, setCancelItemConfirm] = useState<{ isOpen: boolean; batchId: string; itemId: string; fileName: string }>({ isOpen: false, batchId: '', itemId: '', fileName: '' });
 
   // Bulk version resolution state
   const [selectedVersionedItems, setSelectedVersionedItems] = useState<Map<string, VersionedBatchItem>>(new Map());
@@ -561,33 +563,47 @@ export default function MyResumesPage() {
     }
   }, [searchParams, router]);
 
+  // Single mapper for every batch payload the API returns. The cancel/retry
+  // handlers used to spread the raw snake_case batch instead (`statuses: b.items`),
+  // which silently blanked out file names, candidate names and error messages
+  // until the next full refresh.
+  const mapBatchRecord = (batch: any) => ({
+    id: batch.id,
+    date: batch.date ?? batch.created_at,
+    completedAt: batch.completed_at,
+    fileName: batch.batch_name,
+    totalFiles: batch.total_files,
+    completed: batch.completed ?? 0,
+    pending: batch.pending ?? 0,
+    duplicated: batch.duplicates ?? 0,
+    versioned: batch.versions ?? 0,
+    errors: batch.errors ?? 0,
+    cancelled: batch.cancelled ?? 0,
+    status: batch.status,
+    source: 'my-resumes' as const,
+    statuses: batch.items?.map((item: any) => ({
+      id: item.id,
+      fileName: item.file_name,
+      status: item.status === 'duplicated' ? 'duplicate' : item.status,
+      errorMessage: item.error_message,
+      candidateName: item.candidate_name,
+      resumeId: item.resume_id,
+    })) || [],
+  });
+
+  // Refresh from the server and replace only the my-resumes records.
+  const refreshMyResumesBatches = async () => {
+    const response = await resumeService.listUploadBatches(50);
+    if (!response?.batches) return;
+    const updated = response.batches.map(mapBatchRecord);
+    setUploadHistory(prev => [...prev.filter(r => r.source !== 'my-resumes'), ...updated]);
+  };
+
   const fetchUploadHistory = async () => {
     try {
       const response = await resumeService.listUploadBatches(50);
       if (response?.batches) {
-        const history = response.batches.map((batch: any) => ({
-          id: batch.id,
-          date: batch.date,
-          completedAt: batch.completed_at,
-          fileName: batch.batch_name,
-          totalFiles: batch.total_files,
-          completed: batch.completed,
-          pending: batch.pending,
-          duplicated: batch.duplicates,
-          versioned: batch.versions,
-          errors: batch.errors,
-          status: batch.status,
-          source: 'my-resumes' as const,
-          statuses: batch.items?.map((item: any) => ({
-            id: item.id,
-            fileName: item.file_name,
-            status: item.status === 'duplicated' ? 'duplicate' : item.status,
-            errorMessage: item.error_message,
-            candidateName: item.candidate_name,
-            resumeId: item.resume_id,
-          })) || [],
-        }));
-        setUploadHistory(history);
+        setUploadHistory(response.batches.map(mapBatchRecord));
       }
     } catch (error) {
       console.error('Failed to fetch upload history:', error);
@@ -625,14 +641,7 @@ export default function MyResumesPage() {
           : 'Retrying stuck items. No additional units deducted.'
       );
       // Refresh upload history so items show as "pending" and start polling for progress
-      const batches = await resumeService.listUploadBatches(50);
-      if (batches?.batches) {
-        setUploadHistory(prev => {
-          const otherBatches = prev.filter(r => r.source !== 'my-resumes');
-          const updated = batches.batches.map((b: any) => ({ ...b, source: 'my-resumes', statuses: b.items || [] }));
-          return [...otherBatches, ...updated];
-        });
-      }
+      await refreshMyResumesBatches();
       startBatchPolling(batchId);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to retry batch items');
@@ -641,21 +650,26 @@ export default function MyResumesPage() {
     }
   };
 
-  const handleCancelBatch = async (batchId: string, pendingCount: number, e: React.MouseEvent) => {
+  // Cancelling a batch is destructive and irreversible for files already in
+  // flight, so it always goes through a confirmation step. It used to fire on a
+  // single click — and a focused button also fires on Space/Enter, which is an
+  // easy way to lose most of a 100-file upload without realising it.
+  const handleCancelBatch = (batchId: string, pendingCount: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    setCancelBatchConfirm({ isOpen: true, batchId, pendingCount });
+  };
+
+  const confirmCancelBatch = async () => {
+    const { batchId, pendingCount } = cancelBatchConfirm;
+    setCancelBatchConfirm({ isOpen: false, batchId: '', pendingCount: 0 });
+    if (!batchId) return;
     setCancellingBatches(prev => new Set(prev).add(batchId));
     try {
-      await resumeService.cancelBatch(batchId);
-      toast.success(`Cancelled ${pendingCount} pending item(s). Units refunded.`);
+      const res = await resumeService.cancelBatch(batchId);
+      const refunded = res?.refunded_units ?? pendingCount;
+      toast.success(`Cancelled ${res?.cancelled ?? pendingCount} file(s). ${refunded} unit(s) refunded.`);
       // Refresh upload history to reflect the cancellation
-      const batches = await resumeService.listUploadBatches(50);
-      if (batches?.batches) {
-        setUploadHistory(prev => {
-          const otherBatches = prev.filter(r => r.source !== 'my-resumes');
-          const updated = batches.batches.map((b: any) => ({ ...b, source: 'my-resumes', statuses: b.items || [] }));
-          return [...otherBatches, ...updated];
-        });
-      }
+      await refreshMyResumesBatches();
     } catch (err: any) {
       toast.error(err?.message || 'Failed to cancel batch');
     } finally {
@@ -675,14 +689,7 @@ export default function MyResumesPage() {
           : 'Retrying file. No additional units deducted.'
       );
       // Refresh upload history so the item shows as "pending/queued" and start polling for progress
-      const batches = await resumeService.listUploadBatches(50);
-      if (batches?.batches) {
-        setUploadHistory(prev => {
-          const otherBatches = prev.filter(r => r.source !== 'my-resumes');
-          const updated = batches.batches.map((b: any) => ({ ...b, source: 'my-resumes', statuses: b.items || [] }));
-          return [...otherBatches, ...updated];
-        });
-      }
+      await refreshMyResumesBatches();
       startBatchPolling(batchId);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to retry file');
@@ -691,20 +698,24 @@ export default function MyResumesPage() {
     }
   };
 
-  const handleCancelItem = async (batchId: string, itemId: string, e: React.MouseEvent) => {
+  const handleCancelItem = (batchId: string, itemId: string, fileName: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    setCancelItemConfirm({ isOpen: true, batchId, itemId, fileName });
+  };
+
+  const confirmCancelItem = async () => {
+    const { batchId, itemId, fileName } = cancelItemConfirm;
+    setCancelItemConfirm({ isOpen: false, batchId: '', itemId: '', fileName: '' });
+    if (!batchId || !itemId) return;
     setCancellingItems(prev => new Set(prev).add(itemId));
     try {
-      await resumeService.cancelItem(batchId, itemId);
-      toast.success('File cancelled. 1 unit refunded.');
-      const batches = await resumeService.listUploadBatches(50);
-      if (batches?.batches) {
-        setUploadHistory(prev => {
-          const otherBatches = prev.filter(r => r.source !== 'my-resumes');
-          const updated = batches.batches.map((b: any) => ({ ...b, source: 'my-resumes', statuses: b.items || [] }));
-          return [...otherBatches, ...updated];
-        });
-      }
+      const res = await resumeService.cancelItem(batchId, itemId);
+      toast.success(
+        res?.refunded_units
+          ? `'${fileName}' cancelled. 1 unit refunded.`
+          : `'${fileName}' cancelled.`
+      );
+      await refreshMyResumesBatches();
     } catch (err: any) {
       toast.error(err?.message || 'Failed to cancel file');
     } finally {
@@ -729,6 +740,8 @@ export default function MyResumesPage() {
                 duplicated: status.duplicates,
                 versioned: status.versions,
                 errors: status.errors,
+                cancelled: status.cancelled ?? 0,
+                completedAt: status.completed_at,
                 status: status.status,
                 statuses: status.items?.map((item: any) => ({
                   id: item.id,
@@ -2033,6 +2046,7 @@ export default function MyResumesPage() {
         duplicated: 0,
         versioned: 0,
         errors: 0,
+        cancelled: 0,
         status: 'uploading',
         source: 'my-resumes' as const,
         statuses: files.map((f, idx) => ({
@@ -2204,6 +2218,7 @@ export default function MyResumesPage() {
         duplicated: batch.duplicates || 0,
         versioned: batch.versions || 0,
         errors: batch.errors || 0,
+        cancelled: batch.cancelled || 0,
         status: batch.status || 'processing',
         source: 'my-resumes' as const,
         statuses: initialStatuses,
@@ -2230,6 +2245,8 @@ export default function MyResumesPage() {
                   duplicated: status.duplicates,
                   versioned: status.versions,
                   errors: status.errors,
+                  cancelled: status.cancelled ?? 0,
+                  completedAt: status.completed_at,
                   status: status.status,
                   statuses: status.items?.map((item: any) => ({
                     id: item.id,
@@ -3395,8 +3412,16 @@ export default function MyResumesPage() {
                   const versionedCount = displayRecords.reduce((sum, r) => sum + (r.versioned || 0), 0);
                   const failedCount = displayRecords.reduce((sum, r) => sum + (r.errors || 0), 0);
                   const pendingCount = displayRecords.reduce((sum, r) => sum + (r.pending || 0), 0);
+                  // Fall back to the item list for batches whose row predates the `cancelled` column.
+                  const cancelledTotal = displayRecords.reduce((sum, r) => sum + Math.max(
+                    r.cancelled || 0,
+                    r.statuses?.filter((s: any) => s.status === 'cancelled' || s.status === 'discarded').length || 0,
+                  ), 0);
                   const totalFiles = displayRecords.reduce((sum, r) => sum + (r.totalFiles || 0), 0);
-                  const successRate = totalFiles > 0 ? Math.round((completedCount / totalFiles) * 100) : 0;
+                  // Cancelled files were never attempted, so they must not count against
+                  // the success rate — that is what turned a cancelled batch into "23%".
+                  const attemptedFiles = Math.max(0, totalFiles - cancelledTotal);
+                  const successRate = attemptedFiles > 0 ? Math.round((completedCount / attemptedFiles) * 100) : 0;
 
                   return (
                     <>
@@ -3540,6 +3565,22 @@ export default function MyResumesPage() {
                                   </div>
                                   <div className={`text-lg sm:text-xl lg:text-2xl font-bold tracking-tight ${t.value}`}>{value}</div>
                                 </div>
+
+                        {/* Cancelled */}
+                        <div
+                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'cancelled' ? null : 'cancelled')}
+                          className={`bg-gradient-to-br from-gray-100 to-gray-200/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
+                            uploadHistoryFilter === 'cancelled' ? 'border-gray-700 ring-2 ring-gray-400 shadow-md' : 'border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <Ban className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                            </div>
+                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Cancelled</span>
+                          </div>
+                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-800">{cancelledTotal}</div>
+                        </div>
                               );
                             })}
 
@@ -3566,12 +3607,14 @@ export default function MyResumesPage() {
                             uploadHistoryFilter === 'duplicated' ? 'bg-brand-orange/15 text-brand-orange-deep' :
                             uploadHistoryFilter === 'versioned' ? 'bg-brand-blue-2/10 text-brand-blue-2' :
                             uploadHistoryFilter === 'error' ? 'bg-brand-orange-deep/10 text-brand-orange-deep' :
+                            uploadHistoryFilter === 'cancelled' ? 'bg-gray-200 text-gray-800' :
                             'bg-brand-teal/10 text-brand-teal'
                           }`}>
                             {uploadHistoryFilter === 'completed' ? 'Completed' :
                              uploadHistoryFilter === 'duplicated' ? 'Duplicates' :
                              uploadHistoryFilter === 'versioned' ? 'Versioned' :
                              uploadHistoryFilter === 'error' ? 'Failed' :
+                             uploadHistoryFilter === 'cancelled' ? 'Cancelled' :
                              'Pending'}
                           </span>
                           <button
@@ -3660,13 +3703,29 @@ export default function MyResumesPage() {
                           {displayRecords
                             .slice(0, 20)
                             .map(record => {
-                              const processed = record.completed + record.errors + record.duplicated + (record.versioned || 0);
-                              const percentage = record.totalFiles > 0 ? Math.round((record.completed / record.totalFiles) * 100) : 100;
+                              // Prefer the server counter, but fall back to the item list so an
+                              // older batch row (written before `cancelled` existed) still adds up.
+                              const cancelledFromItems = record.statuses?.filter(
+                                (s: any) => s.status === 'cancelled' || s.status === 'discarded'
+                              ).length ?? 0;
+                              const cancelledCount = Math.max(record.cancelled ?? 0, cancelledFromItems);
+                              const processed = record.completed + record.errors + record.duplicated + (record.versioned || 0) + cancelledCount;
+                              // Files the batch counters can't explain. If this is ever non-zero the
+                              // summary is under-reporting, and we say so instead of hiding it.
+                              const unaccountedCount = Math.max(0, (record.totalFiles || 0) - processed - (record.pending || 0));
+                              // Success is measured against files that were actually attempted —
+                              // cancelling 77 of 100 is not a 23% failure of the upload.
+                              const attempted = Math.max(0, (record.totalFiles || 0) - cancelledCount);
+                              const percentage = attempted > 0 ? Math.round((record.completed / attempted) * 100) : 100;
                               const isUploading = record.status === 'uploading';
                               const isProcessing = record.status === 'processing' || record.pending > 0;
-                              const isCancelled = record.statuses?.some((s: any) => s.status === 'cancelled');
-                              const hasErrors = record.errors > 0 && !isCancelled;
-                              const hasIssues = record.duplicated > 0 || (record.versioned || 0) > 0 || record.errors > 0;
+                              const isCancelled = cancelledCount > 0;
+                              // Optimistic pre-API record: its id and item ids are `temp-*`
+                              // placeholders, not UUIDs. Every retry/cancel endpoint takes UUID
+                              // path params, so any action fired against it 422s on uuid_parsing.
+                              const isTempRecord = record.id.startsWith('temp-');
+                              const hasErrors = record.errors > 0;
+                              const hasIssues = record.duplicated > 0 || (record.versioned || 0) > 0 || record.errors > 0 || cancelledCount > 0;
 
                               return (
                                 <div
@@ -3745,7 +3804,7 @@ export default function MyResumesPage() {
                                   </div>
 
                                   {/* Mini Stats */}
-                                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-2 mb-3 sm:mb-4">
+                                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-2 mb-3 sm:mb-4">
                                     {/* Mini stats use the same brand tones as the summary cards above */}
                                     <div className="text-center p-1.5 sm:p-2 bg-brand-blue/[0.06] rounded-lg border border-brand-blue/15">
                                       <div className="text-xs sm:text-sm font-semibold text-brand-blue">{record.completed}</div>
@@ -3767,7 +3826,22 @@ export default function MyResumesPage() {
                                       <div className="text-xs sm:text-sm font-semibold text-brand-teal">{record.pending}</div>
                                       <div className="text-[10px] sm:text-xs text-gray-600">Pending</div>
                                     </div>
+                                    {/* Cancelled — previously had no tile, so cancelled files simply
+                                        disappeared from the batch summary (23 of 100, nothing failed). */}
+                                    <div className="text-center p-1.5 sm:p-2 bg-gray-100 rounded-lg border border-gray-300">
+                                      <div className="text-xs sm:text-sm font-semibold text-gray-700">{cancelledCount}</div>
+                                      <div className="text-[10px] sm:text-xs text-gray-600">Cancelled</div>
+                                    </div>
                                   </div>
+                                  {unaccountedCount > 0 && (
+                                    <div className="mb-3 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[10px] sm:text-xs text-amber-800">
+                                      <AlertCircle className="mt-px h-3.5 w-3.5 flex-shrink-0" />
+                                      <span>
+                                        {unaccountedCount} file{unaccountedCount !== 1 ? 's' : ''} in this batch {unaccountedCount !== 1 ? 'are' : 'is'} not
+                                        reflected in the totals above — open the file list below for their actual state.
+                                      </span>
+                                    </div>
+                                  )}
 
                                   {/* Progress Bar */}
                                   <div className="mb-3 sm:mb-4">
@@ -3824,10 +3898,10 @@ export default function MyResumesPage() {
                                   {/* Retry / Cancel Batch actions — hidden until the optimistic
                                       temp record is swapped for the real server batch_id, since
                                       both endpoints require a UUID path param. */}
-                                  {!isCancelled && (isProcessing || hasErrors) && !record.id.startsWith('temp-') && (
+                                  {(isProcessing || hasErrors || isCancelled) && !isTempRecord && (
                                     <div className="flex items-center gap-2 mb-3 sm:mb-4" onClick={e => e.stopPropagation()}>
-                                      {/* Retry — show when items are stuck in pending or have errors */}
-                                      {(isProcessing || hasErrors) && (
+                                      {/* Retry — stuck in pending, failed, or cancelled (re-queues the files) */}
+                                      {(isProcessing || hasErrors || isCancelled) && (
                                         <button
                                           disabled={retryingBatches.has(record.id)}
                                           onClick={(e) => handleRetryBatch(record.id, e)}
@@ -3838,14 +3912,23 @@ export default function MyResumesPage() {
                                           }`}
                                         >
                                           <RefreshCw className={`w-3 h-3 ${retryingBatches.has(record.id) ? 'animate-spin' : ''}`} />
-                                          {retryingBatches.has(record.id) ? 'Retrying...' : 'Retry'}
+                                          {retryingBatches.has(record.id)
+                                            ? 'Retrying...'
+                                            : isCancelled && !isProcessing ? `Re-queue ${cancelledCount} cancelled` : 'Retry'}
                                         </button>
                                       )}
-                                      {/* Cancel — show only while items are still pending */}
+                                      {/* Cancel — show only while items are still pending.
+                                          type="button" so a stray Enter can't submit-activate it, and it
+                                          opens a confirmation instead of cancelling on the spot. */}
                                       {isProcessing && record.pending > 0 && (
                                         <button
+                                          type="button"
                                           disabled={cancellingBatches.has(record.id)}
                                           onClick={(e) => handleCancelBatch(record.id, record.pending, e)}
+                                          onKeyDown={(e) => {
+                                            // Space scrolls the file list; don't let it double as "cancel 77 files".
+                                            if (e.key === ' ') e.preventDefault();
+                                          }}
                                           className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
                                             cancellingBatches.has(record.id)
                                               ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
@@ -3868,6 +3951,7 @@ export default function MyResumesPage() {
                                           if (uploadHistoryFilter === 'versioned') return f.status === 'versioned' || f.status === 'version';
                                           if (uploadHistoryFilter === 'error') return f.status === 'error';
                                           if (uploadHistoryFilter === 'pending') return f.status === 'pending' || f.status === 'processing';
+                                          if (uploadHistoryFilter === 'cancelled') return f.status === 'cancelled' || f.status === 'discarded';
                                           return true;
                                         })
                                       : record.statuses;
@@ -3928,12 +4012,19 @@ export default function MyResumesPage() {
                                             <AlertCircle className="w-3 h-3" />
                                             {record.statuses.filter((f: any) => f.status === 'error' || f.status === 'duplicate' || f.status === 'duplicated').length}
                                           </span>
+                                          {/* Cancelled files had no counter at all, so they were invisible here too */}
+                                          {record.statuses.some((f: any) => f.status === 'cancelled' || f.status === 'discarded') && (
+                                            <span className="flex items-center gap-1 text-gray-600">
+                                              <Ban className="w-3 h-3" />
+                                              {record.statuses.filter((f: any) => f.status === 'cancelled' || f.status === 'discarded').length}
+                                            </span>
+                                          )}
                                         </div>
                                       </div>
                                       {/* Short note: cancel only for queued items */}
-                                      {record.statuses.some((f: any) => f.status === 'pending' || f.status === 'error') && (
+                                      {record.statuses.some((f: any) => f.status === 'pending' || f.status === 'error' || f.status === 'cancelled') && (
                                         <p className="text-[10px] text-gray-400 mb-2">
-                                          ℹ️ Retry is available for queued &amp; failed files. Cancel is only available for queued files.
+                                          ℹ️ Retry is available for queued, failed &amp; cancelled files. Cancel is only available for queued files.
                                         </p>
                                       )}
                                       <div className="space-y-1.5 max-h-64 overflow-y-auto">
@@ -3941,6 +4032,15 @@ export default function MyResumesPage() {
                                           const isClickable = ['completed', 'versioned', 'duplicate', 'error'].includes(file.status);
                                           const isVersioned = file.status === 'versioned' || file.status === 'version';
                                           const isSelected = selectedVersionedItems.has(file.id);
+                                          const isCancelledFile = file.status === 'cancelled' || file.status === 'discarded';
+                                          // Anything the UI has no case for. Surfaced explicitly rather than
+                                          // being absorbed by the "Queued" fallback, so a new backend status
+                                          // can never masquerade as "still waiting in the queue".
+                                          const isUnknownStatusFile = ![
+                                            'completed', 'versioned', 'version', 'processing',
+                                            'pending', 'duplicate', 'duplicated', 'error',
+                                            'cancelled', 'discarded',
+                                          ].includes(file.status);
                                           return (
                                           <div
                                             key={file.id || idx}
@@ -3972,6 +4072,8 @@ export default function MyResumesPage() {
                                               file.status === 'processing' ? 'bg-brand-blue/5 border-brand-blue/20' :
                                               file.status === 'duplicate' ? 'bg-brand-orange/[0.07] border-brand-orange/20 hover:bg-brand-orange/10 hover:border-brand-orange/30' :
                                               file.status === 'error' ? 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300' :
+                                              isCancelledFile ? 'bg-gray-100 border-gray-300' :
+                                              isUnknownStatusFile ? 'bg-amber-50 border-amber-300' :
                                               'bg-gray-50 border-gray-200'
                                             } ${isClickable ? 'cursor-pointer' : ''}`}
                                           >
@@ -4006,6 +4108,7 @@ export default function MyResumesPage() {
                                               file.status === 'processing' ? 'bg-brand-blue' :
                                               file.status === 'duplicate' ? 'bg-brand-orange' :
                                               file.status === 'error' ? 'bg-red-500' :
+                                              isCancelledFile ? 'bg-gray-500' :
                                               'bg-gray-400'
                                             }`}>
                                               {file.status === 'completed' && <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
@@ -4014,6 +4117,7 @@ export default function MyResumesPage() {
                                               {file.status === 'duplicate' && <Copy className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
                                               {file.status === 'error' && <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
                                               {file.status === 'pending' && <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-white animate-pulse" />}
+                                              {isCancelledFile && <Ban className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
                                             </div>
                                             {/* File Info */}
                                             <div className="flex-1 min-w-0">
@@ -4025,6 +4129,8 @@ export default function MyResumesPage() {
                                                 {file.status === 'pending' && '⏳ Waiting in queue...'}
                                                 {file.status === 'duplicate' && (file.errorMessage || '⚠ Duplicate - already exists')}
                                                 {file.status === 'error' && (file.errorMessage || '✗ Failed to process')}
+                                                {isCancelledFile && (file.errorMessage || '✕ Cancelled before processing')}
+                                                {isUnknownStatusFile && `? Unrecognised status: ${String(file.status)}`}
                                               </div>
                                             </div>
                                             {/* Status Badge */}
@@ -4034,6 +4140,7 @@ export default function MyResumesPage() {
                                               file.status === 'processing' ? 'bg-brand-blue/10 text-brand-blue' :
                                               file.status === 'duplicate' ? 'bg-brand-orange/15 text-brand-orange-deep' :
                                               file.status === 'error' ? 'bg-red-100 text-red-700' :
+                                              isCancelledFile ? 'bg-gray-200 text-gray-700' :
                                               'bg-gray-100 text-gray-600'
                                             }`}>
                                               {file.status === 'completed' ? '✓ Done' :
@@ -4041,23 +4148,32 @@ export default function MyResumesPage() {
                                                file.status === 'processing' ? '⚡ Running' :
                                                file.status === 'duplicate' ? '⚠ Duplicate' :
                                                file.status === 'error' ? '✗ Failed' :
-                                               '⏳ Queued'}
+                                               file.status === 'cancelled' ? '✕ Cancelled' :
+                                               file.status === 'discarded' ? '✕ Discarded' :
+                                               file.status === 'pending' ? '⏳ Queued' :
+                                               /* Never claim "Queued" for a status we don't understand —
+                                                  that is exactly how 77 cancelled files read as queued. */
+                                               `? ${String(file.status ?? 'unknown')}`}
                                             </span>
-                                            {/* Per-item Retry / Cancel */}
-                                            {file.id && (file.status === 'pending' || file.status === 'error') && (
+                                            {/* Per-item Retry / Cancel — same temp-record guard as the
+                                                batch-level actions above. Without it the optimistic
+                                                record renders these buttons over `temp-file-N` ids and
+                                                the request 422s on uuid_parsing for both path params. */}
+                                            {file.id && !isTempRecord && !String(file.id).startsWith('temp-')
+                                              && (file.status === 'pending' || file.status === 'error' || file.status === 'cancelled') && (
                                               <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
                                                 <button
                                                   disabled={retryingItems.has(file.id)}
                                                   onClick={(e) => handleRetryItem(record.id, file.id, e)}
                                                   className={`p-1 rounded text-[10px] font-medium transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-brand-blue hover:bg-brand-blue/10'}`}
-                                                  aria-label="Retry this file" title="Retry this file"
+                                                  aria-label="Retry this file" title={file.status === 'cancelled' ? 'Re-queue this cancelled file' : 'Retry this file'}
                                                 >
                                                   <RefreshCw className={`w-3 h-3 ${retryingItems.has(file.id) ? 'animate-spin' : ''}`} />
                                                 </button>
                                                 {file.status === 'pending' && (
                                                   <button
                                                     disabled={cancellingItems.has(file.id)}
-                                                    onClick={(e) => handleCancelItem(record.id, file.id, e)}
+                                                    onClick={(e) => handleCancelItem(record.id, file.id, file.fileName, e)}
                                                     className={`p-1 rounded text-[10px] font-medium transition-colors ${cancellingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-red-500 hover:bg-red-50'}`}
                                                     aria-label="Cancel this file (queued only)" title="Cancel this file (queued only)"
                                                   >
@@ -4078,6 +4194,7 @@ export default function MyResumesPage() {
                                           uploadHistoryFilter === 'duplicated' ? 'duplicate' :
                                           uploadHistoryFilter === 'versioned' ? 'versioned' :
                                           uploadHistoryFilter === 'error' ? 'failed' :
+                                          uploadHistoryFilter === 'cancelled' ? 'cancelled' :
                                           'pending'
                                         } files in this batch</p>
                                       </div>
@@ -4536,6 +4653,79 @@ export default function MyResumesPage() {
           }}
         />
       )}
+
+      {/* Cancel Batch Confirmation Dialog */}
+      <AlertDialog
+        open={cancelBatchConfirm.isOpen}
+        onOpenChange={(open) => {
+          if (!open) setCancelBatchConfirm({ isOpen: false, batchId: '', pendingCount: 0 });
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Ban className="w-5 h-5 text-red-500" />
+              Cancel {cancelBatchConfirm.pendingCount} queued file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''}?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p>
+                  This stops <span className="font-medium text-gray-900">{cancelBatchConfirm.pendingCount} file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''}</span> that
+                  {cancelBatchConfirm.pendingCount !== 1 ? ' have' : ' has'} not finished processing.
+                </p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Files already completed are kept</li>
+                  <li>Their Resume Storage units are refunded</li>
+                  <li>You can re-queue cancelled files later with Retry</li>
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep processing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancelBatch}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Cancel {cancelBatchConfirm.pendingCount} file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Cancel Single File Confirmation Dialog */}
+      <AlertDialog
+        open={cancelItemConfirm.isOpen}
+        onOpenChange={(open) => {
+          if (!open) setCancelItemConfirm({ isOpen: false, batchId: '', itemId: '', fileName: '' });
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Ban className="w-5 h-5 text-red-500" />
+              Cancel this file?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-gray-600">
+                <p>
+                  <span className="font-medium text-gray-900">{cancelItemConfirm.fileName}</span> will not
+                  be processed. Its unit is refunded and you can re-queue it later with Retry.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep processing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancelItem}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Cancel file
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Resume Confirmation Dialog */}
       <AlertDialog
