@@ -7647,7 +7647,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Connection lost overlay ── */}
       {!isConnected && !isClosing && status.startsWith('Connection lost') && (
         <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-red-500 rounded-2xl p-8 max-w-sm text-center shadow-2xl">
+          <div className="bg-gray-900 border border-red-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
             <div className="text-red-400 text-5xl mb-4">⚠️</div>
             <h2 className="text-xl font-bold text-white mb-2">Connection Lost</h2>
             <p className="text-gray-400 mb-6 text-sm leading-relaxed">
@@ -7667,7 +7667,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Proctoring: Camera/Mic disabled overlay ── */}
       {isConnected && (!proctoringState.isCameraActive || !proctoringState.isMicrophoneActive) && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-red-500 rounded-2xl p-8 max-w-md text-center shadow-2xl">
+          <div className="bg-gray-900 border border-red-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
             <div className="text-red-500 text-5xl mb-4">
               {!proctoringState.isCameraActive ? "📷" : "🎤"}
             </div>
@@ -7693,7 +7693,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Proctoring: Face not in frame overlay ── */}
       {isConnected && isFaceBlocked && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-md text-center shadow-2xl">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
             <div className="text-amber-500 text-5xl mb-4">👤</div>
             <h2 className="text-xl font-bold text-white mb-2">Face Not Detected</h2>
             <p className="text-gray-400 mb-4">
@@ -7735,7 +7735,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Microphone issue popup ── */}
       {showMicPopup && (
         <div className="fixed inset-0 z-[101] bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-sm text-center shadow-2xl animate-in fade-in zoom-in duration-200">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="text-amber-500 text-5xl mb-4">🎤</div>
             <h2 className="text-xl font-bold text-white mb-2">Microphone Issue?</h2>
             <p className="text-gray-400 mb-3">We couldn&apos;t detect any audio. Is your microphone working?</p>
@@ -7762,7 +7762,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Interview completion modal (Req 16) ── */}
       {showCompletionModal && (
         <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[#0A1020] border border-[#10B981]/30 rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
+          <div className="bg-[#0A1020] border border-[#10B981]/30 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
             <div className="w-16 h-16 rounded-full bg-[#10B981]/15 flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -8699,7 +8699,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             onClick={() => setShowEndConfirm(false)}
           />
           {/* Modal */}
-          <div className="relative w-full max-w-sm bg-[#0F1929] border border-white/[0.10] rounded-2xl shadow-2xl shadow-black/60 p-6 flex flex-col gap-5">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md bg-[#0F1929] border border-white/[0.10] rounded-2xl shadow-2xl shadow-black/60 p-6 flex flex-col gap-5">
             {/* Icon */}
             <div className="flex items-center justify-center w-12 h-12 mx-auto rounded-full bg-[#DC2626]/15 border border-[#DC2626]/30">
               <LogOut className="w-5 h-5 text-[#EF4444]" />
@@ -8752,7 +8752,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Fullscreen exit overlay — shows when candidate leaves fullscreen mid-interview ── */}
       {isFullscreenExited && isConnected && !isClosing && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <div className="relative w-full max-w-sm mx-4 bg-[#0F1929] border border-white/10 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-white/10 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5">
             {/* Warning icon */}
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/15 border border-amber-400/30">
               <Maximize className="w-6 h-6 text-amber-400" />
@@ -8835,7 +8835,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           matches the product rule "do not allow to start the interview again". */}
       {mediaBlocked && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md">
-          <div className="relative w-full max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/20 border border-red-400/40">
               <MicOff className="w-7 h-7 text-red-400" />
             </div>

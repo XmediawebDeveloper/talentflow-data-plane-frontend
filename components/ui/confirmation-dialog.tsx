@@ -69,7 +69,7 @@ export function ConfirmationDialog({
 
       {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-md w-full pointer-events-auto animate-in zoom-in-95 duration-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-[95vw] sm:max-w-md w-full pointer-events-auto animate-in zoom-in-95 duration-200 overflow-hidden">
           <div className="p-6">
             {/* Icon */}
             <div className={`w-12 h-12 ${config.iconBg} rounded-full flex items-center justify-center mx-auto mb-4`}>

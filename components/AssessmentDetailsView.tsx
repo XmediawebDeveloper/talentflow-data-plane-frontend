@@ -453,22 +453,28 @@ export default function AssessmentDetailsView({
     <div className="flex-1 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
       {/* Breadcrumb */}
       <div className="px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-5">
-        <div className="flex items-center justify-between gap-3">
-          <PageBreadcrumb
-            className="mb-4 flex-1"
-            items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'Assessments', href: '/recruitment/assessments' },
-              { label: stripVersionFromTitle(assessment.title) || assessment.short_id || 'Assessment Details' },
-            ]}
-          />
-          <RecordPager
-            currentIndex={currentIndex}
-            totalCount={totalCount}
-            onPrev={onPrev}
-            onNext={onNext}
-          />
-        </div>
+        <PageBreadcrumb
+          className="mb-3"
+          items={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Assessments', href: '/recruitment/assessments' },
+            { label: stripVersionFromTitle(assessment.title) || assessment.short_id || 'Assessment Details' },
+          ]}
+        />
+
+        {/* Previous / Next navigation — sits below the breadcrumb, as on
+            job-details. The row is dropped entirely when there is no list to
+            page through, so it leaves no empty gap. */}
+        {totalCount != null && totalCount > 0 && (
+          <div className="flex items-center justify-end mb-4">
+            <RecordPager
+              currentIndex={currentIndex}
+              totalCount={totalCount}
+              onPrev={onPrev}
+              onNext={onNext}
+            />
+          </div>
+        )}
       </div>
 
       {/* Sticky Header */}
@@ -1034,7 +1040,7 @@ export default function AssessmentDetailsView({
                 </h3>
                 <button
                   onClick={() => setActiveTab('activity')}
-                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 w-fit"
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 w-fit"
                 >
                   <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   View Full Tracking

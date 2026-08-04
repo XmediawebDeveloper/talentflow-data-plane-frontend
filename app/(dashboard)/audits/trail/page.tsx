@@ -790,7 +790,7 @@ export default function AuditTrailPage() {
     <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Audit Trail' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Audit Trail' }]} />
         {/* SaaS Hero Header */}
         <section className="relative mb-6 rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
@@ -1434,9 +1434,9 @@ export default function AuditTrailPage() {
       {/* Detail Modal */}
       {selectedLog && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-lg md:max-w-2xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-lg md:max-w-2xl w-full flex flex-col max-h-[90vh] sm:max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-5 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white dark:from-slate-800/50 dark:to-slate-900">
+            <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-5 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white dark:from-slate-800/50 dark:to-slate-900">
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 bg-brand-blue rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg shadow-brand-blue/20 ring-1 ring-white/10 flex-shrink-0">
                   <ScrollText className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
@@ -1455,7 +1455,7 @@ export default function AuditTrailPage() {
             </div>
 
             {/* Modal Body */}
-            <div className="p-3 sm:p-4 md:p-6 overflow-y-auto max-h-[65vh] sm:max-h-[60vh] space-y-3 sm:space-y-4 md:space-y-5">
+            <div className="p-3 sm:p-4 md:p-6 flex-1 min-h-0 overflow-y-auto space-y-3 sm:space-y-4 md:space-y-5">
               {/* User & Action Header */}
               <div className="flex items-start gap-2.5 sm:gap-3 md:gap-4 pb-3 sm:pb-4 md:pb-5 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-lg sm:rounded-xl bg-brand-blue text-white flex items-center justify-center text-[10px] sm:text-xs md:text-sm font-bold flex-shrink-0 shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
@@ -1735,7 +1735,7 @@ export default function AuditTrailPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-gray-50/50 dark:bg-slate-800/50 flex justify-end">
+            <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-gray-50/50 dark:bg-slate-800/50 flex justify-end">
               <button
                 onClick={() => setSelectedLog(null)}
                 className="px-4 py-2 text-sm bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-medium"
@@ -1750,7 +1750,7 @@ export default function AuditTrailPage() {
       {/* Export Modal */}
       {exportModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white dark:from-slate-800/50 dark:to-slate-900">
               <div className="flex items-center gap-3">

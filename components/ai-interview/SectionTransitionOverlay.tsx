@@ -27,7 +27,7 @@ export default function SectionTransitionOverlay({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="text-center text-white max-w-md mx-auto px-6">
+      <div className="text-center text-white max-w-[95vw] sm:max-w-md mx-auto px-6">
         <div className="mb-4">
           <div className="w-16 h-16 rounded-full border-2 border-blue-400 flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

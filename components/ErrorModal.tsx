@@ -17,9 +17,9 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-red-200 bg-gradient-to-r from-red-50 to-rose-50 rounded-t-xl">
+        <div className="flex-shrink-0 flex items-center justify-between p-4 sm:p-5 border-b border-red-200 bg-gradient-to-r from-red-50 to-rose-50 rounded-t-xl">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 sm:w-10 sm:h-10 bg-red-100 ring-1 ring-red-200 rounded-lg flex items-center justify-center flex-shrink-0">
               <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
@@ -44,7 +44,7 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
         </div>
 
         {/* Body */}
-        <div className="p-4 sm:p-6 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4">
           {/* File Name */}
           {error.file_name && (
             <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
@@ -82,7 +82,7 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50 rounded-b-xl">
+        <div className="flex-shrink-0 flex items-center justify-end gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50 rounded-b-xl">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"

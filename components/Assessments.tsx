@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Clock, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2 } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2 } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -16,6 +16,9 @@ import AssessmentPreviewModal from './AssessmentPreviewModal';
 import AssessmentEditModal from './AssessmentEditModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, type InviteFilterState } from './InviteFilterBar';
+import ListToolbar from '@/components/ui/list-toolbar';
+import type { AssessmentAttemptResponse } from '@/lib/services/assessmentService';
+
 import { Job } from '@/lib/types/types';
 import { assessmentService } from '@/lib/services';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
@@ -55,6 +58,13 @@ interface AssessmentsProps {
   preSelectedJdId?: string;
   preSelectedJdTitle?: string;
 }
+
+/** A completed attempt, tagged with the assessment it belongs to. */
+type CandidateResultRow = AssessmentAttemptResponse & {
+  _assessment_id: string;
+  _assessment_short_id?: string;
+  _assessment_title?: string;
+};
 
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle }: AssessmentsProps) {
   const router = useRouter();
@@ -165,6 +175,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [assessmentTotalItems, setAssessmentTotalItems] = useState(0);
   const [assessmentTotalPages, setAssessmentTotalPages] = useState(1);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  // Assessment list search + filters. `assessmentSearch` is what the user types;
+  // `assessmentSearchQuery` is the debounced value sent to the API, so the search
+  // spans every page rather than only the one on screen. The rest narrow the
+  // loaded page client-side — the list endpoint takes no filters beyond search.
+  const [assessmentSearch, setAssessmentSearch] = useState('');
+  const [assessmentSearchQuery, setAssessmentSearchQuery] = useState('');
+  const [showAssessmentFilters, setShowAssessmentFilters] = useState(false);
+  // True once the user confirms the More Filters panel with "Done" — mirrors
+  // job-openings, so Clear appears only after filters are applied.
+  const [assessmentFiltersConfirmed, setAssessmentFiltersConfirmed] = useState(false);
+  const [filterType, setFilterType] = useState<'all' | 'Technical' | 'Behavioral' | 'Aptitude'>('all');
+  const [filterCreatedBy, setFilterCreatedBy] = useState('all');
+  const [filterCreatedFrom, setFilterCreatedFrom] = useState('');
+  const [filterCreatedTo, setFilterCreatedTo] = useState('');
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
   const [totalUnits, setTotalUnits] = useState<number>(10); // Total subscription limit
   const [isUnlimited, setIsUnlimited] = useState<boolean>(false); // Track if quota is unlimited
@@ -174,13 +198,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [trackingTotalPages, setTrackingTotalPages] = useState(1);
   const [trackingFilters, setTrackingFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
 
-  // Cross-assessment "Candidates Assessed" tab — aggregates all completed
-  // invitations across every assessment by fanning out listInvitations() calls
-  // (no global endpoint exists yet). Client-side paginated.
-  const [completedCandidates, setCompletedCandidates] = useState<any[]>([]);
+  // Cross-assessment "Candidate Results" tab — aggregates every completed
+  // attempt across all assessments by fanning out listResults() calls (no
+  // global endpoint exists yet). Client-side paginated.
+  const [completedCandidates, setCompletedCandidates] = useState<CandidateResultRow[]>([]);
   const [isLoadingCompletedCandidates, setIsLoadingCompletedCandidates] = useState(false);
   const [completedCandidatesError, setCompletedCandidatesError] = useState<string | null>(null);
   const [completedCandidatesPage, setCompletedCandidatesPage] = useState(1);
+
   const COMPLETED_PAGE_SIZE = 20;
 
   const openAssessmentsList = (tab: 'all' | 'active' | 'draft' | 'completed' | 'completed-candidates' | 'archived' = 'all') => {
@@ -251,13 +276,34 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const rootRef = useScrollRestoration('assessments', !isLoading, [pageView]);
   useListStatePersistence(
     'assessments',
-    { activeTab, settingsSubTab, viewMode, assessmentCurrentPage, assessmentItemsPerPage },
+    {
+      activeTab,
+      settingsSubTab,
+      viewMode,
+      assessmentCurrentPage,
+      assessmentItemsPerPage,
+      assessmentSearch,
+      filterType,
+      filterCreatedBy,
+      filterCreatedFrom,
+      filterCreatedTo,
+    },
     (s) => {
       if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as typeof activeTab);
       if (s.settingsSubTab === 'proctoring' || s.settingsSubTab === 'topics') setSettingsSubTab(s.settingsSubTab);
       if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
       if (typeof s.assessmentCurrentPage === 'number') setAssessmentCurrentPage(s.assessmentCurrentPage);
       if (typeof s.assessmentItemsPerPage === 'number') setAssessmentItemsPerPage(s.assessmentItemsPerPage);
+      if (typeof s.assessmentSearch === 'string') {
+        setAssessmentSearch(s.assessmentSearch);
+        setAssessmentSearchQuery(s.assessmentSearch);
+      }
+      if (s.filterType === 'Technical' || s.filterType === 'Behavioral' || s.filterType === 'Aptitude') {
+        setFilterType(s.filterType);
+      }
+      if (typeof s.filterCreatedBy === 'string') setFilterCreatedBy(s.filterCreatedBy);
+      if (typeof s.filterCreatedFrom === 'string') setFilterCreatedFrom(s.filterCreatedFrom);
+      if (typeof s.filterCreatedTo === 'string') setFilterCreatedTo(s.filterCreatedTo);
     },
   );
 
@@ -377,6 +423,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       if (status) {
         filters.status = status;
       }
+      if (assessmentSearchQuery.trim()) {
+        filters.search = assessmentSearchQuery.trim();
+      }
 
       const response = await assessmentService.list(filters);
       const mapped = (response.items || []).map((a: any, index: number) =>
@@ -467,6 +516,71 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // listInvitations(id, {status:'completed'}) call per assessment in parallel
   // and merge. Stamps each invitation with its assessment title/id so the
   // table can show which assessment each completion belongs to.
+  // Rounds are optional per assessment, so a missing score is "not run" rather
+  // than zero. Pass/fail colouring follows the assessment pass mark.
+  const RESULT_PASS_MARK = 70;
+
+  const formatTimeSpent = (seconds?: number) => {
+    if (typeof seconds !== 'number' || seconds <= 0) return '-';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
+
+  // Same vocabulary as the per-assessment Candidate Results table.
+  const inviteSourceMeta = (source?: string) => {
+    const value = source || 'Manual';
+    const styles: Record<string, string> = {
+      'JD': 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
+      'Assessment': 'bg-brand-blue/10 text-brand-blue-2 ring-1 ring-brand-blue/20',
+      'Resume Scoring': 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
+      'My Resumes': 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
+      'Internal DB': 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20',
+      'Manual': 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
+    };
+    const labels: Record<string, string> = { 'JD': 'Job' };
+    return {
+      label: labels[value] || value,
+      cls: styles[value] || styles['Manual'],
+    };
+  };
+
+  const resultStatusClass = (status?: string) => {
+    if (status === 'completed') return 'bg-green-100 text-green-700';
+    if (status === 'in_progress') return 'bg-blue-100 text-blue-700';
+    return 'bg-gray-100 text-gray-600';
+  };
+
+  const resultStatusLabel = (status?: string) => {
+    if (status === 'completed') return 'Completed';
+    if (status === 'in_progress') return 'In Progress';
+    return 'Pending';
+  };
+
+  // Row click opens that candidate's result view. The detail route builds its
+  // own breadcrumb (Dashboard > Assessments > assessment > candidate) and pages
+  // through `assessmentResultNavList`, so seed it with the rows on screen.
+  const openCandidateResult = (result: CandidateResultRow, rows: CandidateResultRow[]) => {
+    const attemptId = result.id;
+    if (!attemptId) {
+      toast.error('No result record for this candidate yet');
+      return;
+    }
+    try {
+      sessionStorage.setItem(
+        'assessmentResultNavList',
+        JSON.stringify(
+          rows
+            .filter(row => row.id && row._assessment_id === result._assessment_id)
+            .map(row => ({ id: row.id, cid: row.candidate_display_id || '' }))
+        )
+      );
+    } catch { /* ignore quota errors */ }
+
+    const cid = result.candidate_display_id ? `&cid=${encodeURIComponent(result.candidate_display_id)}` : '';
+    router.push(`/recruitment/assessments/${result._assessment_id}/results/details?candidate_id=${attemptId}${cid}`);
+  };
+
   const loadAllCompletedCandidates = async () => {
     setIsLoadingCompletedCandidates(true);
     setCompletedCandidatesError(null);
@@ -477,12 +591,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         setCompletedCandidates([]);
         return;
       }
+      // Results rather than invitations: the attempt carries the scores and the
+      // pass/fail verdict this tab is about.
       const results = await Promise.all(
         items.map(async (a: any) => {
           try {
-            const r = await assessmentService.listInvitations(a.id, { status: 'completed', page_size: 1000 });
-            const invs = r.items || [];
-            return invs.map((inv: any) => ({ ...inv, _assessment_id: a.id, _assessment_short_id: a.short_id, _assessment_title: a.title }));
+            const r = await assessmentService.listResults(a.id, { status_filter: 'completed', page_size: 1000 });
+            const attempts = r.items || [];
+            return attempts.map((attempt): CandidateResultRow => ({
+              ...attempt,
+              _assessment_id: a.id,
+              _assessment_short_id: a.short_id,
+              _assessment_title: a.title,
+            }));
           } catch {
             return [];
           }
@@ -642,11 +763,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     loadAssessmentsPage(assessmentCurrentPage);
-  }, [activeTab, preSelectedJdId, assessmentCurrentPage, assessmentItemsPerPage]);
+  }, [activeTab, preSelectedJdId, assessmentCurrentPage, assessmentItemsPerPage, assessmentSearchQuery]);
 
   useEffect(() => {
     setAssessmentCurrentPage(1);
-  }, [activeTab, preSelectedJdId, assessmentItemsPerPage]);
+  }, [activeTab, preSelectedJdId, assessmentItemsPerPage, assessmentSearchQuery]);
+
+  // Hold the search until typing settles, so a query is one request, not one per key.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAssessmentSearchQuery(assessmentSearch), 350);
+    return () => window.clearTimeout(timer);
+  }, [assessmentSearch]);
 
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
@@ -1269,12 +1396,43 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     );
   }
 
+  // Everyone who has created one of the loaded assessments, for the filter list.
+  const assessmentCreators = Array.from(
+    new Set(assessments.map((a) => a.created_by_name).filter(Boolean))
+  ).sort();
+
+  const assessmentFilterCount =
+    (filterType !== 'all' ? 1 : 0) +
+    (filterCreatedBy !== 'all' ? 1 : 0) +
+    (filterCreatedFrom ? 1 : 0) +
+    (filterCreatedTo ? 1 : 0);
+  // Gates the toolbar's solid button + Clear: selected AND confirmed via "Done".
+  const assessmentFiltersActive = assessmentFiltersConfirmed && assessmentFilterCount > 0;
+  // Whether the list is narrowed at all — drives the result count and the
+  // "no matches" empty state, which must react to a search as well.
+  const assessmentListNarrowed = assessmentFilterCount > 0 || assessmentSearch.trim() !== '';
+
+  const clearAssessmentFilters = () => {
+    setAssessmentFiltersConfirmed(false);
+    setAssessmentSearch('');
+    setFilterType('all');
+    setFilterCreatedBy('all');
+    setFilterCreatedFrom('');
+    setFilterCreatedTo('');
+  };
+
   const filteredAssessments = assessments.filter((assessment) => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'active') return assessment.status === 'Active';
-    if (activeTab === 'draft') return assessment.status === 'Draft';
-    if (activeTab === 'completed') return assessment.status === 'Completed';
-    if (activeTab === 'archived') return assessment.status === 'Archived';
+    if (activeTab === 'active' && assessment.status !== 'Active') return false;
+    if (activeTab === 'draft' && assessment.status !== 'Draft') return false;
+    if (activeTab === 'completed' && assessment.status !== 'Completed') return false;
+    if (activeTab === 'archived' && assessment.status !== 'Archived') return false;
+
+    if (filterType !== 'all' && assessment.type !== filterType) return false;
+    if (filterCreatedBy !== 'all' && assessment.created_by_name !== filterCreatedBy) return false;
+    // `created` is the YYYY-MM-DD date, so the range compares as plain strings.
+    if (filterCreatedFrom && assessment.created < filterCreatedFrom) return false;
+    if (filterCreatedTo && assessment.created > filterCreatedTo) return false;
+
     return true;
   });
   const assessmentPaginationVisible = !['audit', 'consent', 'settings'].includes(activeTab) && assessmentTotalItems > 5;
@@ -1293,10 +1451,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     : `Showing ${trackingStartIndex} to ${trackingEndIndex} of ${trackingTotalItems} invites`;
 
   return (
-    <div ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Assessments' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Assessments' }]} />
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
           <div className="flex items-start gap-3">
@@ -1339,7 +1497,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             )}
             {canAccessHRQuestionBank && (
               <button
-                onClick={() => router.push('/recruitment/hr-question-bank')}
+                onClick={() => {
+                  // Tells the question bank which module to name in its breadcrumb.
+                  try { sessionStorage.setItem('questionBankSource', 'assessments'); } catch { /* ignore */ }
+                  router.push('/recruitment/hr-question-bank');
+                }}
                 className="flex items-center gap-1.5 border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 px-3 py-2 rounded-lg hover:bg-brand-blue/5 transition-colors shadow-sm text-sm"
               >
                 <ClipboardList className="w-4 h-4" />
@@ -1580,8 +1742,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   }`}
                 >
                   <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <span className="hidden sm:inline">Candidates Assessed</span>
-                  <span className="sm:hidden">Candidates</span>
+                  <span className="hidden sm:inline">Candidate Results</span>
+                  <span className="sm:hidden">Results</span>
                 </button>
                 {/* <button
                   onClick={() => setActiveTab('completed')}
@@ -1673,8 +1835,113 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
           {/* Assessment List */}
           <div className="p-3 sm:p-6">
+            {/* Search + filters — only for the tabs that list assessments; the
+                other tabs bring their own controls. */}
+            {!['completed-candidates', 'audit', 'consent', 'settings'].includes(activeTab) && (
+              <div className="mb-4">
+                <ListToolbar
+                  searchValue={assessmentSearch}
+                  onSearchChange={setAssessmentSearch}
+                  searchPlaceholder="Search by assessment name, ID or description..."
+                  onToggleFilters={() => setShowAssessmentFilters(!showAssessmentFilters)}
+                  filtersOpen={showAssessmentFilters}
+                  activeFilterCount={assessmentFilterCount}
+                  filtersApplied={assessmentFiltersActive}
+                  onClearFilters={clearAssessmentFilters}
+                  className="mb-0"
+                />
+
+                {showAssessmentFilters && (
+                  <div className="mt-3 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                      <div>
+                        <label htmlFor="assessment-type" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                          Type
+                        </label>
+                        <select
+                          id="assessment-type"
+                          value={filterType}
+                          onChange={(e) => setFilterType(e.target.value as typeof filterType)}
+                          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                        >
+                          <option value="all">All types</option>
+                          <option value="Technical">Technical</option>
+                          <option value="Behavioral">Behavioral</option>
+                          <option value="Aptitude">Aptitude</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="assessment-creator" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                          Created by
+                        </label>
+                        <select
+                          id="assessment-creator"
+                          value={filterCreatedBy}
+                          onChange={(e) => setFilterCreatedBy(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                        >
+                          <option value="all">Anyone</option>
+                          {assessmentCreators.map((name) => (
+                            <option key={name} value={name}>{name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label htmlFor="assessment-created-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                          Created from
+                        </label>
+                        <input
+                          id="assessment-created-from"
+                          type="date"
+                          value={filterCreatedFrom}
+                          max={filterCreatedTo || undefined}
+                          onChange={(e) => setFilterCreatedFrom(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="assessment-created-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                          Created to
+                        </label>
+                        <input
+                          id="assessment-created-to"
+                          type="date"
+                          value={filterCreatedTo}
+                          min={filterCreatedFrom || undefined}
+                          onChange={(e) => setFilterCreatedTo(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Panel footer: "Done" applies the selection and reveals the
+                        toolbar Clear — same flow as job-openings. */}
+                    <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => { setShowAssessmentFilters(false); setAssessmentFiltersConfirmed(true); }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {assessmentListNarrowed && !isLoading && (
+                  <p className="mt-3 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                    <span className="font-semibold text-gray-900 dark:text-slate-50">{filteredAssessments.length}</span>
+                    {' '}assessment{filteredAssessments.length === 1 ? '' : 's'} match
+                    {assessmentSearch.trim() ? ` "${assessmentSearch.trim()}"` : ' your filters'}
+                  </p>
+                )}
+              </div>
+            )}
+
             {activeTab === 'completed-candidates' ? (() => {
-              /* Candidates Assessed Tab — aggregated completed invitations across all assessments */
+              /* Candidate Results tab - every completed attempt across all assessments */
               const total = completedCandidates.length;
               const totalPages = Math.max(1, Math.ceil(total / COMPLETED_PAGE_SIZE));
               const safePage = Math.min(Math.max(1, completedCandidatesPage), totalPages);
@@ -1684,7 +1951,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   {isLoadingCompletedCandidates ? (
                     <div className="flex items-center justify-center py-16">
                       <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                      <span className="ml-2 text-sm text-gray-600 dark:text-slate-400">Loading completed candidates…</span>
+                      <span className="ml-2 text-sm text-gray-600 dark:text-slate-400">Loading candidate results…</span>
                     </div>
                   ) : completedCandidatesError ? (
                     <div className="p-6 text-center">
@@ -1701,69 +1968,171 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                         <Users className="w-5 h-5 text-brand-blue" />
                       </div>
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">No Completed Candidates</h3>
+                      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">No Candidate Results Yet</h3>
                       <p className="text-sm text-gray-500 dark:text-slate-500">
-                        No candidates have completed an assessment yet.
+                        Results appear here once candidates complete an assessment.
                       </p>
                     </div>
                   ) : (
                     <>
-                      <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                         <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-                          <span className="font-semibold text-gray-900 dark:text-slate-50">{total.toLocaleString()}</span> candidate{total === 1 ? '' : 's'} completed across all assessments
+                          <span className="font-semibold text-gray-900 dark:text-slate-50">{total.toLocaleString()}</span> result{total === 1 ? '' : 's'} across all assessments
+                        </span>
+                        <span className="flex items-center gap-3 text-xs sm:text-sm">
+                          <span className="inline-flex items-center gap-1.5 text-green-700 dark:text-green-400">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            {completedCandidates.filter(r => r.passed).length} passed
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                            <XCircle className="w-3.5 h-3.5" />
+                            {completedCandidates.filter(r => r.passed === false).length} failed
+                          </span>
                         </span>
                       </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full min-w-[1000px] table-auto">
-                          <thead className="bg-slate-50 dark:bg-slate-800/50">
+                      {/* Same card + title as the per-assessment results view. */}
+                      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+                        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60">
+                          <h2 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 tracking-tight">Candidate Results</h2>
+                        </div>
+                        <div className="min-h-[400px] max-h-[calc(100vh-24rem)] overflow-auto">
+                        <table className="w-full min-w-[1500px] table-auto">
+                          <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                             <tr>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Candidate ID</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Candidate Name</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Email</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Assessment ID</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Assessment</th>
-                              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Completed at</th>
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">CID</th>
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Candidate</th>
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Email</th>
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">JD Title</th>
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Phone</th>
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Tech Score</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Coding Score</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Result Status</th>
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Timeline</th>
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Completed</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Duration</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Actions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                            {pageItems.map((inv: any) => (
-                              <tr key={`${inv._assessment_id}-${inv.id}`} className="hover:bg-brand-blue/5 transition-colors">
-                                <td className="py-3 px-4 align-middle whitespace-nowrap">
-                                  {inv.candidate_display_id ? (
-                                    <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs font-mono font-medium ring-1 ring-brand-blue/20">
-                                      {inv.candidate_display_id}
+                            {pageItems.map((result) => {
+                              const invite = inviteSourceMeta(result.invite_source);
+                              return (
+                                <tr
+                                  key={`${result._assessment_id}-${result.invitation_id}`}
+                                  onClick={() => openCandidateResult(result, pageItems)}
+                                  className="hover:bg-brand-blue/5 transition-colors cursor-pointer"
+                                  title={`View ${result.candidate_name || 'candidate'}'s result`}
+                                >
+                                  <td className="px-4 py-4 align-middle whitespace-nowrap">
+                                    {result.candidate_display_id ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs font-mono font-medium ring-1 ring-brand-blue/20">
+                                        {result.candidate_display_id}
+                                      </span>
+                                    ) : (
+                                      <span className="text-gray-400 text-sm">-</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-4 align-middle whitespace-nowrap">
+                                    <div className="flex items-center gap-2.5">
+                                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-blue text-white text-xs font-semibold">
+                                        {(result.candidate_name || 'U').charAt(0).toUpperCase()}
+                                      </span>
+                                      <span className="text-sm font-medium text-gray-900 dark:text-slate-50">
+                                        {result.candidate_name || 'Unknown'}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4 align-middle text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                                    {result.candidate_email || '-'}
+                                  </td>
+                                  <td className="px-4 py-4 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                                    {result.jd_title || result._assessment_title || '-'}
+                                  </td>
+                                  <td className="px-4 py-4 align-middle text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                                    {result.candidate_phone || '-'}
+                                  </td>
+                                  <td className="px-4 py-4 align-middle whitespace-nowrap">
+                                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${invite.cls}`}>
+                                      {invite.label}
                                     </span>
-                                  ) : (
-                                    <span className="text-gray-400 text-sm">-</span>
-                                  )}
-                                </td>
-                                <td className="py-3 px-4 align-middle whitespace-nowrap">
-                                  <div className="text-sm font-medium text-gray-900 dark:text-slate-50">
-                                    {inv.candidate_name || 'Unknown'}
-                                  </div>
-                                </td>
-                                <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                                  {inv.candidate_email || <span className="text-gray-400">-</span>}
-                                </td>
-                                <td className="py-3 px-4 align-middle whitespace-nowrap">
-                                  {inv._assessment_short_id ? (
-                                    <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs font-mono font-medium ring-1 ring-brand-blue/20">
-                                      {inv._assessment_short_id}
+                                  </td>
+                                  <td className="px-4 py-4 align-middle text-center">
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className={`text-lg font-semibold ${typeof result.technical_score === 'number' ? (result.technical_score >= RESULT_PASS_MARK ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                        {typeof result.technical_score === 'number' ? `${Math.round(result.technical_score)}%` : '-'}
+                                      </span>
+                                      {typeof result.technical_score === 'number' && (
+                                        <span className={`text-xs font-medium ${result.technical_score >= RESULT_PASS_MARK ? 'text-green-600' : 'text-red-600'}`}>
+                                          {result.technical_score >= RESULT_PASS_MARK ? 'Pass' : 'Fail'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4 align-middle text-center">
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className={`text-lg font-semibold ${typeof result.coding_score === 'number' ? (result.coding_score >= RESULT_PASS_MARK ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                        {typeof result.coding_score === 'number' ? `${Math.round(result.coding_score)}%` : '-'}
+                                      </span>
+                                      {typeof result.coding_score === 'number' && (
+                                        <span className={`text-xs font-medium ${result.coding_score >= RESULT_PASS_MARK ? 'text-green-600' : 'text-red-600'}`}>
+                                          {result.coding_score >= RESULT_PASS_MARK ? 'Pass' : 'Fail'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4 align-middle text-center whitespace-nowrap">
+                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs ${resultStatusClass(result.status)}`}>
+                                      {resultStatusLabel(result.status)}
                                     </span>
-                                  ) : (
-                                    <span className="text-gray-400 text-sm">-</span>
-                                  )}
-                                </td>
-                                <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                                  {inv._assessment_title || 'Untitled'}
-                                </td>
-                                <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-600 dark:text-slate-400">
-                                  {inv.completed_at ? formatIST(inv.completed_at) : '-'}
-                                </td>
-                              </tr>
-                            ))}
+                                  </td>
+                                  <td className="px-4 py-4 align-middle text-xs text-gray-500 dark:text-slate-400 whitespace-nowrap">
+                                    <div className="space-y-1">
+                                      {result.started_at && (
+                                        <div className="flex items-center gap-2 whitespace-nowrap">
+                                          <Play className="w-3 h-3 text-brand-orange-deep" />
+                                          <span>Started: {formatIST(result.started_at)}</span>
+                                        </div>
+                                      )}
+                                      {result.completed_at && (
+                                        <div className="flex items-center gap-2 whitespace-nowrap">
+                                          <CheckCircle className="w-3 h-3 text-green-500" />
+                                          <span>Completed: {formatIST(result.completed_at)}</span>
+                                        </div>
+                                      )}
+                                      {!result.started_at && !result.completed_at && <span>-</span>}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4 align-middle whitespace-nowrap">
+                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                                      <Calendar className="w-4 h-4" />
+                                      {result.completed_at ? formatISTDate(result.completed_at) : '-'}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4 align-middle text-center whitespace-nowrap">
+                                    <div className="flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                                      <Clock className="w-4 h-4" />
+                                      {formatTimeSpent(result.time_spent_seconds)}
+                                    </div>
+                                  </td>
+                                  <td className="px-2 sm:px-4 py-4 align-middle" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-center justify-center">
+                                      <button
+                                        onClick={() => openCandidateResult(result, pageItems)}
+                                        className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                                        title="View candidate result"
+                                        aria-label={`View result for ${result.candidate_name || 'candidate'}`}
+                                      >
+                                        <Eye className="w-3.5 h-3.5 shrink-0" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
+                        </div>
                       </div>
                       {total > COMPLETED_PAGE_SIZE && (
                         <div className="mt-4 flex items-center justify-between gap-3">
@@ -2356,6 +2725,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
                   <p className="text-gray-600 dark:text-slate-400">Loading assessments...</p>
                 </div>
+              </div>
+            ) : filteredAssessments.length === 0 && assessmentListNarrowed ? (
+              /* Nothing matched — say so, and offer the way back. */
+              <div className="text-center py-12">
+                <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-10 h-10 text-brand-blue" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-slate-50 mb-2 tracking-tight">No assessments match</h3>
+                <p className="text-gray-600 dark:text-slate-400 mb-4">
+                  Try a different name, type, creator or date range.
+                </p>
+                <button
+                  onClick={clearAssessmentFilters}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 hover:bg-brand-blue/10 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                  Clear search and filters
+                </button>
               </div>
             ) : filteredAssessments.length === 0 ? (
               /* Empty State */
@@ -3769,6 +4156,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div>
         )}
       </ConfirmationDialog>
-    </div>
+    </main>
   );
 }

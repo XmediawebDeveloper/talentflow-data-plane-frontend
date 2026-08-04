@@ -8,6 +8,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
 import ResumeTable from '@/components/ResumeTable';
 import SkillsList from '@/components/ui/SkillsList';
+import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import Pagination from '@/components/Pagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
@@ -214,16 +215,14 @@ function DraggableCardResumeRow({
       <div className="text-sm text-gray-600 truncate">{resume.email || '-'}</div>
       {/* Phone */}
       <div className="text-sm text-gray-600 truncate">{resume.phone || '-'}</div>
-      {/* Skills */}
+      {/* Skills — same set the Resume Details "Skills" section shows */}
       <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-        {resume.skills && resume.skills.length > 0 ? (
-          <>
-            <SkillsList
-              skills={resume.skills}
-              chipClassName="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-brand-blue/10 text-brand-blue border border-brand-blue/20 truncate max-w-[90px]"
-              moreClassName="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors"
-            />
-          </>
+        {getDisplaySkills(resume).length > 0 ? (
+          <SkillsList
+            skills={getDisplaySkills(resume)}
+            chipClassName="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-brand-blue/10 text-brand-blue border border-brand-blue/20 truncate max-w-[90px]"
+            moreClassName="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors"
+          />
         ) : (
           <span className="text-xs text-gray-400 italic">No skills</span>
         )}
@@ -2457,7 +2456,7 @@ export default function MyResumesPage() {
     <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-      <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'My Resumes' }]} />
+      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'My Resumes' }]} />
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <div className="w-full sm:w-auto flex items-start gap-3">
           <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
@@ -2495,7 +2494,7 @@ export default function MyResumesPage() {
           {canUploadMyResumes && (
             <button
               onClick={() => setIsUploadModalOpen(true)}
-              className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-md transition-all text-sm flex-1 sm:flex-initial bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-md transition-all text-sm flex-1 sm:flex-initial bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Upload Resume</span>
@@ -2994,10 +2993,10 @@ export default function MyResumesPage() {
                                 {resume.experience && (
                                   <div className="text-gray-600">{resume.experience} exp.</div>
                                 )}
-                                {resume.skills && resume.skills.length > 0 && (
+                                {getDisplaySkills(resume).length > 0 && (
                                   <div className="flex flex-wrap gap-1">
                                     <SkillsList
-                                      skills={resume.skills}
+                                      skills={getDisplaySkills(resume)}
                                       chipClassName="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs border border-brand-blue/20"
                                       moreClassName="px-2 py-0.5 text-brand-blue text-xs font-medium rounded hover:bg-brand-blue/10 transition-colors cursor-pointer"
                                     />
@@ -3174,9 +3173,9 @@ export default function MyResumesPage() {
           <div className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200" />
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               {/* Header */}
-              <div className="flex items-center gap-4 p-6 border-b border-gray-200">
+              <div className="flex-shrink-0 flex items-center gap-4 p-6 border-b border-gray-200">
                 <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
                   <AlertCircle className="w-6 h-6 text-yellow-600" />
                 </div>
@@ -3187,7 +3186,7 @@ export default function MyResumesPage() {
               </div>
 
               {/* Content */}
-              <div className="p-6 max-h-96 overflow-y-auto">
+              <div className="flex-1 min-h-0 overflow-y-auto p-6">
                 <p className="text-gray-700 mb-4">
                   <span className="font-semibold text-red-600">{duplicateScoringWarning.existingScores.length} candidate(s)</span> have already been scored for this job description.
                 </p>
@@ -3239,7 +3238,7 @@ export default function MyResumesPage() {
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200">
+              <div className="flex-shrink-0 flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200">
                 <button
                   onClick={() => setDuplicateScoringWarning({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 })}
                   className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -3271,7 +3270,7 @@ export default function MyResumesPage() {
           />
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="flex items-center gap-4 p-6 border-b border-gray-200">
                 <div className="w-12 h-12 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
@@ -3305,7 +3304,7 @@ export default function MyResumesPage() {
                 <button
                   onClick={handleZipDownload}
                   disabled={isDownloadingZip}
-                  className="flex items-center gap-2 px-4 py-2 text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isDownloadingZip ? (
                     <>
@@ -3333,7 +3332,7 @@ export default function MyResumesPage() {
             setIsUploadHistoryMinimized(false);
             setIsUploadHistoryModalOpen(true);
           }}
-          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-all cursor-pointer flex items-center gap-2 sm:gap-3 animate-in slide-in-from-bottom duration-300"
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 bg-brand-blue hover:bg-brand-blue-2 text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-all cursor-pointer flex items-center gap-2 sm:gap-3 animate-in slide-in-from-bottom duration-300"
         >
           <div className="relative">
             <History className="w-5 h-5" />
@@ -3366,7 +3365,7 @@ export default function MyResumesPage() {
           />
           {/* Centered Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-4xl max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4 rounded-t-2xl">
                 <div className="flex items-center justify-between">
@@ -3466,88 +3465,106 @@ export default function MyResumesPage() {
                         </button>
                       </div>
 
-                      {/* 6-card stats grid — same layout in both tabs, scoped to the tab's records */}
-                      {/* Status Summary Cards - 6 Column Grid (Clickable Filters) */}
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
-                        {/* Completed */}
-                        <div
-                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'completed' ? null : 'completed')}
-                          className={`bg-gradient-to-br from-green-50 to-green-100/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
-                            uploadHistoryFilter === 'completed' ? 'border-green-500 ring-2 ring-green-300 shadow-md' : 'border-green-200'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
-                            </div>
-                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Completed</span>
-                          </div>
-                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-green-700">{completedCount}</div>
-                        </div>
+                      {/* 6-card stats grid — same layout in both tabs, scoped to
+                          the tab's records. All six use the brand palette. When
+                          every number is zero the grid is replaced by a single
+                          "nothing here" card, so a wall of zeros never shows. */}
+                      {(() => {
+                        const statCards = [
+                          { key: 'completed', label: 'Completed', value: completedCount, icon: CheckCircle, tone: 'brand-blue' },
+                          { key: 'duplicated', label: 'Duplicates', value: duplicatedCount, icon: Copy, tone: 'brand-orange' },
+                          { key: 'versioned', label: 'Versioned', value: versionedCount, icon: GitBranch, tone: 'brand-blue-2' },
+                          { key: 'error', label: 'Failed', value: failedCount, icon: AlertCircle, tone: 'brand-orange-deep' },
+                          { key: 'pending', label: 'Pending', value: pendingCount, icon: Clock, tone: 'brand-teal' },
+                        ] as const;
 
-                        {/* Duplicates */}
-                        <div
-                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'duplicated' ? null : 'duplicated')}
-                          className={`bg-gradient-to-br from-yellow-50 to-yellow-100/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
-                            uploadHistoryFilter === 'duplicated' ? 'border-yellow-500 ring-2 ring-yellow-300 shadow-md' : 'border-yellow-200'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-yellow-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
-                            </div>
-                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Duplicates</span>
-                          </div>
-                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-yellow-700">{duplicatedCount}</div>
-                        </div>
+                        // Tailwind needs whole class names, so map tone → classes.
+                        const TONE_CLASS: Record<string, { card: string; active: string; idle: string; tile: string; value: string }> = {
+                          'brand-blue': {
+                            card: 'from-brand-blue/[0.08] to-brand-blue/[0.03]',
+                            active: 'border-brand-blue/50 ring-2 ring-brand-blue/30 shadow-md',
+                            idle: 'border-brand-blue/20',
+                            tile: 'bg-brand-blue',
+                            value: 'text-brand-blue',
+                          },
+                          'brand-blue-2': {
+                            card: 'from-brand-blue-2/[0.08] to-brand-blue-2/[0.03]',
+                            active: 'border-brand-blue-2/50 ring-2 ring-brand-blue-2/30 shadow-md',
+                            idle: 'border-brand-blue-2/20',
+                            tile: 'bg-brand-blue-2',
+                            value: 'text-brand-blue-2',
+                          },
+                          'brand-cyan': {
+                            card: 'from-brand-cyan/[0.08] to-brand-cyan/[0.03]',
+                            active: 'border-brand-cyan/50 ring-2 ring-brand-cyan/30 shadow-md',
+                            idle: 'border-brand-cyan/20',
+                            tile: 'bg-brand-cyan',
+                            value: 'text-brand-cyan',
+                          },
+                          'brand-teal': {
+                            card: 'from-brand-teal/[0.08] to-brand-teal/[0.03]',
+                            active: 'border-brand-teal/50 ring-2 ring-brand-teal/30 shadow-md',
+                            idle: 'border-brand-teal/20',
+                            tile: 'bg-brand-teal',
+                            value: 'text-brand-teal',
+                          },
+                          'brand-orange': {
+                            card: 'from-brand-orange/[0.08] to-brand-orange/[0.03]',
+                            active: 'border-brand-orange/50 ring-2 ring-brand-orange/30 shadow-md',
+                            idle: 'border-brand-orange/20',
+                            tile: 'bg-brand-orange',
+                            value: 'text-brand-orange-deep',
+                          },
+                          'brand-orange-deep': {
+                            card: 'from-brand-orange-deep/[0.08] to-brand-orange-deep/[0.03]',
+                            active: 'border-brand-orange-deep/50 ring-2 ring-brand-orange-deep/30 shadow-md',
+                            idle: 'border-brand-orange-deep/20',
+                            tile: 'bg-brand-orange-deep',
+                            value: 'text-brand-orange-deep',
+                          },
+                        };
 
-                        {/* Versioned */}
-                        <div
-                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'versioned' ? null : 'versioned')}
-                          className={`bg-gradient-to-br from-brand-blue-2/[0.07] to-brand-blue-2/[0.03] border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
-                            uploadHistoryFilter === 'versioned' ? 'border-brand-blue-2/50 ring-2 ring-brand-blue-2/30 shadow-md' : 'border-brand-blue-2/20'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
-                            </div>
-                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Versioned</span>
-                          </div>
-                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-blue-2 tracking-tight">{versionedCount}</div>
-                        </div>
+                        const allZero = statCards.every(card => (card.value || 0) === 0) && totalFiles === 0;
 
-                        {/* Failed */}
-                        <div
-                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'error' ? null : 'error')}
-                          className={`bg-gradient-to-br from-red-50 to-red-100/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
-                            uploadHistoryFilter === 'error' ? 'border-red-500 ring-2 ring-red-300 shadow-md' : 'border-red-200'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                        if (allZero) {
+                          return (
+                            <div className="flex items-center gap-3 mb-4 sm:mb-6 bg-gradient-to-br from-brand-blue/[0.08] to-brand-blue/[0.03] border border-brand-blue/20 rounded-xl p-4">
+                              <div className="w-9 h-9 bg-brand-blue rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Clock className="w-4 h-4 text-white" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900">
+                                  {uploadHistoryTab === 'current' ? 'No uploads in progress' : 'No completed uploads yet'}
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  {uploadHistoryTab === 'current'
+                                    ? 'Upload resumes to see live progress and status counts here.'
+                                    : 'Finished upload batches and their status counts will appear here.'}
+                                </p>
+                              </div>
                             </div>
-                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Failed</span>
-                          </div>
-                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-red-700">{failedCount}</div>
-                        </div>
+                          );
+                        }
 
-                        {/* Pending */}
-                        <div
-                          onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'pending' ? null : 'pending')}
-                          className={`bg-gradient-to-br from-gray-50 to-gray-100/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
-                            uploadHistoryFilter === 'pending' ? 'border-gray-600 ring-2 ring-gray-400 shadow-md' : 'border-gray-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
-                            </div>
-                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Pending</span>
-                          </div>
-                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-700">{pendingCount}</div>
-                        </div>
+                        return (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
+                            {statCards.map(({ key, label, value, icon: Icon, tone }) => {
+                              const t = TONE_CLASS[tone];
+                              const isActive = uploadHistoryFilter === key;
+                              return (
+                                <div
+                                  key={key}
+                                  onClick={() => setUploadHistoryFilter(isActive ? null : key)}
+                                  className={`bg-gradient-to-br ${t.card} border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${isActive ? t.active : t.idle}`}
+                                >
+                                  <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
+                                    <div className={`w-6 h-6 sm:w-8 sm:h-8 ${t.tile} rounded-lg flex items-center justify-center flex-shrink-0`}>
+                                      <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                                    </div>
+                                    <span className="text-[10px] sm:text-xs text-gray-700 truncate">{label}</span>
+                                  </div>
+                                  <div className={`text-lg sm:text-xl lg:text-2xl font-bold tracking-tight ${t.value}`}>{value}</div>
+                                </div>
 
                         {/* Cancelled */}
                         <div
@@ -3564,30 +3581,34 @@ export default function MyResumesPage() {
                           </div>
                           <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-800">{cancelledTotal}</div>
                         </div>
+                              );
+                            })}
 
-                        {/* Success Rate */}
-                        <div className="bg-gradient-to-br from-brand-cyan/[0.08] to-brand-cyan/[0.03] border border-brand-cyan/20 rounded-xl p-2.5 sm:p-3 lg:p-4">
-                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
-                              <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                            {/* Success Rate — not a filter, so it stays static */}
+                            <div className="bg-gradient-to-br from-brand-cyan/[0.08] to-brand-cyan/[0.03] border border-brand-cyan/20 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                              <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
+                                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
+                                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+                                </div>
+                                <span className="text-[10px] sm:text-xs text-gray-700 truncate">Success Rate</span>
+                              </div>
+                              <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
                             </div>
-                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Success Rate</span>
                           </div>
-                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
-                        </div>
-                      </div>
+                        );
+                      })()}
 
                       {/* Active Filter Indicator */}
                       {uploadHistoryFilter && (
                         <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-white border border-gray-200 rounded-lg">
                           <span className="text-xs text-gray-500">Filtering by:</span>
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                            uploadHistoryFilter === 'completed' ? 'bg-green-100 text-green-700' :
+                            uploadHistoryFilter === 'completed' ? 'bg-brand-blue/10 text-brand-blue' :
                             uploadHistoryFilter === 'duplicated' ? 'bg-brand-orange/15 text-brand-orange-deep' :
                             uploadHistoryFilter === 'versioned' ? 'bg-brand-blue-2/10 text-brand-blue-2' :
-                            uploadHistoryFilter === 'error' ? 'bg-red-100 text-red-700' :
+                            uploadHistoryFilter === 'error' ? 'bg-brand-orange-deep/10 text-brand-orange-deep' :
                             uploadHistoryFilter === 'cancelled' ? 'bg-gray-200 text-gray-800' :
-                            'bg-gray-100 text-gray-700'
+                            'bg-brand-teal/10 text-brand-teal'
                           }`}>
                             {uploadHistoryFilter === 'completed' ? 'Completed' :
                              uploadHistoryFilter === 'duplicated' ? 'Duplicates' :
@@ -3656,10 +3677,10 @@ export default function MyResumesPage() {
                       {displayRecords.length === 0 ? (
                         <div className="flex flex-col items-center justify-center text-center py-8 sm:py-12">
                           <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mb-3 sm:mb-4 ring-1 ${
-                            uploadHistoryTab === 'current' ? 'bg-green-100 ring-green-200/60' : 'bg-brand-blue/10 ring-brand-blue/15'
+                            uploadHistoryTab === 'current' ? 'bg-brand-cyan/10 ring-brand-cyan/20' : 'bg-brand-blue/10 ring-brand-blue/15'
                           }`}>
                             {uploadHistoryTab === 'current' ? (
-                              <CheckCircle className="w-7 h-7 sm:w-10 sm:h-10 text-green-600" />
+                              <CheckCircle className="w-7 h-7 sm:w-10 sm:h-10 text-brand-cyan" />
                             ) : (
                               <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-brand-blue" />
                             )}
@@ -3740,7 +3761,7 @@ export default function MyResumesPage() {
                                               : `${s}s`;
                                           return (
                                             <span className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                                              <CheckCircle className="w-3 h-3 flex-shrink-0 text-green-500" />
+                                              <CheckCircle className="w-3 h-3 flex-shrink-0 text-brand-blue" />
                                               <span className="truncate">
                                                 Finished {formatDateTimeIST(record.completedAt)}
                                                 <span className="ml-1.5 text-gray-400">·</span>
@@ -3759,7 +3780,7 @@ export default function MyResumesPage() {
                                         </span>
                                       )}
                                       {!isUploading && hasIssues && (
-                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-yellow-100 text-yellow-700 text-[10px] sm:text-xs rounded-full border border-yellow-200">
+                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-orange/15 text-brand-orange-deep text-[10px] sm:text-xs rounded-full border border-brand-orange/30">
                                           <AlertCircle className="w-3 h-3 flex-shrink-0" />
                                           <span className="hidden sm:inline">Needs Review</span>
                                           <span className="sm:hidden">Review</span>
@@ -3768,10 +3789,10 @@ export default function MyResumesPage() {
                                       {!isUploading && (
                                         <div className="text-right">
                                           <div className={`text-base sm:text-xl font-bold tracking-tight ${
-                                            percentage === 100 ? 'text-green-600' :
-                                            percentage >= 90 ? 'text-brand-blue' :
-                                            percentage >= 70 ? 'text-brand-orange-deep' :
-                                            'text-red-600'
+                                            percentage === 100 ? 'text-brand-blue' :
+                                            percentage >= 90 ? 'text-brand-cyan' :
+                                            percentage >= 70 ? 'text-brand-orange' :
+                                            'text-brand-orange-deep'
                                           }`}>
                                             {percentage}%
                                           </div>
@@ -3784,24 +3805,25 @@ export default function MyResumesPage() {
 
                                   {/* Mini Stats */}
                                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 sm:gap-2 mb-3 sm:mb-4">
-                                    <div className="text-center p-1.5 sm:p-2 bg-green-50 rounded-lg border border-green-100">
-                                      <div className="text-xs sm:text-sm font-semibold text-green-700">{record.completed}</div>
+                                    {/* Mini stats use the same brand tones as the summary cards above */}
+                                    <div className="text-center p-1.5 sm:p-2 bg-brand-blue/[0.06] rounded-lg border border-brand-blue/15">
+                                      <div className="text-xs sm:text-sm font-semibold text-brand-blue">{record.completed}</div>
                                       <div className="text-[10px] sm:text-xs text-gray-600">Done</div>
                                     </div>
-                                    <div className="text-center p-1.5 sm:p-2 bg-yellow-50 rounded-lg border border-yellow-100">
-                                      <div className="text-xs sm:text-sm font-semibold text-yellow-700">{record.duplicated}</div>
+                                    <div className="text-center p-1.5 sm:p-2 bg-brand-orange/[0.08] rounded-lg border border-brand-orange/20">
+                                      <div className="text-xs sm:text-sm font-semibold text-brand-orange-deep">{record.duplicated}</div>
                                       <div className="text-[10px] sm:text-xs text-gray-600">Duplicates</div>
                                     </div>
                                     <div className="text-center p-1.5 sm:p-2 bg-brand-blue-2/[0.07] rounded-lg border border-brand-blue-2/20">
                                       <div className="text-xs sm:text-sm font-semibold text-brand-blue-2">{record.versioned || 0}</div>
                                       <div className="text-[10px] sm:text-xs text-gray-600">Version</div>
                                     </div>
-                                    <div className="text-center p-1.5 sm:p-2 bg-red-50 rounded-lg border border-red-100">
-                                      <div className="text-xs sm:text-sm font-semibold text-red-700">{record.errors}</div>
+                                    <div className="text-center p-1.5 sm:p-2 bg-brand-orange-deep/[0.08] rounded-lg border border-brand-orange-deep/20">
+                                      <div className="text-xs sm:text-sm font-semibold text-brand-orange-deep">{record.errors}</div>
                                       <div className="text-[10px] sm:text-xs text-gray-600">Failed</div>
                                     </div>
-                                    <div className="text-center p-1.5 sm:p-2 bg-brand-cyan/[0.08] rounded-lg border border-brand-cyan/20">
-                                      <div className="text-xs sm:text-sm font-semibold text-brand-cyan">{record.pending}</div>
+                                    <div className="text-center p-1.5 sm:p-2 bg-brand-teal/[0.08] rounded-lg border border-brand-teal/20">
+                                      <div className="text-xs sm:text-sm font-semibold text-brand-teal">{record.pending}</div>
                                       <div className="text-[10px] sm:text-xs text-gray-600">Pending</div>
                                     </div>
                                     {/* Cancelled — previously had no tile, so cancelled files simply
@@ -3827,13 +3849,13 @@ export default function MyResumesPage() {
                                       <span>Progress</span>
                                       <span>{processed} of {record.totalFiles}</span>
                                     </div>
-                                    <div className="h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div className="h-1.5 sm:h-2 bg-brand-blue/10 rounded-full overflow-hidden">
                                       <div
                                         className={`h-full transition-all ${
-                                          percentage === 100 ? 'bg-green-500' :
-                                          percentage >= 90 ? 'bg-brand-blue' :
+                                          percentage === 100 ? 'bg-brand-blue' :
+                                          percentage >= 90 ? 'bg-brand-cyan' :
                                           percentage >= 70 ? 'bg-brand-orange' :
-                                          'bg-red-500'
+                                          'bg-brand-orange-deep'
                                         }`}
                                         style={{ width: `${Math.min((processed / record.totalFiles) * 100, 100)}%` }}
                                       />
@@ -4211,7 +4233,7 @@ export default function MyResumesPage() {
                     </button>
                     <button
                       onClick={() => setIsBulkResolveModalOpen(true)}
-                      className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white bg-brand-blue hover:from-brand-blue hover:to-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex items-center justify-center gap-1.5 sm:gap-2"
+                      className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex items-center justify-center gap-1.5 sm:gap-2"
                     >
                       <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       Resolve ({selectedVersionedItems.size})
@@ -4224,7 +4246,7 @@ export default function MyResumesPage() {
               <div className="border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 bg-white rounded-b-2xl">
                 <button
                   onClick={handleCloseUploadHistory}
-                  className="w-full px-4 py-2 sm:py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base"
+                  className="w-full px-4 py-2 sm:py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base"
                 >
                   Close
                 </button>
@@ -4270,9 +4292,9 @@ export default function MyResumesPage() {
             }}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               {/* Header */}
-              <div className="flex items-center gap-4 p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white">
+              <div className="flex-shrink-0 flex items-center gap-4 p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white">
                 <div className="w-12 h-12 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
                   <ClipboardCheck className="w-6 h-6 text-white" />
                 </div>
@@ -4295,7 +4317,7 @@ export default function MyResumesPage() {
               </div>
 
               {/* Content */}
-              <div className="p-6 overflow-y-auto max-h-[calc(80vh-200px)]">
+              <div className="flex-1 min-h-0 overflow-y-auto p-6">
                 {/* Selected Candidates Preview */}
                 <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Selected Candidates</h4>
@@ -4504,7 +4526,7 @@ export default function MyResumesPage() {
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200">
+              <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <div className="text-sm text-gray-600">
                   {selectedAssessments.length} assessment{selectedAssessments.length !== 1 ? 's' : ''} selected
                 </div>
@@ -4549,7 +4571,7 @@ export default function MyResumesPage() {
                       setIsShareAssessmentModalOpen(true);
                     }}
                     disabled={selectedAssessments.length === 0}
-                    className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Mail className="w-4 h-4" />
                     Proceed to Send Invitations

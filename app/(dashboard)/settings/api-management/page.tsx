@@ -142,7 +142,7 @@ export default function ApiManagementPage() {
     <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'API Management' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'API Management' }]} />
 
         {/* SaaS Hero Header */}
         <section className="relative mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-6">
@@ -284,9 +284,9 @@ export default function ApiManagementPage() {
       {/* Create API Key Modal — only renders if user has Manage permission */}
       {showCreateModal && canManage && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="rounded-xl bg-white dark:bg-slate-900 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.03] dark:ring-white/[0.02] border border-gray-100 dark:border-slate-700/60 max-w-md w-full overflow-hidden">
+          <div className="rounded-xl bg-white dark:bg-slate-900 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.03] dark:ring-white/[0.02] border border-gray-100 dark:border-slate-700/60 max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="relative overflow-hidden bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 px-6 py-5">
+            <div className="relative flex-shrink-0 overflow-hidden bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 px-6 py-5">
               <div className="relative flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="h-9 w-9 flex items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
@@ -305,7 +305,7 @@ export default function ApiManagementPage() {
               </div>
             </div>
 
-            <div className="p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6">
             {newlyCreatedKey ? (
               <div>
                 <div className="rounded-lg ring-1 ring-brand-orange/20 bg-brand-orange/5 p-4 mb-4">

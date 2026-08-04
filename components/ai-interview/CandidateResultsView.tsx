@@ -465,7 +465,7 @@ function RecordingTabContent({
             <a
               href={blobUrl}
               download={downloadName}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 transition-colors"
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 transition-colors"
             >
               <Download className="w-4 h-4" /> Download MP4
             </a>
@@ -1385,7 +1385,8 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   ? { label: 'AI Interviews', onClick: onNavigateToList }
                   : { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
                 ...(breadcrumbTrail ?? []),
-                { label: 'Candidate Results' },
+                // Deepest crumb names the candidate whose results are open.
+                { label: interview.candidate_name || 'Candidate Results' },
               ]}
             />
             <RecordPager
@@ -2571,7 +2572,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                     <div className="flex justify-end relative">
                       <button
                         onClick={() => setQaExportMenuOpen(v => !v)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-blue text-white hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30"
                       >
                         <Download className="w-3.5 h-3.5" />
                         Export
@@ -3309,7 +3310,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             <button
                               onClick={() => setExportMenuOpen(v => !v)}
                               disabled={groups.length === 0}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-blue text-white hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <Download className="w-3.5 h-3.5" />
                               Export

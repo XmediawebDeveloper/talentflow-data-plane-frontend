@@ -26,6 +26,9 @@ function DetailsContent() {
   const [jdId, setJdId] = useState<string>('');
   const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Reported by CandidateResultDetails once the result loads, so the deepest
+  // crumb can name the candidate rather than saying "Candidate Details".
+  const [candidateName, setCandidateName] = useState<string>('');
 
   // Prev/Next navigation: AssessmentResults stores the visible candidate list
   // in sessionStorage when the user opens the details view, so the user can
@@ -79,22 +82,30 @@ function DetailsContent() {
   };
 
   const breadcrumb = (
-    <div className="flex items-center justify-between gap-3 mb-4 md:mb-8">
+    <div className="mb-4 md:mb-8">
       <PageBreadcrumb
-        className="mb-0 flex-1"
+        className="mb-3"
         items={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Assessments', href: '/recruitment/assessments' },
-          { label: 'Results', href: `/recruitment/assessments/${assessmentId}/results` },
-          { label: 'Candidate Details' },
+          // Name the assessment, then the candidate record being viewed.
+          { label: assessmentTitle || 'Results', href: `/recruitment/assessments/${assessmentId}/results` },
+          { label: candidateName || candidateDisplayId || 'Candidate Details' },
         ]}
       />
-      <RecordPager
-        currentIndex={navIndex >= 0 ? navIndex : undefined}
-        totalCount={navList.length || undefined}
-        onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
-        onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
-      />
+
+      {/* Previous / Next sits below the breadcrumb, as on job-details. The row
+          is dropped when there is no list to page through. */}
+      {navList.length > 0 && (
+        <div className="flex items-center justify-end">
+          <RecordPager
+            currentIndex={navIndex >= 0 ? navIndex : undefined}
+            totalCount={navList.length || undefined}
+            onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
+            onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
+          />
+        </div>
+      )}
     </div>
   );
 
@@ -157,6 +168,7 @@ function DetailsContent() {
         onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
         onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
         showRecordPager={false}
+        onCandidateLoaded={setCandidateName}
       />
         </div>
       </div>

@@ -278,7 +278,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
   if (hasOnlyExactDuplicates) {
     return (
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] flex flex-col">
           {/* Header */}
           <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-red-50 to-red-100">
             <div className="flex items-start gap-4">
@@ -377,7 +377,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
   return (
     <>
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-orange-50">
           <div className="flex items-start gap-4">
@@ -418,7 +418,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-320px)]">
+        <div className="flex-1 min-h-0 p-6 overflow-y-auto">
           {/* Candidate Info */}
           <div className="mb-6 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-gray-200 dark:border-slate-700">
             <div className="flex items-center gap-3 mb-2">
@@ -740,7 +740,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
     {/* Inline Preview Modal */}
     {showPreviewModal && (
       <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[110]" onClick={closePreview}>
-        <div className="bg-white rounded-xl w-[90vw] h-[85vh] max-w-4xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-white rounded-xl w-[90vw] h-[85vh] max-w-[95vw] sm:max-w-4xl flex flex-col" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
             <div className="flex items-center gap-2">
               <Eye className="w-5 h-5 text-blue-600" />

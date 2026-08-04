@@ -157,7 +157,7 @@ export default function UnitAdjustmentModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
           <div>

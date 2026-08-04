@@ -43,6 +43,7 @@ interface ApplyToJobModalProps {
   mode?: 'apply' | 'assessment' | 'scoring'; // New: Support different modes
   title?: string; // New: Custom title
   description?: string; // New: Custom description
+  stayOnCurrentPage?: boolean;
 }
 
 export default function ApplyToJobModal({
@@ -52,7 +53,8 @@ export default function ApplyToJobModal({
   onApply,
   mode = 'apply',
   title,
-  description
+  description,
+  stayOnCurrentPage = false
 }: ApplyToJobModalProps) {
   // Default titles based on mode
   const defaultTitle = mode === 'assessment' ? 'Create Assessment' : mode === 'scoring' ? 'Resume Scoring' : 'Apply to Job';
@@ -64,6 +66,7 @@ export default function ApplyToJobModal({
 
   const modalTitle = title || defaultTitle;
   const modalDescription = description || defaultDescription;
+  const isScoringMode = mode === 'scoring';
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [isApplying, setIsApplying] = useState(false);
@@ -344,16 +347,22 @@ export default function ApplyToJobModal({
                 <div>
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">Next Steps</h4>
                   <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
-                    {selectedJobs.length === 1 ? (
+                    {isScoringMode ? (
+                      <>
+                        <li>&bull; Resume will be scored against {selectedJobs.length} selected job{selectedJobs.length > 1 ? 's' : ''}</li>
+                        <li>&bull; {stayOnCurrentPage ? 'Scoring progress will run on this resume page' : "You'll see the Resume Scoring page"}</li>
+                        <li>&bull; AI will analyze fit for each job</li>
+                      </>
+                    ) : selectedJobs.length === 1 ? (
                       <>
                         <li>• Candidates will be added to the selected job</li>
-                        <li>• You'll be navigated to the job's applicant list</li>
+                        <li>• You&apos;ll be navigated to the job&apos;s applicant list</li>
                         <li>• You can review and manage applications there</li>
                       </>
                     ) : (
                       <>
                         <li>• Candidates will be applied to {selectedJobs.length} jobs</li>
-                        <li>• You'll see the Resume Scoring page</li>
+                        <li>• You&apos;ll see the Resume Scoring page</li>
                         <li>• AI will analyze fit for each job</li>
                       </>
                     )}
@@ -371,13 +380,13 @@ export default function ApplyToJobModal({
             {selectedJobs.length === 1 && (
               <span className="flex items-center gap-1.5">
                 <CheckCircle className="w-4 h-4 text-gray-800 dark:text-slate-100 flex-shrink-0" />
-                Ready to apply to job
+                {isScoringMode ? 'Ready to score resume' : 'Ready to apply to job'}
               </span>
             )}
             {selectedJobs.length > 1 && (
               <span className="flex items-center gap-1.5">
                 <CheckCircle className="w-4 h-4 text-gray-800 dark:text-slate-100 flex-shrink-0" />
-                Ready to apply to {selectedJobs.length} jobs
+                {isScoringMode ? `Ready to score against ${selectedJobs.length} jobs` : `Ready to apply to ${selectedJobs.length} jobs`}
               </span>
             )}
           </div>
@@ -397,12 +406,14 @@ export default function ApplyToJobModal({
               {isApplying ? (
                 <>
                   <Loader2 className="w-4 h-4 text-white animate-spin" />
-                  Applying...
+                  {isScoringMode ? 'Scoring...' : 'Applying...'}
                 </>
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4" />
-                  Apply to {selectedJobs.length > 0 ? `${selectedJobs.length} Job${selectedJobs.length > 1 ? 's' : ''}` : 'Job'}
+                  {isScoringMode
+                    ? 'Score Resume'
+                    : `Apply to ${selectedJobs.length > 0 ? `${selectedJobs.length} Job${selectedJobs.length > 1 ? 's' : ''}` : 'Job'}`}
                 </>
               )}
             </button>

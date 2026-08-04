@@ -1931,7 +1931,7 @@ function CurrentPlanContent() {
     <main className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan' }]} />
 
         {/* SaaS Hero Header */}
         <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
@@ -2916,7 +2916,7 @@ function CurrentPlanContent() {
       {/* Plan Selection Modal */}
       {showPaymentModal && selectedPlanForPayment && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-200 dark:border-slate-700">
               <div className="flex items-center justify-between">
@@ -3417,7 +3417,7 @@ function CurrentPlanContent() {
         ) === -1;
         return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-200 dark:border-slate-700">
               <div className="flex items-center justify-between">
@@ -3560,9 +3560,9 @@ function CurrentPlanContent() {
         const changeLabel = isCancelDowngrade ? 'Downgrade' : 'Upgrade';
         return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+            <div className="flex-shrink-0 p-6 border-b border-gray-200 dark:border-slate-700">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
@@ -3586,7 +3586,7 @@ function CurrentPlanContent() {
               </div>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
               {/* Warning */}
               <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                 <div className="flex items-start gap-3">

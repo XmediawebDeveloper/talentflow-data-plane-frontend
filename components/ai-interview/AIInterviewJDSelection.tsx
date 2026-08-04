@@ -146,7 +146,7 @@ export default function AIInterviewJDSelection() {
             {canCreateJD && (
               <button
                 onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
               >
                 <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                 Create Job Description
@@ -244,7 +244,7 @@ export default function AIInterviewJDSelection() {
                     ) : canCreateAIInterviews ? (
                       <button
                         onClick={() => handleSelectJd(jd)}
-                        className="px-4 py-1.5 text-sm font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                        className="px-4 py-1.5 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                       >
                         Select
                       </button>

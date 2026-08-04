@@ -86,7 +86,7 @@ export default function AITalentMatchProgressPanel({
   if (error) {
     return (
       <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-sm w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
+        <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="text-center">
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-50 ring-1 ring-red-200 rounded-full flex items-center justify-center mx-auto mb-3">
               <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
@@ -108,7 +108,7 @@ export default function AITalentMatchProgressPanel({
   // Show progress panel
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-lg w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-2xl w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
         {/* Header */}
         <div className="text-center mb-4 sm:mb-5">
           <div className="w-10 h-10 sm:w-14 sm:h-14 bg-brand-blue ring-1 ring-white/10 shadow-md shadow-brand-blue/25 rounded-full flex items-center justify-center mx-auto mb-3 animate-pulse">

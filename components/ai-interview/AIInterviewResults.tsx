@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import ListToolbar from '@/components/ui/list-toolbar';
 import { useRouter } from 'next/navigation';
 import {
-  Search, Filter, ChevronLeft, ChevronRight, Eye, Loader2,
+  ChevronLeft, ChevronRight, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
-  X, BarChart3, Ban,
+  BarChart3, Ban,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -130,6 +131,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  // True once the user confirms the panel with "Done" - mirrors job-openings,
+  // so Clear appears only after filters are applied.
+  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -200,7 +204,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
 
   const hasActiveFilters = statusFilter !== 'all' || scoreMin || scoreMax || dateFrom || dateTo;
 
+  // Score min/max is one logical range filter, and so is the date range.
+  const activeFiltersCount = [scoreMin || scoreMax, dateFrom || dateTo].filter(Boolean).length;
+
   const clearFilters = () => {
+    setFiltersConfirmed(false);
     setStatusFilter('all');
     setScoreMin('');
     setScoreMax('');
@@ -286,53 +294,33 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
 
       {/* Search + Filter bar */}
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue" />
-            <input
-              type="text"
-              placeholder="Search by name, email, or CID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-            />
-          </div>
+        <ListToolbar
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search by name, email, or CID..."
+          onToggleFilters={() => setShowFilters((v) => !v)}
+          filtersOpen={showFilters}
+          activeFilterCount={activeFiltersCount}
+          filtersApplied={filtersConfirmed && activeFiltersCount > 0}
+          onClearFilters={clearFilters}
+          className="mb-0"
+        >
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white"
+            aria-label="Interview status"
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
           >
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
-          <button
-            onClick={() => setShowFilters((v) => !v)}
-            className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-lg transition-colors ${
-              hasActiveFilters
-                ? 'border-brand-blue/30 bg-brand-blue/5 text-brand-blue'
-                : 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-            }`}
-          >
-            <Filter className="w-4 h-4" />
-            Filters
-            {hasActiveFilters && (
-              <span className="w-5 h-5 bg-brand-blue text-white rounded-full text-xs flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                {[scoreMin || scoreMax ? 1 : 0, dateFrom || dateTo ? 1 : 0].reduce((a, b) => a + b, 0)}
-              </span>
-            )}
-          </button>
-          {hasActiveFilters && (
-            <button onClick={clearFilters} className="flex items-center gap-1 text-sm text-gray-500 hover:text-brand-blue transition-colors">
-              <X className="w-4 h-4" />
-              Clear
-            </button>
-          )}
-        </div>
+        </ListToolbar>
 
         {/* Expanded filters */}
         {showFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-4">
+          <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Score Range (%)</label>
               <div className="flex items-center gap-2">
@@ -376,6 +364,18 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
               </div>
             </div>
           </div>
+
+          {/* Panel footer: "Done" applies the selection and reveals the
+              toolbar Clear - same flow as job-openings. */}
+          <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+            <button
+              onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+            >
+              Done
+            </button>
+          </div>
+          </div>
         )}
       </div>
 
@@ -394,7 +394,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
               {totalSessions === 0 && !hasActiveFilters ? 'No candidates invited yet' : 'No results match your filters'}
             </p>
             {hasActiveFilters && (
-              <button onClick={clearFilters} className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors">
+              <button onClick={clearFilters} className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors">
                 Clear filters
               </button>
             )}
@@ -584,7 +584,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
             items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-              { label: 'Results' },
+              // Name the interview these results belong to when we know it.
+              { label: configTitle || jdTitle || 'Results' },
             ]}
           />
           {body}

@@ -2416,7 +2416,8 @@ export default function AIInterviewClusters() {
               items={[
                 { label: 'Dashboard', href: '/dashboard' },
                 { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-                { label: 'Clusters' },
+                // Name the JD whose clusters are being edited.
+                { label: config?.jd_title || config?.position || 'Clusters' },
               ]}
             />
           {/* Header */}
@@ -3061,7 +3062,7 @@ export default function AIInterviewClusters() {
                   <button
                     onClick={handleGenerateClusters}
                     disabled={generating || saving}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     {generating ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -3676,7 +3677,7 @@ export default function AIInterviewClusters() {
             <button
               onClick={handleContinue}
               disabled={saving || generating}
-              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {saving ? 'Saving...' : 'Continue to Preview'}

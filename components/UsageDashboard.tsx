@@ -775,7 +775,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     <main ref={rootRef} className="flex-1 bg-white dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Usage & Quotas' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Usage & Quotas' }]} />
 
         <div className="space-y-6">
         {/* Subscription Summary Card */}
@@ -1359,7 +1359,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       {/* Record Usage Modal */}
       {showRecordModal && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col">
             <div className="p-6 border-b border-gray-200 dark:border-slate-700 shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1508,7 +1508,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       {/* Addon Purchase Modal */}
       {showAddonModal && selectedAddon && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-xl shadow-2xl sm:border sm:border-gray-200 dark:sm:border-slate-700 max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-xl shadow-2xl sm:border sm:border-gray-200 dark:sm:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
 
             {/* Modal Header */}
             <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal flex-shrink-0 overflow-hidden">

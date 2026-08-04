@@ -8,6 +8,7 @@ import { Resume, Folder } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
+import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import { EmptyState } from './ui/empty-state';
 import Pagination from './Pagination';
 import { usePagination } from '@/lib/hooks/usePagination';
@@ -457,8 +458,9 @@ export default function ResumeTable({
               </td>
               <td className="px-4 py-3 align-middle min-w-[220px]">
                 <div className="flex flex-wrap gap-1">
+                  {/* Same set the Resume Details "Skills" section shows */}
                   <SkillsList
-                    skills={resume.skills}
+                    skills={getDisplaySkills(resume)}
                     highlight={(s) => (highlightQuery ? highlightText(s, highlightQuery) : s)}
                   />
                 </div>
@@ -515,7 +517,7 @@ export default function ResumeTable({
                           onApplySelected();
                         }
                       }}
-                      className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                      className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       <Briefcase className="w-4 h-4" />
                       Apply to Job
@@ -717,10 +719,10 @@ export default function ResumeTable({
                   <span>{resume.experience} years exp.</span>
                 </div>
               )}
-              {resume.skills && resume.skills.length > 0 && (
+              {getDisplaySkills(resume).length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
                   <SkillsList
-                    skills={resume.skills}
+                    skills={getDisplaySkills(resume)}
                     chipClassName="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs ring-1 ring-brand-blue/20"
                     moreClassName="px-2 py-0.5 text-brand-blue text-xs font-medium rounded hover:bg-brand-blue/10 transition-colors cursor-pointer"
                   />
@@ -740,7 +742,7 @@ export default function ResumeTable({
               {onApplyToJob && (
                 <button
                   onClick={() => handleApplyToJob(resume)}
-                  className="flex-1 px-3 py-2 text-sm text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue rounded-lg transition-all flex items-center justify-center gap-1 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="flex-1 px-3 py-2 text-sm text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all flex items-center justify-center gap-1 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   <Briefcase className="w-4 h-4" />
                   Apply
@@ -797,7 +799,7 @@ export default function ResumeTable({
       {/* Edit Details Modal */}
       {showEditModal && selectedResumeForAction && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-2">
@@ -897,7 +899,7 @@ export default function ResumeTable({
                   setShowEditModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="flex-1 px-4 py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="flex-1 px-4 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 Save Changes
               </button>
@@ -909,7 +911,7 @@ export default function ResumeTable({
       {/* Share Resume Modal */}
       {showShareModal && selectedResumeForAction && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-2">
@@ -967,7 +969,7 @@ export default function ResumeTable({
                   setShowShareModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="flex-1 px-4 py-2.5 bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
+                className="flex-1 px-4 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Mail className="w-4 h-4" />
                 Share
@@ -980,7 +982,7 @@ export default function ResumeTable({
       {/* Add Tags Modal */}
       {showAddTagsModal && selectedResumeForAction && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-2">
@@ -1044,7 +1046,7 @@ export default function ResumeTable({
                   setShowAddTagsModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="flex-1 px-4 py-2.5 bg-brand-cyan hover:from-brand-teal hover:to-brand-cyan text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-cyan/25 ring-1 ring-white/10"
+                className="flex-1 px-4 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Tag className="w-4 h-4" />
                 Add Tags
@@ -1057,7 +1059,7 @@ export default function ResumeTable({
       {/* Archive Resume Modal */}
       {showArchiveModal && selectedResumeForAction && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-2">
@@ -1120,7 +1122,7 @@ export default function ResumeTable({
                   setShowArchiveModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="flex-1 px-4 py-2.5 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
+                className="flex-1 px-4 py-2.5 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
               >
                 <Archive className="w-4 h-4" />
                 Archive

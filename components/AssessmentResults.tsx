@@ -992,10 +992,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     <div ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb className="mb-4 md:mb-8" items={[
+          <PageBreadcrumb className="mb-4 md:mb-6" items={[
             { label: 'Dashboard', href: '/dashboard' },
             { label: 'Assessments', href: '/recruitment/assessments' },
-            { label: 'Results' },
+            // Name the assessment these results belong to, not just "Results".
+            ...(assessmentTitle ? [{ label: assessmentTitle }] : [{ label: 'Results' }]),
           ]} />
       {/* Header */}
       <div className="mb-4 sm:mb-6">
@@ -1023,7 +1024,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <button
                   onClick={handleDownloadBulkPDFs}
                   disabled={downloadingBulkPDF}
-                  className="px-3 sm:px-6 py-2 sm:py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  className="px-3 sm:px-6 py-2 sm:py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {downloadingBulkPDF ? (
                     <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
@@ -1036,7 +1037,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               )}
               <button
                 onClick={() => setShowExportModal(true)}
-                className="px-3 sm:px-6 py-2 sm:py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm whitespace-nowrap"
+                className="px-3 sm:px-6 py-2 sm:py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm whitespace-nowrap"
               >
                 <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline">Export Results</span>
@@ -1482,7 +1483,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => viewCandidateDetails(candidate)}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                             title="View Details"
                             aria-label={`View details for ${candidate.name || 'candidate'}`}
                           >
@@ -1491,7 +1492,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <button
                             onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                             disabled={downloadingPDF === candidate.id}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Download PDF Report"
                             aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                           >
@@ -1796,7 +1797,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
                           <button
                             onClick={() => viewCandidateDetails(candidate)}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                             title="View Details"
                             aria-label={`View details for ${candidate.name || 'candidate'}`}
                           >
@@ -1805,7 +1806,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <button
                             onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                             disabled={downloadingPDF === candidate.id}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Download PDF Report"
                             aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                           >
@@ -1915,7 +1916,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       {/* Export Format & Scope Selection Modal */}
       {showExportModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
             {/* Step 1: Format Selection */}
             {exportStep === 'format' && (
               <>

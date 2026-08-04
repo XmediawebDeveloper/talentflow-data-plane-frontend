@@ -560,20 +560,20 @@ export default function InternalTicketAdmin() {
               <div className="p-6 border-b border-gray-200">
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search by ticket, title, or user..."
-                      className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
                     />
                   </div>
 
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                   >
                     <option value="all">All Status</option>
                     <option value="open">Open</option>
@@ -585,7 +585,7 @@ export default function InternalTicketAdmin() {
                   <select
                     value={filterAssignment}
                     onChange={(e) => setFilterAssignment(e.target.value)}
-                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                   >
                     <option value="all">All Tickets</option>
                     <option value="mine">Assigned to Me</option>
@@ -595,7 +595,7 @@ export default function InternalTicketAdmin() {
                   <select
                     value={filterPriority}
                     onChange={(e) => setFilterPriority(e.target.value)}
-                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    className="px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                   >
                     <option value="all">All Priority</option>
                     <option value="low">Low</option>
@@ -784,7 +784,7 @@ export default function InternalTicketAdmin() {
                         onChange={(e) => setReplyMessage(e.target.value)}
                         placeholder="Type your response..."
                         rows={4}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 resize-none"
                       />
                       <div className="flex justify-end mt-3">
                         <button
@@ -846,7 +846,7 @@ export default function InternalTicketAdmin() {
                     <select
                       value={selectedTicket.priority}
                       onChange={(e) => handleUpdatePriority(selectedTicket.id, e.target.value as InternalTicketPriority)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                     >
                       {priorities.map(p => (
                         <option key={p.value} value={p.value}>{p.label}</option>

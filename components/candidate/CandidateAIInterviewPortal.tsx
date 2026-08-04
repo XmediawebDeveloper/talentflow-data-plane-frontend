@@ -2089,7 +2089,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             gesture, so it happens on this button's click. */}
         {finalConsentFsExited && (
           <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+            <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5">
                 <Maximize2 className="w-8 h-8 text-amber-600" />
               </div>
@@ -2262,7 +2262,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (
           <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
+            <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
                 <AlertTriangle className="w-8 h-8 text-red-600" />
               </div>
@@ -2294,7 +2294,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             before the hard-pause overlay kicks in. Silent otherwise. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && fullscreenGraceRemaining !== null && isFullscreenActive && (
           <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white border-2 border-amber-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
+            <div className="bg-white border-2 border-amber-400 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-amber-500 mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
               <p className="text-gray-600 mb-4 text-sm">
@@ -2323,7 +2323,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             Production uses the unified "return to the interview" pause below. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && !isFullscreenActive && (
           <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white border-2 border-yellow-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
+            <div className="bg-white border-2 border-yellow-400 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
               <p className="text-gray-600 mb-4 text-sm">

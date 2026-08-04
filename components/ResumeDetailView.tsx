@@ -15,9 +15,12 @@ interface ResumeDetailViewProps {
   onEdit?: (resume: Resume) => void;
   onDelete?: (resumeId: string) => void;
   onApplyToJob?: (resume: Resume) => void;
+  /** When true, render in the page flow (no backdrop / fixed overlay) so it can
+   *  live under a breadcrumb instead of floating over the page. */
+  embedded?: boolean;
 }
 
-export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, onApplyToJob }: ResumeDetailViewProps) {
+export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, onApplyToJob, embedded = false }: ResumeDetailViewProps) {
   const dialog = useGlobalDialog();
   const [showVersionSelector, setShowVersionSelector] = useState(false);
   
@@ -81,44 +84,55 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-6xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+    <div className={embedded
+      ? 'w-full'
+      : 'fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6'}>
+      <div className={embedded
+        ? 'bg-white rounded-xl border border-gray-200 shadow-sm w-full overflow-hidden flex flex-col'
+        : 'bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-6xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col'}>
+        {/* Header — brand blue, with Download / Share on the right of the name */}
+        <div className="bg-brand-blue px-6 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
               <Briefcase className="w-5 h-5 text-white" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-white">Resume Details</h2>
-              <p className="text-blue-100 text-sm">{resume.name}</p>
+              <p className="text-white/80 text-sm truncate">{resume.name}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
-           aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Action Bar */}
-        <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors text-sm"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-white border border-white/30 rounded-lg hover:bg-white/15 transition-colors"
             >
               <Download className="w-4 h-4" />
-              Download
+              <span className="hidden sm:inline">Download</span>
             </button>
             <button
               onClick={handleShare}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors text-sm"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-white border border-white/30 rounded-lg hover:bg-white/15 transition-colors"
             >
               <Send className="w-4 h-4" />
-              Share
+              <span className="hidden sm:inline">Share</span>
             </button>
+            {/* Embedded view is reached via the breadcrumb, so no back control */}
+            {!embedded && (
+              <button
+                onClick={onClose}
+                className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Action Bar — only when there is an action to show */}
+        {(onEdit || onDelete || onApplyToJob) && (
+        <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
             {onEdit && (
               <button
                 onClick={() => onEdit(resume)}
@@ -148,15 +162,16 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             </button>
           )}
         </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-5xl mx-auto space-y-6">
+          <div className="space-y-6">
             
             {/* Personal Info Card */}
             <div className="bg-white border-2 border-blue-200 rounded-xl p-6 shadow-lg">
               <div className="flex items-start gap-6">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-3xl flex-shrink-0">
+                <div className="w-24 h-24 rounded-full bg-brand-blue flex items-center justify-center text-white text-3xl flex-shrink-0">
                   {resume.name.split(' ').map(n => n[0]).join('')}
                 </div>
                 <div className="flex-1">

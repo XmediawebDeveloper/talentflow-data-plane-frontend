@@ -203,6 +203,18 @@ export default function HRQuestionBank() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+  // The question bank is opened from Assessments or from AI Interviews, and the
+  // trail names whichever module the user came through. Assessments is the
+  // default for a direct visit, since the bank feeds assessments first.
+  const [openedFrom, setOpenedFrom] = useState<'assessments' | 'ai-interviews'>('assessments');
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('questionBankSource') === 'ai-interviews') {
+        setOpenedFrom('ai-interviews');
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   // Persist + restore the list's scroll position and view state so returning
   // from a detail page lands the user exactly where they left off.
   const rootRef = useScrollRestoration<HTMLElement>('hr-question-bank', !loading);
@@ -390,6 +402,9 @@ export default function HRQuestionBank() {
             className="mb-4 md:mb-6"
             items={[
               { label: 'Dashboard', href: '/dashboard' },
+              openedFrom === 'ai-interviews'
+                ? { label: 'AI Interviews', href: '/recruitment/ai-interviews' }
+                : { label: 'Assessments', href: '/recruitment/assessments' },
               { label: 'HR Question Bank' },
             ]}
           />
@@ -416,7 +431,7 @@ export default function HRQuestionBank() {
         {canCreateHRQuestionBank && (
           <button
             onClick={() => { setShowAddForm(true); setEditingId(null); setFormData(EMPTY_QUESTION); }}
-            className="flex items-center gap-1.5 px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium shrink-0 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+            className="flex items-center gap-1.5 px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm font-medium shrink-0 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
           >
             <Plus className="w-4 h-4" />
             Add Question
@@ -552,7 +567,7 @@ export default function HRQuestionBank() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Save className="w-4 h-4" />
                 {saving ? 'Saving...' : editingId ? 'Update Question' : 'Save Question'}

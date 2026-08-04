@@ -1,5 +1,6 @@
-import { ArrowLeft, Sparkles, Mail, Phone, MapPin, Building2, Clock, CheckCircle2, Star, TrendingUp, Filter, Download, Share2, Search, ChevronDown, X } from 'lucide-react';
+import { ArrowLeft, Sparkles, Mail, Phone, MapPin, Building2, Clock, CheckCircle2, Star, TrendingUp, Filter, Download, Share2 } from 'lucide-react';
 import { useState } from 'react';
+import ListToolbar from '@/components/ui/list-toolbar';
 
 interface AIMatchResultsProps {
   job: any;
@@ -16,6 +17,9 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
   const [noticePeriodFilter, setNoticePeriodFilter] = useState('');
   const [skillFilter, setSkillFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  // True once the user confirms the panel with "Done" - mirrors job-openings,
+  // so Clear appears only after filters are applied.
+  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
 
   const getMatchColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
@@ -56,6 +60,15 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
   const experiences = Array.from(new Set(results.map(r => r.experience)));
   const noticePeriods = Array.from(new Set(results.map(r => r.noticePeriod)));
   const allSkills = Array.from(new Set(results.flatMap(r => r.skills)));
+
+  const clearAllFilters = () => {
+    setFiltersConfirmed(false);
+    setSearchQuery('');
+    setLocationFilter('');
+    setExperienceFilter('');
+    setNoticePeriodFilter('');
+    setSkillFilter('');
+  };
 
   const activeFiltersCount = [
     searchQuery !== '',
@@ -159,47 +172,26 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
       <div className="p-6">
         {/* Search and Filter Bar */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by candidate name or job title..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
-              </div>
+          <ListToolbar
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search by candidate name or job title..."
+            onToggleFilters={() => setShowFilters(!showFilters)}
+            filtersOpen={showFilters}
+            activeFilterCount={activeFiltersCount}
+            filtersApplied={filtersConfirmed && activeFiltersCount > 0}
+            onClearFilters={clearAllFilters}
+            className="mb-0"
+          >
+            <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
+              <span className="text-brand-blue font-semibold">{filteredResults.length}</span> of {results.length}
             </div>
-
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`px-5 py-2.5 rounded-lg border-2 transition-all flex items-center gap-2 font-medium ${
-                activeFiltersCount > 0
-                  ? 'bg-gray-50 border-gray-800 text-gray-900 shadow-sm'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              <Filter className="w-5 h-5" />
-              Filters
-              {activeFiltersCount > 0 && (
-                <span className="px-2 py-0.5 bg-gray-800 text-white rounded-full text-xs font-medium">
-                  {activeFiltersCount}
-                </span>
-              )}
-              <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-            </button>
-
-            <div className="text-sm text-gray-700 bg-gray-100 px-4 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
-              <span className="text-gray-800">{filteredResults.length}</span> of {results.length} candidates
-            </div>
-          </div>
+          </ListToolbar>
 
           {/* Expanded Filters */}
           {showFilters && (
-            <div className="mt-5 pt-5 border-t border-gray-200">
-              <div className="grid grid-cols-5 gap-5">
+            <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Location
@@ -264,22 +256,18 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
                   </select>
                 </div>
 
-                <div className="flex items-end">
-                  <button
-                    onClick={() => {
-                      setSearchQuery('');
-                      setLocationFilter('');
-                      setExperienceFilter('');
-                      setNoticePeriodFilter('');
-                      setSkillFilter('');
-                    }}
-                    disabled={activeFiltersCount === 0}
-                    className="w-full px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-medium"
-                  >
-                    <X className="w-4 h-4" />
-                    Clear All
-                  </button>
-                </div>
+              </div>
+
+              {/* Panel footer: "Done" applies the selection and reveals the
+                  toolbar Clear - same flow as job-openings. Clearing lives on
+                  the toolbar so there is exactly one clear control. */}
+              <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+                >
+                  Done
+                </button>
               </div>
             </div>
           )}
@@ -441,13 +429,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
             <h3 className="text-lg text-gray-900 mb-2">No candidates match your filters</h3>
             <p className="text-gray-600 mb-4">Try adjusting your search or filter criteria</p>
             <button
-              onClick={() => {
-                setSearchQuery('');
-                setLocationFilter('');
-                setExperienceFilter('');
-                setNoticePeriodFilter('');
-                setSkillFilter('');
-              }}
+              onClick={clearAllFilters}
               className="px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
             >
               Clear All Filters

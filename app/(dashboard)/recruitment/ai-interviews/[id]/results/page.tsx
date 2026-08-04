@@ -54,7 +54,7 @@ export default function AIInterviewResultsPage() {
         <div className="text-red-500 text-base">{error}</div>
         <button
           onClick={() => router.push('/recruitment/ai-interviews')}
-          className="px-3 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+          className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
         >
           Back to AI Interviews
         </button>

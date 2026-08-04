@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import ListToolbar from '@/components/ui/list-toolbar';
 import {
-  Eye, Filter, ChevronDown, Download, Search, X, BarChart3,
+  Eye, Download, X, BarChart3,
   CheckCircle2, XCircle, AlertCircle, Loader2, Clock,
   Target, Video, ClipboardCheck, FileText, TrendingUp, TrendingDown,
   Layers, Minus, RefreshCw
@@ -40,7 +41,30 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
   const [includePartialDeductions, setIncludePartialDeductions] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  // True once the user confirms the panel with "Done" - mirrors job-openings,
+  // so Clear appears only after filters are applied.
+  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
   const [days, setDays] = useState(30);
+
+  // Defaults: 30 days, both deduction toggles on. Anything else is a filter.
+  const activeFiltersCount = [
+    selectedUnitType !== '',
+    selectedCategory !== '',
+    days !== 30,
+    !includePartialDeductions,
+    !includeNonDeductions,
+  ].filter(Boolean).length;
+
+  const clearAllFilters = () => {
+    setFiltersConfirmed(false);
+    setSelectedUnitType('');
+    setSelectedCategory('');
+    setDays(30);
+    setIncludePartialDeductions(true);
+    setIncludeNonDeductions(true);
+    setSearchQuery('');
+    setPage(0);
+  };
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -326,22 +350,21 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
 
         {/* Filters Section */}
         <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <Filter className="w-5 h-5 text-gray-700" />
-              <h3 className="text-lg text-gray-900 font-medium">Filter Usage Data</h3>
-            </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 text-sm"
-            >
-              <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-              {showFilters ? 'Hide' : 'Show'} Filters
-            </button>
-          </div>
+          <ListToolbar
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search usage records..."
+            onToggleFilters={() => setShowFilters(!showFilters)}
+            filtersOpen={showFilters}
+            activeFilterCount={activeFiltersCount}
+            filtersApplied={filtersConfirmed && activeFiltersCount > 0}
+            onClearFilters={clearAllFilters}
+            className="mb-0"
+          />
 
           {showFilters && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
+            <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
               {/* Unit Type Filter */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Unit Type</label>
@@ -388,26 +411,6 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                 </select>
               </div>
 
-              {/* Search */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  />
-                  {searchQuery && (
-                    <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2" aria-label="Close">
-                      <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
               {/* Checkboxes */}
               <div className="col-span-2 lg:col-span-4 flex gap-6 pt-2">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -429,6 +432,18 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                   <span className="text-sm text-gray-700">Include Non-Deductions (Failed/Abandoned)</span>
                 </label>
               </div>
+            </div>
+
+            {/* Panel footer: "Done" applies the selection and reveals the
+                toolbar Clear - same flow as job-openings. */}
+            <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+              <button
+                onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+              >
+                Done
+              </button>
+            </div>
             </div>
           )}
         </div>

@@ -599,8 +599,8 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto relative">
-        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden relative">
+        <div className="flex-shrink-0 flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
           <div className="min-w-0">
             <h2 className="text-base sm:text-xl text-gray-900 dark:text-slate-50">Upload Resume</h2>
             <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">
@@ -615,7 +615,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           </button>
         </div>
 
-        <div className="p-4 sm:p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
           {/* Success State with Scoring Option */}
           {uploadSuccess ? (
             <div className="text-center py-6 sm:py-8">
@@ -1023,7 +1023,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
         {/* No Files Error Alert */}
         {showNoFilesError && (
-          <div className="mx-4 sm:mx-6 mb-0 p-3 sm:p-4 bg-red-50 border border-red-300 rounded-lg animate-pulse">
+          <div className="flex-shrink-0 mx-4 sm:mx-6 mb-0 p-3 sm:p-4 bg-red-50 border border-red-300 rounded-lg animate-pulse">
             <div className="flex items-center gap-2 sm:gap-3">
               <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0" />
               <div className="flex-1 min-w-0">
@@ -1042,7 +1042,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
         {/* Hide footer when showing success state */}
         {!uploadSuccess && (
-        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200">
+        <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-gray-200">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-black"

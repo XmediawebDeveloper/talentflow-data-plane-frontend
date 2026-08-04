@@ -71,6 +71,11 @@ export default function SearchFilterBarCompact({
     const emptyFilters = {};
     setTempFilters(emptyFilters);
     onFiltersChange(emptyFilters);
+    // Reset the search box too. job-openings' clearAllFilters() clears the search
+    // as well; leaving it set here meant "Clear all" appeared to do nothing when
+    // the results were actually still narrowed by the search text.
+    setLocalSearchQuery('');
+    onSearchChange('');
   };
 
   const toggleSection = (section: string) => {
@@ -262,7 +267,7 @@ export default function SearchFilterBarCompact({
             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
             className={`flex items-center gap-1.5 h-9 px-3 rounded-lg font-medium text-sm transition-all ${
               activeFilterCount > 0
-                ? 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                 : 'bg-slate-100 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue border border-gray-200'
             }`}
           >
@@ -507,16 +512,14 @@ export default function SearchFilterBarCompact({
                     <span className="text-gray-500">No filters applied</span>
                   )}
                 </div>
+                {/* Commit button only — matches job-openings, where the panel
+                    confirms and the Clear control lives outside it. The second
+                    "Clear All" that used to sit here duplicated the "Clear all"
+                    in the active-filter chips row below. */}
                 <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
-                    onClick={handleClearFilters}
-                    className="flex-1 sm:flex-none px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white rounded-lg hover:bg-slate-100 transition-colors font-medium text-gray-700"
-                  >
-                    Clear All
-                  </button>
-                  <button
                     onClick={handleApplyFilters}
-                    className="flex-1 sm:flex-none px-4 sm:px-6 py-2 text-xs sm:text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                    className="flex-1 sm:flex-none px-4 sm:px-6 py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                   >
                     Apply Filters
                   </button>

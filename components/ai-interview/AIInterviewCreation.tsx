@@ -359,7 +359,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
               />
               <button
                 onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
+                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" />
                 Create New JD
@@ -378,7 +378,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 <p className="text-sm text-gray-400 mb-4">Create and publish a JD first to configure an AI interview</p>
                 <button
                   onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                   Create Job Description
@@ -862,7 +862,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                     disabled={!percentageValid || enabledRounds.length === 0 || publishing}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
                       percentageValid && enabledRounds.length > 0 && !publishing
-                        ? 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                        ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     }`}
                   >

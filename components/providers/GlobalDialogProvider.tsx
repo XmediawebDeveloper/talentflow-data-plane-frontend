@@ -264,7 +264,7 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
             className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none"
           >
             <div
-              className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full pointer-events-auto animate-in zoom-in-95 fade-in duration-200"
+              className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full pointer-events-auto animate-in zoom-in-95 fade-in duration-200"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-6">

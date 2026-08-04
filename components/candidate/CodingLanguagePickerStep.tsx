@@ -79,7 +79,7 @@ export default function CodingLanguagePickerStep({
   if (compilable === null) {
     return (
       <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-lg w-full p-8 flex items-center justify-center min-h-[200px]">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-[95vw] sm:max-w-2xl w-full p-8 flex items-center justify-center min-h-[200px]">
           <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
         </div>
       </div>
@@ -88,8 +88,8 @@ export default function CodingLanguagePickerStep({
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-lg w-full p-6 sm:p-8">
-        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-[95vw] sm:max-w-2xl w-full p-6 sm:p-8 max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+        <div className="flex-shrink-0 w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
           <Code className="w-6 h-6 text-blue-600 dark:text-blue-400" />
         </div>
         <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-1">
@@ -105,7 +105,7 @@ export default function CodingLanguagePickerStep({
           <p className="text-sm text-red-600 dark:text-red-400 mb-4">{loadError}</p>
         )}
 
-        <div className="space-y-2 mb-5">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-2 mb-5">
           {compilable.map((lang) => {
             const selected = highlightedLang === lang.id;
             return (
