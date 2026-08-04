@@ -335,7 +335,15 @@ tier2:
       fi
     - |
       set -e
+      # Clear ANY container holding the scratch port, not just this job's.
+      # after_script normally removes it, but a runner killed mid-job leaves one
+      # behind and the next run then dies on "port is already allocated" — in a
+      # blocking job, that stops every deploy until someone logs in and looks.
       docker rm -f "tier2-api-$CI_JOB_ID" >/dev/null 2>&1 || true
+      for stale in $(docker ps -q --filter "publish=$TIER2_PORT"); do
+        echo "removing $(docker inspect --format '{{.Name}}' "$stale") — it holds port $TIER2_PORT"
+        docker rm -f "$stale" >/dev/null 2>&1 || true
+      done
       docker run -d --name "tier2-api-$CI_JOB_ID" --env-file "$CI_PROJECT_DIR/.tier2.env" \
         -p "127.0.0.1:$TIER2_PORT:8001" --memory=2g "$BACKEND_IMAGE" >/dev/null
       for i in $(seq 1 36); do
