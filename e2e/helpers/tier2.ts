@@ -24,6 +24,38 @@ import {
   authedApi,
   Tier2Tenant,
 } from "./tier2-backend";
+import { attachEvidence, recordAssertion } from "./evidence";
+import { recordingApi } from "./recording-api";
+
+/**
+ * One line of plain English per assertion kind, recorded alongside the HTTP
+ * exchanges so the dashboard can say what the row claims to prove without the
+ * reader knowing the runner's vocabulary.
+ */
+function describeAssertion(kind: string, value: string, endpoint: string): string {
+  switch (kind) {
+    case "api_ok":
+      return `GET ${endpoint} answers 2xx`;
+    case "api_fields":
+      return `${endpoint} returns ${value.split("|").filter(Boolean).join(", ")}`;
+    case "list_only":
+      return `every item ${endpoint} returns has ${value}`;
+    case "persisted":
+      return `a record POSTed to ${endpoint} can be fetched back with "${value}" intact`;
+    case "constraint_rejected":
+      return `${endpoint} rejects an invalid payload with a 4xx`;
+    case "audit_logged":
+      return `an auditable action writes an audit row carrying ${value.split("|").filter(Boolean).join(", ")}`;
+    case "units_deducted":
+      return "a billable action reduces the unit balance";
+    case "units_unchanged":
+      return "a rejected action costs no units";
+    case "rbac_denied":
+      return `a ${value || "viewer"} is refused ${endpoint} with 401/403`;
+    default:
+      return `${kind}(${value})`;
+  }
+}
 
 export interface Tier2Row {
   tc_id: string;
@@ -199,7 +231,13 @@ export function runTier2Cases(suite: string, rows: Tier2Row[]) {
       } finally {
         await anon.dispose();
       }
-      api = await authedApi(tenant);
+      // Wrapped once, here: every assertion below goes through this context, so
+      // this is the only place that needs to know evidence exists.
+      api = recordingApi(await authedApi(tenant));
+    });
+
+    test.afterEach(async () => {
+      await attachEvidence();
     });
 
     test.afterAll(async () => {
@@ -282,6 +320,7 @@ export function runTier2Cases(suite: string, rows: Tier2Row[]) {
         if (row.layer === "rule") {
           test.info().annotations.push({ type: "provenance", description: row.note });
         }
+        recordAssertion(describeAssertion(row.assert_kind, row.assert_value, row.endpoint));
 
         const why = `${row.tc_id}: ${row.expected_result || row.what_to_check}`;
         const marker = `${row.tc_id}-${Date.now().toString(36)}`;
@@ -442,10 +481,16 @@ export function runTier2Cases(suite: string, rows: Tier2Row[]) {
             const narrower = await createUser(api, row.assert_value || "viewer", tenant);
             const { apiUrl } = readTier2Env();
             const { request } = await import("@playwright/test");
-            const asNarrower = await request.newContext({
-              baseURL: apiUrl,
-              extraHTTPHeaders: { Authorization: `Bearer ${narrower.accessToken}` },
-            });
+            // Wrapped too. This is the exchange the row is actually about — the
+            // 403 — and it goes through its own context, so without this the
+            // evidence for all 190 rbac rows would show the setup call that
+            // created the user and nothing else.
+            const asNarrower = recordingApi(
+              await request.newContext({
+                baseURL: apiUrl,
+                extraHTTPHeaders: { Authorization: `Bearer ${narrower.accessToken}` },
+              }),
+            );
             const res = await asNarrower.post(row.endpoint, { data: {} });
             const body = (await res.text()).slice(0, 160);
             await asNarrower.dispose();

@@ -53,3 +53,4 @@ e2e/data/*.json
 .tier2-seed.sql
 .tier2-tenant.json
 junit-*.xml
+report.json

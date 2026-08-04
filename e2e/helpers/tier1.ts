@@ -24,6 +24,53 @@ import {
   resetViewState,
 } from "./auth";
 import { mockSeededLists } from "./fixtures";
+import { attachEvidence, recordAssertion, recordStep } from "./evidence";
+
+/** What the row claims to prove, without the reader knowing the vocabulary. */
+function describeAssertion(kind: string, value: string): string {
+  const parts = value.split("|").filter(Boolean);
+  switch (kind) {
+    case "page_loads":
+      return "the page renders, holds its URL, and shows no session-expired or feature-gate screen";
+    case "text_visible":
+      return `"${value}" is on screen`;
+    case "all_text_visible":
+      return `all of ${parts.map((p) => `"${p}"`).join(", ")} are on screen`;
+    case "control_visible":
+      return `a button or link named "${value}" is on screen`;
+    case "placeholder_visible":
+      return `an input with placeholder "${value}" is on screen`;
+    case "element_absent":
+      return `"${value}" is NOT on screen`;
+    default:
+      return `${kind}(${value})`;
+  }
+}
+
+/**
+ * Record every API response the page received, mocked or not.
+ *
+ * The mock table is worth as much as the assertion. A Tier-1 pass proves a
+ * rendering rule, not a backend one, and that is the single most common
+ * misreading of a green row — seeing that the data came from
+ * `GET /api/v1/scoring/all → 200 (3 items)` served by a mock makes it obvious.
+ *
+ * Deduped by method+path: a page that polls an endpoint eight times should
+ * produce one line saying so, not eight identical ones.
+ */
+function watchMockTraffic(page: Page): void {
+  const seen = new Map<string, number>();
+  page.on("response", (res) => {
+    const url = res.url();
+    if (!/\/api\/v\d+\//.test(url)) return;
+    const path = url.replace(/^https?:\/\/[^/]+/, "").split("?")[0];
+    const key = `${res.request().method()} ${path}`;
+    const count = (seen.get(key) ?? 0) + 1;
+    seen.set(key, count);
+    if (count > 1) return;
+    recordStep("mock", `${key}`, String(res.status()));
+  });
+}
 
 export interface Tier1Row {
   tc_id: string;
@@ -142,6 +189,10 @@ export function runTier1Cases(suite: string, rows: Tier1Row[]) {
       return;
     }
 
+    test.afterEach(async () => {
+      await attachEvidence();
+    });
+
     for (const row of rows) {
       const name = `${row.tc_id} [${row.scrum_id || "—"}] ${row.title}`.trim();
 
@@ -159,6 +210,15 @@ export function runTier1Cases(suite: string, rows: Tier1Row[]) {
           description: `${row.source_sheet} — ${row.what_to_check} => ${row.expected_result}`,
         });
 
+        recordAssertion(describeAssertion(row.assert_kind, row.assert_value));
+
+        // One listener instead of instrumenting every page.route() handler in
+        // auth.ts. `response` fires for fulfilled mocks too, so this records
+        // what the page was actually served — which is the point. Reaching into
+        // each handler would mean thirty edit sites and a silent gap the first
+        // time someone adds a thirty-first.
+        watchMockTraffic(page);
+
         await installMocks(page, row.role);
         if (row.precondition) {
           const apply = PRECONDITIONS[row.precondition];
@@ -169,7 +229,9 @@ export function runTier1Cases(suite: string, rows: Tier1Row[]) {
         await loginViaUi(page);
         await resetViewState(page);
 
-        await page.goto(row.query ? `${row.route}?${row.query}` : row.route);
+        const target = row.query ? `${row.route}?${row.query}` : row.route;
+        recordStep("route", target);
+        await page.goto(target);
 
         // Before interacting: if the page crashed, say so instead of timing out
         // on a control that was never rendered.
@@ -180,6 +242,7 @@ export function runTier1Cases(suite: string, rows: Tier1Row[]) {
         // inside the button, and some of them lead with a "Live" trend badge —
         // so the label is not always at the start.
         if (row.open_card) {
+          recordStep("action", `click card "${row.open_card}"`);
           await openListView(page, new RegExp(row.open_card.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
         }
 
