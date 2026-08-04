@@ -13,7 +13,8 @@
  *     (Playwright's JSON reporter)        duration, failure message, and the
  *                                         evidence attachment
  *
- *   test-results/**\/*.png                what it LOOKED like when it failed
+ *   screenshot attachments                what the screen LOOKED like — one per
+ *     (also from the JSON reporter)       test, not only the failures
  *
  * JUnit is deliberately not read here. GitLab already parses it for its own
  * Tests tab, and it cannot carry attachments — the evidence, which is the
@@ -173,7 +174,12 @@ for (const spec of readReport()) {
   const results = spec.tests.flatMap((t) => t.results ?? []);
   const last = results[results.length - 1] ?? {};
   let evidence = null;
+  let screenshot = null;
   for (const att of last.attachments ?? []) {
+    if (att.name === "screenshot" && att.path) {
+      screenshot = path.relative(ROOT, att.path);
+      continue;
+    }
     if (att.name !== "evidence") continue;
     const raw = readAttachment(att);
     if (raw) {
@@ -191,7 +197,7 @@ for (const spec of readReport()) {
     retries: Math.max(0, results.length - 1),
     error: last.error?.message ? stripAnsi(last.error.message).slice(0, 4000) : null,
     evidence,
-    screenshot: null,
+    screenshot,
   };
 }
 
@@ -201,8 +207,9 @@ function stripAnsi(s) {
 }
 
 // -------------------------------------------------------------- screenshots --
-// `screenshot: "only-on-failure"` writes test-failed-1.png into a directory
-// named after the test title, so the tc_id survives in the directory name.
+// Fallback only. The reporter names the screenshot for every test it captured,
+// which is the reliable source; this scan exists for a run whose reporter output
+// is missing or older, and it keys off the tc_id surviving in the directory name.
 
 function attachScreenshots() {
   if (!fs.existsSync(resultsDir)) return 0;
@@ -227,7 +234,8 @@ function attachScreenshots() {
   walk(resultsDir);
   return found;
 }
-const shots = attachScreenshots();
+const rescued = attachScreenshots();
+const shots = [...byId.values()].filter((c) => c.run?.screenshot).length;
 
 // ------------------------------------------------------------------- output --
 // One vocabulary for the dashboard, derived rather than duplicated:
@@ -237,12 +245,14 @@ const shots = attachScreenshots();
 //                          This is the one that catches a spec quietly
 //                          dropping its rows; without it that looks green.
 
+const sourceJob = process.env.CI_JOB_NAME ?? null;
+
 const cases = [...byId.values()].map((c) => {
   let status;
   if (c.run) status = c.run.outcome === "skipped" ? "blocked" : c.run.outcome === "flaky" ? "passed" : c.run.outcome;
   else if (c.mapped_status !== "active") status = "blocked";
   else status = "not_run";
-  return { ...c, status };
+  return { ...c, status, source_job: c.run ? sourceJob : null };
 });
 
 const counts = cases.reduce((acc, c) => ((acc[c.status] = (acc[c.status] ?? 0) + 1), acc), {});
@@ -261,7 +271,8 @@ fs.writeFileSync(outPath, JSON.stringify({ summary, cases }, null, 2));
 console.log(`[build-report] ${cases.length} cases -> ${path.relative(ROOT, outPath)}`);
 console.log(
   `[build-report] ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(" · ")}` +
-    ` · ${shots} screenshots · ${cases.filter((c) => c.run?.evidence).length} with evidence`,
+    ` · ${shots} screenshots${rescued ? ` (${rescued} found by scan)` : ""}` +
+    ` · ${cases.filter((c) => c.run?.evidence).length} with evidence`,
 );
 if (unmatched) {
   console.warn(

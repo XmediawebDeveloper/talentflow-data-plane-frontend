@@ -54,7 +54,14 @@ export default defineConfig({
     // matters here — this runner filled its disk to 100% once already and took
     // the pipeline down with it, and a passing 1,268-test run would otherwise
     // leave a screenshot per test behind every push.
-    screenshot: "only-on-failure",
+    // Every test, not only the failures. A tester verifying a case wants to see
+    // the screen it asserted against — "Insufficient Units" being on the page is
+    // a different kind of evidence from a line saying it was.
+    //
+    // Measured cost is in the Tier-1 job only: the 817 Tier-2 rows are API calls
+    // that never open a page, so there is nothing to photograph and this setting
+    // does not touch them.
+    screenshot: process.env.E2E_SCREENSHOT_ALL === "0" ? "only-on-failure" : "on",
 
     // The trace is the heavier artifact — DOM snapshots, network, console, a
     // step timeline — so it is spent only on the retry of something that already
