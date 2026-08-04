@@ -618,6 +618,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // to false — previously the effect saw nothing changed and the pending
   // value just sat there, producing the "no timer on Q3" bug).
   const [questionTimerPendingTick, setQuestionTimerPendingTick] = useState(0);
+  // Set when the server blocks this connection because the interview link is
+  // already open/active in another window or device (single-active-session
+  // guard). Shows a terminal overlay and stops auto-reconnect.
+  const [concurrentBlocked, setConcurrentBlocked] = useState(false);
+  const concurrentBlockedRef = useRef(false);
   // Next-Q debounce: set true the moment the candidate clicks Next Q (so the
   // button disables immediately and rapid double-clicks can't send multiple
   // skip_question messages). Cleared when the backend sends the next question's
@@ -891,7 +896,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // go back to normal listening; if it reaches 0 the turn ends and we move on.
   const [midSilenceCountdown, setMidSilenceCountdown] = useState<number | null>(null);
   const midSilenceCountdownRef = useRef<number | null>(null);
-  const SILENCE_COUNTDOWN_WINDOW_MS = 7000; // show the counter for the final 7s of the silence window
+  const SILENCE_COUNTDOWN_WINDOW_MS = 10000; // show the counter for the final 10s of the 15s window (first ~5s silent, then 10→1)
   const setMidSilenceCountdown_ = useCallback((val: number | null) => {
     if (midSilenceCountdownRef.current !== val) {
       midSilenceCountdownRef.current = val;
@@ -2306,7 +2311,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const speechDetectedAtRef = useRef<number | null>(null);
   const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.005);
-  const silenceDurationMsRef = useRef(8000); // pre-connect fallback; overridden by vad_config.silence_duration_ms from backend .env (8s)
+  const silenceDurationMsRef = useRef(15000); // pre-connect fallback; overridden by vad_config.silence_duration_ms from backend .env (now 15s → 5s silent + 10→1 counter)
   const MAX_CLIENT_SPEECH_THRESHOLD = 0.008;
   const POSSIBLE_SPEECH_LEVEL = 0.0018;
   const MIN_POSSIBLE_SPEECH_FRAMES = 6;
@@ -3342,6 +3347,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       case "pong":
         console.log(`[WS ${timestamp}] Keepalive pong received`);
         break; // Keepalive response — no action needed
+      case "concurrent_session_blocked":
+        // The interview link is already open/active in another window/device.
+        // Stop everything and show a terminal message — do NOT reconnect (the
+        // server will just block again). The close (code 4409) follows this.
+        console.warn(`[WS ${timestamp}] Concurrent session blocked by server`);
+        // NOTE: do NOT set isClosingRef here — the onclose handler treats
+        // isClosing as a NORMAL completion ("Interview completed"). The 4409
+        // close branch + concurrentBlockedRef already suppress auto-reconnect.
+        concurrentBlockedRef.current = true;
+        setConcurrentBlocked(true);
+        setStatus(typeof data.message === 'string' ? data.message : 'This interview is already open in another window or device.');
+        try { stopRecordingSilentRef.current?.(); } catch { /* ignore */ }
+        break;
       case "viseme_timeline":
         // Deprecated — lip sync is now driven by real-time amplitude analysis.
         console.log(`[WS ${timestamp}] Viseme timeline received (deprecated)`);
@@ -6709,6 +6727,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // it, or grace-period reaper fired). Retrying hits the same wall.
         setStatus("Interview has ended. " + (event.reason || ""));
         uploadRecording().catch(() => {});
+      } else if (event.code === 4409 || concurrentBlockedRef.current) {
+        // Single-active-session guard: this link is already open/active in
+        // another window/device. TERMINAL — never auto-reconnect (it would just
+        // be blocked again). The overlay (concurrentBlocked) shows the message.
+        concurrentBlockedRef.current = true;
+        setConcurrentBlocked(true);
+        setStatus(event.reason || "This interview is already open in another window or device.");
       } else if (event.code !== 3001 && !isUnmountedRef.current && !isClosingRef.current) {
         // Unexpected disconnection (tab switch, network glitch) — auto-reconnect
         flushProctoringEventsRef.current?.().catch(() => {});
@@ -7644,6 +7669,26 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   return (
     <>
+      {/* ── Concurrent-session blocked overlay (single-active-session guard) ── */}
+      {concurrentBlocked && (
+        <div className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
+            <div className="text-amber-400 text-5xl mb-4">🔒</div>
+            <h2 className="text-xl font-bold text-white mb-2">Interview already open elsewhere</h2>
+            <p className="text-gray-300 mb-6 text-sm leading-relaxed">
+              {status && !status.startsWith('Connection')
+                ? status
+                : 'This interview link is already open in another window or device. Please continue there. If you just closed it, wait a few seconds and reopen this link.'}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold border border-white/20 transition-colors"
+            >
+              Reload &amp; try again
+            </button>
+          </div>
+        </div>
+      )}
       {/* ── Connection lost overlay ── */}
       {!isConnected && !isClosing && status.startsWith('Connection lost') && (
         <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center backdrop-blur-sm">
@@ -8439,12 +8484,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               const num = isPre ? preTurnCountdown : midSilenceCountdown;
               const isLastQ = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
               const _sec = `${num} second${num === 1 ? '' : 's'}`;
-              const title = isPre ? 'Get ready to answer' : 'No further response detected';
+              const title = isPre ? 'Get ready to answer' : 'Are you done with your response?';
               const subtitle = isPre
                 ? 'Speak when it’s your turn.'
                 : isLastQ
-                  ? `Ending the interview in ${_sec}. Keep talking to continue.`
-                  : `Moving to the next question in ${_sec}. Keep talking to continue, or tap Next.`;
+                  ? `Ending the interview in ${_sec}. If you’re not done with your response, kindly speak up.`
+                  : `Moving on to the next question in ${_sec}. If you’re not done with your response, kindly speak up.`;
               const accent = isPre ? 'text-emerald-300' : 'text-amber-300';
               const ring = isPre ? 'ring-emerald-400/40' : 'ring-amber-400/40';
               return (

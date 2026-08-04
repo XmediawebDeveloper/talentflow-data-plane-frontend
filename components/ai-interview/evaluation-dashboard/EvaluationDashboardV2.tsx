@@ -418,17 +418,23 @@ export function QuestionsView({ data }: { data: DashboardData }) {
   const mhQs = delivered.filter(q => q.section === 'mth');
   const nhQs = delivered.filter(q => q.section === 'nth');
   const hrQs = delivered.filter(q => q.section === 'hr');
-  // Section score = average of question scores (spec Step 4). Questions that
-  // were never evaluated (isUnscored: no evaluator rows at all) are EXCLUDED
-  // — counting them as 0.0 would tank the section as if the candidate said
-  // nothing. Mirrors the backend "never fabricate a 0.0" rule.
+  // Section score = sum(question scores) ÷ PLANNED questions (product decision
+  // 2026-08-04, mirrors backend _compute_section_scores). A question the
+  // candidate never reached (ended early) counts as 0, so an unfinished
+  // interview is penalised. The numerator sums only the SCORED questions
+  // (isUnscored rows — incomplete evals — never got a score and are excluded
+  // from BOTH numerator and denominator, matching the backend's incomplete
+  // handling). The denominator is the planned count, floored at the number of
+  // scored questions so a missing planned count never divides by too few.
   const mhScored = mhQs.filter(q => !q.isUnscored);
   const nhScored = nhQs.filter(q => !q.isUnscored);
-  const mhScore = mhScored.length > 0
-    ? Math.round((mhScored.reduce((s, q) => s + q.questionScore, 0) / mhScored.length) * 10) / 10
+  const mhDenom = Math.max(data.plannedCounts?.mustHave || 0, mhScored.length);
+  const nhDenom = Math.max(data.plannedCounts?.niceToHave || 0, nhScored.length);
+  const mhScore = mhDenom > 0
+    ? Math.round((mhScored.reduce((s, q) => s + q.questionScore, 0) / mhDenom) * 10) / 10
     : 0;
-  const nhScore = nhScored.length > 0
-    ? Math.round((nhScored.reduce((s, q) => s + q.questionScore, 0) / nhScored.length) * 10) / 10
+  const nhScore = nhDenom > 0
+    ? Math.round((nhScored.reduce((s, q) => s + q.questionScore, 0) / nhDenom) * 10) / 10
     : 0;
   const mhPass = mhScore >= MHS_THRESHOLD;
 
@@ -903,7 +909,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
               </div>
               <div className={`p-4 ${mhPass ? 'bg-emerald-50' : 'bg-rose-50'}`}>
                 <div className={`text-xs mb-1 ${mhPass ? 'text-emerald-800' : 'text-rose-800'}`}>
-                  Section Score = avg of {mhQs.length} question scores
+                  Section Score = sum of question scores ÷ {mhDenom} planned questions
                 </div>
                 <div className="flex items-baseline justify-between gap-3 mb-2">
                   <span className={`text-3xl font-bold ${mhPass ? 'text-emerald-600' : 'text-rose-600'}`}>
@@ -932,7 +938,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
               </div>
               <div className="p-4 bg-amber-50">
                 <div className="text-xs text-amber-800 mb-1">
-                  Section Score = avg of {nhQs.length} question scores
+                  Section Score = sum of question scores ÷ {nhDenom} planned questions
                 </div>
                 <div className="flex items-baseline justify-between gap-3 mb-2">
                   <span className="text-3xl font-bold text-amber-600">{nhScore.toFixed(2)}</span>
