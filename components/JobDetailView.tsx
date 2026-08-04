@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ArrowUpRight, ChevronLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2, AlertCircle } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -32,6 +32,10 @@ import { parseAssessmentTitle, isAssessmentRevoked, getLocallyRevokedAssessmentI
 import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandidate } from '@/lib/services/aiMatchService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
+import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
+import AIInterviewResults from './ai-interview/AIInterviewResults';
+import CandidateResultsView from './ai-interview/CandidateResultsView';
+import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
@@ -53,6 +57,9 @@ interface QuickActionButtonProps {
   disabled?: boolean;
   disabledTooltip?: string;
   className?: string;
+  /** Shows a spinner in place of the trailing arrow and blocks re-clicks while
+   *  the action resolves what it needs to open (e.g. fetching a config). */
+  loading?: boolean;
 }
 
 function QuickActionButton({
@@ -61,13 +68,14 @@ function QuickActionButton({
   onClick,
   disabled = false,
   disabledTooltip,
-  className = ''
+  className = '',
+  loading = false
 }: QuickActionButtonProps) {
   return (
     <div className="relative group">
       <button
         onClick={onClick}
-        disabled={disabled}
+        disabled={disabled || loading}
         className={`
           w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all text-left flex items-center gap-2.5
           ${disabled
@@ -82,15 +90,22 @@ function QuickActionButton({
         {/* Trailing affordance: lock when gated, otherwise the same diagonal
             arrow StatsCard/job-openings use for "this opens something", nudged
             up-and-right on hover. */}
-        {disabled
+        {loading
+          ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+          : disabled
           ? <Lock className="w-3 h-3 shrink-0" />
           : <ArrowUpRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
         }
       </button>
 
-      {/* Tooltip on hover when disabled */}
+      {/* Tooltip on hover when disabled.
+          Wraps instead of running off-screen: `whitespace-nowrap` forced every
+          reason onto one line, so longer ones (e.g. "Publish the draft before
+          inviting candidates.") shot past the sidebar and overlapped whatever
+          sat to the right. `w-max` keeps short reasons compact while the
+          viewport-aware max-width caps long ones on small screens. */}
       {disabled && disabledTooltip && (
-        <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-brand-blue text-white text-xs rounded-md shadow-lg shadow-brand-blue/25 ring-1 ring-white/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+        <div className="absolute left-0 top-full mt-1.5 z-40 w-max max-w-[min(14rem,calc(100vw-2rem))] px-2.5 py-1.5 bg-gray-900 dark:bg-slate-700 text-white text-[11px] font-medium leading-snug rounded-md shadow-lg ring-1 ring-black/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal break-words">
           {disabledTooltip}
         </div>
       )}
@@ -119,7 +134,7 @@ interface ExtendedJob extends Job {
 interface JobDetailViewProps {
   job: ExtendedJob;
   onBack: () => void;
-  initialTab?: 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match';
+  initialTab?: 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results';
   initialAction?: 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | 'create-ai-interview' | 'invite-ai-interview' | 'ai-interview-status';
   onEdit?: (job: Job) => void;
   resumes?: any[]; // All resumes for selection
@@ -214,14 +229,31 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const [uploadedResumes, setUploadedResumes] = useState<any[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   const [showInviteToAssessmentModal, setShowInviteToAssessmentModal] = useState(false);
-  // ShareAssessmentModal (used by the assessment-side flow) reused here so
-  // the JD-page "Invite for Assessment" flow matches the same UX. We need
+  // ShareAssessmentModal (used by the assessment-side flow) is reused here for
+  // deep-linked assessment sharing. We need
   // the assessment(s) loaded before we can mount it.
   const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
   const [shareAssessments, setShareAssessments] = useState<any[]>([]);
   const [isLoadingShareAssessments, setIsLoadingShareAssessments] = useState(false);
   // Picker shown when the JD has more than one published assessment — user
   // chooses which one(s) to invite candidates to before the share modal opens.
+  // True while the Create action resolves whether this JD already has an
+  // assessment, so the button shows a spinner instead of feeling unresponsive.
+  const [resolvingAssessmentTarget, setResolvingAssessmentTarget] = useState(false);
+  // Set when Create finds only an unpublished draft — drives the in-place
+  // publish prompt below instead of navigating to a half-finished details page.
+  const [draftAssessment, setDraftAssessment] = useState<any>(null);
+  const [publishingDraft, setPublishingDraft] = useState(false);
+  // Whether this JD has any assessment at all — gates Send Invite, which has
+  // nothing to invite to until one is created. False while still loading.
+  const [hasAnyAssessment, setHasAnyAssessment] = useState(false);
+  // Same pair for AI Interview.
+  const [resolvingAIInterviewTarget, setResolvingAIInterviewTarget] = useState(false);
+  const [draftAIInterview, setDraftAIInterview] = useState<any>(null);
+  const [publishingAIDraft, setPublishingAIDraft] = useState(false);
+  // Whether this JD has any AI interview at all (live or draft). False while
+  // still loading.
+  const [hasAnyAIInterview, setHasAnyAIInterview] = useState(false);
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
   const [pickerAssessments, setPickerAssessments] = useState<any[]>([]);
   const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
@@ -236,39 +268,50 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     if (isLoadingShareAssessments) return;
     setIsLoadingShareAssessments(true);
     try {
-      // Ask the API for ONLY published assessments. Drafts, archived, and
-      // disabled assessments are excluded — candidates can't take those.
-      const resp = await assessmentService.list({ jd_id: job.id, status: 'published', page_size: 100 });
+      // Fetch every assessment for this JD, not just published ones. Only
+      // published are invitable, but knowing what else is there is what lets the
+      // failure message name the actual blocker — "still a draft" and "none
+      // created" are different problems with different next steps, and one
+      // generic "no invitable assessment" sentence described neither.
+      const resp = await assessmentService.list({ jd_id: job.id, page_size: 100 });
+      const all: any[] = resp?.items || [];
+      const statusOf = (a: any) => String(a?.status || '').toLowerCase();
       const revokedIds = getLocallyRevokedAssessmentIds();
-      const items: any[] = (resp?.items || []).filter((a: any) => {
-        const status = String(a?.status || '').toLowerCase();
-        if (status !== 'published' && status !== 'active') return false;
-        // Exclude any assessment whose invites the recruiter has revoked.
-        // Backend flag wins; locally-revoked IDs from sessionStorage are
-        // the fallback for tabs where the backend flag isn't yet returned.
-        return !isAssessmentRevoked(a, revokedIds);
-      });
+
+      const published = all.filter(a => ['published', 'active'].includes(statusOf(a)));
+      // Exclude any assessment whose invites the recruiter has revoked.
+      // Backend flag wins; locally-revoked IDs from sessionStorage are
+      // the fallback for tabs where the backend flag isn't yet returned.
+      const items = published.filter(a => !isAssessmentRevoked(a, revokedIds));
 
       if (items.length === 0) {
-        // No usable assessment for this JD. Tell the user explicitly instead
-        // of silently opening a fallback modal that they can't act on.
-        toast.error(
-          'No invitable assessment is available for this job. Published assessments whose invites have been revoked are excluded — duplicate one to start a fresh invite round.',
-          { duration: 6000 }
-        );
+        if (published.length > 0) {
+          // Published, but every one has had its invites revoked.
+          toast.error(
+            'Every published assessment for this job has had its invites revoked. Duplicate one to start a fresh invite round.',
+            { duration: 6000 }
+          );
+        } else if (all.some(a => statusOf(a) === 'draft')) {
+          toast.error(
+            'This job’s assessment is still a draft. Publish it before inviting candidates.',
+            { duration: 6000 }
+          );
+        } else {
+          toast.error('No assessment has been created for this job yet. Use Create to add one.');
+        }
         return;
       }
 
-      if (items.length === 1) {
-        // Exactly one — skip the picker and go straight to share.
-        openShareWithAssessments(items);
-        return;
-      }
-
-      // Multiple — let the user choose which assessment(s) to invite for.
-      setPickerAssessments(items);
-      setPickerSelectedIds([]);
-      setShowAssessmentPicker(true);
+      // Straight to "Share Assessment via Email", matching the AI Interview
+      // Send Invite action which resolves the JD's live config and opens its
+      // share modal in one step — no intermediate dialog.
+      //
+      // NOTE: when the JD has several published assessments, every one of them
+      // is included (first as the modal's primary, rest as additionalAssessments)
+      // and each invited candidate receives an invite for ALL of them. The modal
+      // lists them ("Invitations for N assessments") but has no per-assessment
+      // selection, so this is send-all, not choose-one.
+      openShareWithAssessments(items);
     } catch (err) {
       console.error('Failed to load assessments for JD:', err);
       toast.error('Could not load assessments. Please try again.');
@@ -364,16 +407,324 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // Track Invites modal state
   const [showTrackInvitesModal, setShowTrackInvitesModal] = useState(false);
 
-  const handleCreateAIInterview = () => {
-    router.push(`/recruitment/ai-interviews?action=create-ai-interview&jd_id=${encodeURIComponent(job.id)}`);
+  // "Send AI Interview via Email" modal — opened in place from the Send Invite
+  // quick action, so the recruiter never leaves this page to invite candidates.
+  const [shareAIInterviewConfig, setShareAIInterviewConfig] = useState<AIInterviewResponse | null>(null);
+  const [resolvingInviteConfig, setResolvingInviteConfig] = useState(false);
+  // AI Interview Results tab. The config is fetched lazily on first open rather
+  // than on mount — resolving it pages through the tenant's configs, which
+  // isn't worth doing on every Job Details load for a tab most visits skip.
+  const [aiInterviewConfig, setAiInterviewConfig] = useState<AIInterviewResponse | null>(null);
+  const [aiInterviewCount, setAiInterviewCount] = useState(0);
+  const [loadingAIInterviewConfig, setLoadingAIInterviewConfig] = useState(false);
+  const [aiInterviewConfigError, setAiInterviewConfigError] = useState<string | null>(null);
+  const aiInterviewConfigFetchedRef = useRef(false);
+
+  const loadAIInterviewConfig = async () => {
+    if (aiInterviewConfigFetchedRef.current) return;
+    aiInterviewConfigFetchedRef.current = true;
+    setLoadingAIInterviewConfig(true);
+    setAiInterviewConfigError(null);
+    try {
+      const liveConfig = await aiInterviewService.findLiveConfigForJd(job.id);
+      setAiInterviewConfig(liveConfig);
+
+      // Does this JD have an interview at all? A live one obviously counts; if
+      // there isn't one, look for a draft. Gates Send Invite, which has nothing
+      // to invite to until an interview exists. The draft lookup is best-effort
+      // — a failure there must not break the results tab.
+      if (liveConfig) {
+        setHasAnyAIInterview(true);
+      } else {
+        const draftResult = await aiInterviewService
+          .listConfigs({ status: 'draft', page_size: 50, compact: true })
+          .catch(() => null);
+        setHasAnyAIInterview(
+          (draftResult?.items ?? []).some((c: AIInterviewResponse) => c.jd_id === job.id)
+        );
+      }
+
+      // Invited-candidate count for the tab badge. page_size 1 because only
+      // `total` is read here — the tab's table fetches its own rows. A failure
+      // leaves the badge at 0 rather than breaking the tab itself.
+      if (liveConfig) {
+        const invitations = await aiInterviewService
+          .getConfigInvitations(liveConfig.id, { page_size: 1, compact: true })
+          .catch(() => null);
+        setAiInterviewCount(invitations?.total ?? 0);
+      } else {
+        setAiInterviewCount(0);
+      }
+    } catch {
+      // Allow a retry — clear the guard so re-opening the tab tries again.
+      aiInterviewConfigFetchedRef.current = false;
+      setAiInterviewConfigError('Could not load AI interview results. Please try again.');
+    } finally {
+      setLoadingAIInterviewConfig(false);
+    }
   };
 
-  const handleInviteAIInterview = () => {
-    router.push(`/recruitment/ai-interviews?action=invite-ai-interview&jd_id=${encodeURIComponent(job.id)}`);
+  // Candidate detail opened from the AI Interview Result tab. Held here so the
+  // detail renders inline on this page instead of navigating to the standalone
+  // /ai-interviews/{id}/results/details route.
+  const [viewingAIInterviewCandidate, setViewingAIInterviewCandidate] = useState<AIInterviewResponse | null>(null);
+  const [aiInterviewCandidateNavIds, setAiInterviewCandidateNavIds] = useState<string[]>([]);
+  const [loadingAIInterviewCandidate, setLoadingAIInterviewCandidate] = useState(false);
+
+  const handleAIInterviewCandidateClick = async (sessionId: string, navIds?: string[]) => {
+    // navIds is only passed on the initial click (not by Prev/Next), so the
+    // pager keeps stepping through the list the user opened from.
+    if (navIds) setAiInterviewCandidateNavIds(navIds);
+    setLoadingAIInterviewCandidate(true);
+    try {
+      setViewingAIInterviewCandidate(await aiInterviewService.get(sessionId));
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to load candidate details');
+    } finally {
+      setLoadingAIInterviewCandidate(false);
+    }
+  };
+
+  // Load on mount so the tab badge shows a count before the tab is ever
+  // opened, matching the Scored Resumes / Assessment Results tabs which also
+  // fetch eagerly. Side benefit: opening the tab is then instant.
+  useEffect(() => {
+    if (!job.id) return;
+    if (!hasPlanFeature('ai_interview') || !features.ai_interview) return;
+    // Also runs for share-only users: the Send Invite gate reads
+    // hasAnyAIInterview, which this sets — without it a user who can invite but
+    // not view results would find the button permanently disabled.
+    if (!permissions.canViewAIInterviews && !permissions.canShareAIInterviews) return;
+    loadAIInterviewConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job.id, hasPlanFeature]);
+
+  const handleShowAIInterviewResults = () => {
+    setActiveTab('ai-interview-results');
+    setAiInterviewResultsScrollRequest((request) => request + 1);
+    loadAIInterviewConfig();
+  };
+
+  // Mirrors handleCreateAssessment's three-way split:
+  //   a live interview exists → /recruitment/ai-interviews/{id}
+  //   only a draft exists     → publish prompt, in place on this page
+  //   nothing exists          → the config flow
+  // AIInterviewConfig keeps its own live-config guard as the enforcement (it
+  // covers deep links too); this decides at the click so the recruiter never
+  // passes through a page that immediately redirects them elsewhere.
+  const handleCreateAIInterview = async () => {
+    if (resolvingAIInterviewTarget) return;
+    setResolvingAIInterviewTarget(true);
+    try {
+      const live = await aiInterviewService.findLiveConfigForJd(job.id);
+      if (live?.id) {
+        toast.info('An AI interview already exists for this job.');
+        router.push(`/recruitment/ai-interviews/${live.id}?from=job-details`);
+        return;
+      }
+
+      // Same draft lookup AIInterviewConfig runs when restoring a draft.
+      const draftResult = await aiInterviewService
+        .listConfigs({ status: 'draft', page_size: 50, compact: true })
+        .catch(() => null);
+      const draft = (draftResult?.items ?? []).find(
+        (c: AIInterviewResponse) => c.jd_id === job.id && c.status === 'draft'
+      );
+      if (draft?.id) {
+        // Keep the Send Invite gate in step — this click just proved a draft
+        // exists, which may be newer than what loadAIInterviewConfig saw.
+        setHasAnyAIInterview(true);
+        setDraftAIInterview(draft);
+        return;
+      }
+    } catch {
+      // Lookup failed — fall through to the config flow rather than blocking.
+      // Its own guard re-checks and redirects if a live interview does exist.
+    } finally {
+      setResolvingAIInterviewTarget(false);
+    }
+
+    // Nothing for this JD yet → straight into the config flow. This used to hop
+    // through /recruitment/ai-interviews?action=create-ai-interview just so that
+    // page could resolve the destination, which meant mounting the whole list
+    // page and its data fetch between the click and the form.
+    //
+    // from=job-details keeps the config flow's breadcrumb anchored to this job
+    // instead of resetting to the AI Interviews trail. Mirrors the existing
+    // from=ai-interview param that runs the other direction.
+    router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(job.id)}&from=job-details`);
+  };
+
+  const handleInviteAIInterview = async () => {
+    if (resolvingInviteConfig) return;
+    setResolvingInviteConfig(true);
+    try {
+      // The invite modal needs the live config for this JD. Resolving it here
+      // opens "Send AI Interview via Email" in place, instead of bouncing to
+      // the AI Interviews page just to reach the same modal.
+      const liveConfig = await aiInterviewService.findLiveConfigForJd(job.id);
+      if (!liveConfig) {
+        // "Create and publish…" was wrong whenever a draft already existed — it
+        // told the recruiter to make something they'd already made. Check for a
+        // draft so the message names the step that's actually outstanding.
+        const draftResult = await aiInterviewService
+          .listConfigs({ status: 'draft', page_size: 50, compact: true })
+          .catch(() => null);
+        const hasDraft = (draftResult?.items ?? []).some(
+          (c: AIInterviewResponse) => c.jd_id === job.id
+        );
+        toast.error(
+          hasDraft
+            ? 'This job’s AI interview is still a draft. Publish it before inviting candidates.'
+            : 'No AI interview has been created for this job yet. Use Create to add one.',
+          { duration: 6000 }
+        );
+        return;
+      }
+      setShareAIInterviewConfig(liveConfig);
+    } catch {
+      // Distinct from "none found" — the lookup itself failed, so don't tell
+      // the recruiter to go publish an interview that may already exist.
+      toast.error('Could not load the AI interview for this job. Please try again.');
+    } finally {
+      setResolvingInviteConfig(false);
+    }
   };
 
   const handleAIInterviewStatus = () => {
-    router.push(`/recruitment/ai-interviews?action=ai-interview-status&jd_id=${encodeURIComponent(job.id)}`);
+    // Open the AI Interview Result tab on this page rather than navigating.
+    // The tab owns the config fetch and its own loading / empty / error states,
+    // so this is just a tab switch.
+    handleShowAIInterviewResults();
+  };
+
+  // Resolve the destination on click, so Create goes straight to wherever it
+  // belongs instead of routing through the creation page and bouncing back out:
+  //   a published assessment exists → /recruitment/assessments/{id}
+  //   only a draft exists           → publish prompt, in place on this page
+  //   nothing exists                → /recruitment/assessments/create
+  // AssessmentCreation still runs its own eligibility guard — that one is the
+  // enforcement (it also covers deep links and the JD picker); this is what
+  // keeps the click from flashing a page the recruiter was never meant to see.
+  const handleCreateAssessment = async () => {
+    if (resolvingAssessmentTarget) return;
+    setResolvingAssessmentTarget(true);
+    try {
+      const resp: any = await assessmentService.list({ jd_id: job.id, page_size: 100 });
+      const items: any[] = Array.isArray(resp) ? resp : (resp?.items ?? []);
+      const newestFirst = (a: any, b: any) =>
+        new Date(b?.updated_at || b?.created_at || 0).getTime() -
+        new Date(a?.updated_at || a?.created_at || 0).getTime();
+      const statusOf = (a: any) => String(a?.status || '').toLowerCase();
+
+      // A published assessment is a real destination — open its details page.
+      const live = items.filter(a => ['published', 'active'].includes(statusOf(a))).sort(newestFirst)[0];
+      if (live?.id) {
+        toast.info('An assessment already exists for this job.');
+        router.push(`/recruitment/assessments/${live.id}?from=job-details`);
+        return;
+      }
+
+      // Only a draft: its details page shows an unfinished record and gives no
+      // way forward from here, so stay put and offer to publish it instead.
+      const draft = items.filter(a => statusOf(a) === 'draft').sort(newestFirst)[0];
+      if (draft?.id) {
+        setDraftAssessment(draft);
+        return;
+      }
+    } catch {
+      // Lookup failed — fall through to the creation flow rather than blocking.
+      // Its own guard re-checks and redirects if an assessment does exist, so a
+      // transient error here can't produce a duplicate.
+    } finally {
+      setResolvingAssessmentTarget(false);
+    }
+
+    // No assessment for this JD yet → the step form.
+    //
+    // returnUrl brings the recruiter back to this JD (not the assessments list)
+    // once the assessment is created or the flow is cancelled. from=job-details
+    // keeps the creation flow's breadcrumb anchored to this job across every
+    // step, exactly like handleCreateAIInterview above. The JD is already
+    // chosen, so step=configure skips the JD picker. jd_title travels along so
+    // the JD crumb is correct on first paint instead of showing a placeholder
+    // until the JD fetch lands and then visibly swapping.
+    const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(job.id)}`;
+    router.push(
+      `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(job.id)}` +
+      `&from=job-details&jd_title=${encodeURIComponent(job.title || '')}` +
+      `&returnUrl=${encodeURIComponent(returnUrl)}`
+    );
+  };
+
+  // Publish the draft without leaving this page. On success the JD now has a
+  // live assessment, so refresh the results tab and hand the recruiter straight
+  // to the invite flow — publishing is only ever a step towards inviting.
+  const handlePublishDraftAssessment = async () => {
+    if (!draftAssessment?.id || publishingDraft) return;
+    setPublishingDraft(true);
+    try {
+      await assessmentService.publish(draftAssessment.id);
+      toast.success('Assessment published.');
+      setDraftAssessment(null);
+      fetchAssessmentResults();
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not publish the assessment. Please try again.');
+    } finally {
+      setPublishingDraft(false);
+    }
+  };
+
+  // "Continue editing" — reopen the draft in the configure flow, breadcrumb
+  // still anchored to this job.
+  const handleEditDraftAssessment = () => {
+    if (!draftAssessment?.id) return;
+    const returnUrl = `/recruitment/job-details?id=${encodeURIComponent(job.id)}`;
+    setDraftAssessment(null);
+    router.push(
+      `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(job.id)}` +
+      `&edit=${encodeURIComponent(draftAssessment.id)}` +
+      `&from=job-details&jd_title=${encodeURIComponent(job.title || '')}` +
+      `&returnUrl=${encodeURIComponent(returnUrl)}`
+    );
+  };
+
+  const handlePublishDraftAIInterview = async () => {
+    if (!draftAIInterview?.id || publishingAIDraft) return;
+    setPublishingAIDraft(true);
+    try {
+      await aiInterviewService.publishConfig(draftAIInterview.id);
+      toast.success('AI interview published.');
+      setDraftAIInterview(null);
+      // The JD now has a live config — clear the fetch guard so the results tab
+      // and its badge pick it up instead of staying on the pre-publish result.
+      aiInterviewConfigFetchedRef.current = false;
+      loadAIInterviewConfig();
+    } catch (err: any) {
+      // A draft with no clusters/skills configured can't be published; the API
+      // says why, so surface that rather than a generic failure.
+      toast.error(err?.message || 'Could not publish the AI interview. Please try again.');
+    } finally {
+      setPublishingAIDraft(false);
+    }
+  };
+
+  // "Continue editing" — reopen the draft in the config flow, breadcrumb still
+  // anchored to this job.
+  const handleEditDraftAIInterview = () => {
+    if (!draftAIInterview?.id) return;
+    const configId = draftAIInterview.id;
+    setDraftAIInterview(null);
+    router.push(
+      `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(job.id)}` +
+      `&config_id=${encodeURIComponent(configId)}&from=job-details`
+    );
+  };
+
+  const handleAssessmentStatus = () => {
+    // Same in-place pattern as the AI Interview Result action — the tab already
+    // owns its own fetching and empty states, so this is just a tab switch.
+    setActiveTab('assessment-results');
   };
 
   // Trigger a Quick Action automatically when a caller deep-links into the
@@ -591,6 +942,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       // First, get all assessments for this JD
       const assessmentsResponse = await assessmentService.list({ jd_id: job.id, page_size: 100 });
       const assessments = assessmentsResponse.items || [];
+      // Derived here rather than in a separate request — this list is already
+      // loaded, and it's the same source Create uses to decide its destination.
+      setHasAnyAssessment(assessments.length > 0);
 
       // For each assessment, get the completed results
       const allResults: any[] = [];
@@ -742,11 +1096,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match'>(initialTab || 'overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results'>(initialTab || 'overview');
   const overviewSectionRef = useRef<HTMLDivElement | null>(null);
   const scoredResumesSectionRef = useRef<HTMLDivElement | null>(null);
+  const aiInterviewResultsSectionRef = useRef<HTMLDivElement | null>(null);
   const [overviewScrollRequest, setOverviewScrollRequest] = useState(0);
   const [scoredResumesScrollRequest, setScoredResumesScrollRequest] = useState(0);
+  const [aiInterviewResultsScrollRequest, setAiInterviewResultsScrollRequest] = useState(0);
   const [scoredResumesMatchFilter, setScoredResumesMatchFilter] = useState<ScoredResumesMatchFilter>('all');
 
   const handleShowOverview = () => {
@@ -779,6 +1135,16 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
     return () => window.cancelAnimationFrame(frame);
   }, [scoredResumesScrollRequest, activeTab]);
+
+  useEffect(() => {
+    if (aiInterviewResultsScrollRequest === 0 || activeTab !== 'ai-interview-results') return;
+
+    const frame = window.requestAnimationFrame(() => {
+      aiInterviewResultsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [aiInterviewResultsScrollRequest, activeTab]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1064,6 +1430,34 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     );
   }
 
+  // Candidate detail from the AI Interview Result tab — rendered inline so the
+  // drill-down never leaves this page. Prev/Next step through the same list the
+  // candidate was opened from.
+  if (viewingAIInterviewCandidate) {
+    const _aiIdx = aiInterviewCandidateNavIds.indexOf(viewingAIInterviewCandidate.id);
+    const _aiPrevId = _aiIdx > 0 ? aiInterviewCandidateNavIds[_aiIdx - 1] : null;
+    const _aiNextId = _aiIdx >= 0 && _aiIdx < aiInterviewCandidateNavIds.length - 1
+      ? aiInterviewCandidateNavIds[_aiIdx + 1]
+      : null;
+    return (
+      <CandidateResultsView
+        interview={viewingAIInterviewCandidate}
+        onBack={() => setViewingAIInterviewCandidate(null)}
+        breadcrumbItems={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+          // Returns to the results table rather than reloading the route.
+          { label: job.title || 'Job Details', onClick: () => setViewingAIInterviewCandidate(null) },
+          { label: viewingAIInterviewCandidate.candidate_name || 'Candidate Results' },
+        ]}
+        currentIndex={_aiIdx >= 0 ? _aiIdx : undefined}
+        totalCount={aiInterviewCandidateNavIds.length || undefined}
+        onPrev={_aiPrevId ? () => handleAIInterviewCandidateClick(_aiPrevId) : undefined}
+        onNext={_aiNextId ? () => handleAIInterviewCandidateClick(_aiNextId) : undefined}
+      />
+    );
+  }
+
   // Show CandidateScoringDetailPage when viewing a scored resume (same as ResumeScoringPage)
   if (viewingScoredResume) {
     const _scoredIdx = scoredResumes.findIndex((r: any) => (r.resumeId || r.resume_id) === (viewingScoredResume.resumeId || viewingScoredResume.resume_id));
@@ -1144,15 +1538,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      {/* Breadcrumb — must be a DIRECT child of the card so `sticky` has the
+          card's full height to travel within. Nested inside a wrapper div it
+          was boxed to its own height and could never actually stick. */}
+      <PageBreadcrumb
+        items={jobBreadcrumbItems}
+        className="mb-3"
+      />
       {/* Header */}
       <div className="mb-5">
-        {/* Breadcrumb */}
-        <div className="mb-3">
-          <PageBreadcrumb
-            items={jobBreadcrumbItems}
-          />
-        </div>
-
         {/* Previous / Next navigation - sits below the breadcrumb */}
         {totalCount != null && totalCount > 0 && (
           <div className="flex items-center justify-end gap-2 mb-3">
@@ -1496,7 +1890,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
-              Assessment Results
+              Assessments Results
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'assessment-results'
                   ? 'bg-blue-600 text-white'
@@ -1505,6 +1899,28 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {assessmentResults.length}
               </span>
               {activeTab === 'assessment-results' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              )}
+            </button>
+          )}
+          {hasPlanFeature('ai_interview') && features.ai_interview && permissions.canViewAIInterviews && (
+            <button
+              onClick={handleShowAIInterviewResults}
+              className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
+                activeTab === 'ai-interview-results'
+                  ? 'text-blue-600 bg-blue-50'
+                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
+              }`}
+            >
+              AI Interview Result
+              <span className={`px-2 py-0.5 rounded-full text-xs ${
+                activeTab === 'ai-interview-results'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
+              }`}>
+                {aiInterviewCount}
+              </span>
+              {activeTab === 'ai-interview-results' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
               )}
             </button>
@@ -1810,8 +2226,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   disabled={!features.ai_talent_match || job.status === 'Disabled'}
                   disabledTooltip={
                     !features.ai_talent_match
-                      ? 'AI Match feature is not enabled for your organization'
-                      : 'AI Talent Match is not available for disabled JDs'
+                      ? 'AI Match not enabled'
+                      : 'JD is disabled'
                   }
                 />
               )}
@@ -1823,37 +2239,61 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   label="Score Resumes"
                   onClick={() => setShowSelectSourceModal(true)}
                   disabled={job.status === 'Disabled'}
-                  disabledTooltip="Resume scoring is not available for disabled JDs"
+                  disabledTooltip="JD is disabled"
                 />
               )}
 
-              {/* 4. Invite for Assessment — opens the same
-                  ShareAssessmentModal used by the assessment-side flow so
-                  the JD-page invite matches that UX (Share Assessment via
-                  Email, candidate type/select, expiry, live email preview). */}
-              {permissions.canCreateAssessments && hasPlanFeature('assessment') && (
-                <QuickActionButton
-                  icon={<Mail className="w-4 h-4" />}
-                  label="Invite for Assessment"
-                  onClick={handleOpenShareAssessment}
-                  disabled={!features.assessment || job.status === 'Disabled' || isLoadingShareAssessments}
-                  disabledTooltip={
-                    !features.assessment
-                      ? 'Assessments module is not enabled for your organization'
-                      : 'Assessments are not available for disabled JDs'
-                  }
-                />
-              )}
+              {/* Assessment — Create and Send Invite share a row, Result sits
+                  on its own line. The AI Interview group below mirrors it. */}
+              {(permissions.canCreateAssessments || permissions.canViewAssessments) && hasPlanFeature('assessment') && (
+                <div className="pt-2 mt-2 border-t border-gray-100 dark:border-slate-800">
+                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
+                    Assessment
+                  </p>
+                  <div className="space-y-2">
+                    {permissions.canCreateAssessments && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <QuickActionButton
+                          icon={<Sparkles className="w-4 h-4" />}
+                          label="Create"
+                          onClick={handleCreateAssessment}
+                          loading={resolvingAssessmentTarget}
+                          disabled={!features.assessment || job.status === 'Disabled'}
+                          disabledTooltip={
+                            !features.assessment
+                              ? 'Assessments not enabled'
+                              : 'JD is disabled'
+                          }
+                        />
 
-              {/* 5. Assessment Status */}
-              {permissions.canViewAssessments && hasPlanFeature('assessment') && (
-                <QuickActionButton
-                  icon={<BarChart className="w-4 h-4" />}
-                  label="Assessment Status"
-                  onClick={() => setShowTrackInvitesModal(true)}
-                  disabled={!features.assessment}
-                  disabledTooltip="Assessments module is not enabled"
-                />
+                        <QuickActionButton
+                          icon={<UserPlus className="w-4 h-4" />}
+                          label="Send Invite"
+                          onClick={handleOpenShareAssessment}
+                          loading={isLoadingShareAssessments}
+                          disabled={!features.assessment || job.status === 'Disabled' || !hasAnyAssessment}
+                          disabledTooltip={
+                            !features.assessment
+                              ? 'Assessments not enabled'
+                              : job.status === 'Disabled'
+                                ? 'JD is disabled'
+                                : 'Create an assessment first'
+                          }
+                        />
+                      </div>
+                    )}
+
+                    {permissions.canViewAssessments && (
+                      <QuickActionButton
+                        icon={<BarChart className="w-4 h-4" />}
+                        label="Assessment Result"
+                        onClick={handleAssessmentStatus}
+                        disabled={!features.assessment}
+                        disabledTooltip="Assessments not enabled"
+                      />
+                    )}
+                  </div>
+                </div>
               )}
 
               {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews || permissions.canViewAIInterviews) && hasPlanFeature('ai_interview') && (
@@ -1861,45 +2301,52 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
                     AI Interview
                   </p>
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-                    {/* 6. Create */}
-                    {permissions.canCreateAIInterviews && (
-                      <QuickActionButton
-                        icon={<Sparkles className="w-4 h-4" />}
-                        label="Create"
-                        onClick={handleCreateAIInterview}
-                        disabled={!features.ai_interview || job.status === 'Disabled'}
-                        disabledTooltip={
-                          !features.ai_interview
-                            ? 'AI Interviews module is not enabled for your organization'
-                            : 'AI interviews are not available for disabled JDs'
-                        }
-                      />
+                  <div className="space-y-2">
+                    {/* Create and Send Invite share one row */}
+                    {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews) && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {permissions.canCreateAIInterviews && (
+                          <QuickActionButton
+                            icon={<Sparkles className="w-4 h-4" />}
+                            label="Create"
+                            onClick={handleCreateAIInterview}
+                            loading={resolvingAIInterviewTarget}
+                            disabled={!features.ai_interview || job.status === 'Disabled'}
+                            disabledTooltip={
+                              !features.ai_interview
+                                ? 'AI Interviews not enabled'
+                                : 'JD is disabled'
+                            }
+                          />
+                        )}
+
+                        {permissions.canShareAIInterviews && (
+                          <QuickActionButton
+                            icon={<UserPlus className="w-4 h-4" />}
+                            label="Send Invite"
+                            onClick={handleInviteAIInterview}
+                            loading={resolvingInviteConfig}
+                            disabled={!features.ai_interview || job.status === 'Disabled' || !hasAnyAIInterview}
+                            disabledTooltip={
+                              !features.ai_interview
+                                ? 'AI Interviews not enabled'
+                                : job.status === 'Disabled'
+                                  ? 'JD is disabled'
+                                  : 'Create an AI interview first'
+                            }
+                          />
+                        )}
+                      </div>
                     )}
 
-                    {/* 7. Invite */}
-                    {permissions.canShareAIInterviews && (
-                      <QuickActionButton
-                        icon={<UserPlus className="w-4 h-4" />}
-                        label="Invite"
-                        onClick={handleInviteAIInterview}
-                        disabled={!features.ai_interview || job.status === 'Disabled'}
-                        disabledTooltip={
-                          !features.ai_interview
-                            ? 'AI Interviews module is not enabled for your organization'
-                            : 'AI interview invites are not available for disabled JDs'
-                        }
-                      />
-                    )}
-
-                    {/* 8. Status */}
+                    {/* Result — own full-width row below */}
                     {permissions.canViewAIInterviews && (
                       <QuickActionButton
                         icon={<BarChart className="w-4 h-4" />}
-                        label="Status"
+                        label="AI Interview Result"
                         onClick={handleAIInterviewStatus}
                         disabled={!features.ai_interview}
-                        disabledTooltip="AI Interviews module is not enabled"
+                        disabledTooltip="AI Interviews not enabled"
                       />
                     )}
                   </div>
@@ -2068,6 +2515,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               jobId={job.id}
               availableUnits={15}
               initialMatchStatus={scoredResumesMatchFilter}
+              // Same gate and target as the Score Resumes quick action — opens
+              // "Select Applicants to Score" in place on this page.
+              onScoreResumes={
+                permissions.canRunScoring && hasPlanFeature('resume_scoring') && job.status !== 'Disabled'
+                  ? () => setShowSelectSourceModal(true)
+                  : undefined
+              }
               onViewCandidate={(resume) => {
                 // Pass resume directly - data already formatted by fetchScoredResumes
                 // CandidateScoringDetailPage handles the same format as ResumeScoringPage
@@ -2094,6 +2548,49 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {/* Assessment Results Tab Content */}
       {activeTab === 'assessment-results' && (
         <div className="mt-0">
+          {/* Same actions as the Assessment quick-action group, surfaced on the
+              tab so the recruiter can create or invite without scrolling back
+              up to the Overview sidebar. Both open in place. */}
+          {permissions.canCreateAssessments && hasPlanFeature('assessment') && (
+            <div className="flex flex-wrap items-center justify-end gap-2 mb-3">
+              <button
+                onClick={handleCreateAssessment}
+                disabled={!features.assessment || job.status === 'Disabled' || resolvingAssessmentTarget}
+                title={
+                  !features.assessment
+                    ? 'Assessments not enabled'
+                    : job.status === 'Disabled'
+                      ? 'JD is disabled'
+                      : undefined
+                }
+                className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                {resolvingAssessmentTarget
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Sparkles className="w-4 h-4" />}
+                Create
+              </button>
+              <button
+                onClick={handleOpenShareAssessment}
+                disabled={!features.assessment || job.status === 'Disabled' || isLoadingShareAssessments || !hasAnyAssessment}
+                title={
+                  !features.assessment
+                    ? 'Assessments not enabled'
+                    : job.status === 'Disabled'
+                      ? 'JD is disabled'
+                      : !hasAnyAssessment
+                        ? 'Create an assessment first'
+                        : undefined
+                }
+                className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                {isLoadingShareAssessments
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <UserPlus className="w-4 h-4" />}
+                Send Invite
+              </button>
+            </div>
+          )}
           <AssessmentResultsTable
             results={assessmentResults}
             jobTitle={job.title}
@@ -2104,6 +2601,97 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               setViewingAssessmentResult(result);
             }}
           />
+        </div>
+      )}
+
+      {/* AI Interview Result Tab Content — the same stats + filters + candidate
+          table the standalone results page renders, in `embedded` mode so it
+          drops its own <main>/breadcrumb chrome and stays inside this page. */}
+      {activeTab === 'ai-interview-results' && (
+        <div className="mt-0" ref={aiInterviewResultsSectionRef}>
+          {/* Same actions as the AI Interview quick-action group, surfaced on the
+              tab. Rendered outside the loading/error/empty branches so they stay
+              reachable even when no interview exists yet — that's exactly when
+              Create matters most. Both open in place. */}
+          {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews) && hasPlanFeature('ai_interview') && (
+            <div className="flex flex-wrap items-center justify-end gap-2 mb-3">
+              {permissions.canCreateAIInterviews && (
+                <button
+                  onClick={handleCreateAIInterview}
+                  disabled={!features.ai_interview || job.status === 'Disabled' || resolvingAIInterviewTarget}
+                  title={
+                    !features.ai_interview
+                      ? 'AI Interviews not enabled'
+                      : job.status === 'Disabled'
+                        ? 'JD is disabled'
+                        : undefined
+                  }
+                  className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                >
+                  {resolvingAIInterviewTarget
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Sparkles className="w-4 h-4" />}
+                  Create
+                </button>
+              )}
+              {permissions.canShareAIInterviews && (
+                <button
+                  onClick={handleInviteAIInterview}
+                  disabled={!features.ai_interview || job.status === 'Disabled' || resolvingInviteConfig || !hasAnyAIInterview}
+                  title={
+                    !features.ai_interview
+                      ? 'AI Interviews not enabled'
+                      : job.status === 'Disabled'
+                        ? 'JD is disabled'
+                        : !hasAnyAIInterview
+                          ? 'Create an AI interview first'
+                          : undefined
+                  }
+                  className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                >
+                  {resolvingInviteConfig
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <UserPlus className="w-4 h-4" />}
+                  Send Invite
+                </button>
+              )}
+            </div>
+          )}
+          {loadingAIInterviewConfig ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+              <span className="ml-3 text-sm text-gray-500 dark:text-slate-400">Loading AI interview results...</span>
+            </div>
+          ) : aiInterviewConfigError ? (
+            <div className="text-center py-16">
+              <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">{aiInterviewConfigError}</p>
+              <button
+                onClick={loadAIInterviewConfig}
+                className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          ) : aiInterviewConfig ? (
+            <AIInterviewResults
+              embedded
+              configId={aiInterviewConfig.id}
+              configTitle={aiInterviewConfig.position || aiInterviewConfig.jd_title || 'AI Interview'}
+              jdTitle={aiInterviewConfig.jd_title || ''}
+              onBack={() => setActiveTab('overview')}
+              onViewCandidate={handleAIInterviewCandidateClick}
+            />
+          ) : (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 mx-auto mb-4 flex items-center justify-center">
+                <Brain className="w-8 h-8 text-brand-blue" />
+              </div>
+              <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">No AI interview for this job yet</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">
+                Create and publish an AI interview to see candidate results here.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -2149,6 +2737,141 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           jobId={job.id}
           onClose={() => setShowInviteToAssessmentModal(false)}
         />
+      )}
+
+      {/* Draft assessment prompt — Create found an unpublished draft for this JD.
+          Publishing happens here rather than on the assessment details page,
+          which for a draft shows an unfinished record and no way forward. */}
+      {draftAssessment && (
+        <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full border border-gray-200 dark:border-slate-700">
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-amber-100 ring-1 ring-amber-200 flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">
+                    Draft assessment for this job
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                    Publish it to start inviting candidates.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDraftAssessment(null)}
+                disabled={publishingDraft}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded transition-colors disabled:opacity-50 flex-shrink-0"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-gray-500 dark:text-slate-400" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4">
+              <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-3">
+                <div className="text-sm font-medium text-gray-900 dark:text-slate-50 break-words">
+                  {parseAssessmentTitle(draftAssessment.title || '').cleanTitle
+                    || draftAssessment.short_id
+                    || 'Untitled assessment'}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                  {draftAssessment.short_id && <span>{draftAssessment.short_id}</span>}
+                  <span>{draftAssessment.duration_minutes || 30} min</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">Draft</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-600 dark:text-slate-400 mt-3">
+                Candidates can&apos;t be invited to a draft. Publishing makes this
+                assessment live for {job.title}.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end px-5 py-3 border-t border-gray-200 dark:border-slate-700">
+              <button
+                onClick={handleEditDraftAssessment}
+                disabled={publishingDraft}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+              >
+                Continue editing
+              </button>
+              <button
+                onClick={handlePublishDraftAssessment}
+                disabled={publishingDraft}
+                className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                {publishingDraft && <Loader2 className="w-4 h-4 animate-spin" />}
+                {publishingDraft ? 'Publishing…' : 'Publish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Draft AI interview prompt — same shape as the assessment one above. */}
+      {draftAIInterview && (
+        <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full border border-gray-200 dark:border-slate-700">
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-200 dark:border-slate-700">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-amber-100 ring-1 ring-amber-200 flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">
+                    Draft AI interview for this job
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+                    Publish it to start inviting candidates.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDraftAIInterview(null)}
+                disabled={publishingAIDraft}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded transition-colors disabled:opacity-50 flex-shrink-0"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5 text-gray-500 dark:text-slate-400" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4">
+              <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-3">
+                <div className="text-sm font-medium text-gray-900 dark:text-slate-50 break-words">
+                  {draftAIInterview.position || draftAIInterview.jd_title || job.title || 'Untitled interview'}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                  <span>{draftAIInterview.duration_minutes || 30} min</span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">Draft</span>
+                </div>
+              </div>
+              <p className="text-xs text-gray-600 dark:text-slate-400 mt-3">
+                Candidates can&apos;t be invited to a draft. Publishing makes this
+                interview live for {job.title}.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end px-5 py-3 border-t border-gray-200 dark:border-slate-700">
+              <button
+                onClick={handleEditDraftAIInterview}
+                disabled={publishingAIDraft}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+              >
+                Continue editing
+              </button>
+              <button
+                onClick={handlePublishDraftAIInterview}
+                disabled={publishingAIDraft}
+                className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                {publishingAIDraft && <Loader2 className="w-4 h-4 animate-spin" />}
+                {publishingAIDraft ? 'Publishing…' : 'Publish'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Assessment Picker — shown when this JD has multiple published assessments.
@@ -2238,8 +2961,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       )}
 
       {/* Share Assessment via Email — same modal the assessment-side page
-          uses, so the JD page's "Invite for Assessment" matches the UX
-          shown for assessment-level share. */}
+          uses for assessment-level share. */}
       {showShareAssessmentModal && shareAssessments.length > 0 && (
         <ShareAssessmentModal
           isOpen={showShareAssessmentModal}
@@ -2681,6 +3403,28 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           jdTitle={job.title}
         />
       )}
+
+      {/* Candidate detail fetch overlay — the row click loads the full session
+          before the inline detail view can render. */}
+      {loadingAIInterviewCandidate && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/60 dark:bg-slate-950/60">
+          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
+        </div>
+      )}
+
+      {/* Send AI Interview via Email — same modal the AI Interviews page opens
+          from its own Share action, rendered here so Send Invite resolves in
+          place instead of navigating. */}
+      {shareAIInterviewConfig && (
+        <ShareAIInterviewModal
+          isOpen={!!shareAIInterviewConfig}
+          onClose={() => setShareAIInterviewConfig(null)}
+          config={shareAIInterviewConfig}
+          onInviteSent={() => {
+            toast.success('AI interview invitation sent');
+          }}
+        />
+      )}
       </div>
       </div>
     </main>
@@ -2899,11 +3643,14 @@ function AIMatchTabContent({
 
       {/* Table */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
+        {/* Bounded viewport: rows scroll vertically (and horizontally) while the
+            header stays pinned. Header background/border live on the cells so the
+            pinned row paints solid over the rows sliding underneath. */}
+        <div className="min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto">
+          <table className="w-full min-w-[1450px] table-auto">
+            <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
-                <th className="px-4 py-3 w-10">
+                <th className="px-4 py-3 w-10 align-middle">
                   <input
                     type="checkbox"
                     checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedIds.has(c.resumeId))}
@@ -2911,17 +3658,17 @@ function AIMatchTabContent({
                     className="rounded border-gray-300"
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Match Rating</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Email</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Phone</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Location</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Skills</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Experience</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Uploaded By</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Uploaded Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Attachments</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Scored Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Match Rating</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Candidate Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Phone</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Location</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Skills</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Experience</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded By</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded Date</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Attachments</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Scored Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -2970,7 +3717,7 @@ function AIMatchTabContent({
                           {candidate.rank || '-'}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-sm text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
                             {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
@@ -2981,8 +3728,8 @@ function AIMatchTabContent({
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.email || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.email || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
                         {(() => {
                           const numbers = splitPhoneNumbers(candidate.phone, 2);
                           if (numbers.length === 0) return '—';
@@ -2993,18 +3740,18 @@ function AIMatchTabContent({
                           );
                         })()}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.location || '—'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1">
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.location || '—'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex flex-nowrap items-center gap-1">
                           <SkillsList
                             skills={candidate.skills}
-                            chipClassName="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200"
-                            moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer"
+                            chipClassName="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 whitespace-nowrap"
+                            moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap"
                           />
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.experience || '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.experience || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{uploadDate}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <button className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium">

@@ -102,7 +102,7 @@ function QuickActionButton({
 
       {/* Tooltip on hover when disabled */}
       {disabled && disabledTooltip && (
-        <div className="absolute left-0 top-full mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+        <div className="absolute left-0 top-full mt-2 z-30 w-max max-w-[min(18rem,calc(100vw-2rem))] px-3 py-2 bg-gray-900 text-white text-xs leading-snug rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal break-words">
           {disabledTooltip}
         </div>
       )}

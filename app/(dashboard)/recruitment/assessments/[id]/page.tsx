@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import AssessmentDetailsView from '@/components/AssessmentDetailsView';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
@@ -11,10 +11,15 @@ import { assessmentService } from '@/lib/services';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 
-export default function AssessmentDetailsPage() {
+function AssessmentDetailsContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const assessmentId = params.id as string;
+  // Set when redirected here from a JD's Job Details page — "Assessment →
+  // Create" on a job that already has one lands here. Keeps the breadcrumb and
+  // Back anchored to that job instead of the Assessments list.
+  const fromJobDetails = searchParams.get('from') === 'job-details';
   const { isTenantAdmin, isRecruiter } = useAuth();
   const canInvite = isTenantAdmin || isRecruiter;
 
@@ -123,9 +128,27 @@ export default function AssessmentDetailsPage() {
     }
   }, [assessmentId]);
 
+  // jd_id comes from the fetched assessment rather than the URL — the JD this
+  // assessment belongs to is the authoritative link target.
+  const jdId = assessment?.jd_id || '';
+
   const handleBack = () => {
-    router.push('/recruitment/assessments');
+    router.push(
+      fromJobDetails && jdId
+        ? `/recruitment/job-details?id=${encodeURIComponent(jdId)}`
+        : '/recruitment/assessments',
+    );
   };
+
+  const breadcrumbItems =
+    fromJobDetails && jdId
+      ? [
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+          { label: assessment?.jd_title || 'Job Details', href: `/recruitment/job-details?id=${encodeURIComponent(jdId)}` },
+          { label: 'Assessment' },
+        ]
+      : undefined;
 
   const handleViewResults = () => {
     router.push(`/recruitment/assessments/${assessmentId}/results`);
@@ -177,10 +200,13 @@ export default function AssessmentDetailsPage() {
   }
 
   return (
+    // No wrapper chrome here — AssessmentDetailsView owns its own <main> +
+    // max-w-[1400px] + padded card (same as JobDetailView). Wrapping it again
+    // applied the page padding twice, stacked two white backgrounds, and nested
+    // the view's scroll container inside a non-scrolling <main>, which is why the
+    // breadcrumb could never stick.
     <FeatureGate feature="assessment">
-      <main className="flex-1 overflow-x-hidden bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <>
         <AssessmentDetailsView
           assessment={assessment}
           onBack={handleBack}
@@ -197,6 +223,7 @@ export default function AssessmentDetailsPage() {
           onNext={allAssessmentIds.indexOf(assessmentId) >= 0 && allAssessmentIds.indexOf(assessmentId) < allAssessmentIds.length - 1
             ? () => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) + 1]}`)
             : undefined}
+          breadcrumbItems={breadcrumbItems}
         />
 
         {/* Modals */}
@@ -225,9 +252,28 @@ export default function AssessmentDetailsPage() {
             onSave={handleEditSave}
           />
         )}
-          </div>
-        </div>
-      </main>
+      </>
     </FeatureGate>
+  );
+}
+
+export default function AssessmentDetailsPage() {
+  // useSearchParams needs a Suspense boundary in the App Router.
+  return (
+    <Suspense
+      fallback={
+        <main className="flex-1 overflow-x-hidden bg-slate-50">
+          <div className="mx-auto w-full max-w-[1400px]">
+            <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
+              </div>
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <AssessmentDetailsContent />
+    </Suspense>
   );
 }

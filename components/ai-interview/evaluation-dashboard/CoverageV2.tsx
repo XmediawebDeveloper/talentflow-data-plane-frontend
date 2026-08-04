@@ -150,7 +150,7 @@ export function CoverageV2({ data }: Props) {
   return (
     <div className="space-y-6">
       {/* Header banner */}
-      <div className="rounded-2xl p-6 bg-gradient-to-br from-indigo-600 to-indigo-500 text-white">
+      <div className="rounded-2xl p-6 bg-brand-blue text-white">
         <div className="flex items-center gap-3">
           <Layers className="w-8 h-8" />
           <div>
@@ -208,7 +208,7 @@ export function CoverageV2({ data }: Props) {
       </div>
 
       {/* Coverage Summary */}
-      <div className="rounded-2xl p-6 bg-gradient-to-br from-emerald-500 to-emerald-400 text-white">
+      <div className="rounded-2xl p-6 bg-brand-blue text-white">
         <div className="text-lg font-bold mb-4">Coverage Summary</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {data.sectionsPresent.mustHave && (

@@ -1,4 +1,4 @@
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, Target } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
@@ -94,6 +94,12 @@ interface ScoredResumesTableProps {
    * which would force the same plumbing on JobDetailView, which has no bulk bar.
    */
   toolbarActions?: React.ReactNode;
+  /**
+   * Opens the caller's "Select Applicants to Score" flow. Optional so the
+   * button only appears where a host has somewhere to send it — JobDetailView
+   * owns SelectSourceModal; ResumeScoringPage has its own scoring entry points.
+   */
+  onScoreResumes?: () => void;
 }
 
 export default function ScoredResumesTable({
@@ -107,7 +113,8 @@ export default function ScoredResumesTable({
   onSelectResume,
   onSelectAll,
   isGlobalView = false,
-  toolbarActions
+  toolbarActions,
+  onScoreResumes
 }: ScoredResumesTableProps) {
   const { tenant, isTenantAdmin, user } = useAuth();  // Get tenant info from auth context
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
@@ -557,6 +564,18 @@ export default function ScoredResumesTable({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* Score Resumes — sits before Customize Columns. Opens the host's
+              "Select Applicants to Score" modal in place. */}
+          {onScoreResumes && (
+            <button
+              onClick={onScoreResumes}
+              className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2"
+            >
+              <Target className="w-4 h-4" />
+              <span className="hidden sm:inline">Score Resumes</span>
+              <span className="sm:hidden">Score</span>
+            </button>
+          )}
           {/* Customize Columns - Hide on mobile */}
           <button
             onClick={() => setShowColumnModal(true)}

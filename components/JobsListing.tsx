@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, Filter, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, SlidersHorizontal, LayoutGrid, List, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Heart, Star, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, Mail, BarChart } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -70,8 +70,6 @@ interface JobsListingProps {
   onViewApplicants?: (job: Job) => void;
   onAIMatch?: (job: Job) => void;
   onScoreResumes?: (job: Job) => void;
-  onInviteAssessment?: (job: Job) => void;
-  onAssessmentStatus?: (job: Job) => void;
   onUpdateJobStatus?: (jobId: string, status: Job['status']) => void;
   onEditJob?: (job: Job) => void;
   onPublishJob?: (job: Job) => void;
@@ -95,7 +93,7 @@ interface JobsListingProps {
   masterDataLinks?: { id: string; label: string; href: string; icon: LucideIcon }[];
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onInviteAssessment, onAssessmentStatus, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, masterDataLinks }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, masterDataLinks }: JobsListingProps) {
   const dialog = useGlobalDialog();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJd ?? false);
@@ -741,7 +739,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                           : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue'
                       }`}
                     >
-                      <SlidersHorizontal className="w-4 h-4" />
+                      <Settings className="w-4 h-4" />
                       Config
                       <ChevronDown className={`w-4 h-4 transition-transform ${showConfig ? 'rotate-180' : ''}`} />
                     </button>
@@ -1342,32 +1340,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   Score Resumes
                                 </button>
                               )}
-                              {onInviteAssessment && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onInviteAssessment(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <Mail className="w-4 h-4" />
-                                  Invite for Assessment
-                                </button>
-                              )}
-                              {onAssessmentStatus && job.status.toLowerCase() !== 'draft' && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onAssessmentStatus(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <BarChart className="w-4 h-4" />
-                                  Assessment Status
-                                </button>
-                              )}
                               {/* Disable Job for Published */}
                               {job.status === 'Published' && onDisableJob && (
                                 <button
@@ -1660,32 +1632,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 >
                                   <Target className="w-4 h-4" />
                                   Score Resumes
-                                </button>
-                              )}
-                              {onInviteAssessment && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onInviteAssessment(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <Mail className="w-4 h-4" />
-                                  Invite for Assessment
-                                </button>
-                              )}
-                              {onAssessmentStatus && job.status.toLowerCase() !== 'draft' && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onAssessmentStatus(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <BarChart className="w-4 h-4" />
-                                  Assessment Status
                                 </button>
                               )}
                               {/* Disable Job for Published */}

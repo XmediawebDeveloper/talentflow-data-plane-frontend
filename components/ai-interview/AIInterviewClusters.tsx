@@ -19,6 +19,7 @@ import {
   normalizePriority as sharedNormalizePriority,
 } from '@/lib/constants/aiInterviewPriority';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
+import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -715,6 +716,10 @@ export default function AIInterviewClusters() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get('id') || '';
+  // Carried from the Configure step when the flow started on a JD's Job Details
+  // page — keeps the breadcrumb anchored to that job across the whole flow.
+  const fromJobDetails = searchParams.get('from') === 'job-details';
+  const originParam = fromJobDetails ? '&from=job-details' : '';
 
   /* Loading / saving states */
   const [loading, setLoading] = useState(true);
@@ -1996,7 +2001,7 @@ export default function AIInterviewClusters() {
 
     autogenFiredRef.current = true;
     // Strip the autogen flag so a refresh after generation doesn't loop.
-    router.replace(`/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${id}`);
+    router.replace(`/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${id}${originParam}`);
     // forceExpand on the auto-trigger so /expand-skills always runs on first
     // entry from Configure — recruiter shouldn't need to click "Regenerate"
     // to see sub-skill expansion when arriving with e.g. 2 NTH skills.
@@ -2245,7 +2250,7 @@ export default function AIInterviewClusters() {
     if (!config) return;
     // Include config_id so Config can load the exact draft directly (avoids jd_id search miss)
     saveAndNavigate(
-      `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id || ''}&config_id=${id}`
+      `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id || ''}&config_id=${id}${originParam}`
     );
   };
 
@@ -2309,7 +2314,7 @@ export default function AIInterviewClusters() {
       }
     }
     saveAndNavigate(
-      '/recruitment/ai-interviews/jd-selection/ai-interview-config/preview?id=' + id,
+      '/recruitment/ai-interviews/jd-selection/ai-interview-config/preview?id=' + id + originParam,
       true, // finalize = true → sets flexible_finalized in flexible mode
     );
   };
@@ -2381,12 +2386,7 @@ export default function AIInterviewClusters() {
   /* ── Loading state ── */
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-          <p className="text-sm text-gray-500">Loading cluster configuration...</p>
-        </div>
-      </div>
+      <AIInterviewFlowLoader message="Loading clusters…" />
     );
   }
 
@@ -2413,28 +2413,42 @@ export default function AIInterviewClusters() {
           <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
               className="mb-4 md:mb-6"
-              items={[
-                { label: 'Dashboard', href: '/dashboard' },
-                { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-                // Name the JD whose clusters are being edited.
-                { label: config?.jd_title || config?.position || 'Clusters' },
-              ]}
+              items={
+                fromJobDetails && config?.jd_id
+                  ? [
+                      // Entered from Job Details — repeat that page's trail and link
+                      // the JD crumb back to it so the user returns where they started.
+                      { label: 'Dashboard', href: '/dashboard' },
+                      { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+                      { label: config?.jd_title || config?.position || 'Job Details', href: `/recruitment/job-details?id=${encodeURIComponent(config.jd_id)}` },
+                      { label: 'AI Interview Clusters' },
+                    ]
+                  : [
+                      { label: 'Dashboard', href: '/dashboard' },
+                      { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+                      // Name the JD whose clusters are being edited.
+                      { label: config?.jd_title || config?.position || 'Clusters' },
+                    ]
+              }
             />
           {/* Header */}
           <div className="mb-6">
             {/* Step indicator */}
-            <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
+            <AIInterviewStepIndicator
+              currentStep={CURRENT_STEP}
+              // Steps 1–2 are behind us. Both go through saveAndNavigate so the
+              // in-progress clusters are persisted before leaving. Step 1 drops
+              // the origin param — picking a different JD ends the job context.
+              onStepClick={(step) => {
+                if (saving || generating) return;
+                if (step === 2) handleBack();
+                else if (step === 1) saveAndNavigate('/recruitment/ai-interviews/jd-selection');
+              }}
+            />
 
             {/* Header row */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <button
-                  onClick={handleBack}
-                  disabled={saving}
-                  className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
                 <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Layers className="w-5 h-5 text-brand-blue" />
                 </div>

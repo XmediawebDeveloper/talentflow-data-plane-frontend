@@ -238,7 +238,7 @@ export function SkillsView({ data }: { data: DashboardData }) {
   return (
     <div className="space-y-4">
       {/* Header banner */}
-      <div className="rounded-2xl p-6 bg-gradient-to-br from-indigo-600 to-indigo-500 text-white">
+      <div className="rounded-2xl p-6 bg-brand-blue text-white">
         <div className="text-xl font-bold mb-2">Skill-by-Skill Analysis</div>
         <div className="text-sm text-white/95">
           Detailed breakdown of candidate performance across all evaluated skills with AI-powered insights and per-skill scoring.
@@ -993,7 +993,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl p-6 bg-gradient-to-br from-indigo-600 to-indigo-500 text-white">
+      <div className="rounded-2xl p-6 bg-brand-blue text-white">
         <div className="text-xl font-bold mb-2">Question-by-Question Analysis</div>
         <div className="text-sm text-white/95 mb-3">
           Detailed evaluation of each interview question with skill scoring, weighted contributions, and AI-derived rationale.
@@ -1442,7 +1442,7 @@ export function FormulaView() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl p-6 bg-gradient-to-br from-indigo-600 to-indigo-500 text-white">
+      <div className="rounded-2xl p-6 bg-brand-blue text-white">
         <div className="text-xl font-bold mb-2">Scoring Formula & Example Scenarios</div>
         <div className="text-sm text-white/95">
           Reference card explaining how skill scores roll up into question scores, section scores, and the final Pass/Fail decision — plus the worked scenarios from the evaluation spec.

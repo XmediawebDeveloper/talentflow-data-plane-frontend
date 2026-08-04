@@ -18,6 +18,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
+import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 /* ─────────────────────────────────────────────────────────────────────── */
@@ -165,6 +166,11 @@ export default function AIInterviewPreview() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get('id') || '';
+  // Carried from Clusters when the flow started on a JD's Job Details page, so
+  // stepping back keeps that page's breadcrumb instead of dropping to the
+  // AI Interviews trail.
+  const fromJobDetails = searchParams.get('from') === 'job-details';
+  const originParam = fromJobDetails ? '&from=job-details' : '';
 
   /* State */
   const [loading, setLoading] = useState(true);
@@ -268,7 +274,7 @@ export default function AIInterviewPreview() {
 
   /* Navigation */
   const goBack = () => {
-    router.push('/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=' + id);
+    router.push('/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=' + id + originParam);
   };
 
   const handleSaveAsDraft = async () => {
@@ -290,12 +296,7 @@ export default function AIInterviewPreview() {
   /* ───────────── Loading state ───────────── */
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
-          <p className="text-sm text-gray-500">Loading preview...</p>
-        </div>
-      </div>
+      <AIInterviewFlowLoader message="Loading preview…" />
     );
   }
 
@@ -317,24 +318,58 @@ export default function AIInterviewPreview() {
 
   /* ───────────── Preview mode ───────────── */
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-slate-50"><div className="w-full pb-28">
-      {/* Step indicator */}
-      <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
+    <>
+      {/* Page shell mirrors the Clusters step: centered max-w-[1400px] content
+          card so both steps of the flow line up at the same width and gutters. */}
+      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+            <PageBreadcrumb
+              className="mb-4 md:mb-6"
+              items={
+                fromJobDetails && interview?.jd_id
+                  ? [
+                      // Entered from Job Details — repeat that page's trail and link
+                      // the JD crumb back to it so the user returns where they started.
+                      { label: 'Dashboard', href: '/dashboard' },
+                      { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+                      { label: interview?.jd_title || position, href: `/recruitment/job-details?id=${encodeURIComponent(interview.jd_id)}` },
+                      { label: 'Preview & Publish' },
+                    ]
+                  : [
+                      { label: 'Dashboard', href: '/dashboard' },
+                      { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+                      // Name the JD being previewed so the trail identifies the record.
+                      { label: interview?.jd_title || position || 'Preview & Publish' },
+                    ]
+              }
+            />
+            {/* Header */}
+            <div className="mb-6">
+              {/* Step indicator */}
+              <AIInterviewStepIndicator
+                currentStep={CURRENT_STEP}
+                // Nothing is edited on this page, so no save is needed before
+                // leaving — jump straight to any earlier step. Step 1 drops the
+                // origin param since picking a different JD ends the job context.
+                onStepClick={(step) => {
+                  if (publishing) return;
+                  if (step === 3) goBack();
+                  // Configure needs a jd_id to load; without one it would just
+                  // bounce back to Select JD, so send the user there directly.
+                  else if (step === 2 && interview?.jd_id) router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(interview.jd_id)}&config_id=${id}${originParam}`);
+                  else router.push('/recruitment/ai-interviews/jd-selection');
+                }}
+              />
 
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={goBack}
-          className="p-1.5 rounded-lg hover:bg-brand-blue/5 transition-colors"
-          aria-label="Back to Clusters" title="Back to Clusters"
-        >
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
-        <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-          <CheckCircle className="w-5 h-5 text-brand-blue" />
-        </div>
-        <h1 className="text-xl font-bold text-gray-900 tracking-tight">Review &amp; Publish</h1>
-      </div>
+              {/* Header row */}
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-brand-blue" />
+                </div>
+                <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Review &amp; Publish</h1>
+              </div>
+            </div>
 
       <div className="space-y-5">
         {/* ── JD Info Card ── */}
@@ -614,23 +649,28 @@ export default function AIInterviewPreview() {
         </SectionCard>
       </div>
 
-      {/* ── Sticky Footer ── */}
-      {/* Full-width bar — no left nav in this flow (left-64 was leftover from a
-          sidebar layout). Inner padding matches the main content's p-4/sm:p-6/lg:p-8
-          so the buttons line up with the content above. */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 z-40">
-        <div className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+          </div>{/* closes content card */}
+        </div>{/* closes mx-auto max-w wrapper */}
+      </main>{/* closes flex-1 main */}
+
+      {/* ── Sticky footer ── */}
+      {/* Matches the Clusters step: the outer div is a transparent full-width
+          positioning layer, while the WHITE bar lives on the inner
+          max-w-[1400px] div so it lines up with the content card and leaves no
+          white bleed in the side margins. */}
+      <div className="fixed bottom-0 left-0 right-0 z-40">
+        <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/5 rounded-t-2xl px-4 md:px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
               onClick={goBack}
-              className="px-4 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium flex items-center gap-2"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Clusters
             </button>
             <button
               onClick={handleDiscard}
-              className="px-3 py-2.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
             >
               Discard
             </button>
@@ -638,14 +678,14 @@ export default function AIInterviewPreview() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleSaveAsDraft}
-              className="px-4 py-2.5 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
             >
               Save as Draft
             </button>
             <button
               onClick={() => setShowConfirm(true)}
               disabled={publishing}
-              className="px-6 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {publishing ? (
                 <>
@@ -674,8 +714,6 @@ export default function AIInterviewPreview() {
         cancelText="Cancel"
         variant="info"
       />
-
-      </div>
-    </main>
+    </>
   );
 }

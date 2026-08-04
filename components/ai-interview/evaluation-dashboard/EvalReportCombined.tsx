@@ -425,7 +425,7 @@ export function EvalReportCombined({
       {/* ── Report header band (not part of the PDF) ─────────────────── */}
       <div className="flex items-center justify-between gap-4 flex-wrap rounded-2xl border border-gray-200 bg-white px-6 py-4 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-500 text-white font-bold text-lg flex items-center justify-center shadow-sm shrink-0">
+          <div className="w-12 h-12 rounded-xl bg-brand-blue text-white font-bold text-lg flex items-center justify-center shadow-sm shrink-0">
             AI
           </div>
           <div>
@@ -438,7 +438,7 @@ export function EvalReportCombined({
         <button
           onClick={exportPDF}
           disabled={exporting}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white text-sm font-semibold shadow-sm shadow-indigo-600/25 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-60 text-white text-sm font-semibold shadow-sm shadow-brand-blue/25 transition-colors"
         >
           <Download className={`w-4 h-4 ${exporting ? 'animate-pulse' : ''}`} />
           {exporting ? 'Preparing PDF…' : 'Download Report (PDF)'}
@@ -450,7 +450,7 @@ export function EvalReportCombined({
         {/* 1. Verdict hero — compact Pass/Fail + Match Score + candidate */}
         {isPartialEvaluation ? (
           <div
-            className="rounded-xl p-5 text-amber-950 bg-gradient-to-br from-amber-100 to-amber-50 border border-amber-200 shadow-sm"
+            className="rounded-xl p-5 text-amber-950 bg-amber-100 border border-amber-200 shadow-sm"
             style={{ pageBreakInside: 'avoid' }}
           >
             <div className="flex flex-wrap items-center gap-4">
@@ -472,7 +472,7 @@ export function EvalReportCombined({
         ) : (
           <div
             className={`rounded-xl p-5 text-white shadow-md ${
-              isPassed ? 'bg-gradient-to-br from-emerald-500 to-emerald-400' : 'bg-gradient-to-br from-red-500 to-red-400'
+              isPassed ? 'bg-emerald-500' : 'bg-red-500'
             }`}
             style={{ pageBreakInside: 'avoid' }}
           >
@@ -540,7 +540,7 @@ export function EvalReportCombined({
           {stats.map((s, i) => (
             <div key={i} className="rounded-2xl bg-white border border-gray-200 p-5 shadow-sm">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-500 text-white flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-brand-blue text-white flex items-center justify-center shrink-0">
                   {s.icon}
                 </div>
                 <div>

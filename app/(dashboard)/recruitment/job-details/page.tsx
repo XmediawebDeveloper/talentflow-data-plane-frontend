@@ -35,7 +35,7 @@ function JobDetailsContent() {
   const searchParams = useSearchParams();
   const jobId = searchParams.get('id');
   const fromAiInterview = searchParams.get('from') === 'ai-interview';
-  const tabParam = searchParams.get('tab') as 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | null;
+  const tabParam = searchParams.get('tab') as 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results' | null;
   const actionParam = searchParams.get('action') as 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | 'create-ai-interview' | 'invite-ai-interview' | 'ai-interview-status' | null;
 
   // JD15: Get user role for disable/enable button visibility

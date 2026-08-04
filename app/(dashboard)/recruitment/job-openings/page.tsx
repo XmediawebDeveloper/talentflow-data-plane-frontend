@@ -235,14 +235,6 @@ export default function JobOpeningsPage() {
     router.push(`/recruitment/job-details?id=${job.id}&action=score-resumes`);
   };
 
-  const handleInviteAssessment = (job: Job) => {
-    router.push(`/recruitment/job-details?id=${job.id}&action=invite-assessment`);
-  };
-
-  const handleAssessmentStatus = (job: Job) => {
-    router.push(`/recruitment/job-details?id=${job.id}&tab=assessment-results&action=assessment-status`);
-  };
-
   const handleUpdateJobStatus = async (jobId: string, status: string) => {
     try {
       await jdService.updateStatus(jobId, status);
@@ -461,8 +453,6 @@ export default function JobOpeningsPage() {
         onViewApplicants={handleViewApplicants}
         onAIMatch={hasPermission('canRunAiMatch') || isTenantAdmin ? handleAIMatch : undefined}
         onScoreResumes={hasPermission('canRunScoring') || isTenantAdmin ? handleScoreResumes : undefined}
-        onInviteAssessment={hasPermission('canCreateAssessments') || isTenantAdmin ? handleInviteAssessment : undefined}
-        onAssessmentStatus={hasPermission('canViewAssessments') || isTenantAdmin ? handleAssessmentStatus : undefined}
         onUpdateJobStatus={handleUpdateJobStatus}
         onEditJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleEditJob : undefined}
         onPublishJob={hasPermission('canCreateJD') || isTenantAdmin ? handlePublishJob : undefined}

@@ -64,7 +64,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
       <div className="rounded-lg border-2 border-indigo-600 p-8">
         <div className="flex items-start justify-between mb-6 gap-6 flex-wrap">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-500 text-white font-bold text-2xl flex items-center justify-center shadow-sm">
+            <div className="w-14 h-14 rounded-xl bg-brand-blue text-white font-bold text-2xl flex items-center justify-center shadow-sm">
               AI
             </div>
             <div>
