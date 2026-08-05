@@ -1290,19 +1290,17 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (res.hidden) {
         await startInterviewNow();
       } else {
-        // Vision detecting the tiny collapsed pill is imperfect, so never trap a
-        // candidate who DID hide it: after a few failed checks, proceed anyway
-        // (deterministic fail-open on repeated failure — the recording still
-        // shows whether they hid it, so the recruiter can review).
+        // HARD GATE (per requirement): do NOT allow the interview to start until
+        // the vision check confirms the share bar is hidden. On a confident
+        // "bar visible" we ALWAYS re-prompt — no auto-proceed after N attempts.
+        // (Infra failures — capture returned no frame, or the vision call
+        // errors/times out — still fail-open above and in the catch below, so a
+        // backend hiccup can never permanently brick a candidate; only a real
+        // "bar is visible" keeps them on this step.)
         const nextAttempt = shareBarAttempts + 1;
         setShareBarAttempts(nextAttempt);
-        const MAX_SHARE_BAR_ATTEMPTS = 3;
-        if (nextAttempt >= MAX_SHARE_BAR_ATTEMPTS) {
-          console.warn(`[ShareBar] ${nextAttempt} failed checks — proceeding anyway (fail-open)`);
-          await startInterviewNow();
-        } else {
-          setShareBarError('We can still see the screen-sharing bar. Click "Hide" on that bar, then press Continue again.');
-        }
+        console.warn(`[ShareBar] bar still visible (attempt ${nextAttempt}) — re-prompting, not proceeding`);
+        setShareBarError('We can still see the screen-sharing bar. Please click "Hide" on that bar, then press Continue again — the interview cannot start until it is hidden.');
       }
     } catch (e) {
       console.warn('[ShareBar] verify failed — proceeding (fail-open):', e);
