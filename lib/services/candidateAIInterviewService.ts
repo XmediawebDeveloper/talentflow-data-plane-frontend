@@ -105,7 +105,43 @@ export interface AIHealthResponse {
   latency_ms: number;
 }
 
+/** Stable per-browser id for the single-active-session lease. Persisted in
+ *  localStorage so it survives refresh and is shared across tabs of the SAME
+ *  browser (same person), but differs for another person's browser (blocked).
+ *  The interview WebSocket sends the same value as ?cid=…. */
+export function getAiClientSessionId(token: string): string {
+  if (typeof window === 'undefined') return 'ssr';
+  const key = `tf_ai_client_${token}`;
+  try {
+    let v = localStorage.getItem(key);
+    if (!v) {
+      v = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      localStorage.setItem(key, v);
+    }
+    return v;
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
 export const candidateAIInterviewService = {
+  /** Claim/refresh ('acquire') or drop ('release') the pre-interview
+   *  single-active-session lease. held=true → this browser owns the session;
+   *  blocked=true → another live browser holds it. */
+  async sessionLease(
+    token: string,
+    clientId: string,
+    action: 'acquire' | 'release' = 'acquire',
+  ): Promise<{ held: boolean; blocked: boolean }> {
+    const response = await candidateApi.post<{ held: boolean; blocked: boolean }>(
+      `/candidate/ai-interview/${token}/session-lease`,
+      { client_id: clientId, action },
+    );
+    return response.data;
+  },
+
   async checkAIHealth(token: string): Promise<AIHealthResponse> {
     const response = await candidateApi.get<AIHealthResponse>(
       `/candidate/ai-interview/${token}/ai-health`,

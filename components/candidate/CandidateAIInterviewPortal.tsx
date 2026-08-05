@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, AlertTriangle, RefreshCw, CheckCircle, XCircle, Maximize2, Monitor, Clock, KeyRound, Mail } from 'lucide-react';
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
 import { toast } from 'sonner';
-import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
+import { candidateAIInterviewService, getAiClientSessionId } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
 import { InterviewUI } from '@/components/ai-interview/InterviewUI';
 import type { InterviewTimerSnapshot } from '@/components/ai-interview/InterviewUI';
@@ -163,6 +163,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const [shareBarChecking, setShareBarChecking] = useState(false);
   const [shareBarError, setShareBarError] = useState<string | null>(null);
   const [shareBarAttempts, setShareBarAttempts] = useState(0);
+  // Pre-interview single-active-session lease: true when another browser/device
+  // already holds this interview link (blocks the second person from system
+  // check onward). See the lease heartbeat effect.
+  const [preInterviewBlocked, setPreInterviewBlocked] = useState(false);
   const [screenShareDeclined, setScreenShareDeclined] = useState(false);
   const [screenShareDeclinedReason, setScreenShareDeclinedReason] = useState('');
   // True when the pre-start check found the camera/mic already in use by another
@@ -499,6 +503,45 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       window.scrollTo({ top: 0, behavior: 'instant' });
     }
   }, [step]);
+
+  // ── Single-active-session lease over the PRE-INTERVIEW flow ────────────────
+  // While the candidate is in a pre-interview step (system check → practice →
+  // final consent), heartbeat the DB lease keyed on this browser's stable
+  // client id. If another browser/device already holds it → block. The 'interview'
+  // step is EXCLUDED because the WebSocket takes over the same lock (same cid),
+  // so we must NOT double-heartbeat or release it here. Terminal steps release.
+  useEffect(() => {
+    if (!token) return;
+    const LEASE_STEPS: Step[] = [
+      'identity', 'system_check', 'intro_video', 'language_select',
+      'sample_practice', 'fullscreen_prompt', 'final_consent', 'hide_share_bar',
+    ];
+    if (!LEASE_STEPS.includes(step)) {
+      // Release the lease when the candidate reaches a terminal state (the WS
+      // already released on 'interview' end). Best-effort.
+      if (step === 'completed' || step === 'terminated' || step === 'error') {
+        candidateAIInterviewService
+          .sessionLease(token, getAiClientSessionId(token), 'release')
+          .catch(() => { /* stale-timeout backstops it */ });
+      }
+      return;
+    }
+    const cid = getAiClientSessionId(token);
+    let cancelled = false;
+    const beat = async () => {
+      try {
+        const r = await candidateAIInterviewService.sessionLease(token, cid, 'acquire');
+        if (cancelled) return;
+        if (r?.blocked) setPreInterviewBlocked(true);
+        else if (r?.held) setPreInterviewBlocked(false);
+      } catch {
+        // Network error — don't block a genuine candidate on a transient failure.
+      }
+    };
+    beat();
+    const iv = setInterval(beat, 8000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [step, token]);
 
   // Preload avatar assets when reaching system check
   useEffect(() => {
@@ -1641,6 +1684,32 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       window.removeEventListener('keydown', onKey, true);
     };
   }, [step]);
+
+  // ========== BLOCKED: interview already open on another device ==========
+  // Shown when the pre-interview single-active-session lease is held by another
+  // browser/device. The heartbeat effect keeps running underneath, so if the
+  // other side releases (or goes stale) this recovers automatically.
+  if (preInterviewBlocked && step !== 'interview' && step !== 'completed' && step !== 'terminated' && step !== 'error') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5 text-3xl">🔒</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Already open on another device</h1>
+          <p className="text-gray-600 text-sm leading-relaxed mb-6">
+            This interview link is already in use in another window or device.
+            Only one device can take the interview at a time. Please continue
+            there. If you just closed it, wait a few seconds and reload this page.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3 rounded-xl transition-all"
+          >
+            Reload &amp; try again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ========== LOADING ==========
   if (step === 'loading') {

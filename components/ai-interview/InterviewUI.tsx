@@ -15,7 +15,7 @@ import {
   type DetectedObjectEvent,
   type ObjectEventType,
 } from './proctoring';
-import { CandidateInterviewInfo, candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
+import { CandidateInterviewInfo, candidateAIInterviewService, getAiClientSessionId } from "@/lib/services/candidateAIInterviewService";
 import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon } from "./clientLogForwarder";
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
@@ -6639,7 +6639,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '').replace(/\/api\/v1$/, '') || 'localhost:8000';
-    const wsUrl = `${protocol}//${apiUrl}/api/v1/ws/ai-interview/${token}`;
+    // Send the browser's stable client id so the interview INHERITS the same
+    // single-active-session lease the pre-interview flow held (otherwise the
+    // candidate would block themselves at the interview). A different browser
+    // has a different cid → blocked.
+    const _cid = encodeURIComponent(getAiClientSessionId(token));
+    const wsUrl = `${protocol}//${apiUrl}/api/v1/ws/ai-interview/${token}?cid=${_cid}`;
 
     console.log('[IV-DIAG] connect() called', {
       wsUrl,
