@@ -850,7 +850,9 @@ variables:
 # Separate build for production: NEXT_PUBLIC_* are environment-scoped, so the
 # prod image must be built with prod-scoped variable values.
 "Build the app (production)":
-  extends: build-image
+  # Quoted because the name has spaces; GitLab rejects the whole config if this
+  # does not resolve, and the rename missed it once already.
+  extends: "Build the app"
   needs: []
   environment:
     name: production
