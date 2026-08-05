@@ -559,6 +559,39 @@ variables:
         exit 1
       fi
 
+    # ---- keep the QA tenant from growing without limit -----------------------
+    # Every Tier-3 run writes real rows. Measured over one afternoon, job
+    # descriptions went from 114 to 235 and audit rows from 606 to 1,383. Left
+    # alone that breaks the suite twice: pages get slower, and the tests that
+    # assert on an empty list start describing a database that is no longer one.
+    #
+    # The sweep lives in e2e/scripts/qa-tenant-cleanup.py rather than inline
+    # here — it needs to be readable and runnable by hand, and the first inline
+    # attempt got the timestamp comparison wrong in a way that silently removed
+    # nothing. The script explains why (the backend writes local time with no
+    # offset) and measures age against the data instead of the clock.
+    #
+    # Failure here is reported, not fatal: a tenant that did not get tidied is a
+    # slower suite, not a broken one, and it must never stop the tests running.
+    - |
+      TENANT="$QA_STATE_DIR/tenant.json"
+      if [ -f "$TENANT" ]; then
+        MAIL=$(python3 -c "import json;print(json.load(open('$TENANT'))['adminEmail'])")
+        PASS=$(python3 -c "import json;print(json.load(open('$TENANT'))['adminPassword'])")
+        SUB=$(python3 -c "import json;print(json.load(open('$TENANT'))['subdomain'])")
+        TOKEN=$(curl -fsS -m 20 -X POST "http://127.0.0.1:$QA_API_PORT/api/v1/auth/login" \
+          -H 'Content-Type: application/json' \
+          -d "{\"email\":\"$MAIL\",\"password\":\"$PASS\",\"subdomain\":\"$SUB\"}" \
+          | python3 -c "import sys,json;print(json.load(sys.stdin)['tokens']['access_token'])") || TOKEN=""
+        if [ -n "$TOKEN" ]; then
+          python3 "$CI_PROJECT_DIR/e2e/scripts/qa-tenant-cleanup.py" \
+            --api "http://127.0.0.1:$QA_API_PORT" --token "$TOKEN" --hours 6 \
+            || echo "  tenant cleanup did not finish — continuing"
+        else
+          echo "  could not sign in to tidy the QA tenant — continuing"
+        fi
+      fi
+
     # ---- the reusable QA tenant ---------------------------------------------
     # Provisioned once and kept. Tier 3 signs in as this tenant on every run.
     #

@@ -87,74 +87,51 @@ test.describe("Tier 3 — working with a list", () => {
   });
 
   /**
-   * DEFECT PIN — roles past the hundredth are unreachable in the UI.
+   * Every role the backend has is reachable in the UI.
    *
-   * The Job Openings list is filtered and paged in the browser, from a single
-   * request:
+   * This was written as a defect pin, claiming that a tenant with more than 100
+   * roles could not reach the rest. That was wrong, and the way it was wrong is
+   * worth keeping: the test read only the *last* `GET /jd` the page made and
+   * compared its 18 items against a total of 218. The page had in fact fetched
+   * all of them:
    *
-   *   the page asks for   /api/v1/jd?page=1&page_size=100&source=my-jds
-   *   the backend reports total: 114
-   *   the page therefore holds 100 of them, and 14 are unreachable
+   *     /jd?page=1&page_size=100   total=218  items=100
+   *     /jd?page=2&page_size=100   total=218  items=100
+   *     /jd?page=3&page_size=100   total=218  items=18
    *
-   * Measured, not inferred. Those 14 roles cannot be found by the search box
-   * (it filters what is already loaded) and cannot be reached by the pager (it
-   * pages what is already loaded). Searching for one returns "no results" for a
-   * role that plainly exists, and nothing on the page says a limit was hit.
+   * It pages until it has everything. Nothing is unreachable, and there was
+   * never a defect — the test simply looked at one request out of three.
    *
-   * The backend already supports and honours `?search=` —
-   * `GET /api/v1/jd?search=<title>` returns the missing role immediately. The UI
-   * simply never sends it. So the fix is small: send the search and the page to
-   * the backend, which is what every other list in this product already does.
-   *
-   * 114 job descriptions is an ordinary number for a recruitment tenant. This
-   * one reached it partly through seeding by this suite, but that only brought
-   * the day forward — it did not invent it.
-   *
-   * The assertion below is conditional on purpose: while everything the backend
-   * has fits in one request there is no defect, and it passes. The pin is
-   * applied at runtime, only when the condition that breaks it is actually met,
-   * so this neither hides the problem nor turns the pipeline red.
+   * So it now asserts what it always meant to: across however many requests the
+   * page chooses to make, the rows it ends up holding must be every row the
+   * backend says exist. That stays true if the paging strategy changes, and it
+   * fails for real if the page ever stops early.
    */
   test("TC-T372 every role the backend has is reachable in the UI", async ({ page }) => {
     await seedJd();
-
-    // Read the size of the problem before deciding whether this is a known
-    // defect or an ordinary assertion.
-    const api = await adminApi();
-    let total = 0;
-    try {
-      const res = await api.get("/api/v1/jd?page=1&page_size=100&source=my-jds");
-      total = Number(((await res.json()) as Record<string, unknown>).total ?? 0);
-    } finally {
-      await api.dispose();
-    }
-    test.fail(
-      total > 100,
-      `the tenant holds ${total} roles and the page loads at most 100 — known defect, ` +
-        `see the comment above`,
-    );
-
     const calls = watchApiTraffic(page);
+
     await signIn(page);
     await page.goto("/recruitment/job-openings");
-    await settle(page, 5000);
+    await settle(page, 6000);
     await revealList(page, /^\s*Published\b/i);
 
-    const list = [...calls].reverse().find((c) => c.method === "GET" && /\/api\/v1\/jd\b/.test(c.path));
-    expect(list, `the page never called GET /jd. Calls:\n${describeCalls(calls)}`).toBeTruthy();
+    const lists = calls.filter(
+      (c) => c.method === "GET" && /\/api\/v1\/jd(\?|$)/.test(c.url.replace(/^https?:\/\/[^/]+/, "")) &&
+             c.status === 200 && itemsOf(c.body).length >= 0 && (c.body as Record<string, unknown>)?.total != null,
+    );
+    expect(lists.length, `the page never called GET /jd. Calls:\n${describeCalls(calls)}`).toBeGreaterThan(0);
 
-    const body = (list!.body ?? {}) as Record<string, unknown>;
-    const asked = Number(new URL(list!.url).searchParams.get("page_size") ?? 0);
-    const got = itemsOf(body).length;
+    const total = Number((lists[0].body as Record<string, unknown>).total ?? 0);
+    const fetched = new Set(lists.flatMap((c) => itemsOf(c.body).map((r) => String(r.id))));
 
     expect(
-      got,
-      `the backend holds ${Number(body.total ?? total)} job descriptions and the page ` +
-        `loaded ${got} of them (page_size=${asked}). Filtering and paging happen in ` +
-        `the browser, so every role past the ${asked}th is unreachable: searching ` +
-        `for one returns "no results" for a role that exists. Send the search and ` +
-        `the page to the backend — it already supports ?search= and honours it.`,
-    ).toBe(Number(body.total ?? total));
+      fetched.size,
+      `the backend reports ${total} job descriptions and the page fetched ${fetched.size} ` +
+        `of them across ${lists.length} request(s). Rows it never fetched cannot be ` +
+        `found by the search box or reached by the pager, and nothing on screen says ` +
+        `a limit was hit.`,
+    ).toBe(total);
   });
 
   test("TC-T373 the Draft filter shows a draft, and Published shows a published role", async ({ page }) => {
@@ -279,39 +256,52 @@ test.describe("Tier 3 — working with a list", () => {
   });
 
   /**
-   * DEFECT PIN — Export CSV on the Audit Trail silently does nothing.
+   * DEFECT PIN — Export CSV produces nothing once the trail passes 100 entries.
    *
-   * Found by this test on its first run, then confirmed against the API by hand:
+   * Confirmed by measurement, after two wrong descriptions of it:
    *
-   *   GET /api/v1/audits?page_size=100   200
-   *   GET /api/v1/audits?page_size=101   422  "Input should be less than or
-   *                                            equal to 100"
+   *     rows in the selected window            123
+   *     the export requests page_size=123      (Math.min(total || 1000, 1000))
+   *     GET /audits accepts page_size <= 100   -> 422
+   *     handleExport is `if (response.ok) {…}` with no else
+   *     result: no file, no message, dialog still open
    *
-   * The export asks for `Math.min(total || 1000, 1000)` rows in one request
-   * (app/(dashboard)/audits/trail/page.tsx, handleExport). Any tenant with more
-   * than 100 audit entries therefore gets a 422, and because the handler is
-   * written as `if (response.ok) { ...download... }` with no else, the failure
-   * is completely silent: no file, no message, and the dialog stays open as
-   * though the user had not clicked. This tenant has 606 entries.
+   * The first description said it always asks for 1000. It asks for however
+   * many rows are in the window; 1000 only when the count has not loaded yet.
+   * The second said there was no defect at all, because a run against a window
+   * holding 64 rows downloaded fine. Both readings came from one measurement
+   * each. The defect is real and it is ordinary: any tenant with more than 100
+   * audit entries in the window it exports cannot export.
    *
-   * Two things are wrong and both need fixing:
-   *   - the request exceeds a limit the API declares in its own OpenAPI schema
-   *     (page_size maximum: 100), so it can only ever have worked on a tenant
-   *     with fewer than 100 audit rows — which every tenant is, briefly, on its
-   *     first day
-   *   - a failed export tells the user nothing
-   *
-   * Capping the request at 100 alone is not the fix: that would export the first
-   * 100 rows of a 606-row trail and call it an audit export. It needs to page.
-   *
-   * Pinned with test.fail() rather than deleted or skipped. The suite stays
-   * green, the defect stays visible in the report, and the day someone fixes it
-   * Playwright reports this as "expected to fail but passed" — which is the
-   * signal to turn the pin back into an ordinary assertion.
+   * That also explains why this test flaked. The QA tenant crossed 100 entries
+   * partway through a suite run, so the same test passed alone and failed in
+   * the full run. It is pinned conditionally now — expected to fail only when
+   * the data is above the threshold that triggers the bug, and an ordinary
+   * passing test below it. Neither reading is left to chance.
    */
   test("TC-T376 exporting the audit trail produces a real file", async ({ page }) => {
-    test.fail(true, "Export CSV requests page_size>100 and the API 422s it — see the comment above");
     await seedJd();
+
+    // How many rows the export will ask for decides whether the bug fires.
+    const api = await adminApi();
+    let inWindow = 0;
+    try {
+      const now = new Date();
+      const from = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+      const res = await api.get(
+        `/api/v1/audits?page=1&page_size=1&start_date=${from.toISOString()}&end_date=${now.toISOString()}`,
+      );
+      inWindow = Number(((await res.json()) as Record<string, unknown>).total ?? 0);
+    } finally {
+      await api.dispose();
+    }
+    test.fail(
+      inWindow > 100,
+      `${inWindow} audit entries in the export window; GET /audits caps page_size at ` +
+        `100 and the export asks for all of them — known defect, see above`,
+    );
+
+    const calls = watchApiTraffic(page);
     await signIn(page);
     await page.goto("/audits/trail");
     await settle(page, 6000);
@@ -319,25 +309,33 @@ test.describe("Tier 3 — working with a list", () => {
     await page.getByRole("button", { name: /^\s*export\s*$/i }).first().click();
     await page.waitForTimeout(2000);
     const csv = page.getByRole("button", { name: /^\s*csv\s*$/i }).first();
-    expect(csv, "this build offers no CSV export").toBeTruthy();
+    await expect(csv, "the Export menu offers no CSV option").toBeVisible({ timeout: 10_000 });
 
     // Choosing CSV opens a configuration dialog (columns, date range) rather
     // than downloading immediately. The download is the dialog's confirm.
     await csv.click();
     await page.waitForTimeout(2500);
     const confirm = page.getByRole("button", { name: /export csv/i }).last();
-    await expect(
-      confirm,
-      "choosing CSV opened no export dialog",
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(confirm, "choosing CSV opened no export dialog").toBeVisible({ timeout: 15_000 });
 
     const download = page.waitForEvent("download", { timeout: 45_000 }).catch(() => null);
     await confirm.click();
     const file = await download;
 
+    // Report what the page actually asked for, so a failure names the cause
+    // rather than leaving the reader to find it.
+    const req = [...calls].reverse().find(
+      (c) => c.method === "GET" && /\/api\/v1\/audits(\?|$)/.test(c.url.replace(/^https?:\/\/[^/]+/, "")) &&
+             c.url.includes("page_size"),
+    );
+    const asked = req ? Number(new URL(req.url).searchParams.get("page_size") ?? 0) : null;
+
     expect(
       file,
-      "confirming the CSV export downloaded nothing",
+      `confirming the CSV export downloaded nothing. The page requested ` +
+        `page_size=${asked} from GET /audits, which accepts at most 100 and ` +
+        `returned ${req?.status}. handleExport ignores a failed response, so the ` +
+        `user is told nothing.`,
     ).toBeTruthy();
 
     const path = await file!.path();
