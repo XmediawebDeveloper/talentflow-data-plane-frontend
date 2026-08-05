@@ -782,7 +782,10 @@ tier3:
         -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy \
         sh -c "npm ci --no-audit --no-fund \
                && npx playwright install firefox \
-               && npx playwright test smoke-tier3 --reporter=line,html,junit,json -j 1"
+               && npx playwright test smoke-tier3 --reporter=line,html,junit,json -j 1 \
+               ; rc=\$? \
+               ; node e2e/scripts/build-report.mjs --only tier3 --out qa-cases-tier3.json \
+               ; exit \$rc"
   allow_failure: false   # a red Tier-3 stops the deploy, same as e2e and tier2
   rules:
     - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'

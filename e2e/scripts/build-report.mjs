@@ -44,7 +44,16 @@ function valueOf(flag) {
   return i >= 0 ? args[i + 1] : undefined;
 }
 
-const TC = /\b(TC-\d+)\b/;
+// `TC-0123` for the workbook tiers, `TC-T301` for Tier 3. The original pattern
+// was `TC-\d+`, which silently matched none of the Tier-3 ids — every one of
+// them has a letter after the dash — so 50 tests were dropped from the report
+// without a word.
+//
+// The trailing letter matters too: `TC-T376b` is a distinct test from
+// `TC-T376`, and without it the two collapsed into one row and the second
+// silently replaced the first. A join key that quietly merges two cases is
+// worse than no join key.
+const TC = /\b(TC-T?\d+[a-z]?)\b/;
 
 // ---------------------------------------------------------------- inventory --
 // The workbooks are the authority on what a case is. They exist whether or not
@@ -85,16 +94,31 @@ function loadWorkbook(name, tier, shape) {
 // `not_run` — technically true of that job, and a false alarm to anyone reading
 // it. Each job emits the tier it is responsible for; the dashboard concatenates.
 const only = valueOf("--only");
-if (only && !["tier1", "tier2"].includes(only)) {
-  throw new Error(`--only takes "tier1" or "tier2", got "${only}"`);
+if (only && !["tier1", "tier2", "tier3"].includes(only)) {
+  throw new Error(`--only takes "tier1", "tier2" or "tier3", got "${only}"`);
 }
 
-const inventory = [
-  ...(only === "tier2"
+// Tier 3 has no workbook, and that is the point of it.
+//
+// Tiers 1 and 2 are generated: 1,731 rows through a handful of assertion kinds,
+// so the spreadsheet is the authority on what each case is. Tier 3 is the
+// opposite — 50 hand-written journeys, each one different, each one carrying its
+// own reason for existing in the test title. There is nothing a spreadsheet
+// could add, so its inventory is built from what actually ran.
+//
+// The cost is real and worth stating: a Tier-3 test that is deleted, or that
+// never runs because its file was renamed, cannot be reported as `not_run` here
+// the way a mapped-but-missing workbook row is. Nothing is claiming it should
+// have run. The suite's own count is the check for that.
+const inventory =
+  only === "tier3"
     ? []
-    : loadWorkbook("tier1-cases", 1, (r) => (r.query ? `${r.route}?${r.query}` : r.route))),
-  ...(only === "tier1" ? [] : loadWorkbook("tier2-cases", 2, (r) => r.endpoint)),
-];
+    : [
+        ...(only === "tier2"
+          ? []
+          : loadWorkbook("tier1-cases", 1, (r) => (r.query ? `${r.route}?${r.query}` : r.route))),
+        ...(only === "tier1" ? [] : loadWorkbook("tier2-cases", 2, (r) => r.endpoint)),
+      ];
 
 const byId = new Map();
 for (const row of inventory) {
@@ -119,11 +143,16 @@ function readReport() {
   }
   const doc = JSON.parse(fs.readFileSync(reportPath, "utf-8"));
   const out = [];
-  const walk = (suite) => {
-    for (const child of suite.suites ?? []) walk(child);
-    for (const spec of suite.specs ?? []) out.push(spec);
+  // `file` lives on the top-level suite and `title` on the describe block; a
+  // Tier-3 row has no workbook to take a module name from, so it takes them
+  // from here.
+  const walk = (suite, file, group) => {
+    const f = suite.file ?? file;
+    const g = suite.suites?.length ? group : (suite.title ?? group);
+    for (const child of suite.suites ?? []) walk(child, f, suite.title ?? group);
+    for (const spec of suite.specs ?? []) out.push({ ...spec, _file: spec.file ?? f, _group: g });
   };
-  for (const suite of doc.suites ?? []) walk(suite);
+  for (const suite of doc.suites ?? []) walk(suite, suite.file, suite.title);
   return out;
 }
 
@@ -154,6 +183,20 @@ function readAttachment(att) {
  */
 function outcomeOf(spec) {
   const statuses = spec.tests.map((t) => t.status);
+
+  // A test.fail() pin documents a defect that is known and still reproduces.
+  // Reporting it as "passed" is how a known defect becomes invisible; reporting
+  // it as "failed" is how a suite that is behaving correctly looks broken. It is
+  // its own thing, so it gets its own name.
+  //
+  // `expectedStatus: "failed"` is how Playwright records the pin. If such a test
+  // comes back `unexpected`, it passed when it was expected to fail — the defect
+  // has been fixed and the pin should be removed, which is worth shouting about.
+  const pinned = spec.tests.filter((t) => t.expectedStatus === "failed");
+  if (pinned.length) {
+    return pinned.some((t) => t.status === "unexpected") ? "defect_fixed" : "known_defect";
+  }
+
   if (statuses.includes("unexpected")) return "failed";
   if (statuses.length && statuses.every((s) => s === "skipped")) return "skipped";
   if (statuses.includes("flaky")) return "flaky";
@@ -165,7 +208,30 @@ let unmatched = 0;
 for (const spec of readReport()) {
   const id = spec.title.match(TC)?.[1];
   if (!id) continue;                       // hand-written spec, not from a workbook
-  const entry = byId.get(id);
+  let entry = byId.get(id);
+  if (!entry && only === "tier3") {
+    // Tier 3 describes itself. The title after the id is the whole statement of
+    // what the journey proves, and the spec file names the group.
+    const file = String(spec._file ?? "").split("/").pop() ?? "";
+    entry = {
+      tc_id: id,
+      scrum_id: "",
+      tier: 3,
+      module: spec._group || file.replace(/^smoke-tier3-|\.spec\.ts$/g, "") || "tier3",
+      title: spec.title.replace(TC, "").trim(),
+      what_to_check: spec.title.replace(TC, "").trim(),
+      expected_result: "",
+      target: file,
+      assert_kind: "journey",
+      assert_value: "",
+      confidence: "",
+      layer: "e2e",
+      mapped_status: "active",
+      note: "",
+      run: null,
+    };
+    byId.set(id, entry);
+  }
   if (!entry) {
     unmatched++;
     continue;
@@ -249,7 +315,13 @@ const sourceJob = process.env.CI_JOB_NAME ?? null;
 
 const cases = [...byId.values()].map((c) => {
   let status;
-  if (c.run) status = c.run.outcome === "skipped" ? "blocked" : c.run.outcome === "flaky" ? "passed" : c.run.outcome;
+  if (c.run)
+    status =
+      c.run.outcome === "skipped"
+        ? "blocked"
+        : c.run.outcome === "flaky"
+          ? "passed"
+          : c.run.outcome; // passed · failed · known_defect · defect_fixed
   else if (c.mapped_status !== "active") status = "blocked";
   else status = "not_run";
   return { ...c, status, source_job: c.run ? sourceJob : null };
