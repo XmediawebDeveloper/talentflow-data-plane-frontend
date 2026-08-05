@@ -917,10 +917,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const nowSpeakBannerFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── DEV DEBUG OVERLAY (remove before production release) ──────────────
-  // Gate the whole overlay + its /debug/system-stats polling behind an opt-in
+  // Gate the whole overlay + its /debug/system-stats polling behind an OPT-IN
   // so candidates never see it and never trigger the 404 (the endpoint only
-  // exists when the backend runs with DEBUG=True). Enabled in dev builds by
-  // default, or on any build via ?debug=1 (persisted) / ?debug=0 (cleared).
+  // exists when the backend runs with DEBUG=True). OPT-IN ONLY via ?debug=1
+  // (persisted) / ?debug=0 (cleared). We deliberately do NOT auto-enable on
+  // non-production builds: STAGING is a non-production build too, so the old
+  // `NODE_ENV !== 'production'` default leaked the overlay + a /debug/system-stats
+  // 404 to real candidates on staging. Developers who want it just add ?debug=1
+  // once (it persists in localStorage).
   const [devMonitorEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -930,7 +934,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (flag === '0') { window.localStorage.removeItem('tf_dev_monitor'); return false; }
       if (window.localStorage.getItem('tf_dev_monitor') === '1') return true;
     } catch { /* localStorage blocked — fall through */ }
-    return process.env.NODE_ENV !== 'production';
+    return false;
   });
   const [debugOpen, setDebugOpen] = useState(true);
   const [debugPos, setDebugPos] = useState({ x: 12, y: 12 });

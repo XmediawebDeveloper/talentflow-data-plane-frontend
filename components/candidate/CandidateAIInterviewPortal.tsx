@@ -1327,9 +1327,19 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     setShareBarChecking(true);
     try {
       const frame = await captureScreenFrame();
-      const res = frame
-        ? await candidateAIInterviewService.verifyShareBarHidden(token, frame)
-        : { enabled: true, hidden: true, reason: 'no_frame' }; // can't capture → don't block
+      if (!frame) {
+        // HARD GATE: could not capture a frame to verify → do NOT proceed
+        // (previously this fail-open let the interview start WITHOUT ever
+        // checking the bar — the "moved on at 3rd attempt" leak). The dead-share
+        // case was already routed to re-share above, so this is a transient
+        // capture glitch; re-prompt and let the candidate press Continue to retry.
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        console.warn(`[ShareBar] no frame captured (attempt ${nextAttempt}) — NOT proceeding, re-prompting`);
+        setShareBarError('We could not verify the screen-sharing bar. Make sure you are sharing your ENTIRE screen, click "Hide" on that bar, then press Continue again.');
+        return;
+      }
+      const res = await candidateAIInterviewService.verifyShareBarHidden(token, frame);
       if (res.hidden) {
         await startInterviewNow();
       } else {
@@ -1346,8 +1356,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         setShareBarError('We can still see the screen-sharing bar. Please click "Hide" on that bar, then press Continue again — the interview cannot start until it is hidden.');
       }
     } catch (e) {
-      console.warn('[ShareBar] verify failed — proceeding (fail-open):', e);
-      await startInterviewNow();
+      // HARD GATE: verification threw → do NOT silently start. Re-prompt so the
+      // candidate retries rather than slipping through unverified.
+      const nextAttempt = shareBarAttempts + 1;
+      setShareBarAttempts(nextAttempt);
+      console.warn(`[ShareBar] verify threw (attempt ${nextAttempt}) — NOT proceeding, re-prompting:`, e);
+      setShareBarError('We could not verify the screen-sharing bar just now. Please click "Hide" on that bar, then press Continue again.');
     } finally {
       setShareBarChecking(false);
     }
