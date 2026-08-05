@@ -303,10 +303,36 @@ deploy:qa:
       BACKEND_IMAGE=$(docker inspect "$STAGING_API" --format '{{.Config.Image}}')
       echo "backend image: $BACKEND_IMAGE"
 
+      # The state directory holds the QA env file and the reusable tenant, and it
+      # outlives the job. Checked explicitly because the failure otherwise is a
+      # bare "Permission denied" on a redirect, several lines further down, with
+      # nothing saying which directory or which user.
+      #
+      # This job runs as the runner's own user, not root. The directory was
+      # first created by hand during setup and was root-owned, so the first
+      # pipeline died here — everything had been verified as root, which is not
+      # who runs it.
+      mkdir -p "$QA_STATE_DIR" 2>/dev/null || true
+      if ! ( [ -d "$QA_STATE_DIR" ] && [ -w "$QA_STATE_DIR" ] ); then
+        echo "$QA_STATE_DIR is not writable by $(id -un), which is the user this"
+        echo "job runs as. Fix on the runner host:"
+        echo "    sudo mkdir -p $QA_STATE_DIR"
+        echo "    sudo chown -R $(id -un):$(id -gn) $QA_STATE_DIR"
+        ls -ld "$QA_STATE_DIR" 2>/dev/null || true
+        exit 1
+      fi
+      for f in api.env tenant.json; do
+        if [ -e "$QA_STATE_DIR/$f" ] && [ ! -w "$QA_STATE_DIR/$f" ]; then
+          echo "$QA_STATE_DIR/$f exists but is not writable by $(id -un):"
+          ls -l "$QA_STATE_DIR/$f"
+          echo "    sudo chown $(id -un):$(id -gn) $QA_STATE_DIR/$f"
+          exit 1
+        fi
+      done
+
       # Reuse the staging environment wholesale, then override only what decides
       # which database is written and which control plane is called. Listing
       # ~100 variables by hand would rot the moment the backend gains one.
-      mkdir -p "$QA_STATE_DIR"
       ENVFILE="$QA_STATE_DIR/api.env"
       docker inspect "$STAGING_API" --format '{{range .Config.Env}}{{println .}}{{end}}' \
         | grep -vE '^(DATABASE_NAME|SHARED_DATABASE_NAME|ADMIN_API_URL|BASE_DOMAIN|CORS_ORIGINS|FRONTEND_URL|BACKEND_URL|PATH|HOSTNAME|HOME|LANG|GPG_KEY|PYTHON_|_=|$)' \
