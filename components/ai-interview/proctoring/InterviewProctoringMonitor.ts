@@ -938,7 +938,14 @@ export function useInterviewProctoringMonitor({
   const setupScreenRecordingDetection = useCallback(() => {
     const originalGetDisplayMedia = navigator.mediaDevices?.getDisplayMedia;
     if (originalGetDisplayMedia) {
-      navigator.mediaDevices.getDisplayMedia = async function () {
+      navigator.mediaDevices.getDisplayMedia = async function (constraints?: DisplayMediaStreamOptions) {
+        // Allow the app's OWN mandatory (re)share — the candidate portal sets
+        // this flag right before it (re)requests the screen share. Without it
+        // the block also killed the "Re-share Entire Screen" flow (picker never
+        // opened; logged as a false screen_recording_attempt).
+        if ((window as any).__tfAllowLegitimateShare) {
+          return originalGetDisplayMedia.call(navigator.mediaDevices, constraints as any);
+        }
         emitEventRef.current('screen_recording_attempt', {});
         throw new Error('Screen recording is not allowed during the interview');
       };

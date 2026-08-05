@@ -813,7 +813,19 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       monitorTypeSurfaces: 'include',
     };
 
-    const screenStream = await (navigator.mediaDevices as any).getDisplayMedia(displayMediaOptions);
+    // Mark this as the app's OWN legitimate (re)share so the proctoring
+    // getDisplayMedia guards let it through instead of blocking it as a
+    // "screen recording attempt". Without this, the mid-interview
+    // "Re-share Entire Screen" picker never opened (proctoring had already
+    // monkey-patched getDisplayMedia to throw). Reset in finally so any other
+    // getDisplayMedia call stays blocked.
+    let screenStream: MediaStream;
+    (window as any).__tfAllowLegitimateShare = true;
+    try {
+      screenStream = await (navigator.mediaDevices as any).getDisplayMedia(displayMediaOptions);
+    } finally {
+      (window as any).__tfAllowLegitimateShare = false;
+    }
     const videoTrack = screenStream.getVideoTracks()[0];
     const displaySurface = (videoTrack?.getSettings?.() as any)?.displaySurface;
 

@@ -345,15 +345,19 @@ function buildClustersFromConfig(
     .toLowerCase();
 
   const lookupAsked = (sname: string, score010: number): boolean => {
-    // Strongest signal: if the evaluator scored this skill above 0, it
-    // was definitely probed — that score wouldn't exist otherwise.
-    if (score010 > 0) return true;
-
     const sl = sname.toLowerCase();
 
-    // Union semantics: a skill is "asked" if ANY authoritative source
-    // says yes. Older approach used strict priority order and trusted
-    // skill_assessed_map even when it was stale.
+    // A skill is "asked" only when an AUTHORITATIVE source says a delivered
+    // question probed it: the backend skill_assessed_map, the at-ask-time
+    // assigned_skills snapshot, or the skill named in a question's text.
+    //
+    // We deliberately do NOT treat "score > 0" as proof of being asked when an
+    // authoritative map exists. A score can leak ACROSS SECTIONS — e.g. the
+    // candidate names an NHS skill ("Kubernetes", "Azure DevOps") while
+    // answering an MHS question, so that NHS skill gets a score even though NO
+    // NHS question was ever asked. Trusting score>0 then marked it "covered"
+    // (BUG12). score>0 remains a fallback ONLY for legacy sessions that
+    // persisted neither the assessed map nor the assigned-skills snapshot.
     if (hasAssessedMap) {
       for (const k of Object.keys(assessedMap)) {
         if (k.toLowerCase() === sl && assessedMap[k]) return true;
@@ -361,10 +365,15 @@ function buildClustersFromConfig(
     }
     if (assignedSkillSet.has(sl)) return true;
 
-    if (!questionBlob) return false;
-    for (const kw of keywordsForSkill(sname)) {
-      if (wordBoundaryTest(kw, questionBlob)) return true;
+    if (questionBlob) {
+      for (const kw of keywordsForSkill(sname)) {
+        if (wordBoundaryTest(kw, questionBlob)) return true;
+      }
     }
+
+    // Legacy fallback: no authoritative signal at all → a positive score is the
+    // only evidence the skill was probed.
+    if (!hasAssessedMap && !hasAssignedSnapshot && score010 > 0) return true;
     return false;
   };
 

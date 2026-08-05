@@ -2318,6 +2318,11 @@ export function useProctoringMonitor({
 
     if (mediaDevices && originalGetDisplayMedia) {
       mediaDevices.getDisplayMedia = async function (constraints?: DisplayMediaStreamOptions) {
+        // Let the app's OWN mandatory (re)share through untouched (portal sets
+        // this flag around its getDisplayMedia) — otherwise re-share is blocked.
+        if ((window as any).__tfAllowLegitimateShare) {
+          return originalGetDisplayMedia.call(mediaDevices, constraints);
+        }
         reportScreenCapture({ source: 'mediaDevices.getDisplayMedia' });
         if (screenshotBlocking) {
           throw new Error('Screen recording is not allowed during the assessment');
@@ -2328,6 +2333,9 @@ export function useProctoringMonitor({
 
     if (originalNavigatorGetDisplayMedia) {
       (navigator as any).getDisplayMedia = async function (constraints?: DisplayMediaStreamOptions) {
+        if ((window as any).__tfAllowLegitimateShare) {
+          return originalNavigatorGetDisplayMedia.call(navigator, constraints);
+        }
         reportScreenCapture({ source: 'navigator.getDisplayMedia' });
         if (screenshotBlocking) {
           throw new Error('Screen recording is not allowed during the assessment');
