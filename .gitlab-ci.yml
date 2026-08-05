@@ -309,7 +309,7 @@ deploy:qa:
       mkdir -p "$QA_STATE_DIR"
       ENVFILE="$QA_STATE_DIR/api.env"
       docker inspect "$STAGING_API" --format '{{range .Config.Env}}{{println .}}{{end}}' \
-        | grep -vE '^(DATABASE_NAME|SHARED_DATABASE_NAME|ADMIN_API_URL|CORS_ORIGINS|FRONTEND_URL|BACKEND_URL|PATH|HOSTNAME|HOME|LANG|GPG_KEY|PYTHON_|_=|$)' \
+        | grep -vE '^(DATABASE_NAME|SHARED_DATABASE_NAME|ADMIN_API_URL|BASE_DOMAIN|CORS_ORIGINS|FRONTEND_URL|BACKEND_URL|PATH|HOSTNAME|HOME|LANG|GPG_KEY|PYTHON_|_=|$)' \
         > "$ENVFILE.new"
       {
         printf 'DATABASE_NAME=%s\n' "$QA_DB_NAME"
@@ -317,6 +317,10 @@ deploy:qa:
         # 172.17.0.1 is the docker bridge gateway: the address a container uses
         # to reach a service published on the host.
         printf 'ADMIN_API_URL=http://172.17.0.1:%s/api/v1\n' "$QA_CP_PORT"
+        # BASE_DOMAIN builds tenant subdomains. Staging ships q2a.in, which is
+        # the customers' domain — harmless here in the sense that nothing is
+        # dialled, but wrong, and the guard below rightly refuses it.
+        printf 'BASE_DOMAIN=%s\n' "$QA_BASE_DOMAIN"
         printf 'CORS_ORIGINS=%s\n' "$QA_APP_URL"
         printf 'FRONTEND_URL=%s\n' "$QA_APP_URL"
         printf 'BACKEND_URL=%s\n' "$QA_API_URL"
