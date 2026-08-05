@@ -316,7 +316,7 @@ export default function RefundHistoryPage() {
     <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Refund History' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Refund History' }]} />
 
         {/* Header — actions */}
         <div className="flex flex-wrap items-center justify-end gap-2 mb-4">
@@ -624,8 +624,8 @@ export default function RefundHistoryPage() {
         {/* Refund Detail Modal */}
         {selectedRefund && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-            <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
-              <div className="relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
+            <div className="max-h-[90vh] flex flex-col w-full max-w-[95vw] sm:max-w-2xl overflow-hidden rounded-3xl border border-white/40 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-black/5">
+              <div className="flex-shrink-0 relative overflow-hidden bg-brand-blue px-5 py-4 text-white sm:px-6">
                 <div className="pointer-events-none absolute -top-10 right-0 h-32 w-32 rounded-full bg-white/10 blur-3xl" />
                 <div className="relative flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
@@ -646,7 +646,7 @@ export default function RefundHistoryPage() {
                   </button>
                 </div>
               </div>
-              <div className="max-h-[calc(90vh-92px)] space-y-5 overflow-y-auto p-5 sm:p-6">
+              <div className="flex-1 min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Issue Date</p>

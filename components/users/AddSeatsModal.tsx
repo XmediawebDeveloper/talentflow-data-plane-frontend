@@ -269,7 +269,7 @@ export default function AddSeatsModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/60 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl sm:border sm:border-gray-200 dark:sm:border-slate-700 max-w-xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl sm:border sm:border-gray-200 dark:sm:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
 
         {/* Header */}
         <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-brand-blue flex-shrink-0 overflow-hidden">
@@ -370,7 +370,7 @@ export default function AddSeatsModal({
                       <div className="flex items-center bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-1 gap-1 shadow-sm focus-within:ring-2 focus-within:ring-brand-blue/40 focus-within:border-brand-blue transition-all">
                         <button
                           onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:from-brand-blue-2 hover:to-brand-blue active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:bg-brand-blue-2 active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                         >
                           −
                         </button>
@@ -384,7 +384,7 @@ export default function AddSeatsModal({
                         />
                         <button
                           onClick={() => setQuantity(Math.min(maxPacks, quantity + 1))}
-                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:from-brand-blue-2 hover:to-brand-blue active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:bg-brand-blue-2 active:scale-95 transition-all font-bold text-lg text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                         >
                           +
                         </button>
@@ -460,7 +460,7 @@ export default function AddSeatsModal({
             <button
               onClick={handlePurchase}
               disabled={isPurchasing || razorpayProcessing || !pricing || !!purchaseSuccess}
-              className="flex-1 py-3 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              className="flex-1 py-3 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg font-semibold text-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               {isPurchasing || razorpayProcessing ? (
                 <>

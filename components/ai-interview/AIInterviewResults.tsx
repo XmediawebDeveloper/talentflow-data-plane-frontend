@@ -1,23 +1,28 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import ListToolbar from '@/components/ui/list-toolbar';
 import { useRouter } from 'next/navigation';
 import {
-  Search, Filter, ChevronLeft, ChevronRight, Eye, Loader2,
+  ChevronLeft, ChevronRight, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
-  X, BarChart3, Ban,
+  BarChart3, Ban,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/lib/services/aiInterviewService';
 import { formatISTDate, formatIST, parseIST } from '@/lib/utils/dateUtils';
-import PageBreadcrumb from '@/components/PageBreadcrumb';
+import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 
 interface AIInterviewResultsProps {
   configId: string;
   configTitle?: string;
   jdTitle?: string;
   onBack: () => void;
+  /** Overrides the default AI Interviews trail. Set when these results are
+   *  opened from a JD's Job Details page, so the breadcrumb stays anchored to
+   *  that job instead of resetting to the AI Interviews trail. */
+  breadcrumbItems?: BreadcrumbCrumb[];
   /** When true, render only the results content (stats + filters + table),
    *  without the page <main>/breadcrumb/back-button chrome. Used when the
    *  results view is embedded as a tab inside the interview details page. */
@@ -110,7 +115,7 @@ function formatDuration(session: AIInterviewResponse): string {
   return `${mins}m ${secs}s`;
 }
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate, breadcrumbItems }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -130,6 +135,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  // True once the user confirms the panel with "Done" - mirrors job-openings,
+  // so Clear appears only after filters are applied.
+  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -200,7 +208,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
 
   const hasActiveFilters = statusFilter !== 'all' || scoreMin || scoreMax || dateFrom || dateTo;
 
+  // Score min/max is one logical range filter, and so is the date range.
+  const activeFiltersCount = [scoreMin || scoreMax, dateFrom || dateTo].filter(Boolean).length;
+
   const clearFilters = () => {
+    setFiltersConfirmed(false);
     setStatusFilter('all');
     setScoreMin('');
     setScoreMax('');
@@ -242,97 +254,82 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
         </div>
       )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-          <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-              <Users className="w-4 h-4 text-brand-blue" />
+      {/* Stats — standalone page only. Embedded as the Job Details "AI Interview
+          Result" tab, the summary cards are dropped: that page already carries
+          its own counts and Quick Actions, and the tab leads with the candidate
+          table instead. */}
+      {!embedded && (
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                <Users className="w-4 h-4 text-brand-blue" />
+              </div>
+              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Invited</span>
             </div>
-            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Invited</span>
+            <div className="text-2xl font-bold text-gray-900 tracking-tight">{totalSessions}</div>
           </div>
-          <div className="text-2xl font-bold text-gray-900 tracking-tight">{totalSessions}</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-          <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center">
-              <CheckCircle className="w-4 h-4 text-green-600" />
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+              </div>
+              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Completed</span>
             </div>
-            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Completed</span>
+            <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.completed}</div>
           </div>
-          <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.completed}</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-          <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
-              <Clock className="w-4 h-4 text-brand-orange-deep" />
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+                <Clock className="w-4 h-4 text-brand-orange-deep" />
+              </div>
+              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">In Progress</span>
             </div>
-            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">In Progress</span>
+            <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.inProgress}</div>
           </div>
-          <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.inProgress}</div>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-          <div className="flex items-center gap-2.5 mb-2">
-            <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
-              <BarChart3 className="w-4 h-4 text-brand-cyan" />
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                <BarChart3 className="w-4 h-4 text-brand-cyan" />
+              </div>
+              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Avg Score</span>
             </div>
-            <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Avg Score</span>
-          </div>
-          <div className="text-2xl font-bold text-gray-900 tracking-tight">
-            {summary.avgScore !== null ? `${summary.avgScore}%` : '—'}
+            <div className="text-2xl font-bold text-gray-900 tracking-tight">
+              {summary.avgScore !== null ? `${summary.avgScore}%` : '—'}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Search + Filter bar */}
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue" />
-            <input
-              type="text"
-              placeholder="Search by name, email, or CID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-            />
-          </div>
+        <ListToolbar
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search by name, email, or CID..."
+          onToggleFilters={() => setShowFilters((v) => !v)}
+          filtersOpen={showFilters}
+          activeFilterCount={activeFiltersCount}
+          filtersApplied={filtersConfirmed && activeFiltersCount > 0}
+          onClearFilters={clearFilters}
+          className="mb-0"
+        >
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white"
+            aria-label="Interview status"
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
           >
             {STATUS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
-          <button
-            onClick={() => setShowFilters((v) => !v)}
-            className={`flex items-center gap-2 px-3 py-2 text-sm border rounded-lg transition-colors ${
-              hasActiveFilters
-                ? 'border-brand-blue/30 bg-brand-blue/5 text-brand-blue'
-                : 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-            }`}
-          >
-            <Filter className="w-4 h-4" />
-            Filters
-            {hasActiveFilters && (
-              <span className="w-5 h-5 bg-brand-blue text-white rounded-full text-xs flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                {[scoreMin || scoreMax ? 1 : 0, dateFrom || dateTo ? 1 : 0].reduce((a, b) => a + b, 0)}
-              </span>
-            )}
-          </button>
-          {hasActiveFilters && (
-            <button onClick={clearFilters} className="flex items-center gap-1 text-sm text-gray-500 hover:text-brand-blue transition-colors">
-              <X className="w-4 h-4" />
-              Clear
-            </button>
-          )}
-        </div>
+        </ListToolbar>
 
         {/* Expanded filters */}
         {showFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-4">
+          <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Score Range (%)</label>
               <div className="flex items-center gap-2">
@@ -376,6 +373,18 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
               </div>
             </div>
           </div>
+
+          {/* Panel footer: "Done" applies the selection and reveals the
+              toolbar Clear - same flow as job-openings. */}
+          <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+            <button
+              onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+            >
+              Done
+            </button>
+          </div>
+          </div>
         )}
       </div>
 
@@ -394,7 +403,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
               {totalSessions === 0 && !hasActiveFilters ? 'No candidates invited yet' : 'No results match your filters'}
             </p>
             {hasActiveFilters && (
-              <button onClick={clearFilters} className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors">
+              <button onClick={clearFilters} className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors">
                 Clear filters
               </button>
             )}
@@ -581,10 +590,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
-            items={[
+            items={breadcrumbItems ?? [
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-              { label: 'Results' },
+              // Name the interview these results belong to when we know it.
+              { label: configTitle || jdTitle || 'Results' },
             ]}
           />
           {body}

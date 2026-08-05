@@ -1,16 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import AIInterviewDetailsView from '@/components/ai-interview/AIInterviewDetailsView';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 
-export default function AIInterviewDetailsPage() {
+function AIInterviewDetailsContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const interviewId = params.id as string;
+  // Set when redirected here from a JD's Job Details page — "AI Interview →
+  // Create" on a job that already has a live interview lands here. Keeps the
+  // breadcrumb and Back anchored to that job instead of the AI Interviews list.
+  const fromJobDetails = searchParams.get('from') === 'job-details';
 
   const [config, setConfig] = useState<AIInterviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,9 +58,30 @@ export default function AIInterviewDetailsPage() {
     }
   }, [interviewId]);
 
+  // jd_id comes from the fetched config rather than the URL — the JD this
+  // interview belongs to is the authoritative link target, same as the results
+  // page does.
+  const jdId = config?.jd_id || '';
+
   const handleBack = () => {
-    router.push('/recruitment/ai-interviews');
+    router.push(
+      fromJobDetails && jdId
+        ? `/recruitment/job-details?id=${encodeURIComponent(jdId)}`
+        : '/recruitment/ai-interviews',
+    );
   };
+
+  // Shape is inferred and checked against the prop type at the call site — no
+  // need to import BreadcrumbCrumb into a route module just for an annotation.
+  const breadcrumbItems =
+    fromJobDetails && jdId
+      ? [
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+          { label: config?.jd_title || config?.position || 'Job Details', href: `/recruitment/job-details?id=${encodeURIComponent(jdId)}` },
+          { label: 'AI Interview' },
+        ]
+      : undefined;
 
   if (isLoading) {
     return (
@@ -83,21 +109,42 @@ export default function AIInterviewDetailsPage() {
     );
   }
 
+  // No wrapper div — this view's own <main> is `flex-1 … overflow-y-auto`, which
+  // only becomes a real scroll container as a direct child of the dashboard
+  // layout's flex column. Nesting it broke sticky positioning inside (its own
+  // breadcrumb, and the CandidateResultsView it renders for Invites → View
+  // Details) and applied max-w-[1400px] mx-auto twice.
   return (
-    <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8">
-      <AIInterviewDetailsView
-        config={config}
-        onBack={handleBack}
-        onRefresh={fetchConfig}
-        currentIndex={allIds.indexOf(interviewId)}
-        totalCount={allIds.length}
-        onPrev={allIds.indexOf(interviewId) > 0
-          ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) - 1]}`)
-          : undefined}
-        onNext={allIds.indexOf(interviewId) >= 0 && allIds.indexOf(interviewId) < allIds.length - 1
-          ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) + 1]}`)
-          : undefined}
-      />
-    </div>
+    <AIInterviewDetailsView
+      config={config}
+      onBack={handleBack}
+      onRefresh={fetchConfig}
+      currentIndex={allIds.indexOf(interviewId)}
+      totalCount={allIds.length}
+      onPrev={allIds.indexOf(interviewId) > 0
+        ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) - 1]}`)
+        : undefined}
+      onNext={allIds.indexOf(interviewId) >= 0 && allIds.indexOf(interviewId) < allIds.length - 1
+        ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) + 1]}`)
+        : undefined}
+      breadcrumbItems={breadcrumbItems}
+    />
+  );
+}
+
+export default function AIInterviewDetailsPage() {
+  // useSearchParams needs a Suspense boundary in the App Router.
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8">
+          <div className="flex items-center justify-center h-64 bg-slate-50">
+            <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
+          </div>
+        </div>
+      }
+    >
+      <AIInterviewDetailsContent />
+    </Suspense>
   );
 }

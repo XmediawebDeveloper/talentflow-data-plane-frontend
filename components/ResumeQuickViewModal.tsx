@@ -91,7 +91,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-5xl h-[calc(100dvh-2rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-4xl h-[calc(100dvh-2rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
@@ -174,7 +174,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
                 <p className="text-gray-600 dark:text-slate-400">Preview not available</p>
                 <button
                   onClick={handleDownload}
-                  className="mt-4 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="mt-4 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Download Instead
                 </button>

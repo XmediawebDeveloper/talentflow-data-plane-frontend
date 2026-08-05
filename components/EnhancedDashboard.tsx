@@ -550,7 +550,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {canCreateJD && (
               <Button
                 onClick={() => router.push('/recruitment/jd-creation')}
-                className="bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
+                className="bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
               >
                 <Briefcase className="mr-2 h-4 w-4" />
                 Create Job

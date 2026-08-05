@@ -15,12 +15,12 @@ import {
   type DetectedObjectEvent,
   type ObjectEventType,
 } from './proctoring';
-import { CandidateInterviewInfo, candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
+import { CandidateInterviewInfo, candidateAIInterviewService, getAiClientSessionId } from "@/lib/services/candidateAIInterviewService";
 import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon } from "./clientLogForwarder";
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw, Lightbulb } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -165,6 +165,15 @@ interface InterviewVadConfig {
   silence_duration_ms?: number;
 }
 
+/** AII16 — coaching tips Bina speaks at the end of the opening role/JD warm-up.
+ *  Arrives on the `role_intro` message as a structured copy of text Bina is
+ *  ALREADY speaking, so the on-screen card and the audio always match. */
+interface InterviewTips {
+  lead_in?: string;
+  tips?: string[];
+  closing?: string;
+}
+
 interface InterviewSocketMessage {
   type?: string;
   action?: string;
@@ -210,6 +219,7 @@ interface InterviewSocketMessage {
   stt_model?: string;
   text?: string;
   timer_state?: unknown;
+  tips?: InterviewTips;
   to_cluster?: string;
   token?: string;
   total_questions?: number;
@@ -439,7 +449,9 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
           <span className="text-[10px] font-semibold text-purple-600">BINA</span>
         </div>
         <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
-          <p className="text-sm leading-relaxed">{msg.content}</p>
+          {/* pre-line: keeps the committed opening warm-up (role summary +
+              AII16 tips) laid out the same way it streamed. */}
+          <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
         </div>
         {msg.timestamp && (
           <p className="text-[10px] text-gray-400 mt-0.5">{msg.timestamp}</p>
@@ -482,7 +494,10 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
             <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
             <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
           </div>
-          <p className="text-sm leading-relaxed">{text}</p>
+          {/* pre-line: Bina's opening warm-up carries the AII16 tips as
+              newline-separated lines. Questions have no newlines, so this is a
+              no-op for every other turn. */}
+          <p className="text-sm leading-relaxed whitespace-pre-line">{text}</p>
         </div>
       </div>
     </div>
@@ -618,6 +633,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // to false — previously the effect saw nothing changed and the pending
   // value just sat there, producing the "no timer on Q3" bug).
   const [questionTimerPendingTick, setQuestionTimerPendingTick] = useState(0);
+  // Set when the server blocks this connection because the interview link is
+  // already open/active in another window or device (single-active-session
+  // guard). Shows a terminal overlay and stops auto-reconnect.
+  const [concurrentBlocked, setConcurrentBlocked] = useState(false);
+  const concurrentBlockedRef = useRef(false);
   // Next-Q debounce: set true the moment the candidate clicks Next Q (so the
   // button disables immediately and rapid double-clicks can't send multiple
   // skip_question messages). Cleared when the backend sends the next question's
@@ -866,6 +886,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Keep isClarificationRef in sync with state — used as a gate in timer intervals
   useEffect(() => { isClarificationRef.current = isClarification; }, [isClarification]);
 
+  // ── AII16: interview coaching tips ───────────────────────────────────────
+  // Set from the `role_intro` message (same content Bina is speaking) and shown
+  // as a pinned card above the chat so the candidate can READ the tips as well
+  // as hear them. Cleared the moment the first question's answer window opens
+  // (question_timer_started) — by then the interview has genuinely begun and
+  // the card would only compete with the question for attention.
+  const [interviewTips, setInterviewTips] = useState<InterviewTips | null>(null);
+
   // ── Pre-turn "get ready" countdown (Change 1) ────────────────────────────
   // After Bina finishes speaking, before the mic opens, we show a big 5→1
   // countdown under the question ("Get ready… 5,4,3,2,1 → Now it's your turn").
@@ -891,7 +919,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // go back to normal listening; if it reaches 0 the turn ends and we move on.
   const [midSilenceCountdown, setMidSilenceCountdown] = useState<number | null>(null);
   const midSilenceCountdownRef = useRef<number | null>(null);
-  const SILENCE_COUNTDOWN_WINDOW_MS = 7000; // show the counter for the final 7s of the silence window
+  const SILENCE_COUNTDOWN_WINDOW_MS = 10000; // show the counter for the final 10s of the 15s window (first ~5s silent, then 10→1)
   const setMidSilenceCountdown_ = useCallback((val: number | null) => {
     if (midSilenceCountdownRef.current !== val) {
       midSilenceCountdownRef.current = val;
@@ -912,10 +940,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const nowSpeakBannerFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── DEV DEBUG OVERLAY (remove before production release) ──────────────
-  // Gate the whole overlay + its /debug/system-stats polling behind an opt-in
+  // Gate the whole overlay + its /debug/system-stats polling behind an OPT-IN
   // so candidates never see it and never trigger the 404 (the endpoint only
-  // exists when the backend runs with DEBUG=True). Enabled in dev builds by
-  // default, or on any build via ?debug=1 (persisted) / ?debug=0 (cleared).
+  // exists when the backend runs with DEBUG=True). OPT-IN ONLY via ?debug=1
+  // (persisted) / ?debug=0 (cleared). We deliberately do NOT auto-enable on
+  // non-production builds: STAGING is a non-production build too, so the old
+  // `NODE_ENV !== 'production'` default leaked the overlay + a /debug/system-stats
+  // 404 to real candidates on staging. Developers who want it just add ?debug=1
+  // once (it persists in localStorage).
   const [devMonitorEnabled] = useState(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -925,7 +957,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (flag === '0') { window.localStorage.removeItem('tf_dev_monitor'); return false; }
       if (window.localStorage.getItem('tf_dev_monitor') === '1') return true;
     } catch { /* localStorage blocked — fall through */ }
-    return process.env.NODE_ENV !== 'production';
+    return false;
   });
   const [debugOpen, setDebugOpen] = useState(true);
   const [debugPos, setDebugPos] = useState({ x: 12, y: 12 });
@@ -2306,7 +2338,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const speechDetectedAtRef = useRef<number | null>(null);
   const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.005);
-  const silenceDurationMsRef = useRef(8000); // pre-connect fallback; overridden by vad_config.silence_duration_ms from backend .env (8s)
+  const silenceDurationMsRef = useRef(15000); // pre-connect fallback; overridden by vad_config.silence_duration_ms from backend .env (now 15s → 5s silent + 10→1 counter)
   const MAX_CLIENT_SPEECH_THRESHOLD = 0.008;
   const POSSIBLE_SPEECH_LEVEL = 0.0018;
   const MIN_POSSIBLE_SPEECH_FRAMES = 6;
@@ -3342,6 +3374,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       case "pong":
         console.log(`[WS ${timestamp}] Keepalive pong received`);
         break; // Keepalive response — no action needed
+      case "concurrent_session_blocked":
+        // The interview link is already open/active in another window/device.
+        // Stop everything and show a terminal message — do NOT reconnect (the
+        // server will just block again). The close (code 4409) follows this.
+        console.warn(`[WS ${timestamp}] Concurrent session blocked by server`);
+        // NOTE: do NOT set isClosingRef here — the onclose handler treats
+        // isClosing as a NORMAL completion ("Interview completed"). The 4409
+        // close branch + concurrentBlockedRef already suppress auto-reconnect.
+        concurrentBlockedRef.current = true;
+        setConcurrentBlocked(true);
+        setStatus(typeof data.message === 'string' ? data.message : 'This interview is already open in another window or device.');
+        try { stopRecordingSilentRef.current?.(); } catch { /* ignore */ }
+        break;
       case "viseme_timeline":
         // Deprecated — lip sync is now driven by real-time amplitude analysis.
         console.log(`[WS ${timestamp}] Viseme timeline received (deprecated)`);
@@ -3492,7 +3537,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // runs saveAiMessage BEFORE the roleIntro early-return — always commits
         // the role bubble before Q1's tokens arrive. That closes the old race
         // that made the bubble vanish / delayed Q1's mic.
-        console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}`);
+        console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}, tips=${data.tips?.tips?.length ?? 0}`);
+        // AII16 — the tips are ALREADY part of `data.text` (Bina speaks them as
+        // one continuous utterance); this structured copy only drives the
+        // readable on-screen card. If the backend has tips disabled the field
+        // is absent and nothing renders.
+        if (data.tips?.tips?.length) {
+          setInterviewTips(data.tips);
+        }
         roleIntroActiveRef.current = true;
         roleIntroTextRef.current = (data.text as string) ?? "";  // lip-sync fallback in speaking_started
         tokenBufferRef.current = (data.text as string) ?? "";     // STREAM it, like the greeting / questions
@@ -3852,6 +3904,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // on finalize commits no bubble. The audio_end that follows still opens
         // the mic; the backend's silence ladder handles the (rare) blank turn.
         console.warn(`[WS ${timestamp}] tts_failed — suppressing silent question text`);
+        // Same rule for the AII16 tips card: it is the on-screen half of speech
+        // that never happened, so it must not linger silently either.
+        if (roleIntroActiveRef.current) setInterviewTips(null);
         if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
         tokenBufferRef.current = "";
         currentAiTextRef.current = "";
@@ -4436,6 +4491,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // / repeat) — arm the pre-turn "get ready" 5→1 countdown. Consumed by
         // finalizePlayback when the mic is about to open. Nudges never send this.
         getReadyArmedRef.current = true;
+        // AII16 — the interview proper has started; retire the tips card so it
+        // doesn't compete with the question the candidate now has to answer.
+        setInterviewTips(null);
         console.log('[INTERVIEW-DEBUG] question_timer_started received', {
           seconds: data.seconds,
           total_seconds: data.total_seconds,
@@ -6621,7 +6679,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '').replace(/\/api\/v1$/, '') || 'localhost:8000';
-    const wsUrl = `${protocol}//${apiUrl}/api/v1/ws/ai-interview/${token}`;
+    // Send the browser's stable client id so the interview INHERITS the same
+    // single-active-session lease the pre-interview flow held (otherwise the
+    // candidate would block themselves at the interview). A different browser
+    // has a different cid → blocked.
+    const _cid = encodeURIComponent(getAiClientSessionId(token));
+    const wsUrl = `${protocol}//${apiUrl}/api/v1/ws/ai-interview/${token}?cid=${_cid}`;
 
     console.log('[IV-DIAG] connect() called', {
       wsUrl,
@@ -6709,6 +6772,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // it, or grace-period reaper fired). Retrying hits the same wall.
         setStatus("Interview has ended. " + (event.reason || ""));
         uploadRecording().catch(() => {});
+      } else if (event.code === 4409 || concurrentBlockedRef.current) {
+        // Single-active-session guard: this link is already open/active in
+        // another window/device. TERMINAL — never auto-reconnect (it would just
+        // be blocked again). The overlay (concurrentBlocked) shows the message.
+        concurrentBlockedRef.current = true;
+        setConcurrentBlocked(true);
+        setStatus(event.reason || "This interview is already open in another window or device.");
       } else if (event.code !== 3001 && !isUnmountedRef.current && !isClosingRef.current) {
         // Unexpected disconnection (tab switch, network glitch) — auto-reconnect
         flushProctoringEventsRef.current?.().catch(() => {});
@@ -7644,10 +7714,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   return (
     <>
+      {/* ── Concurrent-session blocked overlay (single-active-session guard) ── */}
+      {concurrentBlocked && (
+        <div className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
+            <div className="text-amber-400 text-5xl mb-4">🔒</div>
+            <h2 className="text-xl font-bold text-white mb-2">Interview already open elsewhere</h2>
+            <p className="text-gray-300 mb-6 text-sm leading-relaxed">
+              {status && !status.startsWith('Connection')
+                ? status
+                : 'This interview link is already open in another window or device. Please continue there. If you just closed it, wait a few seconds and reopen this link.'}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold border border-white/20 transition-colors"
+            >
+              Reload &amp; try again
+            </button>
+          </div>
+        </div>
+      )}
       {/* ── Connection lost overlay ── */}
       {!isConnected && !isClosing && status.startsWith('Connection lost') && (
         <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-red-500 rounded-2xl p-8 max-w-sm text-center shadow-2xl">
+          <div className="bg-gray-900 border border-red-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
             <div className="text-red-400 text-5xl mb-4">⚠️</div>
             <h2 className="text-xl font-bold text-white mb-2">Connection Lost</h2>
             <p className="text-gray-400 mb-6 text-sm leading-relaxed">
@@ -7667,7 +7757,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Proctoring: Camera/Mic disabled overlay ── */}
       {isConnected && (!proctoringState.isCameraActive || !proctoringState.isMicrophoneActive) && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-red-500 rounded-2xl p-8 max-w-md text-center shadow-2xl">
+          <div className="bg-gray-900 border border-red-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
             <div className="text-red-500 text-5xl mb-4">
               {!proctoringState.isCameraActive ? "📷" : "🎤"}
             </div>
@@ -7693,7 +7783,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Proctoring: Face not in frame overlay ── */}
       {isConnected && isFaceBlocked && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-md text-center shadow-2xl">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
             <div className="text-amber-500 text-5xl mb-4">👤</div>
             <h2 className="text-xl font-bold text-white mb-2">Face Not Detected</h2>
             <p className="text-gray-400 mb-4">
@@ -7735,7 +7825,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Microphone issue popup ── */}
       {showMicPopup && (
         <div className="fixed inset-0 z-[101] bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-sm text-center shadow-2xl animate-in fade-in zoom-in duration-200">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="text-amber-500 text-5xl mb-4">🎤</div>
             <h2 className="text-xl font-bold text-white mb-2">Microphone Issue?</h2>
             <p className="text-gray-400 mb-3">We couldn&apos;t detect any audio. Is your microphone working?</p>
@@ -7762,7 +7852,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Interview completion modal (Req 16) ── */}
       {showCompletionModal && (
         <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[#0A1020] border border-[#10B981]/30 rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
+          <div className="bg-[#0A1020] border border-[#10B981]/30 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
             <div className="w-16 h-16 rounded-full bg-[#10B981]/15 flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -8237,6 +8327,35 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             </div>
           )}
 
+          {/* ── AII16: Interview Tips card ──
+              Bina SPEAKS these tips as the tail of her opening warm-up; this
+              card is the "displayed on the screen" half of the same content
+              (identical strings, sent on the role_intro message). Pinned above
+              the chat so it stays readable while she talks, and retired at the
+              first question_timer_started. */}
+          {interviewTips?.tips?.length ? (
+            <div className="flex-shrink-0 px-4 py-3 bg-amber-50 border-b border-amber-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Lightbulb className="w-4 h-4 text-amber-600 shrink-0" />
+                <span className="text-xs font-semibold text-amber-800">Interview Tips</span>
+              </div>
+              {interviewTips.lead_in && (
+                <p className="text-xs text-amber-800/90 leading-snug mb-1.5">{interviewTips.lead_in}</p>
+              )}
+              <ul className="space-y-1">
+                {interviewTips.tips.map((tip, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs text-amber-900 leading-snug">
+                    <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                    <span>{tip}</span>
+                  </li>
+                ))}
+              </ul>
+              {interviewTips.closing && (
+                <p className="text-xs text-amber-800/90 leading-snug mt-1.5">{interviewTips.closing}</p>
+              )}
+            </div>
+          ) : null}
+
           {/* Chat messages — wrapped in a relative container so a bottom
               gradient mask can fade any content into the chat background before
               it reaches the floating turn banner. This keeps the area behind /
@@ -8439,12 +8558,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               const num = isPre ? preTurnCountdown : midSilenceCountdown;
               const isLastQ = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
               const _sec = `${num} second${num === 1 ? '' : 's'}`;
-              const title = isPre ? 'Get ready to answer' : 'No further response detected';
+              const title = isPre ? 'Get ready to answer' : 'Are you done with your response?';
               const subtitle = isPre
                 ? 'Speak when it’s your turn.'
                 : isLastQ
-                  ? `Ending the interview in ${_sec}. Keep talking to continue.`
-                  : `Moving to the next question in ${_sec}. Keep talking to continue, or tap Next.`;
+                  ? `Ending the interview in ${_sec}. If you’re not done with your response, kindly speak up.`
+                  : `Moving on to the next question in ${_sec}. If you’re not done with your response, kindly speak up.`;
               const accent = isPre ? 'text-emerald-300' : 'text-amber-300';
               const ring = isPre ? 'ring-emerald-400/40' : 'ring-amber-400/40';
               return (
@@ -8699,7 +8818,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             onClick={() => setShowEndConfirm(false)}
           />
           {/* Modal */}
-          <div className="relative w-full max-w-sm bg-[#0F1929] border border-white/[0.10] rounded-2xl shadow-2xl shadow-black/60 p-6 flex flex-col gap-5">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md bg-[#0F1929] border border-white/[0.10] rounded-2xl shadow-2xl shadow-black/60 p-6 flex flex-col gap-5">
             {/* Icon */}
             <div className="flex items-center justify-center w-12 h-12 mx-auto rounded-full bg-[#DC2626]/15 border border-[#DC2626]/30">
               <LogOut className="w-5 h-5 text-[#EF4444]" />
@@ -8752,7 +8871,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Fullscreen exit overlay — shows when candidate leaves fullscreen mid-interview ── */}
       {isFullscreenExited && isConnected && !isClosing && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <div className="relative w-full max-w-sm mx-4 bg-[#0F1929] border border-white/10 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-white/10 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5">
             {/* Warning icon */}
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/15 border border-amber-400/30">
               <Maximize className="w-6 h-6 text-amber-400" />
@@ -8835,7 +8954,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           matches the product rule "do not allow to start the interview again". */}
       {mediaBlocked && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md">
-          <div className="relative w-full max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/20 border border-red-400/40">
               <MicOff className="w-7 h-7 text-red-400" />
             </div>

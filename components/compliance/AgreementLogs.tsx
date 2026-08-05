@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { toast } from 'react-hot-toast';
+import { toast } from 'sonner';
 import {
   FileCheck,
   Search,
@@ -395,11 +395,11 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
                 setShowAuditTrail(false);
               }}
             />
-            <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-              <div className="px-6 py-4 border-b border-gray-200">
+            <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden">
+              <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">Agreement Log Details</h3>
               </div>
-              <div className="px-6 py-4 space-y-4">
+              <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-500">User</p>

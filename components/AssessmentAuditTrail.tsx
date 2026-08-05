@@ -1,12 +1,13 @@
 import { useState, useEffect, Fragment } from 'react';
 import {
-  Search, Filter, Download, X, CheckCircle, XCircle, Clock, AlertTriangle,
+  Download, CheckCircle, XCircle, Clock, AlertTriangle,
   FileText, RefreshCw, Eye, Calendar, Mail, User, Building2, Hash, Activity,
   Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Loader2
 } from 'lucide-react';
 import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } from '@/lib/services';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
+import ListToolbar from '@/components/ui/list-toolbar';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 
@@ -60,6 +61,9 @@ export default function AssessmentAuditTrail() {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [showFilters, setShowFilters] = useState(false);
+  // True once the user confirms the panel with "Done" - mirrors job-openings,
+  // so Clear appears only after filters are applied.
+  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
 
@@ -119,6 +123,7 @@ export default function AssessmentAuditTrail() {
   }, [searchTerm, filterDateFrom, filterDateTo]);
 
   const clearFilters = () => {
+    setFiltersConfirmed(false);
     setFilterDateFrom('');
     setFilterDateTo('');
     setSearchTerm('');
@@ -126,8 +131,7 @@ export default function AssessmentAuditTrail() {
 
   const activeFiltersCount =
     (filterDateFrom ? 1 : 0) +
-    (filterDateTo ? 1 : 0) +
-    (searchTerm ? 1 : 0);
+    (filterDateTo ? 1 : 0);
 
   const handleExportAuditLogs = () => {
     console.log('Exporting audit logs:', activities);
@@ -267,76 +271,55 @@ export default function AssessmentAuditTrail() {
             </button>
           </div>
 
-          {/* Search and Filter Bar */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by assessment, candidate, or user..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-400"
-              />
-            </div>
+          {/* Search + filters in the job-openings format. */}
+          <ListToolbar
+            searchValue={searchTerm}
+            onSearchChange={setSearchTerm}
+            searchPlaceholder="Search by assessment, candidate, or user..."
+            onToggleFilters={() => setShowFilters(!showFilters)}
+            filtersOpen={showFilters}
+            activeFilterCount={activeFiltersCount}
+            filtersApplied={filtersConfirmed && activeFiltersCount > 0}
+            onClearFilters={clearFilters}
+            className="mb-0"
+          />
 
-            {/* Filter Toggle */}
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`self-start sm:self-auto px-3 sm:px-4 py-2 text-xs sm:text-sm border rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 ${
-                showFilters || activeFiltersCount > 0
-                  ? 'border-brand-blue/30 text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20'
-                  : 'border-gray-200 bg-white text-gray-700 hover:bg-slate-100'
-              }`}
-            >
-              <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              Filters
-              {activeFiltersCount > 0 && (
-                <span className="px-1.5 py-0.5 bg-brand-blue text-white rounded text-xs">
-                  {activeFiltersCount}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Filter Panel */}
           {showFilters && (
-            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-slate-50 rounded-lg border border-gray-100">
-              <div className="flex items-center justify-between mb-2 sm:mb-3">
-                <h3 className="text-xs sm:text-sm font-medium text-gray-900">Filters</h3>
-                {activeFiltersCount > 0 && (
-                  <button
-                    onClick={clearFilters}
-                    className="text-xs text-gray-600 hover:text-brand-blue flex items-center gap-1"
-                  >
-                    <X className="w-3 h-3" />
-                    Clear All
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                {/* Date From */}
+            <div className="mt-4 pt-4 border-t border-brand-blue/10">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-xs sm:text-sm text-gray-700 mb-1">Date From</label>
+                  <label htmlFor="audit-date-from" className="block text-sm text-gray-700 mb-1.5 font-medium">Date From</label>
                   <input
+                    id="audit-date-from"
                     type="date"
                     value={filterDateFrom}
+                    max={filterDateTo || undefined}
                     onChange={(e) => setFilterDateFrom(e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
                   />
                 </div>
-
-                {/* Date To */}
                 <div>
-                  <label className="block text-xs sm:text-sm text-gray-700 mb-1">Date To</label>
+                  <label htmlFor="audit-date-to" className="block text-sm text-gray-700 mb-1.5 font-medium">Date To</label>
                   <input
+                    id="audit-date-to"
                     type="date"
                     value={filterDateTo}
+                    min={filterDateFrom || undefined}
                     onChange={(e) => setFilterDateTo(e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
                   />
                 </div>
+              </div>
+
+              {/* Panel footer: "Done" applies the selection and reveals the
+                  toolbar Clear - same flow as job-openings. */}
+              <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+                >
+                  Done
+                </button>
               </div>
             </div>
           )}

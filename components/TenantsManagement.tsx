@@ -283,7 +283,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
       {/* Create Tenant Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
             <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Create New Tenant</h2>
               <button

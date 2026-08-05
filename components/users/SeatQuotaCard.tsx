@@ -259,7 +259,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             </div>
             <button
               onClick={() => window.location.href = '/subscription/current-plan'}
-              className="flex-shrink-0 inline-flex items-center gap-1 bg-brand-orange hover:from-brand-orange-deep hover:to-brand-orange text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
+              className="flex-shrink-0 inline-flex items-center gap-1 bg-brand-orange hover:bg-brand-orange-deep text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-all shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
             >
               <TrendingUp className="w-3 h-3" />
               Upgrade
@@ -269,7 +269,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setShowAddonModal(true)}
-              className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm transition-all bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+              className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm transition-all bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
             >
               <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               Add Seats

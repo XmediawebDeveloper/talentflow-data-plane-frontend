@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  ArrowLeft, Clock, Plus, X, Sparkles, CheckCircle2, Loader2,
+  Clock, Plus, X, Sparkles, CheckCircle2, Loader2,
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
   MessageSquare, Info, AlertCircle, Timer, Zap,
   Video, Upload, Layers, ChevronRight, Camera, Play,
@@ -25,6 +25,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { modeFromConfig, durationFromMode } from '@/lib/constants/aiInterviewMode';
 import { STT_MODELS, DEFAULT_STT_MODEL } from '@/lib/constants/aiInterviewSttModels';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
+import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Step indicator constants                                               */
@@ -620,7 +621,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             <button
               type="button"
               onClick={addSkill}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add
@@ -1054,7 +1055,7 @@ function HRSection({
                 <button
                   onClick={saveNewQuestion}
                   disabled={savingQ || !newQText.trim()}
-                  className="flex items-center gap-1 text-xs bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white px-3 py-1.5 rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white px-3 py-1.5 rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingQ ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                   Save
@@ -1094,9 +1095,16 @@ export default function AIInterviewConfig() {
   const searchParams = useSearchParams();
   const jdId = searchParams.get('jd_id');
   const configId = searchParams.get('config_id'); // set when editing an existing config (any status)
+  // Set when the flow was entered from a JD's Job Details page. Keeps the
+  // breadcrumb anchored to that job instead of resetting to the AI Interviews
+  // trail, and must be carried onto every later step in the flow.
+  const fromJobDetails = searchParams.get('from') === 'job-details';
 
   const [selectedJd, setSelectedJd] = useState<PublishedJD | null>(null);
   const [loadingJd, setLoadingJd] = useState(true);
+  // Set when loadJD decides to navigate elsewhere, so the loader stays on screen
+  // through the handoff instead of flashing an empty page.
+  const [redirecting, setRedirecting] = useState(false);
   const existingDraftIdRef = useRef<string | null>(null); // track draft id for auto-save updates
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedSiRef = useRef<Record<string, any>>({}); // parsed special_instructions snapshot from last load
@@ -1245,18 +1253,43 @@ export default function AIInterviewConfig() {
       try {
         setLoadingJd(true);
 
-        // Load JD; if editing a specific config, fetch it directly instead of searching drafts
-        const [jdResult, specificConfig] = await Promise.all([
+        // Load JD; if editing a specific config, fetch it directly instead of
+        // searching drafts. The live-config guard rides along in the same
+        // Promise.all so it costs no extra round trip on the common path.
+        const [jdResult, specificConfig, liveConfig] = await Promise.all([
           aiInterviewService.getPublishedJDs(),
           configId ? aiInterviewService.get(configId).catch(() => null) : Promise.resolve(null),
+          // A failed lookup must not block configuring — fall through as "no
+          // blocker" rather than stranding the recruiter on a transient error.
+          configId ? Promise.resolve(null) : aiInterviewService.findLiveConfigForJd(jdId).catch(() => null),
         ]);
 
         const jd = jdResult.items.find(j => j.id === jdId);
         if (!jd) {
+          setRedirecting(true);
           toast.error('Job description not found');
           router.replace('/recruitment/ai-interviews/jd-selection');
           return;
         }
+
+        // Entering fresh (no config_id): a JD that already has a live interview
+        // must not get a second one configured. This guard used to live on the
+        // AI Interviews list page, which every "Create" click had to route
+        // through just to run it. Doing it here keeps the click on a single
+        // navigation and covers every entry point into this page.
+        if (liveConfig) {
+          setRedirecting(true);
+          toast.info('An AI interview already exists for this job.');
+          // Carry the origin through. Without it the details page falls back to
+          // its own trail and the breadcrumb resets to
+          // Dashboard › AI Interviews › {JD} — losing the job the recruiter
+          // started from, even though they never left that job's flow.
+          router.replace(
+            `/recruitment/ai-interviews/${liveConfig.id}${fromJobDetails ? '?from=job-details' : ''}`
+          );
+          return;
+        }
+
         setSelectedJd(jd);
 
         // Look for an existing config: specific config_id takes priority, then search drafts by jd_id
@@ -1533,6 +1566,7 @@ export default function AIInterviewConfig() {
         }
 
       } catch {
+        setRedirecting(true);
         toast.error('Failed to load job description');
         router.replace('/recruitment/ai-interviews/jd-selection');
       } finally {
@@ -2266,15 +2300,8 @@ export default function AIInterviewConfig() {
     // 3. Navigate immediately. Pass autogen=1 only when something changed
     // (needsRegeneration = skill set diff). No changes → reuse cached clusters,
     // no wasted LLM call.
-    const base = `/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${existingDraftIdRef.current}`;
+    const base = `/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${existingDraftIdRef.current}${fromJobDetails ? '&from=job-details' : ''}`;
     router.push(needsRegeneration ? `${base}&autogen=1` : base);
-  };
-
-  const handleBackClick = async () => {
-    if (isNavigatingRef.current || savingDraft) return;
-    isNavigatingRef.current = true;
-    if (selectedJd) { await saveDraft(true); toast.success('Draft saved automatically'); }
-    router.push('/recruitment/ai-interviews/jd-selection');
   };
 
   const handleSaveAndNavigate = async () => {
@@ -2305,14 +2332,13 @@ export default function AIInterviewConfig() {
   };
 
   /* ── Loading / null guards ── */
-  if (loadingJd) {
+  // `redirecting` keeps the loader up while the router navigates away (JD not
+  // found, or the JD already has a live interview). Without it `finally` clears
+  // loadingJd, selectedJd is still null, and the old `return null` below painted
+  // a blank screen for the frame or two before the new route mounted.
+  if (loadingJd || redirecting) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
-          <p className="text-sm text-gray-500">Loading configuration…</p>
-        </div>
-      </div>
+      <AIInterviewFlowLoader message="Loading configuration…" />
     );
   }
 
@@ -2328,18 +2354,27 @@ export default function AIInterviewConfig() {
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
-            items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-              { label: 'Configure Interview' },
-            ]}
+            items={
+              fromJobDetails && jdId
+                ? [
+                    // Entered from Job Details — repeat that page's trail and link
+                    // the JD crumb back to it so the user returns where they started.
+                    { label: 'Dashboard', href: '/dashboard' },
+                    { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+                    { label: selectedJd?.title || 'Job Details', href: `/recruitment/job-details?id=${encodeURIComponent(jdId)}` },
+                    { label: 'AI Interview Config' },
+                  ]
+                : [
+                    { label: 'Dashboard', href: '/dashboard' },
+                    { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+                    // Name the JD being configured so the trail identifies the record.
+                    { label: selectedJd?.title || 'Configure Interview' },
+                  ]
+            }
           />
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={handleBackClick} disabled={savingDraft} className="p-2 hover:bg-brand-blue/5 rounded-lg transition-colors">
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </button>
           <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
             <Brain className="w-5 h-5 text-brand-blue" />
           </div>
@@ -2350,7 +2385,16 @@ export default function AIInterviewConfig() {
         </div>
 
         {/* Step indicators */}
-        <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
+        <AIInterviewStepIndicator
+          currentStep={CURRENT_STEP}
+          // Only step 1 is behind us. Route through the unsaved-changes dialog
+          // rather than pushing directly — this page's click interceptor only
+          // catches <a> elements, so a plain button would slip past the guard.
+          onStepClick={() => {
+            setPendingNavigation('/recruitment/ai-interviews/jd-selection');
+            setShowUnsavedDialog(true);
+          }}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -2770,7 +2814,7 @@ export default function AIInterviewConfig() {
                         {!cameraReady && !isRecording && !recordedPreviewUrl && (
                           <button
                             onClick={startCamera}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                           >
                             <Camera className="w-3.5 h-3.5" />
                             Open Camera
@@ -2788,7 +2832,7 @@ export default function AIInterviewConfig() {
                         {isRecording && (
                           <button
                             onClick={stopRecordingAndSave}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                           >
                             <span className="w-2.5 h-2.5 rounded-sm bg-white" />
                             Stop & Save
@@ -3073,7 +3117,7 @@ export default function AIInterviewConfig() {
                     aria-disabled={!canContinueToClusters}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
                       canContinueToClusters
-                        ? 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                        ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                         : 'bg-slate-200 text-gray-400 cursor-not-allowed'
                     }`}
                   >
@@ -3142,7 +3186,7 @@ export default function AIInterviewConfig() {
             <button onClick={handleDiscardAndNavigate} className="px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors">
               Discard
             </button>
-            <button onClick={handleSaveAndNavigate} disabled={savingDraft} className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 flex items-center gap-2">
+            <button onClick={handleSaveAndNavigate} disabled={savingDraft} className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 flex items-center gap-2">
               {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {savingDraft ? 'Saving…' : 'Save Draft'}
             </button>

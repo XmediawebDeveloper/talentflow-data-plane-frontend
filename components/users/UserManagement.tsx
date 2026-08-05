@@ -2015,8 +2015,8 @@ export default function UserManagement() {
 
   return (
     <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
-      <div className="mx-auto w-full max-w-[1400px] px-4 md:px-8">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl shadow-2xl">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
 
       {/* Shared organization tab bar — Users is the first tab */}
@@ -2060,7 +2060,7 @@ export default function UserManagement() {
               className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md ring-1 ring-white/10 ${
                 isAtLimit
                   ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/25'
-                  : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-brand-blue/25'
+                  : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25'
               }`}
             >
               <Plus className="w-4 h-4" />
@@ -2495,7 +2495,7 @@ export default function UserManagement() {
       {/* Create User Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-lg max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
             {/* Header strip */}
             <div className="bg-brand-blue px-5 sm:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
@@ -2729,7 +2729,7 @@ export default function UserManagement() {
               <button
                 onClick={handleCreateUser}
                 disabled={isSaving || !emailCheckResult.available || isCheckingEmail}
-                className="px-5 py-2 sm:py-2.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="px-5 py-2 sm:py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                 Create User
@@ -2742,7 +2742,7 @@ export default function UserManagement() {
       {/* Edit User Modal - Redesigned */}
       {editingUser && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
             {/* Header */}
             <div className="bg-brand-blue flex items-center justify-between px-4 sm:px-6 py-4 gap-3 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
@@ -3223,7 +3223,7 @@ export default function UserManagement() {
                 <button
                   onClick={handleUpdateUser}
                   disabled={isSaving}
-                  className="px-4 sm:px-5 py-1.5 sm:py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white text-xs sm:text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="px-4 sm:px-5 py-1.5 sm:py-2 bg-brand-blue hover:bg-brand-blue-2 text-white text-xs sm:text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Save Changes
@@ -3249,8 +3249,8 @@ export default function UserManagement() {
       {/* Reset Password Modal — choose: email a temp password OR set one directly */}
       {resetPwUser && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md ring-1 ring-black/5 overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-5 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md ring-1 ring-black/5 max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+            <div className="flex-shrink-0 flex items-center justify-between gap-3 px-5 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 backdrop-blur-sm flex-shrink-0">
                   <KeyRound className="w-5 h-5" />
@@ -3265,7 +3265,7 @@ export default function UserManagement() {
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
               {resetPwMode === 'choose' ? (
                 <>
                   <button
@@ -3490,7 +3490,7 @@ export default function UserManagement() {
               </div>
               <button
                 onClick={() => { setViewingRolePopup(null); setViewingRolePopupPermissions([]); }}
-                className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium text-xs sm:text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 Close
               </button>

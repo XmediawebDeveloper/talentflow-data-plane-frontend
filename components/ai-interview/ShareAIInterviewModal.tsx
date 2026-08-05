@@ -766,7 +766,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   if (showSuccess) {
     return (
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" role="dialog" aria-modal="true">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="w-14 h-14 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-green-600" />
           </div>
@@ -793,8 +793,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         role="dialog"
         aria-modal="true"
       >
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-md w-full p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
-          <div className="text-center mb-6">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="flex-shrink-0 text-center mb-6">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-10 h-10 text-amber-600" />
             </div>
@@ -805,7 +805,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             </p>
           </div>
 
-          <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4 mb-6">
+          <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4 mb-6">
             <p className="text-sm text-gray-700 dark:text-slate-300 mb-2">You can:</p>
             <ul className="text-sm text-gray-600 dark:text-slate-400 space-y-1">
               <li>
@@ -818,7 +818,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             </ul>
           </div>
 
-          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
+          <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
             <button
               onClick={() => {
                 setShowDuplicateError(false);
@@ -834,7 +834,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 setShowDuplicateError(false);
                 setDuplicateEmail('');
               }}
-              className="flex-1 px-4 py-2.5 min-h-[44px] text-sm font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+              className="flex-1 px-4 py-2.5 min-h-[44px] text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
             >
               Try Different Email
             </button>
@@ -858,7 +858,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     >
       <div className={embedded
         ? 'bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 w-full flex flex-col'
-        : 'bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-4xl w-full max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col'}>
+        : 'bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col'}>
         {/* Header */}
         <div className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -1368,7 +1368,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         <button
                           onClick={handleSendFromDatabase}
                           disabled={selectedResumes.length === 0 || isSubmitting}
-                          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed disabled:shadow-none"
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed disabled:shadow-none"
                         >
                           {isSubmitting ? (
                             <><Loader2 className="w-4 h-4 animate-spin" />Sending...</>
@@ -1539,7 +1539,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             <button
               onClick={handleSend}
               disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
-              className="px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
+              className="px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
             >
               {isSubmitting ? (
                 <>

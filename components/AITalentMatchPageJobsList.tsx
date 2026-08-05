@@ -2,6 +2,7 @@ import { Sparkles, MapPin, Briefcase, User, Clock, ArrowRight, History, DollarSi
 import { useState, useEffect } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import ListPagination from '@/components/ListPagination';
+import ListToolbar from '@/components/ui/list-toolbar';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 
@@ -47,6 +48,9 @@ export default function AITalentMatchPageJobsList({
   const [locationFilter, setLocationFilter] = useState('');
   const [employmentTypeFilter, setEmploymentTypeFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  // True once the user confirms the More Filters panel with "Done" — mirrors
+  // job-openings, so Clear appears only after filters are applied.
+  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [jobsView, setJobsView] = useState<'grid' | 'list'>('list');
   const [currentPage, setCurrentPage] = useState(1);
@@ -55,6 +59,14 @@ export default function AITalentMatchPageJobsList({
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, departmentFilter, locationFilter, employmentTypeFilter]);
+
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setDepartmentFilter('');
+    setLocationFilter('');
+    setEmploymentTypeFilter('');
+    setFiltersConfirmed(false);
+  };
 
   // Filter jobs: Only show Published/Active jobs, exclude Disabled jobs
   const publishedJobs = jobs.filter(j =>
@@ -153,67 +165,23 @@ export default function AITalentMatchPageJobsList({
 
       {/* Search and Filter Bar */}
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 lg:p-5 mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-brand-blue/60" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by job title, department, or location..."
-                className="w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-2.5 text-sm sm:text-base border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-black placeholder:text-gray-400"
-              />
-            </div>
+        <ListToolbar
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search by job title, department, or location..."
+          viewMode={jobsView}
+          onViewModeChange={setJobsView}
+          onToggleFilters={() => setShowFilters(!showFilters)}
+          filtersOpen={showFilters}
+          activeFilterCount={activeFiltersCount}
+          filtersApplied={filtersConfirmed && activeFiltersCount > 0}
+          onClearFilters={clearAllFilters}
+          className="mb-0"
+        >
+          <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
+            <span className="text-brand-blue font-semibold">{filteredJobs.length}</span> of {publishedJobs.length}
           </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center rounded-lg border border-gray-200 bg-white p-0.5" role="group" aria-label="Job view">
-              <button
-                type="button"
-                onClick={() => setJobsView('grid')}
-                className={`rounded-md p-1.5 transition-colors ${jobsView === 'grid' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue'}`}
-                aria-label="Grid view"
-                aria-pressed={jobsView === 'grid'}
-                title="Grid view"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setJobsView('list')}
-                className={`rounded-md p-1.5 transition-colors ${jobsView === 'list' ? 'bg-brand-blue text-white shadow-sm' : 'text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue'}`}
-                aria-label="List view"
-                aria-pressed={jobsView === 'list'}
-                title="List view"
-              >
-                <ListIcon className="h-4 w-4" />
-              </button>
-            </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex-1 sm:flex-initial px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg border transition-all flex items-center justify-center gap-2 font-medium text-sm sm:text-base ${
-                activeFiltersCount > 0
-                  ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue shadow-sm shadow-brand-blue/5'
-                  : 'bg-brand-blue/5 border-brand-blue/10 text-gray-700 hover:bg-brand-blue/10 hover:border-brand-blue/20 hover:text-brand-blue'
-              }`}
-            >
-              <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="hidden sm:inline">Filters</span>
-              <span className="sm:hidden">Filter</span>
-              {activeFiltersCount > 0 && (
-                <span className="px-1.5 sm:px-2 py-0.5 bg-brand-blue text-white rounded-full text-xs font-medium">
-                  {activeFiltersCount}
-                </span>
-              )}
-              <ChevronDown className={`w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-            </button>
-
-            <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg whitespace-nowrap font-medium">
-              <span className="text-brand-blue font-semibold">{filteredJobs.length}</span> of {publishedJobs.length}
-            </div>
-          </div>
-        </div>
+        </ListToolbar>
 
         {/* Expanded Filters */}
         {showFilters && (
@@ -267,21 +235,18 @@ export default function AITalentMatchPageJobsList({
                 </select>
               </div>
 
-              <div className="flex items-end">
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setDepartmentFilter('');
-                    setLocationFilter('');
-                    setEmploymentTypeFilter('');
-                  }}
-                  disabled={activeFiltersCount === 0}
-                  className="w-full px-4 py-2 sm:py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-medium text-sm"
-                >
-                  <X className="w-4 h-4" />
-                  Clear All
-                </button>
-              </div>
+            </div>
+
+            {/* Panel footer: "Done" applies the selection and reveals the
+                toolbar Clear — same flow as job-openings. Clearing lives on the
+                toolbar so there is exactly one clear control. */}
+            <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+              <button
+                onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+              >
+                Done
+              </button>
             </div>
           </div>
         )}
@@ -535,13 +500,8 @@ export default function AITalentMatchPageJobsList({
               No jobs match your current filters. Try adjusting your search criteria.
             </p>
             <button
-              onClick={() => {
-                setSearchQuery('');
-                setDepartmentFilter('');
-                setLocationFilter('');
-                setEmploymentTypeFilter('');
-              }}
-              className="px-4 sm:px-6 py-2.5 sm:py-3 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-2 text-sm sm:text-base"
+              onClick={clearAllFilters}
+              className="px-4 sm:px-6 py-2.5 sm:py-3 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-2 text-sm sm:text-base"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
               Clear All Filters

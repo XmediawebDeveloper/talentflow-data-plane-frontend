@@ -25,7 +25,7 @@ import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import PageBreadcrumb from '@/components/PageBreadcrumb';
+import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 
 const ROUND_LABELS: Record<string, string> = {
@@ -118,9 +118,15 @@ interface AIInterviewDetailsViewProps {
   totalCount?: number;
   onPrev?: () => void;
   onNext?: () => void;
+  /**
+   * Overrides the default AI Interviews trail. Set when this page is reached
+   * from a JD (Job Details → AI Interview → Create on a job that already has
+   * one), so the breadcrumb stays anchored to that job instead of resetting.
+   */
+  breadcrumbItems?: BreadcrumbCrumb[];
 }
 
-export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext }: AIInterviewDetailsViewProps) {
+export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext, breadcrumbItems }: AIInterviewDetailsViewProps) {
   const router = useRouter();
   const { user, isTenantAdmin } = useAuth();
   const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
@@ -486,22 +492,28 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <div className="flex items-center justify-between gap-3 mb-4 md:mb-6">
-            <PageBreadcrumb
-              className="mb-0 flex-1"
-              items={[
-                { label: 'Dashboard', href: '/dashboard' },
-                { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-                { label: config.jd_title || config.position || 'Interview Details' },
-              ]}
-            />
-            <RecordPager
-              currentIndex={currentIndex}
-              totalCount={totalCount}
-              onPrev={onPrev}
-              onNext={onNext}
-            />
-          </div>
+          <PageBreadcrumb
+            className={totalCount != null && totalCount > 0 ? 'mb-3' : 'mb-4 md:mb-6'}
+            items={breadcrumbItems ?? [
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+              { label: config.jd_title || config.position || 'Interview Details' },
+            ]}
+          />
+
+          {/* Previous / Next record pager — sits below the breadcrumb. Skipped
+              entirely when there's no list to page through, so it leaves no
+              empty row behind. */}
+          {totalCount != null && totalCount > 0 && (
+            <div className="flex items-center justify-end mb-4 md:mb-6">
+              <RecordPager
+                currentIndex={currentIndex}
+                totalCount={totalCount}
+                onPrev={onPrev}
+                onNext={onNext}
+              />
+            </div>
+          )}
       {/* Loading overlay for candidate fetch */}
       {candidateLoading && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/60">
@@ -2029,7 +2041,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       {/* Confirmation Dialog */}
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-blue/30 backdrop-blur-sm p-4 sm:p-6">
-          <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
             <h3 className="text-lg font-semibold text-gray-900 mb-2 tracking-tight">{confirmAction.title}</h3>
             <p className="text-sm text-gray-600 mb-6">{confirmAction.message}</p>
             <div className="flex items-center justify-end gap-3">
@@ -2043,7 +2055,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 onClick={confirmAction.onConfirm}
                 disabled={actionLoading}
                 className={`px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-50 ring-1 ring-white/10 ${
-                  confirmAction.type === 'delete' ? 'bg-red-600 hover:bg-red-700 shadow-md shadow-red-600/25' : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue shadow-md shadow-brand-blue/25'
+                  confirmAction.type === 'delete' ? 'bg-red-600 hover:bg-red-700 shadow-md shadow-red-600/25' : 'bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25'
                 }`}
               >
                 {actionLoading ? 'Processing...' : 'Confirm'}

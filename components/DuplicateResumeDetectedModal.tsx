@@ -43,7 +43,11 @@ export function DuplicateResumeDetectedModal({
 }: DuplicateResumeDetectedModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md mx-2 sm:mx-auto max-h-[90vh] flex flex-col">
+      {/* Compact dialog — DialogContent's own sm:max-w-lg (512px). The previous
+          max-w-md override also clobbered the base mobile width guard via
+          tailwind-merge, so it is dropped rather than replaced. The footer's
+          wrap guards below handle the three buttons at this width. */}
+      <DialogContent className="mx-2 sm:mx-auto max-h-[90vh] flex flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-amber-600 text-base sm:text-lg">
             <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
@@ -115,14 +119,18 @@ export function DuplicateResumeDetectedModal({
           </div>
         </div>
 
-        <DialogFooter className="flex flex-col sm:flex-row gap-2 shrink-0">
+        {/* flex-wrap + shrink-0: Button carries whitespace-nowrap and no shrink
+            guard, so without these the labels overflow their boxes instead of
+            wrapping to a second row when space is tight. */}
+        <DialogFooter className="flex flex-col sm:flex-row sm:flex-wrap gap-2 shrink-0 [&>button]:shrink-0">
           {/* Cancel Button */}
           <Button
             variant="outline"
+            size="sm"
             onClick={onClose}
-            className="flex items-center justify-center gap-2 order-3 sm:order-1 text-xs sm:text-sm"
+            className="flex items-center justify-center gap-1.5 order-3 sm:order-1"
           >
-            <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <X className="w-3.5 h-3.5" />
             Cancel
           </Button>
 
@@ -133,9 +141,10 @@ export function DuplicateResumeDetectedModal({
               onViewExisting(existingResume.id);
               onClose();
             }}
-            className="flex items-center justify-center gap-2 order-2 text-xs sm:text-sm"
+            size="sm"
+            className="flex items-center justify-center gap-1.5 order-2"
           >
-            <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <Eye className="w-3.5 h-3.5" />
             View Existing Record
           </Button>
 
@@ -145,9 +154,10 @@ export function DuplicateResumeDetectedModal({
               onProceedWithScoring(existingResume.id);
               onClose();
             }}
-            className="flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 order-1 sm:order-3 text-xs sm:text-sm"
+            size="sm"
+            className="flex items-center justify-center gap-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 order-1 sm:order-3"
           >
-            <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <Target className="w-3.5 h-3.5" />
             Proceed with Scoring
           </Button>
         </DialogFooter>

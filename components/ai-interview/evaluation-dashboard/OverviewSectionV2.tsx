@@ -143,10 +143,10 @@ export function OverviewSectionV2({
       <div
         className={`rounded-2xl p-8 text-white shadow-lg ${
           isPartialEvaluation
-            ? 'bg-gradient-to-br from-amber-500 to-amber-400'
+            ? 'bg-amber-500'
             : isPassed
-              ? 'bg-gradient-to-br from-emerald-500 to-emerald-400'
-              : 'bg-gradient-to-br from-red-500 to-red-400'
+              ? 'bg-emerald-500'
+              : 'bg-red-500'
         }`}
       >
         <div className="flex flex-wrap items-center justify-between gap-6">
@@ -191,7 +191,7 @@ export function OverviewSectionV2({
       </div>
 
       {/* ── Candidate Profile Card ───────────────────────────────────── */}
-      <div className="rounded-2xl p-8 bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200">
+      <div className="rounded-2xl p-8 bg-white border-2 border-gray-200">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="flex items-center gap-6">
             <div className="relative w-24 h-24 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-3xl font-bold overflow-hidden ring-4 ring-indigo-100">
@@ -260,7 +260,7 @@ export function OverviewSectionV2({
         {stats.map((s, i) => (
           <div key={i} className="rounded-2xl bg-white border border-gray-200 p-6 shadow-sm">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-500 text-white flex items-center justify-center shrink-0">
+              <div className="w-14 h-14 rounded-xl bg-brand-blue text-white flex items-center justify-center shrink-0">
                 {s.icon}
               </div>
               <div>
@@ -468,8 +468,8 @@ export function OverviewSectionV2({
 
           <hr className="my-5 border-gray-200" />
 
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-50 to-indigo-100">
-            <div className="text-sm font-semibold text-indigo-700 mb-1.5">Scoring Method</div>
+          <div className="p-5 rounded-2xl bg-brand-blue/10">
+            <div className="text-sm font-semibold text-brand-blue mb-1.5">Scoring Method</div>
             <div className="text-xs text-gray-600 leading-relaxed space-y-1">
               <div>• <strong>Must-Have Section Score</strong> = Average of all Must-Have question scores</div>
               <div>• <strong>Nice-to-Have Section Score</strong> = Average of all Nice-to-Have question scores</div>

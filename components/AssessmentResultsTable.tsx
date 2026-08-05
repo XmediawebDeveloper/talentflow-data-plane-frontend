@@ -759,7 +759,11 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
         className="hidden md:block overflow-x-auto"
         onScroll={() => syncHorizontalScroll('table')}
       >
-        <table className="w-full">
+        {/* Header + data cells stay on one line; the horizontal scroller above
+            (and the synced sticky scrollbar below) handles the overflow. The
+            expanded detail row and the empty state opt back out via
+            whitespace-normal — they're prose/panel layouts, not table data. */}
+        <table className="w-full [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50/60">
               <th className="text-left py-3 px-4 w-12">
@@ -785,7 +789,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           <tbody>
             {filteredResults.length === 0 ? (
               <tr>
-                <td colSpan={enabledColumns.length + 2} className="py-12 text-center">
+                <td colSpan={enabledColumns.length + 2} className="py-12 text-center whitespace-normal">
                   <div className="text-gray-400">
                     <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p className="text-sm">No assessment results found</p>
@@ -1066,7 +1070,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   {/* Expanded Detail Row */}
                   {selectedResultDetail === result.id && (
                     <tr className="bg-brand-blue/[0.03] border-b border-brand-blue/10">
-                      <td colSpan={enabledColumns.length + 2} className="p-6">
+                      <td colSpan={enabledColumns.length + 2} className="p-6 whitespace-normal">
                         <div className="max-w-4xl">
                           <div className="grid grid-cols-2 gap-6">
                             {/* Left Column - Round Scores */}
@@ -1342,7 +1346,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       {/* Export Format & Scope Selection Modal */}
       {showExportModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
             {/* Step 1: Format Selection */}
             {exportStep === 'format' && (
               <>

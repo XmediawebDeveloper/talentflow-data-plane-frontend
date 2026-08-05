@@ -79,29 +79,11 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="/contact"
-                  prefetch={false}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  Contact
-                </Link>
-              </li>
-              <li>
-                <Link
                   href="/faq"
                   prefetch={false}
                   className="text-gray-400 hover:text-white transition-colors"
                 >
                   FAQ
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/careers"
-                  prefetch={false}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  Careers
                 </Link>
               </li>
             </ul>

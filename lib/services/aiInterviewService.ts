@@ -555,6 +555,48 @@ export const aiInterviewService = {
   /**
    * List AI interview configs (parent records, not candidate sessions)
    */
+  /**
+   * Find the config that already "owns" a JD — published, or past publish and
+   * into the candidate flow. Archived configs don't count; a JD whose only
+   * interview was archived can be configured again.
+   *
+   * Used both to stop a second interview being configured for a JD that
+   * already has a live one, and to resolve the config an invite should be sent
+   * against. This check used to live on the AI Interviews list page, which
+   * meant every "Create" / "Send Invite" click had to route through that page
+   * just to run it.
+   *
+   * Throws on API failure rather than returning null, so callers can tell
+   * "this JD has no live interview" apart from "the lookup failed" — those
+   * need different handling and a different message.
+   */
+  async findLiveConfigForJd(jdId: string): Promise<AIInterviewResponse | null> {
+    // Candidate-flow statuses mean the interview is published and in use.
+    const LIVE_STATUSES = [
+      'published', 'invited', 'consent_pending', 'system_check', 'in_progress', 'scheduled',
+    ];
+    try {
+      let page = 1;
+      let seen = 0;
+      // Paginate rather than trusting one big page — a tenant with many
+      // configs would otherwise silently fall off the end and get a duplicate.
+      while (page <= 20) {
+        const res = await this.listConfigs({ page, page_size: 100, compact: true });
+        const items = res.items ?? [];
+        const match = items.find(
+          (c) => c.jd_id === jdId && c.status !== 'archived' && LIVE_STATUSES.includes(c.status),
+        );
+        if (match) return match;
+        seen += items.length;
+        if (items.length < 100 || seen >= (res.total ?? seen)) break;
+        page++;
+      }
+      return null;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
   async listConfigs(params?: {
     status?: string;
     search?: string;

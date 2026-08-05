@@ -1076,7 +1076,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Brief description of your issue"
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-500 placeholder-gray-500"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 placeholder-gray-500"
                   />
                 </div>
 
@@ -1088,7 +1088,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <select
                       value={category}
                       onChange={(e) => setCategory(e.target.value as SupportTicket['category'])}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                     >
                       {categories.map(cat => (
                         <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -1103,7 +1103,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <select
                       value={priority}
                       onChange={(e) => setPriority(e.target.value as SupportTicket['priority'])}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                     >
                       {priorities.map(p => (
                         <option key={p.value} value={p.value}>{p.label}</option>
@@ -1121,7 +1121,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Please provide detailed information about your issue..."
                     rows={6}
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none placeholder-gray-500"
+                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 resize-none placeholder-gray-500"
                   />
                 </div>
 
@@ -1218,13 +1218,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
                 <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
                   <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search tickets..."
-                      className="w-full pl-9 sm:pl-11 pr-3 sm:pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-500 placeholder-gray-500"
+                      className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 placeholder-gray-500"
                     />
                   </div>
 
@@ -1232,7 +1232,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <select
                       value={filterStatus}
                       onChange={(e) => setFilterStatus(e.target.value)}
-                      className="px-2.5 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="px-2.5 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                     >
                       <option value="all">All Status</option>
                       <option value="open">Open</option>
@@ -1244,7 +1244,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <select
                       value={filterPriority}
                       onChange={(e) => setFilterPriority(e.target.value)}
-                      className="px-2.5 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="px-2.5 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                     >
                       <option value="all">All Priority</option>
                       <option value="low">Low</option>
@@ -1461,7 +1461,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         onChange={(e) => setReplyMessage(e.target.value)}
                         placeholder="Type your message..."
                         rows={3}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none placeholder-gray-500"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 resize-none placeholder-gray-500"
                       />
                       <div className="flex justify-end mt-2 sm:mt-3">
                         <button
@@ -1521,7 +1521,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <select
                       value={selectedTicket.priority}
                       onChange={(e) => handleUpdateTicket({ priority: e.target.value })}
-                      className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                     >
                       {priorities.map(p => (
                         <option key={p.value} value={p.value}>{p.label}</option>
@@ -1809,13 +1809,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
                 <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
                   <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search by ticket, title, or user..."
-                      className="w-full pl-9 sm:pl-11 pr-3 sm:pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 placeholder-gray-500"
+                      className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 placeholder-gray-500"
                     />
                   </div>
 
@@ -1823,7 +1823,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <select
                       value={filterStatus}
                       onChange={(e) => setFilterStatus(e.target.value)}
-                      className="px-2.5 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="px-2.5 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                     >
                       <option value="all">All Status</option>
                       <option value="open">Open</option>
@@ -1835,7 +1835,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <select
                       value={internalFilterAssignment}
                       onChange={(e) => setInternalFilterAssignment(e.target.value)}
-                      className="px-2.5 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="px-2.5 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                     >
                       <option value="all">All Tickets</option>
                       <option value="mine">Assigned to Me</option>
@@ -1845,7 +1845,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <select
                       value={filterPriority}
                       onChange={(e) => setFilterPriority(e.target.value)}
-                      className="px-2.5 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500 col-span-2 sm:col-span-1"
+                      className="px-2.5 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 col-span-2 sm:col-span-1"
                     >
                       <option value="all">All Priority</option>
                       <option value="low">Low</option>
@@ -2097,7 +2097,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         onChange={(e) => setReplyMessage(e.target.value)}
                         placeholder="Type your response..."
                         rows={3}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none placeholder-gray-500"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 resize-none placeholder-gray-500"
                       />
                       <div className="flex justify-end mt-2 sm:mt-3">
                         <button
@@ -2159,7 +2159,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <select
                       value={selectedInternalTicket.priority}
                       onChange={(e) => handleUpdateInternalPriority(selectedInternalTicket.id, e.target.value as InternalTicketPriority)}
-                      className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                     >
                       {internalPriorities.map(p => (
                         <option key={p.value} value={p.value}>{p.label}</option>

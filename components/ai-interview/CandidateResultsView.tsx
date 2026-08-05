@@ -61,6 +61,13 @@ interface CandidateResultsViewProps {
    * recruiter drilled in from, so the trail reflects where they came from.
    */
   breadcrumbTrail?: { label: string; href?: string; onClick?: () => void }[];
+  /**
+   * Replaces the whole breadcrumb — including the leading "AI Interviews" crumb
+   * and the trailing candidate crumb — for callers whose trail isn't rooted in
+   * the AI Interviews section at all (e.g. the AI Interview Result tab on a JD's
+   * Job Details page). Takes precedence over `breadcrumbTrail`.
+   */
+  breadcrumbItems?: { label: string; href?: string; onClick?: () => void }[];
 }
 
 type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios';
@@ -347,18 +354,20 @@ function RecordingInfoPanel({
 
 function RecordingTabContent({
   interview,
-  videoBlobUrl, videoBlobSize, videoLoading, videoError, setVideoError,
-  screenBlobUrl, screenBlobSize, screenLoading, screenError,
+  videoBlobUrl, videoBlobSize, videoDownloadUrl, videoLoading, videoError, setVideoError,
+  screenBlobUrl, screenBlobSize, screenDownloadUrl, screenLoading, screenError,
   seekRequest,
 }: {
   interview: AIInterviewResponse;
   videoBlobUrl: string | null;
   videoBlobSize: number | null;
+  videoDownloadUrl: string | null;
   videoLoading: boolean;
   videoError: boolean;
   setVideoError: (v: boolean) => void;
   screenBlobUrl: string | null;
   screenBlobSize: number | null;
+  screenDownloadUrl: string | null;
   screenLoading: boolean;
   screenError: boolean;
   seekRequest?: { seconds: number; key: number } | null;
@@ -390,10 +399,16 @@ function RecordingTabContent({
   const isCandidate = recView === 'candidate';
   const blobUrl = isCandidate ? videoBlobUrl : screenBlobUrl;
   const blobSize = isCandidate ? videoBlobSize : screenBlobSize;
+  // Force-download URL (content-disposition: attachment) from the backend; falls
+  // back to the play URL for local-fs/blob storage (same-origin blob → the
+  // download attr works there).
+  const downloadUrl = (isCandidate ? videoDownloadUrl : screenDownloadUrl) || blobUrl;
   const duration = isCandidate ? candidateDuration : screenDuration;
+  // Stored recordings are WEBM containers — name the download .webm so it plays
+  // (a .mp4 name on webm bytes fails in some players).
   const downloadName = isCandidate
-    ? `candidate-view-${interview.id}.mp4`
-    : `interview-view-${interview.id}.mp4`;
+    ? `candidate-view-${interview.id}.webm`
+    : `interview-view-${interview.id}.webm`;
   const interviewDate = interview.started_at || interview.scheduled_at || interview.created_at;
   const statusLabel = interview.recording_file_path || interview.screen_recording_file_path
     ? 'Transcribed'
@@ -461,13 +476,19 @@ function RecordingTabContent({
             duration={duration}
             interviewDate={interviewDate}
           />
-          {blobUrl && (
+          {downloadUrl && (
             <a
-              href={blobUrl}
+              href={downloadUrl}
               download={downloadName}
-              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 transition-colors"
+              // Cross-origin presigned URLs ignore the `download` attr, so the
+              // backend bakes Content-Disposition: attachment into downloadUrl to
+              // force the save. target/rel are belt-and-suspenders for the
+              // local-fs blob fallback.
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 transition-colors"
             >
-              <Download className="w-4 h-4" /> Download MP4
+              <Download className="w-4 h-4" /> Download Recording
             </a>
           )}
         </div>
@@ -565,7 +586,7 @@ function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected
   );
 }
 
-export default function CandidateResultsView({ interview, onBack, currentIndex, totalCount, onPrev, onNext, onNavigateToList, breadcrumbTrail }: CandidateResultsViewProps) {
+export default function CandidateResultsView({ interview, onBack, currentIndex, totalCount, onPrev, onNext, onNavigateToList, breadcrumbTrail, breadcrumbItems }: CandidateResultsViewProps) {
   // Default to the combined "Evaluation Report" (key 'eval'). The old
   // 'overview' and 'eval_report' tabs are hidden (commented out below) — their
   // content is merged into the Eval tab. The render blocks are kept so any
@@ -581,9 +602,11 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const [videoError, setVideoError] = useState(false);
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
   const [videoBlobSize, setVideoBlobSize] = useState<number | null>(null);
+  const [videoDownloadUrl, setVideoDownloadUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [screenBlobUrl, setScreenBlobUrl] = useState<string | null>(null);
   const [screenBlobSize, setScreenBlobSize] = useState<number | null>(null);
+  const [screenDownloadUrl, setScreenDownloadUrl] = useState<string | null>(null);
   const [screenLoading, setScreenLoading] = useState(false);
   const [screenError, setScreenError] = useState(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
@@ -634,6 +657,11 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
         if (cancelled) return;
         if (streamUrl) {
           setVideoBlobUrl(streamUrl);   // presigned URL — <video> streams it directly
+          // Size + a force-download URL (content-disposition: attachment) come
+          // from the backend — the streaming path never downloads a blob, so
+          // without these File Size shows "—" and Download plays inline.
+          if (meta?.data?.size != null) setVideoBlobSize(Number(meta.data.size));
+          if (meta?.data?.download_url) setVideoDownloadUrl(meta.data.download_url);
           setVideoLoading(false);
           return;
         }
@@ -666,6 +694,8 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
         if (cancelled) return;
         if (streamUrl) {
           setScreenBlobUrl(streamUrl);
+          if (meta?.data?.size != null) setScreenBlobSize(Number(meta.data.size));
+          if (meta?.data?.download_url) setScreenDownloadUrl(meta.data.download_url);
           setScreenLoading(false);
           return;
         }
@@ -1372,34 +1402,49 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const placeholderMsg = getPlaceholderMessage();
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
+    // overflow-y-auto makes this <main> the element that actually scrolls, which
+    // is what the sticky breadcrumb below pins against. Without it, overflow-x
+    // alone still makes <main> a scrollport, but the real scrolling happens on
+    // the layout container above it — so the breadcrumb pinned to a scrollport
+    // that never moved and scrolled away with the page.
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          <div className="flex items-center justify-between gap-3 mb-4 md:mb-6">
-            <PageBreadcrumb
-              className="mb-0 flex-1"
-              sticky={false}
-              items={[
-                { label: 'Dashboard', href: '/dashboard' },
-                onNavigateToList
-                  ? { label: 'AI Interviews', onClick: onNavigateToList }
-                  : { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-                ...(breadcrumbTrail ?? []),
-                { label: 'Candidate Results' },
-              ]}
-            />
-            <RecordPager
-              currentIndex={currentIndex}
-              totalCount={totalCount}
-              onPrev={onPrev}
-              onNext={onNext}
-            />
-          </div>
+          {/* Breadcrumb — a DIRECT child of the card, not wrapped in a row with
+              the pager, so `sticky` has the card's full height to travel within.
+              Boxed inside a breadcrumb-height flex row it could never stick,
+              which is why it used to opt out with sticky={false}. */}
+          <PageBreadcrumb
+            className={totalCount != null && totalCount > 0 ? 'mb-3' : 'mb-4 md:mb-6'}
+            items={breadcrumbItems ?? [
+              { label: 'Dashboard', href: '/dashboard' },
+              onNavigateToList
+                ? { label: 'AI Interviews', onClick: onNavigateToList }
+                : { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+              ...(breadcrumbTrail ?? []),
+              // Deepest crumb names the candidate whose results are open.
+              { label: interview.candidate_name || 'Candidate Results' },
+            ]}
+          />
+
+          {/* Previous / Next record pager — sits below the breadcrumb. Skipped
+              entirely when there's no list to page through, so it leaves no
+              empty row behind. */}
+          {totalCount != null && totalCount > 0 && (
+            <div className="flex items-center justify-end mb-4 md:mb-6">
+              <RecordPager
+                currentIndex={currentIndex}
+                totalCount={totalCount}
+                onPrev={onPrev}
+                onNext={onNext}
+              />
+            </div>
+          )}
 
       <div>
         <div className="w-full">
           {/* Candidate header banner */}
-          <div className="mb-6 rounded-xl bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 p-5">
+          <div className="mb-6 rounded-xl bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 p-5">
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-2">
@@ -1641,7 +1686,10 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
 
         {/* Tabs card */}
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          <div className="sticky top-0 z-20 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm rounded-t-xl px-6 overflow-x-auto">
+          {/* top-9 (36px), not top-0: the breadcrumb above is sticky at top-0 and
+              sits on z-30, so pinning the tabs at the same offset would park them
+              underneath it. 36px = the breadcrumb's height (py-2 + text-sm line). */}
+          <div className="sticky top-9 z-20 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm rounded-t-xl px-6 overflow-x-auto">
             <div className="flex gap-1 min-w-max">
               {tabs.map(tab => (
                 <button
@@ -1789,7 +1837,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                     <>
                       <div>
                         <h3 className="text-sm font-semibold text-gray-900 mb-3 tracking-tight">Sentiment Timeline</h3>
-                        <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/10 p-4" style={{ height: 300 }}>
+                        <div className="bg-brand-blue/5 rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/10 p-4" style={{ height: 300 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={sentimentTimeline} margin={{ left: 0, right: 20, top: 5, bottom: 5 }}>
                               <CartesianGrid strokeDasharray="3 3" />
@@ -2571,7 +2619,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                     <div className="flex justify-end relative">
                       <button
                         onClick={() => setQaExportMenuOpen(v => !v)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30"
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-blue text-white hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30"
                       >
                         <Download className="w-3.5 h-3.5" />
                         Export
@@ -2643,11 +2691,13 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   interview={liveSession}
                   videoBlobUrl={videoBlobUrl}
                   videoBlobSize={videoBlobSize}
+                  videoDownloadUrl={videoDownloadUrl}
                   videoLoading={videoLoading}
                   videoError={videoError}
                   setVideoError={setVideoError}
                   screenBlobUrl={screenBlobUrl}
                   screenBlobSize={screenBlobSize}
+                  screenDownloadUrl={screenDownloadUrl}
                   screenLoading={screenLoading}
                   screenError={screenError}
                   seekRequest={recordingSeek}
@@ -3309,7 +3359,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             <button
                               onClick={() => setExportMenuOpen(v => !v)}
                               disabled={groups.length === 0}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-brand-blue text-white hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <Download className="w-3.5 h-3.5" />
                               Export

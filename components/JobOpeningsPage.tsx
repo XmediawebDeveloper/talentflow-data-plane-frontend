@@ -797,7 +797,7 @@ export default function JobOpeningsPage() {
       {/* Job Quota Exceeded Modal */}
       {showQuotaModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl border border-gray-200 max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] flex flex-col">
+          <div className="bg-white rounded-xl border border-gray-200 max-w-[95vw] sm:max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] flex flex-col">
             {/* Header */}
             <div className="px-5 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
               <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Job Quota Exceeded</h3>
@@ -847,7 +847,7 @@ export default function JobOpeningsPage() {
       {/* Insufficient Units Modal - when RS, RU, AS are all 0 */}
       {showInsufficientUnitsModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl border border-gray-200 max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] flex flex-col">
+          <div className="bg-white rounded-xl border border-gray-200 max-w-[95vw] sm:max-w-md w-full shadow-2xl max-h-[calc(100dvh-2rem)] flex flex-col">
             {/* Header */}
             <div className="px-5 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
               <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Insufficient Units</h3>

@@ -109,7 +109,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                     setShowAddSeatsModal(true);
                   }
                 }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white text-[10px] sm:text-xs font-medium rounded-lg transition-all flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue hover:bg-brand-blue-2 text-white text-[10px] sm:text-xs font-medium rounded-lg transition-all flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Plus className="w-3 h-3" />
                 Add Seats
@@ -225,7 +225,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                       setShowAddSeatsModal(true);
                     }
                   }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white text-xs sm:text-sm font-medium rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white text-xs sm:text-sm font-medium rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   <ShoppingCart className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Add Seats
@@ -265,7 +265,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                     setShowAddSeatsModal(true);
                   }
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white text-xs sm:text-sm font-medium rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white text-xs sm:text-sm font-medium rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add Seats

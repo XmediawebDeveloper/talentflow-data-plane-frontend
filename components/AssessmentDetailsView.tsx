@@ -12,7 +12,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import VersionBadge from './VersionBadge';
 import { formatIST } from '@/lib/utils/dateUtils';
-import PageBreadcrumb from '@/components/PageBreadcrumb';
+import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 
 interface AssessmentDetailsViewProps {
@@ -27,6 +27,12 @@ interface AssessmentDetailsViewProps {
   totalCount?: number;
   onPrev?: () => void;
   onNext?: () => void;
+  /**
+   * Overrides the default Assessments trail. Set when this page is reached from
+   * a JD (Job Details → Assessment → Create on a job that already has one), so
+   * the breadcrumb stays anchored to that job instead of resetting.
+   */
+  breadcrumbItems?: BreadcrumbCrumb[];
 }
 
 interface Section {
@@ -62,6 +68,7 @@ export default function AssessmentDetailsView({
   totalCount,
   onPrev,
   onNext,
+  breadcrumbItems,
 }: AssessmentDetailsViewProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
@@ -449,19 +456,30 @@ export default function AssessmentDetailsView({
     codingScore: assessment.coding_score as number | null,
   };
 
+  // Outer/inner chrome matches job-details: scrolling <main>, centred
+  // max-w-[1400px] column, then one padded white card that owns ALL horizontal
+  // padding. Sections below therefore carry no px-* of their own.
   return (
-    <div className="flex-1 bg-slate-50 dark:bg-slate-950 overflow-y-auto">
-      {/* Breadcrumb */}
-      <div className="px-3 sm:px-5 lg:px-8 pt-3 sm:pt-4 lg:pt-5">
-        <div className="flex items-center justify-between gap-3">
-          <PageBreadcrumb
-            className="mb-4 flex-1"
-            items={[
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'Assessments', href: '/recruitment/assessments' },
-              { label: stripVersionFromTitle(assessment.title) || assessment.short_id || 'Assessment Details' },
-            ]}
-          />
+    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      {/* Breadcrumb — must be a DIRECT child of the card so `sticky` has the
+          card's full height to travel within. Nested inside a padding wrapper it
+          was boxed to its own height and could never actually stick. */}
+      <PageBreadcrumb
+        className="mb-3"
+        items={breadcrumbItems ?? [
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Assessments', href: '/recruitment/assessments' },
+          { label: stripVersionFromTitle(assessment.title) || assessment.short_id || 'Assessment Details' },
+        ]}
+      />
+
+      {/* Previous / Next navigation — sits below the breadcrumb, as on
+          job-details. The row is dropped entirely when there is no list to
+          page through, so it leaves no empty gap. */}
+      {totalCount != null && totalCount > 0 && (
+        <div className="flex items-center justify-end mb-4">
           <RecordPager
             currentIndex={currentIndex}
             totalCount={totalCount}
@@ -469,10 +487,13 @@ export default function AssessmentDetailsView({
             onNext={onNext}
           />
         </div>
-      </div>
+      )}
 
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-20">
+      {/* Header — scrolls with the page. It used to be `sticky top-0`, pinned
+          against the old full-bleed layout; inside the job-details card the
+          breadcrumb is the only sticky element, so a second pinned layer just
+          sat on top of it. */}
+      <div>
         <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
             <div className="flex items-start gap-2 sm:gap-3 lg:gap-4 min-w-0">
@@ -580,9 +601,13 @@ export default function AssessmentDetailsView({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 sticky top-[120px] sm:top-[148px] lg:top-[168px] z-10">
-        <div className="px-3 sm:px-5 lg:px-8">
+      {/* Tabs — not sticky, matching job-details. The old
+          `top-[120px] sm:top-[148px] lg:top-[168px]` offsets were hand-measured
+          against the previous header height; once the header stopped being
+          pinned those numbers pinned the bar mid-page, where it covered the
+          content scrolling beneath it. */}
+      <div className="bg-white border-b border-gray-200">
+        <div>
           <div className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide">
             <button
               onClick={() => setActiveTab('overview')}
@@ -649,7 +674,7 @@ export default function AssessmentDetailsView({
       </div>
 
       {/* Content */}
-      <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-6 w-full bg-white dark:bg-slate-900">
+      <div className="py-3 sm:py-4 lg:py-6 w-full bg-white dark:bg-slate-900">
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
@@ -1034,7 +1059,7 @@ export default function AssessmentDetailsView({
                 </h3>
                 <button
                   onClick={() => setActiveTab('activity')}
-                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 w-fit"
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 w-fit"
                 >
                   <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   View Full Tracking
@@ -2187,6 +2212,8 @@ export default function AssessmentDetailsView({
         </div>
       )}
       </div>
-    </div>
+      </div>
+      </div>
+    </main>
   );
 }

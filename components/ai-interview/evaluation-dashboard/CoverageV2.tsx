@@ -28,10 +28,13 @@ function niceToHaveTagColor(priority: 'High' | 'Medium' | 'Low') {
 function isAsked(s: { asked: boolean }): boolean {
   return !!s.asked;
 }
-function isDemonstrated(s: { score: number }): boolean {
-  // Medium (≥5) or High (≥8) on the 0-10 scale = actual demonstration.
-  // Low (1-5) is treated as "answered weakly", not demonstrated.
-  return s.score >= 5;
+function isDemonstrated(s: { asked: boolean; score: number }): boolean {
+  // Medium (≥5) or High (≥8) on the 0-10 scale = actual demonstration — BUT
+  // ONLY when the skill was genuinely asked. A skill that was never probed in
+  // its section can still carry a leaked score (e.g. an NHS skill merely named
+  // in an MHS answer when no NHS question was asked → BUG12); that is NOT a
+  // demonstration, so gate it on `asked`.
+  return !!s.asked && s.score >= 5;
 }
 
 function coverageStats(cluster: Cluster) {
@@ -150,7 +153,7 @@ export function CoverageV2({ data }: Props) {
   return (
     <div className="space-y-6">
       {/* Header banner */}
-      <div className="rounded-2xl p-6 bg-gradient-to-br from-indigo-600 to-indigo-500 text-white">
+      <div className="rounded-2xl p-6 bg-brand-blue text-white">
         <div className="flex items-center gap-3">
           <Layers className="w-8 h-8" />
           <div>
@@ -208,7 +211,7 @@ export function CoverageV2({ data }: Props) {
       </div>
 
       {/* Coverage Summary */}
-      <div className="rounded-2xl p-6 bg-gradient-to-br from-emerald-500 to-emerald-400 text-white">
+      <div className="rounded-2xl p-6 bg-brand-blue text-white">
         <div className="text-lg font-bold mb-4">Coverage Summary</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {data.sectionsPresent.mustHave && (

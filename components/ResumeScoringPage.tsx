@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid, Loader2, Square, CheckSquare, Building2, Calendar, Users } from 'lucide-react';
+import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, Coins } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -22,6 +22,7 @@ import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
+import ListToolbar from '@/components/ui/list-toolbar';
 
 const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -341,6 +342,42 @@ export default function ResumeScoringPage({
   const [historyJobType, setHistoryJobType] = useState('');
   const [historyIndustry, setHistoryIndustry] = useState('');
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
+  // Mirrors job-openings' `filtersApplied`: only true once the user confirms with
+  // "Done". Gates the solid-blue Filters button and the toolbar Clear, so Clear
+  // doesn't appear while the user is still mid-selection.
+  const [historyFiltersApplied, setHistoryFiltersApplied] = useState(false);
+
+  const clearHistoryFilters = () => {
+    setHistorySearchQuery('');
+    setHistoryCreatedBy('');
+    setHistoryScoredFrom('');
+    setHistoryScoredTo('');
+    setHistoryLocation('');
+    setHistoryJobType('');
+    setHistoryIndustry('');
+    setHistoryFiltersApplied(false);
+  };
+
+  // Returning to the history list from a drill-in (role details / candidate view)
+  // resets the filters to their default state, so Resume Scoring always opens on
+  // the full list after backing out of a role.
+  //
+  // Handled as a viewMode transition rather than by patching each back button:
+  // there are seven `setViewMode('history')` call sites (breadcrumbs, Back,
+  // minimize, post-scoring refresh) and any new one would otherwise be missed.
+  //
+  // Note this deliberately does NOT fire when returning from a different route —
+  // that unmounts the component, so no transition is observed and the persisted
+  // filters restore as before.
+  const prevViewModeRef = useRef(viewMode);
+  useEffect(() => {
+    const previous = prevViewModeRef.current;
+    prevViewModeRef.current = viewMode;
+    if (viewMode === 'history' && (previous === 'details' || previous === 'candidateView')) {
+      clearHistoryFilters();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
   // Legacy history-filter state referenced by the "Clear All Filters" handler.
   // The active filter UI uses the fields above; these remain so the older clear
   // handler keeps compiling and resets any persisted legacy values.
@@ -393,6 +430,16 @@ export default function ResumeScoringPage({
       historySearchQuery, historyCreatedBy, historyScoredFrom, historyScoredTo,
       historyLocation, historyJobType, historyIndustry,
       historyCurrentPage, historyItemsPerPage,
+      // Persist the applied flag alongside the filters themselves. Without it the
+      // filters restore on return but the flag resets to false, so the Filters
+      // button loses its highlight and Clear disappears while results are still
+      // filtered — no way to tell why the list looks short.
+      historyFiltersApplied,
+      // Persist the cards<->list drill-in too. The filter *values* were already
+      // being restored, but pageView always reset to 'cards', so returning hid
+      // the filtered list and the whole toolbar — indistinguishable from the
+      // filters having been cleared.
+      pageView,
     },
     (s) => {
       if (typeof s.isGlobalView === 'boolean') setIsGlobalView(s.isGlobalView);
@@ -407,6 +454,8 @@ export default function ResumeScoringPage({
       if (typeof s.historyIndustry === 'string') setHistoryIndustry(s.historyIndustry);
       if (typeof s.historyCurrentPage === 'number') setHistoryCurrentPage(s.historyCurrentPage);
       if (typeof s.historyItemsPerPage === 'number') setHistoryItemsPerPage(s.historyItemsPerPage);
+      if (typeof s.historyFiltersApplied === 'boolean') setHistoryFiltersApplied(s.historyFiltersApplied);
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
     },
   );
 
@@ -1265,7 +1314,7 @@ export default function ResumeScoringPage({
             setViewMode('details');
             router.push(`/recruitment/resume-scoring?jd_id=${selectedHistoryItem.jobId}`, { scroll: false });
           } },
-          { label: 'Candidate Details' },
+          { label: selectedCandidateForView.candidateName || 'Candidate' },
         ]}
         onBack={() => {
           setSelectedCandidateForView(null);
@@ -1312,7 +1361,7 @@ export default function ResumeScoringPage({
             setViewMode('history');
             router.push(`/recruitment/resume-scoring`, { scroll: false });
           } },
-          { label: 'Candidate Details' },
+          { label: selectedCandidateForView.candidateName || 'Candidate' },
         ]}
         onBack={() => {
           setSelectedCandidateForView(null);
@@ -1346,44 +1395,9 @@ export default function ResumeScoringPage({
           } },
           { label: selectedHistoryItem.jobTitle },
         ]} />
-        {/* Header with Back Button + Prev/Next nav */}
+        {/* Job header — Prev/Next now sits inside the card, immediately before the
+            Score New Resumes action, instead of on its own row above. */}
         <div className="mb-5">
-          {(() => {
-            const _historyIdx = scoredHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
-            const _prevItem = _historyIdx > 0 ? scoredHistory[_historyIdx - 1] : null;
-            const _nextItem = _historyIdx >= 0 && _historyIdx < scoredHistory.length - 1 ? scoredHistory[_historyIdx + 1] : null;
-            const _goToHistoryItem = (item: ScoredResumeData) => {
-              setSelectedHistoryItem(item);
-              setSelectedScoredResumes([]);
-              setSelectedStatusFilter('all');
-              onLoadJdScores?.(item.jobId, item.jobTitle);
-            };
-            return (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-                <button
-                  onClick={() => {
-                    setViewMode('history');
-                    setSelectedHistoryItem(null);
-                    setSelectedStatusFilter('all');
-                  }}
-                  className="inline-flex w-fit items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-sm font-medium text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue-2 transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4 flex-shrink-0" />
-                  Back to Scored Candidates
-                </button>
-                {scoredHistory.length > 1 && (
-                  <RecordPager
-                    currentIndex={_historyIdx >= 0 ? _historyIdx : 0}
-                    totalCount={scoredHistory.length}
-                    onPrev={_prevItem ? () => _goToHistoryItem(_prevItem) : undefined}
-                    onNext={_nextItem ? () => _goToHistoryItem(_nextItem) : undefined}
-                    className="justify-between sm:justify-end"
-                  />
-                )}
-              </div>
-            );
-          })()}
-
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
               <div className="flex items-start gap-3">
@@ -1422,24 +1436,53 @@ export default function ResumeScoringPage({
                 </div>
               </div>
 
-              {canRunScoring && (
-                <button
-                  onClick={() => setViewMode('new')}
-                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
-                >
-                  <Target className="w-4 h-4" />
-                  Score New Resumes
-                </button>
-              )}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto sm:flex-shrink-0">
+                {/* Prev/Next — placed before the Score New Resumes action */}
+                {scoredHistory.length > 1 && (() => {
+                  const historyIdx = scoredHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
+                  const prevItem = historyIdx > 0 ? scoredHistory[historyIdx - 1] : null;
+                  const nextItem = historyIdx >= 0 && historyIdx < scoredHistory.length - 1 ? scoredHistory[historyIdx + 1] : null;
+                  const goToHistoryItem = (item: ScoredResumeData) => {
+                    setSelectedHistoryItem(item);
+                    setSelectedScoredResumes([]);
+                    setSelectedStatusFilter('all');
+                    onLoadJdScores?.(item.jobId, item.jobTitle);
+                  };
+                  return (
+                    <RecordPager
+                      currentIndex={historyIdx >= 0 ? historyIdx : 0}
+                      totalCount={scoredHistory.length}
+                      onPrev={prevItem ? () => goToHistoryItem(prevItem) : undefined}
+                      onNext={nextItem ? () => goToHistoryItem(nextItem) : undefined}
+                      className="justify-between sm:justify-end"
+                    />
+                  );
+                })()}
+
+                {canRunScoring && (
+                  <button
+                    onClick={() => setViewMode('new')}
+                    className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                  >
+                    <Target className="w-4 h-4" />
+                    Score New Resumes
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Bulk Actions Bar */}
-        {scoredResumesData.length > 0 && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3 sm:gap-4">
+        {/* Scored Resumes Table — the select-all + Download ZIP controls that used
+            to sit in their own bar above are passed in as `toolbarActions` so they
+            share one row with the table's search and filters. */}
+        <ScoredResumesTable
+          resumes={scoredResumesData}
+          jobTitle={selectedHistoryItem.jobTitle}
+          jobId={selectedHistoryItem.jobId}
+          toolbarActions={scoredResumesData.length > 0 ? (
+            <>
+              <label className="flex items-center gap-2 whitespace-nowrap cursor-pointer">
                 <input
                   type="checkbox"
                   checked={selectedScoredResumes.length === scoredResumesData.length && scoredResumesData.length > 0}
@@ -1454,16 +1497,16 @@ export default function ResumeScoringPage({
                 />
                 <span className="text-sm text-gray-700 dark:text-slate-300 font-medium">
                   {selectedScoredResumes.length > 0
-                    ? `${selectedScoredResumes.length} candidate${selectedScoredResumes.length > 1 ? 's' : ''} selected`
+                    ? `${selectedScoredResumes.length} selected`
                     : 'Select candidates'}
                 </span>
-              </div>
+              </label>
 
               {selectedScoredResumes.length > 0 && canExport && (
                 <button
                   onClick={handleBulkDownloadScorecards}
                   disabled={isBulkDownloading}
-                  className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm font-medium flex items-center gap-2 whitespace-nowrap shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isBulkDownloading ? (
                     <>
@@ -1478,15 +1521,8 @@ export default function ResumeScoringPage({
                   )}
                 </button>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Scored Resumes Table */}
-        <ScoredResumesTable
-          resumes={scoredResumesData}
-          jobTitle={selectedHistoryItem.jobTitle}
-          jobId={selectedHistoryItem.jobId}
+            </>
+          ) : undefined}
           availableUnits={availableASUnits ?? 10}
           onViewCandidate={(resume) => {
             setSelectedCandidateForView(resume);
@@ -1667,7 +1703,7 @@ export default function ResumeScoringPage({
       <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
         <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${pageView === 'list' ? 'min-h-[calc(100vh-7rem)]' : ''}`}>
-        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
         {/* Header */}
         <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
           {/* Left: back + icon + title */}
@@ -1697,7 +1733,7 @@ export default function ResumeScoringPage({
               <QuotaBadge
                 label="Available Units"
                 availableUnits={availableUnits}
-                icon={DollarSign}
+                icon={Coins}
               />
             )}
 
@@ -1730,7 +1766,7 @@ export default function ResumeScoringPage({
                   setFilterByJobId(undefined);
                   setShowProgressModal(true);
                 }}
-                className="px-3 py-2 bg-brand-cyan text-white rounded-lg hover:from-brand-teal hover:to-brand-cyan transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-cyan/30"
+                className="px-3 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30"
               >
                 <Clock className="w-4 h-4" />
                 <span>Progress Tables</span>
@@ -1749,7 +1785,7 @@ export default function ResumeScoringPage({
                   setResumeSource(null);
                   setSelectedResumes([]);
                 }}
-                className="px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                className="px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
               >
                 <Target className="w-4 h-4" />
                 Score Resumes
@@ -1818,17 +1854,6 @@ export default function ResumeScoringPage({
 
             {/* Action cards — "View by Job" and "View All Candidates" as two
                 separate cards. Clicking either opens its list view. */}
-            <div>
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                  <History className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="mb-1 text-sm font-medium tracking-tight text-gray-900 dark:text-slate-50">Resume Scoring Menu</h3>
-                </div>
-              </div>
-            </div>
-
             <StatsCardGrid className="mb-0">
               <StatsCard
                 tone="neutral"
@@ -1899,97 +1924,46 @@ export default function ResumeScoringPage({
           </div>
         ) : (
         <>
-        {/* View Toggle and Download Bar */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1 sm:gap-2 bg-brand-blue/5 ring-1 ring-brand-blue/10 rounded-lg p-1">
-                <button
-                  onClick={() => setHistoryViewMode('grid')}
-                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                    historyViewMode === 'grid'
-                      ? 'bg-white dark:bg-slate-900 text-brand-blue shadow-sm shadow-brand-blue/10'
-                      : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                  }`}
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                  <span className="hidden sm:inline">Grid</span>
-                </button>
-                <button
-                  onClick={() => setHistoryViewMode('list')}
-                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                    historyViewMode === 'list'
-                      ? 'bg-white dark:bg-slate-900 text-brand-blue shadow-sm shadow-brand-blue/10'
-                      : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                  }`}
-                >
-                  <List className="w-4 h-4" />
-                  <span className="hidden sm:inline">List</span>
-                </button>
-              </div>
+        {/* Selection / Download Bar — only while rows are selected. The view
+            toggle now lives in the search + filter bar below, after the count. */}
+        {selectedHistoryItems.size > 0 && (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span className="text-sm text-gray-600 dark:text-slate-400">
+                {selectedHistoryItems.size} selected
+              </span>
 
-              {selectedHistoryItems.size > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600 dark:text-slate-400">
-                    {selectedHistoryItems.size} selected
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {selectedHistoryItems.size > 0 && (
               <button
                 onClick={handleDownloadSelectedHistory}
-                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all text-sm font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30"
+                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30"
               >
                 <Download className="w-4 h-4" />
                 Download Selected ({selectedHistoryItems.size})
               </button>
-            )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Search and Filter Bar — only when there's a list to filter */}
         {scoredHistory.length > 0 && (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
-                  <input
-                    type="text"
-                    value={historySearchQuery}
-                    onChange={(e) => setHistorySearchQuery(e.target.value)}
-                    placeholder="Search by job title..."
-                    className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 transition-shadow text-sm text-gray-900 dark:text-slate-50"
-                  />
-                </div>
+            <ListToolbar
+              searchValue={historySearchQuery}
+              onSearchChange={setHistorySearchQuery}
+              searchPlaceholder="Search by job title..."
+              viewMode={historyViewMode}
+              onViewModeChange={setHistoryViewMode}
+              onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
+              filtersOpen={showHistoryFilters}
+              activeFilterCount={activeFiltersCount}
+              filtersApplied={historyFiltersApplied && activeFiltersCount > 0}
+              onClearFilters={clearHistoryFilters}
+              className="mb-0"
+            >
+              <div className="text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
+                <span className="text-brand-blue font-semibold">{displayHistory.length}</span> of {scoredHistory.length + (processingEntry ? 1 : 0)} jobs
               </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowHistoryFilters(!showHistoryFilters)}
-                  className={`flex-1 sm:flex-none px-3 py-2 rounded-lg border transition-all flex items-center justify-center gap-2 font-medium text-sm ${
-                    activeFiltersCount > 0
-                      ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue shadow-sm shadow-brand-blue/5'
-                      : 'bg-brand-blue/5 border-brand-blue/10 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:border-brand-blue/20 hover:text-brand-blue'
-                  }`}
-                >
-                  <Filter className="w-4 h-4" />
-                  <span className="hidden sm:inline">Filters</span>
-                  {activeFiltersCount > 0 && (
-                    <span className="px-2 py-0.5 bg-brand-blue text-white rounded-full text-xs font-medium">
-                      {activeFiltersCount}
-                    </span>
-                  )}
-                  <ChevronDown className={`w-4 h-4 transition-transform ${showHistoryFilters ? 'rotate-180' : ''}`} />
-                </button>
-
-                <div className="text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
-                  <span className="text-brand-blue font-semibold">{displayHistory.length}</span> of {scoredHistory.length + (processingEntry ? 1 : 0)} jobs
-                </div>
-              </div>
-            </div>
+            </ListToolbar>
 
             {/* Expanded Filters */}
             {showHistoryFilters && (() => {
@@ -2041,24 +2015,17 @@ export default function ResumeScoringPage({
                     </div>
                   </div>
 
-                  {activeFiltersCount > 0 && (
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        onClick={() => {
-                          setHistoryCreatedBy('');
-                          setHistoryScoredFrom('');
-                          setHistoryScoredTo('');
-                          setHistoryLocation('');
-                          setHistoryJobType('');
-                          setHistoryIndustry('');
-                        }}
-                        className="px-4 py-2 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all flex items-center gap-2 text-sm font-medium"
-                      >
-                        <X className="w-4 h-4" />
-                        Clear All Filters
-                      </button>
-                    </div>
-                  )}
+                  {/* Panel footer: "Done" only — same as job-openings. Clearing
+                      lives on the toolbar Clear button, so there is exactly one
+                      clear control instead of one here and one outside. */}
+                  <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => { setShowHistoryFilters(false); setHistoryFiltersApplied(true); }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+                    >
+                      Done
+                    </button>
+                  </div>
                 </div>
               );
             })()}
@@ -2105,7 +2072,7 @@ export default function ResumeScoringPage({
                         {/* Title row — matches JD list card */}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           {item.jdJobId && (
-                            <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20 flex-shrink-0">
+                            <span className="inline-flex h-7 items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20 flex-shrink-0">
                               {item.jdJobId}
                             </span>
                           )}
@@ -2134,7 +2101,7 @@ export default function ResumeScoringPage({
                             };
                             const c = cfg[s] || cfg.published;
                             return (
-                              <span className={`px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} flex items-center gap-1.5 flex-shrink-0`}>
+                              <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} gap-1.5 flex-shrink-0`}>
                                 <div className={`w-1.5 h-1.5 rounded-full ${c.dot}`}></div>
                                 {c.label}
                               </span>
@@ -2142,7 +2109,7 @@ export default function ResumeScoringPage({
                           })()}
                           {/* Version badge */}
                           {item.jdCurrentVersion && item.jdCurrentVersion >= 1 && (
-                            <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 flex items-center gap-1.5 flex-shrink-0">
+                            <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
                               <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
                               v{item.jdCurrentVersion}
                             </span>
@@ -2150,7 +2117,7 @@ export default function ResumeScoringPage({
                           {/* History icon button */}
                           <button
                             onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
-                            className="p-1.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
+                            className="inline-flex h-7 w-7 items-center justify-center p-1.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
                             aria-label="Scoring History" title="Scoring History"
                           >
                             <History className="w-3.5 h-3.5" />
@@ -2236,7 +2203,7 @@ export default function ResumeScoringPage({
                             setShowJobTitleColumn(false);
                             setShowProgressModal(true);
                           }}
-                          className="px-3 py-2 bg-brand-cyan text-white rounded-lg hover:from-brand-teal hover:to-brand-cyan transition-all text-sm font-medium flex items-center gap-1.5 justify-center w-full shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10"
+                          className="px-3 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-all text-sm font-medium flex items-center gap-1.5 justify-center w-full shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                         >
                           <Eye className="w-4 h-4" />
                           View Progress
@@ -2298,14 +2265,14 @@ export default function ResumeScoringPage({
                               };
                               const c = cfg[s] || cfg.published;
                               return (
-                                <span className={`px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} flex items-center gap-1.5`}>
+                                <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} gap-1.5`}>
                                   <div className={`w-1.5 h-1.5 rounded-full ${c.dot}`}></div>
                                   {c.label}
                                 </span>
                               );
                             })()}
                             {item.jdCurrentVersion && item.jdCurrentVersion >= 1 && (
-                              <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 flex items-center gap-1.5">
+                              <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
                                 v{item.jdCurrentVersion}
                               </span>
@@ -2313,7 +2280,7 @@ export default function ResumeScoringPage({
                             {/* History icon button */}
                             <button
                               onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
-                              className="p-1.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
+                              className="inline-flex h-7 w-7 items-center justify-center p-1.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
                               aria-label="Scoring History" title="Scoring History"
                             >
                               <History className="w-3.5 h-3.5" />
@@ -2324,7 +2291,7 @@ export default function ResumeScoringPage({
                         {/* job_id + title */}
                         <div className="flex items-center gap-2 mb-3">
                           {item.jdJobId && (
-                            <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20">
+                            <span className="inline-flex h-7 items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20">
                               {item.jdJobId}
                             </span>
                           )}
@@ -2503,7 +2470,7 @@ export default function ResumeScoringPage({
                     setResumeSource(null);
                     setSelectedResumes([]);
                   }}
-                  className="px-4 py-2 rounded-lg transition-all font-medium text-sm shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 inline-flex items-center gap-1.5 bg-brand-blue text-white hover:from-brand-blue-2 hover:to-brand-blue hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                  className="px-4 py-2 rounded-lg transition-all font-medium text-sm shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 inline-flex items-center gap-1.5 bg-brand-blue text-white hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
                 >
                   <Target className="w-4 h-4" />
                   Score Resumes Now
@@ -2522,15 +2489,11 @@ export default function ResumeScoringPage({
                 No scored jobs match your current filters. Try adjusting your search criteria or clearing filters.
               </p>
               <button
-                onClick={() => {
-                  setHistorySearchQuery('');
-                  setHistorySourceFilter('all');
-                  setHistoryDateFrom('');
-                  setHistoryDateTo('');
-                  setHistoryMinCandidates(0);
-                  setHistoryAvgScoreMin(0);
-                }}
-                className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg transition-all font-medium text-sm shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-1.5"
+                // Was resetting only the legacy filter fields (source/date/min-
+                // candidates/avg-score), which the filter UI no longer uses — so
+                // the real filters stayed set and the empty state never cleared.
+                onClick={clearHistoryFilters}
+                className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-sm shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-1.5"
               >
                 <X className="w-4 h-4" />
                 Clear All Filters
@@ -2638,7 +2601,7 @@ export default function ResumeScoringPage({
         });
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90vh] flex flex-col">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
@@ -2694,7 +2657,7 @@ export default function ResumeScoringPage({
               </div>
               <div className="px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 flex justify-between items-center bg-gray-50 dark:bg-slate-800/50 shrink-0">
                 <span className="text-xs text-gray-500 dark:text-slate-500">{historyModalItem.totalScored} total resumes scored</span>
-                <button onClick={() => setHistoryModalItem(null)} className="px-4 py-1.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg text-xs font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all">Close</button>
+                <button onClick={() => setHistoryModalItem(null)} className="px-4 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-xs font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all">Close</button>
               </div>
             </div>
           </div>
@@ -2712,37 +2675,15 @@ export default function ResumeScoringPage({
     <main className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${showJobDropdown ? 'min-h-[780px]' : ''}`}>
-      <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
+      <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
       {/* Header */}
       <div className="mb-5">
         <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            onClick={() => {
-              setViewMode('history');
-              setSelectedJob('');
-              setResumeSource(null);
-              setSelectedResumes([]);
-            }}
-            className="p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex-shrink-0"
-            aria-label="Back" title="Back"
-          >
-            <ArrowLeft className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-          </button>
           <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
             <Target className="h-4 w-4 text-brand-blue" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Score Resumes</h1>
-              {availableUnits !== null && (
-                <QuotaBadge
-                  label="Available Units"
-                  availableUnits={availableUnits}
-                  icon={DollarSign}
-                  className="w-fit"
-                />
-              )}
-            </div>
+            <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Score Resumes</h1>
             <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5">Select a job and let AI match the best candidates</p>
           </div>
         </div>
@@ -2932,7 +2873,7 @@ export default function ResumeScoringPage({
               {canRunScoring && (
                 <button
                   onClick={() => setShowResumeSelectionModal(true)}
-                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
                 >
                   <Target className="w-4 h-4" />
                   Select Resumes

@@ -1,11 +1,12 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban, XCircle } from 'lucide-react';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import AIInterviewFlowLoader from '@/components/ai-interview/AIInterviewFlowLoader';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { useQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -23,6 +24,7 @@ import ListPagination from '@/components/ListPagination';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
+import QuotaBadge from '@/components/ui/quota-badge';
 
 // Returns the effective interview duration string.
 // New configs store the real 30 / 35 / N value in duration_minutes.
@@ -119,6 +121,23 @@ export default function AIInterview() {
   // Filter by created_at date range. 'custom' reveals the date-range inputs.
   type DateFilterKey = 'all' | 'today' | 'yesterday' | 'last_week' | 'last_month' | 'custom';
   const [dateFilter, setDateFilter] = useState<DateFilterKey>('all');
+
+  // This page filters through always-visible inline selects rather than a
+  // collapsible panel, so there is no "Done" step — but it had no way to reset
+  // either. Mirrors job-openings' clearAllFilters()/filtersActive pair.
+  const aiFiltersActive =
+    searchQuery !== '' || modeFilter !== 'all' || creatorFilter !== 'all' ||
+    dateFilter !== 'all' || invitedOnly;
+
+  const clearAIInterviewFilters = () => {
+    setSearchQuery('');
+    setModeFilter('all');
+    setCreatorFilter('all');
+    setDateFilter('all');
+    setInvitedOnly(false);
+    setCustomDateFrom('');
+    setCustomDateTo('');
+  };
   const [customDateFrom, setCustomDateFrom] = useState<string>(''); // YYYY-MM-DD
   const [customDateTo, setCustomDateTo] = useState<string>('');     // YYYY-MM-DD
   const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);
@@ -785,12 +804,16 @@ export default function AIInterview() {
         return;
       }
 
+      // Preserve where the quick action was launched from (e.g. from=job-details)
+      // so the config flow can keep its breadcrumb anchored to the JD.
+      const originParam = searchParams.get('from') === 'job-details' ? '&from=job-details' : '';
+
       if (draftConfig && canUpdateAIInterviews) {
-        router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}&config_id=${encodeURIComponent(draftConfig.id)}`);
+        router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}&config_id=${encodeURIComponent(draftConfig.id)}${originParam}`);
         return;
       }
 
-      router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}`);
+      router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(jdId)}${originParam}`);
       return;
     }
 
@@ -1023,15 +1046,21 @@ export default function AIInterview() {
     );
   }
 
-  // Loading state
-  if (loading) {
+  // A create quick-action (Job Details → "AI Interview → Create") always leaves
+  // this page for the config flow. Hold the loader while it's pending, or the
+  // list — breadcrumb included — paints for a frame before the effect above
+  // redirects, which reads as a flash of the wrong page. This can't get stuck:
+  // that effect either navigates away or strips the param via clearQuickActionUrl.
+  const redirectingToConfig = searchParams.get('action') === 'create-ai-interview';
+
+  // Loading state. While redirecting, use the SAME message the config page
+  // shows so the chained loaders read as one continuous screen rather than a
+  // spinner that restarts with different text.
+  if (loading || redirectingToConfig) {
     return (
-      <div className="flex-1 flex items-center justify-center overflow-y-auto bg-slate-50 dark:bg-slate-950">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
-          <p className="text-sm text-gray-500 dark:text-slate-500">Loading AI interviews...</p>
-        </div>
-      </div>
+      <AIInterviewFlowLoader
+        message={redirectingToConfig ? 'Loading configuration…' : 'Loading AI interviews…'}
+      />
     );
   }
 
@@ -1050,10 +1079,10 @@ export default function AIInterview() {
     : 'neutral';
 
   return (
-    <div ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-8" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Interviews' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Interviews' }]} />
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 lg:gap-4 mb-5">
           <div className="flex items-start gap-3 min-w-0">
@@ -1079,60 +1108,21 @@ export default function AIInterview() {
           <div className="flex items-stretch gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
             {/* AI Interview Quota Card */}
             {totalUnits > 0 && (
-              <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all ${
-                quotaTone === 'danger'
-                  ? 'border-red-200 ring-red-100'
-                  : quotaTone === 'warning'
-                  ? 'border-brand-orange/30 ring-brand-orange/10'
-                  : 'border-gray-100 dark:border-slate-700/60'
-              }`}>
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ${
-                  quotaTone === 'danger'
-                    ? 'bg-red-50 text-red-600 ring-red-200'
-                    : quotaTone === 'warning'
-                    ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
-                    : 'bg-brand-blue text-white ring-white/10 shadow-sm shadow-brand-blue/25'
-                }`}>
-                  <Zap className="w-3.5 h-3.5" />
-                </div>
-                <div className="flex flex-col min-w-[88px]">
-                  <span className="text-[10px] uppercase tracking-wider text-gray-500 dark:text-slate-500 font-semibold leading-none">AI Interview Quota</span>
-                  {isUnlimited ? (
-                    <span className="text-xs font-semibold text-brand-blue mt-0.5">Unlimited</span>
-                  ) : availableUnits !== null ? (
-                    <>
-                      <div className="flex items-baseline gap-1 mt-0.5">
-                        <span className={`text-sm font-semibold tabular-nums leading-none tracking-tight ${
-                          quotaTone === 'danger'
-                            ? 'text-red-700'
-                            : quotaTone === 'warning'
-                            ? 'text-brand-orange-deep'
-                            : 'text-brand-blue'
-                        }`}>{availableUnits}</span>
-                        <span className="text-[10px] text-gray-400 dark:text-slate-500">/ {totalUnits}</span>
-                      </div>
-                      <div className="mt-1 h-0.5 w-full rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            quotaTone === 'danger'
-                              ? 'bg-red-500'
-                              : quotaTone === 'warning'
-                              ? 'bg-brand-orange'
-                              : 'bg-gradient-to-r from-brand-blue to-brand-cyan'
-                          }`}
-                          style={{ width: `${quotaUsedPct}%` }}
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <span className="text-xs text-gray-400 dark:text-slate-500 mt-0.5">Loading…</span>
-                  )}
-                </div>
-              </div>
+              <QuotaBadge
+                label="AI Interview Quota"
+                availableUnits={availableUnits}
+                totalUnits={totalUnits}
+                isUnlimited={isUnlimited}
+                icon={Zap}
+              />
             )}
             {canAccessHRQuestionBank && (
               <button
-                onClick={() => router.push('/recruitment/hr-question-bank')}
+                onClick={() => {
+                  // Tells the question bank which module to name in its breadcrumb.
+                  try { sessionStorage.setItem('questionBankSource', 'ai-interviews'); } catch { /* ignore */ }
+                  router.push('/recruitment/hr-question-bank');
+                }}
                 className="inline-flex items-center gap-1.5 border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue px-3.5 py-2 rounded-lg hover:bg-brand-blue/5 transition-all duration-200 text-xs font-medium shadow-sm"
               >
                 <ClipboardList className="w-3.5 h-3.5 flex-shrink-0" />
@@ -1151,7 +1141,7 @@ export default function AIInterview() {
             {canCreateAIInterviews && (
               <button
                 onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                className="group inline-flex items-center gap-1.5 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white px-3.5 py-2 rounded-lg hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 text-xs font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="group inline-flex items-center gap-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white px-3.5 py-2 rounded-lg hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 text-xs font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Plus className="w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 group-hover:rotate-90" />
                 <span>Create AI Interview</span>
@@ -1423,6 +1413,16 @@ export default function AIInterview() {
                     </select>
                     <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-slate-500 rotate-90 pointer-events-none" />
                   </div>
+                  {/* Clear — same control as job-openings' toolbar Clear */}
+                  {aiFiltersActive && (
+                    <button
+                      onClick={clearAIInterviewFilters}
+                      className="flex-shrink-0 px-3 py-2 min-h-[40px] rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      Clear
+                    </button>
+                  )}
                 </div>
               </div>
               {/* Custom date range inputs — surface only when 'Custom range' is selected */}
@@ -1485,7 +1485,7 @@ export default function AIInterview() {
                   {!searchQuery && activeTab !== 'archived' && canCreateAIInterviews && (
                     <button
                       onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                      className="group inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-xl hover:shadow-lg hover:shadow-brand-blue/20 hover:-translate-y-0.5 transition-all duration-200 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                      className="group inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-xl hover:shadow-lg hover:shadow-brand-blue/20 hover:-translate-y-0.5 transition-all duration-200 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       <Plus className="w-4 h-4 transition-transform duration-200 group-hover:rotate-90" />
                       Create your first interview
@@ -1531,7 +1531,7 @@ export default function AIInterview() {
                           <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ring-1 ${
                             normalizedStatus === 'published'
                               ? 'bg-gradient-to-br from-green-100 to-green-50 text-green-600 ring-green-200 group-hover:from-green-200'
-                              : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15 group-hover:from-brand-blue/15'
+                              : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15 group-hover:bg-brand-blue/15'
                           }`}>
                             <Video className="w-5 h-5 sm:w-6 sm:h-6" />
                           </div>
@@ -1645,7 +1645,7 @@ export default function AIInterview() {
                           {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
+                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
                             >
                               <Pencil className="w-3.5 h-3.5 flex-shrink-0" />
                               <span className="hidden sm:inline">Continue Editing</span>
@@ -1680,7 +1680,7 @@ export default function AIInterview() {
                           {normalizedStatus === 'published' && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
+                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
                               aria-label="View interview results" title="View interview results"
                             >
                               <BarChart2 className="w-3.5 h-3.5 flex-shrink-0" />
@@ -1969,7 +1969,7 @@ export default function AIInterview() {
                   <div className="pt-6 border-t border-gray-100 dark:border-slate-700/60">
                     <button
                       onClick={handleSaveSettings}
-                      className="px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                      className="px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                     >
                       Save Settings
                     </button>
@@ -2125,7 +2125,7 @@ export default function AIInterview() {
                       <div className="pt-6 border-t border-gray-100 dark:border-slate-700/60">
                         <button
                           onClick={handleSaveProctoringSettings}
-                          className="px-6 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                          className="px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                         >
                           Save Proctoring Settings
                         </button>
@@ -2601,7 +2601,7 @@ export default function AIInterview() {
                       setViewInvitationsConfig(null);
                       setShareConfig(viewInvitationsConfig);
                     }}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                   >
                     <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                     Invite More
@@ -2648,7 +2648,7 @@ export default function AIInterview() {
                 className={`px-3 sm:px-4 py-2 text-xs sm:text-sm text-white rounded-lg transition-colors shadow-md ring-1 ring-white/10 ${
                   confirmAction.destructive
                     ? 'bg-red-600 hover:bg-red-700 shadow-red-600/25'
-                    : 'bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue shadow-brand-blue/25'
+                    : 'bg-brand-blue hover:bg-brand-blue-2 shadow-brand-blue/25'
                 }`}
               >
                 Confirm
@@ -2660,7 +2660,7 @@ export default function AIInterview() {
 
       {showPublishedModal && (
         <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col">
+          <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col">
             <div className="px-6 pt-5 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
               <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 tracking-tight">AI Interview Published</h2>
               <button
@@ -2776,7 +2776,7 @@ export default function AIInterview() {
           );
         })()}
       </ConfirmationDialog>
-    </div>
+    </main>
   );
 }
 

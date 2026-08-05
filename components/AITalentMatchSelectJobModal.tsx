@@ -40,9 +40,18 @@ interface AITalentMatchSelectJobModalProps {
   jobs: Job[];
   onClose: () => void;
   onMatch: (resumeIds: string[], jobId: string) => void;
+  stayOnCurrentPage?: boolean;
+  confirmLabel?: string;
 }
 
-export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, onMatch }: AITalentMatchSelectJobModalProps) {
+export default function AITalentMatchSelectJobModal({
+  resumes,
+  jobs,
+  onClose,
+  onMatch,
+  stayOnCurrentPage = false,
+  confirmLabel,
+}: AITalentMatchSelectJobModalProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [isMatching, setIsMatching] = useState(false);
@@ -315,7 +324,7 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
                 <div>
                   <h4 className="text-sm text-gray-900 dark:text-slate-50 mb-1">Next Steps</h4>
                   <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
-                    <li>• You'll be taken to the AI Talent Match page</li>
+                    <li>&bull; {stayOnCurrentPage ? 'AI Talent Match will run on this resume page' : "You'll be taken to the AI Talent Match page"}</li>
                     <li>• AI will analyze selected resumes against the job requirements</li>
                     <li>• Get detailed match scores and recommendations</li>
                     <li>• Review and shortlist top matching candidates</li>
@@ -358,7 +367,7 @@ export default function AITalentMatchSelectJobModal({ resumes, jobs, onClose, on
               ) : (
                 <>
                   <Sparkles className="w-4 h-4" />
-                  <span className="hidden sm:inline">Continue to AI Talent Match</span>
+                  <span className="hidden sm:inline">{confirmLabel || 'Continue to AI Talent Match'}</span>
                   <span className="sm:hidden">Continue</span>
                 </>
               )}

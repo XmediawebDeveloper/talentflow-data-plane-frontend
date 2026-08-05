@@ -347,11 +347,11 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                 setShowAuditTrail(false);
               }}
             />
-            <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto mx-2 sm:mx-0">
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
+            <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden mx-2 sm:mx-0">
+              <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
                 <h3 className="text-sm sm:text-lg font-semibold text-gray-900">Consent Log Details</h3>
               </div>
-              <div className="px-4 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
+              <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <p className="text-xs sm:text-sm text-gray-500">Candidate</p>
@@ -420,7 +420,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                   </div>
                 </div>
               </div>
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex justify-end">
+              <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex justify-end">
                 <button
                   onClick={() => {
                     setSelectedLog(null);

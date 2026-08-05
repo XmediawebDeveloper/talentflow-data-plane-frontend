@@ -1017,7 +1017,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
       {/* Create User Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-lg max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
             <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Create New User</h2>
               <button
@@ -1179,7 +1179,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
       {/* Edit User Modal */}
       {editingUser && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-lg max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
             <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Edit User</h2>
               <button

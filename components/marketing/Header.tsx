@@ -7,14 +7,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-const navItems = [
-  { label: "Home", href: "/" },
-  { label: "Features", href: "/features" },
-  { label: "How It Works", href: "/how-it-works" },
-  { label: "Pricing", href: "/pricing" },
-  { label: "About", href: "/about" },
-  { label: "Careers", href: "/careers" },
-  { label: "Contact", href: "/contact" },
+// Items with a `section` exist on the one-page landing route, so on "/" the
+// menu scrolls to them; an item without one would always navigate to its page.
+// Careers and Contact are reachable from the footer rather than this menu.
+const navItems: Array<{ label: string; href: string; section?: string }> = [
+  { label: "Home", href: "/", section: "home" },
+  { label: "Features", href: "/features", section: "features" },
+  { label: "How It Works", href: "/how-it-works", section: "how-it-works" },
+  { label: "Pricing", href: "/pricing", section: "pricing" },
+  { label: "About", href: "/about", section: "about" },
 ];
 
 export function Header() {
@@ -23,8 +24,10 @@ export function Header() {
   const [isSubdomain, setIsSubdomain] = useState(false);
   const [isOrgLogin, setIsOrgLogin] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [activeSection, setActiveSection] = useState("home");
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
+  const isLanding = pathname === "/";
 
   useEffect(() => {
     const host = window.location.hostname;
@@ -51,6 +54,28 @@ export function Header() {
     setMounted(true);
   }, []);
 
+  // On the one-page landing route, highlight the section currently in view.
+  useEffect(() => {
+    if (!isLanding) return;
+    const sections = navItems
+      .map((item) => (item.section ? document.getElementById(item.section) : null))
+      .filter((el): el is HTMLElement => el !== null);
+    if (sections.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (visible) setActiveSection(visible.target.id);
+      },
+      // Only the band just below the header counts as "current".
+      { rootMargin: "-15% 0px -70% 0px", threshold: 0 }
+    );
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [isLanding]);
+
   // Hide the entire header on org-specific login pages (?org=xxx or <org>.0sms.com/login)
   if (isOrgLogin) return null;
 
@@ -73,21 +98,34 @@ export function Header() {
             />
           </Link>
 
-          {!isLoggedIn && !isOrgLogin && (
+          {/* The site menu stays available to signed-in visitors — it is the
+              section index for the one-page landing route. Only the auth
+              buttons below are hidden once there is a session. */}
+          {!isOrgLogin && (
             <nav className="hidden lg:flex items-center gap-4 xl:gap-8">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`transition-colors font-medium text-sm xl:text-base whitespace-nowrap ${
-                    pathname === item.href
-                      ? "text-gray-900 dark:text-white"
-                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {navItems.map((item) => {
+                // A menu item only tracks the scroll position when it has a
+                // section on this route; otherwise it is a plain page link.
+                const onPage = isLanding && !!item.section;
+                const active = onPage ? activeSection === item.section : pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={onPage ? `#${item.section}` : item.href}
+                    aria-current={active ? "true" : undefined}
+                    className={`relative py-1 transition-colors font-medium text-sm xl:text-base whitespace-nowrap ${
+                      active
+                        ? "text-gray-900 dark:text-white"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                    }`}
+                  >
+                    {item.label}
+                    {active && onPage && (
+                      <span className="absolute -bottom-0.5 left-0 right-0 h-0.5 rounded-full bg-brand-orange" />
+                    )}
+                  </Link>
+                );
+              })}
             </nav>
           )}
 
@@ -141,9 +179,11 @@ export function Header() {
               )}
             </button>
 
-            {!isLoggedIn && !isOrgLogin && (
+            {!isOrgLogin && (
               <button
                 className="p-2"
+                aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+                aria-expanded={mobileMenuOpen}
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               >
                 {mobileMenuOpen ? (
@@ -156,40 +196,49 @@ export function Header() {
           </div>
         </div>
 
-        {mobileMenuOpen && !isLoggedIn && !isOrgLogin && (
+        {mobileMenuOpen && !isOrgLogin && (
           <div className="lg:hidden py-4 border-t border-gray-200 dark:border-gray-700">
             <nav className="flex flex-col gap-4">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  prefetch={false}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`text-left py-2 font-medium ${
-                    pathname === item.href
-                      ? "text-gray-900 dark:text-white"
-                      : "text-gray-500 dark:text-gray-400"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
-              <div className="flex flex-col gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <Button
-                  variant="outline"
-                  className="w-full border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
-                  asChild
-                >
-                  <Link href="/signup" prefetch={false}>Sign Up</Link>
-                </Button>
-                <Link
-                  href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`}
-                  prefetch={false}
-                  className="w-full inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
-                >
-                  Start Free Trial
-                </Link>
-              </div>
+              {navItems.map((item) => {
+                // A menu item only tracks the scroll position when it has a
+                // section on this route; otherwise it is a plain page link.
+                const onPage = isLanding && !!item.section;
+                const active = onPage ? activeSection === item.section : pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={isLanding ? `#${item.section}` : item.href}
+                    prefetch={false}
+                    aria-current={active ? "true" : undefined}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`text-left py-2 font-medium ${
+                      active
+                        ? "text-gray-900 dark:text-white"
+                        : "text-gray-500 dark:text-gray-400"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+              {!isLoggedIn && (
+                <div className="flex flex-col gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <Button
+                    variant="outline"
+                    className="w-full border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                    asChild
+                  >
+                    <Link href="/signup" prefetch={false}>Sign Up</Link>
+                  </Button>
+                  <Link
+                    href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`}
+                    prefetch={false}
+                    className="w-full inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
+                  >
+                    Start Free Trial
+                  </Link>
+                </div>
+              )}
             </nav>
           </div>
         )}

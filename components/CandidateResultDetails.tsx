@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
@@ -35,6 +35,11 @@ interface CandidateResultDetailsProps {
    * results/details route wraps its own breadcrumb externally and omits this.
    */
   breadcrumbItems?: BreadcrumbCrumb[];
+  /**
+   * Fired once the candidate record loads, so a parent that owns the breadcrumb
+   * can name its deepest crumb after the candidate instead of a generic label.
+   */
+  onCandidateLoaded?: (name: string) => void;
 }
 
 interface CandidateBasicInfo {
@@ -159,6 +164,7 @@ export default function CandidateResultDetails({
   onNext,
   showRecordPager = true,
   breadcrumbItems,
+  onCandidateLoaded,
 }: CandidateResultDetailsProps) {
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
@@ -258,6 +264,7 @@ export default function CandidateResultDetails({
         // Use overall score from API
         const overallScore = details.overall_score ?? 0;
 
+        onCandidateLoaded?.(details.candidate_name || '');
         setCandidateData({
           name: details.candidate_name || 'Unknown',
           email: details.candidate_email || '',
@@ -455,21 +462,13 @@ export default function CandidateResultDetails({
           />
         </div>
       )}
-      {/* Sticky Header — Back + Title + Export Results in one gradient bar so the
-          inner Question-Analysis tab nav (z-20) can no longer climb on top of it
-          during scroll. */}
-      <div className="bg-brand-blue border-b border-brand-blue-2/40 sticky top-0 z-40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
+      {/* Sticky Header — kept below the shared breadcrumb (z-30), but above the
+          inner Question-Analysis tab nav. */}
+      <div className="bg-brand-blue border-b border-brand-blue-2/40 sticky top-0 z-20 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
+            {/* No back arrow here — the breadcrumb above owns the way back. */}
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <button
-                onClick={onBack}
-                className="w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur-sm text-white ring-1 ring-white/25 transition-colors flex-shrink-0"
-                title="Back to Results"
-                aria-label="Back to Results"
-              >
-                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
               <div className="w-9 h-9 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ring-white/20">
                 <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
@@ -1046,7 +1045,7 @@ export default function CandidateResultDetails({
                 <button
                   onClick={handleGenerateInsights}
                   disabled={isGeneratingInsights}
-                  className="px-4 py-2 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
                   {isGeneratingInsights ? (
                     <>
@@ -1127,7 +1126,7 @@ export default function CandidateResultDetails({
                   <button
                     onClick={handleGenerateInsights}
                     disabled={isGeneratingInsights}
-                    className="px-6 py-3 bg-brand-blue hover:from-brand-blue-2 hover:to-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    className="px-6 py-3 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                   >
                     {isGeneratingInsights ? (
                       <>
@@ -1214,10 +1213,10 @@ export default function CandidateResultDetails({
               {/* Tab Navigation — sticky so the candidate viewer can switch
                   between HR / Technical / Coding / Violations without
                   scrolling all the way back up on long question lists.
-                  z-20 keeps it above question cards but BELOW the page-level
-                  brand header (z-40), so it can never overlap the title /
+                  z-10 keeps it above question cards but BELOW the page-level
+                  brand header (z-20), so it can never overlap the title /
                   Prev/Next / Export Results bar during scroll. */}
-              <div className="sticky top-[64px] sm:top-[80px] z-20 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm">
+              <div className="sticky top-[64px] sm:top-[80px] z-10 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm">
                 <div className="flex flex-wrap gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3">
                   {detailedResult.round_scores.map((round, idx) => {
                     const isActive = activeTab === round.round_type;
