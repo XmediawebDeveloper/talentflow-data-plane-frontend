@@ -12,6 +12,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import VersionBadge from './VersionBadge';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 
@@ -56,6 +57,49 @@ const formatEmploymentType = (type: string | undefined): string => {
     .join(' ');
 };
 
+// ---- Read-only label helpers for the Extracted Data Summary ----
+// Deliberately identical to the Job Details page's versions so the same JD
+// reads the same on both screens; the JD API shape (snake_case) is mapped to
+// them at the call site.
+const prettifyCode = (value?: string): string =>
+  (value || '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+const EDUCATION_LABELS: Record<string, string> = {
+  diploma: 'Diploma',
+  associate: 'Associate Degree',
+  bachelors: "Bachelor's Degree",
+  masters: "Master's Degree",
+  doctorate: 'Doctorate / PhD',
+  none: 'No formal education required',
+  others: 'Others',
+};
+const educationLabel = (value?: string): string =>
+  value ? (EDUCATION_LABELS[value.toLowerCase()] || prettifyCode(value)) : 'Not specified';
+
+const employmentTypeLabel = (value?: string): string => {
+  switch (value) {
+    case 'full_time': return 'Full Time';
+    case 'part_time': return 'Part Time';
+    case 'contract': return 'Contract';
+    case 'internship': return 'Internship';
+    case 'temporary': return 'Temporary / Seasonal';
+    default: return value ? prettifyCode(value) : 'Not specified';
+  }
+};
+
+const workModeLabel = (value?: string): string => {
+  switch (value) {
+    case 'onsite': return 'Onsite';
+    case 'remote': return 'Remote';
+    case 'hybrid': return 'Hybrid';
+    case 'field_based': return 'Field-based / Travel';
+    default: return value ? prettifyCode(value) : 'Not specified';
+  }
+};
+
 export default function AssessmentDetailsView({
   assessment,
   onBack,
@@ -97,6 +141,31 @@ export default function AssessmentDetailsView({
   const [jdData, setJdData] = useState<JDResponse | null>(null);
   const [jdLoading, setJdLoading] = useState(false);
   const [jdError, setJdError] = useState<string | null>(null);
+  // Collapsible "Extracted Data Summary" on the View JD tab — same component
+  // and same default (collapsed) as the Job Details page.
+  const [showExtractedSummary, setShowExtractedSummary] = useState(false);
+
+  // Structured requirements behind the JD, mapped from the raw API shape to the
+  // same values the Job Details page renders.
+  const jdMustHaveSkills = jdData?.must_have_skills || [];
+  const jdNiceToHaveSkills = jdData?.nice_to_have_skills || [];
+  const jdMustHaveComments = jdData?.must_have_comments || [];
+  const jdNiceToHaveComments = jdData?.nice_to_have_comments || [];
+  // education_requirements is an object ({ degree, field }); Job Details reads a
+  // pre-flattened string, so flatten it the same way here.
+  const jdEducationDegree = (jdData?.education_requirements as { degree?: string } | undefined)?.degree;
+  const jdEducationField = (jdData?.education_requirements as { field?: string } | undefined)?.field;
+  const jdExperienceText = formatJobExperienceText({
+    jobLevel: jdData?.job_level,
+    experienceMin: jdData?.experience_min,
+    experienceMax: jdData?.experience_max,
+  });
+  const hasAnyExtractedData = Boolean(
+    jdMustHaveSkills.length || jdNiceToHaveSkills.length ||
+    jdMustHaveComments.length || jdNiceToHaveComments.length ||
+    jdExperienceText || jdEducationDegree || jdData?.industry_type ||
+    jdData?.employment_type || jdData?.remote_type
+  );
 
   // Fetch recent activity when assessment changes.
   // Each invitation is expanded into MULTIPLE timeline events (Invited,
@@ -2194,6 +2263,140 @@ export default function AssessmentDetailsView({
                       </ReactMarkdown>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Extracted Data Summary — collapsible, mirroring the Job Details
+                  page. Recruiters reviewing an assessment were seeing only the
+                  JD prose here and had to open the full JD page to check the
+                  structured requirements the questions were generated from. */}
+              {hasAnyExtractedData && (
+                <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                  <button
+                    onClick={() => setShowExtractedSummary(!showExtractedSummary)}
+                    className="w-full bg-brand-blue/[0.04] px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex items-center justify-between hover:bg-brand-blue/[0.07] transition-colors rounded-t-xl"
+                  >
+                    <div className="text-left">
+                      <h3 className="text-sm sm:text-lg text-gray-900 flex items-center gap-2 flex-wrap">
+                        📊 Extracted Data Summary
+                        <Eye className="w-5 h-5 text-gray-500" />
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Click to {showExtractedSummary ? 'hide' : 'view'} structured requirements
+                      </p>
+                    </div>
+                    <div className={`transform transition-transform ${showExtractedSummary ? 'rotate-180' : ''}`}>
+                      <ChevronRight className="w-5 h-5 text-gray-500 rotate-90" />
+                    </div>
+                  </button>
+
+                  {showExtractedSummary && (
+                    <>
+                      {/* Skills & Comments */}
+                      <div className="p-4 sm:p-6 border-b border-gray-200">
+                        <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Skills &amp; Requirements</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                          <div className="space-y-4 sm:space-y-6">
+                            <div>
+                              <h4 className="text-sm text-gray-700 mb-3">Must-Have Skills ({jdMustHaveSkills.length})</h4>
+                              {jdMustHaveSkills.length > 0 ? (
+                                <div className="space-y-2">
+                                  {jdMustHaveSkills.map((skill, index) => (
+                                    <div key={`ed-mh-${index}`} className="flex items-center gap-2 text-sm text-gray-700">
+                                      <CheckCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                                      {skill}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-gray-500 italic text-sm">None</p>
+                              )}
+                            </div>
+                            <div>
+                              <h4 className="text-sm text-gray-700 mb-3">Nice-to-Have Skills ({jdNiceToHaveSkills.length})</h4>
+                              {jdNiceToHaveSkills.length > 0 ? (
+                                <div className="space-y-2">
+                                  {jdNiceToHaveSkills.map((skill, index) => (
+                                    <div key={`ed-nh-${index}`} className="flex items-center gap-2 text-sm text-gray-600">
+                                      <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
+                                      {skill}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-gray-500 italic text-sm">None</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-4 sm:space-y-6">
+                            <div>
+                              <h4 className="text-sm text-gray-700 mb-3">Must-Have Additional Requirements ({jdMustHaveComments.length})</h4>
+                              {jdMustHaveComments.length > 0 ? (
+                                <div className="space-y-2">
+                                  {jdMustHaveComments.map((comment, index) => (
+                                    <div key={`ed-mhc-${index}`} className="flex items-start gap-2 text-sm text-gray-700">
+                                      <CheckCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                                      <span>{comment}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-gray-500 italic text-sm">None</p>
+                              )}
+                            </div>
+                            <div>
+                              <h4 className="text-sm text-gray-700 mb-3">Nice-to-Have Additional Requirements ({jdNiceToHaveComments.length})</h4>
+                              {jdNiceToHaveComments.length > 0 ? (
+                                <div className="space-y-2">
+                                  {jdNiceToHaveComments.map((comment, index) => (
+                                    <div key={`ed-nhc-${index}`} className="flex items-start gap-2 text-sm text-gray-600">
+                                      <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                                      <span>{comment}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-gray-500 italic text-sm">None</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Requirements Grid */}
+                      <div className="p-4 sm:p-6">
+                        <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Requirements</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                          <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                            <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Experience</h4>
+                            <p className="text-sm sm:text-base text-gray-900">{jdExperienceText || 'Not specified'}</p>
+                          </div>
+                          <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                            <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Education</h4>
+                            <p className="text-sm sm:text-base text-gray-900">
+                              {educationLabel(jdEducationDegree)}
+                              {jdEducationField ? ` — ${jdEducationField}` : ''}
+                            </p>
+                          </div>
+                          {jdData.industry_type && (
+                            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                              <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Industry Type</h4>
+                              <p className="text-sm sm:text-base text-gray-900">{prettifyCode(jdData.industry_type)}</p>
+                            </div>
+                          )}
+                          <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                            <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Employment Type</h4>
+                            <p className="text-sm sm:text-base text-gray-900">{employmentTypeLabel(jdData.employment_type)}</p>
+                          </div>
+                          <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                            <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Work Mode</h4>
+                            <p className="text-sm sm:text-base text-gray-900">{workModeLabel(jdData.remote_type)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 

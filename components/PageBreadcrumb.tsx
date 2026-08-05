@@ -81,9 +81,13 @@ export default function PageBreadcrumb({
                     </button>
                   </BreadcrumbLink>
                 ) : (
-                  <BreadcrumbPage className="font-semibold text-brand-blue">
-                    {crumb.label}
-                  </BreadcrumbPage>
+                  // A middle crumb with no href and no onClick — a grouping
+                  // label whose section has no page of its own (e.g. "Audits",
+                  // "Reports"). Muted, not brand-blue semibold: styled like the
+                  // last crumb it read as a second "current page", so the trail
+                  // showed two highlighted items and neither looked like where
+                  // the user actually was.
+                  <span className="text-slate-500">{crumb.label}</span>
                 )}
               </BreadcrumbItem>
               {!isLast && <BreadcrumbSeparator />}

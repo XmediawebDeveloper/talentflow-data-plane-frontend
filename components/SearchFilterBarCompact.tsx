@@ -2,7 +2,6 @@
 
 import { Search, X, ChevronDown, SlidersHorizontal, Calendar, MapPin, Building2, Clock, GraduationCap, Briefcase, ChevronRight, Upload, Users, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
-import { useDebounce } from '@/lib/hooks/useDebounce';
 
 interface SearchFilterBarProps {
   searchQuery: string;
@@ -24,18 +23,14 @@ export default function SearchFilterBarCompact({
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
   const [tempFilters, setTempFilters] = useState(filters);
-  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const filterPanelRef = useRef<HTMLDivElement>(null);
 
   // Accordion states for collapsible sections
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
 
-  // Debounce search to improve performance
-  const debouncedSearch = useDebounce(localSearchQuery, 300);
-
-  useEffect(() => {
-    onSearchChange(debouncedSearch);
-  }, [debouncedSearch, onSearchChange]);
+  // No local copy and no debounce here any more: the owning page runs the search
+  // through `useListSearch`, which holds the typed value and hands the settled
+  // one to the fetch. Debouncing in both places just stacked the delays.
 
   useEffect(() => {
     setTempFilters(filters);
@@ -74,7 +69,6 @@ export default function SearchFilterBarCompact({
     // Reset the search box too. job-openings' clearAllFilters() clears the search
     // as well; leaving it set here meant "Clear all" appeared to do nothing when
     // the results were actually still narrowed by the search text.
-    setLocalSearchQuery('');
     onSearchChange('');
   };
 
@@ -239,25 +233,19 @@ export default function SearchFilterBarCompact({
           <input
             type="text"
             placeholder="Search by name, email, phone, skills, title, or company..."
-            value={localSearchQuery}
-            onChange={(e) => setLocalSearchQuery(e.target.value)}
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
             className="w-full h-9 pl-9 pr-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-400"
           />
-          {localSearchQuery && (
+          {searchQuery && (
             <button
               onClick={() => {
-                setLocalSearchQuery('');
                 onSearchChange('');
               }}
               className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-200 rounded-full p-1 transition-colors"
              aria-label="Close">
               <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
             </button>
-          )}
-          {localSearchQuery && localSearchQuery !== debouncedSearch && (
-            <div className="absolute right-10 top-1/2 -translate-y-1/2">
-              <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />
-            </div>
           )}
         </div>
 

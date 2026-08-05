@@ -28,6 +28,7 @@ import { useQuota } from '@/contexts/QuotaContext';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 
 interface Job {
   id: string;
@@ -227,7 +228,7 @@ export default function AITalentMatchPage({
   // one row shows every job that candidate matched.
   const openCandidatesView = async () => {
     setHistoryPageView('candidates');
-    setCandidateSearchQuery('');
+    candidateSearch.setQuery('');
     setHistoryListScrollRequest((request) => request + 1);
 
     if (matchHistory.length === 0) {
@@ -327,15 +328,30 @@ export default function AITalentMatchPage({
     router.push(url.pathname + url.search, { scroll: false });
   };
   
-  // History filters
-  const [historySearchQuery, setHistorySearchQuery] = useState('');
-  const [historyDateFrom, setHistoryDateFrom] = useState('');
-  const [historyDateTo, setHistoryDateTo] = useState('');
-  const [historyFilterPhone, setHistoryFilterPhone] = useState('');
-  const [historyFilterLocation, setHistoryFilterLocation] = useState('');
-  const [historyFilterExpMin, setHistoryFilterExpMin] = useState<number | ''>('');
-  const [historyFilterExpMax, setHistoryFilterExpMax] = useState<number | ''>('');
-  const [historyFilterMinMatches, setHistoryFilterMinMatches] = useState<number | ''>('');
+  // Matched Jobs list: search + seven filters, in the shared hook. Sorting stays
+  // local — it narrows nothing, so it does not belong in the filter count.
+  const historySearch = useListSearch({
+    initialFilters: {
+      dateFrom: '',
+      dateTo: '',
+      phone: '',
+      location: '',
+      expMin: '' as number | '',
+      expMax: '' as number | '',
+      minMatches: '' as number | '',
+    },
+    onChange: () => setHistoryCurrentPage(1),
+  });
+  const historySearchQuery = historySearch.appliedQuery;
+  const {
+    dateFrom: historyDateFrom,
+    dateTo: historyDateTo,
+    phone: historyFilterPhone,
+    location: historyFilterLocation,
+    expMin: historyFilterExpMin,
+    expMax: historyFilterExpMax,
+    minMatches: historyFilterMinMatches,
+  } = historySearch.filters;
   const [historySortBy, setHistorySortBy] = useState<'date' | 'matches' | 'title'>('date');
   const [historySortOrder, setHistorySortOrder] = useState<'asc' | 'desc'>('desc');
   // Phone / location / experience filter the candidates inside each match, so
@@ -382,25 +398,39 @@ export default function AITalentMatchPage({
   // the jobs they matched. Built in-page — no navigation away.
   const [candidateRows, setCandidateRows] = useState<CandidateMatchRow[]>([]);
   const [loadingCandidateRows, setLoadingCandidateRows] = useState(false);
-  const [candidateSearchQuery, setCandidateSearchQuery] = useState('');
+
   // Rows whose job chips are expanded past the single-line "+N more" cutoff.
   const [expandedJobChips, setExpandedJobChips] = useState<Set<string>>(new Set());
 
   // Candidate roll-up filters (mirrors the job-openings "More Filters" panel)
   const [showCandidateFilters, setShowCandidateFilters] = useState(false);
-  // True once the user confirms the More Filters panel with "Done" — mirrors
-  // job-openings, so Clear appears only after filters are applied.
-  const [candidateFiltersConfirmed, setCandidateFiltersConfirmed] = useState(false);
-  const [candidateFilterLocation, setCandidateFilterLocation] = useState('all');
-  const [candidateFilterJob, setCandidateFilterJob] = useState('all');
-  const [candidateFilterMinScore, setCandidateFilterMinScore] = useState(0);
-  const [candidateFilterMultiJob, setCandidateFilterMultiJob] = useState(false);
-  // Same filter vocabulary as the Matched Jobs list.
-  const [candidateFilterPhone, setCandidateFilterPhone] = useState('');
-  const [candidateFilterExpMin, setCandidateFilterExpMin] = useState<number | ''>('');
-  const [candidateFilterExpMax, setCandidateFilterExpMax] = useState<number | ''>('');
-  const [candidateFilterDateFrom, setCandidateFilterDateFrom] = useState('');
-  const [candidateFilterDateTo, setCandidateFilterDateTo] = useState('');
+  // Candidate roll-up: search + nine filters, same shared hook. Same filter
+  // vocabulary as the Matched Jobs list above.
+  const candidateSearch = useListSearch({
+    initialFilters: {
+      location: 'all',
+      job: 'all',
+      minScore: 0,
+      multiJob: false,
+      phone: '',
+      expMin: '' as number | '',
+      expMax: '' as number | '',
+      dateFrom: '',
+      dateTo: '',
+    },
+  });
+  const candidateSearchQuery = candidateSearch.appliedQuery;
+  const {
+    location: candidateFilterLocation,
+    job: candidateFilterJob,
+    minScore: candidateFilterMinScore,
+    multiJob: candidateFilterMultiJob,
+    phone: candidateFilterPhone,
+    expMin: candidateFilterExpMin,
+    expMax: candidateFilterExpMax,
+    dateFrom: candidateFilterDateFrom,
+    dateTo: candidateFilterDateTo,
+  } = candidateSearch.filters;
   const [candidateSortBy, setCandidateSortBy] = useState<'score' | 'name' | 'jobs' | 'date'>('jobs');
   const [candidateSortOrder, setCandidateSortOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -456,33 +486,11 @@ export default function AITalentMatchPage({
     return 'bg-red-100 text-red-700 border-red-300';
   };
 
-  const clearCandidateFilters = () => {
-    setCandidateFiltersConfirmed(false);
-    setCandidateFilterLocation('all');
-    setCandidateFilterJob('all');
-    setCandidateFilterMinScore(0);
-    setCandidateFilterMultiJob(false);
-    setCandidateFilterPhone('');
-    setCandidateFilterExpMin('');
-    setCandidateFilterExpMax('');
-    setCandidateFilterDateFrom('');
-    setCandidateFilterDateTo('');
-    setCandidateSearchQuery('');
-  };
+  const clearCandidateFilters = candidateSearch.reset;
 
   // One clear for the whole Matched Jobs list — shared by the panel's "Reset
   // all" and the empty state's button, which used to reset only three of them.
-  const clearHistoryFilters = () => {
-    setHistoryFiltersConfirmed(false);
-    setHistorySearchQuery('');
-    setHistoryDateFrom('');
-    setHistoryDateTo('');
-    setHistoryFilterPhone('');
-    setHistoryFilterLocation('');
-    setHistoryFilterExpMin('');
-    setHistoryFilterExpMax('');
-    setHistoryFilterMinMatches('');
-  };
+  const clearHistoryFilters = historySearch.reset;
 
   const openHistoryListView = () => {
     setHistoryCurrentPage(1);
@@ -490,13 +498,12 @@ export default function AITalentMatchPage({
     setHistoryListScrollRequest((request) => request + 1);
   };
 
+  // Query and filter changes reset the page via the hook's `onChange`; sorting
+  // does not go through the hook, so it still needs its own reset.
   useEffect(() => {
     setHistoryCurrentPage(1);
-  }, [historySearchQuery, historyDateFrom, historyDateTo, historyFilterPhone, historyFilterLocation, historyFilterExpMin, historyFilterExpMax, historyFilterMinMatches, historySortBy, historySortOrder]);
+  }, [historySortBy, historySortOrder]);
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
-  // True once the user confirms the panel with "Done" - mirrors job-openings,
-  // so Clear appears only after filters are applied.
-  const [historyFiltersConfirmed, setHistoryFiltersConfirmed] = useState(false);
   
   // Matching progress
   const [showMatchingPanel, setShowMatchingPanel] = useState(false);
@@ -559,27 +566,31 @@ export default function AITalentMatchPage({
       if (!keepFilters) return;
 
       if (typeof s.showHistoryFilters === 'boolean') setShowHistoryFilters(s.showHistoryFilters);
-      if (typeof s.historySearchQuery === 'string') setHistorySearchQuery(s.historySearchQuery);
-      if (typeof s.historyDateFrom === 'string') setHistoryDateFrom(s.historyDateFrom);
-      if (typeof s.historyDateTo === 'string') setHistoryDateTo(s.historyDateTo);
-      if (typeof s.historyFilterPhone === 'string') setHistoryFilterPhone(s.historyFilterPhone);
-      if (typeof s.historyFilterLocation === 'string') setHistoryFilterLocation(s.historyFilterLocation);
-      if (typeof s.historyFilterExpMin === 'number' || s.historyFilterExpMin === '') setHistoryFilterExpMin(s.historyFilterExpMin as number | '');
-      if (typeof s.historyFilterExpMax === 'number' || s.historyFilterExpMax === '') setHistoryFilterExpMax(s.historyFilterExpMax as number | '');
-      if (typeof s.historyFilterMinMatches === 'number' || s.historyFilterMinMatches === '') setHistoryFilterMinMatches(s.historyFilterMinMatches as number | '');
+      if (typeof s.historySearchQuery === 'string') historySearch.setQuery(s.historySearchQuery);
+      historySearch.setFilters({
+        dateFrom: typeof s.historyDateFrom === 'string' ? s.historyDateFrom : '',
+        dateTo: typeof s.historyDateTo === 'string' ? s.historyDateTo : '',
+        phone: typeof s.historyFilterPhone === 'string' ? s.historyFilterPhone : '',
+        location: typeof s.historyFilterLocation === 'string' ? s.historyFilterLocation : '',
+        expMin: typeof s.historyFilterExpMin === 'number' ? s.historyFilterExpMin : '',
+        expMax: typeof s.historyFilterExpMax === 'number' ? s.historyFilterExpMax : '',
+        minMatches: typeof s.historyFilterMinMatches === 'number' ? s.historyFilterMinMatches : '',
+      });
       if (s.historySortBy === 'date' || s.historySortBy === 'matches' || s.historySortBy === 'title') setHistorySortBy(s.historySortBy);
       if (s.historySortOrder === 'asc' || s.historySortOrder === 'desc') setHistorySortOrder(s.historySortOrder);
       if (typeof s.historyCurrentPage === 'number') setHistoryCurrentPage(s.historyCurrentPage);
-      if (typeof s.candidateSearchQuery === 'string') setCandidateSearchQuery(s.candidateSearchQuery);
-      if (typeof s.candidateFilterLocation === 'string') setCandidateFilterLocation(s.candidateFilterLocation);
-      if (typeof s.candidateFilterJob === 'string') setCandidateFilterJob(s.candidateFilterJob);
-      if (typeof s.candidateFilterMinScore === 'number') setCandidateFilterMinScore(s.candidateFilterMinScore);
-      if (typeof s.candidateFilterMultiJob === 'boolean') setCandidateFilterMultiJob(s.candidateFilterMultiJob);
-      if (typeof s.candidateFilterPhone === 'string') setCandidateFilterPhone(s.candidateFilterPhone);
-      if (typeof s.candidateFilterExpMin === 'number' || s.candidateFilterExpMin === '') setCandidateFilterExpMin(s.candidateFilterExpMin as number | '');
-      if (typeof s.candidateFilterExpMax === 'number' || s.candidateFilterExpMax === '') setCandidateFilterExpMax(s.candidateFilterExpMax as number | '');
-      if (typeof s.candidateFilterDateFrom === 'string') setCandidateFilterDateFrom(s.candidateFilterDateFrom);
-      if (typeof s.candidateFilterDateTo === 'string') setCandidateFilterDateTo(s.candidateFilterDateTo);
+      if (typeof s.candidateSearchQuery === 'string') candidateSearch.setQuery(s.candidateSearchQuery);
+      candidateSearch.setFilters({
+        location: typeof s.candidateFilterLocation === 'string' ? s.candidateFilterLocation : 'all',
+        job: typeof s.candidateFilterJob === 'string' ? s.candidateFilterJob : 'all',
+        minScore: typeof s.candidateFilterMinScore === 'number' ? s.candidateFilterMinScore : 0,
+        multiJob: typeof s.candidateFilterMultiJob === 'boolean' ? s.candidateFilterMultiJob : false,
+        phone: typeof s.candidateFilterPhone === 'string' ? s.candidateFilterPhone : '',
+        expMin: typeof s.candidateFilterExpMin === 'number' ? s.candidateFilterExpMin : '',
+        expMax: typeof s.candidateFilterExpMax === 'number' ? s.candidateFilterExpMax : '',
+        dateFrom: typeof s.candidateFilterDateFrom === 'string' ? s.candidateFilterDateFrom : '',
+        dateTo: typeof s.candidateFilterDateTo === 'string' ? s.candidateFilterDateTo : '',
+      });
       if (s.candidateSortBy === 'score' || s.candidateSortBy === 'name' || s.candidateSortBy === 'jobs' || s.candidateSortBy === 'date') setCandidateSortBy(s.candidateSortBy);
       if (s.candidateSortOrder === 'asc' || s.candidateSortOrder === 'desc') setCandidateSortOrder(s.candidateSortOrder);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
@@ -1304,15 +1315,7 @@ export default function AITalentMatchPage({
   });
 
   // Search sits outside the panel, so — like job-openings — it is not counted.
-  const activeFiltersCount = [
-    historyDateFrom !== '',
-    historyDateTo !== '',
-    historyFilterMinMatches !== '',
-    historyFilterPhone !== '',
-    historyFilterLocation !== '',
-    historyFilterExpMin !== '',
-    historyFilterExpMax !== '',
-  ].filter(Boolean).length;
+  const activeFiltersCount = historySearch.activeFilterCount;
 
   // View: Matching in Progress (direct flow from resume-view / deep link)
   if (viewMode === 'matching') {
@@ -2227,17 +2230,8 @@ export default function AITalentMatchPage({
       new Set(candidateRows.flatMap(row => row.jobs.map(job => job.jobTitle)).filter(Boolean))
     ).sort();
 
-    const candidateFiltersCount =
-      (candidateFilterLocation !== 'all' ? 1 : 0) +
-      (candidateFilterJob !== 'all' ? 1 : 0) +
-      (candidateFilterMinScore > 0 ? 1 : 0) +
-      (candidateFilterMultiJob ? 1 : 0) +
-      (candidateFilterPhone !== '' ? 1 : 0) +
-      (candidateFilterExpMin !== '' ? 1 : 0) +
-      (candidateFilterExpMax !== '' ? 1 : 0) +
-      (candidateFilterDateFrom !== '' ? 1 : 0) +
-      (candidateFilterDateTo !== '' ? 1 : 0);
-    const candidateFiltersApplied = candidateFiltersCount > 0 || candidateQuery.length > 0;
+    const candidateFiltersCount = candidateSearch.activeFilterCount;
+    const candidateFiltersApplied = candidateSearch.isNarrowed;
 
     return (
       <>
@@ -2359,15 +2353,16 @@ export default function AITalentMatchPage({
               <ListToolbar
                 className={showCandidateFilters ? 'mb-3' : 'mb-0'}
                 searchValue={candidateSearchQuery}
-                onSearchChange={setCandidateSearchQuery}
+                onSearchChange={candidateSearch.setQuery}
+                // The hook debounces into `appliedQuery`, so keystrokes pass through.
+                searchDebounceMs={0}
                 searchPlaceholder="Search candidates by name, email or job..."
                 onToggleFilters={() => {
-                  if (showCandidateFilters) setCandidateFiltersConfirmed(true);
                   setShowCandidateFilters(!showCandidateFilters);
                 }}
                 filtersOpen={showCandidateFilters}
                 activeFilterCount={candidateFiltersCount}
-                filtersApplied={(candidateFiltersConfirmed && candidateFiltersCount > 0) || candidateQuery.length > 0}
+                filtersApplied={candidateFiltersApplied}
                 onClearFilters={clearCandidateFilters}
               >
                 <div className="flex items-center gap-2">
@@ -2407,7 +2402,7 @@ export default function AITalentMatchPage({
                         <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Location</label>
                         <select
                           value={candidateFilterLocation}
-                          onChange={(e) => setCandidateFilterLocation(e.target.value)}
+                          onChange={(e) => candidateSearch.setFilter('location', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
                         >
                           <option value="all">All Locations</option>
@@ -2423,7 +2418,7 @@ export default function AITalentMatchPage({
                         <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Matched Job</label>
                         <select
                           value={candidateFilterJob}
-                          onChange={(e) => setCandidateFilterJob(e.target.value)}
+                          onChange={(e) => candidateSearch.setFilter('job', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
                         >
                           <option value="all">All Jobs</option>
@@ -2438,7 +2433,7 @@ export default function AITalentMatchPage({
                       <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Minimum Match</label>
                       <select
                         value={candidateFilterMinScore}
-                        onChange={(e) => setCandidateFilterMinScore(Number(e.target.value))}
+                        onChange={(e) => candidateSearch.setFilter('minScore', Number(e.target.value))}
                         className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
                       >
                         <option value={0}>Any score</option>
@@ -2455,7 +2450,7 @@ export default function AITalentMatchPage({
                         <input
                           type="checkbox"
                           checked={candidateFilterMultiJob}
-                          onChange={(e) => setCandidateFilterMultiJob(e.target.checked)}
+                          onChange={(e) => candidateSearch.setFilter('multiJob', e.target.checked)}
                         />
                         <span className="text-sm text-gray-700 dark:text-slate-300">Matched 2+ jobs</span>
                       </label>
@@ -2467,7 +2462,7 @@ export default function AITalentMatchPage({
                         id="candidate-phone"
                         type="text"
                         value={candidateFilterPhone}
-                        onChange={(e) => setCandidateFilterPhone(e.target.value)}
+                        onChange={(e) => candidateSearch.setFilter('phone', e.target.value)}
                         placeholder="Full or partial number"
                         className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
                       />
@@ -2480,7 +2475,7 @@ export default function AITalentMatchPage({
                         type="date"
                         value={candidateFilterDateFrom}
                         max={candidateFilterDateTo || undefined}
-                        onChange={(e) => setCandidateFilterDateFrom(e.target.value)}
+                        onChange={(e) => candidateSearch.setFilter('dateFrom', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
                       />
                     </div>
@@ -2492,7 +2487,7 @@ export default function AITalentMatchPage({
                         type="date"
                         value={candidateFilterDateTo}
                         min={candidateFilterDateFrom || undefined}
-                        onChange={(e) => setCandidateFilterDateTo(e.target.value)}
+                        onChange={(e) => candidateSearch.setFilter('dateTo', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
                       />
                     </div>
@@ -2503,7 +2498,7 @@ export default function AITalentMatchPage({
                         <input
                           type="number"
                           value={candidateFilterExpMin}
-                          onChange={(e) => setCandidateFilterExpMin(e.target.value === '' ? '' : Number(e.target.value))}
+                          onChange={(e) => candidateSearch.setFilter('expMin', e.target.value === '' ? '' : Number(e.target.value))}
                           placeholder="Min"
                           min={0}
                           aria-label="Minimum experience in years"
@@ -2512,7 +2507,7 @@ export default function AITalentMatchPage({
                         <input
                           type="number"
                           value={candidateFilterExpMax}
-                          onChange={(e) => setCandidateFilterExpMax(e.target.value === '' ? '' : Number(e.target.value))}
+                          onChange={(e) => candidateSearch.setFilter('expMax', e.target.value === '' ? '' : Number(e.target.value))}
                           placeholder="Max"
                           min={0}
                           aria-label="Maximum experience in years"
@@ -2526,7 +2521,8 @@ export default function AITalentMatchPage({
                       toolbar Clear — same flow as job-openings. */}
                   <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
                     <button
-                      onClick={() => { setShowCandidateFilters(false); setCandidateFiltersConfirmed(true); }}
+                      // The controls above commit as they change, so Done just closes.
+                      onClick={() => setShowCandidateFilters(false)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                     >
                       Done
@@ -2755,15 +2751,16 @@ export default function AITalentMatchPage({
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 lg:p-5 mb-4">
           <ListToolbar
             searchValue={historySearchQuery}
-            onSearchChange={setHistorySearchQuery}
+            onSearchChange={historySearch.setQuery}
+            // The hook debounces into `appliedQuery`, so keystrokes pass through.
+            searchDebounceMs={0}
             searchPlaceholder="Search by job title or JD ID..."
             onToggleFilters={() => {
-              if (showHistoryFilters) setHistoryFiltersConfirmed(true);
               setShowHistoryFilters(!showHistoryFilters);
             }}
             filtersOpen={showHistoryFilters}
             activeFilterCount={activeFiltersCount}
-            filtersApplied={(historyFiltersConfirmed && activeFiltersCount > 0) || historySearchQuery.trim() !== ''}
+            filtersApplied={historySearch.isNarrowed}
             onClearFilters={clearHistoryFilters}
             className="mb-0"
           >
@@ -2809,7 +2806,7 @@ export default function AITalentMatchPage({
                     type="date"
                     value={historyDateFrom}
                     max={historyDateTo || undefined}
-                    onChange={(e) => setHistoryDateFrom(e.target.value)}
+                    onChange={(e) => historySearch.setFilter('dateFrom', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
                   />
                 </div>
@@ -2821,7 +2818,7 @@ export default function AITalentMatchPage({
                     type="date"
                     value={historyDateTo}
                     min={historyDateFrom || undefined}
-                    onChange={(e) => setHistoryDateTo(e.target.value)}
+                    onChange={(e) => historySearch.setFilter('dateTo', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
                   />
                 </div>
@@ -2831,7 +2828,7 @@ export default function AITalentMatchPage({
                   <select
                     id="history-min-matches"
                     value={historyFilterMinMatches}
-                    onChange={(e) => setHistoryFilterMinMatches(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={(e) => historySearch.setFilter('minMatches', e.target.value === '' ? '' : Number(e.target.value))}
                     className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
                   >
                     <option value="">Any number</option>
@@ -2848,7 +2845,7 @@ export default function AITalentMatchPage({
                     id="history-location"
                     type="text"
                     value={historyFilterLocation}
-                    onChange={(e) => setHistoryFilterLocation(e.target.value)}
+                    onChange={(e) => historySearch.setFilter('location', e.target.value)}
                     placeholder="e.g. Chennai"
                     className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
                   />
@@ -2860,7 +2857,7 @@ export default function AITalentMatchPage({
                     id="history-phone"
                     type="text"
                     value={historyFilterPhone}
-                    onChange={(e) => setHistoryFilterPhone(e.target.value)}
+                    onChange={(e) => historySearch.setFilter('phone', e.target.value)}
                     placeholder="Full or partial number"
                     className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
                   />
@@ -2872,7 +2869,7 @@ export default function AITalentMatchPage({
                     <input
                       type="number"
                       value={historyFilterExpMin}
-                      onChange={(e) => setHistoryFilterExpMin(e.target.value === '' ? '' : Number(e.target.value))}
+                      onChange={(e) => historySearch.setFilter('expMin', e.target.value === '' ? '' : Number(e.target.value))}
                       placeholder="Min"
                       min={0}
                       aria-label="Minimum candidate experience in years"
@@ -2881,7 +2878,7 @@ export default function AITalentMatchPage({
                     <input
                       type="number"
                       value={historyFilterExpMax}
-                      onChange={(e) => setHistoryFilterExpMax(e.target.value === '' ? '' : Number(e.target.value))}
+                      onChange={(e) => historySearch.setFilter('expMax', e.target.value === '' ? '' : Number(e.target.value))}
                       placeholder="Max"
                       min={0}
                       aria-label="Maximum candidate experience in years"
@@ -2900,7 +2897,8 @@ export default function AITalentMatchPage({
                   toolbar Clear - same flow as job-openings. */}
               <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
                 <button
-                  onClick={() => { setShowHistoryFilters(false); setHistoryFiltersConfirmed(true); }}
+                  // The controls above commit as they change, so Done just closes.
+                  onClick={() => setShowHistoryFilters(false)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                 >
                   Done

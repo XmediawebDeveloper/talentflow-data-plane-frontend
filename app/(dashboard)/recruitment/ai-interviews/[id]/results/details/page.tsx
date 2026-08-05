@@ -14,6 +14,11 @@ function DetailsContent() {
 
   const configId = params.id as string;
   const sessionId = searchParams.get('session_id');
+  // Opened from the AI Interviews list's Candidate Results tab, which spans
+  // every interview. That recruiter never passed through this interview's own
+  // Results page, so the trail shouldn't claim they did — and Back belongs to
+  // the list they actually came from.
+  const fromCandidateResults = searchParams.get('from') === 'candidate-results';
 
   const [session, setSession] = useState<AIInterviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,8 +37,11 @@ function DetailsContent() {
   const navIndex = navList.findIndex(n => n.id === sessionId);
   const prevSession = navIndex > 0 ? navList[navIndex - 1] : null;
   const nextSession = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
+  // Carries the origin across Prev/Next — without it, paging to the next
+  // candidate would silently re-add the Results crumb mid-session.
   const buildNavUrl = (entry: { id: string }) =>
-    `/recruitment/ai-interviews/${configId}/results/details?session_id=${entry.id}`;
+    `/recruitment/ai-interviews/${configId}/results/details?session_id=${entry.id}` +
+    (fromCandidateResults ? '&from=candidate-results' : '');
 
   useEffect(() => {
     if (!sessionId) {
@@ -59,8 +67,13 @@ function DetailsContent() {
   }, [sessionId]);
 
   const handleBack = () => {
-    router.push(`/recruitment/ai-interviews/${configId}/results`);
+    router.push(
+      fromCandidateResults
+        ? '/recruitment/ai-interviews'
+        : `/recruitment/ai-interviews/${configId}/results`
+    );
   };
+  const backLabel = fromCandidateResults ? 'Back to AI Interviews' : 'Back to Results';
 
   if (!sessionId) {
     return (
@@ -68,7 +81,7 @@ function DetailsContent() {
         <div className="flex flex-col items-center justify-center h-64 space-y-3">
           <div className="text-red-500 text-base">No session selected</div>
           <button onClick={handleBack} className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
-            Back to Results
+            {backLabel}
           </button>
         </div>
       </div>
@@ -91,7 +104,7 @@ function DetailsContent() {
         <div className="flex flex-col items-center justify-center h-64 space-y-3">
           <div className="text-red-500 text-base">{error || 'Session not found'}</div>
           <button onClick={handleBack} className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
-            Back to Results
+            {backLabel}
           </button>
         </div>
       </div>
@@ -109,7 +122,10 @@ function DetailsContent() {
     <CandidateResultsView
       interview={session}
       onBack={handleBack}
-      breadcrumbTrail={[{ label: 'Results', href: `/recruitment/ai-interviews/${configId}/results` }]}
+      // Trail is Dashboard › AI Interviews › <candidate>. No intermediate
+      // "Results" crumb on this route, whichever way the recruiter arrived —
+      // Back and the pager still return them to where they came from.
+      breadcrumbTrail={[]}
       currentIndex={navIndex >= 0 ? navIndex : undefined}
       totalCount={navList.length || undefined}
       onPrev={prevSession ? () => router.replace(buildNavUrl(prevSession)) : undefined}

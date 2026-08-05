@@ -133,7 +133,7 @@ const SHELL =
   "container mx-auto w-full max-w-[1200px] px-4 sm:px-6 lg:px-8 xl:max-w-[1320px] 2xl:max-w-[1480px]";
 
 /** Vertical rhythm, shared so sections can't drift apart. */
-const SECTION_Y = "py-16 sm:py-24 2xl:py-32";
+const SECTION_Y = "py-10 sm:py-14 2xl:py-20";
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
@@ -148,23 +148,98 @@ function SectionHeading({
   title,
   lead,
   align = "left",
+  nowrap = false,
 }: {
   eyebrow: string;
   title: React.ReactNode;
   lead?: string;
   align?: "left" | "center";
+  /** Wraps on small screens, then holds to one line from lg up, where the
+   *  column is finally wide enough for the full title at text-5xl. */
+  nowrap?: boolean;
 }) {
+  // The measure has to lift at lg so the one-line title isn't clipped by it,
+  // but it stays on while the title is still wrapping.
+  const measure = nowrap ? "max-w-2xl lg:max-w-none" : "max-w-2xl 2xl:max-w-3xl";
+
   return (
-    <div className={align === "center" ? "text-center max-w-2xl 2xl:max-w-3xl mx-auto" : "max-w-2xl 2xl:max-w-3xl"}>
+    <div className={`${align === "center" ? `text-center mx-auto ${measure}` : measure}`}>
       <Eyebrow>{eyebrow}</Eyebrow>
-      <h2 className="font-display mt-3 text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl font-bold tracking-[-0.03em] text-[#08132E] dark:text-white text-balance">
+      <h2
+        className={`font-display mt-3 text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl font-bold tracking-[-0.03em] text-[#08132E] dark:text-white text-balance ${
+          nowrap ? "lg:whitespace-nowrap" : ""
+        }`}
+      >
         {title}
       </h2>
       {lead && (
-        <p className="mt-4 text-base sm:text-lg 2xl:text-xl text-slate-600 dark:text-slate-400 leading-relaxed">
+        <p
+          className={`mt-4 text-base sm:text-lg 2xl:text-xl text-slate-600 dark:text-slate-400 leading-relaxed ${
+            nowrap ? `lg:max-w-2xl 2xl:max-w-3xl ${align === "center" ? "mx-auto" : ""}` : ""
+          }`}
+        >
           {lead}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Billing period — a segmented control rather than a switch. Both periods stay
+ * visible and labelled, so the unselected state never has to be inferred, and
+ * the yearly saving is priced into the control itself.
+ */
+function BillingToggle({
+  isYearly,
+  onChange,
+  savePercent,
+}: {
+  isYearly: boolean;
+  onChange: (yearly: boolean) => void;
+  savePercent: number;
+}) {
+  const options = [
+    { label: "Monthly", yearly: false },
+    { label: "Yearly", yearly: true },
+  ];
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Billing period"
+      className="inline-flex items-center gap-1 rounded-full border border-slate-200/90 bg-[#FFFFFF] p-1 shadow-sm dark:border-white/10 dark:bg-white/[0.05]"
+    >
+      {options.map((option) => {
+        const selected = option.yearly === isYearly;
+        return (
+          <button
+            key={option.label}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(option.yearly)}
+            className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F3C99] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#08132E] ${
+              selected
+                ? "bg-[#0F3C99] text-white"
+                : "text-slate-600 hover:text-[#08132E] dark:text-slate-400 dark:hover:text-white"
+            }`}
+          >
+            {option.label}
+            {option.yearly && savePercent > 0 && (
+              <span
+                className={`font-data rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
+                  selected
+                    ? "bg-[#ED881C] text-[#08132E]"
+                    : "bg-[#ED881C]/15 text-[#B45B0C] dark:text-[#F0A44E]"
+                }`}
+              >
+                Save {savePercent}%
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -329,6 +404,9 @@ const STEPS = [
   },
 ];
 
+/** One row of plans on the landing page — the rest sit behind the explore card. */
+const VISIBLE_PLANS = 4;
+
 const ABOUT_FIGURES = [
   { value: "2020", label: "Founded" },
   { value: "50+", label: "Countries" },
@@ -379,7 +457,15 @@ export function LandingPageContent() {
     return () => controller.abort();
   }, []);
 
+  const visiblePlans = plans.slice(0, VISIBLE_PLANS);
+  const hiddenPlanCount = plans.length - visiblePlans.length;
 
+  // The badge on the yearly tab quotes the best real discount on offer, so it
+  // can never promise a saving no plan actually gives.
+  const annualSavePercent = plans.reduce(
+    (best, plan) => Math.max(best, Math.round(plan.discountPercentage ?? 0)),
+    0
+  );
 
   return (
     <div
@@ -391,10 +477,10 @@ export function LandingPageContent() {
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_15%_0%,rgba(15,60,153,0.10),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.10),transparent_60%)] dark:bg-[radial-gradient(60%_50%_at_15%_0%,rgba(76,123,232,0.18),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.14),transparent_60%)]"
         />
-        <div className={`${SHELL} relative py-14 sm:py-20 lg:py-28 2xl:py-36`}>
+        <div className={`${SHELL} relative py-9 sm:py-12 lg:py-16 2xl:py-24`}>
           {/* grid-cols-1 keeps the single-column track from sizing to the
               widest child — without it the hero overflows on 320px screens. */}
-          <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-14 2xl:gap-20">
+          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-12 2xl:gap-16">
             <div>
               {/* Arbitrary hex rather than bg-white: globals.css repaints the
                   literal .bg-white / .bg-white\/80 classes in dark mode. */}
@@ -409,14 +495,14 @@ export function LandingPageContent() {
                 </span>
               </div>
 
-              <h1 className="font-display mt-6 text-[2.1rem] font-bold leading-[1.02] tracking-[-0.04em] min-[400px]:text-[2.6rem] min-[400px]:leading-[0.98] sm:text-6xl lg:text-7xl">
+              <h1 className="font-display mt-5 text-[2.1rem] font-bold leading-[1.02] tracking-[-0.04em] min-[400px]:text-[2.6rem] min-[400px]:leading-[0.98] sm:text-6xl lg:text-7xl">
                 <span className="block text-[#08132E] dark:text-white">Hire smarter with</span>
                 <span className="block text-[#0F3C99] dark:text-[#7BA4FF]">
                   AI-powered recruiting
                 </span>
               </h1>
 
-              <p className="mt-6 max-w-xl 2xl:max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-lg 2xl:text-xl">
+              <p className="mt-4 max-w-xl 2xl:max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-lg 2xl:text-xl">
                 Intelligent resume screening, automated assessments and AI-assisted
                 interviews in one place. Recruiting teams save{" "}
                 <span className="font-semibold text-[#08132E] dark:text-white">
@@ -425,7 +511,7 @@ export function LandingPageContent() {
                 .
               </p>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
                 <Link
                   href="/signup"
                   className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#0F3C99] px-6 text-sm font-semibold text-white shadow-lg shadow-[#0F3C99]/25 transition-colors hover:bg-[#0E3B98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ED881C] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#08132E] sm:text-base"
@@ -443,7 +529,7 @@ export function LandingPageContent() {
                 </button>
               </div>
 
-              <ul className="mt-7 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600 dark:text-slate-400">
+              <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600 dark:text-slate-400">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-[#079CC4]" />
                   {trialDays}-day free trial
@@ -468,7 +554,7 @@ export function LandingPageContent() {
           <div className={SHELL}>
             <dl className="grid grid-cols-2 divide-slate-200/80 md:grid-cols-4 md:divide-x dark:divide-white/10">
               {STATS.map((stat) => (
-                <div key={stat.label} className="px-2 py-6 text-center md:py-8 2xl:py-10">
+                <div key={stat.label} className="px-2 py-4 text-center md:py-5 2xl:py-7">
                   <dt className="sr-only">{stat.label}</dt>
                   <dd>
                     <span className="font-data block text-2xl font-medium tabular-nums text-[#08132E] dark:text-white sm:text-3xl">
@@ -493,11 +579,12 @@ export function LandingPageContent() {
               eyebrow="Features"
               title="Everything you need to hire better"
               lead="AI-powered tools for every step of recruitment — from the first resume to the signed offer."
+              nowrap
             />
           </Reveal>
 
           <Reveal delay={80}>
-            <div className="mt-10 sm:mt-14">
+            <div className="mt-7 sm:mt-9">
               <FeatureShowcase />
             </div>
           </Reveal>
@@ -515,11 +602,12 @@ export function LandingPageContent() {
               eyebrow="How it works"
               title="Three steps to your first shortlist"
               lead="Most teams run their first AI match within an hour of signing up."
+              nowrap
             />
           </Reveal>
 
-          <div className="relative mt-10 sm:mt-14">
-            <ol className="grid gap-8 sm:grid-cols-3 sm:gap-6">
+          <div className="relative mt-7 sm:mt-9">
+            <ol className="grid gap-6 sm:grid-cols-3 sm:gap-6">
               {STEPS.map((step, index) => (
                 <li key={step.title} className="relative">
                   {/* The rule links one step to the next — it stops at the last. */}
@@ -533,7 +621,7 @@ export function LandingPageContent() {
                     <span className="font-data relative z-10 inline-grid h-10 w-10 place-items-center rounded-full border border-slate-300 bg-[#F7F8FB] text-sm font-medium tabular-nums text-[#0F3C99] dark:border-white/15 dark:bg-[#0C1732] dark:text-[#7BA4FF]">
                       {String(index + 1).padStart(2, "0")}
                     </span>
-                    <h3 className="font-display mt-5 text-xl font-bold tracking-[-0.02em] text-[#08132E] dark:text-white">
+                    <h3 className="font-display mt-4 text-xl font-bold tracking-[-0.02em] text-[#08132E] dark:text-white">
                       {step.title}
                     </h3>
                     <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
@@ -551,11 +639,14 @@ export function LandingPageContent() {
       <section id="pricing" className={`scroll-mt-16 sm:scroll-mt-20 ${SECTION_Y}`}>
         <div className={SHELL}>
           <Reveal>
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            {/* The one-line title needs the full measure, so the link only moves
+                alongside it once there is room for both. */}
+            <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
               <SectionHeading
                 eyebrow="Pricing"
                 title="Plans that scale with your hiring"
                 lead={`Start on a ${trialDays}-day free trial. Move to a paid plan when your pipeline outgrows it.`}
+                nowrap
               />
               <Link
                 href="/pricing"
@@ -571,55 +662,51 @@ export function LandingPageContent() {
             <>
               {/* Billing period — the price, quotas and signup link all follow it. */}
               <Reveal>
-                <div className="mt-8 flex items-center justify-center gap-3 sm:mt-10">
-                  <span
-                    className={`text-sm ${
-                      !isYearly
-                        ? "font-medium text-[#08132E] dark:text-white"
-                        : "text-slate-500 dark:text-slate-400"
-                    }`}
-                  >
-                    Monthly
-                  </span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={isYearly}
-                    aria-label="Bill yearly"
-                    onClick={() => setIsYearly(!isYearly)}
-                    className={`relative h-7 w-12 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F3C99] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#08132E] ${
-                      isYearly ? "bg-[#0F3C99]" : "bg-slate-300 dark:bg-white/20"
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-1 left-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                        isYearly ? "translate-x-5" : "translate-x-0"
-                      }`}
-                    />
-                  </button>
-                  <span
-                    className={`text-sm ${
-                      isYearly
-                        ? "font-medium text-[#08132E] dark:text-white"
-                        : "text-slate-500 dark:text-slate-400"
-                    }`}
-                  >
-                    Yearly
-                  </span>
+                <div className="mt-6 flex justify-end sm:mt-7">
+                  <BillingToggle
+                    isYearly={isYearly}
+                    onChange={setIsYearly}
+                    savePercent={annualSavePercent}
+                  />
                 </div>
               </Reveal>
 
-              <div className="mt-8 grid gap-4 sm:mt-10 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {plans.map((plan, index) => (
+              {/* The landing page shows one clean row; the rest of the catalogue
+                  lives on the pricing page behind the card below. */}
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {visiblePlans.map((plan, index) => (
                   <Reveal key={plan.id} delay={index * 80} className="h-full">
                     <PlanCard plan={plan} isYearly={isYearly} />
                   </Reveal>
                 ))}
+
+                {hiddenPlanCount > 0 && (
+                  <Reveal delay={VISIBLE_PLANS * 80} className="col-span-full">
+                    <Link
+                      href="/pricing"
+                      className="group flex flex-col items-start gap-4 rounded-2xl border border-dashed border-slate-300 bg-[#FFFFFF] p-6 transition-colors hover:border-[#ED881C] hover:bg-[#ED881C]/[0.04] dark:border-white/15 dark:bg-white/[0.03] dark:hover:bg-[#ED881C]/[0.06] sm:flex-row sm:items-center sm:justify-between sm:p-7"
+                    >
+                      <div>
+                        <p className="font-display text-lg font-bold tracking-[-0.02em] text-[#08132E] dark:text-white">
+                          {hiddenPlanCount} more {hiddenPlanCount === 1 ? "plan" : "plans"} to
+                          explore
+                        </p>
+                        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                          Full quotas, a feature-by-feature comparison and enterprise options.
+                        </p>
+                      </div>
+                      <span className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-300 px-5 text-sm font-semibold text-[#08132E] transition-colors group-hover:border-[#ED881C] group-hover:text-[#B45B0C] dark:border-white/15 dark:text-white dark:group-hover:text-[#F0A44E]">
+                        Explore all plans
+                        <ArrowRight className="h-4 w-4" />
+                      </span>
+                    </Link>
+                  </Reveal>
+                )}
               </div>
             </>
           ) : (
             <Reveal>
-              <div className="mt-10 rounded-2xl border border-slate-200/80 bg-[#FFFFFF] p-8 text-center dark:border-white/10 dark:bg-white/[0.03] sm:mt-14 sm:p-10">
+              <div className="mt-7 rounded-2xl border border-slate-200/80 bg-[#FFFFFF] p-8 text-center dark:border-white/10 dark:bg-white/[0.03] sm:mt-9 sm:p-10">
                 <p className="text-base text-slate-600 dark:text-slate-300">
                   {plansFailed
                     ? "Plan details live on the pricing page."
@@ -644,13 +731,13 @@ export function LandingPageContent() {
         className={`scroll-mt-16 border-y border-slate-200/80 bg-[#FFFFFF] dark:border-white/10 dark:bg-white/[0.02] sm:scroll-mt-20 ${SECTION_Y}`}
       >
         <div className={SHELL}>
-          <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)] lg:gap-16">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)] lg:gap-12">
             <Reveal>
               <SectionHeading
                 eyebrow="About"
                 title="We're on a mission to transform hiring"
               />
-              <div className="mt-6 space-y-4 text-base leading-relaxed text-slate-600 dark:text-slate-400">
+              <div className="mt-5 space-y-3 text-base leading-relaxed text-slate-600 dark:text-slate-400">
                 <p>
                   TalentFlow started when our founders experienced the challenges of
                   modern recruitment firsthand. As hiring managers at growing tech
@@ -670,7 +757,7 @@ export function LandingPageContent() {
               </div>
               <Link
                 href="/about"
-                className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F3C99] hover:underline dark:text-[#7BA4FF]"
+                className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F3C99] hover:underline dark:text-[#7BA4FF]"
               >
                 Read our story
                 <ArrowUpRight className="h-4 w-4" />
@@ -705,10 +792,10 @@ export function LandingPageContent() {
             <h2 className="font-display mx-auto max-w-3xl text-3xl font-bold tracking-[-0.03em] sm:text-5xl">
               Ready to transform your hiring?
             </h2>
-            <p className="mx-auto mt-5 max-w-xl text-base text-white/75 sm:text-lg">
+            <p className="mx-auto mt-4 max-w-xl text-base text-white/75 sm:text-lg">
               Join 2,500+ companies using TalentFlow to build great teams faster.
             </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
                 href={TRIAL_LINK}
                 prefetch={false}
@@ -724,7 +811,7 @@ export function LandingPageContent() {
                 View pricing
               </Link>
             </div>
-            <ul className="mt-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 font-data text-xs uppercase tracking-[0.16em] text-white/60">
+            <ul className="mt-7 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 font-data text-xs uppercase tracking-[0.16em] text-white/60">
               <li className="flex items-center gap-2">
                 <Shield className="h-4 w-4" />
                 SOC 2 certified
