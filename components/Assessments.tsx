@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2 } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -17,6 +17,7 @@ import AssessmentEditModal from './AssessmentEditModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, type InviteFilterState } from './InviteFilterBar';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 import type { AssessmentAttemptResponse } from '@/lib/services/assessmentService';
 
 import { Job } from '@/lib/types/types';
@@ -37,6 +38,8 @@ import QuotaBadge from '@/components/ui/quota-badge';
 
 
 const INVITATIONS_PAGE_SIZE = 10;
+/** Batch size when pulling every assessment for a browser-side filter. */
+const FULL_SET_BATCH_SIZE = 100;
 const ASSESSMENT_INVITE_STATUS_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
   { value: 'pending', label: 'Pending' },
@@ -93,11 +96,65 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [selectedAssessmentForResults, setSelectedAssessmentForResults] = useState<any>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedAssessmentForShare, setSelectedAssessmentForShare] = useState<any>(null);
+  // Page-level Send Invite: the share modal needs one assessment, so this picker
+  // stands in front of it when more than one is shareable.
+  const [showInvitePicker, setShowInvitePicker] = useState(false);
+  const [invitePickerQuery, setInvitePickerQuery] = useState('');
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedAssessmentForPreview, setSelectedAssessmentForPreview] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAssessmentForEdit, setSelectedAssessmentForEdit] = useState<any>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  // The open ⋮ dropdown. Only one exists at a time (grid and list views never
+  // render together), so a single ref covers both.
+  const openMenuRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Dismiss the ⋮ menu on any interaction outside it.
+   *
+   * This replaces the full-screen `fixed inset-0` overlay each menu used to
+   * render. That overlay sat at z-10, below the page's sticky chrome, so a
+   * click on anything stacked above it left the menu hanging open — and while
+   * it was up it swallowed the first click on every other control. A
+   * document-level listener closes the menu whatever the click lands on, and
+   * lets that click through to do its job.
+   *
+   * Scroll closes it too: the dropdown is absolutely positioned, so a scrolled
+   * list leaves it floating away from the row it belongs to.
+   */
+  useEffect(() => {
+    if (!openMenuId) return;
+
+    const close = () => setOpenMenuId(null);
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && openMenuRef.current?.contains(target)) return;
+      // The trigger toggles itself — closing here first would let its own
+      // click reopen the menu, so it never appears to shut.
+      if (target instanceof Element && target.closest('[data-assessment-menu-trigger]')) return;
+      close();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('keydown', handleKeyDown);
+    // Capture phase catches scrolling inside the list container, not just the page.
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('blur', close);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('blur', close);
+    };
+  }, [openMenuId]);
   const [showDetailsView, setShowDetailsView] = useState(false);
   const [selectedAssessmentForDetails, setSelectedAssessmentForDetails] = useState<any>(null);
   // Track Invites modal state
@@ -179,16 +236,31 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // `assessmentSearchQuery` is the debounced value sent to the API, so the search
   // spans every page rather than only the one on screen. The rest narrow the
   // loaded page client-side — the list endpoint takes no filters beyond search.
-  const [assessmentSearch, setAssessmentSearch] = useState('');
-  const [assessmentSearchQuery, setAssessmentSearchQuery] = useState('');
+
   const [showAssessmentFilters, setShowAssessmentFilters] = useState(false);
   // True once the user confirms the More Filters panel with "Done" — mirrors
   // job-openings, so Clear appears only after filters are applied.
-  const [assessmentFiltersConfirmed, setAssessmentFiltersConfirmed] = useState(false);
-  const [filterType, setFilterType] = useState<'all' | 'Technical' | 'Behavioral' | 'Aptitude'>('all');
-  const [filterCreatedBy, setFilterCreatedBy] = useState('all');
-  const [filterCreatedFrom, setFilterCreatedFrom] = useState('');
-  const [filterCreatedTo, setFilterCreatedTo] = useState('');
+  // Search + filters in the shared hook. Search is SERVER-side here, so
+  // `appliedQuery` is what the request is built from; the four filters are
+  // applied in the browser (see the full-set fetch in loadAssessmentsPage).
+  const assessmentListSearch = useListSearch({
+    initialFilters: {
+      type: 'all' as 'all' | 'Technical' | 'Behavioral' | 'Aptitude',
+      createdBy: 'all',
+      createdFrom: '',
+      createdTo: '',
+    },
+    debounceMs: 350,
+    onChange: () => setAssessmentCurrentPage(1),
+  });
+  const assessmentSearch = assessmentListSearch.query;
+  const assessmentSearchQuery = assessmentListSearch.appliedQuery;
+  const {
+    type: filterType,
+    createdBy: filterCreatedBy,
+    createdFrom: filterCreatedFrom,
+    createdTo: filterCreatedTo,
+  } = assessmentListSearch.filters;
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
   const [totalUnits, setTotalUnits] = useState<number>(10); // Total subscription limit
   const [isUnlimited, setIsUnlimited] = useState<boolean>(false); // Track if quota is unlimited
@@ -294,16 +366,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
       if (typeof s.assessmentCurrentPage === 'number') setAssessmentCurrentPage(s.assessmentCurrentPage);
       if (typeof s.assessmentItemsPerPage === 'number') setAssessmentItemsPerPage(s.assessmentItemsPerPage);
-      if (typeof s.assessmentSearch === 'string') {
-        setAssessmentSearch(s.assessmentSearch);
-        setAssessmentSearchQuery(s.assessmentSearch);
-      }
-      if (s.filterType === 'Technical' || s.filterType === 'Behavioral' || s.filterType === 'Aptitude') {
-        setFilterType(s.filterType);
-      }
-      if (typeof s.filterCreatedBy === 'string') setFilterCreatedBy(s.filterCreatedBy);
-      if (typeof s.filterCreatedFrom === 'string') setFilterCreatedFrom(s.filterCreatedFrom);
-      if (typeof s.filterCreatedTo === 'string') setFilterCreatedTo(s.filterCreatedTo);
+      if (typeof s.assessmentSearch === 'string') assessmentListSearch.setQuery(s.assessmentSearch);
+      assessmentListSearch.setFilters({
+        type:
+          s.filterType === 'Technical' || s.filterType === 'Behavioral' || s.filterType === 'Aptitude'
+            ? s.filterType
+            : 'all',
+        createdBy: typeof s.filterCreatedBy === 'string' ? s.filterCreatedBy : 'all',
+        createdFrom: typeof s.filterCreatedFrom === 'string' ? s.filterCreatedFrom : '',
+        createdTo: typeof s.filterCreatedTo === 'string' ? s.filterCreatedTo : '',
+      });
     },
   );
 
@@ -412,10 +484,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const loadAssessmentsPage = async (page: number) => {
     setIsLoading(true);
     try {
-      const filters: any = {
-        page,
-        page_size: assessmentItemsPerPage,
-      };
+      const filters: any = {};
       if (preSelectedJdId) {
         filters.jd_id = preSelectedJdId;
       }
@@ -427,7 +496,45 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         filters.search = assessmentSearchQuery.trim();
       }
 
-      const response = await assessmentService.list(filters);
+      // Type / Created by / Created date are applied in the browser — the
+      // /assessments endpoint takes only jd_id, status, search and paging. Over
+      // a single server page that silently scoped them to the rows on screen:
+      // "Created by Priya" on page 1 of 5 never saw pages 2-5, and the match
+      // count was page-local too. So when any of those filters is on we pull the
+      // whole result set and paginate it here instead.
+      const needsFullSet =
+        filterType !== 'all' || filterCreatedBy !== 'all' || !!filterCreatedFrom || !!filterCreatedTo;
+
+      if (needsFullSet) {
+        const collected: any[] = [];
+        let apiPage = 1;
+        // Batched rather than one page_size=total request, matching how the AI
+        // Interviews list pulls its full set.
+        for (;;) {
+          const batch = await assessmentService.list({
+            ...filters,
+            page: apiPage,
+            page_size: FULL_SET_BATCH_SIZE,
+          });
+          const items = batch.items || [];
+          collected.push(...items);
+          const total = batch.total ?? collected.length;
+          if (items.length < FULL_SET_BATCH_SIZE || collected.length >= total) break;
+          apiPage++;
+        }
+        setApiAssessments(collected.map((a: any, index: number) => mapAssessmentFromApi(a, index)));
+        // Totals now come from the client-side filter — see
+        // `assessmentClientPaginated` below.
+        setAssessmentTotalItems(collected.length);
+        setAssessmentTotalPages(1);
+        return;
+      }
+
+      const response = await assessmentService.list({
+        ...filters,
+        page,
+        page_size: assessmentItemsPerPage,
+      });
       const mapped = (response.items || []).map((a: any, index: number) =>
         mapAssessmentFromApi(a, (page - 1) * assessmentItemsPerPage + index)
       );
@@ -763,17 +870,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     loadAssessmentsPage(assessmentCurrentPage);
-  }, [activeTab, preSelectedJdId, assessmentCurrentPage, assessmentItemsPerPage, assessmentSearchQuery]);
+    // The advanced filters belong here too: turning one on switches the loader
+    // between "one server page" and "the whole result set", and without the
+    // dependency that switch never happened.
+  }, [activeTab, preSelectedJdId, assessmentCurrentPage, assessmentItemsPerPage, assessmentSearchQuery,
+      filterType, filterCreatedBy, filterCreatedFrom, filterCreatedTo]);
 
+  // The hook's `onChange` covers query/filter changes; this handles the rest.
   useEffect(() => {
     setAssessmentCurrentPage(1);
-  }, [activeTab, preSelectedJdId, assessmentItemsPerPage, assessmentSearchQuery]);
+  }, [activeTab, preSelectedJdId, assessmentItemsPerPage]);
 
-  // Hold the search until typing settles, so a query is one request, not one per key.
-  useEffect(() => {
-    const timer = window.setTimeout(() => setAssessmentSearchQuery(assessmentSearch), 350);
-    return () => window.clearTimeout(timer);
-  }, [assessmentSearch]);
 
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
@@ -992,6 +1099,33 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   // Reload assessments from API
+  /**
+   * Assessments that can actually take an invite — the same three rules the
+   * per-row Share button enforces: published, not archived, invites not revoked.
+   */
+  const shareableAssessments = assessments.filter(
+    (assessment: any) =>
+      assessment.status !== 'Draft' && assessment.status !== 'Archived' && !assessment.has_revoked_invites
+  );
+
+  /**
+   * Page-level Send Invite. With exactly one shareable assessment the picker is
+   * pointless, so it goes straight to the share modal.
+   */
+  const handleSendInvite = () => {
+    if (shareableAssessments.length === 0) {
+      toast.error('No published assessment to invite candidates to. Publish one first.');
+      return;
+    }
+    if (shareableAssessments.length === 1) {
+      setSelectedAssessmentForShare(shareableAssessments[0]);
+      setShowShareModal(true);
+      return;
+    }
+    setInvitePickerQuery('');
+    setShowInvitePicker(true);
+  };
+
   const reloadAssessments = async () => {
     try {
       await loadAssessmentsPage(assessmentCurrentPage);
@@ -1401,25 +1535,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     new Set(assessments.map((a) => a.created_by_name).filter(Boolean))
   ).sort();
 
-  const assessmentFilterCount =
-    (filterType !== 'all' ? 1 : 0) +
-    (filterCreatedBy !== 'all' ? 1 : 0) +
-    (filterCreatedFrom ? 1 : 0) +
-    (filterCreatedTo ? 1 : 0);
-  // Gates the toolbar's solid button + Clear: selected AND confirmed via "Done".
-  const assessmentFiltersActive = assessmentFiltersConfirmed && assessmentFilterCount > 0;
-  // Whether the list is narrowed at all — drives the result count and the
-  // "no matches" empty state, which must react to a search as well.
-  const assessmentListNarrowed = assessmentFilterCount > 0 || assessmentSearch.trim() !== '';
-
-  const clearAssessmentFilters = () => {
-    setAssessmentFiltersConfirmed(false);
-    setAssessmentSearch('');
-    setFilterType('all');
-    setFilterCreatedBy('all');
-    setFilterCreatedFrom('');
-    setFilterCreatedTo('');
-  };
+  const assessmentFilterCount = assessmentListSearch.activeFilterCount;
+  const assessmentFiltersActive = assessmentListSearch.filtersApplied;
+  const assessmentListNarrowed = assessmentListSearch.isNarrowed;
+  const clearAssessmentFilters = assessmentListSearch.reset;
 
   const filteredAssessments = assessments.filter((assessment) => {
     if (activeTab === 'active' && assessment.status !== 'Active') return false;
@@ -1435,9 +1554,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
     return true;
   });
-  const assessmentPaginationVisible = !['audit', 'consent', 'settings'].includes(activeTab) && assessmentTotalItems > 5;
-  const assessmentStartIndex = assessmentTotalItems === 0 ? 0 : (assessmentCurrentPage - 1) * assessmentItemsPerPage + 1;
-  const assessmentEndIndex = Math.min(assessmentCurrentPage * assessmentItemsPerPage, assessmentTotalItems);
+
+  /**
+   * With a browser-side filter on, the loader fetched every matching assessment
+   * instead of one server page, so paging is ours to do — and the totals have to
+   * come from the filtered set, not the server's unfiltered count.
+   */
+  const assessmentClientPaginated =
+    filterType !== 'all' || filterCreatedBy !== 'all' || !!filterCreatedFrom || !!filterCreatedTo;
+
+  const assessmentResultCount = assessmentClientPaginated
+    ? filteredAssessments.length
+    : assessmentTotalItems;
+
+  const visibleAssessments = assessmentClientPaginated
+    ? filteredAssessments.slice(
+        (assessmentCurrentPage - 1) * assessmentItemsPerPage,
+        assessmentCurrentPage * assessmentItemsPerPage
+      )
+    : filteredAssessments;
+
+  const assessmentPaginationVisible = !['audit', 'consent', 'settings'].includes(activeTab) && assessmentResultCount > 5;
+  const assessmentStartIndex = assessmentResultCount === 0 ? 0 : (assessmentCurrentPage - 1) * assessmentItemsPerPage + 1;
+  const assessmentEndIndex = Math.min(assessmentCurrentPage * assessmentItemsPerPage, assessmentResultCount);
   const trackingPaginationVisible = trackingTotalPages > 1;
   const trackingStartIndex = trackingTotalItems === 0 ? 0 : (trackingCurrentPage - 1) * INVITATIONS_PAGE_SIZE + 1;
   const trackingEndIndex = Math.min(trackingCurrentPage * INVITATIONS_PAGE_SIZE, trackingTotalItems);
@@ -1494,6 +1633,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 isUnlimited={isUnlimited}
                 icon={Zap}
               />
+            )}
+            {/* Send Invite — same permission as the per-row Share action. */}
+            {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
+              <button
+                onClick={handleSendInvite}
+                disabled={shareableAssessments.length === 0}
+                title={
+                  shareableAssessments.length === 0
+                    ? 'Publish an assessment before inviting candidates'
+                    : 'Send an assessment invitation'
+                }
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors shadow-sm text-sm border ${
+                  shareableAssessments.length === 0
+                    ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                    : 'border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 hover:bg-brand-blue/5'
+                }`}
+              >
+                <Mail className="w-4 h-4" />
+                <span className="hidden sm:inline">Send Invite</span>
+                <span className="sm:hidden">Invite</span>
+              </button>
             )}
             {canAccessHRQuestionBank && (
               <button
@@ -1840,8 +2000,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {!['completed-candidates', 'audit', 'consent', 'settings'].includes(activeTab) && (
               <div className="mb-4">
                 <ListToolbar
-                  searchValue={assessmentSearch}
-                  onSearchChange={setAssessmentSearch}
+                  searchValue={assessmentListSearch.query}
+                  // The hook debounces (350ms) into `appliedQuery` before the
+                  // request, so the toolbar hands keystrokes straight through.
+                  searchDebounceMs={0}
+                  onSearchChange={assessmentListSearch.setQuery}
                   searchPlaceholder="Search by assessment name, ID or description..."
                   onToggleFilters={() => setShowAssessmentFilters(!showAssessmentFilters)}
                   filtersOpen={showAssessmentFilters}
@@ -1861,7 +2024,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <select
                           id="assessment-type"
                           value={filterType}
-                          onChange={(e) => setFilterType(e.target.value as typeof filterType)}
+                          onChange={(e) => assessmentListSearch.setFilter('type', e.target.value as typeof filterType)}
                           className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
                         >
                           <option value="all">All types</option>
@@ -1878,7 +2041,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <select
                           id="assessment-creator"
                           value={filterCreatedBy}
-                          onChange={(e) => setFilterCreatedBy(e.target.value)}
+                          onChange={(e) => assessmentListSearch.setFilter('createdBy', e.target.value)}
                           className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
                         >
                           <option value="all">Anyone</option>
@@ -1897,7 +2060,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           type="date"
                           value={filterCreatedFrom}
                           max={filterCreatedTo || undefined}
-                          onChange={(e) => setFilterCreatedFrom(e.target.value)}
+                          onChange={(e) => assessmentListSearch.setFilter('createdFrom', e.target.value)}
                           className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
                         />
                       </div>
@@ -1911,7 +2074,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           type="date"
                           value={filterCreatedTo}
                           min={filterCreatedFrom || undefined}
-                          onChange={(e) => setFilterCreatedTo(e.target.value)}
+                          onChange={(e) => assessmentListSearch.setFilter('createdTo', e.target.value)}
                           className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
                         />
                       </div>
@@ -1921,7 +2084,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         toolbar Clear — same flow as job-openings. */}
                     <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
                       <button
-                        onClick={() => { setShowAssessmentFilters(false); setAssessmentFiltersConfirmed(true); }}
+                        // The controls above commit as they change, so Done just closes.
+                        onClick={() => setShowAssessmentFilters(false)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                       >
                         Done
@@ -1932,8 +2096,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                 {assessmentListNarrowed && !isLoading && (
                   <p className="mt-3 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-                    <span className="font-semibold text-gray-900 dark:text-slate-50">{filteredAssessments.length}</span>
-                    {' '}assessment{filteredAssessments.length === 1 ? '' : 's'} match
+                    <span className="font-semibold text-gray-900 dark:text-slate-50">{assessmentResultCount}</span>
+                    {' '}assessment{assessmentResultCount === 1 ? '' : 's'} match
                     {assessmentSearch.trim() ? ` "${assessmentSearch.trim()}"` : ' your filters'}
                   </p>
                 )}
@@ -2775,7 +2939,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             ) : viewMode === 'grid' ? (
               /* Grid View */
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {filteredAssessments.map((assessment) => (
+                {visibleAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
                     onClick={() => {
@@ -2790,7 +2954,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         router.push(`/recruitment/assessments/${assessment.id}`);
                       }
                     }}
-                    className="p-4 sm:p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all bg-white dark:bg-slate-900 cursor-pointer"
+                    /* `relative` so the dropdown anchors to its own card — it
+                       used to resolve against a far ancestor, which is what put
+                       it over neighbouring cards. The raised z-index keeps it
+                       above sibling cards while open. */
+                    className={`p-4 sm:p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all bg-white dark:bg-slate-900 cursor-pointer ${
+                      openMenuId === assessment.id ? 'relative z-30' : 'relative'
+                    }`}
                   >
                     {/* Grid Card Header — icon on left, action buttons aligned in a straight line at the top right */}
                     <div className="flex items-start justify-between gap-2 mb-3" onClick={(e) => e.stopPropagation()}>
@@ -2859,6 +3029,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           Results
                         </button>
                         <button
+                          data-assessment-menu-trigger
                           onClick={(e) => {
                             e.stopPropagation();
                             setOpenMenuId(openMenuId === assessment.id ? null : assessment.id);
@@ -3004,6 +3175,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         Results
                       </button>
                       <button
+                        data-assessment-menu-trigger
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpenMenuId(openMenuId === assessment.id ? null : assessment.id);
@@ -3018,22 +3190,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     {openMenuId === assessment.id && (
                       <>
                         <div
-                          className="fixed inset-0 z-10"
-                          onClick={() => setOpenMenuId(null)}
-                        />
-                        <div className="absolute right-0 sm:right-4 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto">
-                          <button
-                            onClick={() => {
-                              setSelectedAssessmentForPreview(assessment);
-                              setShowPreviewModal(true);
-                              setOpenMenuId(null);
-                            }}
-                            className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
-                          >
-                            <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                            Preview
-                          </button>
-                          <div className="border-t border-gray-100 my-1"></div>
+                          ref={openMenuRef}
+                          className="absolute right-0 sm:right-4 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto"
+                        >
                           {/* Draft assessments hide Activate/Archive — drafts go
                               through the configure-page Publish button, and an
                               unpublished row has nothing meaningful to archive. */}
@@ -3106,7 +3265,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             ) : (
               /* List View */
               <div className="space-y-3 sm:space-y-4">
-                {filteredAssessments.map((assessment) => (
+                {visibleAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
                     onClick={() => {
@@ -3121,7 +3280,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         router.push(`/recruitment/assessments/${assessment.id}`);
                       }
                     }}
-                    className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5"
+                    /* `relative` + a raised z-index while this row's ⋮ menu is
+                       open. Every other row lifts on hover via
+                       `hover:-translate-y-0.5`, and a transform makes that row
+                       its own stacking context — which paints it, and its white
+                       background, straight over the open dropdown. Raising the
+                       owning row above its siblings keeps the menu on top. */
+                    className={`p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 ${
+                      openMenuId === assessment.id ? 'relative z-30' : 'relative'
+                    }`}
                   >
                     <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
                       {/* Icon */}
@@ -3287,6 +3454,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {/* Three Dots Menu */}
                           <div className="relative">
                             <button
+                              data-assessment-menu-trigger
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setOpenMenuId(openMenuId === assessment.id ? null : assessment.id);
@@ -3300,21 +3468,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {openMenuId === assessment.id && (
                             <>
                               <div
-                                className="fixed inset-0 z-10"
-                                onClick={() => setOpenMenuId(null)}
-                              />
-                              <div className="absolute right-0 top-full mt-2 w-44 sm:w-52 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto">
-                                <button
-                                  onClick={() => {
-                                    setSelectedAssessmentForPreview(assessment);
-                                    setShowPreviewModal(true);
-                                    setOpenMenuId(null);
-                                  }}
-                                  className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
-                                >
-                                  <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                                  Preview
-                                </button>
+                                ref={openMenuRef}
+                                className="absolute right-0 top-full mt-2 w-44 sm:w-52 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto"
+                              >
                                 {assessment.status !== 'Archived' && canCreateAssessment && (() => {
                                   // Gating computed FRONT-END so it works regardless of
                                   // whether the backend has the new clone_button_disabled
@@ -3487,7 +3643,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <ListPagination
                 currentPage={assessmentCurrentPage}
                 itemsPerPage={assessmentItemsPerPage}
-                totalItems={assessmentTotalItems}
+                totalItems={assessmentResultCount}
                 onPageChange={setAssessmentCurrentPage}
                 onItemsPerPageChange={setAssessmentItemsPerPage}
                 itemLabel="assessments"
@@ -3502,6 +3658,96 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       </div>
 
       {/* Share Assessment Modal */}
+      {/* Send Invite picker — which assessment are we inviting to? Only shown
+          when more than one is shareable; a single one goes straight through. */}
+      {showInvitePicker && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
+            onClick={() => setShowInvitePicker(false)}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="flex-shrink-0 flex items-center gap-4 p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white">
+                <div className="w-12 h-12 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
+                  <Mail className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Send Invite</h3>
+                  <p className="text-sm text-gray-500">Choose the assessment to invite candidates to</p>
+                </div>
+                <button
+                  onClick={() => setShowInvitePicker(false)}
+                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="flex-shrink-0 px-6 pt-4">
+                <input
+                  type="text"
+                  value={invitePickerQuery}
+                  onChange={(e) => setInvitePickerQuery(e.target.value)}
+                  placeholder="Search assessments..."
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+                {(() => {
+                  const query = invitePickerQuery.trim().toLowerCase();
+                  const visible = shareableAssessments.filter((assessment: any) =>
+                    !query ||
+                    `${assessment.title || ''} ${assessment.short_id || ''} ${assessment.job?.title || ''}`
+                      .toLowerCase()
+                      .includes(query)
+                  );
+                  if (visible.length === 0) {
+                    return (
+                      <div className="py-12 text-center">
+                        <p className="text-sm font-medium text-gray-700 mb-1">No assessments match your search</p>
+                        <p className="text-xs text-gray-500">Try a different title or assessment ID.</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-2">
+                      {visible.map((assessment: any) => (
+                        <button
+                          key={assessment.id}
+                          onClick={() => {
+                            setSelectedAssessmentForShare(assessment);
+                            setShowInvitePicker(false);
+                            setShowShareModal(true);
+                          }}
+                          className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/[0.03] transition-all flex items-center gap-3"
+                        >
+                          <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                            <ClipboardCheck className="w-4 h-4 text-brand-blue" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium text-gray-900 truncate">
+                              {assessment.job?.title || stripVersionFromTitle(assessment.title)} - Assessment
+                            </div>
+                            <div className="text-xs text-gray-500 truncate">
+                              {assessment.short_id ? `${assessment.short_id} · ` : ''}
+                              {assessment.duration_minutes || 0} min
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {showShareModal && selectedAssessmentForShare && (
         <ShareAssessmentModal
           isOpen={showShareModal}

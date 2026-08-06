@@ -14,6 +14,7 @@ import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -101,38 +102,67 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const canArchiveJd = isTenantAdmin || (user?.permissions?.canArchiveJd ?? false);
   const canDisableJd = isTenantAdmin || (user?.permissions?.canDisableJd ?? false);
   const canExportJd = isTenantAdmin || (user?.permissions?.canExport ?? false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'all');
-  const [creationMethodFilter, setCreationMethodFilter] = useState<'manual' | 'ai' | null>(null);
+  // Search + all eleven filters, in the shared hook. The controls commit as they
+  // change, so this uses `setFilter` and leaves the draft pair alone.
+  const search = useListSearch({
+    initialFilters: {
+      status: initialStatusFilter || 'all',
+      creationMethod: null as 'manual' | 'ai' | null,
+      location: 'all',
+      department: 'all',
+      industry: 'all',
+      experience: 'all',
+      employmentType: 'all',
+      applicants: 'all',
+      salaryRange: 'all',
+      datePostedFrom: '',
+      datePostedTo: '',
+    },
+    countFilters: (f) =>
+      [
+        f.status !== 'all',
+        f.creationMethod !== null,
+        f.location !== 'all',
+        f.department !== 'all',
+        f.industry !== 'all',
+        f.experience !== 'all',
+        f.employmentType !== 'all',
+        f.applicants !== 'all',
+        f.salaryRange !== 'all',
+        f.datePostedFrom !== '',
+        f.datePostedTo !== '',
+      ].filter(Boolean).length,
+  });
+  const searchQuery = search.appliedQuery;
+  const {
+    status: statusFilter,
+    creationMethod: creationMethodFilter,
+    location: locationFilter,
+    department: departmentFilter,
+    industry: industryFilter,
+    experience: experienceFilter,
+    employmentType: employmentTypeFilter,
+    applicants: applicantsFilter,
+    salaryRange: salaryRangeFilter,
+    datePostedFrom: datePostedFromFilter,
+    datePostedTo: datePostedToFilter,
+  } = search.filters;
 
   // Sync status filter with URL parameter changes
   useEffect(() => {
     if (initialStatusFilter) {
-      setStatusFilter(initialStatusFilter);
+      search.setFilter('status', initialStatusFilter);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialStatusFilter]);
 
-  const [locationFilter, setLocationFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  // True once the user clicks "Done" in the More Filters panel. Gates the Clear
-  // button next to the More Filters button so it appears only after filters are
-  // applied (not live while the user is still picking options).
-  const [filtersApplied, setFiltersApplied] = useState(false);
   const [showAIMatchModal, setShowAIMatchModal] = useState(false);
   const [selectedJobForAIMatch, setSelectedJobForAIMatch] = useState<Job | null>(null);
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   
-  // Advanced filter states
-  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
-  const [industryFilter, setIndustryFilter] = useState<string>('all');
-  const [experienceFilter, setExperienceFilter] = useState<string>('all');
-  const [datePostedFromFilter, setDatePostedFromFilter] = useState<string>('');
-  const [datePostedToFilter, setDatePostedToFilter] = useState<string>('');
-  const [salaryRangeFilter, setSalaryRangeFilter] = useState<string>('all');
-  const [employmentTypeFilter, setEmploymentTypeFilter] = useState<string>('all');
-  const [applicantsFilter, setApplicantsFilter] = useState<string>('all');
 
   // Sort and Bulk Actions states
   const [sortBy, setSortBy] = useState<'date' | 'applicants' | 'title' | 'status' | 'industry'>('date');
@@ -161,7 +191,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   }, [initialStatusFilter]);
 
   const openListView = (statusFilterValue: string) => {
-    setStatusFilter(statusFilterValue);
+    search.setFilter('status', statusFilterValue);
     setCurrentPage(1);
     setPageView('list');
     setListScrollRequest((request) => request + 1);
@@ -193,30 +223,33 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       departmentFilter, industryFilter, experienceFilter, employmentTypeFilter,
       applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter,
       sortBy, sortOrder, currentPage, itemsPerPage,
-      // Persist alongside the filters themselves, otherwise returning to this page
-      // restores the filters but resets the applied flag — the More Filters button
-      // loses its highlight and Clear vanishes while results are still filtered.
-      filtersApplied,
     },
     (s) => {
-      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
-      if (typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter);
-      if (s.creationMethodFilter === null || s.creationMethodFilter === 'manual' || s.creationMethodFilter === 'ai') setCreationMethodFilter(s.creationMethodFilter);
-      if (typeof s.locationFilter === 'string') setLocationFilter(s.locationFilter);
+      if (typeof s.searchQuery === 'string') search.setQuery(s.searchQuery);
       if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
-      if (typeof s.departmentFilter === 'string') setDepartmentFilter(s.departmentFilter);
-      if (typeof s.industryFilter === 'string') setIndustryFilter(s.industryFilter);
-      if (typeof s.experienceFilter === 'string') setExperienceFilter(s.experienceFilter);
-      if (typeof s.employmentTypeFilter === 'string') setEmploymentTypeFilter(s.employmentTypeFilter);
-      if (typeof s.applicantsFilter === 'string') setApplicantsFilter(s.applicantsFilter);
-      if (typeof s.salaryRangeFilter === 'string') setSalaryRangeFilter(s.salaryRangeFilter);
-      if (typeof s.datePostedFromFilter === 'string') setDatePostedFromFilter(s.datePostedFromFilter);
-      if (typeof s.datePostedToFilter === 'string') setDatePostedToFilter(s.datePostedToFilter);
+      // One hydrate instead of eleven setters. `setFilters` also marks them
+      // committed, so the More Filters highlight and Reset survive the round
+      // trip without persisting a separate applied flag.
+      search.setFilters({
+        status: typeof s.statusFilter === 'string' ? s.statusFilter : 'all',
+        creationMethod:
+          s.creationMethodFilter === 'manual' || s.creationMethodFilter === 'ai'
+            ? s.creationMethodFilter
+            : null,
+        location: typeof s.locationFilter === 'string' ? s.locationFilter : 'all',
+        department: typeof s.departmentFilter === 'string' ? s.departmentFilter : 'all',
+        industry: typeof s.industryFilter === 'string' ? s.industryFilter : 'all',
+        experience: typeof s.experienceFilter === 'string' ? s.experienceFilter : 'all',
+        employmentType: typeof s.employmentTypeFilter === 'string' ? s.employmentTypeFilter : 'all',
+        applicants: typeof s.applicantsFilter === 'string' ? s.applicantsFilter : 'all',
+        salaryRange: typeof s.salaryRangeFilter === 'string' ? s.salaryRangeFilter : 'all',
+        datePostedFrom: typeof s.datePostedFromFilter === 'string' ? s.datePostedFromFilter : '',
+        datePostedTo: typeof s.datePostedToFilter === 'string' ? s.datePostedToFilter : '',
+      });
       if (typeof s.sortBy === 'string') setSortBy(s.sortBy as 'date' | 'applicants' | 'title' | 'status' | 'industry');
       if (s.sortOrder === 'asc' || s.sortOrder === 'desc') setSortOrder(s.sortOrder);
       if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
-      if (typeof s.filtersApplied === 'boolean') setFiltersApplied(s.filtersApplied);
     },
   );
 
@@ -584,42 +617,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     totalApplicants: jobs.reduce((sum, j) => sum + (j.applicants || 0), 0)
   };
 
-  const activeFiltersCount = [
-    statusFilter !== 'all',
-    creationMethodFilter !== null,
-    locationFilter !== 'all',
-    departmentFilter !== 'all',
-    industryFilter !== 'all',
-    experienceFilter !== 'all',
-    employmentTypeFilter !== 'all',
-    applicantsFilter !== 'all',
-    salaryRangeFilter !== 'all',
-    datePostedFromFilter !== '',
-    datePostedToFilter !== ''
-  ].filter(Boolean).length;
+  const activeFiltersCount = search.activeFilterCount;
+  const filtersActive = search.filtersApplied;
 
-  // "Applied" = the user selected at least one filter AND confirmed via "Done".
-  // Drives both the highlighted More Filters button and the Clear button.
-  const filtersActive = filtersApplied && activeFiltersCount > 0;
-
-  // Reset every filter (and the search box) back to its default. Shared by the
-  // "Clear" control in the toolbar row and the "Clear Filters" control inside
-  // the More Filters panel so both stay in sync.
-  const clearAllFilters = () => {
-    setSearchQuery('');
-    setStatusFilter('all');
-    setCreationMethodFilter(null);
-    setLocationFilter('all');
-    setDepartmentFilter('all');
-    setIndustryFilter('all');
-    setExperienceFilter('all');
-    setEmploymentTypeFilter('all');
-    setApplicantsFilter('all');
-    setDatePostedFromFilter('');
-    setDatePostedToFilter('');
-    setSalaryRangeFilter('all');
-    setFiltersApplied(false);
-  };
+  // Reset every filter AND the search box. Shared by the toolbar's Reset, the
+  // panel's "Clear Filters", and the empty state, so all three stay in step —
+  // the empty state's own version used to miss creation method, industry and
+  // the applied flag, leaving the list filtered after a "clear".
+  const clearAllFilters = search.reset;
 
   // Create New Job. Before navigating away, drop this list's saved view-state so
   // returning from the Create Job page starts clean (no stale More Filters).
@@ -812,8 +817,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
           {/* Row 1: Search + View toggle + More Filters — the canonical toolbar,
               now shared via <ListToolbar> so other list pages match this one. */}
           <ListToolbar
-            searchValue={searchQuery}
-            onSearchChange={setSearchQuery}
+            searchValue={search.query}
+            onSearchChange={search.setQuery}
+            // The hook debounces into `appliedQuery`, so keystrokes pass through.
+            searchDebounceMs={0}
             searchPlaceholder="Search jobs..."
             viewMode={viewMode}
             onViewModeChange={setViewMode}
@@ -830,7 +837,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             {['all', 'Published', 'Draft', 'Disabled', 'Archived'].map((status) => (
               <button
                 key={status}
-                onClick={() => setStatusFilter(status.toLowerCase())}
+                onClick={() => search.setFilter('status', status.toLowerCase())}
                 className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
                   statusFilter.toLowerCase() === status.toLowerCase()
                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
@@ -843,7 +850,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             <div className="flex items-center gap-2 sm:ml-2 sm:border-l sm:border-gray-200 sm:pl-3">
               <div className="flex items-center bg-brand-blue/5 ring-1 ring-brand-blue/10 rounded-lg p-1">
                 <button
-                  onClick={() => setCreationMethodFilter(creationMethodFilter === 'ai' ? null : 'ai')}
+                  onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'ai' ? null : 'ai')}
                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
                     creationMethodFilter === 'ai'
                       ? 'bg-white text-brand-blue-2 shadow-sm shadow-brand-blue/10'
@@ -855,7 +862,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   <span className="sm:hidden">AI</span>
                 </button>
                 <button
-                  onClick={() => setCreationMethodFilter(creationMethodFilter === 'manual' ? null : 'manual')}
+                  onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'manual' ? null : 'manual')}
                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
                     creationMethodFilter === 'manual'
                       ? 'bg-white text-brand-blue-2 shadow-sm shadow-brand-blue/10'
@@ -878,7 +885,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     <label className="block text-sm text-gray-700 mb-1.5 font-medium">Location</label>
                     <select
                       value={locationFilter}
-                      onChange={(e) => setLocationFilter(e.target.value)}
+                      onChange={(e) => search.setFilter('location', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
                     >
                       <option value="all">All Locations</option>
@@ -893,7 +900,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     <label className="block text-sm text-gray-700 mb-1.5 font-medium">Department</label>
                     <select
                       value={departmentFilter}
-                      onChange={(e) => setDepartmentFilter(e.target.value)}
+                      onChange={(e) => search.setFilter('department', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
                     >
                       <option value="all">All Departments</option>
@@ -908,7 +915,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     <label className="block text-sm text-gray-700 mb-1.5 font-medium">Job Type</label>
                     <select
                       value={employmentTypeFilter}
-                      onChange={(e) => setEmploymentTypeFilter(e.target.value)}
+                      onChange={(e) => search.setFilter('employmentType', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
                     >
                       <option value="all">All Types</option>
@@ -923,7 +930,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     <label className="block text-sm text-gray-700 mb-1.5 font-medium">Industry</label>
                     <select
                       value={industryFilter}
-                      onChange={(e) => setIndustryFilter(e.target.value)}
+                      onChange={(e) => search.setFilter('industry', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
                     >
                       <option value="all">All Industries</option>
@@ -937,7 +944,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   <label className="block text-sm text-gray-700 mb-1.5 font-medium">Experience</label>
                   <select
                     value={experienceFilter}
-                    onChange={(e) => setExperienceFilter(e.target.value)}
+                    onChange={(e) => search.setFilter('experience', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
                   >
                     <option value="all">All Levels</option>
@@ -954,7 +961,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   <input
                     type="date"
                     value={datePostedFromFilter}
-                    onChange={(e) => setDatePostedFromFilter(e.target.value)}
+                    onChange={(e) => search.setFilter('datePostedFrom', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
                   />
                 </div>
@@ -963,7 +970,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   <input
                     type="date"
                     value={datePostedToFilter}
-                    onChange={(e) => setDatePostedToFilter(e.target.value)}
+                    onChange={(e) => search.setFilter('datePostedTo', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
                   />
                 </div>
@@ -973,7 +980,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   the Clear button next to the More Filters button. */}
               <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
                 <button
-                  onClick={() => { setShowAdvancedFilters(false); setFiltersApplied(true); }}
+                  // The controls above commit as they change, so Done just closes.
+                  onClick={() => setShowAdvancedFilters(false)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                 >
                   Done
@@ -1736,18 +1744,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
               </p>
               {searchQuery || activeFiltersCount > 0 ? (
                 <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setStatusFilter('all');
-                    setLocationFilter('all');
-                    setDepartmentFilter('all');
-                    setExperienceFilter('all');
-                    setEmploymentTypeFilter('all');
-                    setApplicantsFilter('all');
-                    setDatePostedFromFilter('');
-                    setDatePostedToFilter('');
-                    setSalaryRangeFilter('all');
-                  }}
+                  onClick={clearAllFilters}
                   className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-white text-gray-700 border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
                 >
                   <XCircle className="w-4 h-4" />

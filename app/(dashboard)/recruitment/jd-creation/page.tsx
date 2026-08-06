@@ -10,6 +10,45 @@ import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdS
 
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 
+/** Modules that can send a recruiter into JD creation mid-flow. */
+type JDFlowOrigin = 'assessment' | 'ai-interview' | 'resume-scoring';
+const JD_FLOW_ORIGINS: JDFlowOrigin[] = ['assessment', 'ai-interview', 'resume-scoring'];
+/**
+ * Retired key. The origin used to be latched here (and inferred from
+ * document.referrer) and was only ever cleared on publish, so one assessment
+ * detour re-labelled every later JD the recruiter created in that browser
+ * session. Cleared on sight so a value left over from the old build cannot.
+ */
+const LEGACY_ASSESSMENT_RETURN_KEY = 'jd_return_to_assessments';
+
+/** Read a query param, falling back to the live URL when the hook is still empty. */
+function readFlowParam(fromHook: string | null, name: string): string | null {
+  if (fromHook) return fromHook;
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+/**
+ * Which module sent the recruiter into JD creation.
+ *
+ * The URL is the single authority — no `from` param means they came in through
+ * Job Descriptions — and `ensureJDCreationUrl` keeps the param across every
+ * in-page stage rewrite, so nothing has to be remembered between visits.
+ */
+function resolveJDFlowOrigin(fromParam: string | null): JDFlowOrigin | null {
+  return JD_FLOW_ORIGINS.find((candidate) => candidate === fromParam) ?? null;
+}
+
+/**
+ * The exact in-flow URL to resume, when the calling module passed one. Only
+ * same-site relative paths are accepted so a hand-edited `returnUrl` cannot
+ * turn a breadcrumb into an off-site link.
+ */
+function resolveJDFlowReturnUrl(raw: string | null): string | null {
+  if (!raw) return null;
+  return raw.startsWith('/') && !raw.startsWith('//') ? raw : null;
+}
+
 // Error display component for pre-condition failures
 function AccessBlockedError({
   errorCode,
@@ -169,43 +208,25 @@ function JDCreationContent() {
   const searchParams = useSearchParams();
   const jdId = searchParams.get('id');
   const stageFromUrl = searchParams.get('stage') as 'create' | 'extract' | 'review' | null;
-  const fromAiInterview = searchParams.get('from') === 'ai-interview';
 
-  // Check multiple sources to determine if coming from assessments
-  const fromUrlParam = searchParams.get('from') === 'assessment';
-  const referrerIsAssessments = typeof document !== 'undefined' && document.referrer.includes('/recruitment/assessments');
-
-  // Store/retrieve assessment redirect intent in sessionStorage
-  const [fromAssessment, setFromAssessment] = useState(() => {
-    if (typeof window === 'undefined') return false;
-
-    // Check URL param first
-    if (fromUrlParam) {
-      sessionStorage.setItem('jd_return_to_assessments', 'true');
-      return true;
-    }
-
-    // Check referrer
-    if (referrerIsAssessments) {
-      sessionStorage.setItem('jd_return_to_assessments', 'true');
-      return true;
-    }
-
-    // Check sessionStorage for persisted intent
-    return sessionStorage.getItem('jd_return_to_assessments') === 'true';
-  });
-
-  console.log('[JD-CREATION-PAGE] ========== INITIALIZATION ==========');
-  console.log('[JD-CREATION-PAGE] URL:', typeof window !== 'undefined' ? window.location.href : 'N/A');
-  console.log('[JD-CREATION-PAGE] from param:', searchParams.get('from'));
-  console.log('[JD-CREATION-PAGE] fromUrlParam:', fromUrlParam);
-  console.log('[JD-CREATION-PAGE] referrer:', typeof document !== 'undefined' ? document.referrer : 'N/A');
-  console.log('[JD-CREATION-PAGE] referrerIsAssessments:', referrerIsAssessments);
-  console.log('[JD-CREATION-PAGE] sessionStorage value:', typeof window !== 'undefined' ? sessionStorage.getItem('jd_return_to_assessments') : null);
-  console.log('[JD-CREATION-PAGE] finalFromAssessment:', fromAssessment);
-  console.log('[JD-CREATION-PAGE] jdId:', jdId);
-  console.log('[JD-CREATION-PAGE] stage:', stageFromUrl);
-  console.log('[JD-CREATION-PAGE] =======================================');
+  // Which module sent the recruiter here — derived from the URL on every
+  // render, never latched. The old version remembered "came from assessments"
+  // in sessionStorage (and sniffed document.referrer) and only cleared it on
+  // publish, so one assessment detour re-labelled every later JD creation in
+  // that browser session. The live-URL fallback covers the first client render
+  // of a prerendered page, where `useSearchParams()` is still empty and the
+  // breadcrumb used to paint the plain Job Descriptions trail before flipping.
+  const flowOrigin = useMemo(
+    () => resolveJDFlowOrigin(readFlowParam(searchParams.get('from'), 'from')),
+    [searchParams]
+  );
+  const flowReturnUrl = useMemo(
+    () => resolveJDFlowReturnUrl(readFlowParam(searchParams.get('returnUrl'), 'returnUrl')),
+    [searchParams]
+  );
+  const fromAiInterview = flowOrigin === 'ai-interview';
+  const fromAssessment = flowOrigin === 'assessment';
+  const fromResumeScoring = flowOrigin === 'resume-scoring';
 
   const [editingJD, setEditingJD] = useState<JDResponse | null>(null);
   const [loading, setLoading] = useState(true); // Start with loading true for access check
@@ -214,15 +235,11 @@ function JDCreationContent() {
   const [isJDInUse, setIsJDInUse] = useState(false);
   const [jdUsageMessage, setJdUsageMessage] = useState<string | undefined>(undefined);
 
-  // Monitor URL changes and update fromAssessment if needed
+  // Drop the retired latch so a value written by the previous build cannot
+  // outlive it. Nothing reads the key any more.
   useEffect(() => {
-    const checkFromParam = searchParams.get('from');
-    if (checkFromParam === 'assessment' && !fromAssessment) {
-      console.log('[JD-CREATION-PAGE] 🔄 Detected from=assessment in URL, updating state');
-      sessionStorage.setItem('jd_return_to_assessments', 'true');
-      setFromAssessment(true);
-    }
-  }, [searchParams, fromAssessment]);
+    try { sessionStorage.removeItem(LEGACY_ASSESSMENT_RETURN_KEY); } catch { /* ignore */ }
+  }, []);
 
   // JD01: Pre-condition validation on page load
   useEffect(() => {
@@ -304,33 +321,72 @@ function JDCreationContent() {
     checkAccess();
   }, [jdId]);
 
+  /**
+   * Where the assessment flow resumes — the JD picker the recruiter left.
+   * Create Assessment forwards its own URL so the Job Details anchor survives;
+   * the bare route is the fallback for older links that carry no `returnUrl`.
+   */
+  const ASSESSMENT_CREATE_HREF =
+    flowReturnUrl?.startsWith('/recruitment/assessments') ? flowReturnUrl : '/recruitment/assessments/create';
+  /** Same idea for Resume Scoring: its JD picker, not the JD list. */
+  const RESUME_SCORING_JD_SELECTION_HREF =
+    flowReturnUrl?.startsWith('/recruitment/resume-scoring') ? flowReturnUrl : '/recruitment/resume-scoring/jd-selection';
+
   const handleViewAllJobs = () => {
-    router.push(fromAiInterview ? '/recruitment/ai-interviews/jd-selection' : '/recruitment/job-openings');
+    if (fromAiInterview) {
+      router.push('/recruitment/ai-interviews/jd-selection');
+      return;
+    }
+    if (fromResumeScoring) {
+      router.push(RESUME_SCORING_JD_SELECTION_HREF);
+      return;
+    }
+    // Entered from Create Assessment: back belongs to that flow, not to the JD
+    // list the recruiter never visited.
+    router.push(fromAssessment ? ASSESSMENT_CREATE_HREF : '/recruitment/job-openings');
   };
 
+  const jdLeafLabel = editingJD ? 'Edit Job Description' : 'Create Job Description';
+
+  // The trail names where the recruiter actually came from. Entering from the
+  // assessment flow used to reset it to Dashboard › Job Descriptions, which
+  // dropped every crumb back to the half-built assessment.
   const breadcrumbItems = fromAiInterview
     ? [
         { label: 'Dashboard', href: '/dashboard' },
         { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
         { label: 'Select Job Description', href: '/recruitment/ai-interviews/jd-selection' },
       ]
-    : [
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Job Descriptions', href: '/recruitment/job-openings' },
-        { label: editingJD ? 'Edit Job Description' : 'Create Job Description' },
-      ];
+    : fromAssessment
+      ? [
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Assessments', href: '/recruitment/assessments' },
+          { label: 'Create Assessment', href: ASSESSMENT_CREATE_HREF },
+          { label: jdLeafLabel },
+        ]
+      : fromResumeScoring
+        ? [
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
+            { label: 'Select Job Description', href: RESUME_SCORING_JD_SELECTION_HREF },
+            { label: jdLeafLabel },
+          ]
+        : [
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+            { label: jdLeafLabel },
+          ];
 
-  // Handle successful JD publish.
-  // AI Interview starts from its JD picker, so publishing there returns to the
-  // AI Interviews list.
-  // Per product decision: publishing a JD never auto-redirects to Assessment —
-  // other entry points stay on the JD success screen (View Job Details / Create another
-  // JD). We also clear the sticky `jd_return_to_assessments` intent so any
-  // leftover flag from a prior assessment-initiated session can't bounce a
-  // normal publish to the Assessments page.
+  // Handle successful JD publish. Each entry point returns to the flow it
+  // interrupted: AI Interview to its list, Create Assessment and Resume Scoring
+  // to their JD pickers — where the JD just published is now selectable, which
+  // is the whole reason those flows send people here. (This reverses an earlier
+  // decision to leave assessment-initiated publishes on the JD success screen.)
+  //
+  // The remembered origin is dropped either way: the flow is over, so it must
+  // not colour the next JD the recruiter creates.
   const handleJDPublish = () => {
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('jd_return_to_assessments');
       if (fromAiInterview) {
         sessionStorage.setItem(AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY, 'pending');
       }
@@ -338,6 +394,14 @@ function JDCreationContent() {
 
     if (fromAiInterview) {
       router.push('/recruitment/ai-interviews');
+      return;
+    }
+    if (fromAssessment) {
+      router.push(ASSESSMENT_CREATE_HREF);
+      return;
+    }
+    if (fromResumeScoring) {
+      router.push(RESUME_SCORING_JD_SELECTION_HREF);
     }
   };
 

@@ -23,6 +23,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 
 const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -333,30 +334,28 @@ export default function ResumeScoringPage({
     setShowProgressModal(true);
   };
 
-  // History filters
-  const [historySearchQuery, setHistorySearchQuery] = useState('');
-  const [historyCreatedBy, setHistoryCreatedBy] = useState('');
-  const [historyScoredFrom, setHistoryScoredFrom] = useState('');
-  const [historyScoredTo, setHistoryScoredTo] = useState('');
-  const [historyLocation, setHistoryLocation] = useState('');
-  const [historyJobType, setHistoryJobType] = useState('');
-  const [historyIndustry, setHistoryIndustry] = useState('');
+  // History search + filters, in the shared hook.
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
-  // Mirrors job-openings' `filtersApplied`: only true once the user confirms with
-  // "Done". Gates the solid-blue Filters button and the toolbar Clear, so Clear
-  // doesn't appear while the user is still mid-selection.
-  const [historyFiltersApplied, setHistoryFiltersApplied] = useState(false);
-
-  const clearHistoryFilters = () => {
-    setHistorySearchQuery('');
-    setHistoryCreatedBy('');
-    setHistoryScoredFrom('');
-    setHistoryScoredTo('');
-    setHistoryLocation('');
-    setHistoryJobType('');
-    setHistoryIndustry('');
-    setHistoryFiltersApplied(false);
-  };
+  const historySearch = useListSearch({
+    initialFilters: {
+      createdBy: '',
+      scoredFrom: '',
+      scoredTo: '',
+      location: '',
+      jobType: '',
+      industry: '',
+    },
+  });
+  const historySearchQuery = historySearch.appliedQuery;
+  const {
+    createdBy: historyCreatedBy,
+    scoredFrom: historyScoredFrom,
+    scoredTo: historyScoredTo,
+    location: historyLocation,
+    jobType: historyJobType,
+    industry: historyIndustry,
+  } = historySearch.filters;
+  const clearHistoryFilters = historySearch.reset;
 
   // Returning to the history list from a drill-in (role details / candidate view)
   // resets the filters to their default state, so Resume Scoring always opens on
@@ -434,7 +433,6 @@ export default function ResumeScoringPage({
       // filters restore on return but the flag resets to false, so the Filters
       // button loses its highlight and Clear disappears while results are still
       // filtered — no way to tell why the list looks short.
-      historyFiltersApplied,
       // Persist the cards<->list drill-in too. The filter *values* were already
       // being restored, but pageView always reset to 'cards', so returning hid
       // the filtered list and the whole toolbar — indistinguishable from the
@@ -445,16 +443,17 @@ export default function ResumeScoringPage({
       if (typeof s.isGlobalView === 'boolean') setIsGlobalView(s.isGlobalView);
       if (typeof s.globalSearchQuery === 'string') setGlobalSearchQuery(s.globalSearchQuery);
       if (s.historyViewMode === 'grid' || s.historyViewMode === 'list') setHistoryViewMode(s.historyViewMode);
-      if (typeof s.historySearchQuery === 'string') setHistorySearchQuery(s.historySearchQuery);
-      if (typeof s.historyCreatedBy === 'string') setHistoryCreatedBy(s.historyCreatedBy);
-      if (typeof s.historyScoredFrom === 'string') setHistoryScoredFrom(s.historyScoredFrom);
-      if (typeof s.historyScoredTo === 'string') setHistoryScoredTo(s.historyScoredTo);
-      if (typeof s.historyLocation === 'string') setHistoryLocation(s.historyLocation);
-      if (typeof s.historyJobType === 'string') setHistoryJobType(s.historyJobType);
-      if (typeof s.historyIndustry === 'string') setHistoryIndustry(s.historyIndustry);
+      if (typeof s.historySearchQuery === 'string') historySearch.setQuery(s.historySearchQuery);
+      historySearch.setFilters({
+        createdBy: typeof s.historyCreatedBy === 'string' ? s.historyCreatedBy : '',
+        scoredFrom: typeof s.historyScoredFrom === 'string' ? s.historyScoredFrom : '',
+        scoredTo: typeof s.historyScoredTo === 'string' ? s.historyScoredTo : '',
+        location: typeof s.historyLocation === 'string' ? s.historyLocation : '',
+        jobType: typeof s.historyJobType === 'string' ? s.historyJobType : '',
+        industry: typeof s.historyIndustry === 'string' ? s.historyIndustry : '',
+      });
       if (typeof s.historyCurrentPage === 'number') setHistoryCurrentPage(s.historyCurrentPage);
       if (typeof s.historyItemsPerPage === 'number') setHistoryItemsPerPage(s.historyItemsPerPage);
-      if (typeof s.historyFiltersApplied === 'boolean') setHistoryFiltersApplied(s.historyFiltersApplied);
       if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
     },
   );
@@ -1690,14 +1689,6 @@ export default function ResumeScoringPage({
       ? [processingEntry, ...filteredHistory]
       : filteredHistory;
 
-    const activeFiltersCount = [
-      historyCreatedBy !== '',
-      historyScoredFrom !== '',
-      historyScoredTo !== '',
-      historyLocation !== '',
-      historyJobType !== '',
-      historyIndustry !== '',
-    ].filter(Boolean).length;
 
     return (
       <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
@@ -1949,14 +1940,16 @@ export default function ResumeScoringPage({
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
             <ListToolbar
               searchValue={historySearchQuery}
-              onSearchChange={setHistorySearchQuery}
+              onSearchChange={historySearch.setQuery}
+              // The hook debounces into `appliedQuery`, so keystrokes pass through.
+              searchDebounceMs={0}
               searchPlaceholder="Search by job title..."
               viewMode={historyViewMode}
               onViewModeChange={setHistoryViewMode}
               onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
               filtersOpen={showHistoryFilters}
-              activeFilterCount={activeFiltersCount}
-              filtersApplied={historyFiltersApplied && activeFiltersCount > 0}
+              activeFilterCount={historySearch.activeFilterCount}
+              filtersApplied={historySearch.filtersApplied}
               onClearFilters={clearHistoryFilters}
               className="mb-0"
             >
@@ -1979,36 +1972,36 @@ export default function ResumeScoringPage({
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     <div>
                       <label className={labelCls}>Created By</label>
-                      <select value={historyCreatedBy} onChange={e => setHistoryCreatedBy(e.target.value)} className={selectCls}>
+                      <select value={historyCreatedBy} onChange={e => historySearch.setFilter('createdBy', e.target.value)} className={selectCls}>
                         <option value="">All Users</option>
                         {uniqueCreators.map(name => <option key={name} value={name!}>{name}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className={labelCls}>Scored From</label>
-                      <input type="date" value={historyScoredFrom} onChange={e => setHistoryScoredFrom(e.target.value)} className={inputCls} />
+                      <input type="date" value={historyScoredFrom} onChange={e => historySearch.setFilter('scoredFrom', e.target.value)} className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Scored To</label>
-                      <input type="date" value={historyScoredTo} onChange={e => setHistoryScoredTo(e.target.value)} className={inputCls} />
+                      <input type="date" value={historyScoredTo} onChange={e => historySearch.setFilter('scoredTo', e.target.value)} className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Location</label>
-                      <select value={historyLocation} onChange={e => setHistoryLocation(e.target.value)} className={selectCls}>
+                      <select value={historyLocation} onChange={e => historySearch.setFilter('location', e.target.value)} className={selectCls}>
                         <option value="">All Locations</option>
                         {uniqueLocations.map(l => <option key={l} value={l!}>{l}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className={labelCls}>Job Type</label>
-                      <select value={historyJobType} onChange={e => setHistoryJobType(e.target.value)} className={selectCls}>
+                      <select value={historyJobType} onChange={e => historySearch.setFilter('jobType', e.target.value)} className={selectCls}>
                         <option value="">All Types</option>
                         {uniqueJobTypes.map(t => <option key={t} value={t!}>{formatEmploymentType(t)}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className={labelCls}>Industry</label>
-                      <select value={historyIndustry} onChange={e => setHistoryIndustry(e.target.value)} className={selectCls}>
+                      <select value={historyIndustry} onChange={e => historySearch.setFilter('industry', e.target.value)} className={selectCls}>
                         <option value="">All Industries</option>
                         {uniqueIndustries.map(i => <option key={i} value={i!}>{formatIndustryType(i)}</option>)}
                       </select>
@@ -2020,7 +2013,8 @@ export default function ResumeScoringPage({
                       clear control instead of one here and one outside. */}
                   <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
                     <button
-                      onClick={() => { setShowHistoryFilters(false); setHistoryFiltersApplied(true); }}
+                      // The controls above commit as they change, so Done just closes.
+                      onClick={() => setShowHistoryFilters(false)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                     >
                       Done

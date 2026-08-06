@@ -131,6 +131,61 @@ interface ExtendedJob extends Job {
   usageStatus?: JDUsageStatus;
 }
 
+/**
+ * Whether a draft AI interview has actually reached step 4 (Preview & Publish).
+ *
+ * The wizard runs Select JD → Configure → Clusters → Preview & Publish, and it
+ * is the Clusters step that persists the clusters into `special_instructions`
+ * on its way out. So clusters on the record mean the recruiter got past step 3;
+ * no clusters mean they stopped in Configure or Clusters and there is nothing
+ * publishable yet — the publish endpoint rejects exactly that case.
+ *
+ * Reads the full config (the compact list rows don't carry
+ * `special_instructions`), so callers must pass a record fetched by id.
+ */
+function aiDraftReachedFinalStep(config: any): boolean {
+  if (!config?.special_instructions) return false;
+  try {
+    const parsed = JSON.parse(config.special_instructions);
+    const mth = Array.isArray(parsed?.mth_clusters) ? parsed.mth_clusters : [];
+    const nth = Array.isArray(parsed?.nth_clusters) ? parsed.nth_clusters : [];
+    return mth.length > 0 || nth.length > 0;
+  } catch {
+    // Older drafts stored plain-text instructions — no clusters recorded, so
+    // the flow was never finished.
+    return false;
+  }
+}
+
+/**
+ * Whether a draft assessment is finished enough to publish — the assessment
+ * flow's equivalent of `aiDraftReachedFinalStep`.
+ *
+ * That flow runs Select JD → Configure → Preview, and Publish lives on
+ * Configure, gated there by exactly these rules: the timed split (Technical +
+ * Coding) must total 100%, every enabled section must carry topics, and an
+ * enabled HR section must have questions picked from the bank. A draft can be
+ * saved before all of that holds — auto-save on leaving Configure writes one —
+ * so the prompt has to re-check rather than assume.
+ */
+function assessmentDraftReadyToPublish(assessment: any): boolean {
+  if (!assessment) return false;
+
+  const hasTopics = (topics: unknown) => Array.isArray(topics) && topics.length > 0;
+
+  if (assessment.technical_enabled && !hasTopics(assessment.technical_topics)) return false;
+  if (assessment.coding_enabled && !hasTopics(assessment.coding_topics)) return false;
+  // HR draws on the Question Bank and isn't timed, so it needs picked questions
+  // but takes no part in the split below.
+  if (assessment.hr_enabled && !hasTopics(assessment.hr_topics)) return false;
+
+  const timedSplit =
+    (assessment.technical_enabled ? Number(assessment.technical_percentage) || 0 : 0) +
+    (assessment.coding_enabled ? Number(assessment.coding_percentage) || 0 : 0);
+
+  return timedSplit === 100;
+}
+
 interface JobDetailViewProps {
   job: ExtendedJob;
   onBack: () => void;
@@ -534,7 +589,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         // Keep the Send Invite gate in step — this click just proved a draft
         // exists, which may be newer than what loadAIInterviewConfig saw.
         setHasAnyAIInterview(true);
-        setDraftAIInterview(draft);
+        // The compact row can't tell us how far the wizard got, and the popup
+        // only offers Publish once the draft is actually publishable — so read
+        // the full record. If that read fails, fall back to the compact row:
+        // the prompt then offers editing only, which is always safe.
+        const full = await aiInterviewService.get(draft.id).catch(() => null);
+        setDraftAIInterview(full ?? draft);
         return;
       }
     } catch {
@@ -629,7 +689,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       // way forward from here, so stay put and offer to publish it instead.
       const draft = items.filter(a => statusOf(a) === 'draft').sort(newestFirst)[0];
       if (draft?.id) {
-        setDraftAssessment(draft);
+        // Read the full record before prompting: the prompt only offers Publish
+        // once the draft is actually publishable, and list rows can't be relied
+        // on to carry every section field. A failed read falls back to the row,
+        // which reads as unfinished — the safe direction.
+        const full = await assessmentService.get(draft.id).catch(() => null);
+        setDraftAssessment(full ?? draft);
         return;
       }
     } catch {
@@ -1533,6 +1598,99 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       />
     );
   }
+
+  // Results-tab actions — the same pair as the Overview quick-action group, so
+  // the recruiter can create or invite without scrolling back up. Built here
+  // rather than inline because each tab hands them to a child toolbar (and the
+  // AI interview tab also falls back to a standalone strip when there are no
+  // results to hang a toolbar off).
+  const assessmentTabActions =
+    permissions.canCreateAssessments && hasPlanFeature('assessment') ? (
+      <>
+        <button
+          onClick={handleCreateAssessment}
+          disabled={!features.assessment || job.status === 'Disabled' || resolvingAssessmentTarget}
+          title={
+            !features.assessment
+              ? 'Assessments not enabled'
+              : job.status === 'Disabled'
+                ? 'JD is disabled'
+                : undefined
+          }
+          className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+        >
+          {resolvingAssessmentTarget
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <Sparkles className="w-4 h-4" />}
+          Create
+        </button>
+        <button
+          onClick={handleOpenShareAssessment}
+          disabled={!features.assessment || job.status === 'Disabled' || isLoadingShareAssessments || !hasAnyAssessment}
+          title={
+            !features.assessment
+              ? 'Assessments not enabled'
+              : job.status === 'Disabled'
+                ? 'JD is disabled'
+                : !hasAnyAssessment
+                  ? 'Create an assessment first'
+                  : undefined
+          }
+          className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+        >
+          {isLoadingShareAssessments
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <UserPlus className="w-4 h-4" />}
+          Send Invite
+        </button>
+      </>
+    ) : null;
+
+  const aiInterviewTabActions =
+    (permissions.canCreateAIInterviews || permissions.canShareAIInterviews) && hasPlanFeature('ai_interview') ? (
+      <>
+        {permissions.canCreateAIInterviews && (
+          <button
+            onClick={handleCreateAIInterview}
+            disabled={!features.ai_interview || job.status === 'Disabled' || resolvingAIInterviewTarget}
+            title={
+              !features.ai_interview
+                ? 'AI Interviews not enabled'
+                : job.status === 'Disabled'
+                  ? 'JD is disabled'
+                  : undefined
+            }
+            className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+          >
+            {resolvingAIInterviewTarget
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <Sparkles className="w-4 h-4" />}
+            Create
+          </button>
+        )}
+        {permissions.canShareAIInterviews && (
+          <button
+            onClick={handleInviteAIInterview}
+            disabled={!features.ai_interview || job.status === 'Disabled' || resolvingInviteConfig || !hasAnyAIInterview}
+            title={
+              !features.ai_interview
+                ? 'AI Interviews not enabled'
+                : job.status === 'Disabled'
+                  ? 'JD is disabled'
+                  : !hasAnyAIInterview
+                    ? 'Create an AI interview first'
+                    : undefined
+            }
+            className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+          >
+            {resolvingInviteConfig
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <UserPlus className="w-4 h-4" />}
+            Send Invite
+          </button>
+        )}
+      </>
+    ) : null;
 
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
@@ -2548,53 +2706,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {/* Assessment Results Tab Content */}
       {activeTab === 'assessment-results' && (
         <div className="mt-0">
-          {/* Same actions as the Assessment quick-action group, surfaced on the
-              tab so the recruiter can create or invite without scrolling back
-              up to the Overview sidebar. Both open in place. */}
-          {permissions.canCreateAssessments && hasPlanFeature('assessment') && (
-            <div className="flex flex-wrap items-center justify-end gap-2 mb-3">
-              <button
-                onClick={handleCreateAssessment}
-                disabled={!features.assessment || job.status === 'Disabled' || resolvingAssessmentTarget}
-                title={
-                  !features.assessment
-                    ? 'Assessments not enabled'
-                    : job.status === 'Disabled'
-                      ? 'JD is disabled'
-                      : undefined
-                }
-                className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-              >
-                {resolvingAssessmentTarget
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <Sparkles className="w-4 h-4" />}
-                Create
-              </button>
-              <button
-                onClick={handleOpenShareAssessment}
-                disabled={!features.assessment || job.status === 'Disabled' || isLoadingShareAssessments || !hasAnyAssessment}
-                title={
-                  !features.assessment
-                    ? 'Assessments not enabled'
-                    : job.status === 'Disabled'
-                      ? 'JD is disabled'
-                      : !hasAnyAssessment
-                        ? 'Create an assessment first'
-                        : undefined
-                }
-                className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-              >
-                {isLoadingShareAssessments
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <UserPlus className="w-4 h-4" />}
-                Send Invite
-              </button>
-            </div>
-          )}
           <AssessmentResultsTable
             results={assessmentResults}
             jobTitle={job.title}
             jobId={job.id}
+            toolbarActions={assessmentTabActions}
             canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
             canBatchDownload={isTenantAdmin || (user?.permissions?.canExport ?? false)}
             onViewResultDetail={(result) => {
@@ -2609,52 +2725,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           drops its own <main>/breadcrumb chrome and stays inside this page. */}
       {activeTab === 'ai-interview-results' && (
         <div className="mt-0" ref={aiInterviewResultsSectionRef}>
-          {/* Same actions as the AI Interview quick-action group, surfaced on the
-              tab. Rendered outside the loading/error/empty branches so they stay
-              reachable even when no interview exists yet — that's exactly when
-              Create matters most. Both open in place. */}
-          {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews) && hasPlanFeature('ai_interview') && (
+          {/* With results on screen the actions ride in that view's toolbar,
+              ahead of More Filters. The other branches have no toolbar to sit
+              in, so they keep the standalone strip — Create has to stay
+              reachable when no interview exists yet, which is exactly when it
+              matters most. */}
+          {!aiInterviewConfig && aiInterviewTabActions && (
             <div className="flex flex-wrap items-center justify-end gap-2 mb-3">
-              {permissions.canCreateAIInterviews && (
-                <button
-                  onClick={handleCreateAIInterview}
-                  disabled={!features.ai_interview || job.status === 'Disabled' || resolvingAIInterviewTarget}
-                  title={
-                    !features.ai_interview
-                      ? 'AI Interviews not enabled'
-                      : job.status === 'Disabled'
-                        ? 'JD is disabled'
-                        : undefined
-                  }
-                  className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                >
-                  {resolvingAIInterviewTarget
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Sparkles className="w-4 h-4" />}
-                  Create
-                </button>
-              )}
-              {permissions.canShareAIInterviews && (
-                <button
-                  onClick={handleInviteAIInterview}
-                  disabled={!features.ai_interview || job.status === 'Disabled' || resolvingInviteConfig || !hasAnyAIInterview}
-                  title={
-                    !features.ai_interview
-                      ? 'AI Interviews not enabled'
-                      : job.status === 'Disabled'
-                        ? 'JD is disabled'
-                        : !hasAnyAIInterview
-                          ? 'Create an AI interview first'
-                          : undefined
-                  }
-                  className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                >
-                  {resolvingInviteConfig
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <UserPlus className="w-4 h-4" />}
-                  Send Invite
-                </button>
-              )}
+              {aiInterviewTabActions}
             </div>
           )}
           {loadingAIInterviewConfig ? (
@@ -2675,6 +2753,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           ) : aiInterviewConfig ? (
             <AIInterviewResults
               embedded
+              toolbarActions={aiInterviewTabActions}
               configId={aiInterviewConfig.id}
               configTitle={aiInterviewConfig.position || aiInterviewConfig.jd_title || 'AI Interview'}
               jdTitle={aiInterviewConfig.jd_title || ''}
@@ -2755,7 +2834,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     Draft assessment for this job
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                    Publish it to start inviting candidates.
+                    {assessmentDraftReadyToPublish(draftAssessment)
+                      ? 'Publish it to start inviting candidates.'
+                      : 'Finish the setup steps before it can be published.'}
                   </p>
                 </div>
               </div>
@@ -2783,27 +2864,35 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 </div>
               </div>
               <p className="text-xs text-gray-600 dark:text-slate-400 mt-3">
-                Candidates can&apos;t be invited to a draft. Publishing makes this
-                assessment live for {job.title}.
+                {assessmentDraftReadyToPublish(draftAssessment)
+                  ? <>Candidates can&apos;t be invited to a draft. Publishing makes this
+                      assessment live for {job.title}.</>
+                  : <>This draft&apos;s <span className="font-medium text-gray-900 dark:text-slate-200">Configure</span> step
+                      isn&apos;t finished — its sections don&apos;t add up to a publishable
+                      assessment yet. Pick the flow back up where you left it.</>}
               </p>
             </div>
 
+            {/* One action, decided by whether the draft is publishable — same
+                rule as the AI interview prompt below. */}
             <div className="flex flex-col sm:flex-row gap-2 sm:justify-end px-5 py-3 border-t border-gray-200 dark:border-slate-700">
-              <button
-                onClick={handleEditDraftAssessment}
-                disabled={publishingDraft}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-              >
-                Continue editing
-              </button>
-              <button
-                onClick={handlePublishDraftAssessment}
-                disabled={publishingDraft}
-                className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-              >
-                {publishingDraft && <Loader2 className="w-4 h-4 animate-spin" />}
-                {publishingDraft ? 'Publishing…' : 'Publish'}
-              </button>
+              {assessmentDraftReadyToPublish(draftAssessment) ? (
+                <button
+                  onClick={handlePublishDraftAssessment}
+                  disabled={publishingDraft}
+                  className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                >
+                  {publishingDraft && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {publishingDraft ? 'Publishing…' : 'Publish'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleEditDraftAssessment}
+                  className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
+                >
+                  Continue editing
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -2823,7 +2912,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     Draft AI interview for this job
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                    Publish it to start inviting candidates.
+                    {aiDraftReachedFinalStep(draftAIInterview)
+                      ? 'Publish it to start inviting candidates.'
+                      : 'Finish the setup steps before it can be published.'}
                   </p>
                 </div>
               </div>
@@ -2848,27 +2939,37 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 </div>
               </div>
               <p className="text-xs text-gray-600 dark:text-slate-400 mt-3">
-                Candidates can&apos;t be invited to a draft. Publishing makes this
-                interview live for {job.title}.
+                {aiDraftReachedFinalStep(draftAIInterview)
+                  ? <>Candidates can&apos;t be invited to a draft. Publishing makes this
+                      interview live for {job.title}.</>
+                  : <>This draft stopped before <span className="font-medium text-gray-900 dark:text-slate-200">Preview &amp; Publish</span>.
+                      Its clusters aren&apos;t set yet, so there is nothing to publish —
+                      pick the flow back up where you left it.</>}
               </p>
             </div>
 
+            {/* One action, decided by how far the wizard got: a finished draft
+                can only be published, an unfinished one can only be resumed.
+                Offering both let recruiters hit Publish on a draft the API was
+                always going to reject. */}
             <div className="flex flex-col sm:flex-row gap-2 sm:justify-end px-5 py-3 border-t border-gray-200 dark:border-slate-700">
-              <button
-                onClick={handleEditDraftAIInterview}
-                disabled={publishingAIDraft}
-                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
-              >
-                Continue editing
-              </button>
-              <button
-                onClick={handlePublishDraftAIInterview}
-                disabled={publishingAIDraft}
-                className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-              >
-                {publishingAIDraft && <Loader2 className="w-4 h-4 animate-spin" />}
-                {publishingAIDraft ? 'Publishing…' : 'Publish'}
-              </button>
+              {aiDraftReachedFinalStep(draftAIInterview) ? (
+                <button
+                  onClick={handlePublishDraftAIInterview}
+                  disabled={publishingAIDraft}
+                  className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                >
+                  {publishingAIDraft && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {publishingAIDraft ? 'Publishing…' : 'Publish'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleEditDraftAIInterview}
+                  className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
+                >
+                  Continue editing
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -8,6 +8,8 @@ import { aiInterviewService, AIInterviewAuditActivity } from '@/lib/services/aiI
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListEmptyState from '@/components/ui/list-empty-state';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 
 type CategoryFilter = 'all' | 'config_lifecycle' | 'candidate_activity';
 
@@ -48,14 +50,20 @@ export default function AIInterviewAuditTrail() {
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
-  const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [showFilters, setShowFilters] = useState(false);
-  // True once the user confirms the panel with "Done" - mirrors job-openings,
-  // so Clear appears only after filters are applied.
-  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
+
+  // Shared search/filter state — same shape as the assessment audit trail, so
+  // the two behave identically. Category chips stay local: they are their own
+  // control rather than part of the panel.
+  const search = useListSearch({
+    initialFilters: { dateFrom: '', dateTo: '' },
+    onChange: () => setPage(1),
+    // From and To are one date range, so they read as a single filter.
+    countFilters: (filters) => (filters.dateFrom || filters.dateTo ? 1 : 0),
+  });
+  const searchTerm = search.appliedQuery;
+  const { dateFrom: filterDateFrom, dateTo: filterDateTo } = search.filters;
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
 
   const loadAuditTrail = async () => {
@@ -87,27 +95,11 @@ export default function AIInterviewAuditTrail() {
     loadAuditTrail();
   }, [categoryFilter, page]);
 
+  // `searchTerm` is the hook's debounced value, so this refetches once per pause
+  // instead of per keystroke; the hook's page reset covers the page > 1 case.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (page === 1) {
-        loadAuditTrail();
-      } else {
-        setPage(1);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
+    if (page === 1) loadAuditTrail();
   }, [searchTerm, filterDateFrom, filterDateTo]);
-
-  const clearFilters = () => {
-    setFiltersConfirmed(false);
-    setFilterDateFrom('');
-    setFilterDateTo('');
-    setSearchTerm('');
-  };
-
-  const activeFiltersCount =
-    (filterDateFrom ? 1 : 0) +
-    (filterDateTo ? 1 : 0);
 
   const handleExportAuditLogs = () => {
     toast.info(`Exporting ${activities.length} audit log entries to CSV`);
@@ -228,28 +220,28 @@ export default function AIInterviewAuditTrail() {
 
           {/* Search + filters in the job-openings format. */}
           <ListToolbar
-            searchValue={searchTerm}
-            onSearchChange={setSearchTerm}
+            searchValue={search.query}
+            onSearchChange={search.setQuery}
+            // The hook debounces into `appliedQuery`, so keystrokes pass through.
+            searchDebounceMs={0}
             searchPlaceholder="Search by config, candidate, or user..."
             onToggleFilters={() => setShowFilters(!showFilters)}
             filtersOpen={showFilters}
-            activeFilterCount={activeFiltersCount}
-            filtersApplied={filtersConfirmed && activeFiltersCount > 0}
-            onClearFilters={clearFilters}
+            activeFilterCount={search.activeFilterCount}
+            filtersApplied={search.filtersApplied}
+            onClearFilters={search.reset}
             className="mb-0"
-          />
-
-          {showFilters && (
-            <div className="mt-4 pt-4 border-t border-brand-blue/10">
+            filterPanel={
+            <div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div>
                   <label htmlFor="audit-date-from" className="block text-sm text-gray-700 mb-1.5 font-medium">Date From</label>
                   <input
                     id="audit-date-from"
                     type="date"
-                    value={filterDateFrom}
-                    max={filterDateTo || undefined}
-                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    value={search.draftFilters.dateFrom}
+                    max={search.draftFilters.dateTo || undefined}
+                    onChange={(e) => search.setDraftFilter('dateFrom', e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
@@ -258,9 +250,9 @@ export default function AIInterviewAuditTrail() {
                   <input
                     id="audit-date-to"
                     type="date"
-                    value={filterDateTo}
-                    min={filterDateFrom || undefined}
-                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    value={search.draftFilters.dateTo}
+                    min={search.draftFilters.dateFrom || undefined}
+                    onChange={(e) => search.setDraftFilter('dateTo', e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
                   />
                 </div>
@@ -270,14 +262,15 @@ export default function AIInterviewAuditTrail() {
                   toolbar Clear - same flow as job-openings. */}
               <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
                 <button
-                  onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                  onClick={() => { search.applyFilters(); setShowFilters(false); }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                 >
                   Done
                 </button>
               </div>
             </div>
-          )}
+            }
+          />
         </div>
 
         {/* Timeline View */}
@@ -288,13 +281,15 @@ export default function AIInterviewAuditTrail() {
               <p className="text-sm text-gray-500">Loading activity log...</p>
             </div>
           ) : activities.length === 0 ? (
-            <div className="text-center py-12">
-              <Activity className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="text-sm text-gray-500">No activities found</p>
-              {(searchTerm || filterDateFrom || filterDateTo) && (
-                <p className="text-xs text-gray-400 mt-1">Try adjusting your filters</p>
-              )}
-            </div>
+            <ListEmptyState
+              icon={Activity}
+              isNarrowed={search.isNarrowed}
+              query={search.appliedQuery}
+              entityLabel="activity"
+              emptyTitle="No activity yet"
+              emptyDescription="AI interview and candidate events appear here as they happen."
+              onReset={search.reset}
+            />
           ) : (
             <div className="space-y-4">
               {activities.map((activity, index) => {

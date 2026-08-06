@@ -8,6 +8,8 @@ import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } 
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListEmptyState from '@/components/ui/list-empty-state';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 
@@ -58,14 +60,20 @@ export default function AssessmentAuditTrail() {
   const pageSize = 50;
 
   // Filters
-  const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [showFilters, setShowFilters] = useState(false);
-  // True once the user confirms the panel with "Done" - mirrors job-openings,
-  // so Clear appears only after filters are applied.
-  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
+
+  // Search + date range come from the shared hook: it owns the typed-vs-applied
+  // query, the staged panel, the active count and the reset. The category chips
+  // stay local — they are their own control, not part of the panel.
+  const search = useListSearch({
+    initialFilters: { dateFrom: '', dateTo: '' },
+    onChange: () => setPage(1),
+    // From and To are one date range, so they read as a single filter.
+    countFilters: (filters) => (filters.dateFrom || filters.dateTo ? 1 : 0),
+  });
+  const searchTerm = search.appliedQuery;
+  const { dateFrom: filterDateFrom, dateTo: filterDateTo } = search.filters;
 
   // Selected activity for details view
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
@@ -110,28 +118,12 @@ export default function AssessmentAuditTrail() {
     loadAuditTrail();
   }, [categoryFilter, page]);
 
-  // Debounced search
+  // `searchTerm` is the hook's debounced value, so this fires once per pause
+  // rather than per keystroke — the hand-rolled timer this replaced did the
+  // same job, and the hook's page reset covers the page > 1 case.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (page === 1) {
-        loadAuditTrail();
-      } else {
-        setPage(1);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
+    if (page === 1) loadAuditTrail();
   }, [searchTerm, filterDateFrom, filterDateTo]);
-
-  const clearFilters = () => {
-    setFiltersConfirmed(false);
-    setFilterDateFrom('');
-    setFilterDateTo('');
-    setSearchTerm('');
-  };
-
-  const activeFiltersCount =
-    (filterDateFrom ? 1 : 0) +
-    (filterDateTo ? 1 : 0);
 
   const handleExportAuditLogs = () => {
     console.log('Exporting audit logs:', activities);
@@ -273,28 +265,28 @@ export default function AssessmentAuditTrail() {
 
           {/* Search + filters in the job-openings format. */}
           <ListToolbar
-            searchValue={searchTerm}
-            onSearchChange={setSearchTerm}
+            searchValue={search.query}
+            onSearchChange={search.setQuery}
+            // The hook debounces into `appliedQuery`, so keystrokes pass through.
+            searchDebounceMs={0}
             searchPlaceholder="Search by assessment, candidate, or user..."
             onToggleFilters={() => setShowFilters(!showFilters)}
             filtersOpen={showFilters}
-            activeFilterCount={activeFiltersCount}
-            filtersApplied={filtersConfirmed && activeFiltersCount > 0}
-            onClearFilters={clearFilters}
+            activeFilterCount={search.activeFilterCount}
+            filtersApplied={search.filtersApplied}
+            onClearFilters={search.reset}
             className="mb-0"
-          />
-
-          {showFilters && (
-            <div className="mt-4 pt-4 border-t border-brand-blue/10">
+            filterPanel={
+            <div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div>
                   <label htmlFor="audit-date-from" className="block text-sm text-gray-700 mb-1.5 font-medium">Date From</label>
                   <input
                     id="audit-date-from"
                     type="date"
-                    value={filterDateFrom}
-                    max={filterDateTo || undefined}
-                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    value={search.draftFilters.dateFrom}
+                    max={search.draftFilters.dateTo || undefined}
+                    onChange={(e) => search.setDraftFilter('dateFrom', e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
                   />
                 </div>
@@ -303,9 +295,9 @@ export default function AssessmentAuditTrail() {
                   <input
                     id="audit-date-to"
                     type="date"
-                    value={filterDateTo}
-                    min={filterDateFrom || undefined}
-                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    value={search.draftFilters.dateTo}
+                    min={search.draftFilters.dateFrom || undefined}
+                    onChange={(e) => search.setDraftFilter('dateTo', e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
                   />
                 </div>
@@ -315,14 +307,15 @@ export default function AssessmentAuditTrail() {
                   toolbar Clear - same flow as job-openings. */}
               <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
                 <button
-                  onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                  onClick={() => { search.applyFilters(); setShowFilters(false); }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                 >
                   Done
                 </button>
               </div>
             </div>
-          )}
+            }
+          />
         </div>
 
         {/* Timeline View */}
@@ -333,13 +326,15 @@ export default function AssessmentAuditTrail() {
               <p className="text-sm text-gray-500">Loading activity log...</p>
             </div>
           ) : activities.length === 0 ? (
-            <div className="text-center py-8 sm:py-12">
-              <Activity className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
-              <p className="text-sm text-gray-500">No activities found</p>
-              {(searchTerm || filterDateFrom || filterDateTo) && (
-                <p className="text-xs text-gray-400 mt-1">Try adjusting your filters</p>
-              )}
-            </div>
+            <ListEmptyState
+              icon={Activity}
+              isNarrowed={search.isNarrowed}
+              query={search.appliedQuery}
+              entityLabel="activity"
+              emptyTitle="No activity yet"
+              emptyDescription="Assessment and candidate events appear here as they happen."
+              onReset={search.reset}
+            />
           ) : (
             <div className="space-y-3 sm:space-y-4">
               {activities.map((activity, index) => {

@@ -4952,12 +4952,32 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     isJobTitleValidating
   );
   const aiPromptValidationError = getAIPromptValidationError(aiPrompt);
-  const isAiInterviewFlow = breadcrumbItems?.some(item => item.href === '/recruitment/ai-interviews') ?? false;
-  const createAnotherJdUrl = isAiInterviewFlow
-    ? '/recruitment/jd-creation?from=ai-interview'
+  // Carry whichever module opened JD creation into the follow-up links. Hard-
+  // coding only the AI Interview case dropped the origin for every other flow,
+  // so "Create Another JD" landed on the plain Dashboard › Job Descriptions
+  // trail mid-flow. The trail itself is the source of truth here — the page
+  // already resolved it from the URL, and reading it back avoids a second
+  // (hydration-unsafe) look at window.location.
+  const flowOriginByCrumb: Array<[string, string]> = [
+    ['/recruitment/ai-interviews', 'ai-interview'],
+    ['/recruitment/assessments', 'assessment'],
+    ['/recruitment/resume-scoring', 'resume-scoring'],
+  ];
+  const flowOrigin = flowOriginByCrumb.find(([href]) =>
+    breadcrumbItems?.some(item => item.href === href)
+  )?.[1] ?? null;
+  const originQuery = flowOrigin ? `from=${flowOrigin}` : '';
+  // Names where `onBack` actually lands, which is the flow's own screen rather
+  // than the JD list whenever this page was opened mid-flow.
+  const backDestinationLabel =
+    flowOrigin === 'assessment' ? 'Create Assessment'
+    : flowOrigin ? 'Select Job Description'
+    : 'View All Jobs';
+  const createAnotherJdUrl = originQuery
+    ? `/recruitment/jd-creation?${originQuery}`
     : '/recruitment/jd-creation';
   const viewPublishedJdUrl = publishedJdId
-    ? `/recruitment/job-details?id=${publishedJdId}${isAiInterviewFlow ? '&from=ai-interview' : ''}`
+    ? `/recruitment/job-details?id=${publishedJdId}${originQuery ? `&${originQuery}` : ''}`
     : '';
 
   return (
@@ -8011,7 +8031,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 onClick={onBack}
                 className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm"
               >
-                {isAiInterviewFlow ? 'Select Job Description' : 'View All Jobs'}
+                {backDestinationLabel}
               </button>
             </div>
           </div>

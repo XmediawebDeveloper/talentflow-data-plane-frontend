@@ -101,15 +101,30 @@ export default function CreateAssessmentPage() {
   const handleCreateAssessment = async (assessment: any) => {
     // Navigate back to returnUrl if provided, otherwise to assessments list
     if (returnUrl) {
-      router.replace(returnUrl);
+      // Publishing from a JD's Job Details page lands on that job's assessment
+      // results, which now has a live assessment to show. Draft saves return the
+      // page as the recruiter left it.
+      const published = String(assessment?.status || '').toLowerCase() === 'active';
+      const toJobDetails = returnUrl.startsWith('/recruitment/job-details');
+      router.replace(
+        published && toJobDetails
+          ? `${returnUrl}${returnUrl.includes('?') ? '&' : '?'}tab=assessment-results`
+          : returnUrl
+      );
     } else {
       router.replace('/recruitment/assessments');
     }
   };
 
   const handleNavigateToJDCreation = () => {
-    // Pass returnUrl to redirect back to assessments page after job creation
-    router.push('/recruitment/job-openings?create=true&returnUrl=/recruitment/assessments');
+    // Tag the origin so JD creation keeps the Assessments trail instead of
+    // resetting to Dashboard › Job Descriptions, and returns here on publish.
+    const assessmentReturnUrl = returnUrl
+      ? `/recruitment/assessments/create?returnUrl=${encodeURIComponent(returnUrl)}`
+      : '/recruitment/assessments/create';
+    router.push(
+      `/recruitment/jd-creation?from=assessment&returnUrl=${encodeURIComponent(assessmentReturnUrl)}`
+    );
   };
 
   if (isLoading) {

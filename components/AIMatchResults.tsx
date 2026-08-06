@@ -1,6 +1,8 @@
 import { ArrowLeft, Sparkles, Mail, Phone, MapPin, Building2, Clock, CheckCircle2, Star, TrendingUp, Filter, Download, Share2 } from 'lucide-react';
 import { useState } from 'react';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListEmptyState from '@/components/ui/list-empty-state';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 
 interface AIMatchResultsProps {
   job: any;
@@ -11,15 +13,20 @@ interface AIMatchResultsProps {
 
 export default function AIMatchResults({ job, results, onBack, onSelectCandidate }: AIMatchResultsProps) {
   const [selectedCandidates, setSelectedCandidates] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [locationFilter, setLocationFilter] = useState('');
-  const [experienceFilter, setExperienceFilter] = useState('');
-  const [noticePeriodFilter, setNoticePeriodFilter] = useState('');
-  const [skillFilter, setSkillFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  // True once the user confirms the panel with "Done" - mirrors job-openings,
-  // so Clear appears only after filters are applied.
-  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
+
+  // Shared search/filter state. The selects commit as you pick, so this uses
+  // `setFilter` and leaves the draft pair alone.
+  const search = useListSearch({
+    initialFilters: { location: '', experience: '', noticePeriod: '', skill: '' },
+  });
+  const searchQuery = search.appliedQuery;
+  const {
+    location: locationFilter,
+    experience: experienceFilter,
+    noticePeriod: noticePeriodFilter,
+    skill: skillFilter,
+  } = search.filters;
 
   const getMatchColor = (score: number) => {
     if (score >= 85) return 'text-green-600';
@@ -61,22 +68,6 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
   const noticePeriods = Array.from(new Set(results.map(r => r.noticePeriod)));
   const allSkills = Array.from(new Set(results.flatMap(r => r.skills)));
 
-  const clearAllFilters = () => {
-    setFiltersConfirmed(false);
-    setSearchQuery('');
-    setLocationFilter('');
-    setExperienceFilter('');
-    setNoticePeriodFilter('');
-    setSkillFilter('');
-  };
-
-  const activeFiltersCount = [
-    searchQuery !== '',
-    locationFilter !== '',
-    experienceFilter !== '',
-    noticePeriodFilter !== '',
-    skillFilter !== '',
-  ].filter(Boolean).length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -173,14 +164,16 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
         {/* Search and Filter Bar */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
           <ListToolbar
-            searchValue={searchQuery}
-            onSearchChange={setSearchQuery}
+            searchValue={search.query}
+            onSearchChange={search.setQuery}
+            // The hook debounces into `appliedQuery`, so keystrokes pass through.
+            searchDebounceMs={0}
             searchPlaceholder="Search by candidate name or job title..."
             onToggleFilters={() => setShowFilters(!showFilters)}
             filtersOpen={showFilters}
-            activeFilterCount={activeFiltersCount}
-            filtersApplied={filtersConfirmed && activeFiltersCount > 0}
-            onClearFilters={clearAllFilters}
+            activeFilterCount={search.activeFilterCount}
+            filtersApplied={search.filtersApplied}
+            onClearFilters={search.reset}
             className="mb-0"
           >
             <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
@@ -198,7 +191,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
                   </label>
                   <select
                     value={locationFilter}
-                    onChange={(e) => setLocationFilter(e.target.value)}
+                    onChange={(e) => search.setFilter('location', e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   >
                     <option value="">All Locations</option>
@@ -214,7 +207,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
                   </label>
                   <select
                     value={experienceFilter}
-                    onChange={(e) => setExperienceFilter(e.target.value)}
+                    onChange={(e) => search.setFilter('experience', e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   >
                     <option value="">All Experience</option>
@@ -230,7 +223,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
                   </label>
                   <select
                     value={noticePeriodFilter}
-                    onChange={(e) => setNoticePeriodFilter(e.target.value)}
+                    onChange={(e) => search.setFilter('noticePeriod', e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   >
                     <option value="">All Periods</option>
@@ -246,7 +239,7 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
                   </label>
                   <select
                     value={skillFilter}
-                    onChange={(e) => setSkillFilter(e.target.value)}
+                    onChange={(e) => search.setFilter('skill', e.target.value)}
                     className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   >
                     <option value="">All Skills</option>
@@ -263,7 +256,8 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
                   the toolbar so there is exactly one clear control. */}
               <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
                 <button
-                  onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                  // The selects above commit as they change, so Done just closes.
+                  onClick={() => setShowFilters(false)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                 >
                   Done
@@ -424,16 +418,16 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
         </div>
 
         {filteredResults.length === 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-            <Filter className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg text-gray-900 mb-2">No candidates match your filters</h3>
-            <p className="text-gray-600 mb-4">Try adjusting your search or filter criteria</p>
-            <button
-              onClick={clearAllFilters}
-              className="px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
-            >
-              Clear All Filters
-            </button>
+          <div className="bg-white rounded-lg border border-gray-200">
+            <ListEmptyState
+              icon={Filter}
+              isNarrowed={search.isNarrowed}
+              query={search.appliedQuery}
+              entityLabel="candidate"
+              emptyTitle="No matched candidates yet"
+              emptyDescription="Run an AI match against this job to see candidates here."
+              onReset={search.reset}
+            />
           </div>
         )}
       </div>

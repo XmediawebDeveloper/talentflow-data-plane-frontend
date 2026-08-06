@@ -85,11 +85,14 @@ function DetailsContent() {
     <div className="mb-4 md:mb-8">
       <PageBreadcrumb
         className="mb-3"
+        // Flat trail: Dashboard › Assessments › <candidate>, matching the AI
+        // interview candidate view. The assessment crumb that sat in between is
+        // gone — Back and the Prev/Next pager still return to its results list,
+        // and rows reached from the cross-assessment Candidate Results tab never
+        // passed through that page anyway.
         items={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Assessments', href: '/recruitment/assessments' },
-          // Name the assessment, then the candidate record being viewed.
-          { label: assessmentTitle || 'Results', href: `/recruitment/assessments/${assessmentId}/results` },
           { label: candidateName || candidateDisplayId || 'Candidate Details' },
         ]}
       />

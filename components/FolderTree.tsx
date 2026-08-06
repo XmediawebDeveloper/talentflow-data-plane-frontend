@@ -9,6 +9,14 @@ import { toast } from 'sonner';
 // Max folder depth (root → level1 → level2 → level3 = 3 levels of nesting)
 const MAX_FOLDER_DEPTH = 3;
 
+// Panel width bounds — the same ones the container's min/max styles enforce, so
+// a drag can never push it outside what CSS would clamp back anyway.
+const MIN_PANEL_WIDTH = 200;
+const MAX_PANEL_WIDTH = 400;
+const DEFAULT_PANEL_WIDTH = 240;
+/** One keyboard nudge of the resize handle. */
+const RESIZE_STEP = 16;
+
 // Drag item type for resumes
 const RESUME_DRAG_TYPE = 'RESUME';
 
@@ -157,6 +165,7 @@ export default function FolderTree({
   selectedResumes = [],
   resumes,
   width,
+  onWidthChange,
 }: FolderTreeProps) {
   const [expandedFolders, setExpandedFolders] = useState<string[]>(['engineering']);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -172,6 +181,71 @@ export default function FolderTree({
   const newFolderInputRef = useRef<HTMLDivElement | null>(null);
   const subFolderInputRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+
+  // ---- Drag-to-resize for the folder column -------------------------------
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const clampWidth = (value: number) =>
+    Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, Math.round(value)));
+
+  /**
+   * Pointer capture keeps the drag alive when the cursor runs past the handle —
+   * off the panel, over the table, even outside the window — so the resize
+   * doesn't stall the moment the mouse outpaces the re-render.
+   */
+  const handleResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const handle = event.currentTarget;
+    const startX = event.clientX;
+    const startWidth = panelRef.current?.getBoundingClientRect().width ?? width;
+
+    handle.setPointerCapture(event.pointerId);
+    setIsResizing(true);
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      onWidthChange(clampWidth(startWidth + (moveEvent.clientX - startX)));
+    };
+    const handleEnd = () => {
+      setIsResizing(false);
+      handle.releasePointerCapture(event.pointerId);
+      handle.removeEventListener('pointermove', handleMove);
+      handle.removeEventListener('pointerup', handleEnd);
+      handle.removeEventListener('pointercancel', handleEnd);
+    };
+
+    handle.addEventListener('pointermove', handleMove);
+    handle.addEventListener('pointerup', handleEnd);
+    handle.addEventListener('pointercancel', handleEnd);
+  };
+
+  const handleResizeKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      onWidthChange(clampWidth(width - RESIZE_STEP));
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      onWidthChange(clampWidth(width + RESIZE_STEP));
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      onWidthChange(DEFAULT_PANEL_WIDTH);
+    }
+  };
+
+  // A drag that crosses the table would otherwise select its text, and the
+  // cursor would flicker back to the default the moment it leaves the handle.
+  useEffect(() => {
+    if (!isResizing) return;
+    const { body } = document;
+    const previousUserSelect = body.style.userSelect;
+    const previousCursor = body.style.cursor;
+    body.style.userSelect = 'none';
+    body.style.cursor = 'col-resize';
+    return () => {
+      body.style.userSelect = previousUserSelect;
+      body.style.cursor = previousCursor;
+    };
+  }, [isResizing]);
 
   useEffect(() => {
     if (!isCreatingFolder && !creatingSubFolderFor && !showFolderMenu) return;
@@ -456,9 +530,38 @@ export default function FolderTree({
 
   return (
     <div
-      className="border-b md:border-b-0 md:border-r border-gray-200 bg-white p-3 sm:p-4 max-md:!w-full max-md:!max-w-full max-md:!min-w-0"
-      style={{ width: `${width}px`, minWidth: '200px', maxWidth: '400px' }}
+      ref={panelRef}
+      className="relative border-b md:border-b-0 md:border-r border-gray-200 bg-white p-3 sm:p-4 max-md:!w-full max-md:!max-w-full max-md:!min-w-0"
+      style={{ width: `${width}px`, minWidth: `${MIN_PANEL_WIDTH}px`, maxWidth: `${MAX_PANEL_WIDTH}px` }}
     >
+      {/* Resize handle — sits on the panel's right edge, over the divider.
+          Desktop only: the panel is full-width below md, where there's no
+          second column to trade space with. */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize folder panel"
+        aria-valuenow={Math.round(width)}
+        aria-valuemin={MIN_PANEL_WIDTH}
+        aria-valuemax={MAX_PANEL_WIDTH}
+        tabIndex={0}
+        onPointerDown={handleResizeStart}
+        onKeyDown={handleResizeKeyDown}
+        onDoubleClick={() => onWidthChange(DEFAULT_PANEL_WIDTH)}
+        title="Drag to resize · double-click to reset"
+        className={`group absolute inset-y-0 -right-1 z-10 hidden w-2 cursor-col-resize touch-none md:block focus:outline-none ${
+          isResizing ? 'bg-brand-blue/10' : ''
+        }`}
+      >
+        {/* Hairline that lights up on hover/drag — the hit area stays 8px wide
+            so the handle is grabbable without a visibly thick divider. */}
+        <span
+          className={`pointer-events-none absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded transition-colors ${
+            isResizing ? 'bg-brand-blue' : 'bg-transparent group-hover:bg-brand-blue/50 group-focus:bg-brand-blue/50'
+          }`}
+        />
+      </div>
+
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-gray-900">Folders</h3>
         <button

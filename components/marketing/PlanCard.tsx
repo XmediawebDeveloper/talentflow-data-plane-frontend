@@ -36,8 +36,8 @@ export function PlanCard({ plan, isYearly }: { plan: MarketingPlan; isYearly: bo
     <article
       className={`relative flex h-full flex-col rounded-2xl border p-6 pt-8 transition-colors sm:p-7 sm:pt-9 ${
         highlighted
-          ? "border-[#ED881C]/40 bg-[#FFFFFF] ring-1 ring-[#ED881C]/25 dark:bg-white/[0.05]"
-          : "border-slate-200/80 bg-[#FFFFFF] hover:border-[#0F3C99]/30 dark:border-white/10 dark:bg-white/[0.03]"
+          ? "border-[#ED881C] bg-[#FFFFFF] ring-1 ring-[#ED881C]/35 shadow-[0_18px_44px_-26px_rgba(237,136,28,0.65)] dark:bg-white/[0.05]"
+          : "border-slate-200/80 bg-[#FFFFFF] hover:border-[#ED881C]/60 dark:border-white/10 dark:bg-white/[0.03]"
       }`}
     >
       <span

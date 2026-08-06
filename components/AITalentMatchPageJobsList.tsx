@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import ListPagination from '@/components/ListPagination';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListEmptyState from '@/components/ui/list-empty-state';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 
@@ -43,30 +45,25 @@ export default function AITalentMatchPageJobsList({
   onViewHistory,
   onBack
 }: AITalentMatchPageJobsListProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [departmentFilter, setDepartmentFilter] = useState('');
-  const [locationFilter, setLocationFilter] = useState('');
-  const [employmentTypeFilter, setEmploymentTypeFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  // True once the user confirms the More Filters panel with "Done" — mirrors
-  // job-openings, so Clear appears only after filters are applied.
-  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [jobsView, setJobsView] = useState<'grid' | 'list'>('list');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, departmentFilter, locationFilter, employmentTypeFilter]);
+  // Shared search/filter state. The selects commit as you pick, so this uses
+  // `setFilter`; `onChange` returns to page 1 on every narrowing.
+  const search = useListSearch({
+    initialFilters: { department: '', location: '', employmentType: '' },
+    onChange: () => setCurrentPage(1),
+  });
+  const searchQuery = search.appliedQuery;
+  const {
+    department: departmentFilter,
+    location: locationFilter,
+    employmentType: employmentTypeFilter,
+  } = search.filters;
 
-  const clearAllFilters = () => {
-    setSearchQuery('');
-    setDepartmentFilter('');
-    setLocationFilter('');
-    setEmploymentTypeFilter('');
-    setFiltersConfirmed(false);
-  };
 
   // Filter jobs: Only show Published/Active jobs, exclude Disabled jobs
   const publishedJobs = jobs.filter(j =>
@@ -97,12 +94,6 @@ export default function AITalentMatchPageJobsList({
     return matchHistory.filter(h => h.jobId === jobId);
   };
 
-  const activeFiltersCount = [
-    searchQuery !== '',
-    departmentFilter !== '',
-    locationFilter !== '',
-    employmentTypeFilter !== '',
-  ].filter(Boolean).length;
 
   const handleSelectJob = (jobId: string) => {
     setSelectedJobs(prev =>
@@ -166,16 +157,18 @@ export default function AITalentMatchPageJobsList({
       {/* Search and Filter Bar */}
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 lg:p-5 mb-4 sm:mb-6">
         <ListToolbar
-          searchValue={searchQuery}
-          onSearchChange={setSearchQuery}
+          searchValue={search.query}
+          onSearchChange={search.setQuery}
+          // The hook debounces into `appliedQuery`, so keystrokes pass through.
+          searchDebounceMs={0}
           searchPlaceholder="Search by job title, department, or location..."
           viewMode={jobsView}
           onViewModeChange={setJobsView}
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
-          activeFilterCount={activeFiltersCount}
-          filtersApplied={filtersConfirmed && activeFiltersCount > 0}
-          onClearFilters={clearAllFilters}
+          activeFilterCount={search.activeFilterCount}
+          filtersApplied={search.filtersApplied}
+          onClearFilters={search.reset}
           className="mb-0"
         >
           <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
@@ -193,7 +186,7 @@ export default function AITalentMatchPageJobsList({
                 </label>
                 <select
                   value={departmentFilter}
-                  onChange={(e) => setDepartmentFilter(e.target.value)}
+                  onChange={(e) => search.setFilter('department', e.target.value)}
                   className="w-full px-3 py-2 sm:py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white text-black"
                 >
                   <option value="">All Departments</option>
@@ -209,7 +202,7 @@ export default function AITalentMatchPageJobsList({
                 </label>
                 <select
                   value={locationFilter}
-                  onChange={(e) => setLocationFilter(e.target.value)}
+                  onChange={(e) => search.setFilter('location', e.target.value)}
                   className="w-full px-3 py-2 sm:py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white text-black"
                 >
                   <option value="">All Locations</option>
@@ -225,7 +218,7 @@ export default function AITalentMatchPageJobsList({
                 </label>
                 <select
                   value={employmentTypeFilter}
-                  onChange={(e) => setEmploymentTypeFilter(e.target.value)}
+                  onChange={(e) => search.setFilter('employmentType', e.target.value)}
                   className="w-full px-3 py-2 sm:py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white text-black"
                 >
                   <option value="">All Types</option>
@@ -242,7 +235,8 @@ export default function AITalentMatchPageJobsList({
                 toolbar so there is exactly one clear control. */}
             <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
               <button
-                onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                // The selects above commit as they change, so Done just closes.
+                onClick={() => setShowFilters(false)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
               >
                 Done
@@ -490,23 +484,16 @@ export default function AITalentMatchPageJobsList({
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-12 lg:p-16 text-center">
-          <div className="max-w-md mx-auto">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 lg:w-20 lg:h-20 mx-auto mb-4 sm:mb-5 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-              <Search className="w-7 h-7 sm:w-8 sm:h-8 lg:w-10 lg:h-10 text-brand-blue" />
-            </div>
-            <h3 className="text-base sm:text-lg lg:text-xl text-gray-900 mb-2">No Results Found</h3>
-            <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">
-              No jobs match your current filters. Try adjusting your search criteria.
-            </p>
-            <button
-              onClick={clearAllFilters}
-              className="px-4 sm:px-6 py-2.5 sm:py-3 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-2 text-sm sm:text-base"
-            >
-              <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              Clear All Filters
-            </button>
-          </div>
+        <div className="bg-white rounded-xl border-2 border-dashed border-brand-blue/20">
+          <ListEmptyState
+            icon={Search}
+            isNarrowed={search.isNarrowed}
+            query={search.appliedQuery}
+            entityLabel="job"
+            emptyTitle="No published jobs"
+            emptyDescription="Publish a job description to run an AI talent match against it."
+            onReset={search.reset}
+          />
         </div>
       )}
 

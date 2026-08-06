@@ -253,6 +253,18 @@ export default function AIInterviewPreview() {
   }, [mode, mthRound, nthRound, hrRound, timedAllocation]);
   const languages = interview?.available_languages ?? (interview?.ai_voice_language ? [interview.ai_voice_language] : ['English']);
 
+  /**
+   * Where leaving this flow lands. A recruiter who started on a JD's Job
+   * Details page — including via that page's draft prompt — came here to finish
+   * one job's interview, so every exit returns them to that job rather than the
+   * AI Interviews list they never chose to visit. The breadcrumb above already
+   * points back there; this keeps the buttons agreeing with it.
+   */
+  const exitHref =
+    fromJobDetails && interview?.jd_id
+      ? `/recruitment/job-details?id=${encodeURIComponent(interview.jd_id)}`
+      : null;
+
   /* Publish handler */
   const handlePublish = async () => {
     setPublishing(true);
@@ -260,6 +272,12 @@ export default function AIInterviewPreview() {
       await aiInterviewService.publishConfig(id);
       setShowConfirm(false);
       toast.success('AI Interview published!');
+      if (exitHref) {
+        // Straight to the job's AI interview results, which now has a live
+        // config to show.
+        router.push(`${exitHref}&tab=ai-interview-results`);
+        return;
+      }
       const params = new URLSearchParams({
         published: '1',
         title: position,
@@ -279,7 +297,7 @@ export default function AIInterviewPreview() {
 
   const handleSaveAsDraft = async () => {
     toast.success('Draft saved!');
-    router.push('/recruitment/ai-interviews');
+    router.push(exitHref ?? '/recruitment/ai-interviews');
   };
 
   const handleDiscard = async () => {
@@ -290,7 +308,7 @@ export default function AIInterviewPreview() {
     } catch {
       // Silent
     }
-    router.push('/recruitment/ai-interviews');
+    router.push(exitHref ?? '/recruitment/ai-interviews');
   };
 
   /* ───────────── Loading state ───────────── */

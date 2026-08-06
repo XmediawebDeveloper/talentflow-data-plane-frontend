@@ -729,6 +729,15 @@ export default function AIInterviewClusters() {
   /* Config from server */
   const [config, setConfig] = useState<AIInterviewResponse | null>(null);
 
+  /* Where leaving the flow lands. Started from a JD's Job Details page — the
+     draft prompt there included — means the recruiter came to finish one job's
+     interview, so saving or discarding returns them to that job instead of the
+     AI Interviews list they never asked for. */
+  const exitHref =
+    fromJobDetails && config?.jd_id
+      ? `/recruitment/job-details?id=${encodeURIComponent(config.jd_id)}`
+      : '/recruitment/ai-interviews';
+
   /* Cluster state */
   const [mthClusters, setMthClusters] = useState<Cluster[]>([]);
   const [nthClusters, setNthClusters] = useState<Cluster[]>([]);
@@ -2349,7 +2358,7 @@ export default function AIInterviewClusters() {
         rounds_config: buildUpdatedRoundsConfig(),
       });
       toast.success('Draft saved!');
-      router.push('/recruitment/ai-interviews');
+      router.push(exitHref);
     } catch {
       toast.error('Failed to save draft');
     } finally {
@@ -2365,7 +2374,7 @@ export default function AIInterviewClusters() {
     } catch {
       // Silent
     }
-    router.push('/recruitment/ai-interviews');
+    router.push(exitHref);
   };
 
   /* ── Validation computed values (only meaningful when clusters exist) ── */

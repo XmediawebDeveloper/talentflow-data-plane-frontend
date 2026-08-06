@@ -218,7 +218,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
     return [
       { label: 'Dashboard', href: '/dashboard' },
-      { label: 'Assessments', href: '/recruitment/assessments' },
+      // onClick, not href: the Assessments page renders this flow INLINE at
+      // /recruitment/assessments, so linking to that URL asked Next.js to
+      // navigate to the route it is already on — nothing happened, and the
+      // crumb looked broken. `onBack` closes the inline view, and on the
+      // standalone /assessments/create route it navigates back for real.
+      { label: 'Assessments', onClick: onBack },
       { label: leafLabel },
     ];
   };
@@ -265,9 +270,21 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     return { technical: technicalPct, coding: codingPct };
   };
 
-  // Navigate to JD creation page
+  // Navigate to JD creation page. The exact assessment URL rides along as
+  // `returnUrl` so JD creation's breadcrumb and Back land on the picker the
+  // recruiter left — including the Job Details anchor when the flow was entered
+  // from a JD page, which a bare `/assessments/create` would have discarded.
   const handleCreateNewJD = () => {
-    router.push('/recruitment/jd-creation?from=assessment');
+    const assessmentParams = new URLSearchParams();
+    if (fromJobDetails) assessmentParams.set('from', 'job-details');
+    if (returnUrl) assessmentParams.set('returnUrl', returnUrl);
+    if (urlJdTitle) assessmentParams.set('jd_title', urlJdTitle);
+    const assessmentQuery = assessmentParams.toString();
+    const assessmentReturnUrl = `/recruitment/assessments/create${assessmentQuery ? `?${assessmentQuery}` : ''}`;
+
+    router.push(
+      `/recruitment/jd-creation?from=assessment&returnUrl=${encodeURIComponent(assessmentReturnUrl)}`
+    );
   };
 
   // Load assessment data when in edit mode
@@ -327,7 +344,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       } catch (error) {
         console.error('Failed to load assessment for edit:', error);
         toast.error('Failed to load assessment for editing. Please try again.');
-        router.push('/recruitment/assessments');
+        // Back where the recruiter came from (the JD's page when the flow
+        // started there), not the Assessments list they never chose.
+        router.push(returnUrl || '/recruitment/assessments');
       }
     };
 

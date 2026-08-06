@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
+import AIInterviewCandidateResults from '@/components/ai-interview/AIInterviewCandidateResults';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, type InviteFilterState } from '@/components/InviteFilterBar';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
@@ -51,7 +52,7 @@ const ROUND_LABELS: Record<string, string> = {
   nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
-type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'processing' | 'audit' | 'consent' | 'settings';
+type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'processing' | 'audit' | 'consent' | 'settings';
 type OverviewCardKey = 'total' | 'active' | 'invited' | 'score';
 const CONFIG_PAGE_SIZE = 10;
 const PROCESSING_PAGE_SIZE = 10;
@@ -1290,6 +1291,9 @@ export default function AIInterview() {
                 // { key: 'completed', label: 'Completed' },
                 { key: 'archived', label: 'Archived', count: stats?.archived_configs ?? archivedConfigs.length },
                 // { key: 'processing', label: 'Processing' },
+                // Candidate sessions across every interview — the Assessments
+                // page's tab of the same name, for AI interviews.
+                { key: 'candidate-results', label: 'Candidate Results' },
                 { key: 'audit', label: 'Activity Logs' },
                 { key: 'settings', label: 'Settings' },
               ].map(tab => {
@@ -1845,6 +1849,14 @@ export default function AIInterview() {
                 onItemsPerPageChange={setProcessingItemsPerPage}
                 itemLabel="interviews"
               />
+            </div>
+          )}
+
+          {/* Candidate Results Tab — every candidate session across every
+              interview, the same table the per-interview results view shows. */}
+          {activeTab === 'candidate-results' && (
+            <div className="p-3 sm:p-6">
+              <AIInterviewCandidateResults />
             </div>
           )}
 

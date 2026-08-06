@@ -17,6 +17,8 @@ import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import VersionHistoryModal from '@/components/VersionHistoryModal';
+import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 import { Resume, Folder, Job } from '@/lib/types/types';
 import { resumeService, folderService, ResumeSearchParams } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
@@ -58,10 +60,16 @@ export default function ResumeDatabasePage() {
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
+  // AI Interview invite — same shared flow the My Resumes list uses.
+  const [isAIInterviewFlowOpen, setIsAIInterviewFlowOpen] = useState(false);
+  const [isDownloadingSelection, setIsDownloadingSelection] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [appliedSearchQuery, setAppliedSearchQuery] = useState(''); // Actual query used for API
-  const [filters, setFilters] = useState<SearchFilters>({});
+  // Search + filters in the shared hook. `appliedQuery` is the settled value —
+  // it is what the API request and the row highlighting are built from.
+  const search = useListSearch<Record<string, unknown>>({ initialFilters: {} });
+  const searchQuery = search.query;
+  const appliedSearchQuery = search.appliedQuery;
+  const filters = search.filters as SearchFilters;
   const [sortBy, setSortBy] = useState('latest');
 
   // Pagination state
@@ -104,9 +112,10 @@ export default function ResumeDatabasePage() {
     'resume-database',
     { searchQuery, appliedSearchQuery, filters, sortBy, currentPage },
     (s) => {
-      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
-      if (typeof s.appliedSearchQuery === 'string') setAppliedSearchQuery(s.appliedSearchQuery);
-      if (s.filters && typeof s.filters === 'object') setFilters(s.filters as SearchFilters);
+      if (typeof s.searchQuery === 'string') search.setQuery(s.searchQuery);
+      if (s.filters && typeof s.filters === 'object') {
+        search.setFilters(s.filters as Record<string, unknown>);
+      }
       if (typeof s.sortBy === 'string') setSortBy(s.sortBy);
       if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
     },
@@ -293,10 +302,12 @@ export default function ResumeDatabasePage() {
   }, [appliedSearchQuery, filters]);
 
   // Handle search change from SearchFilterBarCompact (already debounced)
+  // The hook holds the typed value and debounces it into `appliedSearchQuery`,
+  // which the request is keyed on.
   const handleSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-    setAppliedSearchQuery(query);
+    search.setQuery(query);
     initialLoadDone.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSelectResume = (id: string) => {
@@ -542,6 +553,96 @@ export default function ResumeDatabasePage() {
     setResumesForApply(selectedResumesList);
     fetchJobs();
     setShowAITalentMatchModal(true);
+  };
+
+  const handleBulkAIInterview = () => {
+    if (selectedResumes.length === 0) {
+      toast.error('Please select at least one resume');
+      return;
+    }
+    setIsAIInterviewFlowOpen(true);
+  };
+
+  /**
+   * Bulk download, matching My Resumes: a single selection downloads straight
+   * through, several are zipped client-side (there is no server-side archive
+   * endpoint) so the recruiter gets one file instead of a burst of prompts.
+   */
+  const handleBulkDownload = async () => {
+    if (selectedResumes.length === 0 || isDownloadingSelection) return;
+    const selected = resumes.filter(r => selectedResumes.includes(r.id));
+
+    if (selected.length === 1) {
+      const resume = selected[0];
+      toast.loading('Downloading resume...', { id: 'db-download' });
+      try {
+        const blob = await resumeService.download(resume.id);
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        // Original fileName keeps the real extension (pdf, docx, …).
+        link.download = resume.fileName || `${resume.name || 'resume'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(link);
+        toast.success('Resume downloaded', { id: 'db-download' });
+        setSelectedResumes([]);
+      } catch (error) {
+        console.error('[TalentFlow] Download failed:', error);
+        toast.error('Failed to download resume', { id: 'db-download' });
+      }
+      return;
+    }
+
+    setIsDownloadingSelection(true);
+    toast.loading(`Preparing ${selected.length} resumes for download...`, { id: 'db-download' });
+    try {
+      const { zipSync } = await import('fflate');
+      const files: { [path: string]: Uint8Array } = {};
+      let failed = 0;
+
+      for (let i = 0; i < selected.length; i++) {
+        const resume = selected[i];
+        const fileName = resume.fileName || `${resume.name || `resume_${i + 1}`}_resume`;
+        try {
+          const blob = await resumeService.download(resume.id);
+          files[`resumes/${fileName}`] = new Uint8Array(await blob.arrayBuffer());
+        } catch (error) {
+          // One unreadable file shouldn't cost the recruiter the whole archive.
+          console.error(`[TalentFlow] Failed to download ${fileName}:`, error);
+          failed++;
+        }
+      }
+
+      if (Object.keys(files).length === 0) {
+        toast.error('Could not download any of the selected resumes', { id: 'db-download' });
+        return;
+      }
+
+      const zipped = zipSync(files);
+      const url = window.URL.createObjectURL(new Blob([zipped as unknown as BlobPart], { type: 'application/zip' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `resumes_${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+
+      toast.success(
+        failed > 0
+          ? `Downloaded ${Object.keys(files).length} resumes — ${failed} could not be read`
+          : `Downloaded ${Object.keys(files).length} resumes`,
+        { id: 'db-download' }
+      );
+      setSelectedResumes([]);
+    } catch (error) {
+      console.error('[TalentFlow] ZIP download failed:', error);
+      toast.error('Failed to prepare the download', { id: 'db-download' });
+    } finally {
+      setIsDownloadingSelection(false);
+    }
   };
 
   // ✅ NEW: Handle bulk Resume Scoring
@@ -879,11 +980,17 @@ export default function ResumeDatabasePage() {
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
+            // Same action set as My Resumes, in the same order. `onResumeScoring`
+            // is deliberately not passed: its handler was identical to
+            // `handleBulkApplyToJob` (same modal, same job picker), so the bar
+            // showed "Score Resume" and "Resume Scoring" as two buttons doing
+            // one thing.
             onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job'))) ? handleBulkApplyToJob : undefined}
-            onDelete={isTenantAdmin || hasPermissionCode('internal_db:delete') ? () => handleDeleteResumes(selectedResumes) : undefined}
-            onResumeScoring={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:scoring'))) ? handleBulkResumeScoring : undefined}
             onAssessment={hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment'))) ? handleBulkAssessment : undefined}
+            onAIInterview={hasPlanFeature('ai_interview') && (isTenantAdmin || hasPermission('canShareAIInterviews')) ? handleBulkAIInterview : undefined}
             onAITalentMatch={hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match'))) ? handleBulkAITalentMatch : undefined}
+            onDownload={handleBulkDownload}
+            onDelete={isTenantAdmin || hasPermissionCode('internal_db:delete') ? () => handleDeleteResumes(selectedResumes) : undefined}
           />
         </div>
       )}
@@ -893,7 +1000,7 @@ export default function ResumeDatabasePage() {
           searchQuery={searchQuery}
           onSearchChange={handleSearchChange}
           filters={filters}
-          onFiltersChange={setFilters}
+          onFiltersChange={(next: SearchFilters) => search.setFilters(next as Record<string, unknown>)}
           sortBy={sortBy}
           onSortChange={setSortBy}
         />
@@ -920,11 +1027,8 @@ export default function ResumeDatabasePage() {
             </div>
             {(appliedSearchQuery || activeFilterCount > 0) && (
               <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setAppliedSearchQuery('');
-                  setFilters({});
-                }}
+                // One reset for the query and every filter.
+                onClick={search.reset}
                 className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:underline"
               >
                 Clear all filters
@@ -995,6 +1099,17 @@ export default function ResumeDatabasePage() {
           </div>
         )}
       </div>
+
+      {/* AI Interview invite — the same component My Resumes uses, so the two
+          lists can't drift apart again. */}
+      <InviteToAIInterviewFlow
+        open={isAIInterviewFlowOpen}
+        onClose={() => setIsAIInterviewFlowOpen(false)}
+        candidates={resumes
+          .filter((r) => selectedResumes.includes(r.id))
+          .map((r) => ({ id: r.id, name: r.name, email: r.email }))}
+        onInvited={() => setSelectedResumes([])}
+      />
 
       {isUploadModalOpen && (
         <UploadModal

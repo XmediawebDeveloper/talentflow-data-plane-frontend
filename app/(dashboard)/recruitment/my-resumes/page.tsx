@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical, RefreshCw, Ban } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical, RefreshCw, Ban, Brain } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
@@ -30,6 +30,8 @@ import ResumeVersionSelector from '@/components/ResumeVersionSelector';
 import BulkVersionResolutionModal from '@/components/BulkVersionResolutionModal';
 import type { VersionedBatchItem } from '@/components/BulkVersionResolutionModal';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
+import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
@@ -38,6 +40,7 @@ import { Resume as ApiResume, Folder as ApiFolder, FolderDeletionInfo } from '@/
 import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services';
+import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
@@ -314,9 +317,16 @@ export default function MyResumesPage() {
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [appliedSearchQuery, setAppliedSearchQuery] = useState(''); // For highlighting
-  const [filters, setFilters] = useState({});
+  // Search + filters in the shared hook, the same one every list toolbar uses.
+  // `appliedQuery` is the settled value: it drives the fetch and the result
+  // highlighting, so highlights always match the rows on screen.
+  const search = useListSearch<Record<string, unknown>>({
+    initialFilters: {},
+    onChange: () => setCurrentPage(1),
+  });
+  const searchQuery = search.query;
+  const appliedSearchQuery = search.appliedQuery;
+  const filters = search.filters;
   const [sortBy, setSortBy] = useState('date');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -402,6 +412,10 @@ export default function MyResumesPage() {
   // AI Talent Match modal state
   const [isAITalentMatchModalOpen, setIsAITalentMatchModalOpen] = useState(false);
 
+  // AI Interview: pick a published interview, then send invites to the selected
+  // candidates through the same share modal the AI Interviews module uses.
+  const [isAIInterviewPickerOpen, setIsAIInterviewPickerOpen] = useState(false);
+
   // Delete resume confirmation state
   const [deleteResumeConfirm, setDeleteResumeConfirm] = useState<{
     isOpen: boolean;
@@ -451,11 +465,10 @@ export default function MyResumesPage() {
       breadcrumbPath,
     },
     (s) => {
-      if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
-      if (typeof s.appliedSearchQuery === 'string') setAppliedSearchQuery(s.appliedSearchQuery);
+      if (typeof s.searchQuery === 'string') search.setQuery(s.searchQuery);
       if (typeof s.selectedFolder === 'string') setSelectedFolder(s.selectedFolder);
       if (s.filters && typeof s.filters === 'object' && !Array.isArray(s.filters)) {
-        setFilters(s.filters as typeof filters);
+        search.setFilters(s.filters as typeof filters);
       }
       if (typeof s.sortBy === 'string') setSortBy(s.sortBy);
       if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
@@ -1429,6 +1442,23 @@ export default function MyResumesPage() {
   };
 
   // Handle AI Talent Match button click
+  const handleAIInterview = () => {
+    if (selectedResumes.length === 0) {
+      toast.error('Please select at least one resume');
+      return;
+    }
+    // An archived resume can't be put in front of an interviewer, same rule the
+    // scoring action applies.
+    const archivedCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(r => isResumeArchived(r)).length;
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an AI interview. Please select active resumes only.`);
+      return;
+    }
+    setIsAIInterviewPickerOpen(true);
+  };
+
   const handleAITalentMatch = async () => {
     if (selectedResumes.length === 0) {
       toast.error('Please select at least one resume');
@@ -2379,13 +2409,9 @@ export default function MyResumesPage() {
   });
 
   // Handle search change from SearchFilterBarCompact (already debounced)
-  const handleSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-    setAppliedSearchQuery(query);
-    setCurrentPage(1);
-    // Don't call fetchData directly - let the useEffect handle it
-    // This prevents double API calls
-  }, []);
+  // The hook holds the typed value, debounces it into `appliedSearchQuery` and
+  // resets the page; the fetch effect keyed on that value does the rest.
+  const handleSearchChange = search.setQuery;
 
   // Client-side search helper - searches across all text fields including phone and skills
   // Server handles search, filtering, sorting, and pagination.
@@ -2529,6 +2555,9 @@ export default function MyResumesPage() {
             onArchive={!isArchivedContext && canArchiveMyResumes ? () => handleArchiveResumes(selectedResumes) : undefined}
             onUnarchive={isArchivedContext && canArchiveMyResumes ? () => handleUnarchiveResumes(selectedResumes) : undefined}
             onAITalentMatch={!isArchivedContext && hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? handleAITalentMatch : undefined}
+            // No `my_resumes:ai_interview` action code exists yet, so this
+            // follows the AI Interviews module's own share permission.
+            onAIInterview={!isArchivedContext && hasPlanFeature('ai_interview') && (isTenantAdmin || hasPermission('canShareAIInterviews')) ? handleAIInterview : undefined}
           />
           );
         })()}
@@ -2539,7 +2568,7 @@ export default function MyResumesPage() {
               searchQuery={searchQuery}
               onSearchChange={handleSearchChange}
               filters={filters}
-              onFiltersChange={(newFilters: any) => { setFilters(newFilters); setCurrentPage(1); }}
+              onFiltersChange={(newFilters: any) => search.setFilters(newFilters)}
               sortBy={sortBy}
               onSortChange={(newSort: string) => { setSortBy(newSort); setCurrentPage(1); }}
             />
@@ -2587,11 +2616,9 @@ export default function MyResumesPage() {
               </span>
             </div>
             <button
-              onClick={() => {
-                setSearchQuery('');
-                setAppliedSearchQuery('');
-                setCurrentPage(1);
-              }}
+              // One reset for the query and every filter — `onChange` returns
+              // to page 1.
+              onClick={search.reset}
               className="text-sm text-red-600 hover:text-red-700 hover:underline"
             >
               Clear search
@@ -3557,9 +3584,19 @@ export default function MyResumesPage() {
                           );
                         }
 
+                        // Only outcomes that actually happened get a card — a
+                        // batch with no duplicates or failures shouldn't spend
+                        // grid space saying so. The active filter's card stays
+                        // even at zero, otherwise clicking a card could make it
+                        // vanish with the filter still applied and no way to
+                        // toggle it back off.
+                        const visibleCards = statCards.filter(
+                          card => (card.value || 0) > 0 || uploadHistoryFilter === card.key
+                        );
+
                         return (
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
-                            {statCards.map(({ key, label, value, icon: Icon, tone }) => {
+                            {visibleCards.map(({ key, label, value, icon: Icon, tone }) => {
                               const t = TONE_CLASS[tone];
                               const isActive = uploadHistoryFilter === key;
                               return (
@@ -3579,7 +3616,10 @@ export default function MyResumesPage() {
                               );
                             })}
 
-                            {/* Success Rate — not a filter, so it stays static */}
+                            {/* Success Rate — not a filter, so it stays static.
+                                Hidden when nothing was attempted: 0% would read
+                                as a total failure rather than "no data". */}
+                            {attemptedFiles > 0 && (
                             <div className="bg-gradient-to-br from-brand-cyan/[0.08] to-brand-cyan/[0.03] border border-brand-cyan/20 rounded-xl p-2.5 sm:p-3 lg:p-4">
                               <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
                                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
@@ -3589,6 +3629,7 @@ export default function MyResumesPage() {
                               </div>
                               <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
                             </div>
+                            )}
                           </div>
                         );
                       })()}
@@ -4577,6 +4618,17 @@ export default function MyResumesPage() {
           </div>
         </>
       )}
+
+      {/* AI Interview invite — shared with the Internal Database page so both
+          lists offer the identical action. */}
+      <InviteToAIInterviewFlow
+        open={isAIInterviewPickerOpen}
+        onClose={() => setIsAIInterviewPickerOpen(false)}
+        candidates={resumes
+          .filter((r) => selectedResumes.includes(r.id))
+          .map((r) => ({ id: r.id, name: r.name, email: r.email }))}
+        onInvited={() => setSelectedResumes([])}
+      />
 
       {/* Share Assessment Modal with Pre-filled Candidates (supports multiple assessments) */}
       {isShareAssessmentModalOpen && selectedAssessments.length > 0 && (
