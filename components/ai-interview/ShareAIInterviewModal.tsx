@@ -759,8 +759,27 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     }
   };
 
-  // Validation: all candidates must have valid name and email
-  const isValid = candidates.some((c) => c.name.trim() && c.email.trim() && isValidEmail(c.email));
+  // Validation gate for the Send Invitations button.
+  //   • at least ONE fully-valid candidate (name + valid email), AND
+  //   • NO row with a blocking error — an "in-use" row (name OR email typed)
+  //     that is incomplete, has an invalid email, or is a duplicate of another
+  //     row. This is what the per-row red errors show ("This email is already
+  //     in the list" / invalid email), so the button now disables whenever any
+  //     of those are visible instead of letting the recruiter click Send.
+  const hasAtLeastOneValid = candidates.some(
+    (c) => c.name.trim() && c.email.trim() && isValidEmail(c.email),
+  );
+  const hasBlockingRowError = candidates.some((c) => {
+    const inUse = c.name.trim() || c.email.trim();
+    if (!inUse) return false; // fully-empty row is ignored, not an error
+    return (
+      !c.name.trim() ||
+      !c.email.trim() ||
+      !isValidEmail(c.email) ||
+      isDuplicateEmail(c.id, c.email)
+    );
+  });
+  const isValid = hasAtLeastOneValid && !hasBlockingRowError;
 
   // Success screen
   if (showSuccess) {
