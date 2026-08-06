@@ -241,18 +241,25 @@ for (const spec of readReport()) {
   const last = results[results.length - 1] ?? {};
   let evidence = null;
   let screenshot = null;
+  let defect = null;
   for (const att of last.attachments ?? []) {
     if (att.name === "screenshot" && att.path) {
       screenshot = path.relative(ROOT, att.path);
       continue;
     }
-    if (att.name !== "evidence") continue;
-    const raw = readAttachment(att);
-    if (raw) {
+    // A pinned defect carries what a developer needs to see it for themselves:
+    // the click path, what should happen, what does, and what was measured.
+    // Without this the dashboard can only say "TC-T401 failed", and the person
+    // who has to fix it starts by reading the test to work out what it did.
+    if (att.name === "defect" || att.name === "evidence") {
+      const raw = readAttachment(att);
+      if (!raw) continue;
       try {
-        evidence = JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        if (att.name === "defect") defect = parsed;
+        else evidence = parsed;
       } catch {
-        evidence = null;
+        /* a malformed attachment is not worth failing the report over */
       }
     }
   }
@@ -263,6 +270,7 @@ for (const spec of readReport()) {
     retries: Math.max(0, results.length - 1),
     error: last.error?.message ? stripAnsi(last.error.message).slice(0, 4000) : null,
     evidence,
+    defect,
     screenshot,
   };
 }
@@ -344,7 +352,8 @@ console.log(`[build-report] ${cases.length} cases -> ${path.relative(ROOT, outPa
 console.log(
   `[build-report] ${Object.entries(counts).map(([k, v]) => `${v} ${k}`).join(" · ")}` +
     ` · ${shots} screenshots${rescued ? ` (${rescued} found by scan)` : ""}` +
-    ` · ${cases.filter((c) => c.run?.evidence).length} with evidence`,
+    ` · ${cases.filter((c) => c.run?.evidence).length} with evidence` +
+    ` · ${cases.filter((c) => c.run?.defect).length} with reproduction steps`,
 );
 if (unmatched) {
   console.warn(

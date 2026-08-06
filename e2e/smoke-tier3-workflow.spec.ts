@@ -25,6 +25,7 @@ import {
   seed,
   adminApi,
   revealList,
+  recordDefect,
   uniqueSuffix,
   describe as describeCalls,
 } from "./helpers/tier3";
@@ -279,7 +280,35 @@ test.describe("Tier 3 — working with a list", () => {
    * the data is above the threshold that triggers the bug, and an ordinary
    * passing test below it. Neither reading is left to chance.
    */
-  test("TC-T376 exporting the audit trail produces a real file", async ({ page }) => {
+  test("TC-T376 exporting the audit trail produces a real file", async ({ page }, testInfo) => {
+    await recordDefect(testInfo, {
+      summary:
+        "Export CSV on the Audit Trail silently does nothing once the trail holds more " +
+        "than 100 entries in the window being exported",
+      steps: [
+        "Sign in as a tenant admin of a tenant with more than 100 audit entries in the last 30 days",
+        "Open Audits -> Audit Trail",
+        "Click Export, choose CSV",
+        "Leave the default 30-day range and click \u201cExport CSV\u201d in the dialog",
+      ],
+      expected: "A CSV downloads containing the audit rows for that window",
+      actual:
+        "Nothing downloads, no message appears, and the dialog stays open as though the " +
+        "button had not been clicked. With fewer than 100 entries in the window it works, " +
+        "which is why this looks intermittent.",
+      evidence: [
+        "handleExport asks for every row in the window: Math.min(total || 1000, 1000)",
+        "GET /api/v1/audits declares page_size maximum 100 in its own OpenAPI schema",
+        "Measured: 123 rows in the window -> GET /audits?page=1&page_size=123 -> 422",
+        "The handler is written `if (response.ok) { \u2026download\u2026 }` with no else, so the failure is silent",
+        "Capping at 100 alone is not the fix: that exports the first 100 rows of a 600-row trail and calls it an audit export. It needs to page.",
+      ],
+      where: [
+        "app/(dashboard)/audits/trail/page.tsx  (handleExport)",
+        "GET /api/v1/audits  (page_size maximum: 100)",
+      ],
+      owner: "developer",
+    });
     await seedJd();
 
     // How many rows the export will ask for decides whether the bug fires.

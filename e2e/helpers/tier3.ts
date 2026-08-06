@@ -496,6 +496,51 @@ export async function assertListMatchesApi(
   ).toBeVisible({ timeout: 15_000 });
 }
 
+/**
+ * What a developer needs in order to see the defect for themselves.
+ *
+ * A dashboard row saying "TC-T401 failed" tells a developer that something is
+ * wrong and nothing else — they still have to find the test, read it, work out
+ * what it was doing and reproduce it by hand. Every one of those steps is work
+ * the test already knows how to skip.
+ *
+ * So a pinned defect records the whole thing: the click path, what should
+ * happen, what does happen, and where to look. It is attached to the test
+ * result, folded into qa-cases.json by build-report, and shown in the
+ * dashboard's Issues panel — so the person who has to fix it reads it there
+ * rather than asking whoever wrote the test.
+ *
+ * Written by hand rather than recorded automatically. A recorded click trace
+ * says "clicked button at (412, 208)"; a person needs "open My Resumes, click
+ * Upload Resume".
+ */
+export interface Defect {
+  /** One line: what is broken, in the words a person would use. */
+  summary: string;
+  /** Click by click, from a signed-in dashboard. */
+  steps: string[];
+  /** What should happen. */
+  expected: string;
+  /** What happens instead. */
+  actual: string;
+  /** Anything measured: status codes, request parameters, log lines. */
+  evidence?: string[];
+  /** Files or endpoints worth opening first. Not a diagnosis. */
+  where?: string[];
+  /** Who this is for: the app team, or whoever runs the infrastructure. */
+  owner?: "developer" | "infrastructure";
+}
+
+export async function recordDefect(
+  testInfo: { attach: (name: string, options: { body: string; contentType: string }) => Promise<void> },
+  defect: Defect,
+): Promise<void> {
+  await testInfo.attach("defect", {
+    body: JSON.stringify(defect, null, 2),
+    contentType: "application/json",
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Test data
 // ---------------------------------------------------------------------------

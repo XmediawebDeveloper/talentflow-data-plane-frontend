@@ -25,6 +25,7 @@ import {
   settle,
   seedJd,
   revealList,
+  recordDefect,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -116,8 +117,30 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
    * visible. When it is fixed this reports "expected to fail but passed", which
    * is the signal to drop the pin and let the assertion stand.
    */
-  test("TC-T401 the upload control opens a real file picker", async ({ page }) => {
+  test("TC-T401 the upload control opens a real file picker", async ({ page }, testInfo) => {
     test.fail(true, "clicking Upload Resume throws and the view is replaced by the error boundary");
+    await recordDefect(testInfo, {
+      summary: "Clicking Upload Resume on My Resumes crashes the page — no CV can be uploaded",
+      steps: [
+        "Sign in as a tenant admin",
+        "Open Recruitment -> My Resumes",
+        "Click the \u201cUpload Resume\u201d button",
+      ],
+      expected: "A file picker opens so a CV can be chosen",
+      actual:
+        "The view is replaced by the error boundary: \u201cWe couldn\u2019t load this page \u2014 " +
+        "Something unexpected happened while rendering this view.\u201d No file input is ever " +
+        "created, so uploading is impossible from this screen. Reproduces every time.",
+      evidence: [
+        "No failing network call — nothing is even requested; the crash is in the render",
+        "The error boundary logs a bare \u201cError\u201d: the bundle is minified, so there is no stack",
+        "tsc reports three errors in the same file, one of them the shape a crash like this takes:",
+        "  app/(dashboard)/recruitment/my-resumes/page.tsx(890,40): TS2339: Property 'map' does not exist on type 'string | any[]'",
+        "  app/(dashboard)/recruitment/my-resumes/page.tsx(744,35): TS2339: Property 'cancelled' does not exist on type 'UploadBatchResponse'",
+      ],
+      where: ["app/(dashboard)/recruitment/my-resumes/page.tsx"],
+      owner: "developer",
+    });
     const calls = watchApiTraffic(page);
     await signIn(page);
     await page.goto("/recruitment/my-resumes");

@@ -22,6 +22,7 @@ import {
   signIn,
   settle,
   seedJd,
+  recordDefect,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -137,12 +138,12 @@ test.describe("Tier 3 — every module opens", () => {
     assertNoServerErrors(calls, "the notifications panel");
   });
 
-  test("TC-T355 the notification socket is accepted, not just attempted", async ({ page }) => {
+  test("TC-T355 the notification socket is accepted, not just attempted", async ({ page }, testInfo) => {
     // The socket is the one piece of this stack that is neither HTTP nor
     // mockable, and it authenticates on upgrade — so a 101 is proof the token
     // travelled and was accepted over a completely different transport from
-    // every other call in this suite. It is also the first thing an
-    // nginx `proxy_set_header Upgrade` mistake breaks, and nothing else notices.
+    // every other call in this suite. It is also the first thing a proxy
+    // misconfiguration breaks, and nothing else notices.
     const calls = watchApiTraffic(page);
 
     await signIn(page);
@@ -153,11 +154,52 @@ test.describe("Tier 3 — every module opens", () => {
       socket,
       `the app never opened its notification socket. Calls:\n${describeCalls(calls)}`,
     ).toBeTruthy();
+
+    if (socket!.status !== 101) {
+      await recordDefect(testInfo, {
+        summary:
+          "Real-time notifications do not work through the public domain — the " +
+          "WebSocket upgrade is refused by the proxy",
+        steps: [
+          "Sign in at https://tfa.enthira.in",
+          "Watch the network panel for the notification socket",
+          "Or reproduce with curl:",
+          "  curl -i -m 15 'https://api.enthira.in/api/v1/ws/notifications?token=<jwt>' \\",
+          "    -H 'Connection: Upgrade' -H 'Upgrade: websocket' \\",
+          "    -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='",
+        ],
+        expected: "101 Switching Protocols, and the socket stays open",
+        actual:
+          `${socket!.status} from the proxy. The page loads and everything else works, ` +
+          "so nothing looks wrong — but notifications never arrive and the header " +
+          "silently falls back to polling.",
+        evidence: [
+          "Measured through the domain: HTTP/2 404, server: nginx",
+          "The same socket returns 101 when the backend container is reached directly on :8200",
+          "So the backend accepts the upgrade; the proxy in front of it does not forward it",
+        ],
+        where: [
+          "the nginx server block for api.enthira.in — the /api/v1/ws/ location needs:",
+          "  proxy_http_version 1.1;",
+          "  proxy_set_header Upgrade $http_upgrade;",
+          "  proxy_set_header Connection \"upgrade\";",
+          "  proxy_read_timeout 300s;",
+          "Note the domain answers HTTP/2, and a WebSocket upgrade cannot be negotiated over HTTP/2 the classic way",
+        ],
+        owner: "infrastructure",
+      });
+    }
+
+    // Pinned on the condition, not unconditionally: reached directly the socket
+    // upgrades correctly, so this is an ordinary passing test against the
+    // container and a documented defect through the proxy.
+    test.fail(socket!.status !== 101, `the notification socket returned ${socket!.status}, not 101`);
+
     expect(
       socket!.status,
-      `the notification socket returned ${socket!.status} rather than 101. A 200 ` +
-        `means a proxy answered instead of upgrading; a 401/403 means the token ` +
-        `was refused on a transport where nothing else would notice.`,
+      `the notification socket returned ${socket!.status} rather than 101. A 200 or 404 ` +
+        `means a proxy answered instead of upgrading; a 401/403 means the token was ` +
+        `refused on a transport where nothing else would notice.`,
     ).toBe(101);
   });
 });
