@@ -56,9 +56,15 @@ interface AssessmentResultsTableProps {
   onViewResultDetail?: (result: AssessmentResult, jobTitle?: string) => void;
   canDownloadPDF?: boolean;
   canBatchDownload?: boolean;
+  /**
+   * Page-level actions (e.g. Create, Send Invite) rendered at the front of the
+   * header's control row, ahead of Columns. Lets the owning page put them in
+   * the table's own toolbar instead of a separate strip above it.
+   */
+  toolbarActions?: React.ReactNode;
 }
 
-export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail, canDownloadPDF = false, canBatchDownload = false }: AssessmentResultsTableProps) {
+export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail, canDownloadPDF = false, canBatchDownload = false, toolbarActions }: AssessmentResultsTableProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
@@ -575,6 +581,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           </div>
           
           <div className="flex flex-wrap items-center gap-2">
+            {toolbarActions}
+
             {/* Column Selector */}
             <div className="relative">
               <button

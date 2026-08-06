@@ -2108,7 +2108,15 @@ export default function AIInterviewConfig() {
 
   const handleSaveAsDraft = async () => {
     const ok = await saveDraft();
-    if (ok) router.push('/recruitment/ai-interviews');
+    if (!ok) return;
+    // Started on a JD's Job Details page (including from its draft prompt) —
+    // return there rather than to the AI Interviews list, matching the
+    // breadcrumb this step already shows.
+    router.push(
+      fromJobDetails && selectedJd?.id
+        ? `/recruitment/job-details?id=${encodeURIComponent(selectedJd.id)}`
+        : '/recruitment/ai-interviews'
+    );
   };
 
   const handleContinueToClusters = async () => {

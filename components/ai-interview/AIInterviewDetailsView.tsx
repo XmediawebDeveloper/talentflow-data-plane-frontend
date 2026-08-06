@@ -476,10 +476,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       <CandidateResultsView
         interview={candidateDetail}
         onBack={() => setCandidateDetail(null)}
-        breadcrumbTrail={[{
-          label: config.jd_title || config.position || 'Interview Details',
-          onClick: () => setCandidateDetail(null),
-        }]}
+        // Flat trail: Dashboard › AI Interviews › <candidate>. The interview
+        // crumb that sat in between is gone — Back and the pager still return
+        // to this interview's candidate list.
+        breadcrumbTrail={[]}
         currentIndex={navIdx >= 0 ? navIdx : undefined}
         totalCount={candidateNavIds.length || undefined}
         onPrev={prevId ? () => handleCandidateClick(prevId) : undefined}

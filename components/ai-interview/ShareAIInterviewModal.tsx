@@ -47,6 +47,12 @@ interface ShareAIInterviewModalProps {
   /** When true, render the share form inline (no backdrop / fixed overlay /
    *  close button) so it can live inside a tab on the interview details page. */
   embedded?: boolean;
+  /**
+   * Seeds the candidate list — e.g. the resumes selected on My Resumes — so the
+   * recruiter lands on a filled form instead of retyping names and emails.
+   * Read once on mount, so render this modal conditionally to refresh it.
+   */
+  initialCandidates?: { name: string; email: string; resumeId?: string }[];
 }
 
 const ROUND_LABELS: Record<string, string> = {
@@ -60,7 +66,7 @@ const ROUND_LABELS: Record<string, string> = {
   nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
-export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent, embedded = false }: ShareAIInterviewModalProps) {
+export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent, embedded = false, initialCandidates }: ShareAIInterviewModalProps) {
   const { user } = useAuth();
   const { quotaData } = useQuota();
 
@@ -74,9 +80,17 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   const [quotaStatsLoading, setQuotaStatsLoading] = useState(false);
 
   const [inputMode, setInputMode] = useState<'manual' | 'database' | 'excel'>('manual');
-  const [candidates, setCandidates] = useState<CandidateEmail[]>([
-    { id: '1', name: '', email: '', /* scheduledDate: '', scheduledTime: '', */ source: 'manual' },
-  ]);
+  const [candidates, setCandidates] = useState<CandidateEmail[]>(() =>
+    initialCandidates && initialCandidates.length > 0
+      ? initialCandidates.map((candidate, index) => ({
+          id: `prefilled-${index}`,
+          name: candidate.name,
+          email: candidate.email,
+          source: 'database' as const,
+          resumeId: candidate.resumeId,
+        }))
+      : [{ id: '1', name: '', email: '', /* scheduledDate: '', scheduledTime: '', */ source: 'manual' }]
+  );
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const excelInputRef = useRef<HTMLInputElement>(null);
@@ -759,8 +773,27 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     }
   };
 
-  // Validation: all candidates must have valid name and email
-  const isValid = candidates.some((c) => c.name.trim() && c.email.trim() && isValidEmail(c.email));
+  // Validation gate for the Send Invitations button.
+  //   • at least ONE fully-valid candidate (name + valid email), AND
+  //   • NO row with a blocking error — an "in-use" row (name OR email typed)
+  //     that is incomplete, has an invalid email, or is a duplicate of another
+  //     row. This is what the per-row red errors show ("This email is already
+  //     in the list" / invalid email), so the button now disables whenever any
+  //     of those are visible instead of letting the recruiter click Send.
+  const hasAtLeastOneValid = candidates.some(
+    (c) => c.name.trim() && c.email.trim() && isValidEmail(c.email),
+  );
+  const hasBlockingRowError = candidates.some((c) => {
+    const inUse = c.name.trim() || c.email.trim();
+    if (!inUse) return false; // fully-empty row is ignored, not an error
+    return (
+      !c.name.trim() ||
+      !c.email.trim() ||
+      !isValidEmail(c.email) ||
+      isDuplicateEmail(c.id, c.email)
+    );
+  });
+  const isValid = hasAtLeastOneValid && !hasBlockingRowError;
 
   // Success screen
   if (showSuccess) {

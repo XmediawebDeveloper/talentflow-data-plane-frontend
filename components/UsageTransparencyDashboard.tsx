@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListEmptyState from '@/components/ui/list-empty-state';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 import {
   Eye, Download, X, BarChart3,
   CheckCircle2, XCircle, AlertCircle, Loader2, Clock,
@@ -35,39 +37,32 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
   const [summary, setSummary] = useState<UsageTransparencySummaryResponse | null>(null);
 
   // Filters
-  const [selectedUnitType, setSelectedUnitType] = useState<UnitType | ''>('');
-  const [selectedCategory, setSelectedCategory] = useState<DeductionCategory | ''>('');
-  const [includeNonDeductions, setIncludeNonDeductions] = useState(true);
-  const [includePartialDeductions, setIncludePartialDeductions] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  // True once the user confirms the panel with "Done" - mirrors job-openings,
-  // so Clear appears only after filters are applied.
-  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
-  const [days, setDays] = useState(30);
 
-  // Defaults: 30 days, both deduction toggles on. Anything else is a filter.
-  const activeFiltersCount = [
-    selectedUnitType !== '',
-    selectedCategory !== '',
-    days !== 30,
-    !includePartialDeductions,
-    !includeNonDeductions,
-  ].filter(Boolean).length;
-
-  const clearAllFilters = () => {
-    setFiltersConfirmed(false);
-    setSelectedUnitType('');
-    setSelectedCategory('');
-    setDays(30);
-    setIncludePartialDeductions(true);
-    setIncludeNonDeductions(true);
-    setSearchQuery('');
-    setPage(0);
-  };
-
-  // Pagination
+  // Pagination — declared before the hook so `onChange` can reset it.
   const [page, setPage] = useState(0);
+
+  // Shared search/filter state. The controls commit as you pick, so this uses
+  // `setFilter`. Defaults: 30 days, both deduction toggles on — anything else
+  // counts as a filter.
+  const search = useListSearch({
+    initialFilters: {
+      unitType: '' as UnitType | '',
+      category: '' as DeductionCategory | '',
+      days: 30,
+      includePartialDeductions: true,
+      includeNonDeductions: true,
+    },
+    onChange: () => setPage(0),
+  });
+  const searchQuery = search.appliedQuery;
+  const {
+    unitType: selectedUnitType,
+    category: selectedCategory,
+    days,
+    includePartialDeductions,
+    includeNonDeductions,
+  } = search.filters;
   const [limit] = useState(50);
 
   // Fetch data
@@ -351,14 +346,16 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
         {/* Filters Section */}
         <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
           <ListToolbar
-            searchValue={searchQuery}
-            onSearchChange={setSearchQuery}
+            searchValue={search.query}
+            onSearchChange={search.setQuery}
+            // The hook debounces into `appliedQuery`, so keystrokes pass through.
+            searchDebounceMs={0}
             searchPlaceholder="Search usage records..."
             onToggleFilters={() => setShowFilters(!showFilters)}
             filtersOpen={showFilters}
-            activeFilterCount={activeFiltersCount}
-            filtersApplied={filtersConfirmed && activeFiltersCount > 0}
-            onClearFilters={clearAllFilters}
+            activeFilterCount={search.activeFilterCount}
+            filtersApplied={search.filtersApplied}
+            onClearFilters={search.reset}
             className="mb-0"
           />
 
@@ -370,7 +367,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                 <label className="block text-sm font-medium text-gray-700 mb-2">Unit Type</label>
                 <select
                   value={selectedUnitType}
-                  onChange={(e) => { setSelectedUnitType(e.target.value as UnitType | ''); setPage(0); }}
+                  onChange={(e) => search.setFilter('unitType', e.target.value as UnitType | '')}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white"
                 >
                   <option value="">All Types</option>
@@ -385,7 +382,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                 <label className="block text-sm font-medium text-gray-700 mb-2">Deduction Category</label>
                 <select
                   value={selectedCategory}
-                  onChange={(e) => { setSelectedCategory(e.target.value as DeductionCategory | ''); setPage(0); }}
+                  onChange={(e) => search.setFilter('category', e.target.value as DeductionCategory | '')}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white"
                 >
                   <option value="">All Categories</option>
@@ -400,7 +397,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                 <label className="block text-sm font-medium text-gray-700 mb-2">Time Period</label>
                 <select
                   value={days}
-                  onChange={(e) => { setDays(parseInt(e.target.value)); setPage(0); }}
+                  onChange={(e) => search.setFilter('days', parseInt(e.target.value))}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white"
                 >
                   <option value={7}>Last 7 Days</option>
@@ -417,7 +414,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                   <input
                     type="checkbox"
                     checked={includePartialDeductions}
-                    onChange={(e) => { setIncludePartialDeductions(e.target.checked); setPage(0); }}
+                    onChange={(e) => search.setFilter('includePartialDeductions', e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-gray-700 focus:ring-gray-500"
                   />
                   <span className="text-sm text-gray-700">Include Partial Deductions</span>
@@ -426,7 +423,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                   <input
                     type="checkbox"
                     checked={includeNonDeductions}
-                    onChange={(e) => { setIncludeNonDeductions(e.target.checked); setPage(0); }}
+                    onChange={(e) => search.setFilter('includeNonDeductions', e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-gray-700 focus:ring-gray-500"
                   />
                   <span className="text-sm text-gray-700">Include Non-Deductions (Failed/Abandoned)</span>
@@ -438,7 +435,8 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                 toolbar Clear - same flow as job-openings. */}
             <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
               <button
-                onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                // The controls above commit as they change, so Done just closes.
+                onClick={() => setShowFilters(false)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
               >
                 Done
@@ -558,17 +556,15 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             </table>
 
             {filteredEntries.length === 0 && (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                  <Eye className="w-8 h-8 text-gray-400" />
-                </div>
-                <h3 className="text-lg text-gray-900 mb-2">No Usage Records Found</h3>
-                <p className="text-gray-600">
-                  {searchQuery || selectedUnitType || selectedCategory
-                    ? 'No records match your current filters.'
-                    : 'No usage data recorded yet. Records will appear here as features are used.'}
-                </p>
-              </div>
+              <ListEmptyState
+                icon={Eye}
+                isNarrowed={search.isNarrowed}
+                query={search.appliedQuery}
+                entityLabel="usage record"
+                emptyTitle="No usage recorded yet"
+                emptyDescription="Records appear here as features consume units."
+                onReset={search.reset}
+              />
             )}
           </div>
 

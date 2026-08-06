@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListEmptyState from '@/components/ui/list-empty-state';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Eye, Loader2,
@@ -33,6 +35,12 @@ interface AIInterviewResultsProps {
    *  standalone results-details route. Keeps the breadcrumb anchored to the
    *  interview details page the user came from. */
   onViewCandidate?: (sessionId: string, navIds: string[]) => void;
+  /**
+   * Page-level actions (e.g. Create, Send Invite) rendered at the front of the
+   * search bar's control group, ahead of More Filters. Lets the embedding page
+   * put them in this toolbar instead of a separate strip above it.
+   */
+  toolbarActions?: React.ReactNode;
 }
 
 const STATUS_OPTIONS = [
@@ -45,7 +53,7 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
-function getStatusBadge(status: string) {
+export function getStatusBadge(status: string) {
   switch (status) {
     case 'completed': return 'bg-green-100 text-green-700 ring-1 ring-green-200';
     case 'in_progress': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
@@ -57,7 +65,7 @@ function getStatusBadge(status: string) {
   }
 }
 
-function getStatusLabel(status: string) {
+export function getStatusLabel(status: string) {
   switch (status) {
     case 'completed': return 'Completed';
     case 'in_progress': return 'In Progress';
@@ -69,7 +77,7 @@ function getStatusLabel(status: string) {
   }
 }
 
-function getStatusIcon(status: string) {
+export function getStatusIcon(status: string) {
   switch (status) {
     case 'completed': return <CheckCircle className="w-4 h-4 text-green-500" />;
     case 'in_progress': return <Clock className="w-4 h-4 text-brand-orange-deep" />;
@@ -81,7 +89,7 @@ function getStatusIcon(status: string) {
   }
 }
 
-function getProctoringRisk(session: AIInterviewResponse): { level: string; badge: string } {
+export function getProctoringRisk(session: AIInterviewResponse): { level: string; badge: string } {
   // Prefer server-computed risk_level (persisted at completion time, AIU-82)
   const stored = session.risk_level;
   if (stored) {
@@ -100,7 +108,7 @@ function getProctoringRisk(session: AIInterviewResponse): { level: string; badge
   return { level: 'None', badge: 'bg-green-100 text-green-700 ring-1 ring-green-200' };
 }
 
-function formatDuration(session: AIInterviewResponse): string {
+export function formatDuration(session: AIInterviewResponse): string {
   if (!session.started_at || !session.completed_at) return '—';
   // Parse with parseIST so the duration uses the SAME absolute instants as the
   // Started At / Completed At columns. Raw `new Date()` treats a tz-less backend
@@ -115,7 +123,7 @@ function formatDuration(session: AIInterviewResponse): string {
   return `${mins}m ${secs}s`;
 }
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate, breadcrumbItems }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate, breadcrumbItems, toolbarActions }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -127,24 +135,32 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
     avgScore: null as number | null,
   });
 
-  // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [scoreMin, setScoreMin] = useState('');
-  const [scoreMax, setScoreMax] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  // True once the user confirms the panel with "Done" - mirrors job-openings,
-  // so Clear appears only after filters are applied.
-  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 15;
 
+  // Search and filters live in the shared hook. This view queries the SERVER,
+  // so `appliedQuery` matters twice over: it keeps one request per pause rather
+  // than per keystroke, and it is what the request is built from.
+  const search = useListSearch({
+    initialFilters: { status: 'all', scoreMin: '', scoreMax: '', dateFrom: '', dateTo: '' },
+    onChange: () => setCurrentPage(1),
+    // Score min/max is one logical range filter, and so is the date range.
+    countFilters: (f) =>
+      [f.scoreMin || f.scoreMax, f.dateFrom || f.dateTo].filter(Boolean).length,
+  });
+  const {
+    status: statusFilter,
+    scoreMin,
+    scoreMax,
+    dateFrom,
+    dateTo,
+  } = search.filters;
+
   const requestParams = useMemo(() => ({
-    search: searchQuery || undefined,
+    search: search.appliedQuery || undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
     score_min: scoreMin !== '' ? parseFloat(scoreMin) : undefined,
     score_max: scoreMax !== '' ? parseFloat(scoreMax) : undefined,
@@ -153,7 +169,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
     page: currentPage,
     page_size: PAGE_SIZE,
     compact: true,
-  }), [searchQuery, statusFilter, scoreMin, scoreMax, dateFrom, dateTo, currentPage]);
+  }), [search.appliedQuery, statusFilter, scoreMin, scoreMax, dateFrom, dateTo, currentPage]);
 
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
@@ -199,26 +215,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
     return () => clearInterval(id);
   }, [sessions, configId, requestParams]);
 
-  // Reset page on filter change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, statusFilter, scoreMin, scoreMax, dateFrom, dateTo]);
-
+  // The hook's `onChange` returns to page 1 whenever the query or a filter moves.
   const paginatedSessions = sessions;
-
-  const hasActiveFilters = statusFilter !== 'all' || scoreMin || scoreMax || dateFrom || dateTo;
-
-  // Score min/max is one logical range filter, and so is the date range.
-  const activeFiltersCount = [scoreMin || scoreMax, dateFrom || dateTo].filter(Boolean).length;
-
-  const clearFilters = () => {
-    setFiltersConfirmed(false);
-    setStatusFilter('all');
-    setScoreMin('');
-    setScoreMax('');
-    setDateFrom('');
-    setDateTo('');
-  };
 
   const handleViewDetails = (session: AIInterviewResponse) => {
     // Embedded (Results tab inside the interview details page): open the
@@ -304,19 +302,22 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
       {/* Search + Filter bar */}
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
         <ListToolbar
-          searchValue={searchQuery}
-          onSearchChange={setSearchQuery}
+          searchValue={search.query}
+          onSearchChange={search.setQuery}
+          // The hook debounces into `appliedQuery`, so keystrokes pass through.
+          searchDebounceMs={0}
           searchPlaceholder="Search by name, email, or CID..."
           onToggleFilters={() => setShowFilters((v) => !v)}
           filtersOpen={showFilters}
-          activeFilterCount={activeFiltersCount}
-          filtersApplied={filtersConfirmed && activeFiltersCount > 0}
-          onClearFilters={clearFilters}
+          activeFilterCount={search.activeFilterCount}
+          filtersApplied={search.filtersApplied}
+          onClearFilters={search.reset}
+          leadingActions={toolbarActions}
           className="mb-0"
         >
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => search.setFilter('status', e.target.value)}
             aria-label="Interview status"
             className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
           >
@@ -338,8 +339,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                   placeholder="Min"
                   min={0}
                   max={100}
-                  value={scoreMin}
-                  onChange={(e) => setScoreMin(e.target.value)}
+                  value={search.draftFilters.scoreMin}
+                  onChange={(e) => search.setDraftFilter('scoreMin', e.target.value)}
                   className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
                 <span className="text-gray-400 text-sm">to</span>
@@ -348,8 +349,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                   placeholder="Max"
                   min={0}
                   max={100}
-                  value={scoreMax}
-                  onChange={(e) => setScoreMax(e.target.value)}
+                  value={search.draftFilters.scoreMax}
+                  onChange={(e) => search.setDraftFilter('scoreMax', e.target.value)}
                   className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
               </div>
@@ -359,15 +360,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
               <div className="flex items-center gap-2">
                 <input
                   type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
+                  value={search.draftFilters.dateFrom}
+                  onChange={(e) => search.setDraftFilter('dateFrom', e.target.value)}
                   className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
                 <span className="text-gray-400 text-sm">to</span>
                 <input
                   type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
+                  value={search.draftFilters.dateTo}
+                  onChange={(e) => search.setDraftFilter('dateTo', e.target.value)}
                   className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
               </div>
@@ -378,7 +379,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
               toolbar Clear - same flow as job-openings. */}
           <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
             <button
-              onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+              onClick={() => { search.applyFilters(); setShowFilters(false); }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
             >
               Done
@@ -395,19 +396,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
             <Loader2 className="w-7 h-7 animate-spin text-brand-blue" />
           </div>
         ) : sessions.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-              <Users className="w-10 h-10 text-brand-blue" />
-            </div>
-            <p className="text-gray-700 font-medium">
-              {totalSessions === 0 && !hasActiveFilters ? 'No candidates invited yet' : 'No results match your filters'}
-            </p>
-            {hasActiveFilters && (
-              <button onClick={clearFilters} className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors">
-                Clear filters
-              </button>
-            )}
-          </div>
+          <ListEmptyState
+            icon={Users}
+            isNarrowed={search.isNarrowed}
+            query={search.appliedQuery}
+            entityLabel="candidate"
+            emptyTitle="No candidates invited yet"
+            emptyDescription="Invite candidates to this interview to see their sessions here."
+            onReset={search.reset}
+          />
         ) : (
           <>
             <div className="overflow-x-auto">

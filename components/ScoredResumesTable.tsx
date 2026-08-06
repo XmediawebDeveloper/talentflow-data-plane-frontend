@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListEmptyState from '@/components/ui/list-empty-state';
+import { useListSearch } from '@/lib/hooks/useListSearch';
 import InviteShareModal from './InviteShareModal';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { scoringService } from '@/lib/services/scoringService';
@@ -128,25 +130,46 @@ export default function ScoredResumesTable({
     (ids: string[] | ((prev: string[]) => string[])) => {
       // No-op when using external control
     } : setInternalSelectedResumes;
-  const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  // True once the user confirms the More Filters panel with "Done" — mirrors
-  // job-openings, so Clear appears only after filters are applied.
-  const [filtersConfirmed, setFiltersConfirmed] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCandidate, setInviteCandidate] = useState<ScoredResume | null>(null);
   const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
 
-  // Filter states
-  const [filterMatchStatus, setFilterMatchStatus] = useState<string>(initialMatchStatus);
-  const [filterScoreMin, setFilterScoreMin] = useState<number>(0);
-  const [filterScoreMax, setFilterScoreMax] = useState<number>(100);
-  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
-  const [filterDateTo, setFilterDateTo] = useState<string>('');
-  const [filterRecruiter, setFilterRecruiter] = useState<string>('all');
+  // Search + filters in the shared hook. This panel commits as you pick rather
+  // than staging, so it uses `setFilter` and leaves the draft pair alone.
+  const search = useListSearch({
+    initialFilters: {
+      matchStatus: initialMatchStatus,
+      scoreMin: 0,
+      scoreMax: 100,
+      dateFrom: '',
+      dateTo: '',
+      recruiter: 'all',
+    },
+    // Score min/max is one logical "Score range" filter, so it counts once.
+    countFilters: (f) =>
+      [
+        f.matchStatus !== 'all',
+        f.scoreMin > 0 || f.scoreMax < 100,
+        Boolean(f.dateFrom),
+        Boolean(f.dateTo),
+        f.recruiter !== 'all',
+      ].filter(Boolean).length,
+  });
+  const searchTerm = search.appliedQuery;
+  const {
+    matchStatus: filterMatchStatus,
+    scoreMin: filterScoreMin,
+    scoreMax: filterScoreMax,
+    dateFrom: filterDateFrom,
+    dateTo: filterDateTo,
+    recruiter: filterRecruiter,
+  } = search.filters;
 
+  // The parent can preselect a match status (e.g. "Strong" from a stat card).
   useEffect(() => {
-    setFilterMatchStatus(initialMatchStatus);
+    search.setFilter('matchStatus', initialMatchStatus);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMatchStatus]);
 
   // Column configuration - initialize with defaults, then load from localStorage
@@ -509,35 +532,6 @@ export default function ScoredResumesTable({
     }
   };
 
-  const clearFilters = () => {
-    setFilterMatchStatus('all');
-    setFilterScoreMin(0);
-    setFilterScoreMax(100);
-    setFilterDateFrom('');
-    setFilterDateTo('');
-    setFilterRecruiter('all');
-    setSearchTerm('');
-    setFiltersConfirmed(false);
-  };
-
-  const hasActiveFilters =
-    filterMatchStatus !== 'all' ||
-    filterScoreMin > 0 ||
-    filterScoreMax < 100 ||
-    filterDateFrom ||
-    filterDateTo ||
-    filterRecruiter !== 'all' ||
-    searchTerm;
-
-  // Count for the toolbar badge. Score min/max is one logical "Score range"
-  // filter, so it counts once rather than twice.
-  const activeFilterCount = [
-    filterMatchStatus !== 'all',
-    filterScoreMin > 0 || filterScoreMax < 100,
-    Boolean(filterDateFrom),
-    Boolean(filterDateTo),
-    filterRecruiter !== 'all',
-  ].filter(Boolean).length;
 
   // Function to handle row click and open detail view
   const handleRowClick = (resumeId: string, event: React.MouseEvent) => {
@@ -644,13 +638,15 @@ export default function ScoredResumesTable({
             `palaceholder-gray-500` typo, so it matched no other list in the app. */}
         <ListToolbar
           searchValue={searchTerm}
-          onSearchChange={setSearchTerm}
+          onSearchChange={search.setQuery}
+          // The hook debounces into `appliedQuery`, so keystrokes pass through.
+          searchDebounceMs={0}
           searchPlaceholder="Search by name, email, or phone..."
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
-          activeFilterCount={activeFilterCount}
-          filtersApplied={filtersConfirmed && activeFilterCount > 0}
-          onClearFilters={clearFilters}
+          activeFilterCount={search.activeFilterCount}
+          filtersApplied={search.filtersApplied}
+          onClearFilters={search.reset}
           className="mb-0"
         >
           {toolbarActions}
@@ -665,7 +661,7 @@ export default function ScoredResumesTable({
                 <label className="block text-sm text-gray-700 mb-1">Match Status</label>
                 <select
                   value={filterMatchStatus}
-                  onChange={(e) => setFilterMatchStatus(e.target.value)}
+                  onChange={(e) => search.setFilter('matchStatus', e.target.value as typeof filterMatchStatus)}
                   className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 >
                   <option value="all">All Statuses</option>
@@ -682,7 +678,7 @@ export default function ScoredResumesTable({
                   <input
                     type="number"
                     value={filterScoreMin}
-                    onChange={(e) => setFilterScoreMin(Number(e.target.value))}
+                    onChange={(e) => search.setFilter('scoreMin', Number(e.target.value))}
                     min="0"
                     max="100"
                     placeholder="Min"
@@ -691,7 +687,7 @@ export default function ScoredResumesTable({
                   <input
                     type="number"
                     value={filterScoreMax}
-                    onChange={(e) => setFilterScoreMax(Number(e.target.value))}
+                    onChange={(e) => search.setFilter('scoreMax', Number(e.target.value))}
                     min="0"
                     max="100"
                     placeholder="Max"
@@ -705,7 +701,7 @@ export default function ScoredResumesTable({
                 <label className="block text-sm text-gray-700 mb-1">Scored By</label>
                 <select
                   value={filterRecruiter}
-                  onChange={(e) => setFilterRecruiter(e.target.value)}
+                  onChange={(e) => search.setFilter('recruiter', e.target.value)}
                   className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 >
                   <option value="all">All Recruiters</option>
@@ -721,7 +717,7 @@ export default function ScoredResumesTable({
                 <input
                   type="date"
                   value={filterDateFrom}
-                  onChange={(e) => setFilterDateFrom(e.target.value)}
+                  onChange={(e) => search.setFilter('dateFrom', e.target.value)}
                   className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 />
               </div>
@@ -731,7 +727,7 @@ export default function ScoredResumesTable({
                 <input
                   type="date"
                   value={filterDateTo}
-                  onChange={(e) => setFilterDateTo(e.target.value)}
+                  onChange={(e) => search.setFilter('dateTo', e.target.value)}
                   className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 />
               </div>
@@ -741,7 +737,8 @@ export default function ScoredResumesTable({
                 toolbar Clear — same flow as job-openings. */}
             <div className="mt-4 pt-3 border-t border-gray-200 flex items-center justify-end gap-2">
               <button
-                onClick={() => { setShowFilters(false); setFiltersConfirmed(true); }}
+                // The controls above commit as they change, so Done just closes.
+                onClick={() => setShowFilters(false)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
               >
                 Done
@@ -1029,15 +1026,15 @@ export default function ScoredResumesTable({
         </table>
 
         {filteredResumes.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-gray-400 mb-2">
-              <Search className="w-12 h-12 mx-auto" />
-            </div>
-            <p className="text-gray-600">No scored resumes found</p>
-            <p className="text-sm text-gray-500 mt-1">
-              {hasActiveFilters ? 'Try adjusting your filters' : 'Upload and score candidates to see them here'}
-            </p>
-          </div>
+          <ListEmptyState
+            icon={Search}
+            isNarrowed={search.isNarrowed}
+            query={search.appliedQuery}
+            entityLabel="scored resume"
+            emptyTitle="No scored resumes yet"
+            emptyDescription="Upload and score candidates to see them here."
+            onReset={search.reset}
+          />
         )}
       </div>
 
@@ -1216,15 +1213,15 @@ export default function ScoredResumesTable({
         ))}
 
         {filteredResumes.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-gray-400 mb-2">
-              <Search className="w-12 h-12 mx-auto" />
-            </div>
-            <p className="text-gray-600">No scored resumes found</p>
-            <p className="text-sm text-gray-500 mt-1">
-              {hasActiveFilters ? 'Try adjusting your filters' : 'Upload and score candidates to see them here'}
-            </p>
-          </div>
+          <ListEmptyState
+            icon={Search}
+            isNarrowed={search.isNarrowed}
+            query={search.appliedQuery}
+            entityLabel="scored resume"
+            emptyTitle="No scored resumes yet"
+            emptyDescription="Upload and score candidates to see them here."
+            onReset={search.reset}
+          />
         )}
       </div>
 

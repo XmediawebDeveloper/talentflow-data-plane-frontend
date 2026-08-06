@@ -319,9 +319,16 @@ export default function ResumeTable({
   return (
     <div className="flex-1">
       {/* FIX-008: Desktop Table View - hidden on mobile */}
-      <div className="hidden md:block overflow-x-auto">
+      {/* The header only sticks against a container that actually scrolls
+          vertically. This div was `overflow-x-auto` with no height cap, so it
+          grew to fit every row and never scrolled — `sticky top-0` had nothing
+          to stick to, and the header scrolled away with the page. Capping the
+          height makes the rows scroll inside it and pins the header. */}
+      <div className="hidden md:block overflow-auto min-h-[320px] max-h-[calc(100vh-24rem)]">
         <table className="w-full min-w-[1200px] table-auto">
-        <thead className="bg-slate-50 sticky top-0">
+        {/* Background goes on the cells, not just <thead>: with separate cell
+            backgrounds the rows would otherwise show through as they pass under. */}
+        <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 [&_th]:border-b [&_th]:border-gray-200">
           <tr>
             {/* Drag handle column */}
             {draggable && (
