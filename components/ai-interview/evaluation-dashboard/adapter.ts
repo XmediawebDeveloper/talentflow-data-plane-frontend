@@ -402,49 +402,20 @@ function buildClustersFromConfig(
   // render as 100% coverage — misleading. So for partial evals we keep the FULL
   // configured cluster, so coverage honestly reflects how little of the plan was
   // reached (e.g. 1 of 6 skills). Normal completed interviews are unchanged.
-  // "Ended early" = the candidate did NOT reach every planned question (manually
-  // clicked End Interview, or ran out of time) — even though the interview
-  // COMPLETED normally (candidate_ended → not `partial`). In that case the plan
-  // was only partly delivered, so — exactly like a partial/terminated eval — we
-  // must keep the FULL configured cluster. Otherwise culling to "just the probed
-  // skills" makes a 4-of-15-question interview read as "4/4 · 100% covered",
-  // hiding every un-asked skill (BUG12). Detected from round_tracking:
-  // sum(actual_questions_asked) < sum(planned_questions).
-  const _rtracking = (eval_?.round_tracking || []) as any[];
-  const _plannedQ = _rtracking.reduce((n, r) => n + (Number(r?.planned_questions) || 0), 0);
-  const _actualQ = _rtracking.reduce((n, r) => n + (Number(r?.actual_questions_asked) || 0), 0);
-  // Secondary signal: any question_history row marked as never-asked padding
-  // means the plan wasn't fully delivered.
-  const _hasUndelivered = ((eval_?.question_history || []) as any[]).some(
-    q => ['not_asked', 'not_delivered', 'unasked'].includes(String(q?.response_type || '').toLowerCase()),
-  );
-  // Require _actualQ > 0 on the count-based signal so a re-eval that lost the
-  // runtime `actual_questions_asked` (0) doesn't falsely flag a COMPLETED
-  // interview as ended-early. `_hasUndelivered` covers the padding case.
-  const endedEarly = (_plannedQ > 0 && _actualQ > 0 && _actualQ < _plannedQ) || _hasUndelivered;
-  const isPartialEval = eval_?.partial === true || eval_?.evaluation_incomplete === true || endedEarly;
-  const filterToPlanned = (hasAssignedSnapshot || hasAssessedMap) && !isPartialEval;
   return configClusters.map((cc, idx): Cluster => {
     const weight = weights[idx];
 
+    // Show ALL configured cluster skills — never cull (BUG12). The recruiter
+    // must see every Must-Have / Nice-to-Have skill the interview was set up to
+    // probe, with un-asked ones rendered as "Not Covered", so coverage honestly
+    // reads e.g. "1 of 8" rather than hiding the skills whose questions were
+    // skipped or never reached. (The old plan-culling dropped un-asked skills
+    // from a cluster that had ANY asked skill — e.g. it hid "Test Case Design" /
+    // "Defect Tracking Tools" from a cluster where only "Manual Testing" was
+    // asked — while keeping all skills in clusters with none asked. That
+    // asymmetry is exactly the "8 configured but only 6 shown" report.)
     const allSkillsForCluster = (cc.skills || []) as string[];
-    const culledSkills = filterToPlanned
-      ? allSkillsForCluster.filter(sname => {
-          const sl = sname.toLowerCase().trim();
-          if (assignedSkillSet.has(sl)) return true;
-          if (lookupSkillScore(sname, skillScoresMap) > 0) return true;
-          if (hasAssessedMap) {
-            for (const k of Object.keys(assessedMap)) {
-              if (k.toLowerCase() === sl && assessedMap[k]) return true;
-            }
-          }
-          return false;
-        })
-      : allSkillsForCluster;
-    // Safety net: if filtering wiped the whole cluster (every skill is a
-    // phantom — unlikely but possible if the planner skipped a cluster
-    // entirely), keep the original list so the cluster card doesn't vanish.
-    const renderSkills = culledSkills.length > 0 ? culledSkills : allSkillsForCluster;
+    const renderSkills = allSkillsForCluster;
 
     const skills: Skill[] = renderSkills.map((sname): Skill => {
       // Prefer skill_scores_map (0-10); fall back to lookup in cluster_insights

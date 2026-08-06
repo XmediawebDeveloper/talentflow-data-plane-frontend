@@ -916,7 +916,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                     {mhScore.toFixed(2)}
                   </span>
                   <span className={`text-sm font-semibold ${mhPass ? 'text-emerald-700' : 'text-rose-700'}`}>
-                    / 10
+                    out of 10
                   </span>
                 </div>
                 <div
@@ -926,7 +926,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                       : 'bg-rose-100 border-rose-500 text-rose-800'
                   }`}
                 >
-                  {mhScore.toFixed(2)} {mhPass ? '≥' : '<'} 7.0 → {mhPass ? 'PASS ✓' : 'FAIL ✗'}
+                  {mhScore.toFixed(2)} {mhPass ? '≥' : '<'} {MHS_THRESHOLD.toFixed(1)} → {mhPass ? 'PASS ✓' : 'FAIL ✗'}
                 </div>
               </div>
             </div>
@@ -942,7 +942,7 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                 </div>
                 <div className="flex items-baseline justify-between gap-3 mb-2">
                   <span className="text-3xl font-bold text-amber-600">{nhScore.toFixed(2)}</span>
-                  <span className="text-sm font-semibold text-amber-700">/ 10</span>
+                  <span className="text-sm font-semibold text-amber-700">out of 10</span>
                 </div>
                 <div className="text-sm font-bold text-center p-2 rounded bg-amber-100 border-2 border-amber-500 text-amber-800">
                   Informational only — does not affect Pass/Fail
@@ -1438,7 +1438,7 @@ export function FormulaView() {
       result: 'BORDERLINE',
       color: '#F59E0B',
       insight:
-        'Sits just below the 7.0 threshold. A single question like this can swing Section Score below Pass.',
+        'Sits just below the 6.0 threshold. A single question like this can swing Section Score below Pass.',
     },
   ];
 
