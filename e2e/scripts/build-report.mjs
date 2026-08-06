@@ -29,6 +29,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { journeyStepFor, journeyOrder } from "./journey.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..", "..");
@@ -84,6 +85,15 @@ function loadWorkbook(name, tier, shape) {
     // carries a real reason, including the four product defects Tier 2 found.
     mapped_status: r.status || "",
     note: r.note || "",
+    // Which step of a person's day this belongs to. The sheet name says which
+    // sprint wrote it, which is not a question anybody outside the team asks.
+    journey_step: journeyStepFor({
+      route: r.route,
+      endpoint: r.endpoint,
+      target: shape(r),
+      title: r.title,
+      sheet: r.source_sheet,
+    }),
   }));
 }
 
@@ -223,6 +233,7 @@ for (const spec of readReport()) {
       expected_result: "",
       target: file,
       assert_kind: "journey",
+      journey_step: journeyStepFor({ title: spec.title, file, target: file }),
       assert_value: "",
       confidence: "",
       layer: "e2e",
@@ -332,7 +343,12 @@ const cases = [...byId.values()].map((c) => {
           : c.run.outcome; // passed · failed · known_defect · defect_fixed
   else if (c.mapped_status !== "active") status = "blocked";
   else status = "not_run";
-  return { ...c, status, source_job: c.run ? sourceJob : null };
+  return {
+    ...c,
+    status,
+    source_job: c.run ? sourceJob : null,
+    journey_order: journeyOrder(c.journey_step),
+  };
 });
 
 const counts = cases.reduce((acc, c) => ((acc[c.status] = (acc[c.status] ?? 0) + 1), acc), {});
@@ -344,6 +360,17 @@ const summary = {
   job: process.env.CI_JOB_NAME ?? null,
   scope: only ?? "all",
   totals: { cases: cases.length, ...counts },
+  // What is covered at each step of the journey, so a reader can ask "what do
+  // we check about job descriptions" and get one answer instead of three.
+  by_journey_step: Object.fromEntries(
+    [...new Set(cases.map((c) => c.journey_step))]
+      .sort((a, b) => journeyOrder(a) - journeyOrder(b))
+      .map((stepName) => {
+        const inStep = cases.filter((c) => c.journey_step === stepName);
+        const tally = inStep.reduce((acc, c) => ((acc[c.status] = (acc[c.status] ?? 0) + 1), acc), {});
+        return [stepName, { total: inStep.length, ...tally }];
+      }),
+  ),
 };
 
 fs.writeFileSync(outPath, JSON.stringify({ summary, cases }, null, 2));
