@@ -354,18 +354,20 @@ function RecordingInfoPanel({
 
 function RecordingTabContent({
   interview,
-  videoBlobUrl, videoBlobSize, videoLoading, videoError, setVideoError,
-  screenBlobUrl, screenBlobSize, screenLoading, screenError,
+  videoBlobUrl, videoBlobSize, videoDownloadUrl, videoLoading, videoError, setVideoError,
+  screenBlobUrl, screenBlobSize, screenDownloadUrl, screenLoading, screenError,
   seekRequest,
 }: {
   interview: AIInterviewResponse;
   videoBlobUrl: string | null;
   videoBlobSize: number | null;
+  videoDownloadUrl: string | null;
   videoLoading: boolean;
   videoError: boolean;
   setVideoError: (v: boolean) => void;
   screenBlobUrl: string | null;
   screenBlobSize: number | null;
+  screenDownloadUrl: string | null;
   screenLoading: boolean;
   screenError: boolean;
   seekRequest?: { seconds: number; key: number } | null;
@@ -397,10 +399,16 @@ function RecordingTabContent({
   const isCandidate = recView === 'candidate';
   const blobUrl = isCandidate ? videoBlobUrl : screenBlobUrl;
   const blobSize = isCandidate ? videoBlobSize : screenBlobSize;
+  // Force-download URL (content-disposition: attachment) from the backend; falls
+  // back to the play URL for local-fs/blob storage (same-origin blob → the
+  // download attr works there).
+  const downloadUrl = (isCandidate ? videoDownloadUrl : screenDownloadUrl) || blobUrl;
   const duration = isCandidate ? candidateDuration : screenDuration;
+  // Stored recordings are WEBM containers — name the download .webm so it plays
+  // (a .mp4 name on webm bytes fails in some players).
   const downloadName = isCandidate
-    ? `candidate-view-${interview.id}.mp4`
-    : `interview-view-${interview.id}.mp4`;
+    ? `candidate-view-${interview.id}.webm`
+    : `interview-view-${interview.id}.webm`;
   const interviewDate = interview.started_at || interview.scheduled_at || interview.created_at;
   const statusLabel = interview.recording_file_path || interview.screen_recording_file_path
     ? 'Transcribed'
@@ -468,13 +476,19 @@ function RecordingTabContent({
             duration={duration}
             interviewDate={interviewDate}
           />
-          {blobUrl && (
+          {downloadUrl && (
             <a
-              href={blobUrl}
+              href={downloadUrl}
               download={downloadName}
+              // Cross-origin presigned URLs ignore the `download` attr, so the
+              // backend bakes Content-Disposition: attachment into downloadUrl to
+              // force the save. target/rel are belt-and-suspenders for the
+              // local-fs blob fallback.
+              target="_blank"
+              rel="noopener noreferrer"
               className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 transition-colors"
             >
-              <Download className="w-4 h-4" /> Download MP4
+              <Download className="w-4 h-4" /> Download Recording
             </a>
           )}
         </div>
@@ -588,9 +602,11 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const [videoError, setVideoError] = useState(false);
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
   const [videoBlobSize, setVideoBlobSize] = useState<number | null>(null);
+  const [videoDownloadUrl, setVideoDownloadUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [screenBlobUrl, setScreenBlobUrl] = useState<string | null>(null);
   const [screenBlobSize, setScreenBlobSize] = useState<number | null>(null);
+  const [screenDownloadUrl, setScreenDownloadUrl] = useState<string | null>(null);
   const [screenLoading, setScreenLoading] = useState(false);
   const [screenError, setScreenError] = useState(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
@@ -641,6 +657,11 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
         if (cancelled) return;
         if (streamUrl) {
           setVideoBlobUrl(streamUrl);   // presigned URL — <video> streams it directly
+          // Size + a force-download URL (content-disposition: attachment) come
+          // from the backend — the streaming path never downloads a blob, so
+          // without these File Size shows "—" and Download plays inline.
+          if (meta?.data?.size != null) setVideoBlobSize(Number(meta.data.size));
+          if (meta?.data?.download_url) setVideoDownloadUrl(meta.data.download_url);
           setVideoLoading(false);
           return;
         }
@@ -673,6 +694,8 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
         if (cancelled) return;
         if (streamUrl) {
           setScreenBlobUrl(streamUrl);
+          if (meta?.data?.size != null) setScreenBlobSize(Number(meta.data.size));
+          if (meta?.data?.download_url) setScreenDownloadUrl(meta.data.download_url);
           setScreenLoading(false);
           return;
         }
@@ -2668,11 +2691,13 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   interview={liveSession}
                   videoBlobUrl={videoBlobUrl}
                   videoBlobSize={videoBlobSize}
+                  videoDownloadUrl={videoDownloadUrl}
                   videoLoading={videoLoading}
                   videoError={videoError}
                   setVideoError={setVideoError}
                   screenBlobUrl={screenBlobUrl}
                   screenBlobSize={screenBlobSize}
+                  screenDownloadUrl={screenDownloadUrl}
                   screenLoading={screenLoading}
                   screenError={screenError}
                   seekRequest={recordingSeek}

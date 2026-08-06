@@ -28,10 +28,13 @@ function niceToHaveTagColor(priority: 'High' | 'Medium' | 'Low') {
 function isAsked(s: { asked: boolean }): boolean {
   return !!s.asked;
 }
-function isDemonstrated(s: { score: number }): boolean {
-  // Medium (≥5) or High (≥8) on the 0-10 scale = actual demonstration.
-  // Low (1-5) is treated as "answered weakly", not demonstrated.
-  return s.score >= 5;
+function isDemonstrated(s: { asked: boolean; score: number }): boolean {
+  // Medium (≥5) or High (≥8) on the 0-10 scale = actual demonstration — BUT
+  // ONLY when the skill was genuinely asked. A skill that was never probed in
+  // its section can still carry a leaked score (e.g. an NHS skill merely named
+  // in an MHS answer when no NHS question was asked → BUG12); that is NOT a
+  // demonstration, so gate it on `asked`.
+  return !!s.asked && s.score >= 5;
 }
 
 function coverageStats(cluster: Cluster) {

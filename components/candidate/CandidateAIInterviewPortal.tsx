@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Loader2, AlertTriangle, RefreshCw, CheckCircle, XCircle, Maximize2, Monitor, Clock, KeyRound, Mail } from 'lucide-react';
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
 import { toast } from 'sonner';
-import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
+import { candidateAIInterviewService, getAiClientSessionId } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
 import { InterviewUI } from '@/components/ai-interview/InterviewUI';
 import type { InterviewTimerSnapshot } from '@/components/ai-interview/InterviewUI';
@@ -163,6 +163,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const [shareBarChecking, setShareBarChecking] = useState(false);
   const [shareBarError, setShareBarError] = useState<string | null>(null);
   const [shareBarAttempts, setShareBarAttempts] = useState(0);
+  // Pre-interview single-active-session lease: true when another browser/device
+  // already holds this interview link (blocks the second person from system
+  // check onward). See the lease heartbeat effect.
+  const [preInterviewBlocked, setPreInterviewBlocked] = useState(false);
   const [screenShareDeclined, setScreenShareDeclined] = useState(false);
   const [screenShareDeclinedReason, setScreenShareDeclinedReason] = useState('');
   // True when the pre-start check found the camera/mic already in use by another
@@ -500,6 +504,45 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     }
   }, [step]);
 
+  // ── Single-active-session lease over the PRE-INTERVIEW flow ────────────────
+  // While the candidate is in a pre-interview step (system check → practice →
+  // final consent), heartbeat the DB lease keyed on this browser's stable
+  // client id. If another browser/device already holds it → block. The 'interview'
+  // step is EXCLUDED because the WebSocket takes over the same lock (same cid),
+  // so we must NOT double-heartbeat or release it here. Terminal steps release.
+  useEffect(() => {
+    if (!token) return;
+    const LEASE_STEPS: Step[] = [
+      'identity', 'system_check', 'intro_video', 'language_select',
+      'sample_practice', 'fullscreen_prompt', 'final_consent', 'hide_share_bar',
+    ];
+    if (!LEASE_STEPS.includes(step)) {
+      // Release the lease when the candidate reaches a terminal state (the WS
+      // already released on 'interview' end). Best-effort.
+      if (step === 'completed' || step === 'terminated' || step === 'error') {
+        candidateAIInterviewService
+          .sessionLease(token, getAiClientSessionId(token), 'release')
+          .catch(() => { /* stale-timeout backstops it */ });
+      }
+      return;
+    }
+    const cid = getAiClientSessionId(token);
+    let cancelled = false;
+    const beat = async () => {
+      try {
+        const r = await candidateAIInterviewService.sessionLease(token, cid, 'acquire');
+        if (cancelled) return;
+        if (r?.blocked) setPreInterviewBlocked(true);
+        else if (r?.held) setPreInterviewBlocked(false);
+      } catch {
+        // Network error — don't block a genuine candidate on a transient failure.
+      }
+    };
+    beat();
+    const iv = setInterval(beat, 8000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [step, token]);
+
   // Preload avatar assets when reaching system check
   useEffect(() => {
     if (step === 'system_check') {
@@ -770,7 +813,19 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       monitorTypeSurfaces: 'include',
     };
 
-    const screenStream = await (navigator.mediaDevices as any).getDisplayMedia(displayMediaOptions);
+    // Mark this as the app's OWN legitimate (re)share so the proctoring
+    // getDisplayMedia guards let it through instead of blocking it as a
+    // "screen recording attempt". Without this, the mid-interview
+    // "Re-share Entire Screen" picker never opened (proctoring had already
+    // monkey-patched getDisplayMedia to throw). Reset in finally so any other
+    // getDisplayMedia call stays blocked.
+    let screenStream: MediaStream;
+    (window as any).__tfAllowLegitimateShare = true;
+    try {
+      screenStream = await (navigator.mediaDevices as any).getDisplayMedia(displayMediaOptions);
+    } finally {
+      (window as any).__tfAllowLegitimateShare = false;
+    }
     const videoTrack = screenStream.getVideoTracks()[0];
     const displaySurface = (videoTrack?.getSettings?.() as any)?.displaySurface;
 
@@ -1284,29 +1339,41 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     setShareBarChecking(true);
     try {
       const frame = await captureScreenFrame();
-      const res = frame
-        ? await candidateAIInterviewService.verifyShareBarHidden(token, frame)
-        : { enabled: true, hidden: true, reason: 'no_frame' }; // can't capture → don't block
+      if (!frame) {
+        // HARD GATE: could not capture a frame to verify → do NOT proceed
+        // (previously this fail-open let the interview start WITHOUT ever
+        // checking the bar — the "moved on at 3rd attempt" leak). The dead-share
+        // case was already routed to re-share above, so this is a transient
+        // capture glitch; re-prompt and let the candidate press Continue to retry.
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        console.warn(`[ShareBar] no frame captured (attempt ${nextAttempt}) — NOT proceeding, re-prompting`);
+        setShareBarError('We could not verify the screen-sharing bar. Make sure you are sharing your ENTIRE screen, click "Hide" on that bar, then press Continue again.');
+        return;
+      }
+      const res = await candidateAIInterviewService.verifyShareBarHidden(token, frame);
       if (res.hidden) {
         await startInterviewNow();
       } else {
-        // Vision detecting the tiny collapsed pill is imperfect, so never trap a
-        // candidate who DID hide it: after a few failed checks, proceed anyway
-        // (deterministic fail-open on repeated failure — the recording still
-        // shows whether they hid it, so the recruiter can review).
+        // HARD GATE (per requirement): do NOT allow the interview to start until
+        // the vision check confirms the share bar is hidden. On a confident
+        // "bar visible" we ALWAYS re-prompt — no auto-proceed after N attempts.
+        // (Infra failures — capture returned no frame, or the vision call
+        // errors/times out — still fail-open above and in the catch below, so a
+        // backend hiccup can never permanently brick a candidate; only a real
+        // "bar is visible" keeps them on this step.)
         const nextAttempt = shareBarAttempts + 1;
         setShareBarAttempts(nextAttempt);
-        const MAX_SHARE_BAR_ATTEMPTS = 3;
-        if (nextAttempt >= MAX_SHARE_BAR_ATTEMPTS) {
-          console.warn(`[ShareBar] ${nextAttempt} failed checks — proceeding anyway (fail-open)`);
-          await startInterviewNow();
-        } else {
-          setShareBarError('We can still see the screen-sharing bar. Click "Hide" on that bar, then press Continue again.');
-        }
+        console.warn(`[ShareBar] bar still visible (attempt ${nextAttempt}) — re-prompting, not proceeding`);
+        setShareBarError('We can still see the screen-sharing bar. Please click "Hide" on that bar, then press Continue again — the interview cannot start until it is hidden.');
       }
     } catch (e) {
-      console.warn('[ShareBar] verify failed — proceeding (fail-open):', e);
-      await startInterviewNow();
+      // HARD GATE: verification threw → do NOT silently start. Re-prompt so the
+      // candidate retries rather than slipping through unverified.
+      const nextAttempt = shareBarAttempts + 1;
+      setShareBarAttempts(nextAttempt);
+      console.warn(`[ShareBar] verify threw (attempt ${nextAttempt}) — NOT proceeding, re-prompting:`, e);
+      setShareBarError('We could not verify the screen-sharing bar just now. Please click "Hide" on that bar, then press Continue again.');
     } finally {
       setShareBarChecking(false);
     }
@@ -1643,6 +1710,32 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       window.removeEventListener('keydown', onKey, true);
     };
   }, [step]);
+
+  // ========== BLOCKED: interview already open on another device ==========
+  // Shown when the pre-interview single-active-session lease is held by another
+  // browser/device. The heartbeat effect keeps running underneath, so if the
+  // other side releases (or goes stale) this recovers automatically.
+  if (preInterviewBlocked && step !== 'interview' && step !== 'completed' && step !== 'terminated' && step !== 'error') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5 text-3xl">🔒</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Already open on another device</h1>
+          <p className="text-gray-600 text-sm leading-relaxed mb-6">
+            This interview link is already in use in another window or device.
+            Only one device can take the interview at a time. Please continue
+            there. If you just closed it, wait a few seconds and reload this page.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3 rounded-xl transition-all"
+          >
+            Reload &amp; try again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ========== LOADING ==========
   if (step === 'loading') {
