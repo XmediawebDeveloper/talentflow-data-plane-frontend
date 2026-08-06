@@ -1397,6 +1397,9 @@ export default function AITalentMatchPage({
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <div className="flex items-center justify-between gap-3 mb-4 md:mb-6">
+              {/* Previous / Next rides inside the breadcrumb bar, as on
+                  job-details. Run AI Match stays down in the actions row — only
+                  the pager moved. */}
               <PageBreadcrumb
                 className="mb-0 flex-1"
                 items={[
@@ -1405,6 +1408,14 @@ export default function AITalentMatchPage({
                   // Deepest crumb names the job this match belongs to.
                   { label: selectedHistoryItem?.jobTitle || 'Match Details' },
                 ]}
+                actions={matchHistory.length > 1 ? (
+                  <RecordPager
+                    currentIndex={_matchIdx >= 0 ? _matchIdx : 0}
+                    totalCount={matchHistory.length}
+                    onPrev={_prevMatch ? () => _goToMatch(_prevMatch) : undefined}
+                    onNext={_nextMatch ? () => _goToMatch(_nextMatch) : undefined}
+                  />
+                ) : undefined}
               />
             </div>
         {/* Header Section */}
@@ -1423,7 +1434,8 @@ export default function AITalentMatchPage({
               <>
                 <div className="flex justify-end mb-4">
                   <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
-                    {/* Run AI Match — sits before the Previous/Next pager */}
+                    {/* Run AI Match — now alone in this row; the Previous/Next
+                        pager it used to sit beside moved into the breadcrumb. */}
                     {canRunAIMatch && (
                       <button
                         onClick={() => {
@@ -1448,14 +1460,6 @@ export default function AITalentMatchPage({
                         <Sparkles className="w-3.5 h-3.5" />
                         Run AI Match
                       </button>
-                    )}
-                    {matchHistory.length > 1 && (
-                      <RecordPager
-                        currentIndex={_matchIdx >= 0 ? _matchIdx : 0}
-                        totalCount={matchHistory.length}
-                        onPrev={_prevMatch ? () => _goToMatch(_prevMatch) : undefined}
-                        onNext={_nextMatch ? () => _goToMatch(_nextMatch) : undefined}
-                      />
                     )}
                   </div>
                 </div>

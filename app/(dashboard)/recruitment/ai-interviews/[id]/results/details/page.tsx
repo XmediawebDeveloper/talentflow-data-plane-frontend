@@ -15,9 +15,8 @@ function DetailsContent() {
   const configId = params.id as string;
   const sessionId = searchParams.get('session_id');
   // Opened from the AI Interviews list's Candidate Results tab, which spans
-  // every interview. That recruiter never passed through this interview's own
-  // Results page, so the trail shouldn't claim they did — and Back belongs to
-  // the list they actually came from.
+  // every interview. Drives Back and the Prev/Next origin so both return to the
+  // list they actually came from — the trail names the interview either way.
   const fromCandidateResults = searchParams.get('from') === 'candidate-results';
 
   const [session, setSession] = useState<AIInterviewResponse | null>(null);
@@ -122,10 +121,18 @@ function DetailsContent() {
     <CandidateResultsView
       interview={session}
       onBack={handleBack}
-      // Trail is Dashboard › AI Interviews › <candidate>. No intermediate
-      // "Results" crumb on this route, whichever way the recruiter arrived —
-      // Back and the pager still return them to where they came from.
-      breadcrumbTrail={[]}
+      // Always the full chain: Dashboard › AI Interviews › <interview> ›
+      // <candidate>. The interview the candidate sat is a real step between the
+      // list and this page, so it stays in the trail no matter which route the
+      // recruiter came in by — including the cross-interview Candidate Results
+      // tab, where it's the only thing naming which interview this result is
+      // for. Back and the pager still return them to where they came from.
+      breadcrumbTrail={[{
+        // Same label the Results page shows for this interview, so the crumb
+        // the recruiter clicks through reads identically here.
+        label: session.position || session.jd_title || 'Results',
+        href: `/recruitment/ai-interviews/${configId}/results`,
+      }]}
       currentIndex={navIndex >= 0 ? navIndex : undefined}
       totalCount={navList.length || undefined}
       onPrev={prevSession ? () => router.replace(buildNavUrl(prevSession)) : undefined}

@@ -1070,15 +1070,10 @@ export default function AuditTrailPage() {
 
         {pageView === 'list' && (
         <>
-        {/* Back to overview */}
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <button
-            onClick={() => { setPageView('cards'); setSearchQuery(''); }}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to overview
-          </button>
+        {/* justify-end, not justify-between: the Back to overview button that
+            used to hold the left slot is gone, and the tally belongs on the
+            right. */}
+        <div className="mb-4 flex items-center justify-end gap-2">
           <span className="text-xs text-gray-500 dark:text-slate-400">
             {filteredLogs.length} {filteredLogs.length === 1 ? 'record' : 'records'}
           </span>

@@ -951,6 +951,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // first so the details view can offer Prev/Next between candidates. Used by
   // the row/card click AND the View Details button.
   const viewCandidateDetails = (candidate: CandidateResult) => {
+    // A Pending candidate was invited but never started, so no attempt record
+    // exists and `candidate.id` is the invitation id (see the mapping above).
+    // Passing that to the details route asks the API for a result that isn't
+    // there, which came back as a bare "Result not found" console error.
+    if (candidate.status === 'Pending') {
+      toast.info('This candidate has not started the assessment yet');
+      return;
+    }
     try {
       sessionStorage.setItem('assessmentResultNavList', JSON.stringify(
         paginatedCandidates
@@ -992,12 +1000,27 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     <div ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-          <PageBreadcrumb className="mb-4 md:mb-6" items={[
-            { label: 'Dashboard', href: '/dashboard' },
-            { label: 'Assessments', href: '/recruitment/assessments' },
-            // Name the assessment these results belong to, not just "Results".
-            ...(assessmentTitle ? [{ label: assessmentTitle }] : [{ label: 'Results' }]),
-          ]} />
+          {/* Previous / Next assessment navigation rides inside the breadcrumb
+              bar, as on job-details, so users can step through assessments
+              without going back to the list — and without it scrolling away
+              from the pinned crumb. */}
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={[
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Assessments', href: '/recruitment/assessments' },
+              // Name the assessment these results belong to, not just "Results".
+              ...(assessmentTitle ? [{ label: assessmentTitle }] : [{ label: 'Results' }]),
+            ]}
+            actions={
+              <RecordPager
+                currentIndex={currentIndex}
+                totalCount={totalCount}
+                onPrev={prevId ? () => router.push(`/recruitment/assessments/${prevId}/results`) : undefined}
+                onNext={nextId ? () => router.push(`/recruitment/assessments/${nextId}/results`) : undefined}
+              />
+            }
+          />
       {/* Header */}
       <div className="mb-4 sm:mb-6">
         <div>
@@ -1044,15 +1067,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <span className="sm:hidden">Export</span>
               </button>
 
-              {/* Previous / Next assessment navigation — mirrors the JD
-                  detail page so users can step through assessments
-                  without going back to the list. */}
-              <RecordPager
-                currentIndex={currentIndex}
-                totalCount={totalCount}
-                onPrev={prevId ? () => router.push(`/recruitment/assessments/${prevId}/results`) : undefined}
-                onNext={nextId ? () => router.push(`/recruitment/assessments/${nextId}/results`) : undefined}
-              />
             </div>
           </div>
         </div>
@@ -1129,15 +1143,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
         {pageView === 'list' && (
         <>
-        {/* Back-to-overview button — mirrors the Job Openings drill-down. */}
-        <div className="mb-3 sm:mb-4 flex items-center justify-between gap-2">
-          <button
-            onClick={() => setPageView('cards')}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-brand-blue transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to overview
-          </button>
+        {/* justify-end, not justify-between: the Back to overview button that
+            used to hold the left slot is gone, and the tally belongs on the
+            right. */}
+        <div className="mb-3 sm:mb-4 flex items-center justify-end gap-2">
           <span className="text-xs text-gray-500">
             {totalItems} {totalItems === 1 ? 'candidate' : 'candidates'}
           </span>

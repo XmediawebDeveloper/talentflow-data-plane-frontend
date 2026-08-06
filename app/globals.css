@@ -230,6 +230,32 @@
   --brand-orange: #ed881c;
   --brand-orange-deep: #d76011;
 
+  /* ── Marketing palette (public pages) ───────────────────────────────────
+     The marketing pages can't reuse bg-white / text-brand-blue: the dark-mode
+     compatibility layer near the bottom of this file repaints those utilities
+     to the product's grey surfaces, and the marketing surface is navy. Hence
+     a separate namespace the compat layer never touches.
+
+     Every token that differs between themes is re-declared under .dark below,
+     so components use ONE class and no dark: variant — `bg-mkt-surface`, not
+     `bg-[#FFFFFF] dark:bg-[#0C1732]`. Tokens without a .dark counterpart are
+     intentionally fixed in both themes (solid buttons, the navy CTA band). */
+  --mkt-canvas: #f7f8fb;          /* page background */
+  --mkt-surface: #ffffff;         /* cards and panels */
+  --mkt-ink: #08132e;             /* primary text */
+  --mkt-accent: var(--brand-blue);        /* accent text and icons */
+  --mkt-hero-blue: #38aecc;       /* reusable hero blue text */
+  --mkt-cyan-ink: #0a7a99;        /* cyan text — darkened for contrast on light */
+  --mkt-amber-ink: #b45b0c;       /* amber text — darkened for contrast on light */
+
+  /* Fixed in both themes */
+  --mkt-navy: #08132e;            /* the always-dark CTA band and modal scrim */
+  --mkt-navy-surface: #0c1732;    /* panels sitting on that band */
+  --mkt-accent-solid: var(--brand-blue);      /* filled primary button */
+  --mkt-accent-solid-hover: var(--brand-blue-2);
+  --mkt-cyan: var(--brand-cyan);  /* dots, bars, fills */
+  --mkt-amber: var(--brand-orange);
+
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   color-scheme: light;
 }
@@ -440,14 +466,30 @@
   --color-brand-orange: var(--brand-orange);
   --color-brand-orange-deep: var(--brand-orange-deep);
 
+  /* Marketing palette utilities — bg-mkt-surface, text-mkt-ink,
+     border-mkt-accent, bg-mkt-amber/10, and so on. Alpha modifiers work
+     normally because these resolve to plain colour values. */
+  --color-mkt-canvas: var(--mkt-canvas);
+  --color-mkt-surface: var(--mkt-surface);
+  --color-mkt-ink: var(--mkt-ink);
+  --color-mkt-accent: var(--mkt-accent);
+  --color-mkt-hero-blue: var(--mkt-hero-blue);
+  --color-mkt-accent-solid: var(--mkt-accent-solid);
+  --color-mkt-accent-solid-hover: var(--mkt-accent-solid-hover);
+  --color-mkt-cyan: var(--mkt-cyan);
+  --color-mkt-cyan-ink: var(--mkt-cyan-ink);
+  --color-mkt-amber: var(--mkt-amber);
+  --color-mkt-amber-ink: var(--mkt-amber-ink);
+  --color-mkt-navy: var(--mkt-navy);
+  --color-mkt-navy-surface: var(--mkt-navy-surface);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Marketing faces — loaded by components/marketing/fonts.ts and scoped to the
-     landing page wrapper, so font-display / font-data fall back to the product
-     stacks anywhere else. */
-  --font-display: var(--font-display-face), var(--font-sans), system-ui, sans-serif;
-  --font-data: var(--font-data-face), var(--font-mono);
+  /* The marketing pages used to load their own display and mono faces here.
+     They're on Inter now, like the product, so the tokens are gone rather than
+     left pointing at faces nothing loads — `font-display` would have resolved
+     to an undefined variable and silently dropped the declaration. */
 }
 
 .dark {
@@ -506,6 +548,16 @@
   --score-medium-bg: rgba(245, 158, 11, 0.15);
   --score-low: #f87171;
   --score-low-bg: rgba(239, 68, 68, 0.15);
+
+  /* Marketing palette — dark side. Only the tokens that actually flip are
+     listed; the fixed ones (navy band, solid buttons, cyan/amber fills) keep
+     their :root values on purpose. */
+  --mkt-canvas: #08132e;
+  --mkt-surface: #0c1732;
+  --mkt-ink: #ffffff;
+  --mkt-accent: #7ba4ff;
+  --mkt-cyan-ink: #5cc8e6;
+  --mkt-amber-ink: #f0a44e;
 
   color-scheme: dark;
 }
@@ -1007,6 +1059,233 @@ a:focus:not(:focus-visible) {
 .dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border); }
 .dark .ring-slate-200 { --tw-ring-color: var(--border); }
 .dark .ring-slate-200\/60 { --tw-ring-color: rgba(55, 65, 81, 0.6); }
+
+/* ── Brand family ────────────────────────────────────────
+   The gap that made active states unreadable in dark mode. Every gray,
+   slate and semantic colour above was already remapped, but the brand
+   palette never was — and the brand blues are DARK inks (#0f3c99,
+   #0e3b98) chosen to sit on white. On a slate-950 page they render as
+   near-black on near-black: breadcrumb active crumb, active filter
+   chips, badge labels and icon tints all disappeared.
+
+   Two rules, applied per family:
+     · text / icon colours lighten to a 300-weight tint so they read as
+       "the brand colour" without the ink going invisible;
+     · translucent surfaces (bg-brand-blue/5 and friends) are raised
+       roughly 3x in alpha, because a 5% white-ish wash over a light card
+       becomes invisible over a dark one.
+   Keep these in sync with --brand-* in :root above. ───────────────── */
+
+/* Text + icons */
+.dark .text-brand-blue        { color: #93c5fd; }
+.dark .text-brand-blue-2      { color: #a5c4fb; }
+.dark .text-brand-cyan        { color: #67e8f9; }
+.dark .text-brand-teal        { color: #5eead4; }
+.dark .text-brand-orange      { color: #fdba74; }
+.dark .text-brand-orange-deep { color: #fdba74; }
+
+/* Hover text */
+.dark .hover\:text-brand-blue:hover        { color: #bfdbfe; }
+.dark .hover\:text-brand-blue-2:hover      { color: #bfdbfe; }
+.dark .hover\:text-brand-cyan:hover        { color: #a5f3fc; }
+.dark .group:hover .group-hover\:text-brand-blue { color: #bfdbfe; }
+
+/* Solid brand surfaces keep white labels, so they only need lifting off
+   the page enough to stay distinguishable from the card behind them. */
+.dark .bg-brand-blue    { background-color: #2563eb; }
+.dark .bg-brand-blue-2  { background-color: #1d4ed8; }
+.dark .bg-brand-cyan    { background-color: #0891b2; }
+.dark .bg-brand-teal    { background-color: #0d9488; }
+.dark .bg-brand-orange  { background-color: #ea7c14; }
+.dark .hover\:bg-brand-blue:hover   { background-color: #3b82f6; }
+.dark .hover\:bg-brand-blue-2:hover { background-color: #2563eb; }
+
+/* Translucent brand washes — chips, hover states, icon tiles */
+.dark .bg-brand-blue\/5   { background-color: rgba(59, 130, 246, 0.15); }
+.dark .bg-brand-blue\/10  { background-color: rgba(59, 130, 246, 0.22); }
+.dark .bg-brand-blue\/15  { background-color: rgba(59, 130, 246, 0.28); }
+.dark .bg-brand-blue\/20  { background-color: rgba(59, 130, 246, 0.32); }
+.dark .bg-brand-blue-2\/10 { background-color: rgba(37, 99, 235, 0.22); }
+.dark .bg-brand-cyan\/10  { background-color: rgba(6, 182, 212, 0.22); }
+.dark .bg-brand-teal\/10  { background-color: rgba(13, 148, 136, 0.22); }
+.dark .bg-brand-orange\/5  { background-color: rgba(234, 124, 20, 0.15); }
+.dark .bg-brand-orange\/10 { background-color: rgba(234, 124, 20, 0.22); }
+.dark .hover\:bg-brand-blue\/5:hover  { background-color: rgba(59, 130, 246, 0.2); }
+.dark .hover\:bg-brand-blue\/10:hover { background-color: rgba(59, 130, 246, 0.28); }
+.dark .group:hover .group-hover\:bg-brand-blue\/10 { background-color: rgba(59, 130, 246, 0.28); }
+
+/* Brand borders and rings */
+.dark .border-brand-blue      { border-color: #2563eb; }
+.dark .border-brand-blue\/15  { border-color: rgba(59, 130, 246, 0.3); }
+.dark .border-brand-blue\/20  { border-color: rgba(59, 130, 246, 0.35); }
+.dark .border-brand-blue\/30  { border-color: rgba(59, 130, 246, 0.45); }
+.dark .border-brand-blue\/40  { border-color: rgba(59, 130, 246, 0.55); }
+.dark .border-brand-blue\/50  { border-color: rgba(59, 130, 246, 0.6); }
+.dark .border-brand-blue\/60  { border-color: rgba(59, 130, 246, 0.7); }
+.dark .border-brand-blue-2\/20 { border-color: rgba(37, 99, 235, 0.35); }
+.dark .border-brand-cyan\/20   { border-color: rgba(6, 182, 212, 0.35); }
+.dark .border-brand-orange\/20 { border-color: rgba(234, 124, 20, 0.35); }
+.dark .hover\:border-brand-blue\/30:hover { border-color: rgba(59, 130, 246, 0.45); }
+.dark .hover\:border-brand-blue\/40:hover { border-color: rgba(59, 130, 246, 0.55); }
+.dark .ring-brand-blue\/10 { --tw-ring-color: rgba(59, 130, 246, 0.22); }
+.dark .ring-brand-blue\/15 { --tw-ring-color: rgba(59, 130, 246, 0.28); }
+.dark .ring-brand-blue\/20 { --tw-ring-color: rgba(59, 130, 246, 0.35); }
+.dark .ring-brand-blue\/25 { --tw-ring-color: rgba(59, 130, 246, 0.4); }
+.dark .ring-brand-blue\/30 { --tw-ring-color: rgba(59, 130, 246, 0.45); }
+.dark .ring-brand-blue\/40 { --tw-ring-color: rgba(59, 130, 246, 0.55); }
+.dark .ring-brand-cyan\/15   { --tw-ring-color: rgba(6, 182, 212, 0.28); }
+.dark .ring-brand-cyan\/20   { --tw-ring-color: rgba(6, 182, 212, 0.35); }
+.dark .ring-brand-orange\/15 { --tw-ring-color: rgba(234, 124, 20, 0.28); }
+.dark .ring-brand-orange\/20 { --tw-ring-color: rgba(234, 124, 20, 0.35); }
+.dark .ring-brand-teal\/15   { --tw-ring-color: rgba(13, 148, 136, 0.28); }
+
+/* ══════════════════════════════════════════════════════════
+   APP-WIDE DARK GAPS
+   Found by diffing every colour class used across the 642
+   component files against the rules above: 1006 distinct
+   classes in use, 119 of them light surfaces / dark inks /
+   pale edges with no dark rule. Grouped by what breaks.
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Rings ───────────────────────────────────────────────
+   The single biggest gap (~450 uses). A ring is a halo drawn
+   OUTSIDE the border, so a 100/200-weight ring that reads as a
+   soft edge on white becomes a bright outline tracing every
+   card, tile and badge on a dark page. ─────────────────── */
+.dark .ring-gray-100  { --tw-ring-color: rgba(55, 65, 81, 0.7); }
+.dark .ring-gray-200  { --tw-ring-color: var(--border); }
+.dark .ring-gray-200\/50 { --tw-ring-color: rgba(55, 65, 81, 0.5); }
+.dark .ring-gray-200\/60 { --tw-ring-color: rgba(55, 65, 81, 0.6); }
+.dark .ring-gray-200\/70 { --tw-ring-color: rgba(55, 65, 81, 0.7); }
+.dark .ring-slate-200\/80 { --tw-ring-color: rgba(55, 65, 81, 0.8); }
+.dark .ring-red-100     { --tw-ring-color: rgba(239, 68, 68, 0.25); }
+.dark .ring-red-200     { --tw-ring-color: rgba(239, 68, 68, 0.35); }
+.dark .ring-red-200\/60 { --tw-ring-color: rgba(239, 68, 68, 0.28); }
+.dark .ring-green-100     { --tw-ring-color: rgba(34, 197, 94, 0.25); }
+.dark .ring-green-200     { --tw-ring-color: rgba(34, 197, 94, 0.35); }
+.dark .ring-green-200\/60 { --tw-ring-color: rgba(34, 197, 94, 0.28); }
+.dark .ring-emerald-100     { --tw-ring-color: rgba(16, 185, 129, 0.25); }
+.dark .ring-emerald-200     { --tw-ring-color: rgba(16, 185, 129, 0.35); }
+.dark .ring-emerald-200\/60 { --tw-ring-color: rgba(16, 185, 129, 0.28); }
+.dark .ring-amber-100  { --tw-ring-color: rgba(245, 158, 11, 0.25); }
+.dark .ring-amber-200  { --tw-ring-color: rgba(245, 158, 11, 0.35); }
+.dark .ring-yellow-200 { --tw-ring-color: rgba(234, 179, 8, 0.35); }
+.dark .ring-orange-100 { --tw-ring-color: rgba(249, 115, 22, 0.25); }
+.dark .ring-orange-200 { --tw-ring-color: rgba(249, 115, 22, 0.35); }
+.dark .ring-blue-200   { --tw-ring-color: rgba(59, 130, 246, 0.35); }
+.dark .ring-indigo-200 { --tw-ring-color: rgba(99, 102, 241, 0.35); }
+.dark .ring-violet-100 { --tw-ring-color: rgba(139, 92, 246, 0.25); }
+.dark .ring-purple-200 { --tw-ring-color: rgba(168, 85, 247, 0.35); }
+.dark .ring-rose-100     { --tw-ring-color: rgba(244, 63, 94, 0.25); }
+.dark .ring-rose-200     { --tw-ring-color: rgba(244, 63, 94, 0.35); }
+.dark .ring-rose-200\/50 { --tw-ring-color: rgba(244, 63, 94, 0.25); }
+
+/* ── Pale borders not yet mapped ─────────────────────────── */
+.dark .border-slate-100     { border-color: var(--border); }
+.dark .border-slate-200\/80 { border-color: rgba(55, 65, 81, 0.8); }
+.dark .border-gray-200\/80  { border-color: rgba(55, 65, 81, 0.8); }
+.dark .border-red-100    { border-color: rgba(239, 68, 68, 0.3); }
+.dark .border-green-100  { border-color: rgba(34, 197, 94, 0.3); }
+.dark .border-amber-100  { border-color: rgba(245, 158, 11, 0.3); }
+.dark .border-blue-100   { border-color: rgba(59, 130, 246, 0.3); }
+.dark .border-indigo-100 { border-color: rgba(99, 102, 241, 0.3); }
+.dark .border-teal-100   { border-color: rgba(20, 184, 166, 0.3); }
+.dark .border-purple-100 { border-color: rgba(168, 85, 247, 0.3); }
+.dark .border-sky-200    { border-color: rgba(14, 165, 233, 0.35); }
+.dark .border-rose-200   { border-color: rgba(244, 63, 94, 0.35); }
+
+/* ── Translucent tinted surfaces ─────────────────────────
+   Same hues as the solid -50 tints already mapped above, but
+   with an alpha suffix, so the existing selectors miss them
+   and they stay near-white. ─────────────────────────────── */
+.dark .bg-gray-50\/30 { background-color: rgba(31, 41, 55, 0.3); }
+.dark .bg-gray-50\/40 { background-color: rgba(31, 41, 55, 0.4); }
+.dark .bg-gray-50\/60 { background-color: rgba(31, 41, 55, 0.6); }
+.dark .bg-gray-50\/70 { background-color: rgba(31, 41, 55, 0.7); }
+.dark .bg-gray-50\/80 { background-color: rgba(31, 41, 55, 0.8); }
+.dark .bg-gray-50\/95 { background-color: rgba(31, 41, 55, 0.95); }
+.dark .bg-gray-100\/50 { background-color: rgba(55, 65, 81, 0.5); }
+.dark .bg-slate-100\/70 { background-color: rgba(55, 65, 81, 0.7); }
+.dark .bg-rose-50       { background-color: rgba(244, 63, 94, 0.15); }
+.dark .bg-rose-50\/50   { background-color: rgba(244, 63, 94, 0.1); }
+.dark .bg-red-50\/30 { background-color: rgba(239, 68, 68, 0.08); }
+.dark .bg-red-50\/40 { background-color: rgba(239, 68, 68, 0.1); }
+.dark .bg-red-50\/60 { background-color: rgba(239, 68, 68, 0.12); }
+.dark .bg-red-50\/80 { background-color: rgba(239, 68, 68, 0.14); }
+.dark .bg-green-50\/30 { background-color: rgba(34, 197, 94, 0.08); }
+.dark .bg-green-50\/40 { background-color: rgba(34, 197, 94, 0.1); }
+.dark .bg-green-50\/50 { background-color: rgba(34, 197, 94, 0.12); }
+.dark .bg-emerald-50\/40 { background-color: rgba(16, 185, 129, 0.1); }
+.dark .bg-emerald-50\/50 { background-color: rgba(16, 185, 129, 0.12); }
+.dark .bg-emerald-50\/60 { background-color: rgba(16, 185, 129, 0.14); }
+.dark .bg-amber-50\/40  { background-color: rgba(245, 158, 11, 0.1); }
+.dark .bg-orange-50\/30 { background-color: rgba(249, 115, 22, 0.08); }
+.dark .bg-indigo-50\/30 { background-color: rgba(99, 102, 241, 0.08); }
+.dark .bg-indigo-50\/40 { background-color: rgba(99, 102, 241, 0.1); }
+.dark .bg-indigo-50\/60 { background-color: rgba(99, 102, 241, 0.14); }
+.dark .bg-purple-50\/30 { background-color: rgba(168, 85, 247, 0.08); }
+.dark .bg-teal-50\/30   { background-color: rgba(20, 184, 166, 0.08); }
+
+/* ── Opaque white panels expressed with alpha ─────────────
+   Deliberately only the HIGH alphas (>= 50%). Those are solid
+   surfaces — sticky bars, popovers, frosted panels — and stay
+   white without this. The low ones (bg-white/10 … /30, ~280
+   uses) are glass overlays sitting ON brand-coloured headers
+   and buttons; darkening those would black out the very
+   elements they highlight, so they are left alone. ──────── */
+.dark .bg-white\/50 { background-color: rgba(31, 41, 55, 0.5); }
+.dark .bg-white\/55 { background-color: rgba(31, 41, 55, 0.55); }
+.dark .bg-white\/70 { background-color: rgba(31, 41, 55, 0.7); }
+.dark .bg-white\/85 { background-color: rgba(31, 41, 55, 0.85); }
+.dark .bg-white\/90 { background-color: rgba(31, 41, 55, 0.9); }
+.dark .bg-white\/95 { background-color: rgba(31, 41, 55, 0.95); }
+
+/* ── Inks the earlier families missed ────────────────────── */
+.dark .text-slate-950 { color: var(--text-primary); }
+.dark .text-sky-700     { color: #7dd3fc; }
+.dark .text-sky-800     { color: #7dd3fc; }
+.dark .text-sky-800\/70 { color: rgba(125, 211, 252, 0.7); }
+.dark .text-sky-700\/50 { color: rgba(125, 211, 252, 0.5); }
+.dark .text-sky-900     { color: #bae6fd; }
+.dark .text-rose-600 { color: #fda4af; }
+.dark .text-rose-800 { color: #fecdd3; }
+.dark .text-red-700\/90     { color: rgba(248, 113, 113, 0.9); }
+.dark .text-green-600\/80   { color: rgba(74, 222, 128, 0.8); }
+.dark .text-emerald-700\/70 { color: rgba(110, 231, 183, 0.7); }
+.dark .text-amber-800\/90 { color: rgba(252, 211, 77, 0.9); }
+.dark .text-amber-900\/80 { color: rgba(253, 230, 138, 0.8); }
+.dark .text-amber-950     { color: #fde68a; }
+
+/* ── Long tail ───────────────────────────────────────────
+   One-off edges and tints. Individually trivial, but each is
+   a bright hairline or pale panel on some dark page, so the
+   audit only reads clean once they are mapped too. ─────── */
+.dark .ring-blue-100    { --tw-ring-color: rgba(59, 130, 246, 0.25); }
+.dark .ring-cyan-100    { --tw-ring-color: rgba(6, 182, 212, 0.25); }
+.dark .ring-indigo-100  { --tw-ring-color: rgba(99, 102, 241, 0.25); }
+.dark .ring-amber-200\/60 { --tw-ring-color: rgba(245, 158, 11, 0.28); }
+.dark .border-gray-100\/70 { border-color: rgba(55, 65, 81, 0.7); }
+.dark .border-gray-100\/80 { border-color: rgba(55, 65, 81, 0.8); }
+.dark .border-gray-200\/50 { border-color: rgba(55, 65, 81, 0.5); }
+.dark .border-gray-200\/70 { border-color: rgba(55, 65, 81, 0.7); }
+.dark .border-slate-200\/90 { border-color: rgba(55, 65, 81, 0.9); }
+.dark .border-orange-100    { border-color: rgba(249, 115, 22, 0.3); }
+.dark .border-teal-200      { border-color: rgba(20, 184, 166, 0.35); }
+.dark .border-red-200\/70     { border-color: rgba(239, 68, 68, 0.3); }
+.dark .border-green-200\/70   { border-color: rgba(34, 197, 94, 0.3); }
+.dark .border-emerald-200\/70 { border-color: rgba(16, 185, 129, 0.3); }
+.dark .border-emerald-200\/80 { border-color: rgba(16, 185, 129, 0.35); }
+.dark .border-amber-200\/80   { border-color: rgba(245, 158, 11, 0.35); }
+.dark .border-orange-200\/80  { border-color: rgba(249, 115, 22, 0.35); }
+.dark .border-cyan-200\/80    { border-color: rgba(6, 182, 212, 0.35); }
+.dark .border-rose-200\/80    { border-color: rgba(244, 63, 94, 0.35); }
+.dark .border-violet-200\/80  { border-color: rgba(139, 92, 246, 0.35); }
+.dark .divide-slate-200\/80 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(55, 65, 81, 0.8); }
+.dark .divide-red-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(239, 68, 68, 0.25); }
+.dark .bg-blue-50\/30 { background-color: rgba(59, 130, 246, 0.08); }
+.dark .bg-blue-50\/50 { background-color: rgba(59, 130, 246, 0.12); }
+.dark .bg-blue-50\/60 { background-color: rgba(59, 130, 246, 0.14); }
+.dark .bg-amber-50\/60 { background-color: rgba(245, 158, 11, 0.14); }
 
 /* ── Violet family ─────────────────────────────────────── */
 .dark .bg-violet-50  { background-color: rgba(139, 92, 246, 0.15); }

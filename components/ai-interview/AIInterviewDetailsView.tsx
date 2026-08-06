@@ -472,14 +472,29 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     const navIdx = candidateNavIds.indexOf(candidateDetail.id);
     const prevId = navIdx > 0 ? candidateNavIds[navIdx - 1] : null;
     const nextId = navIdx >= 0 && navIdx < candidateNavIds.length - 1 ? candidateNavIds[navIdx + 1] : null;
+    // The interview the candidate belongs to stays in the trail, so it reads
+    // … › <interview> › <candidate> rather than dropping the page the recruiter
+    // just came from. onClick, not href: this view lives on the interview's own
+    // route, so a link couldn't switch the body back to the candidate list.
+    const backToInterview = () => setCandidateDetail(null);
+    const interviewLabel = config.jd_title || config.position || 'Interview Details';
+    const candidateLabel = candidateDetail.candidate_name || 'Candidate Results';
     return (
       <CandidateResultsView
         interview={candidateDetail}
-        onBack={() => setCandidateDetail(null)}
-        // Flat trail: Dashboard › AI Interviews › <candidate>. The interview
-        // crumb that sat in between is gone — Back and the pager still return
-        // to this interview's candidate list.
-        breadcrumbTrail={[]}
+        onBack={backToInterview}
+        // A caller-supplied trail (reached from a JD's Job Details page) is
+        // anchored somewhere else entirely, so extend that one instead of the
+        // AI Interviews trail — its last crumb is this interview.
+        {...(breadcrumbItems
+          ? {
+              breadcrumbItems: [
+                ...breadcrumbItems.slice(0, -1),
+                { ...breadcrumbItems[breadcrumbItems.length - 1], href: undefined, onClick: backToInterview },
+                { label: candidateLabel },
+              ],
+            }
+          : { breadcrumbTrail: [{ label: interviewLabel, onClick: backToInterview }] })}
         currentIndex={navIdx >= 0 ? navIdx : undefined}
         totalCount={candidateNavIds.length || undefined}
         onPrev={prevId ? () => handleCandidateClick(prevId) : undefined}
@@ -492,28 +507,26 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* Previous / Next rides inside the breadcrumb bar, as on
+              job-details, so it stays reachable while the sticky crumb is
+              pinned. Passed as undefined when there's no list to page through,
+              which leaves the bar exactly as it was. */}
           <PageBreadcrumb
-            className={totalCount != null && totalCount > 0 ? 'mb-3' : 'mb-4 md:mb-6'}
+            className="mb-4 md:mb-6"
             items={breadcrumbItems ?? [
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
               { label: config.jd_title || config.position || 'Interview Details' },
             ]}
-          />
-
-          {/* Previous / Next record pager — sits below the breadcrumb. Skipped
-              entirely when there's no list to page through, so it leaves no
-              empty row behind. */}
-          {totalCount != null && totalCount > 0 && (
-            <div className="flex items-center justify-end mb-4 md:mb-6">
+            actions={totalCount != null && totalCount > 0 ? (
               <RecordPager
                 currentIndex={currentIndex}
                 totalCount={totalCount}
                 onPrev={onPrev}
                 onNext={onNext}
               />
-            </div>
-          )}
+            ) : undefined}
+          />
       {/* Loading overlay for candidate fetch */}
       {candidateLoading && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/60">

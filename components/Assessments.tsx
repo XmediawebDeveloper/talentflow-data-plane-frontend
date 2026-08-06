@@ -685,7 +685,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     } catch { /* ignore quota errors */ }
 
     const cid = result.candidate_display_id ? `&cid=${encodeURIComponent(result.candidate_display_id)}` : '';
-    router.push(`/recruitment/assessments/${result._assessment_id}/results/details?candidate_id=${attemptId}${cid}`);
+    // `from` marks the cross-assessment origin so the details breadcrumb stays
+    // flat instead of inserting an assessment crumb the recruiter never visited.
+    router.push(`/recruitment/assessments/${result._assessment_id}/results/details?candidate_id=${attemptId}${cid}&from=candidate-results`);
   };
 
   const loadAllCompletedCandidates = async () => {
@@ -1943,16 +1945,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </button>
                   </>
                 )}
-                {/* <button
+                <button
                   onClick={() => setActiveTab('archived')}
-                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
                     activeTab === 'archived'
                       ? 'border-brand-blue text-brand-blue font-medium'
                       : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                   }`}
                 >
+                  <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Archived
-                </button> */}
+                </button>
                 <button
                   onClick={() => setActiveTab('settings')}
                   className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
