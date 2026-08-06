@@ -63,10 +63,10 @@ variables:
   # startup and provisioning on every push, and left orphaned containers and
   # tenant databases behind whenever a runner was killed mid-job.
   QA_API_CONTAINER: tf-qa-api
-  QA_APP_CONTAINER: tf-qa-frontend-ci
+  QA_APP_CONTAINER: tf-qa-frontend
   QA_CP_CONTAINER: tf-qa-control-plane
   QA_API_PORT: "8200"
-  QA_APP_PORT: "3201"
+  QA_APP_PORT: "3200"
   QA_CP_PORT: "8299"
   QA_DB_NAME: talentflow_e2e
   QA_STATE_DIR: /opt/talentflow/qa
@@ -75,27 +75,33 @@ variables:
   # browser at. NEXT_PUBLIC_* are baked in at build time, so these decide the
   # image, not the container.
   #
-  # The VM's own address, not the public domains, and the reason is measured
-  # rather than cautious. Both were tried:
+  # The public domains, which is worth the trouble: it exercises DNS, TLS,
+  # Cloudflare and the CORS preflight, and two of the four defects this suite has
+  # found so far lived exactly there.
   #
-  #   api.enthira.in   reaches nginx directly and is fine — one
-  #                    Access-Control-Allow-Origin header, real login, 200s
-  #   tfa.enthira.in   sits behind Cloudflare, and Cloudflare stopped being able
-  #                    to reach the origin partway through a full suite run:
-  #                    26 tests passed, then every remaining test failed. It has
-  #                    returned 502 ever since, in 65ms — Cloudflare is not even
-  #                    waiting for an origin timeout — while the container
-  #                    answers 200 on 127.0.0.1:3200 throughout.
+  # Three earlier attempts failed for reasons worth keeping, because each is a
+  # trap the next person would fall into:
   #
-  # So the domain path is real infrastructure with a real fault in it, and a
-  # blocking job must not depend on it until that is fixed. Going straight to
-  # the container costs the DNS/TLS/proxy coverage and buys a suite that fails
-  # only when the product is wrong.
+  #   tfaapi.mo.vc    added its own Access-Control-Allow-* headers on top of the
+  #                   ones the backend already sends, so a browser saw "*, *",
+  #                   blocked every response, and the UI reported "Network Error"
+  #                   while the API returned 200
+  #   tfa.enthira.in  Cloudflare stopped being able to reach the origin partway
+  #                   through a full run — 26 tests passed, then every remaining
+  #                   test failed, and it served 502 in 65ms for hours afterwards
+  #                   while the container answered 200 on 127.0.0.1
+  #   enthira.in with BASE_DOMAIN=enthira.in was right; with the app served at
+  #                   tfa.enthira.in it was not — `getSubdomain()` reads "tfa" as
+  #                   a tenant, finds none, and 307s to the apex. The same
+  #                   container answers 200 on 127.0.0.1 and redirects on the
+  #                   domain, with only the Host header different.
   #
-  # When the frontend proxy is stable, these become the domains and nothing else
-  # changes. Tier 3 already passed 61 of 64 through them before the 502 started.
-  QA_API_URL: http://192.168.2.12:8200
-  QA_APP_URL: http://192.168.2.12:3201
+  # The apex is stable: a full 64-test run through it took 13.3 minutes and the
+  # domain was still answering 200 afterwards. If it ever starts failing under
+  # load again, these two values go back to http://192.168.2.12:3201 and
+  # http://192.168.2.12:8200 and nothing else changes.
+  QA_API_URL: https://api.enthira.in
+  QA_APP_URL: https://enthira.in
 
   # QA declares its own build values instead of borrowing the NEXT_PUBLIC_*
   # ones. Those are environment-scoped in GitLab (Settings -> CI/CD -> Variables,
@@ -106,15 +112,14 @@ variables:
   #
   # Being explicit is also more honest: QA is its own environment, not a copy of
   # staging with two URLs swapped.
-  # The app's own host, not the registrable domain, and the difference matters.
-  # `getSubdomain()` returns null when the host equals BASE_DOMAIN and the prefix
-  # when it ends with `.BASE_DOMAIN`. Set to `enthira.in`, a request to
-  # tfa.enthira.in reads "tfa" as a tenant, finds no such tenant and 307s to the
-  # apex — the same container answers 200 on 127.0.0.1 and redirects on the
-  # domain, with only the Host header different. Setting it to the host the app
-  # is served from means no tenant is inferred and `?org=` supplies it, which is
-  # how every test signs in.
-  QA_BASE_DOMAIN: tfa.enthira.in
+  # Must equal the host the app is served from. `getSubdomain()` returns null
+  # when the host equals BASE_DOMAIN and the prefix when it ends with
+  # `.BASE_DOMAIN` — so serving the app at the apex and setting the apex here
+  # means no tenant is inferred from the URL and `?org=` supplies it, which is
+  # how every test signs in. Serving it at a subdomain and setting the
+  # registrable domain instead makes the app read that subdomain as a tenant,
+  # find none, and redirect.
+  QA_BASE_DOMAIN: enthira.in
   # QA must never reach a real payment gateway, so the bypass is on and no key
   # is supplied. A key that is absent cannot be charged against by accident.
   QA_RAZORPAY_BYPASS: "true"

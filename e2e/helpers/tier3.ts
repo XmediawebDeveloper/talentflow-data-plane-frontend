@@ -173,6 +173,41 @@ export async function settle(page: Page, ms = 2500): Promise<void> {
   await page.waitForTimeout(ms);
 }
 
+/**
+ * Wait for a page to actually make the call, instead of sleeping and hoping.
+ *
+ * `settle(page, 6000)` is fine when the only question is "has the page finished
+ * painting". It is not fine when an assertion depends on a specific request
+ * having happened: through Cloudflare the same page took longer than the sleep,
+ * so a test that passed every time against the container reported "the page
+ * never called GET /rbac/roles" against the domain — while the page was working
+ * perfectly and simply had not got there yet.
+ *
+ * Returns the call so the assertion can read its body. Throws with the calls it
+ * did see, which is the thing you want when it genuinely never happens.
+ */
+export async function waitForCall(
+  page: Page,
+  calls: ApiCall[],
+  match: RegExp,
+  { timeout = 20_000, status = 200 }: { timeout?: number; status?: number } = {},
+): Promise<ApiCall> {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const hit = [...calls]
+      .reverse()
+      .find((c) => match.test(c.path) && c.status === status && c.body != null);
+    if (hit) return hit;
+    if (Date.now() > deadline) {
+      throw new Error(
+        `no ${status} response matching ${match} within ${timeout}ms.\n` +
+          `Calls seen:\n${describe(calls)}`,
+      );
+    }
+    await page.waitForTimeout(400);
+  }
+}
+
 /** Nothing reached a customer-facing host, and something reached the QA one. */
 export function assertTrafficStayedInQa(calls: ApiCall[], apiUrl: string): void {
   const expected = new URL(apiUrl).hostname;

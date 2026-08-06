@@ -149,13 +149,15 @@ test.describe("Tier 3 — every module opens", () => {
     await signIn(page);
     await settle(page, 5000);
 
+    // A refused upgrade shows up two ways depending on how the proxy rejects it:
+    // as a recorded response with a non-101 status, or as no response event at
+    // all when the connection dies before one. Both are the same defect, and
+    // treating the second as a hard failure made this test red on one run and
+    // green on the next for the same broken proxy.
     const socket = calls.find((c) => /\/ws\//.test(c.path));
-    expect(
-      socket,
-      `the app never opened its notification socket. Calls:\n${describeCalls(calls)}`,
-    ).toBeTruthy();
+    const status = socket?.status ?? 0;
 
-    if (socket!.status !== 101) {
+    if (status !== 101) {
       await recordDefect(testInfo, {
         summary:
           "Real-time notifications do not work through the public domain — the " +
@@ -170,7 +172,8 @@ test.describe("Tier 3 — every module opens", () => {
         ],
         expected: "101 Switching Protocols, and the socket stays open",
         actual:
-          `${socket!.status} from the proxy. The page loads and everything else works, ` +
+          `${status || "no response at all"} from the proxy. The page loads and ` +
+          "everything else works, " +
           "so nothing looks wrong — but notifications never arrive and the header " +
           "silently falls back to polling.",
         evidence: [
@@ -193,11 +196,12 @@ test.describe("Tier 3 — every module opens", () => {
     // Pinned on the condition, not unconditionally: reached directly the socket
     // upgrades correctly, so this is an ordinary passing test against the
     // container and a documented defect through the proxy.
-    test.fail(socket!.status !== 101, `the notification socket returned ${socket!.status}, not 101`);
+    test.fail(status !== 101, `the notification socket returned ${status || "nothing"}, not 101`);
 
     expect(
-      socket!.status,
-      `the notification socket returned ${socket!.status} rather than 101. A 200 or 404 ` +
+      status,
+      `the notification socket returned ${status || "no response at all"} rather than 101. ` +
+        `A 200 or 404 ` +
         `means a proxy answered instead of upgrading; a 401/403 means the token was ` +
         `refused on a transport where nothing else would notice.`,
     ).toBe(101);
