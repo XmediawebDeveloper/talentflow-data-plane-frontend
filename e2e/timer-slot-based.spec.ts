@@ -11,55 +11,14 @@
  *  - Text reveal doesn't outpace audio (ArrayBuffer-detach regression guard)
  */
 import { test, expect, Page } from "@playwright/test";
+import {
+  mockCandidateApi,
+  interviewInfo as mockInterviewInfo,
+  assertMocksCoverTheApp,
+} from "./helpers/ai-interview-mocks";
 
 const INTERVIEW_TOKEN = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const INTERVIEW_URL = `/ai-interview/${INTERVIEW_TOKEN}`;
-
-function mockInterviewInfo(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "int-001",
-    candidate_name: "Test Candidate",
-    candidate_email: "test@example.com",
-    position: "Senior Python Developer",
-    interview_type: "ai",
-    duration_minutes: 30,
-    total_questions: 15,
-    status: "in_progress",
-    consent_accepted_at: new Date().toISOString(),
-    system_check_passed: true,
-    available_languages: ["English"],
-    selected_language: "English",
-    jd_title: "Senior Python Developer",
-    jd_must_have_skills: ["Python"],
-    jd_nice_to_have_skills: ["AWS"],
-    interview_mode: "fixed",
-    identity_verified: true,
-    copy_paste_blocking: false,
-    introduction_video_url: null,
-    ...overrides,
-  };
-}
-
-async function mockCandidateApi(page: Page, overrides: Record<string, unknown> = {}) {
-  const token = INTERVIEW_TOKEN;
-  const info = mockInterviewInfo(overrides);
-  await page.route(`**/candidate/ai-interview/${token}`, (route) => {
-    if (route.request().method() === "GET") {
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(info) });
-    }
-    return route.continue();
-  });
-  for (const suffix of [
-    "consent", "system-check", "languages", "language-select",
-    "identity-verify", "ai-health", "transcribe-practice", "practice-complete",
-    "upload-recording", "proctor-event", "start",
-  ]) {
-    await page.route(`**/candidate/ai-interview/${token}/${suffix}`, (route) =>
-      route.fulfill({ status: 200, contentType: "application/json",
-        body: JSON.stringify({ success: true, available_languages: ["English"], selected_language: "English", text: "ok", status: "healthy" }) })
-    );
-  }
-}
 
 async function setupWsMock(page: Page) {
   await page.addInitScript(() => {
@@ -134,6 +93,30 @@ async function readGlobalTimerSeconds(page: Page): Promise<number | null> {
   });
 }
 
+
+/**
+ * Wait for the global countdown to be on screen, and return it.
+ *
+ * These tests used to sleep for a fixed 300ms and then read. On a loaded runner
+ * React had not painted the clock yet, so the read returned null and the test
+ * failed on its very first assertion — before reaching the behaviour it was
+ * written to check. It passed locally and failed in CI for no reason other than
+ * how busy the machine was.
+ *
+ * Waiting for the value to exist removes that entirely: on a fast machine it
+ * returns immediately, on a slow one it waits, and it only fails if the clock
+ * genuinely never appears — which would be a real defect worth reporting.
+ */
+async function waitForGlobalTimer(page: Page, timeout = 15_000): Promise<number> {
+  await expect
+    .poll(() => readGlobalTimerSeconds(page), {
+      timeout,
+      message: "the global countdown never appeared on screen",
+    })
+    .not.toBeNull();
+  return (await readGlobalTimerSeconds(page))!;
+}
+
 /** Bina's text bubble content (empty string if not shown). */
 async function readLindaBubbleText(page: Page): Promise<string> {
   return page.evaluate(() => {
@@ -155,19 +138,24 @@ test.describe("Slot-based timed-mode semantics", () => {
     await openInterview(page);
 
     await sendConnected(send, 1800);
-    await page.waitForTimeout(300);
+    const before = await waitForGlobalTimer(page);
+    expect(before, "the countdown started somewhere other than 30:00").toBeGreaterThanOrEqual(1795);
 
-    const before = await readGlobalTimerSeconds(page);
-    expect(before).not.toBeNull();
-    expect(before!).toBeGreaterThanOrEqual(1795);  // ≈30:00
-
-    // Bina starts speaking → global should PAUSE (new slot-based behaviour)
+    // Bina starts speaking → global should PAUSE (slot-based behaviour).
     await send({ type: "speaking_started" });
+
+    // This wait is genuine and stays: a pause is the absence of change, and
+    // there is nothing to poll for. Three seconds of Bina talking is enough
+    // that a running clock would visibly move.
     await page.waitForTimeout(3000);
 
     const after = await readGlobalTimerSeconds(page);
-    // Allow 1s drift for the paused-detection gate; must not drop by more than 1s during 3s of Bina talking
-    expect(Math.abs(before! - after!)).toBeLessThanOrEqual(1);
+    expect(after, "the countdown vanished while Bina was speaking").not.toBeNull();
+    expect(
+      Math.abs(before - after!),
+      `the countdown moved from ${before}s to ${after}s while Bina was speaking — ` +
+        `it is meant to pause. One second of drift is allowed for the detection gate.`,
+    ).toBeLessThanOrEqual(1);
   });
 
   test("S2: Per-question timer is HIDDEN while Bina speaks, APPEARS when she stops", async ({ page }) => {
