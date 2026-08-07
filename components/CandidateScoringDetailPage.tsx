@@ -1810,7 +1810,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                       {/* Right: Comments */}
                       <div className="space-y-4 sm:space-y-6">
                         <div>
-                          <h5 className="text-sm text-gray-700 mb-3">Must-Have Comments ({jdMustHaveComments.length})</h5>
+                          <h5 className="text-sm text-gray-700 mb-3">Must-Have Additional Requirements ({jdMustHaveComments.length})</h5>
                           {jdMustHaveComments.length > 0 ? (
                             <div className="space-y-2">
                               {jdMustHaveComments.map((comment, index) => (
@@ -1825,7 +1825,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                           )}
                         </div>
                         <div>
-                          <h5 className="text-sm text-gray-700 mb-3">Nice-to-Have Comments ({jdNiceToHaveComments.length})</h5>
+                          <h5 className="text-sm text-gray-700 mb-3">Nice-to-Have Additional Requirements ({jdNiceToHaveComments.length})</h5>
                           {jdNiceToHaveComments.length > 0 ? (
                             <div className="space-y-2">
                               {jdNiceToHaveComments.map((comment, index) => (
