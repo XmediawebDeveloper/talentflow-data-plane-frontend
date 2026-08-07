@@ -188,6 +188,27 @@ variables:
       - playwright-report
       - test-results
       - qa-cases-*.json
+    # Traces are excluded, and this is the one thing in the bundle worth arguing
+    # about. Pipeline #19757 uploaded nothing at all — 413 Request Entity Too
+    # Large, FATAL: too large, job failed — after every one of its tests had
+    # passed. The run before it uploaded 88.4 MB and squeaked under.
+    #
+    # The bundle is screenshots and traces. Screenshots are deliberate: one per
+    # test, passing or not, because the dashboard shows a tester what the screen
+    # looked like for any case they open, and that is most of what it is for.
+    # Traces are the part nobody here reads — the dashboard cannot open one, and
+    # using it means downloading the zip and running `npx playwright show-trace`
+    # by hand. They are also the part that varies: `trace: on-first-retry` means
+    # a flaky run writes 2 MB more per retry, so the size of the upload depends
+    # on how the tests felt that morning. That is what took an 88 MB bundle over
+    # the limit and turned a green run red.
+    #
+    # A trace is still the best thing to have when a failure is hard to read, so
+    # this is a real loss. It is recoverable — re-run the job — and the failure
+    # it prevents is not.
+    exclude:
+      - "**/trace.zip"
+      - "**/*.trace.zip"
     # Feeds GitLab's Tests tab: per-test pass/fail/skip, searchable, with the
     # failing tc_id named. Reading a 1,268-line job log to find one red row is
     # not a reporting strategy.
@@ -242,6 +263,17 @@ variables:
                ; node e2e/scripts/build-report.mjs --only tier1 --out qa-cases-tier1.json
                ; exit \$rc"
   after_script:
+    # What is about to be uploaded, before the upload decides. GitLab refuses the
+    # whole bundle over its limit and the job dies with "413 Request Entity Too
+    # Large" — after every test has passed, with no clue in the log about what
+    # was big. This prints the answer where it will be looked for.
+    - |
+      MB=$(du -sm playwright-report test-results qa-cases-*.json 2>/dev/null | awk '{s+=$1} END{print s+0}')
+      echo "artifact bundle: ${MB} MB"
+      if [ "${MB:-0}" -gt 70 ]; then
+        echo "that is close to the limit a job upload is refused at. The largest parts:"
+        du -sm playwright-report/* test-results/* 2>/dev/null | sort -rn | head -8
+      fi
     - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
   allow_failure: false   # a red suite stops the deploy
 
@@ -284,6 +316,17 @@ variables:
                ; node e2e/scripts/build-report.mjs --only quarantine --out qa-cases-quarantine.json
                ; exit \$rc"
   after_script:
+    # What is about to be uploaded, before the upload decides. GitLab refuses the
+    # whole bundle over its limit and the job dies with "413 Request Entity Too
+    # Large" — after every test has passed, with no clue in the log about what
+    # was big. This prints the answer where it will be looked for.
+    - |
+      MB=$(du -sm playwright-report test-results qa-cases-*.json 2>/dev/null | awk '{s+=$1} END{print s+0}')
+      echo "artifact bundle: ${MB} MB"
+      if [ "${MB:-0}" -gt 70 ]; then
+        echo "that is close to the limit a job upload is refused at. The largest parts:"
+        du -sm playwright-report/* test-results/* 2>/dev/null | sort -rn | head -8
+      fi
     - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
   allow_failure: true    # known-red today — reported, but does not gate the deploy
 
@@ -777,6 +820,27 @@ variables:
       - playwright-report
       - test-results
       - qa-cases-*.json
+    # Traces are excluded, and this is the one thing in the bundle worth arguing
+    # about. Pipeline #19757 uploaded nothing at all — 413 Request Entity Too
+    # Large, FATAL: too large, job failed — after every one of its tests had
+    # passed. The run before it uploaded 88.4 MB and squeaked under.
+    #
+    # The bundle is screenshots and traces. Screenshots are deliberate: one per
+    # test, passing or not, because the dashboard shows a tester what the screen
+    # looked like for any case they open, and that is most of what it is for.
+    # Traces are the part nobody here reads — the dashboard cannot open one, and
+    # using it means downloading the zip and running `npx playwright show-trace`
+    # by hand. They are also the part that varies: `trace: on-first-retry` means
+    # a flaky run writes 2 MB more per retry, so the size of the upload depends
+    # on how the tests felt that morning. That is what took an 88 MB bundle over
+    # the limit and turned a green run red.
+    #
+    # A trace is still the best thing to have when a failure is hard to read, so
+    # this is a real loss. It is recoverable — re-run the job — and the failure
+    # it prevents is not.
+    exclude:
+      - "**/trace.zip"
+      - "**/*.trace.zip"
     # Feeds GitLab's Tests tab: per-test pass/fail/skip, searchable, with the
     # failing tc_id named. Reading a 1,268-line job log to find one red row is
     # not a reporting strategy.
@@ -896,6 +960,27 @@ variables:
       - playwright-report
       - test-results
       - qa-cases-*.json
+    # Traces are excluded, and this is the one thing in the bundle worth arguing
+    # about. Pipeline #19757 uploaded nothing at all — 413 Request Entity Too
+    # Large, FATAL: too large, job failed — after every one of its tests had
+    # passed. The run before it uploaded 88.4 MB and squeaked under.
+    #
+    # The bundle is screenshots and traces. Screenshots are deliberate: one per
+    # test, passing or not, because the dashboard shows a tester what the screen
+    # looked like for any case they open, and that is most of what it is for.
+    # Traces are the part nobody here reads — the dashboard cannot open one, and
+    # using it means downloading the zip and running `npx playwright show-trace`
+    # by hand. They are also the part that varies: `trace: on-first-retry` means
+    # a flaky run writes 2 MB more per retry, so the size of the upload depends
+    # on how the tests felt that morning. That is what took an 88 MB bundle over
+    # the limit and turned a green run red.
+    #
+    # A trace is still the best thing to have when a failure is hard to read, so
+    # this is a real loss. It is recoverable — re-run the job — and the failure
+    # it prevents is not.
+    exclude:
+      - "**/trace.zip"
+      - "**/*.trace.zip"
     reports:
       junit: junit-*.xml
   script:
