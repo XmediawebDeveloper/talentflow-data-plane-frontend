@@ -544,15 +544,10 @@ export default function TeamManagementPage() {
 
                 {pageView === 'list' && (
                 <>
-                {/* Back to overview — header tally adapts to the active view */}
-                <div className="mb-4 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => { setPageView('cards'); setListView('teams-all'); setSearchQuery(''); setFilterTeamLead(''); }}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                    Back to overview
-                  </button>
+                {/* Header tally adapts to the active view. justify-end, not
+                    justify-between: the Back to overview button that used to
+                    hold the left slot is gone. */}
+                <div className="mb-4 flex items-center justify-end gap-2">
                   <span className="text-xs text-gray-500 dark:text-slate-400">
                     {listView === 'members'
                       ? `${flattenedMembers.length} ${flattenedMembers.length === 1 ? 'member' : 'members'}`

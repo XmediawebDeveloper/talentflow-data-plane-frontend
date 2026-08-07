@@ -9,7 +9,6 @@ import {
   RefreshCw,
   Trash2,
   ChevronDown,
-  ChevronLeft,
   ChevronRight,
   Calendar,
   User,
@@ -295,17 +294,6 @@ export default function LogVerificationPage() {
 
         {pageView === 'list' && (
         <>
-        {/* Back to overview */}
-        <div className="mb-4 flex items-center justify-between gap-2">
-          <button
-            onClick={() => { setPageView('cards'); setSearchQuery(''); setStatusFilter(''); }}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to overview
-          </button>
-        </div>
-
         {/* Action Buttons & Filters */}
         <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
           <div className="px-3 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4 border-b border-gray-100 dark:border-slate-700/60">

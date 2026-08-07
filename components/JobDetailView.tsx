@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ArrowUpRight, ChevronLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2, AlertCircle } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -43,6 +43,7 @@ import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
+import RecordPager from '@/components/RecordPager';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -390,6 +391,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const [jdHistory, setJdHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<any>(null);
+  // Version badge dropdown. The badge used to jump straight into the full
+  // history modal; listing the versions under it lets a recruiter see what
+  // exists — and pick one — without opening a modal to find out.
+  const [showVersionMenu, setShowVersionMenu] = useState(false);
+  const [versionMenuList, setVersionMenuList] = useState<JDVersion[]>([]);
+  const [versionMenuLoading, setVersionMenuLoading] = useState(false);
+  // Which version the modal should open on, set by picking one in the dropdown.
+  const [versionMenuSelection, setVersionMenuSelection] = useState<number | undefined>(undefined);
+  const versionMenuRef = useRef<HTMLDivElement>(null);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   // Collapsible "Extracted Data Summary" (mirrors the Step 2/Review summary dropdown)
   const [showExtractedSummary, setShowExtractedSummary] = useState(false);
@@ -858,6 +868,24 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   }, [job.id, hasPlanFeature]);
 
 
+  // Fetched on first open and then kept: the badge sits in the header of a page
+  // recruiters land on constantly, so this must not cost a request per click.
+  const toggleVersionMenu = async () => {
+    const opening = !showVersionMenu;
+    setShowVersionMenu(opening);
+    if (!opening || versionMenuList.length > 0 || versionMenuLoading) return;
+    setVersionMenuLoading(true);
+    try {
+      const data = await jdService.getVersionHistory(job.id);
+      setVersionMenuList(data.versions || []);
+    } catch (error) {
+      console.error('Failed to load JD versions:', error);
+      setVersionMenuList([]);
+    } finally {
+      setVersionMenuLoading(false);
+    }
+  };
+
   const fetchJDHistory = async () => {
     setLoadingHistory(true);
     try {
@@ -1215,6 +1243,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setShowAddApplicantsMenu(false);
+      }
+      if (versionMenuRef.current && !versionMenuRef.current.contains(event.target as Node)) {
+        setShowVersionMenu(false);
       }
     };
 
@@ -1702,34 +1733,22 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       <PageBreadcrumb
         items={jobBreadcrumbItems}
         className="mb-3"
+        // Previous / Next rides inside the breadcrumb bar instead of sitting on
+        // its own row below it, so it stays reachable while the sticky crumb is
+        // pinned. Uses the shared RecordPager rather than the hand-rolled grey
+        // buttons this page used to carry — that was the one pager in the app
+        // not in brand-blue.
+        actions={
+          <RecordPager
+            currentIndex={currentIndex}
+            totalCount={totalCount}
+            onPrev={prevId ? () => router.push(`/recruitment/job-details?id=${prevId}`) : undefined}
+            onNext={nextId ? () => router.push(`/recruitment/job-details?id=${nextId}`) : undefined}
+          />
+        }
       />
       {/* Header */}
       <div className="mb-5">
-        {/* Previous / Next navigation - sits below the breadcrumb */}
-        {totalCount != null && totalCount > 0 && (
-          <div className="flex items-center justify-end gap-2 mb-3">
-            <button
-              onClick={() => prevId && router.push(`/recruitment/job-details?id=${prevId}`)}
-              disabled={!prevId}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Previous
-            </button>
-            <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap px-2">
-              {(currentIndex ?? 0) + 1} of {totalCount}
-            </span>
-            <button
-              onClick={() => nextId && router.push(`/recruitment/job-details?id=${nextId}`)}
-              disabled={!nextId}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300"
-            >
-              Next
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
         {/* Job Details Card */}
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
@@ -1848,15 +1867,88 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <span>By {job.postedBy || 'Unknown'}</span>
                 <span className="text-gray-300">•</span>
 
-                {/* Version Badge */}
+                {/* Version Badge — opens a dropdown of every published version.
+                    Picking one opens it in the history modal; the last entry
+                    still reaches the full history the badge used to open. */}
                 {job.currentVersion && job.currentVersion > 0 ? (
-                  <button
-                    onClick={() => setShowVersionHistory(true)}
-                    className="inline-flex items-center px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium hover:bg-purple-700 transition-colors"
-                    aria-label="View version history" title="View version history"
-                  >
-                    v{job.currentVersion}.0
-                  </button>
+                  <div className="relative" ref={versionMenuRef}>
+                    <button
+                      onClick={toggleVersionMenu}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium hover:bg-purple-700 transition-colors"
+                      aria-label="View version history"
+                      aria-haspopup="menu"
+                      aria-expanded={showVersionMenu}
+                      title="View version history"
+                    >
+                      v{job.currentVersion}.0
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showVersionMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showVersionMenu && (
+                      <div
+                        role="menu"
+                        className="absolute left-0 top-full mt-2 w-64 max-h-72 overflow-y-auto bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 z-50"
+                      >
+                        {versionMenuLoading ? (
+                          <div className="flex items-center gap-2 px-3 py-3 text-xs text-gray-500 dark:text-slate-400">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Loading versions...
+                          </div>
+                        ) : versionMenuList.length === 0 ? (
+                          <div className="px-3 py-3 text-xs text-gray-500 dark:text-slate-400">
+                            No version history yet
+                          </div>
+                        ) : (
+                          versionMenuList.map((version, index) => (
+                            <button
+                              key={version.id}
+                              role="menuitem"
+                              onClick={() => {
+                                setShowVersionMenu(false);
+                                setVersionMenuSelection(version.version_number);
+                                setShowVersionHistory(true);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-brand-blue/5 transition-colors"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-semibold text-gray-900 dark:text-slate-100">
+                                  v{version.version_number}.0
+                                </span>
+                                {/* The API returns newest first, so index 0 is live. */}
+                                {index === 0 && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                                    Current
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                                {version.published_at_ist
+                                  ? formatISTDateTime(version.published_at_ist)
+                                  : formatToIST(version.published_at)}
+                              </div>
+                              <div className="text-[11px] text-gray-400 dark:text-slate-500 truncate">
+                                By {version.published_by_name || 'Unknown User'}
+                              </div>
+                            </button>
+                          ))
+                        )}
+
+                        <div className="border-t border-gray-100 dark:border-slate-700 my-1" />
+                        <button
+                          role="menuitem"
+                          onClick={() => {
+                            setShowVersionMenu(false);
+                            setVersionMenuSelection(undefined);
+                            setShowVersionHistory(true);
+                          }}
+                          className="w-full px-3 py-2 text-left text-xs font-medium text-brand-blue hover:bg-brand-blue/5 transition-colors flex items-center gap-2"
+                        >
+                          <History className="w-3.5 h-3.5" />
+                          View full history
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <span className="inline-flex items-center px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium">
                     v1.0
@@ -2714,6 +2806,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
             canBatchDownload={isTenantAdmin || (user?.permissions?.canExport ?? false)}
             onViewResultDetail={(result) => {
+              // Pending means invited but never started, so no attempt exists
+              // and `result.id` fell back to the invitation id when this list
+              // was built. Opening the detail view would ask the API for a
+              // result that isn't there.
+              if ((result.status || '').toLowerCase() === 'pending') {
+                toast.info('This candidate has not started the assessment yet');
+                return;
+              }
               setViewingAssessmentResult(result);
             }}
           />
@@ -2792,6 +2892,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             try {
               sessionStorage.setItem('resumeNavJobId', job.id);
               sessionStorage.setItem('resumeNavJobTab', 'scored-resumes');
+              // Names the job crumb on the resume page, so its trail reads
+              // Job Descriptions › <job> › <candidate> rather than collapsing
+              // the job the recruiter came from into a generic step.
+              sessionStorage.setItem('resumeNavJobTitle', job.title || '');
             } catch { /* ignore */ }
             router.push(`/recruitment/resume-view/${candidate.resumeId}`);
           }}
@@ -3119,9 +3223,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {/* Version History Modal */}
       <JDVersionHistoryModal
         isOpen={showVersionHistory}
-        onClose={() => setShowVersionHistory(false)}
+        onClose={() => {
+          setShowVersionHistory(false);
+          // Cleared on close, or reopening from the badge would jump back to
+          // the version picked last time instead of the list.
+          setVersionMenuSelection(undefined);
+        }}
         jdId={job.id}
         jdTitle={job.title}
+        initialVersionNumber={versionMenuSelection}
       />
 
       {/* JD History Modal */}

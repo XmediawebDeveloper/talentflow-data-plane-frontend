@@ -50,12 +50,16 @@ export function Tooltip({ content, children, position = 'top', delay = 200 }: To
       onMouseLeave={handleMouseLeave}
     >
       {children}
+      {/* w-max below, or the bubble sizes itself by shrink-to-fit against the
+          space left of the trigger — for an icon button that's ~18px, so every
+          label collapsed to one word per line. max-w-xs still caps genuinely
+          long content, which then wraps at 20rem as before. */}
       {isVisible && (
         <div
-          className={`absolute z-50 ${positionClasses[position]} animate-in fade-in duration-150`}
+          className={`absolute z-50 w-max max-w-xs ${positionClasses[position]} animate-in fade-in duration-150`}
           role="tooltip"
         >
-          <div className="bg-gray-700 text-white text-xs px-3 py-2 rounded-lg shadow-lg max-w-xs whitespace-normal">
+          <div className="bg-gray-700 text-white text-xs px-3 py-2 rounded-lg shadow-lg whitespace-normal">
             {content}
             <div className={`absolute w-0 h-0 border-4 ${arrowClasses[position]}`} />
           </div>

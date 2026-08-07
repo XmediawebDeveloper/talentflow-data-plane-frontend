@@ -605,13 +605,16 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
             {showPlanMenu && !isExpiredSubscription && (
               <>
-                {/* Backdrop + panel z-indices were z-10 / z-20, but the
-                    dashboard's sticky tab row and content cards stack above
-                    that, which is why the dropdown body bled through behind
-                    them. Lift to z-40 / z-50 so the menu always renders on
-                    top of in-page chrome. */}
-                <div className="fixed inset-0 z-40" onClick={() => setShowPlanMenu(false)} />
-                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50">
+                {/* Header dropdowns all sit in one band: z-[60] backdrop,
+                    z-[70] panel. <header> itself is static with no z-index, so
+                    these compete directly with page chrome rather than being
+                    scoped inside a header stacking context — at the old z-10 /
+                    z-20 the sticky breadcrumb (z-30) and content cards painted
+                    straight over them. The band clears every in-page layer
+                    (page dropdowns peak at z-50) and stays under the layout's
+                    global modals, which start at z-[88]. */}
+                <div className="fixed inset-0 z-[80]" onClick={() => setShowPlanMenu(false)} />
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-[85]">
                   {/* Header */}
                   <div className="px-4 py-3 bg-brand-blue text-white">
                     <h3 className="font-medium flex items-center gap-2 text-sm">
@@ -721,10 +724,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           {showHelpMenu && (
             <>
               <div
-                className="fixed inset-0 z-10"
+                className="fixed inset-0 z-[80]"
                 onClick={() => setShowHelpMenu(false)}
               ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] overflow-y-auto">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-[85] max-h-[calc(100vh-80px)] overflow-y-auto">
                 <div className="px-4 py-3 bg-brand-blue text-white">
                   <h3 className="font-medium flex items-center gap-2">
                     <HelpCircle className="w-5 h-5" />
@@ -906,10 +909,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           {showNotifications && (
             <>
               <div
-                className="fixed inset-0 z-10"
+                className="fixed inset-0 z-[80]"
                 onClick={() => setShowNotifications(false)}
               ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-20">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-[85]">
                 <div className="px-4 py-3 bg-brand-blue text-white">
                   <div className="flex items-center justify-between">
                     <h3 className="font-medium flex items-center gap-2">
@@ -1062,10 +1065,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           {showUserMenu && (
             <>
               <div
-                className="fixed inset-0 z-10"
+                className="fixed inset-0 z-[80]"
                 onClick={() => setShowUserMenu(false)}
               ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] overflow-y-auto">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-[85] max-h-[calc(100vh-80px)] overflow-y-auto">
                 {/* User Profile Header */}
                 <div className="bg-brand-blue px-5 py-4 shrink-0">
                   <div className="flex items-center gap-4">

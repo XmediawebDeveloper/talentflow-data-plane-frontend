@@ -14,6 +14,12 @@ interface JDVersionHistoryModalProps {
   onClose: () => void;
   jdId: string;
   jdTitle: string;
+  /**
+   * Open straight into this version's detail view instead of the version list.
+   * Set when the caller already picked a version — the header badge dropdown
+   * lists them, so landing back on a list would repeat the choice just made.
+   */
+  initialVersionNumber?: number;
 }
 
 // Function to compute diff and return lines with diff info
@@ -38,6 +44,7 @@ export default function JDVersionHistoryModal({
   onClose,
   jdId,
   jdTitle,
+  initialVersionNumber,
 }: JDVersionHistoryModalProps) {
   const [loading, setLoading] = useState(true);
   const [versionHistory, setVersionHistory] = useState<JDVersionHistoryResponse | null>(null);
@@ -98,6 +105,16 @@ export default function JDVersionHistoryModal({
       setPreviousVersion(null);
     }
   };
+
+  // Land on the version the caller picked, once the list has arrived. Back
+  // still returns to the full list, so nothing is unreachable.
+  useEffect(() => {
+    if (!isOpen || initialVersionNumber == null || !versionHistory) return;
+    const index = versionHistory.versions.findIndex(
+      (v) => v.version_number === initialVersionNumber
+    );
+    if (index >= 0) handleVersionClick(versionHistory.versions[index], index);
+  }, [isOpen, initialVersionNumber, versionHistory]);
 
   const handleBack = () => {
     setSelectedVersion(null);
