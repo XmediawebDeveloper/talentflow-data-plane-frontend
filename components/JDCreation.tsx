@@ -647,6 +647,9 @@ interface JDCreationProps {
   isEmbedded?: boolean;  // Flag to indicate embedded mode
 }
 
+// How many skills a category shows before the rest collapse behind "+N more".
+const SKILL_PREVIEW_LIMIT = 10;
+
 interface DraggableSkillProps {
   skill: string;
   index: number;
@@ -1231,6 +1234,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [usCitiesByState, setUsCitiesByState] = useState<Record<string, string[]>>({});
   const [isLoadingUsLocations, setIsLoadingUsLocations] = useState(false);
   
+  // Long skill lists are collapsed to the first SKILL_PREVIEW_LIMIT entries so
+  // one column can't push the other two off the fold; the rest sit behind a
+  // "+N more" toggle, per category.
+  const [expandedSkillCategories, setExpandedSkillCategories] = useState<{
+    mustHaveSkills: boolean;
+    niceToHaveSkills: boolean;
+  }>({ mustHaveSkills: false, niceToHaveSkills: false });
+
+  const toggleSkillCategory = (category: 'mustHaveSkills' | 'niceToHaveSkills') =>
+    setExpandedSkillCategories(prev => ({ ...prev, [category]: !prev[category] }));
+
   // Inline editing states
   const [editingSkillIndex, setEditingSkillIndex] = useState<{ category: 'mustHaveSkills' | 'niceToHaveSkills'; index: number } | null>(null);
   const [editingSkillValue, setEditingSkillValue] = useState('');
@@ -3143,6 +3157,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }));
       setNewSkill('');
       setEditingCategory(null);
+      // A new skill appends to the end, which is behind the "+N more" fold on a
+      // long list — expand so the recruiter sees what they just added.
+      setExpandedSkillCategories(prev => ({ ...prev, [category]: true }));
       markExtractedDataModified();
 
       // Clear validation error when skill is added
@@ -5725,7 +5742,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     category="mustHaveSkills"
                     onDrop={(skill, fromCategory) => handleDropSkill(skill, fromCategory, 'mustHaveSkills')}
                   >
-                    {extractedData.mustHaveSkills.map((skill, index) => (
+                    {/* Sliced from the front so each chip keeps its real index —
+                        remove/edit/drag all address the array by position. */}
+                    {(expandedSkillCategories.mustHaveSkills
+                      ? extractedData.mustHaveSkills
+                      : extractedData.mustHaveSkills.slice(0, SKILL_PREVIEW_LIMIT)
+                    ).map((skill, index) => (
                       <DraggableSkill
                         key={index}
                         skill={skill}
@@ -5743,6 +5765,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       />
                     ))}
                   </DroppableSkillsContainer>
+                  {extractedData.mustHaveSkills.length > SKILL_PREVIEW_LIMIT && (
+                    <button
+                      type="button"
+                      onClick={() => toggleSkillCategory('mustHaveSkills')}
+                      className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg hover:bg-brand-blue/10 transition-colors"
+                    >
+                      {expandedSkillCategories.mustHaveSkills
+                        ? 'Show less'
+                        : `+${extractedData.mustHaveSkills.length - SKILL_PREVIEW_LIMIT} more`}
+                    </button>
+                  )}
                   {validationErrors.mustHaveSkills && (
                     <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4" />
@@ -5788,7 +5821,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     category="niceToHaveSkills"
                     onDrop={(skill, fromCategory) => handleDropSkill(skill, fromCategory, 'niceToHaveSkills')}
                   >
-                    {extractedData.niceToHaveSkills.map((skill, index) => (
+                    {(expandedSkillCategories.niceToHaveSkills
+                      ? extractedData.niceToHaveSkills
+                      : extractedData.niceToHaveSkills.slice(0, SKILL_PREVIEW_LIMIT)
+                    ).map((skill, index) => (
                       <DraggableSkill
                         key={index}
                         skill={skill}
@@ -5806,6 +5842,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       />
                     ))}
                   </DroppableSkillsContainer>
+                  {extractedData.niceToHaveSkills.length > SKILL_PREVIEW_LIMIT && (
+                    <button
+                      type="button"
+                      onClick={() => toggleSkillCategory('niceToHaveSkills')}
+                      className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg hover:bg-brand-blue/10 transition-colors"
+                    >
+                      {expandedSkillCategories.niceToHaveSkills
+                        ? 'Show less'
+                        : `+${extractedData.niceToHaveSkills.length - SKILL_PREVIEW_LIMIT} more`}
+                    </button>
+                  )}
                 </div>
 
                 {/* Column 3: Comments (Split - Must-Have on top, Nice-to-Have below) */}
@@ -6192,19 +6239,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
-              {/* Locations Section */}
-              <div>
+              {/* Locations Section — boxed like the page's other panels
+                  (same border / ring / shadow and the same p-4 sm:p-6 inner
+                  padding as the card that wraps this step). */}
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Locations</h3>
-                  <label className={`flex items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Locations <span className="text-red-500">*</span></h3>
+                  <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={extractedData.locationsRequired}
                       onChange={(e) => { setExtractedData(prev => ({ ...prev, locationsRequired: e.target.checked })); markExtractedDataModified(); }}
-                      className="w-4 h-4 text-gray-600 border-gray-300 rounded focus:ring-gray-500"
+                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                       disabled={isRegenerating}
                     />
-                    <span className="text-gray-500 dark:text-slate-500 text-xs">(Required)</span>
+                    <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
                   </label>
                 </div>
 
@@ -7267,8 +7316,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
-              {/* Employment Type & Work Model - Side by Side */}
-              <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              {/* Employment Type & Work Model - Side by Side, in a panel that
+                  matches the Locations box above it. */}
+              <div className="mt-4 sm:mt-6 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Employment Type */}
                 <div>
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-2">Employment Type</h3>

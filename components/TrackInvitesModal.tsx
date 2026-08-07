@@ -12,6 +12,10 @@ interface TrackInvitesModalProps {
   onClose: () => void;
   jdId: string;
   jdTitle: string;
+  /** Lets the host open a candidate's result without leaving its page (Job
+   *  Details renders the detail view inline). Falls back to navigating to the
+   *  standalone results-details route when not supplied. */
+  onViewResult?: (invitation: any) => void;
 }
 
 
@@ -33,8 +37,23 @@ const getEffectiveStatus = (inv: any): string => {
   return 'pending';
 };
 
-export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: TrackInvitesModalProps) {
+export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onViewResult }: TrackInvitesModalProps) {
   const router = useRouter();
+
+  // One rule for both the mobile cards and the desktop table: stay in place if
+  // the host can show the result itself, otherwise fall back to the route.
+  const openResult = (invitation: any) => {
+    if (onViewResult) {
+      onViewResult(invitation);
+      return;
+    }
+    router.push(
+      `/recruitment/assessments/${invitation.assessment_id}/results/details`
+      + `?candidate_id=${invitation.attempt_id}`
+      + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
+      + `&from=jd&jd_id=${jdId}`
+    );
+  };
   const [isLoading, setIsLoading] = useState(true);
   const [invitations, setInvitations] = useState<any[]>([]);
   const [stats, setStats] = useState({
@@ -214,6 +233,30 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
     return <span className={`${base} bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700`}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Pending</span>;
   };
 
+  // Timeline milestones, oldest first. The table shows only the latest one so
+  // every row stays a single line — the rest ride along in the hover title,
+  // with a "+N" hint that there's more. Without this the column stretched some
+  // rows to five lines while their neighbours had one, and nothing lined up.
+  const timelineEvents = (inv: any) => {
+    const out: { label: string; at: string; Icon: typeof Mail; tone: string }[] = [];
+    if (inv.sent_at) out.push({ label: 'Sent', at: inv.sent_at, Icon: Mail, tone: 'text-brand-blue' });
+    if (inv.email_read_at) out.push({ label: 'Email Read', at: inv.email_read_at, Icon: Eye, tone: 'text-brand-cyan' });
+    if (inv.bounced_at) out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-red-600' });
+    if (inv.started_at) out.push({ label: 'Started', at: inv.started_at, Icon: Play, tone: 'text-brand-orange-deep' });
+    if (inv.completed_at) out.push({ label: 'Completed', at: inv.completed_at, Icon: CheckCircle, tone: 'text-brand-blue' });
+
+    const s = (inv.status || '').toLowerCase();
+    const clockExpired = !inv.started_at
+      && !inv.unit_consumed
+      && inv.expires_at
+      && new Date(inv.expires_at) < new Date();
+    if (!inv.completed_at && (s === 'expired' || clockExpired) && inv.expires_at) {
+      out.push({ label: 'Expired at', at: inv.expires_at, Icon: Clock, tone: 'text-brand-orange-deep' });
+    }
+
+    return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  };
+
   // Secondary "Expired" badge — shown alongside the base status when the
   // invitation has passed its expiry but hasn't reached a terminal state.
   // Mirrors isInvExpired() in the assessment-level popup so both surfaces
@@ -338,34 +381,34 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                         {getStatusBadge(invitation)}
                       </div>
 
-                      {/* CID + Assessment */}
-                      <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                        <span className="text-[9px] font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-1 py-0.5 rounded">
+                      {/* CID + Assessment + the secondary Expired flag the
+                          desktop table shows next to the status badge. */}
+                      <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
+                        <span className="text-[9px] font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-1 py-0.5 rounded flex-shrink-0">
                           {invitation.candidate_display_id || '-'}
                         </span>
-                        <span className="text-[10px] text-gray-600 dark:text-slate-400 truncate">{invitation.assessment_title}</span>
+                        <span className="text-[10px] text-gray-600 dark:text-slate-400 truncate flex-1">{invitation.assessment_title}</span>
+                        {isInvExpired(invitation) && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
+                            <Clock className="w-2.5 h-2.5" /> Expired
+                          </span>
+                        )}
                       </div>
 
-                      {/* Timeline */}
-                      <div className="text-[10px] text-gray-500 dark:text-slate-500 flex flex-wrap gap-x-3 gap-y-0.5 mb-1.5">
-                        {invitation.sent_at && (
-                          <div className="flex items-center gap-1">
-                            <Mail className="w-2.5 h-2.5 text-brand-blue flex-shrink-0" />
-                            <span>Sent: {formatIST(invitation.sent_at)}</span>
+                      {invitation.status === 'failed' && (
+                        <p className="text-[10px] text-red-600 mb-1.5">Incorrect Email</p>
+                      )}
+
+                      {/* Timeline — a two-column grid rather than a free wrap,
+                          so the entries line up instead of staggering by the
+                          width of whichever label came before them. */}
+                      <div className="text-[10px] text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1.5">
+                        {timelineEvents(invitation).map(({ label, at, Icon, tone }) => (
+                          <div key={label} className="flex items-center gap-1 min-w-0">
+                            <Icon className={`w-2.5 h-2.5 flex-shrink-0 ${tone}`} />
+                            <span className="truncate">{label}: {formatIST(at)}</span>
                           </div>
-                        )}
-                        {invitation.started_at && (
-                          <div className="flex items-center gap-1">
-                            <Play className="w-2.5 h-2.5 text-brand-orange-deep flex-shrink-0" />
-                            <span>Started: {formatIST(invitation.started_at)}</span>
-                          </div>
-                        )}
-                        {invitation.completed_at && (
-                          <div className="flex items-center gap-1">
-                            <CheckCircle className="w-2.5 h-2.5 text-brand-blue flex-shrink-0" />
-                            <span>Done: {formatIST(invitation.completed_at)}</span>
-                          </div>
-                        )}
+                        ))}
                       </div>
 
                       {/* Progress + Actions */}
@@ -398,12 +441,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                           </div>
                           {getEffectiveStatus(invitation) === 'completed' && invitation.attempt_id && (
                             <button
-                              onClick={() => router.push(
-                                `/recruitment/assessments/${invitation.assessment_id}/results/details`
-                                + `?candidate_id=${invitation.attempt_id}`
-                                + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
-                                + `&from=jd&jd_id=${jdId}`
-                              )}
+                              onClick={() => openResult(invitation)}
                               className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-brand-blue hover:bg-brand-blue/5 rounded transition-colors"
                             >
                               <Eye className="w-3 h-3" />
@@ -411,8 +449,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                             </button>
                           )}
                         </div>
-                        {/* Failed/Bounced actions */}
-                        {(['failed', 'bounced'].includes(getEffectiveStatus(invitation))) && (
+                        {/* Resend / Change Email — same reach as the desktop
+                            table (any un-started invite, not just failed and
+                            bounced ones), so a recruiter on a phone isn't
+                            missing the fix-the-address path. */}
+                        {(['sent', 'opened', 'failed', 'expired', 'bounced'].includes(invitation.status)
+                          && !invitation.started_at
+                          && !invitation.completed_at) && (
                           editingEmailId === invitation.id ? (
                             <div className="flex flex-col gap-1.5">
                               <input
@@ -444,10 +487,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => handleResendInvitation(invitation)}
-                                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-600 text-white hover:bg-red-700 rounded transition-colors"
+                                disabled={resendingId === invitation.id}
+                                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-600 text-white hover:bg-red-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                <Mail className="w-3 h-3" />
-                                Resend
+                                {resendingId === invitation.id
+                                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                                  : <Mail className="w-3 h-3" />}
+                                {resendingId === invitation.id ? 'Sending…' : 'Resend'}
                               </button>
                               <button
                                 onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
@@ -470,31 +516,31 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                   an assessment that has that round enabled. Same rule as
                   the Results page: no all-empty columns. */}
               <div className="hidden sm:block overflow-x-auto">
-                <table className="w-full min-w-[900px] table-fixed">
+                <table className="w-full min-w-[960px] table-fixed">
                   <colgroup>
                     <col className="w-[72px]" />
                     <col className="w-[220px]" />
-                    <col className="w-[180px]" />
-                    <col className="w-[140px]" />
-                    <col className="w-[200px]" />
-                    {invitations.some(inv => inv.assessment_technical_enabled) && <col className="w-[100px]" />}
-                    {invitations.some(inv => inv.assessment_coding_enabled) && <col className="w-[100px]" />}
                     <col className="w-[160px]" />
+                    <col className="w-[150px]" />
+                    <col className="w-[190px]" />
+                    {invitations.some(inv => inv.assessment_technical_enabled) && <col className="w-[110px]" />}
+                    {invitations.some(inv => inv.assessment_coding_enabled) && <col className="w-[110px]" />}
+                    <col className="w-[168px]" />
                   </colgroup>
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-slate-700">
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Assessment</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Timeline</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">CID</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Candidate</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Assessment</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Status</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Timeline</th>
                       {invitations.some(inv => inv.assessment_technical_enabled) && (
-                        <th className="text-center py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Tech Score</th>
+                        <th className="text-center py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Tech Score</th>
                       )}
                       {invitations.some(inv => inv.assessment_coding_enabled) && (
-                        <th className="text-center py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Coding Score</th>
+                        <th className="text-center py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Coding Score</th>
                       )}
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Actions</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -508,100 +554,75 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
 
                       return (
                         <tr key={invitation.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
-                          <td className="py-3 px-3 lg:px-4 align-top">
-                            <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                          <td className="py-3 px-3 lg:px-4 align-middle">
+                            <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded whitespace-nowrap">
                               {invitation.candidate_display_id || '-'}
                             </span>
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-top">
+                          <td className="py-3 px-3 lg:px-4 align-middle">
                             <div className="flex items-center gap-2 lg:gap-3">
                               <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-xs lg:text-sm flex-shrink-0">
                                 {initials}
                               </div>
                               <div className="min-w-0">
-                                <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate">{invitation.candidate_name}</p>
-                                <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{invitation.candidate_email}</p>
+                                <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
+                                <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-top">
-                            <p className="text-sm text-gray-700 dark:text-slate-300 truncate">{invitation.assessment_title}</p>
+                          <td className="py-3 px-3 lg:px-4 align-middle">
+                            <p className="text-sm text-gray-700 dark:text-slate-300 truncate" title={invitation.assessment_title}>{invitation.assessment_title}</p>
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-top">
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {getStatusBadge(invitation)}
-                                {isInvExpired(invitation) && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20">
-                                    <Clock className="w-3 h-3" /> Expired
-                                  </span>
-                                )}
-                              </div>
+                          <td className="py-3 px-3 lg:px-4 align-middle">
+                            {/* Badges stay on one line — the row height is set by
+                                the candidate cell, and a wrapping second badge
+                                was what pushed neighbouring columns out of line. */}
+                            <div className="flex items-center gap-1.5 flex-nowrap overflow-hidden">
+                              {getStatusBadge(invitation)}
+                              {isInvExpired(invitation) && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
+                                  <Clock className="w-3 h-3" /> Expired
+                                </span>
+                              )}
                               {invitation.status === 'failed' && (
-                                <p className="text-xs text-red-600 mt-1">Incorrect Email</p>
+                                <span className="text-xs text-red-600 whitespace-nowrap">Incorrect Email</span>
                               )}
                             </div>
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-top text-xs text-gray-500 dark:text-slate-500">
-                            <div className="space-y-1">
-                              {invitation.sent_at && (
-                                <div className="flex items-center gap-2">
-                                  <Mail className="w-3 h-3 text-brand-blue flex-shrink-0" />
-                                  <span>Sent: {formatIST(invitation.sent_at)}</span>
+                          <td className="py-3 px-3 lg:px-4 align-middle text-xs text-gray-500 dark:text-slate-500">
+                            {/* Latest milestone only — earlier ones are in the
+                                hover title, counted by the trailing "+N". */}
+                            {(() => {
+                              const events = timelineEvents(invitation);
+                              if (events.length === 0) {
+                                return <span className="text-gray-400 dark:text-slate-500">—</span>;
+                              }
+                              const latest = events[events.length - 1];
+                              const { Icon } = latest;
+                              return (
+                                <div
+                                  className="flex items-center gap-2 whitespace-nowrap"
+                                  title={events.map(e => `${e.label}: ${formatIST(e.at)}`).join('\n')}
+                                >
+                                  <Icon className={`w-3 h-3 flex-shrink-0 ${latest.tone}`} />
+                                  <span className={`truncate ${latest.tone}`}>
+                                    {latest.label}: {formatIST(latest.at)}
+                                  </span>
+                                  {events.length > 1 && (
+                                    <span className="text-[10px] text-gray-400 dark:text-slate-500 flex-shrink-0">
+                                      +{events.length - 1}
+                                    </span>
+                                  )}
                                 </div>
-                              )}
-                              {invitation.email_read_at && (
-                                <div className="flex items-center gap-2">
-                                  <Eye className="w-3 h-3 text-brand-cyan flex-shrink-0" />
-                                  <span>Email Read: {formatIST(invitation.email_read_at)}</span>
-                                </div>
-                              )}
-                              {invitation.bounced_at && (
-                                <div className="flex items-center gap-2">
-                                  <RefreshCw className="w-3 h-3 text-red-600 flex-shrink-0" />
-                                  <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
-                                </div>
-                              )}
-                              {invitation.started_at && (
-                                <div className="flex items-center gap-2">
-                                  <Play className="w-3 h-3 text-brand-orange-deep flex-shrink-0" />
-                                  <span>Started: {formatIST(invitation.started_at)}</span>
-                                </div>
-                              )}
-                              {invitation.completed_at && (
-                                <div className="flex items-center gap-2">
-                                  <CheckCircle className="w-3 h-3 text-brand-blue flex-shrink-0" />
-                                  <span>Completed: {formatIST(invitation.completed_at)}</span>
-                                </div>
-                              )}
-                              {/* Expired-at timestamp — shown when the link
-                                  has expired (status='expired' or clock-based
-                                  expiry on a never-started invite). Same rule
-                                  as the assessment-level popup. */}
-                              {(() => {
-                                const s = (invitation.status || '').toLowerCase();
-                                const clockExpired = !invitation.started_at
-                                  && !invitation.unit_consumed
-                                  && invitation.expires_at
-                                  && new Date(invitation.expires_at) < new Date();
-                                const isExpired = !invitation.completed_at
-                                  && (s === 'expired' || clockExpired);
-                                if (!isExpired || !invitation.expires_at) return null;
-                                return (
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-3 h-3 text-brand-orange-deep" />
-                                    <span className="text-brand-orange-deep">Expired at: {formatIST(invitation.expires_at)}</span>
-                                  </div>
-                                );
-                              })()}
-                            </div>
+                              );
+                            })()}
                           </td>
                           {/* Tech Score column body — render the cell only
                               when *some* row has tech enabled (column header
                               is gated identically). For a row whose source
                               assessment doesn't have tech, render '—'. */}
                           {invitations.some(inv => inv.assessment_technical_enabled) && (
-                            <td className="py-3 px-3 lg:px-4 align-top text-sm text-center">
+                            <td className="py-3 px-3 lg:px-4 align-middle text-sm text-center">
                               {(() => {
                                 if (!invitation.assessment_technical_enabled) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const ready =
@@ -611,7 +632,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                 if (!ready) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const v = invitation.technical_score;
                                 return (
-                                  <div className="flex flex-col items-center gap-0.5">
+                                  <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                                     <span className={`font-medium ${v >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
                                       {Math.round(v)}%
                                     </span>
@@ -624,7 +645,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                             </td>
                           )}
                           {invitations.some(inv => inv.assessment_coding_enabled) && (
-                            <td className="py-3 px-3 lg:px-4 align-top text-sm text-center">
+                            <td className="py-3 px-3 lg:px-4 align-middle text-sm text-center">
                               {(() => {
                                 if (!invitation.assessment_coding_enabled) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const ready =
@@ -634,7 +655,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                 if (!ready) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const v = invitation.coding_score;
                                 return (
-                                  <div className="flex flex-col items-center gap-0.5">
+                                  <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                                     <span className={`font-medium ${v >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
                                       {Math.round(v)}%
                                     </span>
@@ -646,7 +667,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                               })()}
                             </td>
                           )}
-                          <td className="py-3 px-3 lg:px-4 align-top">
+                          <td className="py-3 px-3 lg:px-4 align-middle">
                             {/* Action rules mirror the assessment-level
                                 popup so a recruiter sees the same controls
                                 from either entry point: View Results when
@@ -656,12 +677,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                             {getEffectiveStatus(invitation) === 'completed' ? (
                               invitation.attempt_id ? (
                                 <button
-                                  onClick={() => router.push(
-                                    `/recruitment/assessments/${invitation.assessment_id}/results/details`
-                                    + `?candidate_id=${invitation.attempt_id}`
-                                    + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
-                                    + `&from=jd&jd_id=${jdId}`
-                                  )}
+                                  onClick={() => openResult(invitation)}
                                   className="flex items-center gap-1 px-3 py-1.5 text-xs text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors whitespace-nowrap"
                                 >
                                   <Eye className="w-3.5 h-3.5" />

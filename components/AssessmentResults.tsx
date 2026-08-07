@@ -484,6 +484,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return formatISTWithSeconds(dateStr);
   };
 
+  const getTimelineSummary = (candidate: CandidateResult) => {
+    const entries: string[] = [];
+    if (candidate.sent_at) entries.push(`Sent: ${formatTimelineDate(candidate.sent_at)}`);
+    if (candidate.started_at) entries.push(`Started: ${formatTimelineDate(candidate.started_at)}`);
+    if (candidate.completed_at) entries.push(`Completed: ${formatTimelineDate(candidate.completed_at)}`);
+    if (entries.length === 0) {
+      entries.push(candidate.created_at ? `Created: ${formatTimelineDate(candidate.created_at)}` : '-');
+    }
+    return entries.join(' | ');
+  };
+
   const canDownloadResultPdf = (candidate: CandidateResult): boolean => {
     return candidate.status === 'Completed' && candidate.scoring_status === 'completed';
   };
@@ -1525,7 +1536,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             className="hidden xl:block overflow-x-auto"
             onScroll={() => syncHorizontalScroll('table')}
           >
-            <table className="w-full min-w-[1480px] table-fixed">
+            <table className="w-full min-w-[2040px] table-fixed [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_td]:align-middle">
               <thead className="bg-slate-50 border-b border-gray-100">
                 <tr>
                   <th className={`px-4 py-3 w-10 ${stickyHeaderClass}`}>
@@ -1541,7 +1552,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   )}
                   {isColumnEnabled('candidate') && (
                     <th
-                      className={`w-40 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
+                      className={`w-48 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
                       onClick={() => handleSort('name')}
                     >
                       <div className="flex items-center gap-1">
@@ -1551,7 +1562,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('email') && (
-                    <th className={`w-52 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
+                    <th className={`w-64 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Mail className="w-3 h-3" />
                         Email
@@ -1559,7 +1570,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('jdTitle') && (
-                    <th className={`w-40 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
+                    <th className={`w-56 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Briefcase className="w-3 h-3" />
                         JD Title
@@ -1567,7 +1578,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('phone') && (
-                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
+                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Phone className="w-3 h-3" />
                         Phone
@@ -1575,7 +1586,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('inviteSource') && (
-                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Invite Source</th>
+                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Invite Source</th>
                   )}
                   {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                     <th
@@ -1611,7 +1622,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('timeline') && (
-                    <th className={`w-56 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
+                    <th className={`w-96 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         Timeline
@@ -1638,7 +1649,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <tbody className="divide-y divide-gray-100">
                 {paginatedCandidates.length === 0 ? (
                   <tr>
-                    <td colSpan={enabledColumnsCount + 2} className="px-6 py-12 text-center">
+                    <td colSpan={enabledColumnsCount + 2} className="px-6 py-12 text-center whitespace-normal">
                       <div className="flex flex-col items-center">
                         <Users className="w-12 h-12 text-gray-300 mb-3" />
                         {searchQuery || Object.keys(roundFilters).length > 0 || statusFilter !== 'all' || passFailFilter !== 'all' ? (
@@ -1679,29 +1690,29 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('candidate') && (
                         <td className="px-4 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center text-white text-xs">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex shrink-0 items-center justify-center text-white text-xs">
                               {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </div>
-                            <div className="text-sm text-gray-900 font-medium break-words">{candidate.name || 'Unknown'}</div>
+                            <div className="min-w-0 truncate text-sm text-gray-900 font-medium" title={candidate.name || 'Unknown'}>{candidate.name || 'Unknown'}</div>
                           </div>
                         </td>
                       )}
                       {isColumnEnabled('email') && (
                         <td className="px-4 py-4">
-                          <div className="text-sm text-gray-600 break-all">{candidate.email}</div>
+                          <div className="truncate text-sm text-gray-600" title={candidate.email || '-'}>{candidate.email || '-'}</div>
                         </td>
                       )}
                       {isColumnEnabled('jdTitle') && (
                         <td className="px-4 py-4">
-                          <div className="text-sm text-gray-600 break-words" title={jdTitle || 'N/A'}>
+                          <div className="truncate text-sm text-gray-600" title={jdTitle || 'N/A'}>
                             {jdTitle || 'N/A'}
                           </div>
                         </td>
                       )}
                       {isColumnEnabled('phone') && (
                         <td className="px-4 py-4">
-                          <div className="text-sm text-gray-600 break-all">{candidate.phone || '-'}</div>
+                          <div className="truncate text-sm text-gray-600" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
                         </td>
                       )}
                       {isColumnEnabled('inviteSource') && (
@@ -1718,7 +1729,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                         <td className="px-4 py-4 text-center">
-                          <div className="flex flex-col items-center gap-1">
+                          <div className="flex items-center justify-center gap-2">
                             {/* Tech Score: green when ≥ threshold, red below.
                                 The 4-band gradient (red/yellow/gray/green)
                                 was confusing because 69% rendered gray even
@@ -1737,7 +1748,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
                         <td className="px-4 py-4 text-center">
-                          <div className="flex flex-col items-center gap-1">
+                          <div className="flex items-center justify-center gap-2">
                             <span className={`text-lg font-semibold ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
                               {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
                             </span>
@@ -1757,29 +1768,29 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         </td>
                       )}
                       {isColumnEnabled('timeline') && (
-                        <td className="px-4 py-4 text-xs text-gray-500">
-                          <div className="space-y-1 break-words">
+                        <td className="px-4 py-4 overflow-hidden text-xs text-gray-500">
+                          <div className="flex min-w-0 items-center gap-3 overflow-hidden" title={getTimelineSummary(candidate)}>
                             {candidate.sent_at && (
-                              <div className="flex items-center gap-2">
-                                <Mail className="w-3 h-3 text-brand-blue" />
+                              <div className="inline-flex shrink-0 items-center gap-2">
+                                <Mail className="w-3 h-3 shrink-0 text-brand-blue" />
                                 <span>Sent: {formatTimelineDate(candidate.sent_at)}</span>
                               </div>
                             )}
                             {candidate.started_at && (
-                              <div className="flex items-center gap-2">
-                                <Play className="w-3 h-3 text-brand-orange-deep" />
+                              <div className="inline-flex shrink-0 items-center gap-2">
+                                <Play className="w-3 h-3 shrink-0 text-brand-orange-deep" />
                                 <span>Started: {formatTimelineDate(candidate.started_at)}</span>
                               </div>
                             )}
                             {candidate.completed_at && (
-                              <div className="flex items-center gap-2">
-                                <CheckCircle className="w-3 h-3 text-green-500" />
+                              <div className="inline-flex shrink-0 items-center gap-2">
+                                <CheckCircle className="w-3 h-3 shrink-0 text-green-500" />
                                 <span>Completed: {formatTimelineDate(candidate.completed_at)}</span>
                               </div>
                             )}
                             {!candidate.sent_at && !candidate.started_at && !candidate.completed_at && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-3 h-3 text-gray-400" />
+                              <div className="inline-flex shrink-0 items-center gap-2">
+                                <Clock className="w-3 h-3 shrink-0 text-gray-400" />
                                 <span>{candidate.created_at ? `Created: ${formatTimelineDate(candidate.created_at)}` : '-'}</span>
                               </div>
                             )}

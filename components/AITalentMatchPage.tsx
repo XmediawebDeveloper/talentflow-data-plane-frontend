@@ -230,7 +230,13 @@ export default function AITalentMatchPage({
     setHistoryPageView('candidates');
     candidateSearch.setQuery('');
     setHistoryListScrollRequest((request) => request + 1);
+    await buildCandidateRows();
+  };
 
+  // The roll-up itself, split out from the click handler so a restored
+  // 'candidates' view can rebuild its rows once match history has loaded —
+  // otherwise returning from a resume landed on an empty candidates table.
+  const buildCandidateRows = async () => {
     if (matchHistory.length === 0) {
       setCandidateRows([]);
       return;
@@ -548,6 +554,11 @@ export default function AITalentMatchPage({
       searchQuery, filterThreshold, filterPhone, filterLocation,
       filterExperienceMin, filterExperienceMax, sortBy,
       currentPage, itemsPerPage,
+      // The cards -> list/candidates drill-in. Restored with the filters below
+      // rather than unconditionally: it belongs to the same "came back from a
+      // resume" round trip. Without it the view reset to the stat cards and the
+      // list the user had been reading was simply gone.
+      historyPageView,
     },
     (s) => {
       // Layout choices are harmless to restore from any entry point.
@@ -565,6 +576,9 @@ export default function AITalentMatchPage({
       } catch { /* ignore */ }
       if (!keepFilters) return;
 
+      if (s.historyPageView === 'cards' || s.historyPageView === 'list' || s.historyPageView === 'candidates') {
+        setHistoryPageView(s.historyPageView);
+      }
       if (typeof s.showHistoryFilters === 'boolean') setShowHistoryFilters(s.showHistoryFilters);
       if (typeof s.historySearchQuery === 'string') historySearch.setQuery(s.historySearchQuery);
       historySearch.setFilters({
@@ -603,6 +617,21 @@ export default function AITalentMatchPage({
       if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
     },
   );
+
+  // Restored straight into the candidate roll-up: its rows are built on click,
+  // not fetched by the page load, so rebuild them once match history is in.
+  // Guarded on empty rows so it can't re-run over a roll-up that's already
+  // there, and it deliberately leaves the restored candidate search alone.
+  const rebuiltRestoredCandidatesRef = useRef(false);
+  useEffect(() => {
+    if (rebuiltRestoredCandidatesRef.current) return;
+    if (historyPageView !== 'candidates') return;
+    if (loadingCandidateRows || candidateRows.length > 0) return;
+    if (matchHistory.length === 0) return;
+    rebuiltRestoredCandidatesRef.current = true;
+    buildCandidateRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyPageView, matchHistory.length, loadingCandidateRows, candidateRows.length]);
 
   useEffect(() => {
     if (historyListScrollRequest === 0) return;
