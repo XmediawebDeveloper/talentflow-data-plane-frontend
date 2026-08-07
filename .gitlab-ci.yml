@@ -578,24 +578,53 @@ variables:
       fi
 
     # ---- and from filling the disk -------------------------------------------
-    # Every pipeline builds a QA frontend image, 668 MB of it, and nothing was
-    # removing the old ones. Fifty-six accumulated and the runner's disk reached
-    # 100% full, which is how a green `Set up the test environment` is followed
-    # by two test jobs failing for reasons that have nothing to do with the code:
-    # the report they write comes out zero bytes, because the write itself fails.
+    # Every pipeline tags three frontend images — `-e2e` for the Tier-1 job,
+    # `-qa` for this environment, `-staging` for the release — 668 MB each, and
+    # nothing removed the old ones. Fifty-six accumulated, the runner's disk hit
+    # 100%, and a green `Set up the test environment` was followed by two test
+    # jobs failing for a reason that had nothing to do with the code: the report
+    # they write came out zero bytes, because the write itself failed.
     #
-    # `docker image prune` does not help — these are tagged, not dangling. So the
-    # tags this job creates are the tags this job cleans up, keeping whatever any
-    # container is actually running.
+    # `docker image prune` does not help — these are tagged, not dangling, so it
+    # skips every one of them. The count has to be bounded explicitly instead.
+    #
+    # Three things survive, and the order matters:
+    #   1. the newest KEEP tags, whatever they are — rollback headroom;
+    #   2. this pipeline's own tags, because `Release to staging` runs later in
+    #      this same pipeline and needs the `-staging` image to still exist;
+    #   3. anything a container is running, QA or staging.
+    # Only `$IMAGE` is touched. `talentflow-cp-*` and `talentflow-backend` are
+    # other projects' images and are not this job's to remove.
     - |
+      KEEP=6
       INUSE=$(docker ps -a --format '{{.Image}}' | sort -u)
-      removed=0
-      for img in $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "^$IMAGE:.*-qa$"); do
+      n=0; removed=0
+      for img in $(docker images "$IMAGE" --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$'); do
+        n=$((n + 1))
+        [ "$n" -le "$KEEP" ] && continue
+        case "$img" in *":$TAG-"*) continue ;; esac
         echo "$INUSE" | grep -qx "$img" && continue
         docker rmi "$img" >/dev/null 2>&1 && removed=$((removed + 1))
       done
       docker builder prune -f --filter until=48h >/dev/null 2>&1 || true
-      echo "removed $removed superseded QA image(s); $(df -h / | awk 'NR==2{print $4}') free on /"
+      echo "$IMAGE: $n tag(s) on disk, removed $removed superseded"
+
+    # A disk that is nearly full breaks the test jobs downstream in a way that
+    # looks like a test failure, so it is caught here instead — where the message
+    # can say what is actually wrong and what to do about it.
+    - |
+      FREE=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+      echo "${FREE}G free on / after cleanup"
+      if [ "${FREE:-0}" -lt 8 ]; then
+        echo
+        echo "less than 8G free on the runner. The test jobs would still start and"
+        echo "then write truncated or zero-byte reports, so this job stops here."
+        docker system df
+        echo
+        echo "what is using it:"
+        docker images --format '{{.Size}}\t{{.Repository}}:{{.Tag}}' | sort -rh | head -15
+        exit 1
+      fi
 
     # ---- keep the QA tenant from growing without limit -----------------------
     # Every Tier-3 run writes real rows. Measured over one afternoon, job
