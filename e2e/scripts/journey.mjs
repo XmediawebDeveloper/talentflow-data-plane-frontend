@@ -60,11 +60,19 @@ const FILE_RULES = [
   // that means something else here.
   [/timer-slot-based|timer-speaking|ai-interview-pipeline/i, "AI interview"],
 
+  // The Login workbook. Its rows are wrong passwords, locked accounts and the
+  // like, and none of them names a route — so without this it lands in "Across
+  // the product", which is the one place a tester asking "what do we check about
+  // logging in?" would never look.
+  [/excel-data-driven/i, "Sign in"],
+
   // Hand-written Tier-1 specs. They carry no workbook row, so the file name is
   // the only thing that says what they are about.
   [/smoke-auth/i, "Sign in"],
   [/smoke-dashboard/i, "Dashboard"],
-  [/smoke-jd|tier1-jd/i, "Job descriptions"],
+  // tier2-jd as well as tier1-jd: the pattern used to name one tier and the
+  // other tier's JD file fell through to "Across the product".
+  [/smoke-jd|tier[12]-jd/i, "Job descriptions"],
   [/smoke-score-consistency|tier1-discrimination/i, "Resume scoring"],
   [/tier1-resume/i, "Resumes"],
   [/tier1-assessment/i, "Assessments"],
