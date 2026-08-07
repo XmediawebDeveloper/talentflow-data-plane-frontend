@@ -104,9 +104,18 @@ function loadWorkbook(name, tier, shape) {
 // `not_run` — technically true of that job, and a false alarm to anyone reading
 // it. Each job emits the tier it is responsible for; the dashboard concatenates.
 const only = valueOf("--only");
-if (only && !["tier1", "tier2", "tier3"].includes(only)) {
-  throw new Error(`--only takes "tier1", "tier2" or "tier3", got "${only}"`);
+if (only && !["tier1", "tier2", "tier3", "quarantine"].includes(only)) {
+  throw new Error(`--only takes "tier1", "tier2", "tier3" or "quarantine", got "${only}"`);
 }
+
+/**
+ * Which tier a synthesised row belongs to.
+ *
+ * The quarantine specs are Tier 1 by definition — a real browser with every
+ * response mocked — they are simply parked in a non-blocking job until they are
+ * repaired.
+ */
+const SCOPE_TIER = { tier1: 1, tier2: 2, tier3: 3, quarantine: 1 };
 
 // Tier 3 has no workbook, and that is the point of it.
 //
@@ -121,7 +130,7 @@ if (only && !["tier1", "tier2", "tier3"].includes(only)) {
 // the way a mapped-but-missing workbook row is. Nothing is claiming it should
 // have run. The suite's own count is the check for that.
 const inventory =
-  only === "tier3"
+  only === "tier3" || only === "quarantine"
     ? []
     : [
         ...(only === "tier2"
@@ -216,18 +225,28 @@ function outcomeOf(spec) {
 
 let unmatched = 0;
 for (const spec of readReport()) {
-  const id = spec.title.match(TC)?.[1];
-  if (!id) continue;                       // hand-written spec, not from a workbook
+  // Specs with no TC id at all: the hand-written ones, and everything in the
+  // quarantined files. They used to be skipped here, so they reached the
+  // dashboard through JUnit alone — with no tier, no module and nothing to group
+  // them by, which put every AI-interview timer test under "Across the product".
+  //
+  // The id is built to match exactly what the dashboard derives from JUnit —
+  // `<job>::<describe> › <title>`, truncated the same way — so the two rows
+  // merge into one instead of appearing twice.
+  const file = String(spec._file ?? "").split("/").pop() ?? "";
+  const group = spec._group ?? "";
+  const id =
+    spec.title.match(TC)?.[1] ??
+    `${process.env.CI_JOB_NAME ?? "local"}::${group ? `${group} › ` : ""}${spec.title}`.slice(0, 120);
   let entry = byId.get(id);
-  if (!entry && only === "tier3") {
+  if (!entry && (only === "tier3" || only === "quarantine")) {
     // Tier 3 describes itself. The title after the id is the whole statement of
     // what the journey proves, and the spec file names the group.
-    const file = String(spec._file ?? "").split("/").pop() ?? "";
     entry = {
       tc_id: id,
       scrum_id: "",
-      tier: 3,
-      module: spec._group || file.replace(/^smoke-tier3-|\.spec\.ts$/g, "") || "tier3",
+      tier: SCOPE_TIER[only] ?? 3,
+      module: group || file.replace(/^smoke-tier3-|\.spec\.ts$/g, "") || only || "e2e",
       title: spec.title.replace(TC, "").trim(),
       what_to_check: spec.title.replace(TC, "").trim(),
       expected_result: "",

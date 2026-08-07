@@ -30,6 +30,7 @@ import {
   assertNoServerErrors,
   assertPageHealthy,
   signIn,
+  signOut,
   settle,
   seed,
   seedJd,
@@ -189,8 +190,20 @@ test.describe("Tier 3 — complete jobs of work", () => {
       `${at}: ${member.email} was created and GET /users does not return them`,
     ).toContain(member.email);
 
-    // 6 ─ that person can sign in themselves, into the same tenant
-    at = step(6, "the teammate signs in");
+    // 6 ─ that person can sign in themselves, into the same tenant.
+    //
+    //     The admin signs out first. Not politeness — visiting /login while a
+    //     session is live redirects to the dashboard, so the form never appears
+    //     and the step failed looking for "Welcome Back". A person hands the
+    //     laptop over the same way.
+    at = step(6, "the admin signs out, the teammate signs in");
+    await signOut(page);
+    await expect(page, `${at}: signing out did not leave the app`).toHaveURL(
+      /\/login|\/signin|\/signup|\/$/,
+      { timeout: 30_000 },
+    );
+    await settle(page, 1500);
+
     const theirCalls = watchApiTraffic(page);
     await signIn(page, { email: member.email, password: member.password });
     await settle(page, 4000);
@@ -278,18 +291,26 @@ test.describe("Tier 3 — complete jobs of work", () => {
     await settle(page, 5000);
     await assertPageHealthy(page, at);
 
-    const jds = [...calls]
-      .reverse()
-      .find((c) => /\/api\/v1\/jd(\?|$)/.test(c.path) && c.status === 200 && c.body != null);
+    // The builder has its own endpoint for this — `/ai-interview/jds-for-interview`,
+    // not the general `/jd` list. Looking for the wrong one reported that a
+    // working page had loaded nothing.
     expect(
-      jds,
-      `${at}: configuring an interview never loaded the roles to interview for. ` +
-        `Calls:\n${describeCalls(calls)}`,
-    ).toBeTruthy();
+      new URL(page.url()).pathname,
+      `${at}: Create AI Interview did not open the role picker`,
+    ).toContain("jd-selection");
+
+    const jds = await waitForCall(page, calls, /\/api\/v1\/(ai-interview\/jds-for-interview|jd)(\?|$)/);
     expect(
-      itemsOf(jds!.body).length,
-      `${at}: no roles offered, though "${jd.title}" was just published`,
+      itemsOf(jds.body).length,
+      `${at}: the picker offered no roles, though "${jd.title}" was just published`,
     ).toBeGreaterThan(0);
+
+    // And the specific role is on screen — the join between publishing a role
+    // and interviewing for it, which is the whole point of this flow.
+    await expect(
+      page.getByText(jd.title, { exact: false }).first(),
+      `${at}: "${jd.title}" was published and the interview builder does not offer it`,
+    ).toBeVisible({ timeout: 25_000 });
 
     assertNoServerErrors(calls, "the prepare-an-interview flow");
   });

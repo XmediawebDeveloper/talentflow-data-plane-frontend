@@ -245,6 +245,20 @@ export async function loginForReal(page: Page, tenant: Tier3Tenant): Promise<voi
   await expect(page.getByRole("heading", { name: /welcome back/i })).toBeVisible();
   await page.getByPlaceholder(/enter your email/i).fill(tenant.adminEmail);
   await page.getByPlaceholder(/enter your password/i).fill(tenant.adminPassword);
+
+  // Wait for the page to be interactive before touching it.
+  //
+  // The heading above is server-rendered, so it is on screen before React has
+  // attached anything, and through Cloudflare the bundle arrives later than it
+  // does from the container next door. Filling and clicking in that gap does
+  // nothing at all, and the test fails with "sign-in did not leave /login".
+  //
+  // Clicking a second time was tried and is worse: it took the failure from one
+  // run in eighty-four to six out of six. A second submit while the first is in
+  // flight leaves the app stuck on the login page with a 200 already returned —
+  // so the retry created the very symptom it was meant to paper over. Waiting
+  // for the page to go quiet is the fix; the double click is not.
+  await page.waitForLoadState("networkidle").catch(() => {});
   await page.getByRole("button", { name: /sign in/i }).click();
 }
 

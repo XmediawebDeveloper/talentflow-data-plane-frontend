@@ -63,10 +63,10 @@ variables:
   # startup and provisioning on every push, and left orphaned containers and
   # tenant databases behind whenever a runner was killed mid-job.
   QA_API_CONTAINER: tf-qa-api
-  QA_APP_CONTAINER: tf-qa-frontend
+  QA_APP_CONTAINER: tf-qa-frontend-ci
   QA_CP_CONTAINER: tf-qa-control-plane
   QA_API_PORT: "8200"
-  QA_APP_PORT: "3200"
+  QA_APP_PORT: "3201"
   QA_CP_PORT: "8299"
   QA_DB_NAME: talentflow_e2e
   QA_STATE_DIR: /opt/talentflow/qa
@@ -75,33 +75,25 @@ variables:
   # browser at. NEXT_PUBLIC_* are baked in at build time, so these decide the
   # image, not the container.
   #
-  # The public domains, which is worth the trouble: it exercises DNS, TLS,
-  # Cloudflare and the CORS preflight, and two of the four defects this suite has
-  # found so far lived exactly there.
+  # The VM's own address, and the reason is a measurement rather than a
+  # preference. Running Tier 3 through https://enthira.in works — 82 of 84
+  # passed — but signing in through it is flaky: ten consecutive runs of the
+  # login journey gave nine passes and one failure, always the same way, with
+  # `POST /auth/login` returning 200 and the app still sitting on /login.
   #
-  # Three earlier attempts failed for reasons worth keeping, because each is a
-  # trap the next person would fall into:
+  # Every one of the 84 tests signs in. A one-in-ten flake per login is a
+  # blocking pipeline that fails most pushes for reasons no developer can act
+  # on, and a suite people learn to re-run rather than read. Against the
+  # container the same suite has not failed once across several full runs.
   #
-  #   tfaapi.mo.vc    added its own Access-Control-Allow-* headers on top of the
-  #                   ones the backend already sends, so a browser saw "*, *",
-  #                   blocked every response, and the UI reported "Network Error"
-  #                   while the API returned 200
-  #   tfa.enthira.in  Cloudflare stopped being able to reach the origin partway
-  #                   through a full run — 26 tests passed, then every remaining
-  #                   test failed, and it served 502 in 65ms for hours afterwards
-  #                   while the container answered 200 on 127.0.0.1
-  #   enthira.in with BASE_DOMAIN=enthira.in was right; with the app served at
-  #                   tfa.enthira.in it was not — `getSubdomain()` reads "tfa" as
-  #                   a tenant, finds none, and 307s to the apex. The same
-  #                   container answers 200 on 127.0.0.1 and redirects on the
-  #                   domain, with only the Host header different.
-  #
-  # The apex is stable: a full 64-test run through it took 13.3 minutes and the
-  # domain was still answering 200 afterwards. If it ever starts failing under
-  # load again, these two values go back to http://192.168.2.12:3201 and
-  # http://192.168.2.12:8200 and nothing else changes.
-  QA_API_URL: https://api.enthira.in
-  QA_APP_URL: https://enthira.in
+  # This is not a retreat from the domains. api.enthira.in is fine and its CORS
+  # is correct; the apex survived a full 13-minute run; and the earlier problems
+  # there are all fixed. What is left is a login race that shows up only with
+  # Cloudflare's added latency — the page is interactive later than the test
+  # expects — and until that is understood, the gating suite runs where it is
+  # deterministic. Switching back is these two values and nothing else.
+  QA_API_URL: http://192.168.2.12:8200
+  QA_APP_URL: http://192.168.2.12:3201
 
   # QA declares its own build values instead of borrowing the NEXT_PUBLIC_*
   # ones. Those are environment-scoped in GitLab (Settings -> CI/CD -> Variables,
@@ -281,12 +273,16 @@ variables:
         -e E2E_EXTERNAL=1 -e BASE_URL="http://localhost:$APP_PORT"
         -e PLAYWRIGHT_JUNIT_OUTPUT_NAME="junit-$CI_JOB_NAME_SLUG.xml"
         -e PLAYWRIGHT_JSON_OUTPUT_NAME="report.json"
+        -e CI_COMMIT_SHORT_SHA -e CI_COMMIT_BRANCH -e CI_PIPELINE_ID -e CI_JOB_NAME
         --memory=8g --memory-swap=8g --shm-size=1g
         -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy
         sh -c "npm ci --no-audit --no-fund
                && npx playwright install firefox
                && npx playwright test ai-interview-pipeline timer-slot-based timer-speaking
-                    --reporter=line,html,junit,json"
+                    --reporter=line,html,junit,json
+               ; rc=\$?
+               ; node e2e/scripts/build-report.mjs --only quarantine --out qa-cases-quarantine.json
+               ; exit \$rc"
   after_script:
     - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
   allow_failure: true    # known-red today — reported, but does not gate the deploy

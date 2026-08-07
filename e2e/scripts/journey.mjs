@@ -54,6 +54,23 @@ const BY_STEP = new Map(JOURNEY.map((j) => [j.step, j.order]));
  * the product", which is what they are.
  */
 const FILE_RULES = [
+  // The quarantined AI-interview specs. Their titles talk about timers, Bina
+  // and candidates, so title matching filed "Candidate ending turn deducts a
+  // full slot" under Resumes — a sentence about an interview, matched on a word
+  // that means something else here.
+  [/timer-slot-based|timer-speaking|ai-interview-pipeline/i, "AI interview"],
+
+  // Hand-written Tier-1 specs. They carry no workbook row, so the file name is
+  // the only thing that says what they are about.
+  [/smoke-auth/i, "Sign in"],
+  [/smoke-dashboard/i, "Dashboard"],
+  [/smoke-jd|tier1-jd/i, "Job descriptions"],
+  [/smoke-score-consistency|tier1-discrimination/i, "Resume scoring"],
+  [/tier1-resume/i, "Resumes"],
+  [/tier1-assessment/i, "Assessments"],
+  [/tier1-aiinterview/i, "AI interview"],
+  [/tier1-admin/i, "Users & roles"],
+
   [/tier3-(session|login)/i, "Sign in"],
   [/tier3-people/i, "Users & roles"],
   [/tier3-access/i, "Users & roles"],
