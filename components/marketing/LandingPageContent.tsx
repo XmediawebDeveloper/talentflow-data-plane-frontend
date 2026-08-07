@@ -499,7 +499,7 @@ export function LandingPageContent() {
                   )}
                   <Reveal delay={index * 100}>
                     <span className="relative z-10 inline-grid h-10 w-10 place-items-center rounded-full border border-slate-300 bg-mkt-canvas text-sm font-semibold tabular-nums text-mkt-accent dark:border-white/15 dark:bg-mkt-surface">
-    ing                  {String(index + 1).padStart(2, "0")}
+                {String(index + 1).padStart(2, "0")}
                     </span>
                     <h3 className="mt-4 text-xl font-bold tracking-[-0.02em] text-mkt-ink">
                       {step.title}
