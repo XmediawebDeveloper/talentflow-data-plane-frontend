@@ -12,6 +12,7 @@ import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadHistoryPanel from '@/components/UploadHistoryPanel';
 import UploadModal from '@/components/UploadModal';
+import { FOLDER_NAME_MAX_LENGTH } from '@/components/FolderTree';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
@@ -771,6 +772,12 @@ export default function ResumeDatabasePage() {
 
   const handleCreateFolder = async (name: string, parentId?: string) => {
     try {
+      // Same cap as My Resumes. The upload modal's input already stops typing
+      // and pasting past it; this is the backstop on the submit path.
+      if (name.trim().length > FOLDER_NAME_MAX_LENGTH) {
+        toast.error(`Folder name must be ${FOLDER_NAME_MAX_LENGTH} characters or fewer`);
+        return;
+      }
       const newFolder = await folderService.create(name, parentId);
       const converted: Folder = {
         id: newFolder.id,

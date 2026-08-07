@@ -32,6 +32,7 @@ import { parseAssessmentTitle, isAssessmentRevoked, getLocallyRevokedAssessmentI
 import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandidate } from '@/lib/services/aiMatchService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
+import AIInterviewTrackInvitesModal from './AIInterviewTrackInvitesModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
 import AIInterviewResults from './ai-interview/AIInterviewResults';
 import CandidateResultsView from './ai-interview/CandidateResultsView';
@@ -72,6 +73,11 @@ function QuickActionButton({
   className = '',
   loading = false
 }: QuickActionButtonProps) {
+  // Native `title` only while enabled, where it surfaces a label the half-width
+  // grid slot truncated. When disabled, the styled tooltip below is the one and
+  // only tooltip — setting `title` too made the browser draw a second, plain
+  // one on top of it with the same text.
+  const hoverTitle = disabled ? undefined : label;
   return (
     <div className="relative group">
       <button
@@ -84,7 +90,7 @@ function QuickActionButton({
             : `cursor-pointer ${className || 'bg-brand-blue text-white hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10'}`
           }
         `}
-        title={disabled ? disabledTooltip : undefined}
+        title={hoverTitle}
       >
         <span className="shrink-0">{icon}</span>
         <span className="flex-1 min-w-0 truncate">{label}</span>
@@ -471,6 +477,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
   // Track Invites modal state
   const [showTrackInvitesModal, setShowTrackInvitesModal] = useState(false);
+  // AI Interview invite tracking — opens in place on this page, against the
+  // job's live config.
+  const [trackAIInterviewConfig, setTrackAIInterviewConfig] = useState<AIInterviewResponse | null>(null);
+  const [resolvingTrackInvitesConfig, setResolvingTrackInvitesConfig] = useState(false);
 
   // "Send AI Interview via Email" modal — opened in place from the Send Invite
   // quick action, so the recruiter never leaves this page to invite candidates.
@@ -800,6 +810,38 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     // Same in-place pattern as the AI Interview Result action — the tab already
     // owns its own fetching and empty states, so this is just a tab switch.
     setActiveTab('assessment-results');
+  };
+
+  // Track Invite — who was invited and how far they got, as opposed to Result,
+  // which is about scores. The modal pulls every assessment on this JD itself,
+  // so there's nothing to resolve before opening it.
+  const handleTrackAssessmentInvites = () => {
+    setShowTrackInvitesModal(true);
+  };
+
+  // AI Interview invite tracking is bound to a config rather than the JD, so
+  // resolve this job's live config before opening the tracker. Usually already
+  // in hand from the mount fetch — the lookup is the fallback, not the norm.
+  const handleTrackAIInterviewInvites = async () => {
+    if (resolvingTrackInvitesConfig) return;
+    if (aiInterviewConfig?.id) {
+      setTrackAIInterviewConfig(aiInterviewConfig);
+      return;
+    }
+    setResolvingTrackInvitesConfig(true);
+    try {
+      const liveConfig = await aiInterviewService.findLiveConfigForJd(job.id);
+      if (!liveConfig) {
+        toast.error('Publish this job’s AI interview before tracking invitations.');
+        return;
+      }
+      setAiInterviewConfig(liveConfig);
+      setTrackAIInterviewConfig(liveConfig);
+    } catch {
+      toast.error('Could not load the AI interview for this job. Please try again.');
+    } finally {
+      setResolvingTrackInvitesConfig(false);
+    }
   };
 
   // Trigger a Quick Action automatically when a caller deep-links into the
@@ -2072,7 +2114,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       </div>
 
       {/* Tab Navigation */}
-      <div className="mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+      <div className="sticky top-[52px] z-20 mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
         <div className="flex items-center border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
           <button
             onClick={() => setActiveTab('overview')}
@@ -2493,8 +2535,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
-              {/* Assessment — Create and Send Invite share a row, Result sits
-                  on its own line. The AI Interview group below mirrors it. */}
+              {/* Assessment — Create and Send Invite share a row, Track Invite
+                  and Result share the next. The AI Interview group mirrors it. */}
               {(permissions.canCreateAssessments || permissions.canViewAssessments) && hasPlanFeature('assessment') && (
                 <div className="pt-2 mt-2 border-t border-gray-100 dark:border-slate-800">
                   <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
@@ -2534,13 +2576,27 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     )}
 
                     {permissions.canViewAssessments && (
-                      <QuickActionButton
-                        icon={<BarChart className="w-4 h-4" />}
-                        label="Assessment Result"
-                        onClick={handleAssessmentStatus}
-                        disabled={!features.assessment}
-                        disabledTooltip="Assessments not enabled"
-                      />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <QuickActionButton
+                          icon={<Users className="w-4 h-4" />}
+                          label="Track Invite"
+                          onClick={handleTrackAssessmentInvites}
+                          disabled={!features.assessment || !hasAnyAssessment}
+                          disabledTooltip={
+                            !features.assessment
+                              ? 'Assessments not enabled'
+                              : 'Create an assessment first'
+                          }
+                        />
+
+                        <QuickActionButton
+                          icon={<BarChart className="w-4 h-4" />}
+                          label="Result"
+                          onClick={handleAssessmentStatus}
+                          disabled={!features.assessment}
+                          disabledTooltip="Assessments not enabled"
+                        />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -2589,15 +2645,30 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       </div>
                     )}
 
-                    {/* Result — own full-width row below */}
+                    {/* Track Invite and Result share the row below */}
                     {permissions.canViewAIInterviews && (
-                      <QuickActionButton
-                        icon={<BarChart className="w-4 h-4" />}
-                        label="AI Interview Result"
-                        onClick={handleAIInterviewStatus}
-                        disabled={!features.ai_interview}
-                        disabledTooltip="AI Interviews not enabled"
-                      />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <QuickActionButton
+                          icon={<Users className="w-4 h-4" />}
+                          label="Track Invite"
+                          onClick={handleTrackAIInterviewInvites}
+                          loading={resolvingTrackInvitesConfig}
+                          disabled={!features.ai_interview || !hasAnyAIInterview}
+                          disabledTooltip={
+                            !features.ai_interview
+                              ? 'AI Interviews not enabled'
+                              : 'Create an AI interview first'
+                          }
+                        />
+
+                        <QuickActionButton
+                          icon={<BarChart className="w-4 h-4" />}
+                          label="Result"
+                          onClick={handleAIInterviewStatus}
+                          disabled={!features.ai_interview}
+                          disabledTooltip="AI Interviews not enabled"
+                        />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -3611,6 +3682,29 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           isOpen={showTrackInvitesModal}
           onClose={() => setShowTrackInvitesModal(false)}
           jdId={job.id}
+          jdTitle={job.title}
+          // Keep the whole flow on this page: swap the popup for the same
+          // inline detail view the Assessment Result tab opens, rather than
+          // routing out to /assessments/{id}/results/details.
+          onViewResult={(invitation) => {
+            setShowTrackInvitesModal(false);
+            setViewingAssessmentResult({
+              id: invitation.attempt_id,
+              assessmentId: invitation.assessment_id,
+              assessmentName: invitation.assessment_title,
+              candidateName: invitation.candidate_name,
+              candidateDisplayId: invitation.candidate_display_id,
+            });
+          }}
+        />
+      )}
+
+      {/* AI Interview Track Invites — same page, no navigation away */}
+      {trackAIInterviewConfig?.id && (
+        <AIInterviewTrackInvitesModal
+          isOpen={!!trackAIInterviewConfig}
+          onClose={() => setTrackAIInterviewConfig(null)}
+          configId={trackAIInterviewConfig.id}
           jdTitle={job.title}
         />
       )}

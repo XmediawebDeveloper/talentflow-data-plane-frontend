@@ -313,40 +313,85 @@ export function LandingPageContent() {
     <div className="bg-mkt-canvas text-mkt-ink">
       {/* ---------------------------------------------------------- Hero */}
       <section id="home" className="relative scroll-mt-16 overflow-hidden sm:scroll-mt-20">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_15%_0%,rgba(15,60,153,0.10),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.10),transparent_60%)] dark:bg-[radial-gradient(60%_50%_at_15%_0%,rgba(76,123,232,0.18),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.14),transparent_60%)]"
-        />
-        {/* Atmosphere rather than chrome: a fine dot field over the colour
-            wash, masked so it fades out well before it reaches the type. Both
-            layers are decorative and sit behind everything. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:radial-gradient(var(--mkt-accent)_1px,transparent_1px)] [background-size:22px_22px] [mask-image:radial-gradient(65%_55%_at_50%_0%,black,transparent)]"
-        />
-        <div className={`${SHELL} relative py-14 text-center sm:py-20 lg:py-24 2xl:py-32`}>
-          {/* Centred. Left-aligned in a capped column, the hero leaned into an
-              empty right half once the screening card came out — centring is
-              what makes a single column read as deliberate rather than
-              orphaned. mx-auto on each block keeps the measures readable. */}
-          <div className="mx-auto max-w-4xl">
+        {/* The hero band is its own positioning context so the artwork can't
+            reach past it. When the layers were pinned to the whole <section>
+            they also spanned the stat band below, which pushed the image's
+            centre line down and hid the candidate cards along its bottom edge
+            behind that band. */}
+        <div className="relative xl:min-h-[680px]">
+          {/* Colour wash + dot field, both decorative. Gone from xl up in light
+              mode, where the artwork takes over — the wash tinted the photograph
+              and read as a haze laid over it.
+              Two elements rather than one with `xl:hidden dark:xl:block`: a
+              stacked responsive+dark pair leaves which rule wins up to variant
+              sort order. `hidden` twice can't conflict, and `hidden dark:block`
+              is the pairing Tailwind guarantees. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_15%_0%,rgba(15,60,153,0.10),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.10),transparent_60%)] xl:hidden dark:hidden"
+          />
+          {/* Dark mode shows no artwork, so it keeps its wash at every width. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(60%_50%_at_15%_0%,rgba(76,123,232,0.18),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.14),transparent_60%)] dark:block"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:radial-gradient(var(--mkt-accent)_1px,transparent_1px)] [background-size:22px_22px] [mask-image:radial-gradient(65%_55%_at_50%_0%,black,transparent)] xl:hidden"
+          />
+          {/* Hero artwork at its natural size — no background-size, so it is
+              never scaled or distorted. Anchored top-right: right because that's
+              where the subject sits, top so the 680px image starts flush with
+              the band and its lower edge stays inside it. The left ~60% of the
+              image is deliberately empty, and that emptiness is where the copy
+              goes. Only from xl up: below that the image is wider than the
+              viewport and the subject would be pushed off-screen. Light mode
+              only — the artwork is white-on-white, so dark mode keeps the
+              gradients above instead. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 hidden bg-white bg-[url('/marketing/hero-bg.png')] bg-right-top bg-no-repeat opacity-100 xl:block dark:opacity-0"
+          />
+          {/* Padding below xl, where there is no artwork and the copy would
+              otherwise sit flush under the header. From xl the band is exactly
+              the artwork's 680px and the padding goes, so the image starts at
+              the top edge and the copy centres against it. */}
+          <div className={`${SHELL} relative py-12 text-left sm:py-16 lg:py-20 xl:flex xl:min-h-[680px] xl:items-center xl:py-0`}>
+          {/* Left-aligned in a capped column. From xl the artwork owns the right
+              half, so the column is held back to clear the subject; below that
+              the image is hidden and the column runs to its natural measure. */}
+          {/* The artwork is 1920px wide and unscaled, so its subject always
+              occupies a fixed ~770px at the right edge. What's left for the
+              copy is therefore viewport-width minus that, which is why the
+              column tightens at xl and only opens up again at 2xl. */}
+          <div className="max-w-2xl lg:max-w-4xl xl:max-w-[30rem] 2xl:max-w-[46rem]">
             {/* Two imperatives rather than a category claim: the old headline
                 ("Hire smarter with AI-powered recruiting") named the market,
                 not what the product does for the reader. */}
-            <h1 className="text-[1.75rem] font-extrabold leading-[1.02] tracking-[-0.045em] text-balance min-[400px]:text-[2.65rem] min-[400px]:leading-[0.98] sm:text-[3.95rem] lg:text-[4.85rem] 2xl:text-[5.7rem]">
-              <span className="block whitespace-nowrap text-mkt-ink">Screen every applicant.</span>
+            {/* Steps back down at xl, where the artwork appears and the column
+                narrows — the headline has to sit beside the subject rather than
+                run under it, then opens up again at 2xl once there is room. */}
+            <h1 className="text-[1.75rem] font-extrabold leading-[1.02] tracking-[-0.045em] text-balance min-[400px]:text-[2.35rem] min-[400px]:leading-[0.98] sm:text-[3.1rem] md:text-[3.95rem] lg:text-[4.6rem] xl:text-[3rem] 2xl:text-[4.2rem]">
+              {/* No `whitespace-nowrap`: at 3.95rem the line is ~620px, which
+                  is wider than the usable width between 640 and ~700px, and the
+                  section clips its overflow — so the sentence lost its tail
+                  rather than wrapping. Left-aligned, that clipping is on the
+                  right edge and very visible. */}
+              <span className="block text-mkt-ink">Screen every applicant.</span>
               {/* The payoff line carries the accent and a soft underglow — the
                   page's one flourish, and it needs no box to hold it. */}
               <span className="relative mt-1 block text-mkt-accent">
                 Shortlist in minutes.
+                {/* Runs from the left edge now the hero is left-aligned — a
+                    symmetrical fade read as off-centre against flush type. */}
                 <span
                   aria-hidden="true"
-                  className="absolute inset-x-0 -bottom-2 mx-auto h-px w-2/3 bg-gradient-to-r from-transparent via-mkt-amber to-transparent"
+                  className="absolute -bottom-2 left-0 h-px w-2/3 bg-gradient-to-r from-mkt-amber to-transparent"
                 />
               </span>
             </h1>
 
-            <p className="mx-auto mt-8 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-lg 2xl:text-xl">
+            <p className="mt-8 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-lg 2xl:text-xl">
               Resume screening, assessments and AI interviews run as one pass, so
               the shortlist is ready before your first call. Teams get back{" "}
               <span className="font-semibold text-mkt-ink">
@@ -355,7 +400,7 @@ export function LandingPageContent() {
               .
             </p>
 
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-start">
               <Link
                 href="/signup"
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-mkt-accent-solid px-6 text-sm font-semibold text-white shadow-lg shadow-mkt-accent-solid/25 transition-colors hover:bg-mkt-accent-solid-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-amber focus-visible:ring-offset-2 dark:focus-visible:ring-offset-mkt-navy sm:text-base"
@@ -379,8 +424,10 @@ export function LandingPageContent() {
             <p className="mt-5 text-sm text-slate-500 dark:text-slate-400">
               {trialDays}-day free trial · no credit card
             </p>
+            </div>
           </div>
         </div>
+        {/* /hero band */}
 
         {/* Stat band — the page's proof line, set as data rather than cards. */}
         <div className="border-y border-slate-200/80 bg-white/70 dark:border-white/10 dark:bg-white/[0.03]">
@@ -452,7 +499,7 @@ export function LandingPageContent() {
                   )}
                   <Reveal delay={index * 100}>
                     <span className="relative z-10 inline-grid h-10 w-10 place-items-center rounded-full border border-slate-300 bg-mkt-canvas text-sm font-semibold tabular-nums text-mkt-accent dark:border-white/15 dark:bg-mkt-surface">
-                      {String(index + 1).padStart(2, "0")}
+    ing                  {String(index + 1).padStart(2, "0")}
                     </span>
                     <h3 className="mt-4 text-xl font-bold tracking-[-0.02em] text-mkt-ink">
                       {step.title}

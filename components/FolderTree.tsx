@@ -9,6 +9,11 @@ import { toast } from 'sonner';
 // Max folder depth (root → level1 → level2 → level3 = 3 levels of nesting)
 const MAX_FOLDER_DEPTH = 3;
 
+/** Longest folder name we accept. Exported so every entry point — the tree's
+ *  create/rename inputs, the upload modal, and the pages' own submit handlers —
+ *  enforces the same number. */
+export const FOLDER_NAME_MAX_LENGTH = 14;
+
 // Panel width bounds — the same ones the container's min/max styles enforce, so
 // a drag can never push it outside what CSS would clamp back anyway.
 const MIN_PANEL_WIDTH = 200;
@@ -374,6 +379,7 @@ export default function FolderTree({
               }}
               onBlur={() => handleRename(folder.id)}
               placeholder="Folder name..."
+              maxLength={FOLDER_NAME_MAX_LENGTH}
               autoFocus
               className="w-full px-2 py-1 text-sm border border-blue-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
@@ -494,6 +500,7 @@ export default function FolderTree({
                 }
               }}
               placeholder="Sub-folder name..."
+              maxLength={FOLDER_NAME_MAX_LENGTH}
               autoFocus
               className="w-full px-2 py-1 text-xs border border-blue-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
@@ -588,6 +595,7 @@ export default function FolderTree({
               }
             }}
             placeholder="Folder name..."
+            maxLength={FOLDER_NAME_MAX_LENGTH}
             autoFocus
             className="w-full px-3 py-1.5 text-sm border border-blue-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600"
           />
