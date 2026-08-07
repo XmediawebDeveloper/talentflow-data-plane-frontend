@@ -577,6 +577,26 @@ variables:
         exit 1
       fi
 
+    # ---- and from filling the disk -------------------------------------------
+    # Every pipeline builds a QA frontend image, 668 MB of it, and nothing was
+    # removing the old ones. Fifty-six accumulated and the runner's disk reached
+    # 100% full, which is how a green `Set up the test environment` is followed
+    # by two test jobs failing for reasons that have nothing to do with the code:
+    # the report they write comes out zero bytes, because the write itself fails.
+    #
+    # `docker image prune` does not help — these are tagged, not dangling. So the
+    # tags this job creates are the tags this job cleans up, keeping whatever any
+    # container is actually running.
+    - |
+      INUSE=$(docker ps -a --format '{{.Image}}' | sort -u)
+      removed=0
+      for img in $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "^$IMAGE:.*-qa$"); do
+        echo "$INUSE" | grep -qx "$img" && continue
+        docker rmi "$img" >/dev/null 2>&1 && removed=$((removed + 1))
+      done
+      docker builder prune -f --filter until=48h >/dev/null 2>&1 || true
+      echo "removed $removed superseded QA image(s); $(df -h / | awk 'NR==2{print $4}') free on /"
+
     # ---- keep the QA tenant from growing without limit -----------------------
     # Every Tier-3 run writes real rows. Measured over one afternoon, job
     # descriptions went from 114 to 235 and audit rows from 606 to 1,383. Left
