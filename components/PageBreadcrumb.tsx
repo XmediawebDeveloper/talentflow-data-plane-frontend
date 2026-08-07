@@ -33,6 +33,7 @@ export default function PageBreadcrumb({
   items,
   className = 'mb-4',
   sticky = true,
+  actions,
 }: {
   items: BreadcrumbCrumb[];
   className?: string;
@@ -43,11 +44,18 @@ export default function PageBreadcrumb({
    * become unclickable.
    */
   sticky?: boolean;
+  /**
+   * Controls rendered on the right of the crumb row, inside the same bar —
+   * e.g. a Previous/Next record pager. Kept inside so the pager travels with a
+   * sticky breadcrumb instead of scrolling away above it. The bar's own
+   * background and ring are untouched; when omitted the markup is byte-for-byte
+   * what it was, so no other page shifts.
+   */
+  actions?: React.ReactNode;
 }) {
   const router = useRouter();
-  return (
-    <Breadcrumb className={`${sticky ? 'sticky top-0 z-30 ' : ''}bg-slate-50 ring-1 ring-slate-200/80 px-3 py-2 ${className}`}>
-      <BreadcrumbList>
+  const list = (
+    <BreadcrumbList>
         {items.map((crumb, idx) => {
           const isLast = idx === items.length - 1;
           return (
@@ -94,7 +102,22 @@ export default function PageBreadcrumb({
             </React.Fragment>
           );
         })}
-      </BreadcrumbList>
+    </BreadcrumbList>
+  );
+
+  return (
+    <Breadcrumb className={`${sticky ? 'sticky top-0 z-30 ' : ''}bg-slate-50 ring-1 ring-slate-200/80 px-3 py-2 ${className}`}>
+      {actions ? (
+        // flex-wrap + ml-auto rather than justify-between: on a narrow screen
+        // the actions drop to their own line and stay right-aligned there,
+        // which justify-between would not do for a lone wrapped item.
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0">{list}</div>
+          <div className="flex items-center gap-2 shrink-0 ml-auto">{actions}</div>
+        </div>
+      ) : (
+        list
+      )}
     </Breadcrumb>
   );
 }

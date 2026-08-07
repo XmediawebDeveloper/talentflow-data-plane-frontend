@@ -1,7 +1,8 @@
 'use client';
 
-import { X, FileText, Copy, GitBranch, AlertTriangle, AlertCircle, CheckCircle, Calendar, User, ExternalLink } from 'lucide-react';
+import { X, FileText, Copy, GitBranch, AlertTriangle, AlertCircle, CheckCircle, Calendar, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import ViewResumeButton from '@/components/ui/view-resume-button';
 
 export interface UploadHistoryItem {
   id: string;
@@ -208,13 +209,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
             Close
           </button>
           {(item.status === 'completed' || item.status === 'versioned') && item.resumeId && (
-            <button
-              onClick={handleViewResume}
-              className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
-            >
-              <ExternalLink className="w-4 h-4" />
-              View Resume
-            </button>
+            <ViewResumeButton onClick={handleViewResume} className="justify-center" />
           )}
         </div>
       </div>

@@ -3,10 +3,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import RecordPager from '@/components/RecordPager';
 import {
   ArrowLeft, Download, Mail, Phone, MapPin, Briefcase, Calendar, Award,
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
-  ChevronRight, ChevronLeft, ExternalLink, Linkedin, Globe, FileText, Clock, History,
+  ChevronRight, ExternalLink, Linkedin, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
   AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search
 } from 'lucide-react';
@@ -239,6 +240,7 @@ export default function ResumeViewPage() {
   // list stores this in sessionStorage as `resumeNavSource`.
   const [viewSource, setViewSource] = useState<'my-resumes' | 'resume-database' | 'ai-talent-match' | 'job-details'>('resume-database');
   const [jobDetailsReturnUrl, setJobDetailsReturnUrl] = useState<string | null>(null);
+  const [jobDetailsTitle, setJobDetailsTitle] = useState('');
   const [aiMatchDetailsReturnUrl, setAiMatchDetailsReturnUrl] = useState<string | null>(null);
   const [aiMatchJobTitle, setAiMatchJobTitle] = useState('');
   useEffect(() => {
@@ -252,6 +254,8 @@ export default function ResumeViewPage() {
       const jobTab = sessionStorage.getItem('resumeNavJobTab') || 'scored-resumes';
       if (jobId) {
         setJobDetailsReturnUrl(`/recruitment/job-details?id=${encodeURIComponent(jobId)}&tab=${encodeURIComponent(jobTab)}`);
+        // The crumb reads as the job the candidate was opened from.
+        setJobDetailsTitle(sessionStorage.getItem('resumeNavJobTitle') || '');
       }
 
       const aiMatchJobId = sessionStorage.getItem('resumeNavAIMatchJobId');
@@ -273,7 +277,13 @@ export default function ResumeViewPage() {
         ? [{ label: aiMatchJobTitle || 'Match Details', href: aiMatchDetailsReturnUrl }]
         : []),
     ]
-    : viewSource === 'job-details' ? [{ label: 'Scored Resumes', href: jobDetailsReturnUrl || '/recruitment/job-openings' }]
+    // Every step the recruiter walked, not just the last one: the jobs list,
+    // then the job itself. "Scored Resumes" alone named a tab rather than the
+    // record, and skipped the list the job was reached from.
+    : viewSource === 'job-details' ? [
+      { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+      { label: jobDetailsTitle || 'Job Details', href: jobDetailsReturnUrl || '/recruitment/job-openings' },
+    ]
     : [{ label: 'Internal Database', href: '/recruitment/resume-database' }];
 
   // Apply to Job modal state
@@ -1042,6 +1052,9 @@ Best regards`);
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* Previous / Next rides inside the breadcrumb bar, as on
+              job-details, and uses the shared RecordPager instead of the grey
+              hand-rolled buttons that used to sit in the header row. */}
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={[
@@ -1050,6 +1063,14 @@ Best regards`);
               // Name the candidate whose resume is open, not a generic label.
               { label: resume?.name || 'Resume Details' },
             ]}
+            actions={navList.length > 0 && navIndex >= 0 ? (
+              <RecordPager
+                currentIndex={navIndex}
+                totalCount={navList.length}
+                onPrev={prevId ? () => router.replace(`/recruitment/resume-view/${prevId}`) : undefined}
+                onNext={nextId ? () => router.replace(`/recruitment/resume-view/${nextId}`) : undefined}
+              />
+            ) : undefined}
           />
       {/* Header */}
       <div className="border-b border-gray-100 py-3 sm:py-4 mb-4">
@@ -1063,29 +1084,6 @@ Best regards`);
               <p className="text-xs sm:text-sm text-gray-600 truncate">{resume.name}</p>
             </div>
           </div>
-          {navList.length > 0 && navIndex >= 0 && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => prevId && router.replace(`/recruitment/resume-view/${prevId}`)}
-                disabled={!prevId}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Previous
-              </button>
-              <span className="text-sm text-gray-600 font-medium px-1">
-                {navIndex + 1} / {navList.length}
-              </span>
-              <button
-                onClick={() => nextId && router.replace(`/recruitment/resume-view/${nextId}`)}
-                disabled={!nextId}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                Next
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          )}
         </div>
       </div>
 

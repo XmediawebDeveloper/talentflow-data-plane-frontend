@@ -1414,8 +1414,12 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
               the pager, so `sticky` has the card's full height to travel within.
               Boxed inside a breadcrumb-height flex row it could never stick,
               which is why it used to opt out with sticky={false}. */}
+          {/* Previous / Next rides inside the breadcrumb bar, as on
+              job-details, so it stays reachable while the sticky crumb is
+              pinned. Passed as undefined when there's no list to page through,
+              which leaves the bar exactly as it was. */}
           <PageBreadcrumb
-            className={totalCount != null && totalCount > 0 ? 'mb-3' : 'mb-4 md:mb-6'}
+            className="mb-4 md:mb-6"
             items={breadcrumbItems ?? [
               { label: 'Dashboard', href: '/dashboard' },
               onNavigateToList
@@ -1425,21 +1429,15 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
               // Deepest crumb names the candidate whose results are open.
               { label: interview.candidate_name || 'Candidate Results' },
             ]}
-          />
-
-          {/* Previous / Next record pager — sits below the breadcrumb. Skipped
-              entirely when there's no list to page through, so it leaves no
-              empty row behind. */}
-          {totalCount != null && totalCount > 0 && (
-            <div className="flex items-center justify-end mb-4 md:mb-6">
+            actions={totalCount != null && totalCount > 0 ? (
               <RecordPager
                 currentIndex={currentIndex}
                 totalCount={totalCount}
                 onPrev={onPrev}
                 onNext={onNext}
               />
-            </div>
-          )}
+            ) : undefined}
+          />
 
       <div>
         <div className="w-full">

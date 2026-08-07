@@ -1,8 +1,9 @@
 'use client';
 
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Eye, Sparkles, UserPlus } from 'lucide-react';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import ResumeDetailView from './ResumeDetailView';
+import ViewResumeButton from '@/components/ui/view-resume-button';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
 import { useState, useEffect, useRef } from 'react';
@@ -688,6 +689,17 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               (onClick, not href — we never left this route). */}
           <PageBreadcrumb
             className="mb-4 md:mb-6"
+            // Previous / Next rides inside the breadcrumb bar, as on
+            // job-details. Dropped in the resume view, where paging to the next
+            // candidate from someone else's resume reads as a bug.
+            actions={view !== 'resume' ? (
+              <RecordPager
+                currentIndex={currentIndex}
+                totalCount={totalCount}
+                onPrev={onPrev}
+                onNext={onNext}
+              />
+            ) : undefined}
             items={(() => {
               // Deepest crumb names the record being viewed (the candidate),
               // not a generic page label.
@@ -725,7 +737,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       {/* Header */}
       <div>
         <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4 sm:p-6">
-          {/* Row 1: candidate identity on the left, record pager on the right */}
+          {/* Row 1: candidate identity. The record pager that used to sit on
+              the right moved into the breadcrumb bar, as on job-details. */}
           <div className="flex items-start justify-between gap-4 mb-3">
             <div className="min-w-0">
               <h1 className="text-xl sm:text-2xl text-gray-900 font-bold mb-2 truncate">{resume.candidateName}</h1>
@@ -737,14 +750,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                   </span>
                 )}
               </div>
-            </div>
-            <div className="flex-shrink-0">
-              <RecordPager
-                currentIndex={currentIndex}
-                totalCount={totalCount}
-                onPrev={onPrev}
-                onNext={onNext}
-              />
             </div>
           </div>
 
@@ -823,13 +828,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                 </div>
               )}
 
-              <button
-                onClick={handleViewResume}
-                className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium text-brand-blue bg-white border border-brand-blue/40 rounded-lg hover:bg-brand-blue/5 transition-colors flex items-center gap-1.5 whitespace-nowrap"
-              >
-                <Eye className="w-4 h-4" />
-                View Resume
-              </button>
+              <ViewResumeButton onClick={handleViewResume} loading={loadingResumeDetail} />
 
               {canExport && (
                 <button
