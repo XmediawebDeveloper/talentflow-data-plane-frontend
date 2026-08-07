@@ -99,6 +99,24 @@ export function readTier3Tenant(): Tier3Tenant {
         "/opt/talentflow/qa/tenant.json.",
     );
   }
+  // The host check above is a blocklist — it refuses the hosts and ports known
+  // to be live. That is the weaker half of the guarantee: a port nobody thought
+  // of passes it. This is the other half, and it is about data rather than
+  // addresses. Every QA tenant is provisioned with an `e2e<digits>` subdomain
+  // and no customer tenant has one, so a suite confined to such a tenant cannot
+  // reach a customer's records even if it is pointed at the wrong backend.
+  //
+  // It matters more from here on: these tests deactivate users, change
+  // passwords and ask the product to start a password reset, which writes to
+  // the landlord database. Confined to an e2e tenant those writes land in the
+  // QA landlord; unconfined they would not.
+  if (!/^e2e\d/i.test(subdomain)) {
+    throw new Error(
+      `TIER3_TENANT_SUBDOMAIN=${subdomain} is not a QA tenant. Tier 3 creates ` +
+        `users, deactivates them and resets passwords — it runs only inside a ` +
+        `tenant provisioned for it, whose subdomain starts with "e2e".`,
+    );
+  }
   return { subdomain, adminEmail, adminPassword };
 }
 
