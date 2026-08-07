@@ -377,7 +377,7 @@ variables:
       # ~100 variables by hand would rot the moment the backend gains one.
       ENVFILE="$QA_STATE_DIR/api.env"
       docker inspect "$STAGING_API" --format '{{range .Config.Env}}{{println .}}{{end}}' \
-        | grep -vE '^(DATABASE_NAME|SHARED_DATABASE_NAME|ADMIN_API_URL|BASE_DOMAIN|CORS_ORIGINS|FRONTEND_URL|BACKEND_URL|PATH|HOSTNAME|HOME|LANG|GPG_KEY|PYTHON_|_=|$)' \
+        | grep -vE '^(DATABASE_NAME|SHARED_DATABASE_NAME|ADMIN_API_URL|BASE_DOMAIN|CORS_ORIGINS|FRONTEND_URL|BACKEND_URL|SMTP_USER|SMTP_PASSWORD|PATH|HOSTNAME|HOME|LANG|GPG_KEY|PYTHON_|_=|$)' \
         > "$ENVFILE.new"
       {
         printf 'DATABASE_NAME=%s\n' "$QA_DB_NAME"
@@ -392,6 +392,24 @@ variables:
         printf 'CORS_ORIGINS=%s\n' "$QA_APP_URL"
         printf 'FRONTEND_URL=%s\n' "$QA_APP_URL"
         printf 'BACKEND_URL=%s\n' "$QA_API_URL"
+        # No mail credentials, deliberately blank rather than absent.
+        #
+        # `POST /api/v1/users` calls send_user_invite_email, and this suite creates
+        # roughly ninety users a run — a viewer here, a recruiter there, each one
+        # to check that a permission actually holds. Copying staging's environment
+        # wholesale brought the real SMTP account with it, so every one of those
+        # was a live send against a 50-a-day limit, to addresses ending
+        # @example.com that could only bounce. Two bad outcomes at once: the
+        # customers' quota spent by a test, and bounces charged to the sending
+        # reputation of an account they depend on.
+        #
+        # Blank is the right value, not a fake host. send_user_invite_email checks
+        # `if not smtp_user or not smtp_password` and returns ("SMTP not
+        # configured") without raising, so user creation still succeeds and every
+        # RBAC test still runs — nothing leaves the machine. A dummy host would
+        # instead hang on connect and make ninety tests slow and flaky.
+        printf 'SMTP_USER=\n'
+        printf 'SMTP_PASSWORD=\n'
       } >> "$ENVFILE.new"
       mv "$ENVFILE.new" "$ENVFILE"
       chmod 600 "$ENVFILE"
@@ -407,6 +425,18 @@ variables:
         echo "the QA environment file still points at a q2a.in host:"
         grep -n 'q2a\.in' "$ENVFILE"
         echo "QA must never send traffic to a customer-facing system."
+        exit 1
+      fi
+      # And one for mail, which is the same mistake in a different costume: a
+      # credential inherited from staging that lets a test suite spend something
+      # the customers own. Checked rather than assumed, because the value is
+      # copied from a container whose environment this file does not control.
+      if grep -qE '^SMTP_(USER|PASSWORD)=.+' "$ENVFILE"; then
+        echo "the QA environment file carries live mail credentials:"
+        grep -nE '^SMTP_(USER|PASSWORD)=' "$ENVFILE" | sed 's/=.*/=<set>/'
+        echo "POST /api/v1/users sends an invite email. This suite creates ~90 users"
+        echo "a run, against a 50-a-day limit, to @example.com addresses that bounce."
+        echo "QA must not be able to send mail at all."
         exit 1
       fi
 
