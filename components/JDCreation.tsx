@@ -1638,7 +1638,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const normalized = value?.toLowerCase().trim() || '';
     if (!normalized) return {};
 
-    const rangeMatch = normalized.match(/(\d{1,2})\s*(?:-|to|–)\s*(\d{1,2})/);
+    const rangeMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*(?:-|to|–)\s*(\d{1,2}(?:\.\d+)?)/);
     if (rangeMatch) {
       const first = Number(rangeMatch[1]);
       const second = Number(rangeMatch[2]);
@@ -1650,7 +1650,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     }
 
-    const plusMatch = normalized.match(/(\d{1,2})\s*(?:\+|plus|or more|and above)/);
+    const plusMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*(?:\+|plus|or more|and above)/);
     if (plusMatch) {
       const years = Number(plusMatch[1]);
       if (!Number.isNaN(years)) {
@@ -1658,7 +1658,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     }
 
-    const minimumMatch = normalized.match(/(?:minimum|min\.?|at least)\s*(\d{1,2})/);
+    const minimumMatch = normalized.match(/(?:minimum|min\.?|at least)\s*(\d{1,2}(?:\.\d+)?)/);
     if (minimumMatch) {
       const years = Number(minimumMatch[1]);
       if (!Number.isNaN(years)) {
@@ -1666,7 +1666,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     }
 
-    const singleMatch = normalized.match(/(\d{1,2})\s*(?:years?|yrs?)/);
+    const singleMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)/);
     if (singleMatch) {
       const years = Number(singleMatch[1]);
       if (!Number.isNaN(years)) {
@@ -5959,7 +5959,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           type="number"
                           min={0}
                           max={50}
-                          step={1}
+                          step={0.5}
                           value={from}
                           onChange={(e) => commitYears(e.target.value, to)}
                           placeholder="From (years)"
@@ -5971,7 +5971,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           type="number"
                           min={0}
                           max={50}
-                          step={1}
+                          step={0.5}
                           value={to}
                           onChange={(e) => commitYears(from, e.target.value)}
                           placeholder="To (years)"
