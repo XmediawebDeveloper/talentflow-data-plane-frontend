@@ -996,7 +996,6 @@ const FALLBACK_EXPERIENCE_LEVELS: ExperienceLevel[] = [
   { id: 5, code: 'architect', label: 'Architect Level (10+ Years)', min_years: 10, max_years: null, sort_order: 5, is_active: true },
   { id: 6, code: 'management', label: 'Management Level (10+ Years)', min_years: 10, max_years: null, sort_order: 6, is_active: true },
 ];
-const CUSTOM_EXPERIENCE_VALUE = '__custom_experience__';
 
 const FALLBACK_EDUCATION_LEVELS: EducationLevel[] = [
   { id: 1, code: 'diploma', label: 'Diploma', level: 1, sort_order: 1, is_active: true },
@@ -1678,6 +1677,76 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     return {};
   };
 
+  // ── NUMBERS-FIRST experience helpers ──────────────────────────────────────
+  // The experience field stores the recruiter's ACTUAL years as a canonical
+  // "From-To Years" string ("4-7 Years", "7+ Years") instead of a fixed level
+  // bucket. These helpers convert between that string and raw numbers, and
+  // derive a level CODE from the numbers so downstream screens/scoring that read
+  // job_level keep working unchanged.
+  const buildExperienceYearsString = (min?: number | null, max?: number | null): string => {
+    const hasMin = min !== null && min !== undefined && !Number.isNaN(Number(min));
+    const hasMax = max !== null && max !== undefined && !Number.isNaN(Number(max));
+    if (hasMin && hasMax) return `${Number(min)}-${Number(max)} Years`;
+    if (hasMin) return `${Number(min)}+ Years`;
+    if (hasMax) return `0-${Number(max)} Years`;
+    return '';
+  };
+
+  const parseExperienceYearsString = (value?: string | null): { from: string; to: string } => {
+    const range = inferExperienceRangeFromCustomValue(value || '');
+    return {
+      from: range.experienceMin !== undefined ? String(range.experienceMin) : '',
+      to: range.experienceMax !== undefined ? String(range.experienceMax) : '',
+    };
+  };
+
+  const deriveExperienceCodeFromYears = (min?: number | null, max?: number | null): string => {
+    const value =
+      min !== null && min !== undefined && !Number.isNaN(Number(min))
+        ? Number(min)
+        : max !== null && max !== undefined && !Number.isNaN(Number(max))
+          ? Number(max)
+          : null;
+    if (value === null) return '';
+    const levels = experienceLevels || [];
+    if (levels.length) {
+      const containing = levels.filter((l) => {
+        const lo = l.min_years ?? 0;
+        const hi = l.max_years == null ? Number.POSITIVE_INFINITY : l.max_years;
+        return value >= lo && value <= hi;
+      });
+      if (containing.length) {
+        containing.sort((a, b) => {
+          const wa = (a.max_years == null ? Number.POSITIVE_INFINITY : a.max_years) - (a.min_years ?? 0);
+          const wb = (b.max_years == null ? Number.POSITIVE_INFINITY : b.max_years) - (b.min_years ?? 0);
+          return wa - wb;
+        });
+        return containing[0].code;
+      }
+      const byMin = [...levels].sort((a, b) => (b.min_years ?? 0) - (a.min_years ?? 0));
+      if (byMin.length) return byMin[0].code;
+    }
+    // Fallback thresholds when master levels are unavailable.
+    if (value >= 7) return 'senior';
+    if (value >= 5) return 'mid';
+    if (value >= 2) return 'junior';
+    return 'entry';
+  };
+
+  // When the JD is completely silent on experience (no years, no level word),
+  // apply the recruiter's fallback rule: a SIMPLE JD (few skills/tools) defaults
+  // to the lowest master level's years; a COMPLEX JD (many skills/tools) is left
+  // BLANK so the recruiter fills From/To manually after extraction.
+  const EXPERIENCE_COMPLEX_SKILL_THRESHOLD = 6;
+  const applyExperienceFallback = (mapped: string, skillCount: number): string => {
+    if (mapped) return mapped;
+    if (skillCount >= EXPERIENCE_COMPLEX_SKILL_THRESHOLD) return '';
+    const levels = experienceLevels || [];
+    if (!levels.length) return '';
+    const lowest = [...levels].sort((a, b) => (a.min_years ?? 0) - (b.min_years ?? 0))[0];
+    return buildExperienceYearsString(lowest.min_years, lowest.max_years);
+  };
+
   const resolveExperiencePayload = (value?: string | null) => {
     const normalized = value?.trim() || '';
     if (!normalized) {
@@ -1700,8 +1769,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
 
     const { experienceMin, experienceMax } = inferExperienceRangeFromCustomValue(normalized);
+    // Derive a level CODE from the raw years so downstream consumers that read
+    // job_level (scoring, interview, list/badge screens) keep working; keep the
+    // raw text only if no master level maps to the number.
+    const derivedCode = deriveExperienceCodeFromYears(experienceMin, experienceMax);
     return {
-      jobLevel: normalized,
+      jobLevel: derivedCode || normalized,
       experienceMin,
       experienceMax,
       isCustom: true,
@@ -1895,19 +1968,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
 
       if (!experienceValue) {
-        return rawExperienceValue;
+        // Could not resolve the level word → let the caller apply its fallback.
+        return '';
       }
     }
 
-    return experienceValue;
+    // NUMBERS-FIRST OUTPUT: always return a canonical "From-To Years" string.
+    // - explicit years in the JD -> use those numbers verbatim
+    // - only a level word         -> use the matched master level's From/To years
+    if (hasExpMin || hasExpMax) {
+      return buildExperienceYearsString(hasExpMin ? expMin : null, hasExpMax ? expMax : null);
+    }
+    const matchedLevel = getExperienceLevelByCode(experienceValue);
+    return matchedLevel ? buildExperienceYearsString(matchedLevel.min_years, matchedLevel.max_years) : '';
   };
 
-  const selectedExperienceLevel = getExperienceLevelByCode(extractedData.experience);
-  const experienceSelectValue = selectedExperienceLevel
-    ? selectedExperienceLevel.code
-    : showCustomExperienceInput
-      ? CUSTOM_EXPERIENCE_VALUE
-      : '';
 
   // Check max_jobs quota on mount
   useEffect(() => {
@@ -2160,7 +2235,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const processExtractedParams = (params: any, experienceSourceText: string) => {
       console.log('[TalentFlow] Processing extracted params from generation:', params);
 
-      const expValue = mapExtractedExperienceValue(params, experienceSourceText);
+      const expValue = applyExperienceFallback(
+        mapExtractedExperienceValue(params, experienceSourceText),
+        (params.must_have_skills?.length || 0) + (params.nice_to_have_skills?.length || 0)
+      );
       const hasExplicitExperienceYears = (
         params.experience_min !== null
         && params.experience_min !== undefined
@@ -2630,14 +2708,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         hasExpMax
       });
 
-      const experienceValue = mapExtractedExperienceValue(
-        {
-          experience_min: params.experience_min,
-          experience_max: params.experience_max,
-          experience_level: params.experience_level,
-          job_level: params.job_level,
-        },
-        jdText
+      const experienceValue = applyExperienceFallback(
+        mapExtractedExperienceValue(
+          {
+            experience_min: params.experience_min,
+            experience_max: params.experience_max,
+            experience_level: params.experience_level,
+            job_level: params.job_level,
+          },
+          jdText
+        ),
+        (params.must_have_skills?.length || 0) + (params.nice_to_have_skills?.length || 0)
       );
 
       // Log if still no experience extracted
@@ -4826,37 +4907,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Calculate actual values first, then set Required based on whether value exists
         const educationValue = effectiveEditingJD.education_requirements?.degree || '';
 
-        // Map experience_min/max to level codes (entry, junior, mid, senior, architect, management)
-        const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
-          // Check for null/undefined but allow 0 as valid value
-          if (min === null || min === undefined) return '';
-
-          // 10+ years
-          if (min >= 10) {
-            // Check JD description for architect/management keywords
-            const desc = (effectiveEditingJD.description || '').toLowerCase();
-            const isArchitect = desc.includes('architect') || desc.includes('architecture');
-            const isManagement = desc.includes('manager') || desc.includes('management') || desc.includes('director') || desc.includes('lead');
-
-            if (isArchitect && !isManagement) return 'architect';
-            if (isManagement) return 'management';
-            return 'senior';
+        // NUMBERS-FIRST: prefill the From/To years from the saved range. For
+        // legacy JDs that only stored a level code (job_level) and no numbers,
+        // fall back to that level's master From/To range so the boxes still fill.
+        let experienceValue = buildExperienceYearsString(
+          effectiveEditingJD.experience_min,
+          effectiveEditingJD.experience_max
+        );
+        if (!experienceValue && effectiveEditingJD.job_level) {
+          const legacyLevel = getExperienceLevelByCode(effectiveEditingJD.job_level);
+          if (legacyLevel) {
+            experienceValue = buildExperienceYearsString(legacyLevel.min_years, legacyLevel.max_years);
           }
-
-          // 7-10 years = Senior
-          if (min >= 7) return 'senior';
-
-          // 5-7 years = Mid
-          if (min >= 5) return 'mid';
-
-          // 2-4 years = Junior
-          if (min >= 2) return 'junior';
-
-          // 0-2 years = Entry
-          return 'entry';
-        };
-
-        const experienceValue = effectiveEditingJD.job_level || mapExpToLevel(effectiveEditingJD.experience_min, effectiveEditingJD.experience_max);
+        }
         const hasPersistedExperienceYears = (
           effectiveEditingJD.experience_min !== null
           && effectiveEditingJD.experience_min !== undefined
@@ -4866,8 +4929,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         );
         // Restore industry type from saved draft
         const industryValue = effectiveEditingJD.industry_type || '';
-        setShowCustomExperienceInput(Boolean(experienceValue && !getExperienceLevelByCode(experienceValue)));
-        setExperienceYearsExplicit(hasPersistedExperienceYears);
+        setShowCustomExperienceInput(false);
+        setExperienceYearsExplicit(hasPersistedExperienceYears || Boolean(experienceValue));
 
         console.log('[DEBUG] Loading effectiveEditingJD data:');
         console.log('[DEBUG] - experience_min from API:', effectiveEditingJD.experience_min);
@@ -5868,85 +5931,57 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
                     </label>
                   </div>
-                  <select
-                    value={experienceSelectValue}
-                    onChange={(e) => {
-                      const nextValue = e.target.value;
-                      if (nextValue === CUSTOM_EXPERIENCE_VALUE) {
-                        setShowCustomExperienceInput(true);
-                        setExperienceYearsExplicit(false);
-                        setExtractedData(prev => ({
-                          ...prev,
-                          experience: getExperienceLevelByCode(prev.experience) ? '' : prev.experience,
-                        }));
-                        markExtractedDataModified();
-                        return;
-                      }
-
+                  {/* NUMBERS-FIRST: recruiter enters the actual From/To years. The
+                      value is stored as a canonical "From-To Years" string on
+                      extractedData.experience; persistence parses it back into
+                      experience_min/experience_max and derives job_level. */}
+                  {(() => {
+                    const { from, to } = parseExperienceYearsString(extractedData.experience);
+                    const commitYears = (nextFrom: string, nextTo: string) => {
+                      const canonical = buildExperienceYearsString(
+                        nextFrom === '' ? null : Number(nextFrom),
+                        nextTo === '' ? null : Number(nextTo)
+                      );
                       setShowCustomExperienceInput(false);
-                      // A level picked from the dropdown is a deliberate user choice,
-                      // and each level carries a definitional year range (e.g. "Junior
-                      // Level" = 2-4 years). Mark years as explicit so the range
-                      // persists into Step 3 and the published JD. (Without this, the
-                      // selected experience was silently dropped before reaching Step 3.)
-                      const selectedLevel = getExperienceLevelByCode(nextValue);
-                      const levelHasYears = !!selectedLevel
-                        && (selectedLevel.min_years != null || selectedLevel.max_years != null);
-                      setExperienceYearsExplicit(levelHasYears);
-                      setExtractedData(prev => ({ ...prev, experience: nextValue }));
+                      setExperienceYearsExplicit(nextFrom !== '' || nextTo !== '');
+                      setExtractedData(prev => ({ ...prev, experience: canonical }));
                       markExtractedDataModified();
-                      // Clear validation error when user makes a selection
-                      if (nextValue) {
+                      if (nextFrom !== '' || nextTo !== '') {
                         setValidationErrors(prev => ({ ...prev, experience: undefined }));
                       }
-                    }}
-                    className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black mb-3 ${
+                    };
+                    const inputClass = `w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black ${
                       validationErrors.experience ? 'border-red-500' : 'border-gray-200'
-                    } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                    disabled={masterDataLoading || isRegenerating}
-                  >
-                    <option value="">{masterDataLoading ? 'Loading...' : 'Select experience level'}</option>
-                    {experienceLevels.map((level) => (
-                      <option key={level.id} value={level.code}>{level.label}</option>
-                    ))}
-                    <option value={CUSTOM_EXPERIENCE_VALUE}>Custom experience</option>
-                  </select>
-                  {showCustomExperienceInput && (
-                    <input
-                      type="text"
-                      value={selectedExperienceLevel ? '' : extractedData.experience}
-                      onChange={(e) => {
-                        const nextValue = e.target.value;
-                        if (nextValue && !isEnglishOnly(nextValue)) {
-                          setValidationErrors(prev => ({
-                            ...prev,
-                            experience: 'Custom experience must be written in English only.',
-                          }));
-                          toast.error({
-                            title: 'English only',
-                            description: 'Custom experience must be written in English only. Other languages are not supported.',
-                          });
-                          return;
-                        }
-
-                        setExtractedData(prev => ({ ...prev, experience: nextValue }));
-                        const customRange = inferExperienceRangeFromCustomValue(nextValue);
-                        setExperienceYearsExplicit(
-                          customRange.experienceMin !== undefined || customRange.experienceMax !== undefined
-                        );
-                        markExtractedDataModified();
-                        if (nextValue.trim()) {
-                          setValidationErrors(prev => ({ ...prev, experience: undefined }));
-                        }
-                      }}
-                      placeholder="Enter custom experience, e.g. 3-5 years in SaaS"
-                      maxLength={50}
-                      className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black mb-3 ${
-                        validationErrors.experience ? 'border-red-500' : 'border-gray-200'
-                      } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                      disabled={isRegenerating}
-                    />
-                  )}
+                    } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`;
+                    return (
+                      <div className="flex items-center gap-2 mb-3">
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          step={1}
+                          value={from}
+                          onChange={(e) => commitYears(e.target.value, to)}
+                          placeholder="From (years)"
+                          disabled={isRegenerating}
+                          className={inputClass}
+                        />
+                        <span className="text-sm text-gray-500 dark:text-slate-400">to</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          step={1}
+                          value={to}
+                          onChange={(e) => commitYears(from, e.target.value)}
+                          placeholder="To (years)"
+                          disabled={isRegenerating}
+                          className={inputClass}
+                        />
+                        <span className="text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">years</span>
+                      </div>
+                    );
+                  })()}
                   {validationErrors.experience && (
                     <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4" />
