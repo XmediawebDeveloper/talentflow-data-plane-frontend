@@ -1322,6 +1322,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Lets handleNext / handleConfirmPublish detect "no changes since load" and skip
   // the extraction / reformat LLM calls on a no-op edit pass-through.
   const stage1LoadBaseline = useRef<{ jobTitle: string; aiPrompt: string; generatedJD: string; manualJD: string } | null>(null);
+  // Tracks which creation mode produced the CURRENT extractedData. If the user
+  // switches AI<->Manual and re-extracts, the source content is fundamentally
+  // different, so the extraction must NOT preserve the previous mode's values
+  // (that caused old AI-generated data to linger after switching to Manual).
+  const lastExtractionSourceMode = useRef<CreationMode | null>(null);
 
   // Validation errors for inline display
   const [validationErrors, setValidationErrors] = useState<{
@@ -2249,9 +2254,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         && !Number.isNaN(Number(params.experience_max))
       );
 
-      // When in edit mode, preserve existing values if extraction returns empty arrays
-      const isEditMode = !!editingId;
+      // When in edit mode, preserve existing values if extraction returns empty
+      // arrays — but NOT when the creation mode changed since the last extraction
+      // (switching Manual->AI must not preserve stale Manual-derived data).
+      const extractionSourceModeChanged =
+        lastExtractionSourceMode.current !== null && lastExtractionSourceMode.current !== mode;
+      const isEditMode = !!editingId && !extractionSourceModeChanged;
       const nextExperienceValue = expValue || (isEditMode ? extractedData.experience : '');
+      lastExtractionSourceMode.current = mode;
 
       setShowCustomExperienceInput(Boolean(nextExperienceValue && !getExperienceLevelByCode(nextExperienceValue)));
       setExperienceYearsExplicit(hasExplicitExperienceYears);
@@ -2860,8 +2870,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
 
       // When in edit mode, preserve existing values if extraction returns empty arrays
-      // This prevents losing manually edited comments/skills when re-extracting
-      const isEditMode = !!editingId;
+      // This prevents losing manually edited comments/skills when re-extracting.
+      // BUT if the creation mode changed since the last extraction (e.g. the user
+      // generated via AI, went back, switched to Manual and pasted new content),
+      // the source is fundamentally different — treat it as a FRESH extraction so
+      // stale prior-mode (AI-generated) data does not linger in the other fields.
+      const extractionSourceModeChanged =
+        lastExtractionSourceMode.current !== null && lastExtractionSourceMode.current !== mode;
+      const isEditMode = !!editingId && !extractionSourceModeChanged;
 
       // FIX: If user has modified extracted data (deleted/edited skills/comments), preserve their changes
       // Don't let AI extraction overwrite user's manual edits
@@ -2936,6 +2952,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         niceToHaveComments: extraction.niceToHaveComments
       });
       setExtractedData(extraction);
+      lastExtractionSourceMode.current = mode;
       // We now hold the authoritative extracted data in state. Saving below sets
       // the JD id into the URL (ensureJDCreationUrl), which makes the page re-fetch
       // the JD and re-populate `editingJD`. Without this flag, the load effect would
@@ -4897,7 +4914,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       // Restore the creation mode based on saved creation_method
       if (effectiveEditingJD.creation_method) {
-        setMode(effectiveEditingJD.creation_method === 'ai_generated' ? 'ai' : 'manual');
+        const loadedMode: CreationMode = effectiveEditingJD.creation_method === 'ai_generated' ? 'ai' : 'manual';
+        setMode(loadedMode);
+        lastExtractionSourceMode.current = loadedMode;
       }
 
       // Load extracted data if:
