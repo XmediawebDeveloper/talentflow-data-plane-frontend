@@ -302,8 +302,10 @@ export default function JobOpeningsPage() {
       toast.success('New version created', {
         description: `Version ${(newJd as any).version_number ?? ''} created as a new draft. Edit and publish it independently.`,
       });
-      // Land on Step 2 (Extract/review of the copied data), not the blank Step 1.
-      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=extract`);
+      // Start on Step 1 with ALL the source JD's data pre-filled (title, JD
+      // text, extracted skills/experience/etc.). The no-change-no-LLM guard
+      // keeps that data intact through the steps until the recruiter edits it.
+      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create`);
     } catch (error) {
       console.error('Failed to create new JD version:', error);
       setEditWarningDialog(prev => ({ ...prev, creating: false }));
