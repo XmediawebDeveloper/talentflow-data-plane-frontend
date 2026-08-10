@@ -185,27 +185,30 @@ variables:
     when: always
     expire_in: 1 week
     paths:
-      - playwright-report
       - test-results
       - qa-cases-*.json
-    # Traces are excluded, and this is the one thing in the bundle worth arguing
-    # about. Pipeline #19757 uploaded nothing at all — 413 Request Entity Too
-    # Large, FATAL: too large, job failed — after every one of its tests had
-    # passed. The run before it uploaded 88.4 MB and squeaked under.
+    # What is uploaded is the screenshots the dashboard shows, and the report it
+    # reads. Nothing else.
     #
-    # The bundle is screenshots and traces. Screenshots are deliberate: one per
-    # test, passing or not, because the dashboard shows a tester what the screen
-    # looked like for any case they open, and that is most of what it is for.
-    # Traces are the part nobody here reads — the dashboard cannot open one, and
-    # using it means downloading the zip and running `npx playwright show-trace`
-    # by hand. They are also the part that varies: `trace: on-first-retry` means
-    # a flaky run writes 2 MB more per retry, so the size of the upload depends
-    # on how the tests felt that morning. That is what took an 88 MB bundle over
-    # the limit and turned a green run red.
+    # Pipelines #19757 and #19758 both uploaded nothing at all — 413 Request
+    # Entity Too Large, job failed — after every test in them had passed. The
+    # first fix here excluded traces on the theory that they were the bulk. They
+    # were not: with traces excluded the bundle still measured 153 MB, and the
+    # size report added alongside said where it actually was.
     #
-    # A trace is still the best thing to have when a failure is hard to read, so
-    # this is a real loss. It is recoverable — re-run the job — and the failure
-    # it prevents is not.
+    #   58 MB  playwright-report/data
+    #    4 MB  test-results/<one test>
+    #    3 MB  test-results/<one test>  ...
+    #
+    # playwright-report/data is Playwright's HTML report copying every
+    # attachment — so each screenshot was uploaded twice, and the second copy is
+    # read by nothing here. The dashboard has its own UI and fetches screenshots
+    # from their test-results path; it does not reference playwright-report at
+    # all. Dropping it costs nothing and takes back 58 MB.
+    #
+    # Traces stay excluded. They are the other thing nothing here reads — using
+    # one means downloading the zip and running `npx playwright show-trace` by
+    # hand — and they are the part that varies with how flaky the run was.
     exclude:
       - "**/trace.zip"
       - "**/*.trace.zip"
@@ -248,7 +251,7 @@ variables:
       fi
     - docker run --rm --network=host --user "$(id -u):$(id -g)"
         -e HOME=/tmp -e npm_config_cache=/tmp/.npm
-        -e E2E_EXTERNAL=1 -e BASE_URL="http://localhost:$APP_PORT"
+        -e E2E_EXTERNAL=1 -e E2E_SCREENSHOT_ALL=0 -e BASE_URL="http://localhost:$APP_PORT"
         -e PLAYWRIGHT_JUNIT_OUTPUT_NAME="junit-$CI_JOB_NAME_SLUG.xml"
         -e PLAYWRIGHT_JSON_OUTPUT_NAME="report.json"
         -e CI_COMMIT_SHORT_SHA -e CI_COMMIT_BRANCH -e CI_PIPELINE_ID -e CI_JOB_NAME
@@ -302,7 +305,7 @@ variables:
       fi
     - docker run --rm --network=host --user "$(id -u):$(id -g)"
         -e HOME=/tmp -e npm_config_cache=/tmp/.npm
-        -e E2E_EXTERNAL=1 -e BASE_URL="http://localhost:$APP_PORT"
+        -e E2E_EXTERNAL=1 -e E2E_SCREENSHOT_ALL=0 -e BASE_URL="http://localhost:$APP_PORT"
         -e PLAYWRIGHT_JUNIT_OUTPUT_NAME="junit-$CI_JOB_NAME_SLUG.xml"
         -e PLAYWRIGHT_JSON_OUTPUT_NAME="report.json"
         -e CI_COMMIT_SHORT_SHA -e CI_COMMIT_BRANCH -e CI_PIPELINE_ID -e CI_JOB_NAME
@@ -817,27 +820,30 @@ variables:
     when: always
     expire_in: 1 week
     paths:
-      - playwright-report
       - test-results
       - qa-cases-*.json
-    # Traces are excluded, and this is the one thing in the bundle worth arguing
-    # about. Pipeline #19757 uploaded nothing at all — 413 Request Entity Too
-    # Large, FATAL: too large, job failed — after every one of its tests had
-    # passed. The run before it uploaded 88.4 MB and squeaked under.
+    # What is uploaded is the screenshots the dashboard shows, and the report it
+    # reads. Nothing else.
     #
-    # The bundle is screenshots and traces. Screenshots are deliberate: one per
-    # test, passing or not, because the dashboard shows a tester what the screen
-    # looked like for any case they open, and that is most of what it is for.
-    # Traces are the part nobody here reads — the dashboard cannot open one, and
-    # using it means downloading the zip and running `npx playwright show-trace`
-    # by hand. They are also the part that varies: `trace: on-first-retry` means
-    # a flaky run writes 2 MB more per retry, so the size of the upload depends
-    # on how the tests felt that morning. That is what took an 88 MB bundle over
-    # the limit and turned a green run red.
+    # Pipelines #19757 and #19758 both uploaded nothing at all — 413 Request
+    # Entity Too Large, job failed — after every test in them had passed. The
+    # first fix here excluded traces on the theory that they were the bulk. They
+    # were not: with traces excluded the bundle still measured 153 MB, and the
+    # size report added alongside said where it actually was.
     #
-    # A trace is still the best thing to have when a failure is hard to read, so
-    # this is a real loss. It is recoverable — re-run the job — and the failure
-    # it prevents is not.
+    #   58 MB  playwright-report/data
+    #    4 MB  test-results/<one test>
+    #    3 MB  test-results/<one test>  ...
+    #
+    # playwright-report/data is Playwright's HTML report copying every
+    # attachment — so each screenshot was uploaded twice, and the second copy is
+    # read by nothing here. The dashboard has its own UI and fetches screenshots
+    # from their test-results path; it does not reference playwright-report at
+    # all. Dropping it costs nothing and takes back 58 MB.
+    #
+    # Traces stay excluded. They are the other thing nothing here reads — using
+    # one means downloading the zip and running `npx playwright show-trace` by
+    # hand — and they are the part that varies with how flaky the run was.
     exclude:
       - "**/trace.zip"
       - "**/*.trace.zip"
@@ -957,27 +963,30 @@ variables:
     when: always
     expire_in: 1 week
     paths:
-      - playwright-report
       - test-results
       - qa-cases-*.json
-    # Traces are excluded, and this is the one thing in the bundle worth arguing
-    # about. Pipeline #19757 uploaded nothing at all — 413 Request Entity Too
-    # Large, FATAL: too large, job failed — after every one of its tests had
-    # passed. The run before it uploaded 88.4 MB and squeaked under.
+    # What is uploaded is the screenshots the dashboard shows, and the report it
+    # reads. Nothing else.
     #
-    # The bundle is screenshots and traces. Screenshots are deliberate: one per
-    # test, passing or not, because the dashboard shows a tester what the screen
-    # looked like for any case they open, and that is most of what it is for.
-    # Traces are the part nobody here reads — the dashboard cannot open one, and
-    # using it means downloading the zip and running `npx playwright show-trace`
-    # by hand. They are also the part that varies: `trace: on-first-retry` means
-    # a flaky run writes 2 MB more per retry, so the size of the upload depends
-    # on how the tests felt that morning. That is what took an 88 MB bundle over
-    # the limit and turned a green run red.
+    # Pipelines #19757 and #19758 both uploaded nothing at all — 413 Request
+    # Entity Too Large, job failed — after every test in them had passed. The
+    # first fix here excluded traces on the theory that they were the bulk. They
+    # were not: with traces excluded the bundle still measured 153 MB, and the
+    # size report added alongside said where it actually was.
     #
-    # A trace is still the best thing to have when a failure is hard to read, so
-    # this is a real loss. It is recoverable — re-run the job — and the failure
-    # it prevents is not.
+    #   58 MB  playwright-report/data
+    #    4 MB  test-results/<one test>
+    #    3 MB  test-results/<one test>  ...
+    #
+    # playwright-report/data is Playwright's HTML report copying every
+    # attachment — so each screenshot was uploaded twice, and the second copy is
+    # read by nothing here. The dashboard has its own UI and fetches screenshots
+    # from their test-results path; it does not reference playwright-report at
+    # all. Dropping it costs nothing and takes back 58 MB.
+    #
+    # Traces stay excluded. They are the other thing nothing here reads — using
+    # one means downloading the zip and running `npx playwright show-trace` by
+    # hand — and they are the part that varies with how flaky the run was.
     exclude:
       - "**/trace.zip"
       - "**/*.trace.zip"
