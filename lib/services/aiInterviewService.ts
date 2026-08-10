@@ -45,6 +45,7 @@ export interface AIInterviewCreate {
   total_questions?: number;
   scheduled_at?: string;
   recording_enabled?: boolean;
+  environment_verification_enabled?: boolean;
   send_email_reminder?: boolean;
   enable_ai_analysis?: boolean;
   ai_voice_language?: string;
@@ -67,6 +68,7 @@ export interface AIInterviewUpdate {
   total_questions?: number;
   scheduled_at?: string;
   recording_enabled?: boolean;
+  environment_verification_enabled?: boolean;
   send_email_reminder?: boolean;
   enable_ai_analysis?: boolean;
   ai_voice_language?: string;
@@ -150,6 +152,7 @@ export interface AIInterviewResponse {
   system_check_passed: boolean;
   system_check_results?: Record<string, any>;
   recording_enabled: boolean;
+  environment_verification_enabled?: boolean;
   send_email_reminder: boolean;
   enable_ai_analysis: boolean;
   ai_voice_language: string;
@@ -305,6 +308,7 @@ export interface AIInterviewVersionHistoryItem {
   total_questions?: number;
   rounds_config?: AIInterviewRoundConfig[];
   recording_enabled?: boolean;
+  environment_verification_enabled?: boolean;
   ai_voice_language?: string;
   custom_questions?: string[];
   special_instructions?: string;

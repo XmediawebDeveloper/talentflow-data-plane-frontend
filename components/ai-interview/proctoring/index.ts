@@ -7,5 +7,6 @@ export type { ObjectEventType } from './detectableObjects';
 export { useInterviewFaceVerification } from './InterviewFaceVerification';
 export { useInterviewVoiceVerification } from './InterviewVoiceVerification';
 export { InterviewProctoringWarnings } from './InterviewProctoringWarnings';
+export { EnvironmentVerificationOverlay } from './EnvironmentVerificationOverlay';
 export { InterviewEventBus } from './InterviewEventBus';
 export type { ProctoringEventType, ProctoringEvent } from './InterviewEventBus';

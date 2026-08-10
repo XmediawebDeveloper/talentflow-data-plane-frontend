@@ -12,6 +12,7 @@ import {
   useInterviewObjectDetection,
   useInterviewProctoringMonitor,
   InterviewProctoringWarnings,
+  EnvironmentVerificationOverlay,
   type DetectedObjectEvent,
   type ObjectEventType,
 } from './proctoring';
@@ -799,6 +800,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   }>(null);
   const mediaBlockedRef = useRef<typeof mediaBlocked>(null);
   useEffect(() => { mediaBlockedRef.current = mediaBlocked; }, [mediaBlocked]);
+
+  // Mobile QR-based environment verification — set on
+  // "environment_verification_triggered", cleared on
+  // "environment_verification_submitted" (or local expiry).
+  const [envVerification, setEnvVerification] = useState<null | {
+    qrCodeDataUri: string | null;
+    verificationUrl: string | null;
+    expiresAt: string | null;
+  }>(null);
 
   // Session ID — populated from `connected` WS event, used for violation event logging
   const sessionIdRef = useRef<string | null>(null);
@@ -3474,6 +3484,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }
         const _priorDisplay = data.prior_question_count ?? 0;
         setStatus(`Session resumed — continuing from question ${_priorDisplay + 1}`);
+        break;
+      }
+      case "environment_verification_triggered": {
+        console.log(`[WS ${timestamp}] Environment verification triggered`);
+        setEnvVerification({
+          qrCodeDataUri: typeof data.qr_code_data_uri === 'string' ? data.qr_code_data_uri : null,
+          verificationUrl: typeof data.verification_url === 'string' ? data.verification_url : null,
+          expiresAt: typeof data.expires_at === 'string' ? data.expires_at : null,
+        });
+        setStatus('Interview paused — verify your environment on your phone');
+        break;
+      }
+      case "environment_verification_submitted": {
+        console.log(`[WS ${timestamp}] Environment verification submitted — resuming`);
+        setEnvVerification(null);
+        try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
         break;
       }
       case "greeting":
@@ -8986,6 +9012,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       )}
 
       <InterviewProctoringWarnings />
+
+      <EnvironmentVerificationOverlay
+        active={Boolean(envVerification)}
+        qrCodeDataUri={envVerification?.qrCodeDataUri ?? null}
+        verificationUrl={envVerification?.verificationUrl ?? null}
+        expiresAt={envVerification?.expiresAt ?? null}
+        onExpired={() => {
+          // Candidate never completed verification in time — never hard-stall
+          // the interview on it. Resume ourselves; the backend independently
+          // records an environment_verification_timed_out event.
+          setEnvVerification(null);
+          try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+        }}
+      />
 
       {/* Tester mute dot removed per UX request. */}
     </>
