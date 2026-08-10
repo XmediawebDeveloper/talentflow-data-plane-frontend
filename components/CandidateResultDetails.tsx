@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { assessmentService, DetailedResultResponse, InvitationResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
 import { formatISTDate, formatISTTime, formatISTWithSeconds } from '@/lib/utils/dateUtils';
@@ -67,6 +67,15 @@ interface CandidateBasicInfo {
     weightedScore: number;
   }[];
 }
+
+type CandidateDetailTab = {
+  id: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  count?: number;
+  isQuestionTab?: boolean;
+  danger?: boolean;
+};
 
 function getCodingEvaluationState(q: QuestionEvaluation) {
   const judged = q.candidate_test_results;
@@ -201,29 +210,66 @@ export default function CandidateResultDetails({
   const [resumeDetail, setResumeDetail] = useState<any>(null);
   const [isLoadingResume, setIsLoadingResume] = useState(false);
   const [showResume, setShowResume] = useState(false);
+  const detailContentRef = useRef<HTMLDivElement>(null);
 
-  // Job Description Summary, Section-wise Performance and AI-Generated
-  // Candidate Insights used to stack one under the other, so reaching the
-  // insights meant scrolling past two full-width cards. Same three panels,
-  // shown one at a time behind a tab bar. Named `overviewTab` because
-  // `activeTab` above already drives the per-round question tabs further down.
-  const [overviewTab, setOverviewTab] = useState<'jd-summary' | 'section-performance' | 'candidate-insights'>('jd-summary');
+  // One tab row now owns both summary panels and detailed question panels.
+  // `activeTab` is still kept for the proctoring-events fetch trigger, but the
+  // visible panel is driven by this top-level selection.
+  const [overviewTab, setOverviewTab] = useState<string>('jd-summary');
   // A tab is offered only when its panel has something to render — the JD
   // snapshot may not have loaded (or the JD captured nothing), and insights
   // only exist once scoring completes. Without this, switching could land the
   // recruiter on a blank panel.
-  const overviewTabs = [
-    ...(assessmentMeta ? [{ id: 'jd-summary' as const, label: 'Job Description Summary', icon: FileText }] : []),
-    { id: 'section-performance' as const, label: 'Section-wise Performance', icon: Activity },
+  const overviewTabs: CandidateDetailTab[] = [
+    ...(assessmentMeta ? [{ id: 'jd-summary', label: 'Job Description Summary', icon: FileText }] : []),
+    { id: 'section-performance', label: 'Section-wise Performance', icon: Activity },
     ...(detailedResult && detailedResult.scoring_status === 'completed'
-      ? [{ id: 'candidate-insights' as const, label: 'AI-Generated Candidate Insights', icon: Award }]
+      ? [{ id: 'candidate-insights', label: 'AI-Generated Candidate Insights', icon: Award }]
       : []),
   ];
+  const formatRoundTabLabel = (roundType: string) =>
+    `${roundType.toLowerCase() === 'hr' ? 'HR' : roundType.charAt(0).toUpperCase() + roundType.slice(1)} Round`;
+  const analysisTabs: CandidateDetailTab[] = detailedResult && detailedResult.scoring_status !== 'processing'
+    ? [
+        ...detailedResult.round_scores.map((round) => ({
+          id: round.round_type,
+          label: formatRoundTabLabel(round.round_type),
+          icon: Clipboard,
+          count: detailedResult.question_evaluations.filter(q => q.round_type === round.round_type).length,
+          isQuestionTab: true,
+        })),
+        {
+          id: 'violations',
+          label: 'Violations',
+          icon: ShieldAlert,
+          count: detailedResult.proctoring_stats?.total_violations || 0,
+          isQuestionTab: true,
+          danger: true,
+        },
+      ]
+    : [];
+  const detailTabs = [...overviewTabs, ...analysisTabs];
   // Falls back while the selected tab is still unavailable, e.g. the JD
   // snapshot request hasn't returned yet on first paint.
-  const currentOverviewTab = overviewTabs.some(tab => tab.id === overviewTab)
+  const currentDetailTab = detailTabs.some(tab => tab.id === overviewTab)
     ? overviewTab
-    : (overviewTabs[0]?.id ?? 'section-performance');
+    : (detailTabs[0]?.id ?? 'section-performance');
+  const isQuestionAnalysisTab = analysisTabs.some(tab => tab.id === currentDetailTab);
+  const activeQuestionTab = isQuestionAnalysisTab ? currentDetailTab : activeTab;
+  const scrollDetailContentToTop = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      detailContentRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+        inline: 'nearest',
+      });
+    });
+  }, []);
+  const handleDetailTabClick = useCallback((tab: CandidateDetailTab) => {
+    setOverviewTab(tab.id);
+    if (tab.isQuestionTab) setActiveTab(tab.id);
+    scrollDetailContentToTop();
+  }, [scrollDetailContentToTop]);
 
   // Group events by minute + event_type so each row shows: event, timestamp (HH:MM), count
   const groupedEvents = Object.values(
@@ -680,7 +726,7 @@ export default function CandidateResultDetails({
   }
 
   return (
-    <div className="flex-1 bg-slate-50 overflow-y-auto">
+    <div className="flex-1 bg-slate-50">
       {breadcrumbItems && breadcrumbItems.length > 0 && (
         <div className="px-3 sm:px-4 pt-3">
           {/* Previous / Next rides inside the breadcrumb bar, as on
@@ -712,9 +758,9 @@ export default function CandidateResultDetails({
           />
         </div>
       )}
-      {/* Sticky Header — kept below the shared breadcrumb (z-30), but above the
-          inner Question-Analysis tab nav. */}
-      <div className="bg-brand-blue border-b border-brand-blue-2/40 sticky top-0 z-20 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
+      {/* Candidate/assessment header. This must scroll normally so it does not
+          cover the sticky side menu or question content. */}
+      <div className="bg-brand-blue border-b border-brand-blue-2/40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
             {/* No back arrow here — the breadcrumb above owns the way back. */}
@@ -914,40 +960,62 @@ export default function CandidateResultDetails({
           </div>
         </div>
 
-        {/* Overview tab bar — switches between the three panels below. Kept
-            outside them so the bar stays put while the panel underneath
-            changes. Labels scroll horizontally on narrow screens rather than
-            wrapping, which would push the panel down a row on mobile. */}
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 mb-4 sm:mb-6">
+        {/* Unified detail layout: vertical navigation on the left, selected content on the right. */}
+        <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+          <aside className="sticky top-20 self-start bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
           {/* No border-b here — the card's own border already draws the
               baseline the active tab's underline sits on. Adding one gave a
               doubled 2px rule under the row. */}
-          <div className="px-3 sm:px-6">
-            <div className="flex gap-3 sm:gap-5 overflow-x-auto scrollbar-hide">
-              {overviewTabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setOverviewTab(tab.id)}
-                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-                    currentOverviewTab === tab.id
-                      ? 'border-brand-blue text-brand-blue font-medium'
-                      : 'border-transparent text-gray-600 hover:text-brand-blue'
-                  }`}
-                >
-                  <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  {tab.label}
-                </button>
-              ))}
+          <div className="p-2 sm:p-3">
+            <div className="flex flex-col gap-1.5">
+              {detailTabs.map(tab => {
+                const isActive = currentDetailTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleDetailTabClick(tab)}
+                    className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center justify-between gap-2 ${
+                      isActive
+                        ? tab.danger
+                          ? 'bg-red-50 text-red-700 font-medium ring-1 ring-red-200'
+                          : 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
+                        : tab.danger
+                          ? 'text-gray-600 hover:bg-red-50 hover:text-red-700'
+                          : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                      <span className="min-w-0 leading-snug">{tab.label}</span>
+                    </span>
+                    {typeof tab.count === 'number' && (
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        tab.danger
+                          ? isActive || tab.count > 0
+                            ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
+                            : 'bg-slate-100 text-gray-600'
+                          : isActive
+                            ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
+                            : 'bg-slate-100 text-gray-600'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
-        </div>
+          </aside>
+
+          <div ref={detailContentRef} className="min-w-0 overflow-x-auto scroll-mt-24">
 
         {/* JD Summary — Must-Have & Nice-to-Have skills snapshotted from the
             JD when the assessment was generated. Both sections always render
             (with an empty-state placeholder) so the layout is consistent
             even when the JD didn't capture preferred skills. Same shape as
             the AI-Interview detail page's Overview tab. */}
-        {currentOverviewTab === 'jd-summary' && (() => {
+        {currentDetailTab === 'jd-summary' && (() => {
           const skillDepth: any[] = (assessmentMeta?.jd_skill_depth as any[]) || [];
           const niceToHaveSkills: any[] = (assessmentMeta?.jd_nice_to_have_skills as any[]) || [];
           if (!assessmentMeta) return null;
@@ -1020,7 +1088,7 @@ export default function CandidateResultDetails({
         {/* Score Calculation Notice - Show if individual questions are all 0.
             Rides with the Section-wise Performance tab because it explains the
             weighted section maths shown there. */}
-        {currentOverviewTab === 'section-performance' && detailedResult && candidateData && (() => {
+        {currentDetailTab === 'section-performance' && detailedResult && candidateData && (() => {
           // Check if all questions show 0 points
           const allQuestionsZero = detailedResult.question_evaluations.every(q => q.points_earned === 0);
           const sectionsHaveScores = detailedResult.round_scores.some(r => (r.raw_score ?? 0) > 0);
@@ -1058,7 +1126,7 @@ export default function CandidateResultDetails({
         })()}
 
         {/* Section Scores */}
-        {currentOverviewTab === 'section-performance' && (
+        {currentDetailTab === 'section-performance' && (
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 mb-4 sm:mb-6">
           <h2 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4 tracking-tight font-semibold">Section-wise Performance</h2>
           <div className="space-y-4">
@@ -1313,7 +1381,7 @@ export default function CandidateResultDetails({
         </div>}
 
         {/* Candidate Insights - AI Generated Analysis */}
-        {currentOverviewTab === 'candidate-insights' && detailedResult && detailedResult.scoring_status === 'completed' && (
+        {currentDetailTab === 'candidate-insights' && detailedResult && detailedResult.scoring_status === 'completed' && (
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden mb-6">
             <div className="bg-gray-50 border-b border-brand-blue/15 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="flex items-center gap-3">
@@ -1432,47 +1500,8 @@ export default function CandidateResultDetails({
           </div>
         )}
 
-        {/* Detailed Answers */}
+        {isQuestionAnalysisTab && (
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-          <div className="bg-brand-blue px-4 sm:px-6 py-4 sm:py-5 ring-1 ring-white/10">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div>
-                <h2 className="text-white text-sm sm:text-base tracking-tight font-semibold">Detailed Question Analysis</h2>
-                <p className="text-white/80 text-xs sm:text-sm mt-1">Review questions and answers for each section</p>
-              </div>
-              {/* Agent Status Badge */}
-              {detailedResult && (
-                <div className={`px-4 py-2 rounded-lg flex items-center gap-2 ring-1 ${
-                  detailedResult.scoring_status === 'completed'
-                    ? 'bg-green-500/20 text-green-100 ring-green-400/30'
-                    : detailedResult.scoring_status === 'processing'
-                    ? 'bg-brand-orange/20 text-white ring-brand-orange/40'
-                    : detailedResult.scoring_status === 'error'
-                    ? 'bg-red-500/20 text-red-100 ring-red-400/30'
-                    : 'bg-white/10 text-white ring-white/20'
-                }`}>
-                  {detailedResult.scoring_status === 'processing' && (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  )}
-                  {detailedResult.scoring_status === 'completed' && (
-                    <CheckCircle className="w-4 h-4" />
-                  )}
-                  {detailedResult.scoring_status === 'pending' && (
-                    <Clock className="w-4 h-4" />
-                  )}
-                  {detailedResult.scoring_status === 'error' && (
-                    <XCircle className="w-4 h-4" />
-                  )}
-                  <span className="text-sm font-medium">
-                    {detailedResult.scoring_status === 'completed' && 'Scoring Complete'}
-                    {detailedResult.scoring_status === 'processing' && 'Processing...'}
-                    {detailedResult.scoring_status === 'pending' && 'Scoring Pending'}
-                    {detailedResult.scoring_status === 'error' && 'Scoring Failed - Needs Retry'}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
 
           {/* Agent Processing State */}
           {detailedResult && detailedResult.scoring_status === 'processing' && (
@@ -1496,69 +1525,10 @@ export default function CandidateResultDetails({
           {/* Content when loaded */}
           {detailedResult && detailedResult.scoring_status !== 'processing' && (
             <>
-              {/* Tab Navigation — sticky so the candidate viewer can switch
-                  between HR / Technical / Coding / Violations without
-                  scrolling all the way back up on long question lists.
-                  z-10 keeps it above question cards but BELOW the page-level
-                  brand header (z-20), so it can never overlap the title /
-                  Prev/Next / Export Results bar during scroll. */}
-              <div className="sticky top-[64px] sm:top-[80px] z-10 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm">
-                <div className="flex flex-wrap gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3">
-                  {detailedResult.round_scores.map((round, idx) => {
-                    const isActive = activeTab === round.round_type;
-                    const questionsForRound = detailedResult.question_evaluations.filter(
-                      q => q.round_type === round.round_type
-                    );
-
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => setActiveTab(round.round_type)}
-                        className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
-                          isActive
-                            ? 'bg-white text-brand-blue border-t-2 border-x border-brand-blue font-medium shadow-sm'
-                            : 'bg-white/60 text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
-                        }`}
-                      >
-                        <span className="font-medium capitalize text-xs sm:text-sm">{round.round_type} Round</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          isActive ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' : 'bg-slate-100 text-gray-600'
-                        }`}>
-                          {questionsForRound.length}
-                        </span>
-                      </button>
-                    );
-                  })}
-
-                  {/* Violations Tab */}
-                  <button
-                    onClick={() => setActiveTab('violations')}
-                    className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
-                      activeTab === 'violations'
-                        ? 'bg-white text-red-700 border-t-2 border-x border-red-500 font-medium shadow-sm'
-                        : 'bg-white/60 text-gray-600 hover:bg-red-50 hover:text-red-700'
-                    }`}
-                  >
-                    <ShieldAlert className="w-4 h-4" />
-                    <span className="font-medium">Violations</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      activeTab === 'violations'
-                        ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
-                        : (detailedResult.proctoring_stats?.total_violations || 0) > 0
-                          ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
-                          : 'bg-slate-100 text-gray-600'
-                    }`}>
-                      {detailedResult.proctoring_stats?.total_violations || 0}
-                    </span>
-                  </button>
-
-                </div>
-              </div>
-
-              {/* Tab Content */}
+              {/* Question or violation content selected from the unified tab row above. */}
               <div className="p-3 sm:p-4 md:p-6">
                 {detailedResult.round_scores.map((round, roundIdx) => {
-                  const isActiveTab = activeTab === round.round_type;
+                  const isActiveTab = activeQuestionTab === round.round_type;
                   if (!isActiveTab) return null;
                   const isHRRound = round.round_type === 'hr';
 
@@ -2241,7 +2211,7 @@ export default function CandidateResultDetails({
                 })}
 
                 {/* Violations Tab Content */}
-                {activeTab === 'violations' && detailedResult.proctoring_stats && (
+                {activeQuestionTab === 'violations' && detailedResult.proctoring_stats && (
                   <div className="space-y-4 sm:space-y-6">
                     {/* Violations Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-100">
@@ -2813,6 +2783,9 @@ export default function CandidateResultDetails({
               </div>
             </>
           )}
+        </div>
+        )}
+        </div>
         </div>
       </div>
     </div>

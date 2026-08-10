@@ -12,7 +12,7 @@ import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import Pagination from '@/components/Pagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
-import FolderTree from '@/components/FolderTree';
+import FolderTree, { FOLDER_NAME_MAX_LENGTH } from '@/components/FolderTree';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadModal from '@/components/UploadModal';
 import type { DuplicateFile, ExistingResume } from '@/components/DuplicateResumeModal';
@@ -1730,6 +1730,12 @@ export default function MyResumesPage() {
         toast.error('Folder name must not contain HTML or script content');
         return;
       }
+      // The inputs cap this with maxLength; the check is here as well because
+      // this handler is the single point every entry path funnels through.
+      if (name.trim().length > FOLDER_NAME_MAX_LENGTH) {
+        toast.error(`Folder name must be ${FOLDER_NAME_MAX_LENGTH} characters or fewer`);
+        return;
+      }
       // Helper to get all folders including nested children
       const getAllFolders = (folderList: FolderType[]): FolderType[] => {
         const result: FolderType[] = [];
@@ -1791,6 +1797,10 @@ export default function MyResumesPage() {
     try {
       if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
         toast.error('Folder name must not contain HTML or script content');
+        return;
+      }
+      if (name.trim().length > FOLDER_NAME_MAX_LENGTH) {
+        toast.error(`Folder name must be ${FOLDER_NAME_MAX_LENGTH} characters or fewer`);
         return;
       }
       // Prevent renaming "Archived Resumes" folder

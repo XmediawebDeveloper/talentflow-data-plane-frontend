@@ -482,8 +482,13 @@ export default function AIInterview() {
     'ai-interviews',
     { activeTab, invitedOnly, modeFilter, searchQuery, sortBy,
       creatorFilter, dateFilter, customDateFrom, customDateTo,
-      configListPage, configListItemsPerPage, processingPage, processingItemsPerPage },
+      configListPage, configListItemsPerPage, processingPage, processingItemsPerPage,
+      // The cards<->list drill-in. Without it the tab, filters and page were
+      // all restored but pageView fell back to 'cards', so returning from an
+      // interview page showed only the stat tiles — the list looked gone.
+      pageView },
     (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
       // 'consent' tab was removed — never restore onto it.
       if (typeof s.activeTab === 'string' && s.activeTab !== 'consent') setActiveTab(s.activeTab as TabKey);
       if (typeof s.invitedOnly === 'boolean') setInvitedOnly(s.invitedOnly);
@@ -994,17 +999,17 @@ export default function AIInterview() {
   const getStatusBadge = (status: string) => {
     switch (normalizeConfigStatus(status)) {
       case 'published':
-        return 'bg-emerald-100 text-emerald-700';
+        return 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
       case 'draft':
-        return 'bg-amber-100 text-amber-700';
+        return 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300';
       case 'completed':
-        return 'bg-blue-100 text-blue-700';
+        return 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300';
       case 'cancelled':
-        return 'bg-red-100 text-red-700';
+        return 'bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300';
       case 'archived':
-        return 'bg-orange-100 text-orange-700';
+        return 'bg-orange-100 dark:bg-orange-500/15 text-orange-700 dark:text-orange-300';
       default:
-        return 'bg-gray-100 text-gray-600';
+        return 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300';
     }
   };
 
@@ -1080,9 +1085,11 @@ export default function AIInterview() {
     : 'neutral';
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      {/* The page shell and this panel had no dark variants at all, so every
+          card inside was painting a dark surface onto a white page. */}
+      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl dark:shadow-black/40 dark:border dark:border-slate-700/60">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Interviews' }]} />
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 lg:gap-4 mb-5">
@@ -1152,7 +1159,11 @@ export default function AIInterview() {
         </div>
 
         {/* AI-Powered Interviews Banner */}
-        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-brand-blue/15 ring-1 ring-brand-blue/10 bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 p-3 sm:p-5 mb-5 sm:mb-8 shadow-sm shadow-brand-blue/10">
+        {/* `dark:bg-none` drops the gradient outright in dark mode — its
+            `via-white` stop painted a near-white band across the banner. A flat
+            slate surface with a slightly stronger accent border reads the same
+            way against the dark page. */}
+        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-brand-blue/15 dark:border-brand-blue/25 ring-1 ring-brand-blue/10 dark:ring-brand-blue/15 bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 dark:bg-none dark:bg-slate-900 p-3 sm:p-5 mb-5 sm:mb-8 shadow-sm shadow-brand-blue/10">
           <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-brand-blue/5 blur-2xl" aria-hidden />
           <div className="relative flex items-start gap-3 sm:gap-4">
             <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
@@ -1161,7 +1172,7 @@ export default function AIInterview() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">AI-Powered Interviews</h3>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-green-100 text-green-700 text-[10px] font-semibold ring-1 ring-green-200">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300 text-[10px] font-semibold ring-1 ring-green-200 dark:ring-green-500/25">
                   LIVE
                 </span>
               </div>
@@ -1282,7 +1293,9 @@ export default function AIInterview() {
         {/* Main Content */}
         <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
           {/* Tabs */}
-          <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 bg-gradient-to-b from-white to-slate-50/40">
+          {/* The white→slate gradient is a light-mode lift only; in dark mode it
+              sat as a pale strip above the card. */}
+          <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 bg-gradient-to-b from-white to-slate-50/40 dark:bg-none dark:bg-slate-900">
             <div className="flex gap-1 sm:gap-2 overflow-x-auto scrollbar-hide -mb-px">
               {[
                 { key: 'all', label: 'All AI Interviews', count: configs.length + archivedConfigs.length },
@@ -1375,7 +1388,7 @@ export default function AIInterview() {
                     <select
                       value={creatorFilter}
                       onChange={(e) => setCreatorFilter(e.target.value)}
-                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue cursor-pointer text-gray-700 font-medium transition-colors max-w-[160px]"
+                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue cursor-pointer text-gray-700 dark:text-slate-300 font-medium transition-colors max-w-[160px]"
                       aria-label="Filter by creator"
                     >
                       <option value="all">All creators</option>
@@ -1391,7 +1404,7 @@ export default function AIInterview() {
                     <select
                       value={dateFilter}
                       onChange={(e) => setDateFilter(e.target.value as DateFilterKey)}
-                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue cursor-pointer text-gray-700 font-medium transition-colors"
+                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue cursor-pointer text-gray-700 dark:text-slate-300 font-medium transition-colors"
                       aria-label="Filter by date"
                     >
                       <option value="all">Any date</option>
@@ -1421,7 +1434,7 @@ export default function AIInterview() {
                   {aiFiltersActive && (
                     <button
                       onClick={clearAIInterviewFilters}
-                      className="flex-shrink-0 px-3 py-2 min-h-[40px] rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300"
+                      className="flex-shrink-0 px-3 py-2 min-h-[40px] rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 dark:text-red-300 border border-red-200 dark:border-red-500/25 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-500/20"
                     >
                       <XCircle className="w-4 h-4" />
                       Clear
@@ -1437,7 +1450,7 @@ export default function AIInterview() {
                     type="date"
                     value={customDateFrom}
                     onChange={(e) => setCustomDateFrom(e.target.value)}
-                    className="px-3 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-700"
+                    className="px-3 py-2 min-h-[40px] text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-700 dark:text-slate-300 dark:[color-scheme:dark]"
                     aria-label="Custom range start date"
                   />
                   <span className="text-xs font-medium text-gray-500">To</span>
@@ -1446,7 +1459,7 @@ export default function AIInterview() {
                     value={customDateTo}
                     onChange={(e) => setCustomDateTo(e.target.value)}
                     min={customDateFrom || undefined}
-                    className="px-3 py-2 min-h-[40px] text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-700"
+                    className="px-3 py-2 min-h-[40px] text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-700 dark:text-slate-300 dark:[color-scheme:dark]"
                     aria-label="Custom range end date"
                   />
                   {(customDateFrom || customDateTo) && (
@@ -1512,13 +1525,16 @@ export default function AIInterview() {
                       : [];
                     const normalizedStatus = normalizeConfigStatus(config.status);
                     const statusStyles: Record<string, { dot: string; chip: string; label: string }> = {
-                      published: { dot: 'bg-green-500', chip: 'bg-green-100 text-green-700 ring-1 ring-green-200', label: 'Active' },
-                      draft: { dot: 'bg-brand-orange', chip: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20', label: 'Draft' },
+                      // The brand-tinted chips already work in dark mode (they
+                      // are alpha over the surface); only the flat green/red
+                      // 100-level fills needed a dark counterpart.
+                      published: { dot: 'bg-green-500', chip: 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300 ring-1 ring-green-200 dark:ring-green-500/25', label: 'Active' },
+                      draft: { dot: 'bg-brand-orange', chip: 'bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-1 ring-brand-orange/20', label: 'Draft' },
                       completed: { dot: 'bg-brand-blue', chip: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20', label: 'Completed' },
-                      cancelled: { dot: 'bg-red-500', chip: 'bg-red-100 text-red-700 ring-1 ring-red-200', label: 'Cancelled' },
-                      archived: { dot: 'bg-brand-orange', chip: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20', label: 'Archived' },
+                      cancelled: { dot: 'bg-red-500', chip: 'bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-1 ring-red-200 dark:ring-red-500/25', label: 'Cancelled' },
+                      archived: { dot: 'bg-brand-orange', chip: 'bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-1 ring-brand-orange/20', label: 'Archived' },
                     };
-                    const statusStyle = statusStyles[normalizedStatus] || { dot: 'bg-gray-400', chip: 'bg-slate-100 text-gray-700 ring-1 ring-gray-200', label: getStatusLabel(config.status) };
+                    const statusStyle = statusStyles[normalizedStatus] || { dot: 'bg-gray-400', chip: 'bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700', label: getStatusLabel(config.status) };
 
                     return (
                       <div
@@ -1534,7 +1550,7 @@ export default function AIInterview() {
                         <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
                           <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ring-1 ${
                             normalizedStatus === 'published'
-                              ? 'bg-gradient-to-br from-green-100 to-green-50 text-green-600 ring-green-200 group-hover:from-green-200'
+                              ? 'bg-gradient-to-br from-green-100 to-green-50 text-green-600 ring-green-200 group-hover:from-green-200 dark:bg-none dark:bg-green-500/12 dark:text-green-300 dark:ring-green-500/25 dark:group-hover:bg-green-500/20'
                               : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15 group-hover:bg-brand-blue/15'
                           }`}>
                             <Video className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -2277,7 +2293,7 @@ export default function AIInterview() {
 
       {/* Candidate Detail Loading Overlay */}
       {candidateDetailLoading && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/60">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/60 dark:bg-slate-950/60">
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         </div>
       )}
@@ -2335,20 +2351,20 @@ export default function AIInterview() {
               const autoCompleted = reason.startsWith('time_limit');
               return (
                 <span
-                  className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded-full text-xs flex items-center gap-1"
+                  className="px-2 py-0.5 bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300 ring-1 ring-green-200 dark:ring-green-500/25 rounded-full text-xs flex items-center gap-1"
                   title={autoCompleted ? 'Auto-completed when the interview duration elapsed' : undefined}
                 >
                   <CheckCircle className="w-3 h-3" /> Completed
-                  {autoCompleted && <span className="text-green-600/80">(Auto)</span>}
+                  {autoCompleted && <span className="text-green-600/80 dark:text-green-400/80">(Auto)</span>}
                 </span>
               );
             }
             case 'in_progress': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> In Progress</span>;
             case 'invited': return <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Invited</span>;
-            case 'cancelled': return <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Cancelled</span>;
-            case 'terminated': return <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full text-xs flex items-center gap-1" title="Auto-ended by the proctoring policy — candidate left the interview screen"><Ban className="w-3 h-3" /> Terminated</span>;
+            case 'cancelled': return <span className="px-2 py-0.5 bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-1 ring-red-200 dark:ring-red-500/25 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Cancelled</span>;
+            case 'terminated': return <span className="px-2 py-0.5 bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-1 ring-red-200 dark:ring-red-500/25 rounded-full text-xs flex items-center gap-1" title="Auto-ended by the proctoring policy — candidate left the interview screen"><Ban className="w-3 h-3" /> Terminated</span>;
             case 'expired': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
-            default: return <span className="px-2 py-0.5 bg-slate-100 text-gray-700 ring-1 ring-gray-200 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> {status}</span>;
+            default: return <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> {status}</span>;
           }
         };
 
@@ -2601,7 +2617,7 @@ export default function AIInterview() {
               </div>
 
               {/* Footer */}
-              <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
+              <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
                 <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">
                   {invitationResultsLabel}
                 </span>
@@ -2648,7 +2664,7 @@ export default function AIInterview() {
             <div className="px-5 sm:px-6 py-4 flex-1 overflow-y-auto">
               <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">{confirmAction.message}</p>
             </div>
-            <div className="px-5 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
+            <div className="px-5 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
               <button
                 onClick={() => setConfirmAction(null)}
                 className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
@@ -2688,21 +2704,21 @@ export default function AIInterview() {
                 <span className="absolute w-2 h-2 rounded-full bg-green-400 animate-ping" style={{ top: -4, left: 10 }} />
                 <span className="absolute w-1.5 h-1.5 rounded-full bg-brand-blue/60 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
                 <span className="absolute w-2 h-2 rounded-full bg-brand-cyan/60 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
-                <div className="w-16 h-16 bg-green-100 ring-1 ring-green-200 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-8 h-8 text-green-600" />
+                <div className="w-16 h-16 bg-green-100 dark:bg-green-500/15 ring-1 ring-green-200 dark:ring-green-500/25 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-300" />
                 </div>
               </div>
               <p className="text-sm text-gray-500 dark:text-slate-500 mb-4">
                 Redirected successfully. This message will close in 3 seconds.
               </p>
-              <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/10 px-4 py-3 text-left">
+              <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 dark:bg-none dark:bg-white/[0.04] rounded-xl border border-brand-blue/15 dark:border-brand-blue/25 ring-1 ring-brand-blue/10 dark:ring-brand-blue/15 px-4 py-3 text-left">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm text-gray-500 dark:text-slate-500">Position</span>
                   <span className="text-sm font-medium text-brand-blue text-right">{publishedTitle}</span>
                 </div>
               </div>
             </div>
-            <div className="px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 flex items-center justify-end shrink-0">
+            <div className="px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-end shrink-0">
               <button
                 onClick={() => setShowPublishedModal(false)}
                 className="px-4 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"

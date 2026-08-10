@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu, Moon, Sun } from 'lucide-react';
+import { Bell, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Moon, Sun } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
@@ -36,7 +36,6 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showHelpMenu, setShowHelpMenu] = useState(false);
   const [tenantStatus, setTenantStatus] = useState<string | null>(null);
 
   // Notification state
@@ -564,7 +563,6 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             <button
               onClick={() => {
                 setShowPlanMenu(!showPlanMenu);
-                setShowHelpMenu(false);
                 setShowNotifications(false);
                 setShowUserMenu(false);
               }}
@@ -704,190 +702,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           </div>
         )}
 
-        {/* FIX-010: Help & Support with Tooltip - Hidden on mobile */}
-        <div className="relative hidden sm:block">
-          <Tooltip content="Help & Support" position="bottom">
-            <button
-              onClick={() => {
-                setShowHelpMenu(!showHelpMenu);
-                setShowNotifications(false);
-                setShowPlanMenu(false);
-                setShowUserMenu(false);
-              }}
-              className="relative p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
-              aria-label="Help & Support"
-            >
-              <HelpCircle className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-          </Tooltip>
-
-          {showHelpMenu && (
-            <>
-              <div
-                className="fixed inset-0 z-[80]"
-                onClick={() => setShowHelpMenu(false)}
-              ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-[85] max-h-[calc(100vh-80px)] overflow-y-auto">
-                <div className="px-4 py-3 bg-brand-blue text-white">
-                  <h3 className="font-medium flex items-center gap-2">
-                    <HelpCircle className="w-5 h-5" />
-                    Help & Support
-                  </h3>
-                  <p className="text-sm text-white/80 mt-1">Get the help you need</p>
-                </div>
-
-                <div className="p-4">
-                  {/* Quick Actions */}
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <button
-                      onClick={() => {
-                        setShowHelpMenu(false);
-                        router.push('/help');
-                      }}
-                      className="p-3 border border-gray-200 rounded-lg hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors group text-left"
-                    >
-                      <Book className="w-5 h-5 text-gray-700 mb-2" />
-                      <div className="text-sm text-gray-900">Knowledge Base</div>
-                      <div className="text-xs text-gray-500">Browse articles</div>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowHelpMenu(false);
-                        router.push('/help?article=getting-started');
-                      }}
-                      className="p-3 border border-gray-200 rounded-lg hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors group text-left"
-                    >
-                      <FileText className="w-5 h-5 text-gray-600 mb-2" />
-                      <div className="text-sm text-gray-900">Documentation</div>
-                      <div className="text-xs text-gray-500">Full guides</div>
-                    </button>
-                  </div>
-
-                  {/* Popular Articles */}
-                  <div className="mb-4">
-                    <h4 className="text-sm text-gray-900 mb-2">Popular Articles</h4>
-                    <div className="space-y-2">
-                      <button
-                        onClick={() => {
-                          setShowHelpMenu(false);
-                          router.push('/help?article=getting-started');
-                        }}
-                        className="w-full text-left p-2 hover:bg-brand-blue/5 rounded-lg transition-colors group"
-                      >
-                        <div className="flex items-start gap-2">
-                          <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
-                          <div>
-                            <div className="text-sm text-gray-900 group-hover:text-gray-700">Getting Started with TalentFlow</div>
-                            <div className="text-xs text-gray-500">5 min read</div>
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowHelpMenu(false);
-                          router.push('/help?article=upload-parse-resumes');
-                        }}
-                        className="w-full text-left p-2 hover:bg-brand-blue/5 rounded-lg transition-colors group"
-                      >
-                        <div className="flex items-start gap-2">
-                          <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
-                          <div>
-                            <div className="text-sm text-gray-900 group-hover:text-gray-700">How to Upload & Parse Resumes</div>
-                            <div className="text-xs text-gray-500">6 min read</div>
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowHelpMenu(false);
-                          router.push('/help?article=create-job-description');
-                        }}
-                        className="w-full text-left p-2 hover:bg-brand-blue/5 rounded-lg transition-colors group"
-                      >
-                        <div className="flex items-start gap-2">
-                          <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
-                          <div>
-                            <div className="text-sm text-gray-900 group-hover:text-gray-700">How to Create a Job Description</div>
-                            <div className="text-xs text-gray-500">8 min read</div>
-                          </div>
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowHelpMenu(false);
-                          router.push('/help?article=create-assessments');
-                        }}
-                        className="w-full text-left p-2 hover:bg-brand-blue/5 rounded-lg transition-colors group"
-                      >
-                        <div className="flex items-start gap-2">
-                          <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
-                          <div>
-                            <div className="text-sm text-gray-900 group-hover:text-gray-700">Creating & Managing Assessments</div>
-                            <div className="text-xs text-gray-500">10 min read</div>
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Contact Options */}
-                  <div className="border-t border-gray-200 pt-4">
-                    <h4 className="text-sm text-gray-900 mb-3">Contact Support</h4>
-                    <div className="space-y-2">
-                      <a
-                        href="mailto:support@talentflow.com"
-                        className="w-full flex items-center gap-3 p-2 hover:bg-brand-blue/5 rounded-lg transition-colors text-left"
-                      >
-                        <div className="w-8 h-8 bg-brand-blue/10 rounded-md flex items-center justify-center">
-                          <Mail className="w-4 h-4 text-brand-blue" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-sm text-gray-900">Email Support</div>
-                          <div className="text-xs text-gray-500">support@talentflow.com</div>
-                        </div>
-                        <ExternalLink className="w-4 h-4 text-gray-400" />
-                      </a>
-                      <a
-                        href="tel:+18001234567"
-                        className="w-full flex items-center gap-3 p-2 hover:bg-brand-blue/5 rounded-lg transition-colors text-left"
-                      >
-                        <div className="w-8 h-8 bg-brand-blue/10 rounded-md flex items-center justify-center">
-                          <Phone className="w-4 h-4 text-brand-blue" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-sm text-gray-900">Phone Support</div>
-                          <div className="text-xs text-gray-500">+1 (800) 123-4567</div>
-                        </div>
-                        <ExternalLink className="w-4 h-4 text-gray-400" />
-                      </a>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2 mt-4">
-                    <button
-                      onClick={() => {
-                        setShowHelpMenu(false);
-                        router.push('/support-tickets');
-                      }}
-                      className="flex-1 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors text-sm font-medium"
-                    >
-                      Open Support Ticket
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
         {/* FIX-010: Notifications with Tooltip */}
         <div className="relative">
           <Tooltip content="Notifications" position="bottom">
             <button
               onClick={() => {
                 setShowNotifications(!showNotifications);
-                setShowHelpMenu(false);
                 setShowPlanMenu(false);
                 setShowUserMenu(false);
               }}
@@ -1188,6 +1008,27 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       </div>
                     </button>
                   )}
+                  {/* User Guide — the header's own guide button is hidden below
+                      sm, so this is the only way to it on a phone. It goes
+                      straight to /help rather than opening that dropdown, which
+                      would render nothing at mobile widths. Ungated by
+                      subscription, same as Support Tickets: someone whose plan
+                      lapsed still needs the docs. */}
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      router.push('/help');
+                    }}
+                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-brand-blue/5 transition-colors flex items-center gap-3 group"
+                  >
+                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
+                      <Book className="w-4 h-4 text-brand-blue" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">User Guide</p>
+                      <p className="text-xs text-gray-500">Guides, articles and how-tos</p>
+                    </div>
+                  </button>
                   <button
                     onClick={() => {
                       setShowUserMenu(false);

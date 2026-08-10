@@ -3162,11 +3162,13 @@ export default function AIInterviewConfig() {
 
               {/* Actions */}
               <div className="space-y-2">
+                {/* No native `title` on the button — the styled bubble below
+                    already shows `continueDisabledReason`, and setting both made
+                    the browser draw a second plain tooltip over it. */}
                 <div className="relative group">
                   <button
                     onClick={handleContinueToClusters}
                     disabled={!canContinueToClusters}
-                    title={continueDisabledReason || undefined}
                     aria-disabled={!canContinueToClusters}
                     className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
                       canContinueToClusters

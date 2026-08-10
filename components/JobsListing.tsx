@@ -222,11 +222,20 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       searchQuery, statusFilter, creationMethodFilter, locationFilter, viewMode,
       departmentFilter, industryFilter, experienceFilter, employmentTypeFilter,
       applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter,
-      sortBy, sortOrder, currentPage, itemsPerPage,
+      sortBy, sortOrder, currentPage, itemsPerPage, pageView,
     },
     (s) => {
       if (typeof s.searchQuery === 'string') search.setQuery(s.searchQuery);
       if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
+      // Restore the two-step view too. Without this, coming back from a
+      // job-details page always remounted on 'cards' — the filters and page
+      // were restored but the whole list stayed hidden behind the stat tiles,
+      // which read as "the table vanished". A deep link carrying an explicit
+      // status still wins: it means "show me that list".
+      if ((s.pageView === 'cards' || s.pageView === 'list')
+        && !(initialStatusFilter && initialStatusFilter !== 'all')) {
+        setPageView(s.pageView);
+      }
       // One hydrate instead of eleven setters. `setFilters` also marks them
       // committed, so the More Filters highlight and Reset survive the round
       // trip without persisting a separate applied flag.
@@ -646,13 +655,20 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const totalPages = Math.ceil(sortedJobs.length / itemsPerPage);
   const currentJobs = sortedJobs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  // Reset to page 1 when filters change
+  // Reset to page 1 when filters change. Skipped on the mount pass: the
+  // restored filters and the restored page arrive together, and resetting here
+  // would throw away the page the user was on before opening a job.
+  const skipPageResetRef = useRef(true);
   useEffect(() => {
+    if (skipPageResetRef.current) { skipPageResetRef.current = false; return; }
     setCurrentPage(1);
   }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, sortBy, sortOrder]);
 
-  // Update items per page based on view mode
+  // Update items per page based on view mode. Also skipped on mount, so it
+  // can't overwrite a restored page size / page number either.
+  const skipViewModeResetRef = useRef(true);
   useEffect(() => {
+    if (skipViewModeResetRef.current) { skipViewModeResetRef.current = false; return; }
     setItemsPerPage(10);
     setCurrentPage(1); // Reset to first page when view mode changes
   }, [viewMode]);

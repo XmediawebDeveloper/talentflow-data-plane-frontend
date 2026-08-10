@@ -9,6 +9,7 @@ import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } fr
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { FOLDER_NAME_MAX_LENGTH } from './FolderTree';
 import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
 import ErrorModal from './ErrorModal';
 
@@ -990,10 +991,13 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                           }
                         }}
                         placeholder="e.g., Senior Developers, Frontend Team..."
+                        maxLength={FOLDER_NAME_MAX_LENGTH}
                         autoFocus
                         className="w-full px-3 sm:px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-sm"
                       />
-                      <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1">Press Enter to create, Esc to cancel</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1">
+                        Press Enter to create, Esc to cancel · {newFolderName.length}/{FOLDER_NAME_MAX_LENGTH}
+                      </p>
                     </div>
                   </div>
 

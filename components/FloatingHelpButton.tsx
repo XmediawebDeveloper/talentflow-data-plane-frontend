@@ -56,11 +56,13 @@ export default function FloatingHelpButton({ onNavigateToSupport }: FloatingHelp
           </>
         )}
 
-        {/* Main Button */}
+        {/* Main Button — aria-label only, no native `title`: the styled bubble
+            below is the visible tooltip, and a `title` drew a second one on top
+            of it with the same text. */}
         <button
           onClick={() => setShowMenu(!showMenu)}
           className="w-14 h-14 bg-gray-800 text-white rounded-full shadow-lg hover:bg-gray-900 hover:shadow-xl transition-all flex items-center justify-center group relative"
-          aria-label="Get Help & Support" title="Get Help & Support"
+          aria-label="Get Help & Support"
         >
           <HelpCircle className="w-6 h-6" />
           
