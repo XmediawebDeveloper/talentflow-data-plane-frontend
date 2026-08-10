@@ -27,6 +27,7 @@ import {
   signIn,
   settle,
   describeCase,
+  recordObserved,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -150,6 +151,14 @@ test.describe("Tier 3 — every page loads", () => {
         failures.push(`${p.name} (${p.path}) rendered without the app shell`);
       }
     }
+
+    // What it actually walked, so the result is a fact rather than a sentence
+    // pointing back at the expectation.
+    await recordObserved({
+      "pages opened": String(PAGES.length),
+      "kept the shell and the session": String(PAGES.length - failures.length),
+      "lost one or the other": String(failures.length),
+    });
 
     expect(
       failures,

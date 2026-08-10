@@ -477,6 +477,17 @@ export function assertNoServerErrors(calls: ApiCall[], where: string): void {
  * generic network-failure banner the login page showed when CORS was wrong.
  */
 export async function assertPageHealthy(page: Page, where: string): Promise<void> {
+  // Every page this passes through is recorded, which is what turns "Yes,
+  // exactly that." into a result somebody can read. A test that walks fourteen
+  // pages should say it walked fourteen pages and name them; the alternative is
+  // a sentence pointing back at the expectation, which is what the field was
+  // supposed to stop being.
+  //
+  // Recorded here rather than in each test because this is the assertion every
+  // browser test already makes about a page having rendered — so the fact is
+  // free, and it cannot drift from what actually loaded.
+  await recordObserved({ [`page: ${where}`]: new URL(page.url()).pathname });
+
   await expect(
     page.getByRole("heading", { name: /we couldn't load this page|something went wrong/i }),
     `${where} rendered an error boundary`,
