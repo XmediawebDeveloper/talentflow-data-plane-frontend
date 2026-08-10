@@ -91,18 +91,17 @@ test.describe("Tier 3 — users, roles and the signed-in account", () => {
       `GET /users returned nobody. Calls:\n${describeCalls(calls)}`,
     ).toBeGreaterThan(0);
 
-    // The list pages at ten rows in the browser out of the twenty the API sent,
-    // so "all twenty are on screen" is false while everything works. Two things
-    // are true regardless of paging, and both matter:
+    // What is true regardless of paging: every address the page shows is one the
+    // API actually sent. A row the UI invented, or held over from a previous
+    // tenant, fails here and nowhere else.
     //
-    //   1. the page says how many there are, and agrees with the API
-    //   2. every address it shows is one the API actually sent — a row the UI
-    //      invented, or held over from a previous tenant, fails here and
-    //      nowhere else
-    await expect(
-      page.getByText(new RegExp(`\\b${returned.length}\\s+users?\\b`, "i")).first(),
-      `GET /users returned ${returned.length} users and the page does not say so`,
-    ).toBeVisible({ timeout: 20_000 });
+    // There used to be a second assertion — that the page prints the number of
+    // users the API returned — and it was wrong twice over. It compared against
+    // one page of results rather than the total, so it could only hold while the
+    // tenant had fewer users than a page; once the QA tenant reached 280 it
+    // failed every run. And counting is TC-T391's whole job, done there against
+    // the figure the product actually derives its count from. This was a
+    // duplicate that happened to be the broken copy.
 
     const onScreen = await page.evaluate(() =>
       [...new Set((document.body.innerText.match(/[\w.+-]+@[\w.-]+\.\w+/g) ?? []))],
