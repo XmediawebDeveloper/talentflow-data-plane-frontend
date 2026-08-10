@@ -232,7 +232,7 @@ variables:
     APP_PORT: "3999"
   script:
     - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
-    - docker run -d --name "e2e-app-$CI_JOB_ID" -p "$APP_PORT:3000" "$IMAGE:$TAG-e2e"
+    - docker run -d --name "e2e-app-$CI_JOB_ID" -p "$APP_PORT:3000" "$IMAGE:e2e"
     # Shaped like .deploy-template's smoke check: `if` guards the probe and the
     # give-up branch lives after the loop, so nothing in the retry path can trip
     # the runner's `set -e`.
@@ -286,7 +286,7 @@ variables:
     APP_PORT: "3998"
   script:
     - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
-    - docker run -d --name "e2e-app-$CI_JOB_ID" -p "$APP_PORT:3000" "$IMAGE:$TAG-e2e"
+    - docker run -d --name "e2e-app-$CI_JOB_ID" -p "$APP_PORT:3000" "$IMAGE:e2e"
     # Shaped like .deploy-template's smoke check: `if` guards the probe and the
     # give-up branch lives after the loop, so nothing in the retry path can trip
     # the runner's `set -e`.
@@ -571,7 +571,12 @@ variables:
       for img in $(docker images "$IMAGE" --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$'); do
         n=$((n + 1))
         [ "$n" -le "$KEEP" ] && continue
-        case "$img" in *":$TAG-"*) continue ;; esac
+        # This pipeline's own tags. `:qa` and `:e2e` are named here explicitly
+        # because they no longer carry the commit — and `e2e` in particular is
+        # built by an earlier job and used by a later one, with this prune in
+        # between. Matching only on the sha would have deleted it out from under
+        # `Test 1 of 3`, which builds nothing and would simply not find it.
+        case "$img" in *":$TAG-"*|*":qa"|*":e2e") continue ;; esac
         echo "$INUSE" | grep -qx "$img" && continue
         docker rmi "$img" >/dev/null 2>&1 && removed=$((removed + 1))
       done
@@ -582,6 +587,12 @@ variables:
       # `--max-used-space` on this Docker; `--keep-storage` was the older spelling
       # and is not accepted here, so both are tried before falling back to the
       # time bound that was never the right shape.
+      # `qa` and `e2e` are rebuilt under the same name every pipeline, so the
+      # image each one replaces loses its tag and becomes dangling — which is
+      # exactly what `docker image prune` removes, and the one case where it
+      # helps. It never could before: every tag carried a commit and none of
+      # them was ever untagged.
+      docker image prune -f >/dev/null 2>&1 || true
       docker builder prune -f --max-used-space 4GB >/dev/null 2>&1 \
         || docker builder prune -f --keep-storage 4GB >/dev/null 2>&1 \
         || docker builder prune -f --filter until=24h >/dev/null 2>&1 || true
@@ -655,13 +666,13 @@ variables:
         --build-arg NEXT_PUBLIC_BASE_DOMAIN="$QA_BASE_DOMAIN" \
         --build-arg NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED="$QA_RAZORPAY_BYPASS" \
         --build-arg NEXT_PUBLIC_RAZORPAY_KEY_ID="" \
-        -t "$IMAGE:$TAG-qa" .
+        -t "$IMAGE:qa" .
 
       # Assert the URL really is in the bundle. A build-arg typo produces an
       # image that starts, serves, and quietly calls the wrong backend — and the
       # only symptom is Tier 3 failing for a reason that looks like anything but
       # a build-arg typo.
-      BAKED=$(docker run --rm --entrypoint sh "$IMAGE:$TAG-qa" -c \
+      BAKED=$(docker run --rm --entrypoint sh "$IMAGE:qa" -c \
         "grep -rlo '$QA_API_URL/api/v1' /app/.next 2>/dev/null | head -1" || true)
       if [ -z "$BAKED" ]; then
         echo "the QA frontend image does not contain $QA_API_URL/api/v1."
@@ -686,10 +697,16 @@ variables:
         docker run -d --name "$name" --restart unless-stopped \
           --label "qa.spec=$want" "$@" >/dev/null
       }
-      # The image tag carries the commit, so every commit legitimately rolls this
-      # container — it has to, that is the code under test.
-      ensure "$QA_APP_CONTAINER" "app:$IMAGE:$TAG-qa:$QA_APP_PORT" \
-        -p "$QA_APP_PORT:3000" --memory=1g "$IMAGE:$TAG-qa"
+      # The image ID, not the tag. `ensure` replaces the container when its spec
+      # changes, and the spec used to carry the commit through the tag name —
+      # which worked only because every commit produced a new tag. The tag is
+      # fixed now, so a fresh build under the same name would have left the old
+      # container running against the previous bytes, and the tests would have
+      # passed on code that is no longer the code. The ID changes when the image
+      # does, which is the thing actually being asked about.
+      QA_APP_ID=$(docker image inspect "$IMAGE:qa" --format '{{.Id}}')
+      ensure "$QA_APP_CONTAINER" "app:$QA_APP_ID:$QA_APP_PORT" \
+        -p "$QA_APP_PORT:3000" --memory=1g "$IMAGE:qa"
 
       for i in $(seq 1 24); do
         if curl -fsS "http://127.0.0.1:$QA_APP_PORT/login?org=probe" >/dev/null 2>&1; then
@@ -1084,7 +1101,7 @@ variables:
         --build-arg NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED="$NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED"
         --build-arg NEXT_PUBLIC_RAZORPAY_KEY_ID="$NEXT_PUBLIC_RAZORPAY_KEY_ID"
         -t "$IMAGE:$TAG-$CI_ENVIRONMENT_SLUG"
-        -t "$IMAGE:$TAG-e2e" .
+        -t "$IMAGE:e2e" .
   environment:
     name: staging
     action: prepare
