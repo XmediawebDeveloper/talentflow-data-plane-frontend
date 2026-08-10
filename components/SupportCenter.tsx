@@ -940,7 +940,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               </div>
 
               {loading ? (
-                <div className="flex items-center justify-center py-8 sm:py-12">
+                <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-800" />
                 </div>
               ) : tickets.length === 0 ? (
@@ -1258,7 +1258,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
               {/* Tickets */}
               {loading ? (
-                <div className="flex items-center justify-center py-8 sm:py-12">
+                <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-800" />
                 </div>
               ) : (
@@ -1298,7 +1298,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
 
                   {/* Desktop Table */}
-                  <div className="hidden md:block overflow-x-auto">
+                  <div className="hidden md:block overflow-x-auto tf-table-shell">
                     <table className="w-full">
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>
@@ -1740,7 +1740,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               </div>
 
               {internalLoading ? (
-                <div className="flex items-center justify-center py-8 sm:py-12">
+                <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-600" />
                 </div>
               ) : internalTickets.length === 0 ? (
@@ -1858,7 +1858,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
               {/* Tickets */}
               {internalLoading ? (
-                <div className="flex items-center justify-center py-8 sm:py-12">
+                <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-600" />
                 </div>
               ) : (
@@ -1911,7 +1911,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   </div>
 
                   {/* Desktop Table */}
-                  <div className="hidden md:block overflow-x-auto">
+                  <div className="hidden md:block overflow-x-auto tf-table-shell">
                     <table className="w-full">
                       <thead className="bg-gray-50 border-b border-gray-200">
                         <tr>

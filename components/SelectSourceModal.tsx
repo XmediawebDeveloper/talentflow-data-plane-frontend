@@ -1234,7 +1234,7 @@ export default function SelectSourceModal({
                 header relied on `sticky top-0 z-10`, which the rows painted over. */}
             <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-6">
               {loading ? (
-                <div className="flex items-center justify-center py-10 sm:py-16">
+                <div className="flex items-center justify-center py-10 sm:py-16 tf-loader-center tf-loader-center--compact">
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
                   <span className="ml-2 sm:ml-3 text-xs sm:text-base text-gray-600 dark:text-slate-400">Loading resumes...</span>
                 </div>

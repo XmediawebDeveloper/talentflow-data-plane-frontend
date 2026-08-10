@@ -314,7 +314,7 @@ export default function Analytics() {
           <button className="text-sm text-gray-800 dark:text-slate-100 hover:text-gray-900">View All My Jobs</button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto tf-table-shell">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200 dark:border-slate-700">

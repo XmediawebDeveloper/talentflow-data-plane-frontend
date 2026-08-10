@@ -257,7 +257,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
 
       {/* Members Table */}
       {members.length > 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden tf-table-shell">
           <table className="w-full" role="table" aria-label="Team member usage statistics">
             <thead className="bg-gray-50">
               <tr>

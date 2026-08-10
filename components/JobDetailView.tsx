@@ -2907,7 +2907,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </div>
           )}
           {loadingAIInterviewConfig ? (
-            <div className="flex items-center justify-center py-16">
+            <div className="flex items-center justify-center py-16 tf-loader-center">
               <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
               <span className="ml-3 text-sm text-gray-500 dark:text-slate-400">Loading AI interview results...</span>
             </div>
@@ -3345,7 +3345,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* Content */}
             <div className="p-4 sm:p-5 overflow-y-auto flex-1">
               {loadingHistory ? (
-                <div className="flex items-center justify-center py-12">
+                <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                   <Loader2 className="h-8 w-8 text-gray-600 dark:text-slate-400 animate-spin" />
                   <span className="ml-3 text-gray-600 dark:text-slate-400">Loading history...</span>
                 </div>
@@ -3824,7 +3824,7 @@ function AIMatchTabContent({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12 tf-loader-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 text-gray-600 dark:text-slate-400 animate-spin" />
           <p className="text-gray-500 dark:text-slate-500 text-sm">Loading AI match results...</p>
@@ -3951,7 +3951,7 @@ function AIMatchTabContent({
         {/* Bounded viewport: rows scroll vertically (and horizontally) while the
             header stays pinned. Header background/border live on the cells so the
             pinned row paints solid over the rows sliding underneath. */}
-        <div className="min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto">
+        <div className="min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto tf-table-shell">
           <table className="w-full min-w-[1450px] table-auto">
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>

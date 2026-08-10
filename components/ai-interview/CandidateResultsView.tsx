@@ -1333,7 +1333,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     const mm = Math.floor(evalElapsedSec / 60);
     const ss = String(evalElapsedSec % 60).padStart(2, '0');
     return (
-    <div className="flex flex-col items-center justify-center py-24">
+    <div className="flex flex-col items-center justify-center py-24 tf-loader-center">
       <div className="relative mb-6">
         <div className="w-16 h-16 rounded-full border-4 border-brand-blue/20" />
         <Loader2 className="absolute inset-0 w-16 h-16 text-brand-blue animate-spin" />
@@ -3378,7 +3378,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             )}
                           </div>
 
-                          <div className="overflow-x-auto rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white">
+                          <div className="overflow-x-auto rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white tf-table-shell">
                             <table className="w-full text-sm">
                               <thead className="bg-slate-50 text-gray-600 text-xs uppercase tracking-wide border-b border-gray-100">
                                 <tr>
@@ -4004,7 +4004,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                     </div>
                   ) : (
                     <>
-                      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+                      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden tf-table-shell">
                         <table className="w-full text-sm">
                           <thead className="bg-slate-50 border-b border-gray-100">
                             <tr>

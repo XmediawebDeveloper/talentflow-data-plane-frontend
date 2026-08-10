@@ -1226,7 +1226,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
           <div className="p-3 sm:p-4 md:p-6">
             {addonsLoading && (
-              <div className="flex flex-col items-center justify-center py-12">
+              <div className="flex flex-col items-center justify-center py-12 tf-loader-center">
                 <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
                   <Loader2 className="w-8 h-8 text-gray-400 dark:text-slate-500 animate-spin" />
                 </div>

@@ -292,7 +292,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
             <div className="flex-1 overflow-auto p-3 sm:p-6">
               {/* Matrix View */}
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto tf-table-shell tf-table-shell--compact">
                   <table className="w-full border-collapse min-w-[400px]">
                     <thead className="bg-gray-50">
                       <tr>

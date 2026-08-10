@@ -232,7 +232,7 @@ const STATS = [
 const STEPS = [
   {
     title: "Sign up",
-    description: "Two minutes, no credit card, no sales call.",
+    description: "Two minutes,No credit card required, no sales call.",
   },
   {
     title: "Add the role",
@@ -422,7 +422,7 @@ export function LandingPageContent() {
             {/* One quiet line where a three-item checklist used to sit. The
                 same reassurance, without competing with the headline. */}
             <p className="mt-5 text-sm text-slate-500 dark:text-slate-400">
-              {trialDays}-day free trial · no credit card
+              {trialDays}-day free trial ·  No credit card required
             </p>
             </div>
           </div>

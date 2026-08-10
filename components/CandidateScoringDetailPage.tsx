@@ -119,9 +119,10 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [showInviteMenu, setShowInviteMenu] = useState(false);
   const inviteMenuRef = useRef<HTMLDivElement>(null);
 
-  // In-page resume view — swaps the candidate body for the resume, keeping the
-  // page (and its breadcrumb) instead of routing to /recruitment/resume-view.
-  const [view, setView] = useState<'candidate' | 'resume'>('candidate');
+  // Resume opens as a modal over this page (the same overlay ResumeDetailView
+  // renders on job-details), so the score stays visible underneath. It used to
+  // swap the candidate body out, which lost that context on the way in and back.
+  const [showResumeModal, setShowResumeModal] = useState(false);
   const [resumeDetail, setResumeDetail] = useState<any>(null);
   const [loadingResumeDetail, setLoadingResumeDetail] = useState(false);
 
@@ -493,7 +494,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       toast.error('Resume is not available for this candidate');
       return;
     }
-    setView('resume');
+    setShowResumeModal(true);
     if (resumeDetail || loadingResumeDetail) return;
 
     setLoadingResumeDetail(true);
@@ -509,7 +510,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     } catch (err) {
       console.error('[CandidateScoringDetailPage] Failed to load resume:', err);
       toast.error('Could not load the resume. Please try again.');
-      setView('candidate');
+      setShowResumeModal(false);
     } finally {
       setLoadingResumeDetail(false);
     }
@@ -685,53 +686,30 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          {/* In the resume view the Candidate Details crumb becomes clickable
-              (onClick, not href — we never left this route). */}
+          {/* The resume is a modal now, so the trail always names the candidate —
+              no "› Resume" leaf, and the pager keeps its place (the backdrop
+              covers it while the modal is open). */}
           <PageBreadcrumb
             className="mb-4 md:mb-6"
-            // Previous / Next rides inside the breadcrumb bar, as on
-            // job-details. Dropped in the resume view, where paging to the next
-            // candidate from someone else's resume reads as a bug.
-            actions={view !== 'resume' ? (
+            // Previous / Next rides inside the breadcrumb bar, as on job-details.
+            actions={
               <RecordPager
                 currentIndex={currentIndex}
                 totalCount={totalCount}
                 onPrev={onPrev}
                 onNext={onNext}
               />
-            ) : undefined}
-            items={(() => {
+            }
+            items={breadcrumbItems ?? [
               // Deepest crumb names the record being viewed (the candidate),
               // not a generic page label.
-              const base = breadcrumbItems ?? [
-                { label: 'Dashboard', href: '/dashboard' },
-                { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
-                { label: jobTitle, href: `/recruitment/resume-scoring?jd_id=${jobId}` },
-                { label: resume.candidateName || 'Candidate' },
-              ];
-              if (view !== 'resume') return base;
-              return [
-                ...base.slice(0, -1),
-                { ...base[base.length - 1], onClick: () => setView('candidate') },
-                { label: 'Resume' },
-              ];
-            })()}
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
+              { label: jobTitle, href: `/recruitment/resume-scoring?jd_id=${jobId}` },
+              { label: resume.candidateName || 'Candidate' },
+            ]}
           />
 
-          {view === 'resume' ? (
-            loadingResumeDetail || !resumeDetail ? (
-              <div className="flex items-center justify-center gap-2 text-gray-500 py-20">
-                <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
-                <span className="text-sm">Loading resume...</span>
-              </div>
-            ) : (
-              <ResumeDetailView
-                embedded
-                resume={resumeDetail}
-                onClose={() => setView('candidate')}
-              />
-            )
-          ) : (
           <>
 
       {/* Header */}
@@ -1878,6 +1856,25 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
         </div>
       </div>
           </>
+
+          {/* View Resume — an overlay over the candidate page. ResumeDetailView
+              brings its own backdrop in this (non-embedded) form; the loading
+              state needs a matching one so the popup appears on click rather
+              than after the fetch settles. */}
+          {showResumeModal && (
+            loadingResumeDetail || !resumeDetail ? (
+              <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-xl shadow-2xl px-6 py-5 flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+                  <span className="text-sm text-gray-600">Loading resume...</span>
+                </div>
+              </div>
+            ) : (
+              <ResumeDetailView
+                resume={resumeDetail}
+                onClose={() => setShowResumeModal(false)}
+              />
+            )
           )}
 
           {/* Assessment picker — only when this JD has more than one invitable

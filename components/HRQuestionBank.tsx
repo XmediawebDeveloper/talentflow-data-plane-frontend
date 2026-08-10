@@ -643,7 +643,7 @@ export default function HRQuestionBank() {
 
       {/* Question List */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <div className="flex flex-col items-center justify-center py-16 gap-3 tf-loader-center">
           <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
           <p className="text-gray-500 text-sm">Loading questions...</p>
         </div>

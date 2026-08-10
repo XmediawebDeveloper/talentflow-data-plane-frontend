@@ -405,65 +405,67 @@ function TeamRow({
           <td colSpan={7} className="p-0 border-t border-gray-100 dark:border-slate-700/60">
             <div className="bg-gray-50 dark:bg-slate-800/50">
               {loadingMembers ? (
-                <div className="flex items-center gap-2 text-gray-400 dark:text-slate-500 text-sm px-6 py-4">
+                <div className="flex items-center justify-center gap-2 text-gray-400 dark:text-slate-500 text-sm px-6 py-4">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Loading members…
                 </div>
               ) : members && members.length > 0 ? (
-                <table className="w-full">
-                  {/* Member table header — 9 cols */}
-                  <thead>
-                    <tr className="border-b border-gray-200 dark:border-slate-700">
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
-                        Member
-                      </th>
-                      <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
-                        <span className="flex flex-col items-center gap-0.5">
-                          <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RS}`} />
-                          <span className="text-gray-500 dark:text-slate-500">Resume Scoring</span>
-                        </span>
-                      </th>
-                      <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
-                        <span className="flex flex-col items-center gap-0.5">
-                          <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AS}`} />
-                          <span className="text-gray-500 dark:text-slate-500">Assessment</span>
-                        </span>
-                      </th>
-                      <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
-                        <span className="flex flex-col items-center gap-0.5">
-                          <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AIU}`} />
-                          <span className="text-gray-500 dark:text-slate-500">AI Interview</span>
-                        </span>
-                      </th>
-                      <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
-                        <span className="flex flex-col items-center gap-0.5">
-                          <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RU}`} />
-                          <span className="text-gray-500 dark:text-slate-500">Resume Storage</span>
-                        </span>
-                      </th>
-                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
-                        <span className="flex flex-col items-center gap-0.5">
-                          <FileText className="w-3 h-3 text-indigo-400" />
-                          JDs
-                        </span>
-                      </th>
-                      <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
-                        <span className="flex flex-col items-center gap-0.5">
-                          <ClipboardCheck className="w-3 h-3 text-purple-400" />
-                          Assessments
-                        </span>
-                      </th>
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
-                        Last Active
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-50 dark:divide-slate-700/60">
-                    {members.map(m => (
-                      <MemberRow key={m.user_id} member={m} fromDate={fromDate} />
-                    ))}
-                  </tbody>
-                </table>
+                <div className="tf-table-shell">
+                  <table className="w-full">
+                    {/* Member table header — 9 cols */}
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-slate-700">
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                          Member
+                        </th>
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
+                          <span className="flex flex-col items-center gap-0.5">
+                            <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RS}`} />
+                            <span className="text-gray-500 dark:text-slate-500">Resume Scoring</span>
+                          </span>
+                        </th>
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
+                          <span className="flex flex-col items-center gap-0.5">
+                            <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AS}`} />
+                            <span className="text-gray-500 dark:text-slate-500">Assessment</span>
+                          </span>
+                        </th>
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
+                          <span className="flex flex-col items-center gap-0.5">
+                            <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AIU}`} />
+                            <span className="text-gray-500 dark:text-slate-500">AI Interview</span>
+                          </span>
+                        </th>
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wider">
+                          <span className="flex flex-col items-center gap-0.5">
+                            <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RU}`} />
+                            <span className="text-gray-500 dark:text-slate-500">Resume Storage</span>
+                          </span>
+                        </th>
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                          <span className="flex flex-col items-center gap-0.5">
+                            <FileText className="w-3 h-3 text-indigo-400" />
+                            JDs
+                          </span>
+                        </th>
+                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                          <span className="flex flex-col items-center gap-0.5">
+                            <ClipboardCheck className="w-3 h-3 text-purple-400" />
+                            Assessments
+                          </span>
+                        </th>
+                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                          Last Active
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-50 dark:divide-slate-700/60">
+                      {members.map(m => (
+                        <MemberRow key={m.user_id} member={m} fromDate={fromDate} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <p className="px-6 py-4 text-sm text-gray-400 dark:text-slate-500 italic">
                   No members with usage in this period.
@@ -719,7 +721,7 @@ export default function TeamUsageAnalytics() {
       </div>
 
       {/* Outer team table — 7 cols (Team, RS, AS, AIU, RU, Total, expand) */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden tf-table-shell">
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
             <tr>
@@ -738,8 +740,11 @@ export default function TeamUsageAnalytics() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="py-16">
-                  <div className="flex items-center justify-center gap-3 text-gray-500 dark:text-slate-500">
+                <td colSpan={7}>
+                  {/* This row is the only content of a shell that reserves 400px, so the
+                      loader box carries that height too — otherwise it sits at the top
+                      of the box with the rest of it left empty. */}
+                  <div className="flex items-center justify-center gap-3 text-gray-500 dark:text-slate-500 tf-loader-center">
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span className="text-sm">Loading team usage…</span>
                   </div>

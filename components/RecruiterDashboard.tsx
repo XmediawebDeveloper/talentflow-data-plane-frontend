@@ -250,7 +250,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
             </div>
             <div className="p-6">
               {loadingJDs ? (
-                <div className="flex items-center justify-center py-10">
+                <div className="flex items-center justify-center py-10 tf-loader-center">
                   <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                 </div>
               ) : myJDs.length === 0 ? (

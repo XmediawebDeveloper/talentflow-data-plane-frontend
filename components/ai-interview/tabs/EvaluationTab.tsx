@@ -382,7 +382,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                               {clSkills.length === 0 ? (
                                 <div className="text-xs text-gray-400 italic px-6 py-3">No skill-level data available for this cluster.</div>
                               ) : (
-                                <div className="overflow-x-auto">
+                                <div className="overflow-x-auto tf-table-shell">
                                   <table className="w-full text-xs">
                                     <thead className="bg-gray-100 text-gray-500 uppercase text-[10px] tracking-wider">
                                       <tr>
@@ -440,7 +440,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                     {sectionCards.length === 0 ? (
                       <div className="text-xs text-gray-400 italic px-5 py-4">No skill data available for this section.</div>
                     ) : (
-                      <div className="overflow-x-auto">
+                      <div className="overflow-x-auto tf-table-shell">
                         <table className="w-full text-xs">
                           <thead className="bg-gray-100 text-gray-500 uppercase text-[10px] tracking-wider">
                             <tr>

@@ -1820,7 +1820,7 @@ export default function AIInterview() {
           {activeTab === 'processing' && (
             <div className="p-3 sm:p-6">
               {processingLoading ? (
-                <div className="flex items-center justify-center py-12">
+                <div className="flex items-center justify-center py-12 tf-loader-center">
                   <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                 </div>
               ) : processingSessions.length === 0 ? (
@@ -2009,7 +2009,7 @@ export default function AIInterview() {
               {settingsSubTab === 'proctoring' && !IS_PRODUCTION_ENV && (
                 <div className="max-w-3xl space-y-6">
                   {proctoringLoading ? (
-                    <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center justify-center py-12 tf-loader-center">
                       <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                     </div>
                   ) : (
@@ -2455,7 +2455,7 @@ export default function AIInterview() {
               {/* Candidate List */}
               <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4 min-h-0">
                 {loadingInvitations ? (
-                  <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                     <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                   </div>
                 ) : invitations.length === 0 ? (
@@ -2832,7 +2832,7 @@ function ConsentLogsWrapper() {
 
   if (!ConsentLogs) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12 tf-loader-center">
         <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
       </div>
     );
