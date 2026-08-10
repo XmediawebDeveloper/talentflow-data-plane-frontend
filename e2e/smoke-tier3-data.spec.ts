@@ -27,6 +27,7 @@ import {
   revealList,
   adminApi,
   uniqueSuffix,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -36,7 +37,19 @@ test.describe("Tier 3 — the UI and the API agree", () => {
     readTier3Tenant();
   });
 
-  test("TC-T320 a job description in the database is on the Job Openings page", async ({ page }) => {
+  test("TC-T320 a job description in the database is on the Job Openings page", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Put a job description in the database, then open Job Openings",
+      expects: "The one that was just created is on the page",
+      category: "positive",
+      steps: [
+        "Create a job description through the API",
+        "Sign in",
+        "Open Recruitment -> Job Openings",
+        "Find the one just created",
+      ],
+    });
+
     const jd = await seedJd();
     const calls = watchApiTraffic(page);
 
@@ -58,7 +71,18 @@ test.describe("Tier 3 — the UI and the API agree", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T321 that job description is still there after a reload", async ({ page }) => {
+  test("TC-T321 that job description is still there after a reload", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Reload the Job Openings page",
+      expects: "The job description is still there \u2014 it came from the database, not from the browser",
+      category: "positive",
+      steps: [
+        "Open Job Openings with a known job description on it",
+        "Press reload",
+        "Check the job description is still listed",
+      ],
+    });
+
     const jd = await seedJd();
 
     await signIn(page);
@@ -82,7 +106,19 @@ test.describe("Tier 3 — the UI and the API agree", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T322 the Job Openings list matches the list endpoint, item for item", async ({ page }) => {
+  test("TC-T322 the Job Openings list matches the list endpoint, item for item", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Compare the Job Openings list on screen with the list endpoint, item by item",
+      expects: "Every row on screen is one the API sent, and none is missing",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Job Openings",
+        "List the titles on screen",
+        "Compare them with the titles the API returned",
+      ],
+    });
+
     await seedJd();
     const calls = watchApiTraffic(page);
 
@@ -98,7 +134,18 @@ test.describe("Tier 3 — the UI and the API agree", () => {
     });
   });
 
-  test("TC-T323 the Internal Resume Database explains an empty database", async ({ page }) => {
+  test("TC-T323 the Internal Resume Database explains an empty database", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open the Internal Resume Database when it holds nothing",
+      expects: "It explains that it is empty instead of showing a blank page",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Recruitment -> Internal Resume Database",
+        "Check the page says it is empty rather than showing nothing",
+      ],
+    });
+
     // No resume has been uploaded to this tenant, so the correct render is an
     // explanation, not a blank panel. The two are the same DOM to any assertion
     // that only looks for errors, and only one of them tells a user what is
@@ -124,7 +171,19 @@ test.describe("Tier 3 — the UI and the API agree", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T324 the Teams count on screen is the number the API returned", async ({ page }) => {
+  test("TC-T324 the Teams count on screen is the number the API returned", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Read the Teams count on screen",
+      expects: "It is the number of teams the API returned",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Organisation -> Team Management",
+        "Read the team count",
+        "Compare it with the API's",
+      ],
+    });
+
     // Asserting on the count rather than hunting for a row is deliberate. The
     // count is rendered from the same payload the rows come from, it is stable
     // across layout changes, and it fails for exactly one reason: the UI and the
@@ -155,7 +214,19 @@ test.describe("Tier 3 — the UI and the API agree", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T325 a real write shows up in the audit trail", async ({ page }) => {
+  test("TC-T325 a real write shows up in the audit trail", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Make a real change, then look at the audit trail",
+      expects: "The change is recorded there",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Create or change something real",
+        "Open Audits -> Audit Trail",
+        "Find the entry for what was just done",
+      ],
+    });
+
     const jd = await seedJd();
     const calls = watchApiTraffic(page);
 
@@ -192,7 +263,19 @@ test.describe("Tier 3 — the UI and the API agree", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T326 the Job Openings totals match the list endpoint", async ({ page }) => {
+  test("TC-T326 the Job Openings totals match the list endpoint", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Read the totals printed on Job Openings",
+      expects: "They match the list endpoint",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Job Openings",
+        "Read the totals on the summary tiles",
+        "Compare with the list endpoint",
+      ],
+    });
+
     await seedJd();
     const calls = watchApiTraffic(page);
 

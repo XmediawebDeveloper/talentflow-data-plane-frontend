@@ -48,6 +48,13 @@ test.describe("Tier 3 — roles and permissions", () => {
     await describeCase(testInfo, {
       does: "Open Role Management and read the 'Total Roles' figure",
       expects: "It is the number of roles the API defines",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Open Organisation -> Role Management",
+        "Read Total Roles",
+        "Compare it with the roles the API returns",
+      ],
     });
 
     const calls = watchApiTraffic(page);
@@ -73,6 +80,13 @@ test.describe("Tier 3 — roles and permissions", () => {
     await describeCase(testInfo, {
       does: "Read the 'Permissions Catalog' figure on the same page",
       expects: "It is the number of permissions the API lists",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Open Organisation -> Role Management",
+        "Read the Permissions Catalog figure",
+        "Compare it with what the API lists",
+      ],
     });
 
     // 197 permissions is the vocabulary the whole access system is built from.
@@ -96,6 +110,13 @@ test.describe("Tier 3 — roles and permissions", () => {
     await describeCase(testInfo, {
       does: "Open Permissions & Roles and read the permission count beside each role",
       expects: "Each one matches what the API grants that role \u2014 the figure people read before handing a role out",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Open Settings -> Permissions & Roles",
+        "Read the '<n> perms' figure next to each role",
+        "Compare each with the permission count the API reports",
+      ],
     });
 
     // The per-role figure is the one people actually read when deciding whether
@@ -132,6 +153,14 @@ test.describe("Tier 3 — roles and permissions", () => {
     await describeCase(testInfo, {
       does: "Sign in as a viewer and open Role Management directly by its address",
       expects: "It is refused, and no role or permission data is served on the way",
+      category: "negative",
+      steps: [
+        "Create a viewer",
+        "Sign in as them",
+        "Type the Role Management address directly",
+        "Check the page is refused",
+        "Check no role or permission data was served",
+      ],
     });
 
     // The page that hands out permissions is the one that must never be

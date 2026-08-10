@@ -54,6 +54,13 @@ test.describe("Tier 3 — the organisation record and settings", () => {
     await describeCase(testInfo, {
       does: "Open Company Profile and compare the form with the organisation record the API returns",
       expects: "The form is filled from that record, and there is a way to change it",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Open Organisation -> Company Profile",
+        "Compare the fields on screen with the record the API returned",
+        "Check there is an Edit Profile control",
+      ],
     });
 
     const calls = watchApiTraffic(page);
@@ -111,6 +118,14 @@ test.describe("Tier 3 — the organisation record and settings", () => {
     await describeCase(testInfo, {
       does: "Open Security Settings and compare the session list with what the API knows",
       expects: "Every session is listed, each can be revoked, and there is a way to end all the others",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Settings -> Security",
+        "Compare the sessions listed with the ones the API returns",
+        "Check each has a Revoke control",
+        "Check there is a 'Revoke all other sessions' control",
+      ],
     });
 
     // A session list that is wrong is worse than none: it is what someone reads
@@ -149,6 +164,13 @@ test.describe("Tier 3 — the organisation record and settings", () => {
     await describeCase(testInfo, {
       does: "Click Change Password on Security Settings",
       expects: "Something opens that takes a password",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Settings -> Security",
+        "Click Change Password",
+        "Check a dialog opens with password fields",
+      ],
     });
 
     // Not exercised end to end on purpose — changing the QA tenant's password

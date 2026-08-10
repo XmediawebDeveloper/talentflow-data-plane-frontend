@@ -22,6 +22,7 @@ import {
   settle,
   adminApi,
   uniqueSuffix,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -56,7 +57,19 @@ test.describe("Tier 3 — creating a record through the real UI", () => {
     readTier3Tenant();
   });
 
-  test("TC-T340 a team created in the UI appears on the page", async ({ page }) => {
+  test("TC-T340 a team created in the UI appears on the page", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Create a team through the UI",
+      expects: "It appears on the page",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Organisation -> Team Management",
+        "Create a team with a new name",
+        "Check it appears in the list",
+      ],
+    });
+
     const name = `E2E T3 UI Team ${uniqueSuffix()}`;
     const calls = watchApiTraffic(page);
 
@@ -81,7 +94,18 @@ test.describe("Tier 3 — creating a record through the real UI", () => {
     ).toBeLessThan(400);
   });
 
-  test("TC-T341 the API can see the team the UI created", async ({ page }) => {
+  test("TC-T341 the API can see the team the UI created", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Ask the API for the team the UI just created",
+      expects: "The API can see it \u2014 it was really written, not only drawn",
+      category: "positive",
+      steps: [
+        "Create a team through the UI",
+        "Ask the API for the teams",
+        "Find the one just created",
+      ],
+    });
+
     const name = `E2E T3 UI Team ${uniqueSuffix()}`;
     const before = await teamsFromApi();
 
@@ -105,7 +129,18 @@ test.describe("Tier 3 — creating a record through the real UI", () => {
     ).toContain(name);
   });
 
-  test("TC-T342 the team is still there after a reload", async ({ page }) => {
+  test("TC-T342 the team is still there after a reload", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Reload after creating a team",
+      expects: "The team is still there",
+      category: "positive",
+      steps: [
+        "Create a team through the UI",
+        "Press reload",
+        "Check the team is still listed",
+      ],
+    });
+
     const name = `E2E T3 UI Team ${uniqueSuffix()}`;
 
     await signIn(page);
@@ -129,7 +164,19 @@ test.describe("Tier 3 — creating a record through the real UI", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T343 an invalid team is refused, and the UI says why", async ({ page }) => {
+  test("TC-T343 an invalid team is refused, and the UI says why", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Try to create a team that is not valid",
+      expects: "It is refused, and the UI says why",
+      category: "negative",
+      steps: [
+        "Sign in",
+        "Open Team Management",
+        "Try to create a team with no name, or a name already used",
+        "Check it is refused and a reason is shown",
+      ],
+    });
+
     // The other half of a form: what it does with input it should not accept.
     // A form that submits an empty name and lets the API 422 it, showing the
     // user nothing, passes every happy-path test in this file.

@@ -24,6 +24,7 @@ import {
   settle,
   waitForCall,
   seedJd,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -58,7 +59,18 @@ test.describe("Tier 3 — talent match, interviews, question bank and scoring", 
 
   // -------------------------------------------------------- talent match ----
 
-  test("TC-T450 AI Talent Match loads the roles it matches against", async ({ page }) => {
+  test("TC-T450 AI Talent Match loads the roles it matches against", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open AI Talent Match",
+      expects: "It loads the roles it matches against",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Recruitment -> AI Talent Match",
+        "Check the roles load",
+      ],
+    });
+
     // Matching is meaningless without job descriptions, so a page that renders
     // without them is a page that can only ever produce nothing. Seeded first,
     // so an empty screen means a broken page and not an empty tenant.
@@ -90,7 +102,18 @@ test.describe("Tier 3 — talent match, interviews, question bank and scoring", 
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T451 the matched-jobs count is the number the API returned", async ({ page }) => {
+  test("TC-T451 the matched-jobs count is the number the API returned", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Read the matched-jobs count",
+      expects: "It is the number the API returned",
+      category: "positive",
+      steps: [
+        "Open AI Talent Match",
+        "Read the matched-jobs count",
+        "Compare it with the API's",
+      ],
+    });
+
     const calls = watchApiTraffic(page);
     await signIn(page);
     await page.goto("/recruitment/ai-talent-match");
@@ -113,7 +136,19 @@ test.describe("Tier 3 — talent match, interviews, question bank and scoring", 
 
   // ---------------------------------------------------------- interviews ----
 
-  test("TC-T452 the AI Interview config count agrees with the API", async ({ page }) => {
+  test("TC-T452 the AI Interview config count agrees with the API", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Read the AI Interview configuration count",
+      expects: "It agrees with the API",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open AI Interviews",
+        "Read the configuration count",
+        "Compare it with the API's",
+      ],
+    });
+
     const calls = watchApiTraffic(page);
     await signIn(page);
     await page.goto("/recruitment/ai-interviews");
@@ -133,7 +168,18 @@ test.describe("Tier 3 — talent match, interviews, question bank and scoring", 
     ).toBe(fromApi);
   });
 
-  test("TC-T453 AI Interviews offers the actions the module exists for", async ({ page }) => {
+  test("TC-T453 AI Interviews offers the actions the module exists for", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Look at what AI Interviews offers to do",
+      expects: "The actions the module exists for are offered",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open AI Interviews",
+        "Check Create AI Interview, Send Invite and HR Question Bank are offered",
+      ],
+    });
+
     // A configuration page with nothing to configure renders perfectly and is
     // completely useless. These three are the module's whole purpose.
     const calls = watchApiTraffic(page);
@@ -151,7 +197,19 @@ test.describe("Tier 3 — talent match, interviews, question bank and scoring", 
 
   // ------------------------------------------------------- question bank ----
 
-  test("TC-T454 the question bank total is the number the API holds", async ({ page }) => {
+  test("TC-T454 the question bank total is the number the API holds", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Read the question bank total",
+      expects: "It is the number the API holds",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open the HR Question Bank",
+        "Read the total",
+        "Compare it with the API's",
+      ],
+    });
+
     const calls = watchApiTraffic(page);
     await signIn(page);
     await page.goto("/recruitment/hr-question-bank");
@@ -173,7 +231,19 @@ test.describe("Tier 3 — talent match, interviews, question bank and scoring", 
     ).toBe(fromApi);
   });
 
-  test("TC-T455 the question-type breakdown adds up to the total", async ({ page }) => {
+  test("TC-T455 the question-type breakdown adds up to the total", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Read the question-type breakdown",
+      expects: "The parts add up to the total",
+      category: "positive",
+      steps: [
+        "Open the HR Question Bank",
+        "Read each question-type figure",
+        "Add them up",
+        "Compare with the total shown",
+      ],
+    });
+
     // Two numbers computed from the same list, side by side. When they stop
     // adding up, one of them is being computed from something else — and both
     // look perfectly plausible on their own.
@@ -199,7 +269,18 @@ test.describe("Tier 3 — talent match, interviews, question bank and scoring", 
 
   // ------------------------------------------------------------- scoring ----
 
-  test("TC-T460 Resume Scoring loads everything it needs to score with", async ({ page }) => {
+  test("TC-T460 Resume Scoring loads everything it needs to score with", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open Resume Scoring",
+      expects: "It loads everything it needs to score with",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Recruitment -> Resume Scoring",
+        "Check the roles, the candidates and the scoring settings all load",
+      ],
+    });
+
     // Scoring needs three separate lists — the resumes, the folders they live
     // in, and the roles to score against. Any one missing leaves a page that
     // renders and cannot score.
@@ -231,7 +312,18 @@ test.describe("Tier 3 — talent match, interviews, question bank and scoring", 
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T461 the scored-candidate count agrees with the API", async ({ page }) => {
+  test("TC-T461 the scored-candidate count agrees with the API", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Read the scored-candidate count",
+      expects: "It agrees with the API",
+      category: "positive",
+      steps: [
+        "Open Resume Scoring",
+        "Read the scored-candidate count",
+        "Compare it with the API's",
+      ],
+    });
+
     const calls = watchApiTraffic(page);
     await signIn(page);
     await page.goto("/recruitment/resume-scoring");
@@ -249,7 +341,18 @@ test.describe("Tier 3 — talent match, interviews, question bank and scoring", 
     ).toBe(fromApi);
   });
 
-  test("TC-T462 the units the page offers to spend are the units the plan has", async ({ page }) => {
+  test("TC-T462 the units the page offers to spend are the units the plan has", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Read the units the page offers to spend",
+      expects: "They are the units the plan actually has",
+      category: "positive",
+      steps: [
+        "Open Resume Scoring",
+        "Read the units available to spend",
+        "Compare with the units the plan reports",
+      ],
+    });
+
     // Scoring costs units, and the figure on this page is what someone reads
     // before deciding whether to run a batch. It has to come from the same place
     // the backend will charge against.

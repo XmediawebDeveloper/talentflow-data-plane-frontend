@@ -52,6 +52,13 @@ test.describe("Tier 3 — users, roles and the signed-in account", () => {
     await describeCase(testInfo, {
       does: "Open Users and compare the list on screen with the list the API returns",
       expects: "Every user shown belongs to this organisation, and nobody else appears",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Open Organisation -> Users",
+        "Reveal the user list",
+        "Compare every address on screen with the ones the API returned",
+      ],
     });
 
     // Created before the page opens, by something the browser knows nothing
@@ -120,6 +127,13 @@ test.describe("Tier 3 — users, roles and the signed-in account", () => {
     await describeCase(testInfo, {
       does: "Read the user count printed on the Users page",
       expects: "It is the number the API reports, not a count of one page of it",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Open Organisation -> Users",
+        "Read the Total Users figure",
+        "Compare it with the number the API reports",
+      ],
     });
 
     await createUserForUi("viewer");
@@ -154,6 +168,14 @@ test.describe("Tier 3 — users, roles and the signed-in account", () => {
     await describeCase(testInfo, {
       does: "Open the role picker and compare the roles offered with the roles the API defines",
       expects: "The UI offers exactly the roles that exist",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Open Organisation -> Users",
+        "Start adding a user, or open a role picker",
+        "List the roles offered",
+        "Compare with the roles the API defines",
+      ],
     });
 
     // A role list that drifts from the backend's is how someone gets assigned a
@@ -198,6 +220,12 @@ test.describe("Tier 3 — users, roles and the signed-in account", () => {
     await describeCase(testInfo, {
       does: "Open the profile page while signed in",
       expects: "It is filled with the signed-in account's own name and email",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open the account menu and choose Profile",
+        "Check the name and email are this account's own",
+      ],
     });
 
     // Settings pages are where a stale cache shows one person another person's
@@ -225,6 +253,14 @@ test.describe("Tier 3 — users, roles and the signed-in account", () => {
     await describeCase(testInfo, {
       does: "Create a user, then sign in as them",
       expects: "They reach the dashboard, inside the same organisation",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Create a user with a known password",
+        "Sign out",
+        "Sign in as the new user",
+        "Check the dashboard opens in the same organisation",
+      ],
     });
 
     // The round trip that matters for user management: created here, usable

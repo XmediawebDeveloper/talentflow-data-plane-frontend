@@ -23,6 +23,7 @@ import {
   settle,
   seedJd,
   recordDefect,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -32,7 +33,19 @@ test.describe("Tier 3 — every module opens", () => {
     readTier3Tenant();
   });
 
-  test("TC-T350 Assessments offers the published roles to assess against", async ({ page }) => {
+  test("TC-T350 Assessments offers the published roles to assess against", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open the assessment builder and see which roles it offers",
+      expects: "The published roles are offered to assess against",
+      category: "positive",
+      steps: [
+        "Publish a job description",
+        "Sign in",
+        "Open Recruitment -> Assessments -> Create",
+        "Check the published role is offered",
+      ],
+    });
+
     // An assessment is always created against a job description, so this page
     // is only useful if the JD list behind it arrived. A published JD is seeded
     // first precisely so an empty screen here means a broken page rather than
@@ -63,7 +76,18 @@ test.describe("Tier 3 — every module opens", () => {
     ).toBeGreaterThan(0);
   });
 
-  test("TC-T351 Resume Scoring loads its scored-candidate list", async ({ page }) => {
+  test("TC-T351 Resume Scoring loads its scored-candidate list", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open Resume Scoring",
+      expects: "Its list of scored candidates loads",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Recruitment -> Resume Scoring",
+        "Check the scored candidates load",
+      ],
+    });
+
     const calls = watchApiTraffic(page);
 
     await signIn(page);
@@ -81,7 +105,18 @@ test.describe("Tier 3 — every module opens", () => {
     ).toBeTruthy();
   });
 
-  test("TC-T352 AI Interviews opens without an entitlement wall", async ({ page }) => {
+  test("TC-T352 AI Interviews opens without an entitlement wall", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open AI Interviews",
+      expects: "It opens on the module itself, not on an upgrade wall",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Recruitment -> AI Interviews",
+        "Check the module opens and no entitlement wall covers it",
+      ],
+    });
+
     const calls = watchApiTraffic(page);
 
     await signIn(page);
@@ -102,7 +137,18 @@ test.describe("Tier 3 — every module opens", () => {
     ).toHaveCount(0);
   });
 
-  test("TC-T353 the HR Question Bank opens", async ({ page }) => {
+  test("TC-T353 the HR Question Bank opens", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open the HR Question Bank",
+      expects: "It opens",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Recruitment -> HR Question Bank",
+        "Check the page opens without an error",
+      ],
+    });
+
     const calls = watchApiTraffic(page);
 
     await signIn(page);
@@ -115,7 +161,19 @@ test.describe("Tier 3 — every module opens", () => {
     await expect(page.getByLabel("TalentFlow home")).toBeVisible();
   });
 
-  test("TC-T354 notifications open and are fetched from the API", async ({ page }) => {
+  test("TC-T354 notifications open and are fetched from the API", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open notifications",
+      expects: "They open, and they were fetched from the API rather than made up in the browser",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Click the notifications bell",
+        "Check the panel opens",
+        "Check the app asked the API for them",
+      ],
+    });
+
     const calls = watchApiTraffic(page);
 
     await signIn(page);
@@ -139,6 +197,17 @@ test.describe("Tier 3 — every module opens", () => {
   });
 
   test("TC-T355 the notification socket is accepted, not just attempted", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open the app and watch the notification socket",
+      expects: "The socket is accepted, not merely attempted",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Watch the network for the notifications socket",
+        "Check it is accepted rather than refused",
+      ],
+    });
+
     // The socket is the one piece of this stack that is neither HTTP nor
     // mockable, and it authenticates on upgrade — so a 101 is proof the token
     // travelled and was accepted over a completely different transport from

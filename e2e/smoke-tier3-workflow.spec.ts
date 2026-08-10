@@ -27,6 +27,7 @@ import {
   revealList,
   recordDefect,
   uniqueSuffix,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -47,7 +48,19 @@ test.describe("Tier 3 — working with a list", () => {
     readTier3Tenant();
   });
 
-  test("TC-T370 searching Job Openings narrows the list to what was searched for", async ({ page }) => {
+  test("TC-T370 searching Job Openings narrows the list to what was searched for", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Search Job Openings for a role that exists",
+      expects: "The list narrows to what was searched for",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Job Openings",
+        "Type part of a known role's title into the search",
+        "Check the list narrows to matching roles",
+      ],
+    });
+
     const jd = await seedJd();
     const calls = watchApiTraffic(page);
 
@@ -66,7 +79,19 @@ test.describe("Tier 3 — working with a list", () => {
     assertNoServerErrors(calls, "Job Openings while searching");
   });
 
-  test("TC-T371 a search with no matches says so, rather than showing everything", async ({ page }) => {
+  test("TC-T371 a search with no matches says so, rather than showing everything", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Search Job Openings for something that does not exist",
+      expects: "It says there are no matches, rather than quietly showing everything",
+      category: "negative",
+      steps: [
+        "Sign in",
+        "Open Job Openings",
+        "Search for text no role contains",
+        "Check the page says there are no matches",
+      ],
+    });
+
     // The failure this catches is the worst kind of quiet one: a search whose
     // query is dropped, leaving the full list on screen. It looks like a working
     // page, and every row on it is wrong.
@@ -108,7 +133,19 @@ test.describe("Tier 3 — working with a list", () => {
    * backend says exist. That stays true if the paging strategy changes, and it
    * fails for real if the page ever stops early.
    */
-  test("TC-T372 every role the backend has is reachable in the UI", async ({ page }) => {
+  test("TC-T372 every role the backend has is reachable in the UI", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Page through Job Openings to the end",
+      expects: "Every role the backend has can be reached in the UI",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Job Openings",
+        "Turn every page to the end",
+        "Compare the roles seen with the total the API reports",
+      ],
+    });
+
     await seedJd();
     const calls = watchApiTraffic(page);
 
@@ -135,7 +172,19 @@ test.describe("Tier 3 — working with a list", () => {
     ).toBe(total);
   });
 
-  test("TC-T373 the Draft filter shows a draft, and Published shows a published role", async ({ page }) => {
+  test("TC-T373 the Draft filter shows a draft, and Published shows a published role", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Use the Draft and Published filters",
+      expects: "Draft shows a draft and Published shows a published role",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Job Openings",
+        "Choose the Draft filter and check what is listed",
+        "Choose Published and check what is listed",
+      ],
+    });
+
     // Draft and published are the same rows with a different column, so this is
     // the cheapest possible place for a filter to be wrong and the hardest to
     // notice: both views render, both look plausible.
@@ -184,7 +233,20 @@ test.describe("Tier 3 — working with a list", () => {
     assertNoServerErrors(calls, "Job Openings while filtering by status");
   });
 
-  test("TC-T374 turning the page shows different roles", async ({ page }) => {
+  test("TC-T374 turning the page shows different roles", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Turn to the next page of Job Openings",
+      expects: "Different roles are shown \u2014 the control really pages",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Job Openings",
+        "Note the roles on page one",
+        "Go to page two",
+        "Check the roles are different",
+      ],
+    });
+
     // Seeded up front so there is genuinely more than one page. A pagination
     // test on a single page of data passes by doing nothing at all.
     for (let i = 0; i < 3; i++) await seedJd();
@@ -216,7 +278,19 @@ test.describe("Tier 3 — working with a list", () => {
     ).not.toBe(first);
   });
 
-  test("TC-T375 filtering the audit trail by action reaches the backend", async ({ page }) => {
+  test("TC-T375 filtering the audit trail by action reaches the backend", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Filter the audit trail by action",
+      expects: "The filter reaches the backend rather than only hiding rows in the browser",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Audits -> Audit Trail",
+        "Choose an action to filter by",
+        "Check the app asked the backend for that filter",
+      ],
+    });
+
     // Worth doing here and not in Tier 2 because of how this list is paged: the
     // audit trail asks for 20 rows out of hundreds, so a filter applied in the
     // browser would filter those 20 and present the result as the whole record.
@@ -281,6 +355,19 @@ test.describe("Tier 3 — working with a list", () => {
    * passing test below it. Neither reading is left to chance.
    */
   test("TC-T376 exporting the audit trail produces a real file", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Export the audit trail as CSV",
+      expects: "A file downloads containing the rows for that window",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Open Audits -> Audit Trail",
+        "Click Export and choose CSV",
+        "Leave the default 30-day range and confirm",
+        "Check a file downloads",
+      ],
+    });
+
     await recordDefect(testInfo, {
       summary:
         "Export CSV on the Audit Trail silently does nothing once the trail holds more " +
@@ -307,6 +394,8 @@ test.describe("Tier 3 — working with a list", () => {
         "app/(dashboard)/audits/trail/page.tsx  (handleExport)",
         "GET /api/v1/audits  (page_size maximum: 100)",
       ],
+      severity: "major",
+      priority: "P2",
       owner: "developer",
     });
     await seedJd();
@@ -392,7 +481,18 @@ test.describe("Tier 3 — working with a list", () => {
    * that says exactly what the limit is rather than a screenshot of a dialog
    * that did not close.
    */
-  test("TC-T376b the audit endpoint caps page_size, which is what the export ignores", async () => {
+  test("TC-T376b the audit endpoint caps page_size, which is what the export ignores", async ({}, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Ask the audit endpoint for more rows than it allows",
+      expects: "It refuses \u2014 which is what the export ignores",
+      category: "negative",
+      steps: [
+        "Ask GET /audits for a page_size above its maximum",
+        "Note the answer",
+        "Compare it with what the export asks for",
+      ],
+    });
+
     const api = await adminApi();
     try {
       const ok = await api.get("/api/v1/audits?page=1&page_size=100");
@@ -415,7 +515,18 @@ test.describe("Tier 3 — working with a list", () => {
     }
   });
 
-  test("TC-T377 two people signed in at once do not see each other's session", async ({ browser }) => {
+  test("TC-T377 two people signed in at once do not see each other's session", async ({ browser }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in as two people at once in separate browsers",
+      expects: "Neither sees the other's session",
+      category: "negative",
+      steps: [
+        "Sign in as one user",
+        "In a separate browser, sign in as another",
+        "Check neither one's session or data appears in the other",
+      ],
+    });
+
     // Every real deployment has more than one person signed in. A session held
     // anywhere shared — a module-level variable, a service worker, a cache keyed
     // on nothing — works perfectly with one user and mixes two people's data the
@@ -460,7 +571,19 @@ test.describe("Tier 3 — working with a list", () => {
     }
   });
 
-  test("TC-T378 a record created elsewhere appears after a refresh", async ({ page }) => {
+  test("TC-T378 a record created elsewhere appears after a refresh", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Create a record elsewhere, then refresh the page",
+      expects: "It appears \u2014 the page reads the database, not a cache of its own",
+      category: "positive",
+      steps: [
+        "Open a list page",
+        "Create a record through the API",
+        "Refresh the page",
+        "Check the new record is listed",
+      ],
+    });
+
     // The stale-cache test. A list cached hard enough to survive a reload shows
     // a user data that no longer exists, and nothing on the page says so.
     await signIn(page);
@@ -483,7 +606,19 @@ test.describe("Tier 3 — working with a list", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T379 an edit made through the API shows up in the UI", async ({ page }) => {
+  test("TC-T379 an edit made through the API shows up in the UI", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Change a record through the API, then look at the UI",
+      expects: "The change shows up",
+      category: "positive",
+      steps: [
+        "Note a record shown in the UI",
+        "Change it through the API",
+        "Refresh the page",
+        "Check the UI shows the change",
+      ],
+    });
+
     // The read path for a record that has changed. A detail view that renders
     // from a list fetched before the edit shows the old value indefinitely.
     const jd = await seedJd();
@@ -520,7 +655,19 @@ test.describe("Tier 3 — working with a list", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T380 the global search reaches the backend", async ({ page }) => {
+  test("TC-T380 the global search reaches the backend", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Use the global search",
+      expects: "It reaches the backend rather than filtering what is already loaded",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Type something into the global search",
+        "Watch the requests",
+        "Check the app asked the backend",
+      ],
+    });
+
     const jd = await seedJd();
     const calls = watchApiTraffic(page);
 

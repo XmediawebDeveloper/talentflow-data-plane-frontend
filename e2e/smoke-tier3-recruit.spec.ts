@@ -26,6 +26,7 @@ import {
   seedJd,
   revealList,
   recordDefect,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -57,7 +58,18 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
 
   // ---------------------------------------------------------------- resumes --
 
-  test("TC-T400 My Resumes agrees with the API about what is stored", async ({ page }) => {
+  test("TC-T400 My Resumes agrees with the API about what is stored", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open My Resumes and compare it with what the API holds",
+      expects: "The page agrees with the API about what is stored",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Recruitment -> My Resumes",
+        "Compare the entries on screen with what the API returns",
+      ],
+    });
+
     const calls = watchApiTraffic(page);
     await signIn(page);
     await page.goto("/recruitment/my-resumes");
@@ -118,6 +130,18 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
    * is the signal to drop the pin and let the assertion stand.
    */
   test("TC-T401 the upload control opens a real file picker", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Click Upload Resume on My Resumes",
+      expects: "A file picker opens so a CV can be chosen",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Open Recruitment -> My Resumes",
+        "Click the Upload Resume button",
+        "Check a file picker opens",
+      ],
+    });
+
     test.fail(true, "clicking Upload Resume throws and the view is replaced by the error boundary");
     await recordDefect(testInfo, {
       summary: "Clicking Upload Resume on My Resumes crashes the page — no CV can be uploaded",
@@ -139,6 +163,8 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
         "  app/(dashboard)/recruitment/my-resumes/page.tsx(744,35): TS2339: Property 'cancelled' does not exist on type 'UploadBatchResponse'",
       ],
       where: ["app/(dashboard)/recruitment/my-resumes/page.tsx"],
+      severity: "critical",
+      priority: "P1",
       owner: "developer",
     });
     const calls = watchApiTraffic(page);
@@ -160,7 +186,20 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
     assertNoServerErrors(calls, "My Resumes with the upload dialog open");
   });
 
-  test("TC-T402 the resume filters open and can be applied", async ({ page }) => {
+  test("TC-T402 the resume filters open and can be applied", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open the resume filters and apply one",
+      expects: "They open and can be applied",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open My Resumes",
+        "Open the filters",
+        "Apply one",
+        "Check the list responds",
+      ],
+    });
+
     // Written first as "the folders the API returns are offered as filters",
     // which was an assumption and a wrong one: this panel filters by
     // experience, location, company, date and source — not by folder. Folders
@@ -194,7 +233,19 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
 
   // ------------------------------------------------------------ assessments --
 
-  test("TC-T410 the assessment builder offers the published roles", async ({ page }) => {
+  test("TC-T410 the assessment builder offers the published roles", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open the assessment builder",
+      expects: "It offers the published roles to build against",
+      category: "positive",
+      steps: [
+        "Publish a role",
+        "Sign in",
+        "Open Assessments -> Create",
+        "Check the published role is offered",
+      ],
+    });
+
     // An assessment is always built against a job description, so this page is
     // useless if the JD list behind it did not arrive. Seeded first, so an
     // empty screen means a broken page rather than an empty tenant.
@@ -226,7 +277,18 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T411 searching the builder narrows it to the role searched for", async ({ page }) => {
+  test("TC-T411 searching the builder narrows it to the role searched for", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Search the assessment builder for one role",
+      expects: "It narrows to the role searched for",
+      category: "positive",
+      steps: [
+        "Open the assessment builder",
+        "Type part of a known role's title",
+        "Check the list narrows to it",
+      ],
+    });
+
     const jd = await seedJd();
     const calls = watchApiTraffic(page);
 
@@ -247,7 +309,19 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
     await assertPageHealthy(page, "Create Assessment while searching");
   });
 
-  test("TC-T412 the question bank and topic list load for the builder", async ({ page }) => {
+  test("TC-T412 the question bank and topic list load for the builder", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open the builder's question bank and topic list",
+      expects: "Both load",
+      category: "positive",
+      steps: [
+        "Open the assessment builder",
+        "Open the question bank",
+        "Open the topic list",
+        "Check both load",
+      ],
+    });
+
     // Two supporting lists the builder cannot work without. Either failing
     // leaves a page that renders and cannot produce an assessment.
     const calls = watchApiTraffic(page);
@@ -274,7 +348,18 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
 
   // ------------------------------------------------------------------ gates --
 
-  test("TC-T420 JD creation explains itself when the plan will not allow it", async ({ page }) => {
+  test("TC-T420 JD creation explains itself when the plan will not allow it", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Try to create a job description when the plan will not allow it",
+      expects: "The product explains why rather than failing silently",
+      category: "negative",
+      steps: [
+        "Sign in on a plan at its job-description limit",
+        "Try to create another",
+        "Check the product says why it cannot",
+      ],
+    });
+
     // This tenant's plan has no units left, so the builder refuses. That is the
     // correct behaviour and it is worth pinning: the failure mode to fear is a
     // creation page that lets someone fill in a long form and only then says
@@ -323,7 +408,18 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T421 the plan page shows the plan the API reports", async ({ page }) => {
+  test("TC-T421 the plan page shows the plan the API reports", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open the plan page",
+      expects: "It shows the plan the API reports",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Billing -> Plan",
+        "Compare what is shown with what the API reports",
+      ],
+    });
+
     // Billing is the one area where being wrong costs money, and the one least
     // likely to be exercised by hand. The name on screen has to be the name the
     // backend holds.
@@ -349,7 +445,19 @@ test.describe("Tier 3 — resumes, assessments and the gates around them", () =>
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T422 every billing tab opens without falling over", async ({ page }) => {
+  test("TC-T422 every billing tab opens without falling over", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open every billing tab in turn",
+      expects: "Each one opens without falling over",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open Billing",
+        "Open each tab in turn",
+        "Check none shows an error",
+      ],
+    });
+
     test.setTimeout(180_000);
     // Seven tabs a customer can reach from one page. Each is a separate route
     // and a separate call, and any of them rendering an error boundary is a

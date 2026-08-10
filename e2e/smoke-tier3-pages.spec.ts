@@ -26,6 +26,7 @@ import {
   assertPageHealthy,
   signIn,
   settle,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -50,7 +51,19 @@ test.describe("Tier 3 — every page loads", () => {
     readTier3Tenant();
   });
 
-  test("TC-T310 no page an admin can reach 5xx's behind the scenes", async ({ page }) => {
+  test("TC-T310 no page an admin can reach 5xx's behind the scenes", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open every page an admin can reach and watch what the server answers",
+      expects: "No page 5xx's behind the scenes, however normal it looks",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Open each page in the navigation in turn",
+        "Watch the requests each one makes",
+        "Check none of them answered 5xx",
+      ],
+    });
+
     test.setTimeout(240_000);
     await signIn(page);
 
@@ -72,7 +85,19 @@ test.describe("Tier 3 — every page loads", () => {
     expect(failures, `pages whose API calls 5xx'd:\n${failures.join("\n")}`).toEqual([]);
   });
 
-  test("TC-T311 no page renders an error boundary or hangs on a spinner", async ({ page }) => {
+  test("TC-T311 no page renders an error boundary or hangs on a spinner", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open every page and look at what it renders",
+      expects: "No page shows an error boundary and none hangs on a spinner",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open each page in turn",
+        "Wait for it to settle",
+        "Check it shows content, not an error box or a spinner that never stops",
+      ],
+    });
+
     test.setTimeout(240_000);
     await signIn(page);
 
@@ -90,7 +115,19 @@ test.describe("Tier 3 — every page loads", () => {
     expect(failures, `pages that did not render usably:\n${failures.join("\n")}`).toEqual([]);
   });
 
-  test("TC-T312 every page keeps the shell and the session", async ({ page }) => {
+  test("TC-T312 every page keeps the shell and the session", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open every page and check the shell and the session survive",
+      expects: "Every page keeps the navigation and keeps you signed in",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open each page in turn",
+        "Check the navigation is still there",
+        "Check you are still signed in",
+      ],
+    });
+
     test.setTimeout(240_000);
     const calls = watchApiTraffic(page);
     await signIn(page);

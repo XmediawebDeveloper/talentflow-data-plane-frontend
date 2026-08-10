@@ -39,6 +39,7 @@ import {
   createUserForUi,
   adminApi,
   uniqueSuffix,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -67,7 +68,22 @@ test.describe("Tier 3 — complete jobs of work", () => {
     readTier3Tenant();
   });
 
-  test("TC-T500 FLOW: publish a role, then build an assessment for it", async ({ page }) => {
+  test("TC-T500 FLOW: publish a role, then build an assessment for it", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Publish a role, then build an assessment for that same role",
+      expects: "The role reaches Job Openings, survives a reload, is findable in the builder, and the trail records it",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Publish a job description",
+        "Find it on Job Openings",
+        "Reload and check it is still there",
+        "Open the assessment builder",
+        "Search the builder for that role",
+        "Check the audit trail recorded the work",
+      ],
+    });
+
     test.setTimeout(240_000);
     const calls = watchApiTraffic(page);
 
@@ -142,7 +158,22 @@ test.describe("Tier 3 — complete jobs of work", () => {
     assertNoServerErrors(calls, "the publish-a-role flow");
   });
 
-  test("TC-T510 FLOW: bring a teammate on, and confine them to their role", async ({ page }) => {
+  test("TC-T510 FLOW: bring a teammate on, and confine them to their role", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Bring a teammate on, then confine them to their role",
+      expects: "The new person can sign in, and sees only what their role allows",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Create a teammate with a limited role",
+        "Sign out",
+        "Sign in as the teammate",
+        "Check they reach the dashboard",
+        "Check the admin sections are not offered",
+        "Check the API refuses them too",
+      ],
+    });
+
     test.setTimeout(240_000);
     const tenant = readTier3Tenant();
     const calls = watchApiTraffic(page);
@@ -248,7 +279,20 @@ test.describe("Tier 3 — complete jobs of work", () => {
     }
   });
 
-  test("TC-T520 FLOW: prepare an AI interview for a published role", async ({ page }) => {
+  test("TC-T520 FLOW: prepare an AI interview for a published role", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Prepare an AI interview for a published role",
+      expects: "The role is offered to the interview builder and the configuration can be started",
+      category: "positive",
+      steps: [
+        "Publish a role",
+        "Sign in",
+        "Open AI Interviews",
+        "Check the role is offered for interviewing",
+        "Start the configuration",
+      ],
+    });
+
     test.setTimeout(240_000);
     const calls = watchApiTraffic(page);
 
@@ -315,7 +359,19 @@ test.describe("Tier 3 — complete jobs of work", () => {
     assertNoServerErrors(calls, "the prepare-an-interview flow");
   });
 
-  test("TC-T530 FLOW: three real actions, and the trail accounts for all of them", async ({ page }) => {
+  test("TC-T530 FLOW: three real actions, and the trail accounts for all of them", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Do three real things, then check the audit trail accounts for all of them",
+      expects: "Every one of the three is recorded",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Do three real actions in the product",
+        "Open Audits -> Audit Trail",
+        "Find an entry for each of the three",
+      ],
+    });
+
     test.setTimeout(240_000);
     // The audit trail is the product's own answer to "what happened here". A
     // trail that misses a write is a compliance problem, and the only way to

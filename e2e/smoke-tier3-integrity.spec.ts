@@ -20,6 +20,7 @@ import {
   adminApi,
   seedJd,
   uniqueSuffix,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -58,7 +59,19 @@ test.describe("Tier 3 — invariants across the product", () => {
     readTier3Tenant();
   });
 
-  test("TC-T360 no page puts a token in a URL", async ({ page }) => {
+  test("TC-T360 no page puts a token in a URL", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Walk every page and look at the addresses in the browser bar",
+      expects: "No page ever puts a session token in a URL",
+      category: "negative",
+      steps: [
+        "Sign in",
+        "Open each page in turn",
+        "Look at the full address of every request the page makes",
+        "Check no token appears in any of them",
+      ],
+    });
+
     test.setTimeout(180_000);
     const calls = watchApiTraffic(page);
     await signIn(page);
@@ -89,7 +102,19 @@ test.describe("Tier 3 — invariants across the product", () => {
     ).toEqual([]);
   });
 
-  test("TC-T361 every tenant-scoped request carries the session", async ({ page }) => {
+  test("TC-T361 every tenant-scoped request carries the session", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Watch the requests every page makes",
+      expects: "Every request scoped to this organisation carries the session",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open each page in turn",
+        "Watch the requests",
+        "Check each tenant-scoped one carries the session",
+      ],
+    });
+
     test.setTimeout(180_000);
     const calls = watchApiTraffic(page);
     await signIn(page);
@@ -115,7 +140,18 @@ test.describe("Tier 3 — invariants across the product", () => {
     ).toEqual([]);
   });
 
-  test("TC-T362 a record that does not exist is handled, not crashed on", async ({ page }) => {
+  test("TC-T362 a record that does not exist is handled, not crashed on", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open a record that does not exist",
+      expects: "The app handles it \u2014 it does not crash",
+      category: "negative",
+      steps: [
+        "Sign in",
+        "Open the address of a record with an id that does not exist",
+        "Check the app shows a not-found state rather than an error page",
+      ],
+    });
+
     const calls = watchApiTraffic(page);
     await signIn(page);
 
@@ -137,7 +173,19 @@ test.describe("Tier 3 — invariants across the product", () => {
     assertNoServerErrors(calls, "a job-details page for a record that does not exist");
   });
 
-  test("TC-T363 a deep link opens directly, without bouncing through the dashboard", async ({ page }) => {
+  test("TC-T363 a deep link opens directly, without bouncing through the dashboard", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Paste a deep link straight into the browser while signed in",
+      expects: "It opens that page directly, without bouncing through the dashboard first",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Copy the address of an inner page",
+        "Open it directly in a new tab",
+        "Check it lands there and does not detour via the dashboard",
+      ],
+    });
+
     // Every link anyone shares is a deep link. An app that only works when
     // navigated from its own home page passes every other test in this file.
     const jd = await seedJd();
@@ -156,7 +204,18 @@ test.describe("Tier 3 — invariants across the product", () => {
     await assertPageHealthy(page, `a deep link to Job Openings (seeded "${jd.title}")`);
   });
 
-  test("TC-T364 the tenant on screen is the tenant that signed in", async ({ page }) => {
+  test("TC-T364 the tenant on screen is the tenant that signed in", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Read the organisation shown on screen",
+      expects: "It is the organisation that signed in",
+      category: "positive",
+      steps: [
+        "Sign in to a known organisation",
+        "Look at the organisation name shown in the app",
+        "Check it is the one that signed in",
+      ],
+    });
+
     const calls = watchApiTraffic(page);
     const tenant = readTier3Tenant();
     await signIn(page);
@@ -182,7 +241,18 @@ test.describe("Tier 3 — invariants across the product", () => {
     ).toBe(tenant.adminEmail);
   });
 
-  test("TC-T365 a second user sees the same tenant, not their own", async ({ page }) => {
+  test("TC-T365 a second user sees the same tenant, not their own", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in as a second user of the same organisation",
+      expects: "They see the same organisation's data, not one of their own",
+      category: "positive",
+      steps: [
+        "Create a second user in the organisation",
+        "Sign in as them",
+        "Check they see the same organisation's records",
+      ],
+    });
+
     // The complement of the test above. A new user created inside this tenant
     // must land inside it — a per-user tenant, or a fallback to a default one,
     // would show up here and nowhere else.
@@ -206,7 +276,19 @@ test.describe("Tier 3 — invariants across the product", () => {
     ).toBe(tenant.subdomain);
   });
 
-  test("TC-T366 a revoked user cannot keep using a session they already had", async ({ page }) => {
+  test("TC-T366 a revoked user cannot keep using a session they already had", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Revoke a user, then keep using the session they already had",
+      expects: "It stops working",
+      category: "negative",
+      steps: [
+        "Create a user and sign in as them",
+        "Keep their session",
+        "Revoke the user as an admin",
+        "Use the old session again",
+      ],
+    });
+
     // A token stays valid until it expires unless something revokes it. If
     // deactivating a user does not, then removing someone's access does nothing
     // until their token happens to lapse — which is not what "remove access"

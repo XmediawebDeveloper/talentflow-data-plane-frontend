@@ -47,6 +47,13 @@ test.describe("Tier 3 — permissions, in a real browser", () => {
     await describeCase(testInfo, {
       does: "Sign in as a viewer and look at what the navigation offers",
       expects: "The admin sections are not offered",
+      category: "negative",
+      steps: [
+        "Create a viewer",
+        "Sign in as them",
+        "Look through the navigation",
+        "Check the admin sections are not offered",
+      ],
     });
 
     const viewer = await createUserForUi("viewer");
@@ -80,6 +87,12 @@ test.describe("Tier 3 — permissions, in a real browser", () => {
     await describeCase(testInfo, {
       does: "As that viewer, ask the API directly for the things the UI hid",
       expects: "The API refuses them too \u2014 the menu is not the only thing standing in the way",
+      category: "negative",
+      steps: [
+        "Sign in as a viewer",
+        "Call the admin endpoints directly with that session",
+        "Check each one is refused",
+      ],
     });
 
     const viewer = await createUserForUi("viewer");
@@ -127,6 +140,12 @@ test.describe("Tier 3 — permissions, in a real browser", () => {
     await describeCase(testInfo, {
       does: "Sign in as an admin and look at the same navigation",
       expects: "The admin sections are offered, so the viewer's result was a permission and not a missing page",
+      category: "positive",
+      steps: [
+        "Sign in as a tenant admin",
+        "Look through the navigation",
+        "Check the admin sections the viewer could not see are offered here",
+      ],
     });
 
     // The control. Without it, TC-T330 passes just as happily on a sidebar that
@@ -153,6 +172,12 @@ test.describe("Tier 3 — permissions, in a real browser", () => {
     await describeCase(testInfo, {
       does: "As a viewer, ask the API to give the session more permissions than it has",
       expects: "It is refused",
+      category: "negative",
+      steps: [
+        "Sign in as a viewer",
+        "Ask the API to widen the session's permissions",
+        "Check it is refused",
+      ],
     });
 
     // The last gap: a UI that never offers the action, and an API that refuses
