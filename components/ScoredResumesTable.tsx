@@ -427,20 +427,22 @@ export default function ScoredResumesTable({
         <h2>${jobTitle} - Scored Resumes</h2>
         <p>Exported: ${formatIST(new Date().toISOString())}</p>
         <p>Total Records: ${dataToExport.length}</p>
-        <table>
-          <thead>
-            <tr>
-              ${enabledColumns.map(col => `<th>${col.label}</th>`).join('')}
-            </tr>
-          </thead>
-          <tbody>
-            ${dataToExport.map(resume => `
+        <div className="tf-table-shell">
+          <table>
+            <thead>
               <tr>
-                ${enabledColumns.map(col => `<td>${getCellValue(resume, col.id)}</td>`).join('')}
+                ${enabledColumns.map(col => `<th>${col.label}</th>`).join('')}
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${dataToExport.map(resume => `
+                <tr>
+                  ${enabledColumns.map(col => `<td>${getCellValue(resume, col.id)}</td>`).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
       </body>
       </html>
     `;
@@ -749,7 +751,7 @@ export default function ScoredResumesTable({
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden md:block overflow-x-auto">
+      <div className="hidden md:block overflow-x-auto tf-table-shell">
         <table className="w-full min-w-[1100px] table-auto">
           <thead>
             <tr className="border-b border-gray-200">

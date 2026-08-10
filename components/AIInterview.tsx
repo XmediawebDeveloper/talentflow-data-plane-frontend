@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban, XCircle } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban, XCircle, Check } from 'lucide-react';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -69,6 +69,7 @@ const AI_INTERVIEW_INVITE_STATUS_OPTIONS = [
   { value: 'expired', label: 'Expired' },
   { value: 'cancelled', label: 'Cancelled' },
   { value: 'scheduled', label: 'Scheduled' },
+  { value: 'revoked', label: 'Revoked' },
 ];
 
 const CONFIG_FETCH_PAGE_SIZE = 20;
@@ -165,6 +166,17 @@ export default function AIInterview() {
   const [resendingEmailFor, setResendingEmailFor] = useState<string | null>(null); // session id
   // Resend-with-new-link confirmation dialog target
   const [resendInviteTarget, setResendInviteTarget] = useState<any | null>(null);
+  // Revoke confirmation dialog target
+  const [revokeInviteTarget, setRevokeInviteTarget] = useState<any | null>(null);
+  const [revokingInviteFor, setRevokingInviteFor] = useState<string | null>(null); // session id
+  // Bulk revoke — checkbox selection (current invitations page) + confirm dialog state
+  const [selectedInviteIds, setSelectedInviteIds] = useState<Set<string>>(new Set());
+  const [bulkRevokeConfirmOpen, setBulkRevokeConfirmOpen] = useState(false);
+  const [isBulkRevoking, setIsBulkRevoking] = useState(false);
+  // Edit invitation modal target — only ever set for a REVOKED invitation
+  const [editInviteTarget, setEditInviteTarget] = useState<any | null>(null);
+  const [editInviteForm, setEditInviteForm] = useState({ candidate_name: '', candidate_email: '' });
+  const [savingEditInvite, setSavingEditInvite] = useState(false);
   const [inviteFilters, setInviteFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
   const [invitationTotal, setInvitationTotal] = useState(0);
   const [invitationTotalPages, setInvitationTotalPages] = useState(1);
@@ -443,6 +455,15 @@ export default function AIInterview() {
     }
   }, []);
 
+  // Shared refetch used after Resend/Revoke/Edit so the list + stat cards
+  // reflect the new status immediately.
+  const refreshInvitationsView = useCallback(async (configId: string) => {
+    await Promise.all([
+      loadInvitations(configId, invitationPage, inviteFilters),
+      loadInvitationOverview(configId),
+    ]);
+  }, [loadInvitations, loadInvitationOverview, invitationPage, inviteFilters]);
+
   const loadProctoringSettings = useCallback(async () => {
     setProctoringLoading(true);
     try {
@@ -570,6 +591,13 @@ export default function AIInterview() {
     if (!viewInvitationsConfig) return;
     loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters);
   }, [viewInvitationsConfig, invitationPage, inviteFilters, loadInvitations]);
+
+  // Bulk-revoke selection is scoped to the current invitations page — clear it
+  // whenever the page, filters, or the open config changes so a stale selection
+  // from a different page/filter set can't be carried into a revoke action.
+  useEffect(() => {
+    setSelectedInviteIds(new Set());
+  }, [viewInvitationsConfig, invitationPage, inviteFilters]);
 
   useEffect(() => {
     if (!viewInvitationsConfig) return;
@@ -1820,7 +1848,7 @@ export default function AIInterview() {
           {activeTab === 'processing' && (
             <div className="p-3 sm:p-6">
               {processingLoading ? (
-                <div className="flex items-center justify-center py-12">
+                <div className="flex items-center justify-center py-12 tf-loader-center">
                   <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                 </div>
               ) : processingSessions.length === 0 ? (
@@ -2009,7 +2037,7 @@ export default function AIInterview() {
               {settingsSubTab === 'proctoring' && !IS_PRODUCTION_ENV && (
                 <div className="max-w-3xl space-y-6">
                   {proctoringLoading ? (
-                    <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center justify-center py-12 tf-loader-center">
                       <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                     </div>
                   ) : (
@@ -2314,10 +2342,16 @@ export default function AIInterview() {
         // Once a unit has been consumed (candidate actually started the interview),
         // expiry no longer applies.
         const isInvExpired = (inv: any): boolean => {
-          if (['completed', 'cancelled', 'terminated', 'expired'].includes(inv.status)) return false;
+          if (['completed', 'cancelled', 'terminated', 'expired', 'revoked'].includes(inv.status)) return false;
           if (inv.unit_consumed) return false;
           return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
         };
+
+        // Same eligibility rule as the per-row Revoke button below: hidden once the
+        // candidate has engaged with the interview (in_progress/completed/terminated),
+        // the invite was abandoned pre-send (cancelled), or it's already revoked.
+        const isRevocableInvite = (inv: any): boolean =>
+          !['in_progress', 'completed', 'terminated', 'cancelled', 'revoked'].includes(inv.status);
 
         const invTotal = invitationOverview.total;
         const invInProgress = invitationOverview.inProgress;
@@ -2330,6 +2364,25 @@ export default function AIInterview() {
         const invInvited = Math.max(0, invTotal - invCompleted - invInProgress - invTerminated - invCancelled);
         const invCompletionRate = invTotal > 0 ? Math.round((invCompleted / invTotal) * 100) : 0;
         const paginatedInvitations = invitations;
+        // "Select All" only ever targets revocable rows on the CURRENT page — the
+        // list is server-paginated (INVITATION_PAGE_SIZE), so this intentionally
+        // does not reach across pages.
+        const selectableIds = paginatedInvitations.filter(isRevocableInvite).map((inv) => inv.id);
+        const allSelectableOnPageSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedInviteIds.has(id));
+        const toggleSelectAll = () => {
+          setSelectedInviteIds((prev) => {
+            if (allSelectableOnPageSelected) return new Set();
+            return new Set(selectableIds);
+          });
+        };
+        const toggleSelectOne = (id: string) => {
+          setSelectedInviteIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          });
+        };
         const hasActiveInviteFilters =
           inviteFilters.search.trim() !== '' ||
           inviteFilters.status !== 'all' ||
@@ -2364,6 +2417,7 @@ export default function AIInterview() {
             case 'cancelled': return <span className="px-2 py-0.5 bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-1 ring-red-200 dark:ring-red-500/25 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Cancelled</span>;
             case 'terminated': return <span className="px-2 py-0.5 bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-1 ring-red-200 dark:ring-red-500/25 rounded-full text-xs flex items-center gap-1" title="Auto-ended by the proctoring policy — candidate left the interview screen"><Ban className="w-3 h-3" /> Terminated</span>;
             case 'expired': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
+            case 'revoked': return <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-gray-700 dark:text-slate-300 ring-1 ring-gray-300 dark:ring-slate-600 rounded-full text-xs flex items-center gap-1" title="Revoked by recruiter — the old link no longer works"><Ban className="w-3 h-3" /> Revoked</span>;
             default: return <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> {status}</span>;
           }
         };
@@ -2452,10 +2506,47 @@ export default function AIInterview() {
                 searchPlaceholder="Search by candidate name or email..."
               />
 
+              {/* Bulk selection bar — only shown once there's at least one
+                  revocable invitation on the current page. */}
+              {!loadingInvitations && selectableIds.length > 0 && (
+                <div className="flex items-center justify-between px-3 sm:px-6 pt-3">
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+                  >
+                    <span
+                      role="checkbox"
+                      aria-checked={allSelectableOnPageSelected}
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                        allSelectableOnPageSelected
+                          ? 'bg-brand-blue border-brand-blue'
+                          : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
+                      }`}
+                    >
+                      {allSelectableOnPageSelected && <Check className="w-3 h-3 text-white" />}
+                    </span>
+                    Select All ({selectableIds.length})
+                  </button>
+
+                  {selectedInviteIds.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setBulkRevokeConfirmOpen(true)}
+                      disabled={isBulkRevoking}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 ring-1 ring-red-200 dark:ring-red-500/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Ban className="w-3.5 h-3.5" />
+                      Revoke Selected ({selectedInviteIds.size})
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Candidate List */}
               <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4 min-h-0">
                 {loadingInvitations ? (
-                  <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                     <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                   </div>
                 ) : invitations.length === 0 ? (
@@ -2474,6 +2565,27 @@ export default function AIInterview() {
                       <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all gap-2 sm:gap-3">
                         {/* Candidate info */}
                         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                          {/* Selection checkbox — only interactive for revocable invitations;
+                              a fixed-width spacer keeps every row's avatar aligned regardless
+                              of whether the checkbox is shown. */}
+                          <div className="w-5 flex-shrink-0 flex items-center justify-center">
+                            {isRevocableInvite(inv) && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleSelectOne(inv.id); }}
+                                role="checkbox"
+                                aria-checked={selectedInviteIds.has(inv.id)}
+                                aria-label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
+                                className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
+                                  selectedInviteIds.has(inv.id)
+                                    ? 'bg-brand-blue border-brand-blue'
+                                    : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
+                                }`}
+                              >
+                                {selectedInviteIds.has(inv.id) && <Check className="w-3 h-3 text-white" />}
+                              </button>
+                            )}
+                          </div>
                           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                             <span className="text-xs sm:text-sm font-medium text-brand-blue">
                               {(inv.candidate_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
@@ -2536,7 +2648,7 @@ export default function AIInterview() {
                           </div>
 
                           {/* Copy Link — available while session is still active */}
-                          {inv.interview_token && !['completed', 'cancelled', 'terminated', 'expired'].includes(resolveStatus(inv)) && !isInvExpired(inv) && (
+                          {inv.interview_token && !['completed', 'cancelled', 'terminated', 'expired', 'revoked'].includes(resolveStatus(inv)) && !isInvExpired(inv) && (
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation();
@@ -2552,8 +2664,10 @@ export default function AIInterview() {
                             </button>
                           )}
 
-                          {/* Resend Email — only for invited AND not yet started/completed. Regenerates token. */}
-                          {resolveStatus(inv) === 'invited' && !inv.started_at && !inv.completed_at && (
+                          {/* Resend Email — for invited (regenerates token) or revoked
+                              (reactivates + issues a fresh token), as long as the
+                              candidate hasn't already started/completed. */}
+                          {(resolveStatus(inv) === 'invited' || inv.status === 'revoked') && !inv.started_at && !inv.completed_at && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2567,8 +2681,53 @@ export default function AIInterview() {
                                 ? <Loader2 className="w-3 h-3 animate-spin" />
                                 : <Mail className="w-3 h-3" />
                               }
-                              Resend Email
+                              {inv.status === 'revoked' ? 'Send Again' : 'Resend Email'}
                             </button>
+                          )}
+
+                          {/* Edit / Revoke — Edit is only ever enabled once the
+                              invitation has been revoked; Revoke is enabled for
+                              any invitation that hasn't already reached a
+                              terminal/interview-in-progress state. Hidden together
+                              once the candidate has actually engaged with the
+                              interview (in_progress/completed/terminated) or the
+                              invite was abandoned pre-send (cancelled). */}
+                          {!['in_progress', 'completed', 'terminated', 'cancelled'].includes(inv.status) && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditInviteForm({
+                                    candidate_name: inv.candidate_name || '',
+                                    candidate_email: inv.candidate_email || '',
+                                  });
+                                  setEditInviteTarget(inv);
+                                }}
+                                disabled={inv.status !== 'revoked'}
+                                aria-label="Edit invitation"
+                                title={inv.status === 'revoked' ? 'Edit candidate details' : 'Revoke this invitation first to edit it'}
+                                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-900 disabled:hover:border-gray-200 dark:disabled:hover:border-slate-700 disabled:hover:text-gray-700 dark:disabled:hover:text-slate-300"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRevokeInviteTarget(inv);
+                                }}
+                                disabled={inv.status === 'revoked' || revokingInviteFor === inv.id}
+                                aria-label="Revoke invitation"
+                                title={inv.status === 'revoked' ? 'Already revoked' : 'Revoke this invitation — the candidate\'s link will stop working'}
+                                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 ring-1 ring-red-200 dark:ring-red-500/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {revokingInviteFor === inv.id
+                                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                                  : <Ban className="w-3 h-3" />
+                                }
+                                Revoke
+                              </button>
+                            </>
                           )}
 
                           {/* View Details button — also for terminated sessions so
@@ -2741,12 +2900,9 @@ export default function AIInterview() {
           try {
             await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
             toast.success(`New invitation link sent to ${inv.candidate_email}`);
-            // refresh invitations list so the new expires_at is reflected
+            // refresh invitations list so the new expires_at/status is reflected
             if (viewInvitationsConfig) {
-              await Promise.all([
-                loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters),
-                loadInvitationOverview(viewInvitationsConfig.id),
-              ]);
+              await refreshInvitationsView(viewInvitationsConfig.id);
             }
           } catch (err: any) {
             const detail = err?.response?.data?.detail;
@@ -2804,6 +2960,168 @@ export default function AIInterview() {
           );
         })()}
       </ConfirmationDialog>
+
+      {/* Revoke confirmation — flips status to REVOKED; old link stops working immediately */}
+      <ConfirmationDialog
+        isOpen={!!revokeInviteTarget}
+        onClose={() => { if (!revokingInviteFor) setRevokeInviteTarget(null); }}
+        onConfirm={async () => {
+          const inv = revokeInviteTarget;
+          if (!inv) return;
+          setRevokingInviteFor(inv.id);
+          try {
+            await aiInterviewService.revokeInvitation(inv.id);
+            toast.success(`Invitation for ${inv.candidate_email} has been revoked`);
+            if (viewInvitationsConfig) {
+              await refreshInvitationsView(viewInvitationsConfig.id);
+            }
+          } catch (err: any) {
+            toast.error(err?.message || 'Failed to revoke invitation');
+          } finally {
+            setRevokingInviteFor(null);
+            setRevokeInviteTarget(null);
+          }
+        }}
+        title="Revoke this invitation?"
+        description={
+          revokeInviteTarget
+            ? `The interview link already sent to ${revokeInviteTarget.candidate_email} will stop working immediately. You'll be able to edit the candidate's details and send a new invitation afterwards.`
+            : ''
+        }
+        confirmText={revokingInviteFor && revokingInviteFor === revokeInviteTarget?.id ? 'Revoking…' : 'Yes, revoke'}
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* Bulk revoke confirmation — revokes every checked invitation. Each one is
+          revoked independently via the same single-revoke endpoint, so one
+          candidate's link having already changed state doesn't block the rest. */}
+      <ConfirmationDialog
+        isOpen={bulkRevokeConfirmOpen}
+        onClose={() => { if (!isBulkRevoking) setBulkRevokeConfirmOpen(false); }}
+        onConfirm={async () => {
+          const targets = invitations.filter((inv) => selectedInviteIds.has(inv.id));
+          if (targets.length === 0) { setBulkRevokeConfirmOpen(false); return; }
+          setIsBulkRevoking(true);
+          try {
+            const results = await Promise.allSettled(
+              targets.map((inv) => aiInterviewService.revokeInvitation(inv.id))
+            );
+            const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+            const failed = results.length - succeeded;
+            if (succeeded > 0) {
+              toast.success(`Revoked ${succeeded} invitation${succeeded === 1 ? '' : 's'}.`);
+            }
+            if (failed > 0) {
+              toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
+            }
+            setSelectedInviteIds(new Set());
+            if (viewInvitationsConfig) {
+              await refreshInvitationsView(viewInvitationsConfig.id);
+            }
+          } finally {
+            setIsBulkRevoking(false);
+            setBulkRevokeConfirmOpen(false);
+          }
+        }}
+        title="Revoke selected invitations?"
+        description={`${selectedInviteIds.size} interview link${selectedInviteIds.size === 1 ? '' : 's'} will stop working immediately.`}
+        confirmText={isBulkRevoking ? 'Revoking…' : 'Yes, revoke selected'}
+        cancelText="Cancel"
+        variant="danger"
+      >
+        {selectedInviteIds.size > 0 && (
+          <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-100 dark:border-slate-700/60 divide-y divide-gray-100 dark:divide-slate-700/60">
+            {invitations
+              .filter((inv) => selectedInviteIds.has(inv.id))
+              .map((inv) => (
+                <div key={inv.id} className="px-3 py-2 text-sm text-gray-700 dark:text-slate-300 truncate">
+                  {inv.candidate_name || 'Unknown'} <span className="text-gray-400 dark:text-slate-500">— {inv.candidate_email}</span>
+                </div>
+              ))}
+          </div>
+        )}
+      </ConfirmationDialog>
+
+      {/* Edit invitation modal — only reachable while the invitation is REVOKED */}
+      {editInviteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md">
+            <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Edit Invitation</h3>
+              <button
+                onClick={() => { if (!savingEditInvite) setEditInviteTarget(null); }}
+                className="p-1.5 text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-700 rounded-lg transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-5 sm:px-6 py-4 space-y-4">
+              <p className="text-sm text-gray-500 dark:text-slate-500">
+                This invitation is revoked, so its status stays <strong>Revoked</strong> after saving. Use Send Again afterwards to reactivate it with a fresh link.
+              </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate name</label>
+                <input
+                  type="text"
+                  value={editInviteForm.candidate_name}
+                  onChange={(e) => setEditInviteForm((f) => ({ ...f, candidate_name: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
+                <input
+                  type="email"
+                  value={editInviteForm.candidate_email}
+                  onChange={(e) => setEditInviteForm((f) => ({ ...f, candidate_email: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                />
+              </div>
+            </div>
+            <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setEditInviteTarget(null)}
+                disabled={savingEditInvite}
+                className="px-4 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const inv = editInviteTarget;
+                  if (!inv) return;
+                  const name = editInviteForm.candidate_name.trim();
+                  const email = editInviteForm.candidate_email.trim();
+                  if (!name || !email) {
+                    toast.error('Candidate name and email are required');
+                    return;
+                  }
+                  setSavingEditInvite(true);
+                  try {
+                    await aiInterviewService.updateInvitation(inv.id, { candidate_name: name, candidate_email: email });
+                    toast.success('Invitation updated');
+                    if (viewInvitationsConfig) {
+                      await refreshInvitationsView(viewInvitationsConfig.id);
+                    }
+                    setEditInviteTarget(null);
+                  } catch (err: any) {
+                    toast.error(err?.message || 'Failed to update invitation');
+                  } finally {
+                    setSavingEditInvite(false);
+                  }
+                }}
+                disabled={savingEditInvite}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50"
+              >
+                {savingEditInvite && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -2832,7 +3150,7 @@ function ConsentLogsWrapper() {
 
   if (!ConsentLogs) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12 tf-loader-center">
         <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
       </div>
     );

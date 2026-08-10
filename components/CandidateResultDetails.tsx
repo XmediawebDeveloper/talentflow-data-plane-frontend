@@ -650,7 +650,7 @@ export default function CandidateResultDetails({
 
   if (isLoadingDetails) {
     return (
-      <div className="flex items-center justify-center h-64 bg-slate-50 dark:bg-slate-950">
+      <div className="tf-loader-page bg-slate-50 dark:bg-slate-950">
         <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
       </div>
     );
@@ -682,7 +682,7 @@ export default function CandidateResultDetails({
   // it and is told about the resume view through onResumeViewChange.
   if (showResume) {
     const resumeBody = isLoadingResume || !resumeDetail ? (
-      <div className="flex items-center justify-center gap-2 text-gray-500 py-20">
+      <div className="flex items-center justify-center gap-2 text-gray-500 py-20 tf-loader-center">
         <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
         <span className="text-sm">Loading resume...</span>
       </div>
@@ -2604,7 +2604,7 @@ export default function CandidateResultDetails({
                       </div>
 
                       {isLoadingEvents ? (
-                        <div className="flex items-center justify-center py-10 text-gray-500">
+                        <div className="flex items-center justify-center py-10 text-gray-500 tf-loader-center">
                           <Loader2 className="w-6 h-6 animate-spin mr-2 text-brand-blue" />
                           <span className="text-sm">Loading events…</span>
                         </div>

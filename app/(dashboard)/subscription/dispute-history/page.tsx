@@ -547,7 +547,7 @@ export default function DisputeHistoryPage() {
                 </p>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto tf-table-shell">
               <table className="w-full min-w-[800px]">
                 <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                   <tr className="text-left">

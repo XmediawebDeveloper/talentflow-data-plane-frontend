@@ -1891,16 +1891,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   Active
                 </button>
                 <button
-                  onClick={() => setActiveTab('draft')}
-                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === 'draft'
-                      ? 'border-brand-blue text-brand-blue font-medium'
-                      : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                  }`}
-                >
-                  Draft
-                </button>
-                <button
                   onClick={() => setActiveTab('completed-candidates')}
                   className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
                     activeTab === 'completed-candidates'
@@ -1911,6 +1901,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span className="hidden sm:inline">Candidate Results</span>
                   <span className="sm:hidden">Results</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('draft')}
+                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                    activeTab === 'draft'
+                      ? 'border-brand-blue text-brand-blue font-medium'
+                      : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                  }`}
+                >
+                  Draft
+                </button>
+                <button
+                  onClick={() => setActiveTab('archived')}
+                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                    activeTab === 'archived'
+                      ? 'border-brand-blue text-brand-blue font-medium'
+                      : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                  }`}
+                >
+                  <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Archived
                 </button>
                 {/* <button
                   onClick={() => setActiveTab('completed')}
@@ -1950,17 +1961,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </button>
                   </>
                 )}
-                <button
-                  onClick={() => setActiveTab('archived')}
-                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-                    activeTab === 'archived'
-                      ? 'border-brand-blue text-brand-blue font-medium'
-                      : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                  }`}
-                >
-                  <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  Archived
-                </button>
                 <button
                   onClick={() => setActiveTab('settings')}
                   className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
@@ -2121,7 +2121,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <div>
                   {isLoadingCompletedCandidates ? (
-                    <div className="flex items-center justify-center py-16">
+                    <div className="flex items-center justify-center py-16 tf-loader-center">
                       <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                       <span className="ml-2 text-sm text-gray-600 dark:text-slate-400">Loading candidate results…</span>
                     </div>
@@ -2167,7 +2167,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60">
                           <h2 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 tracking-tight">Candidate Results</h2>
                         </div>
-                        <div className="min-h-[400px] max-h-[calc(100vh-24rem)] overflow-auto">
+                        <div className="min-h-[400px] max-h-[calc(100vh-24rem)] overflow-auto tf-table-shell">
                         <table className="w-full min-w-[1500px] table-auto">
                           <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                             <tr>
@@ -2389,7 +2389,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                     {/* Loading State */}
                     {isLoadingTopics ? (
-                      <div className="flex items-center justify-center py-12">
+                      <div className="flex items-center justify-center py-12 tf-loader-center">
                         <div className="text-center">
                           <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
                           <p className="text-gray-600 dark:text-slate-400">Loading topic settings...</p>
@@ -2586,7 +2586,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <div className="space-y-4 sm:space-y-6">
                 {/* Loading State */}
                 {isLoadingProctoring ? (
-                  <div className="flex items-center justify-center py-8 sm:py-12">
+                  <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
                     <div className="text-center">
                       <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
                       <p className="text-sm text-gray-600 dark:text-slate-400">Loading proctoring settings...</p>
@@ -2834,7 +2834,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <span className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">{proctoringEventsTotal} total</span>
                       </div>
                       {isLoadingProctoringEvents ? (
-                        <div className="flex items-center justify-center py-8">
+                        <div className="flex items-center justify-center py-8 tf-loader-center">
                           <Loader2 className="w-6 h-6 text-brand-blue animate-spin mr-2" />
                           <span className="text-sm text-gray-500 dark:text-slate-500">Loading events...</span>
                         </div>
@@ -2892,7 +2892,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
             ) : isLoading ? (
               /* Loading State */
-              <div className="flex items-center justify-center py-12">
+              <div className="flex items-center justify-center py-12 tf-loader-center">
                 <div className="text-center">
                   <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
                   <p className="text-gray-600 dark:text-slate-400">Loading assessments...</p>
@@ -3837,7 +3837,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {/* Invitations Table / Cards */}
             <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-auto flex-1 min-h-0">
               {isLoadingInvitations ? (
-                <div className="flex items-center justify-center py-8 sm:py-12">
+                <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center tf-loader-center--compact">
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
                 </div>
               ) : trackingInvitations.length === 0 ? (
@@ -3850,376 +3850,378 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </p>
                 </div>
               ) : (
-                <table className="w-full min-w-[900px] table-fixed">
-                  <colgroup>
-                    <col className="w-[80px]" />
-                    <col className="w-[240px]" />
-                    <col className="w-[140px]" />
-                    <col className="w-[220px]" />
-                    {(selectedAssessmentForTracking?.technical_enabled ?? true) && <col className="w-[100px]" />}
-                    {selectedAssessmentForTracking?.coding_enabled && <col className="w-[100px]" />}
-                    <col className="w-[170px]" />
-                  </colgroup>
-                  <thead>
-                    <tr className="border-b border-gray-200 dark:border-slate-700">
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Timeline</th>
-                      {/* Tech / Coding Score columns are conditional on the
-                          assessment having that round enabled — same rule as
-                          the Results page. Showing a "Coding Score" column
-                          for a JD without a coding round produced a
-                          permanent "—" column that confused recruiters. */}
-                      {(selectedAssessmentForTracking?.technical_enabled ?? true) && (
-                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
-                      )}
-                      {selectedAssessmentForTracking?.coding_enabled && (
-                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
-                      )}
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                    {trackingInvitations.map((invitation: any) => {
-                      const getStatusBadge = (inv: any) => {
-                        const s = inv.status;
-                        const base = "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ring-1";
-                        if (s === 'completed' || inv.completed_at) {
-                          const autoCompleted = inv.termination_code === 'TENANT_SESSION_TIMEOUT';
-                          return (
-                            <span
-                              className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}
-                              title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined}
-                            >
-                              <CheckCircle className="w-3 h-3" />
-                              Completed
-                              {autoCompleted && <span className="text-brand-blue/80">(Auto)</span>}
-                            </span>
-                          );
-                        }
-                        if (s === 'failed') {
-                          return <span className={`${base} bg-red-50 text-red-600 ring-red-200`}><X className="w-3 h-3" /> Invite Failed</span>;
-                        }
-                        if (s === 'bounced' || inv.bounced_at) {
-                          return <span className={`${base} bg-red-50 text-red-600 ring-red-200`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
-                        }
-                        if (s === 'expired') {
-                          return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Clock className="w-3 h-3" /> Expired</span>;
-                        }
-                        if (s === 'abandoned') {
-                          return <span className={`${base} bg-gray-100 text-gray-700 ring-gray-200`}><X className="w-3 h-3" /> Abandoned</span>;
-                        }
-                        if (s === 'started' || inv.started_at) {
-                          return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Play className="w-3 h-3" /> Started</span>;
-                        }
-                        if (s === 'opened' || inv.opened_at) {
-                          return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`}><Eye className="w-3 h-3" /> Link Opened</span>;
-                        }
-                        if (s === 'sent' || inv.sent_at) {
-                          return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-3 h-3" /> Invite Sent</span>;
-                        }
-                        return <span className={`${base} bg-gray-100 text-gray-600 ring-gray-200`}><Clock className="w-3 h-3" /> Pending</span>;
-                      };
-
-                      // Show an additional "Expired" badge alongside the base status
-                      // when the invitation has passed its expiry but hasn't reached a
-                      // terminal state. Covers the case where a candidate started the
-                      // system check but never started the assessment. Once a unit has
-                      // been consumed (candidate actually started the assessment),
-                      // expiry no longer applies.
-                      const isInvExpired = (inv: any): boolean => {
-                        const s = inv.status;
-                        if (['completed', 'failed', 'bounced', 'abandoned', 'expired'].includes(s) || inv.completed_at || inv.bounced_at) return false;
-                        if (inv.unit_consumed) return false;
-                        return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
-                      };
-
-                          const initials = invitation.candidate_name
-                            ?.split(' ')
-                            .map((n: string) => n[0])
-                            .join('')
-                            .toUpperCase()
-                            .slice(0, 2) || '??';
-
-                      return (
-                        <tr key={invitation.id} className="hover:bg-brand-blue/5 transition-colors">
-                          <td className="py-3 px-4 align-top">
-                            <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
-                              {invitation.candidate_display_id || '-'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 align-top">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm flex-shrink-0">
-                                {initials}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate">{invitation.candidate_name}</p>
-                                <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{invitation.candidate_email}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4 align-top">
-                            <div>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {getStatusBadge(invitation)}
-                                {isInvExpired(invitation) && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20">
-                                    <Clock className="w-3 h-3" /> Expired
-                                  </span>
-                                )}
-                              </div>
-                              {invitation.status === 'failed' && (
-                                <p className="text-xs text-red-600 mt-1">Incorrect Email</p>
-                              )}
-                            </div>
-                          </td>
-                              <td className="py-3 px-3 lg:px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
-                                <div className="space-y-1">
-                                  {invitation.sent_at && (
-                                    <div className="flex items-center gap-2">
-                                      <Mail className="w-3 h-3 text-brand-blue flex-shrink-0" />
-                                      <span>Sent: {formatIST(invitation.sent_at)}</span>
-                                </div>
-                              )}
-                              {invitation.bounced_at && (
-                                <div className="flex items-center gap-2">
-                                  <RefreshCw className="w-3 h-3 text-red-600 flex-shrink-0" />
-                                  <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
-                                </div>
-                              )}
-                              {invitation.started_at && (
-                                <div className="flex items-center gap-2">
-                                  <Play className="w-3 h-3 text-brand-orange-deep flex-shrink-0" />
-                                  <span>Started: {formatIST(invitation.started_at)}</span>
-                                </div>
-                              )}
-                              {invitation.completed_at && (
-                                <div className="flex items-center gap-2">
-                                  <CheckCircle className="w-3 h-3 text-brand-blue flex-shrink-0" />
-                                  <span>Completed: {formatIST(invitation.completed_at)}</span>
-                                </div>
-                              )}
-                              {/* Expired-at timestamp — shown when the link
-                                  has expired (status='expired' or clock-based
-                                  expiry on a never-started invite). The
-                                  expires_at column holds the deadline; we
-                                  surface it as the moment of expiry. */}
-                              {(() => {
-                                const s = (invitation.status || '').toLowerCase();
-                                const clockExpired = !invitation.started_at
-                                  && !invitation.unit_consumed
-                                  && invitation.expires_at
-                                  && new Date(invitation.expires_at) < new Date();
-                                const isExpired = !invitation.completed_at
-                                  && (s === 'expired' || clockExpired);
-                                if (!isExpired || !invitation.expires_at) return null;
-                                return (
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-3 h-3 text-brand-orange-deep flex-shrink-0" />
-                                    <span className="text-brand-orange-deep">Expired at: {formatIST(invitation.expires_at)}</span>
-                                  </div>
-                                );
-                              })()}
-                              {!invitation.sent_at && !invitation.started_at && (
-                                <div className="flex items-center gap-2">
-                                  <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                  <span>Created: {formatIST(invitation.created_at)}</span>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          {/* Tech Score / Coding Score columns. Same pattern
-                              as the Results page: percent number on top, small
-                              Pass/Fail tag below, both colored against the 70%
-                              threshold. Rounded so the value matches every
-                              other surface (Results list, Detail view, PDF).
-                              Show "—" until AI scoring is finished — surfacing
-                              0% / Fail mid-evaluation was misleading because
-                              the candidate's answers haven't been judged yet.
-                              Cells are gated on the round being enabled for
-                              this assessment so a Tech-only JD doesn't carry
-                              an empty Coding column. */}
-                          {/* Score is shown when a numeric value is on the
-                              row. Earlier the gate also required
-                              scoring_status === 'completed', but the
-                              listInvitations endpoint didn't include that
-                              field — which silently hid every score. The
-                              backend now ships scoring_status; we still
-                              treat its absence as "show the score if it
-                              exists" so the popup keeps parity with the
-                              Results page. */}
-                          {(selectedAssessmentForTracking?.technical_enabled ?? true) && (() => {
-                            const techReady =
-                              invitation.technical_score != null
-                              && invitation.scoring_status !== 'processing'
-                              && invitation.scoring_status !== 'pending';
+                <div className="tf-table-shell tf-table-shell--compact">
+                  <table className="w-full min-w-[900px] table-fixed">
+                    <colgroup>
+                      <col className="w-[80px]" />
+                      <col className="w-[240px]" />
+                      <col className="w-[140px]" />
+                      <col className="w-[220px]" />
+                      {(selectedAssessmentForTracking?.technical_enabled ?? true) && <col className="w-[100px]" />}
+                      {selectedAssessmentForTracking?.coding_enabled && <col className="w-[100px]" />}
+                      <col className="w-[170px]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-slate-700">
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Timeline</th>
+                        {/* Tech / Coding Score columns are conditional on the
+                            assessment having that round enabled — same rule as
+                            the Results page. Showing a "Coding Score" column
+                            for a JD without a coding round produced a
+                            permanent "—" column that confused recruiters. */}
+                        {(selectedAssessmentForTracking?.technical_enabled ?? true) && (
+                          <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
+                        )}
+                        {selectedAssessmentForTracking?.coding_enabled && (
+                          <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
+                        )}
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                      {trackingInvitations.map((invitation: any) => {
+                        const getStatusBadge = (inv: any) => {
+                          const s = inv.status;
+                          const base = "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ring-1";
+                          if (s === 'completed' || inv.completed_at) {
+                            const autoCompleted = inv.termination_code === 'TENANT_SESSION_TIMEOUT';
                             return (
-                              <td className="py-3 px-4 align-top text-sm text-center">
-                                {techReady ? (
-                                  <div className="flex flex-col items-center gap-0.5">
-                                    <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
-                                      {Math.round(invitation.technical_score)}%
-                                    </span>
-                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.technical_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
-                                      {invitation.technical_score >= 70 ? 'Pass' : 'Fail'}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400">—</span>
-                                )}
-                              </td>
+                              <span
+                                className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}
+                                title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined}
+                              >
+                                <CheckCircle className="w-3 h-3" />
+                                Completed
+                                {autoCompleted && <span className="text-brand-blue/80">(Auto)</span>}
+                              </span>
                             );
-                          })()}
-                          {selectedAssessmentForTracking?.coding_enabled && (() => {
-                            const codingReady =
-                              invitation.coding_score != null
-                              && invitation.scoring_status !== 'processing'
-                              && invitation.scoring_status !== 'pending';
-                            return (
-                              <td className="py-3 px-4 align-top text-sm text-center">
-                                {codingReady ? (
-                                  <div className="flex flex-col items-center gap-0.5">
-                                    <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
-                                      {Math.round(invitation.coding_score)}%
+                          }
+                          if (s === 'failed') {
+                            return <span className={`${base} bg-red-50 text-red-600 ring-red-200`}><X className="w-3 h-3" /> Invite Failed</span>;
+                          }
+                          if (s === 'bounced' || inv.bounced_at) {
+                            return <span className={`${base} bg-red-50 text-red-600 ring-red-200`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
+                          }
+                          if (s === 'expired') {
+                            return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Clock className="w-3 h-3" /> Expired</span>;
+                          }
+                          if (s === 'abandoned') {
+                            return <span className={`${base} bg-gray-100 text-gray-700 ring-gray-200`}><X className="w-3 h-3" /> Abandoned</span>;
+                          }
+                          if (s === 'started' || inv.started_at) {
+                            return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Play className="w-3 h-3" /> Started</span>;
+                          }
+                          if (s === 'opened' || inv.opened_at) {
+                            return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`}><Eye className="w-3 h-3" /> Link Opened</span>;
+                          }
+                          if (s === 'sent' || inv.sent_at) {
+                            return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-3 h-3" /> Invite Sent</span>;
+                          }
+                          return <span className={`${base} bg-gray-100 text-gray-600 ring-gray-200`}><Clock className="w-3 h-3" /> Pending</span>;
+                        };
+  
+                        // Show an additional "Expired" badge alongside the base status
+                        // when the invitation has passed its expiry but hasn't reached a
+                        // terminal state. Covers the case where a candidate started the
+                        // system check but never started the assessment. Once a unit has
+                        // been consumed (candidate actually started the assessment),
+                        // expiry no longer applies.
+                        const isInvExpired = (inv: any): boolean => {
+                          const s = inv.status;
+                          if (['completed', 'failed', 'bounced', 'abandoned', 'expired'].includes(s) || inv.completed_at || inv.bounced_at) return false;
+                          if (inv.unit_consumed) return false;
+                          return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
+                        };
+  
+                            const initials = invitation.candidate_name
+                              ?.split(' ')
+                              .map((n: string) => n[0])
+                              .join('')
+                              .toUpperCase()
+                              .slice(0, 2) || '??';
+  
+                        return (
+                          <tr key={invitation.id} className="hover:bg-brand-blue/5 transition-colors">
+                            <td className="py-3 px-4 align-top">
+                              <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
+                                {invitation.candidate_display_id || '-'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 align-top">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm flex-shrink-0">
+                                  {initials}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate">{invitation.candidate_name}</p>
+                                  <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{invitation.candidate_email}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 align-top">
+                              <div>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {getStatusBadge(invitation)}
+                                  {isInvExpired(invitation) && (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20">
+                                      <Clock className="w-3 h-3" /> Expired
                                     </span>
-                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.coding_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
-                                      {invitation.coding_score >= 70 ? 'Pass' : 'Fail'}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-gray-400">—</span>
-                                )}
-                              </td>
-                            );
-                          })()}
-                          <td className="py-3 px-4 align-top">
-                            {(invitation.status === 'completed' || invitation.completed_at) ? (
-                              invitation.attempt_id ? (
-                                <button
-                                  onClick={() => router.push(
-                                    `/recruitment/assessments/${selectedAssessmentForTracking.id}/results/details`
-                                    + `?candidate_id=${invitation.attempt_id}`
-                                    + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
                                   )}
-                                  className="flex items-center gap-1 px-3 py-1.5 text-xs text-brand-blue hover:bg-brand-blue/10 rounded-lg transition-colors"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  View Results
-                                </button>
-                              ) : (
-                                // Completed-but-no-attempt — extremely rare orphaned invitation. Render
-                                // disabled so we don't silently dump the user on the aggregate page.
-                                <button
-                                  disabled
-                                  title="Result detail unavailable for this invitation"
-                                  className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-400 rounded-lg cursor-not-allowed"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  View Results
-                                </button>
-                              )
-                            ) : invitation.status === 'bounced' ? (
-                              editingEmailId === invitation.id ? (
-                                <div className="flex flex-col gap-1.5 min-w-[190px]">
-                                  <input
-                                    type="email"
-                                    value={newEmailValue}
-                                    onChange={e => setNewEmailValue(e.target.value)}
-                                    placeholder="new@email.com"
-                                    className="text-xs border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full"
-                                    autoFocus
-                                  />
-                                  <div className="flex gap-1">
-                                    <button
-                                      onClick={() => handleUpdateEmail(invitation)}
-                                      disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
-                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-                                    >
-                                      <Send className="w-3 h-3" />
-                                      {isSendingChangeEmail ? 'Sending…' : 'Send'}
-                                    </button>
-                                    <button
-                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
-                                      className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-slate-100 rounded transition-colors"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
                                 </div>
-                              ) : (
-                                <button
-                                  onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
-                                  className="flex items-center gap-1 px-3 py-1.5 text-xs border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 hover:bg-brand-blue/5 rounded-lg transition-colors whitespace-nowrap"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                  Change Email
-                                </button>
-                              )
-                            ) : (['sent', 'opened', 'failed'].includes(invitation.status) && !invitation.started_at && !invitation.completed_at) ? (
-                              // Resend retries the SAME address (good for a transient
-                              // network failure); Edit Email lets the recruiter fix a
-                              // mistyped address before resending (the common cause of
-                              // a "failed"/"Incorrect Email" invite).
-                              editingEmailId === invitation.id ? (
-                                <div className="flex flex-col gap-1.5 min-w-[190px]">
-                                  <input
-                                    type="email"
-                                    value={newEmailValue}
-                                    onChange={e => setNewEmailValue(e.target.value)}
-                                    placeholder="new@email.com"
-                                    className="text-xs border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full"
-                                    autoFocus
-                                  />
-                                  <div className="flex gap-1">
-                                    <button
-                                      onClick={() => handleUpdateEmail(invitation)}
-                                      disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
-                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-                                    >
-                                      <Send className="w-3 h-3" />
-                                      {isSendingChangeEmail ? 'Sending…' : 'Send'}
-                                    </button>
-                                    <button
-                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
-                                      className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-slate-100 rounded transition-colors"
-                                    >
-                                      Cancel
-                                    </button>
+                                {invitation.status === 'failed' && (
+                                  <p className="text-xs text-red-600 mt-1">Incorrect Email</p>
+                                )}
+                              </div>
+                            </td>
+                                <td className="py-3 px-3 lg:px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
+                                  <div className="space-y-1">
+                                    {invitation.sent_at && (
+                                      <div className="flex items-center gap-2">
+                                        <Mail className="w-3 h-3 text-brand-blue flex-shrink-0" />
+                                        <span>Sent: {formatIST(invitation.sent_at)}</span>
                                   </div>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1">
+                                )}
+                                {invitation.bounced_at && (
+                                  <div className="flex items-center gap-2">
+                                    <RefreshCw className="w-3 h-3 text-red-600 flex-shrink-0" />
+                                    <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
+                                  </div>
+                                )}
+                                {invitation.started_at && (
+                                  <div className="flex items-center gap-2">
+                                    <Play className="w-3 h-3 text-brand-orange-deep flex-shrink-0" />
+                                    <span>Started: {formatIST(invitation.started_at)}</span>
+                                  </div>
+                                )}
+                                {invitation.completed_at && (
+                                  <div className="flex items-center gap-2">
+                                    <CheckCircle className="w-3 h-3 text-brand-blue flex-shrink-0" />
+                                    <span>Completed: {formatIST(invitation.completed_at)}</span>
+                                  </div>
+                                )}
+                                {/* Expired-at timestamp — shown when the link
+                                    has expired (status='expired' or clock-based
+                                    expiry on a never-started invite). The
+                                    expires_at column holds the deadline; we
+                                    surface it as the moment of expiry. */}
+                                {(() => {
+                                  const s = (invitation.status || '').toLowerCase();
+                                  const clockExpired = !invitation.started_at
+                                    && !invitation.unit_consumed
+                                    && invitation.expires_at
+                                    && new Date(invitation.expires_at) < new Date();
+                                  const isExpired = !invitation.completed_at
+                                    && (s === 'expired' || clockExpired);
+                                  if (!isExpired || !invitation.expires_at) return null;
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <Clock className="w-3 h-3 text-brand-orange-deep flex-shrink-0" />
+                                      <span className="text-brand-orange-deep">Expired at: {formatIST(invitation.expires_at)}</span>
+                                    </div>
+                                  );
+                                })()}
+                                {!invitation.sent_at && !invitation.started_at && (
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                    <span>Created: {formatIST(invitation.created_at)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            {/* Tech Score / Coding Score columns. Same pattern
+                                as the Results page: percent number on top, small
+                                Pass/Fail tag below, both colored against the 70%
+                                threshold. Rounded so the value matches every
+                                other surface (Results list, Detail view, PDF).
+                                Show "—" until AI scoring is finished — surfacing
+                                0% / Fail mid-evaluation was misleading because
+                                the candidate's answers haven't been judged yet.
+                                Cells are gated on the round being enabled for
+                                this assessment so a Tech-only JD doesn't carry
+                                an empty Coding column. */}
+                            {/* Score is shown when a numeric value is on the
+                                row. Earlier the gate also required
+                                scoring_status === 'completed', but the
+                                listInvitations endpoint didn't include that
+                                field — which silently hid every score. The
+                                backend now ships scoring_status; we still
+                                treat its absence as "show the score if it
+                                exists" so the popup keeps parity with the
+                                Results page. */}
+                            {(selectedAssessmentForTracking?.technical_enabled ?? true) && (() => {
+                              const techReady =
+                                invitation.technical_score != null
+                                && invitation.scoring_status !== 'processing'
+                                && invitation.scoring_status !== 'pending';
+                              return (
+                                <td className="py-3 px-4 align-top text-sm text-center">
+                                  {techReady ? (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
+                                        {Math.round(invitation.technical_score)}%
+                                      </span>
+                                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.technical_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                        {invitation.technical_score >= 70 ? 'Pass' : 'Fail'}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400">—</span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {selectedAssessmentForTracking?.coding_enabled && (() => {
+                              const codingReady =
+                                invitation.coding_score != null
+                                && invitation.scoring_status !== 'processing'
+                                && invitation.scoring_status !== 'pending';
+                              return (
+                                <td className="py-3 px-4 align-top text-sm text-center">
+                                  {codingReady ? (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
+                                        {Math.round(invitation.coding_score)}%
+                                      </span>
+                                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.coding_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                        {invitation.coding_score >= 70 ? 'Pass' : 'Fail'}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400">—</span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            <td className="py-3 px-4 align-top">
+                              {(invitation.status === 'completed' || invitation.completed_at) ? (
+                                invitation.attempt_id ? (
                                   <button
-                                    onClick={() => setResendTargetInvitation(invitation)}
-                                    aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
-                                    className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-all ${
-                                      invitation.status === 'failed'
-                                        ? 'bg-red-600 text-white hover:bg-red-700'
-                                        : 'border border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5'
-                                    }`}
+                                    onClick={() => router.push(
+                                      `/recruitment/assessments/${selectedAssessmentForTracking.id}/results/details`
+                                      + `?candidate_id=${invitation.attempt_id}`
+                                      + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
+                                    )}
+                                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-brand-blue hover:bg-brand-blue/10 rounded-lg transition-colors"
                                   >
-                                    <Mail className="w-3.5 h-3.5" />
-                                    Resend
+                                    <Eye className="w-3.5 h-3.5" />
+                                    View Results
                                   </button>
+                                ) : (
+                                  // Completed-but-no-attempt — extremely rare orphaned invitation. Render
+                                  // disabled so we don't silently dump the user on the aggregate page.
+                                  <button
+                                    disabled
+                                    title="Result detail unavailable for this invitation"
+                                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-400 rounded-lg cursor-not-allowed"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    View Results
+                                  </button>
+                                )
+                              ) : invitation.status === 'bounced' ? (
+                                editingEmailId === invitation.id ? (
+                                  <div className="flex flex-col gap-1.5 min-w-[190px]">
+                                    <input
+                                      type="email"
+                                      value={newEmailValue}
+                                      onChange={e => setNewEmailValue(e.target.value)}
+                                      placeholder="new@email.com"
+                                      className="text-xs border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full"
+                                      autoFocus
+                                    />
+                                    <div className="flex gap-1">
+                                      <button
+                                        onClick={() => handleUpdateEmail(invitation)}
+                                        disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
+                                        className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                                      >
+                                        <Send className="w-3 h-3" />
+                                        {isSendingChangeEmail ? 'Sending…' : 'Send'}
+                                      </button>
+                                      <button
+                                        onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
+                                        className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-slate-100 rounded transition-colors"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
                                   <button
                                     onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
-                                    aria-label="Edit email address and resend" title="Edit email address and resend"
                                     className="flex items-center gap-1 px-3 py-1.5 text-xs border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 hover:bg-brand-blue/5 rounded-lg transition-colors whitespace-nowrap"
                                   >
                                     <Pencil className="w-3.5 h-3.5" />
-                                    Edit Email
+                                    Change Email
                                   </button>
-                                </div>
-                              )
-                            ) : null}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                                )
+                              ) : (['sent', 'opened', 'failed'].includes(invitation.status) && !invitation.started_at && !invitation.completed_at) ? (
+                                // Resend retries the SAME address (good for a transient
+                                // network failure); Edit Email lets the recruiter fix a
+                                // mistyped address before resending (the common cause of
+                                // a "failed"/"Incorrect Email" invite).
+                                editingEmailId === invitation.id ? (
+                                  <div className="flex flex-col gap-1.5 min-w-[190px]">
+                                    <input
+                                      type="email"
+                                      value={newEmailValue}
+                                      onChange={e => setNewEmailValue(e.target.value)}
+                                      placeholder="new@email.com"
+                                      className="text-xs border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full"
+                                      autoFocus
+                                    />
+                                    <div className="flex gap-1">
+                                      <button
+                                        onClick={() => handleUpdateEmail(invitation)}
+                                        disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
+                                        className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                                      >
+                                        <Send className="w-3 h-3" />
+                                        {isSendingChangeEmail ? 'Sending…' : 'Send'}
+                                      </button>
+                                      <button
+                                        onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
+                                        className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-slate-100 rounded transition-colors"
+                                      >
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => setResendTargetInvitation(invitation)}
+                                      aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
+                                      className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-all ${
+                                        invitation.status === 'failed'
+                                          ? 'bg-red-600 text-white hover:bg-red-700'
+                                          : 'border border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5'
+                                      }`}
+                                    >
+                                      <Mail className="w-3.5 h-3.5" />
+                                      Resend
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
+                                      aria-label="Edit email address and resend" title="Edit email address and resend"
+                                      className="flex items-center gap-1 px-3 py-1.5 text-xs border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 hover:bg-brand-blue/5 rounded-lg transition-colors whitespace-nowrap"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                      Edit Email
+                                    </button>
+                                  </div>
+                                )
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
 

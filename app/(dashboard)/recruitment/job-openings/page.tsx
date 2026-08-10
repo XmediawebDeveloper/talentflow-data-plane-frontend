@@ -42,6 +42,8 @@ export default function JobOpeningsPage() {
     open: boolean;
     jobTitle: string;
     usageDetails: string[];
+    jobId?: string;
+    creating?: boolean;
   }>({ open: false, jobTitle: '', usageDetails: [] });
   const [deleteWarningDialog, setDeleteWarningDialog] = useState<{
     open: boolean;
@@ -57,6 +59,31 @@ export default function JobOpeningsPage() {
   const dialog = useGlobalDialog();
   const { user, isTenantAdmin, hasPermission } = useAuth();
   const canManageMasters = hasPermission('canManageSettings');
+
+  // "?view=list" is a one-shot instruction from the JD flow's "View All Jobs":
+  // open the full list with every job showing, rather than the stat-tile overview
+  // or whatever narrowed view was last persisted. Captured on the first render so
+  // it stays stable for this mount, then stripped from the URL below.
+  const [forceListView] = useState(() => searchParams.get('view') === 'list');
+
+  // Landing at a restored scroll offset would drop the recruiter into the middle
+  // of the list they just asked to see from the top — and the newest JD sorts
+  // first. Drop the saved offset before the restore effect can read it (it is
+  // gated on !loading, so it has not run yet on this mount).
+  useEffect(() => {
+    if (!forceListView) return;
+    try { sessionStorage.removeItem('listScroll:job-openings'); } catch { /* ignore */ }
+  }, [forceListView]);
+
+  // Strip the param once consumed, so a later back-navigation from job-details
+  // restores the recruiter's own view instead of resetting it all over again.
+  useEffect(() => {
+    if (searchParams.get('view') !== 'list') return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete('view');
+    const query = next.toString();
+    router.replace(`/recruitment/job-openings${query ? `?${query}` : ''}`, { scroll: false });
+  }, [searchParams, router]);
 
   // Restore/persist the list's view state + scroll position so returning from a
   // job-details page lands the user exactly where they left off. The outer div
@@ -175,7 +202,7 @@ export default function JobOpeningsPage() {
         updated_at: jd.updated_at, // For last updated display
         creation_stage: jd.creation_stage, // For draft JDs
         creation_method: jd.creation_method, // AI or Manual
-        currentVersion: jd.current_version, // For republished status
+        currentVersion: (jd as any).version_number ?? jd.current_version, // lineage version (v1, v2, ...) for the badge
         experience_level: jd.job_level || jd.experience_level,
       }));
 
@@ -269,8 +296,10 @@ export default function JobOpeningsPage() {
 
         setEditWarningDialog({
           open: true,
+          jobId: job.id,
           jobTitle: job.title,
-          usageDetails
+          usageDetails,
+          creating: false,
         });
         return;
       }
@@ -281,6 +310,33 @@ export default function JobOpeningsPage() {
       console.error('Failed to check JD usage status:', error);
       // If usage check fails, allow navigation (backend will validate on save)
       router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
+    }
+  };
+
+  // Version control: editing an in-use JD forks it into a NEW independent version
+  // (a fresh DRAFT copy with its own id) instead of mutating the in-use one. The
+  // editor then opens on the new version; the previous version keeps all its
+  // assessments/interviews/scores untouched.
+  const handleCreateNewVersion = async () => {
+    const sourceId = editWarningDialog.jobId;
+    if (!sourceId) return;
+    setEditWarningDialog(prev => ({ ...prev, creating: true }));
+    try {
+      const newJd = await jdService.createNewVersion(sourceId);
+      setEditWarningDialog({ open: false, jobTitle: '', usageDetails: [] });
+      toast.success('New version created', {
+        description: `Version ${(newJd as any).version_number ?? ''} created as a new draft. Edit and publish it independently.`,
+      });
+      // Start on Step 1 with ALL the source JD's data pre-filled (title, JD
+      // text, extracted skills/experience/etc.). The no-change-no-LLM guard
+      // keeps that data intact through the steps until the recruiter edits it.
+      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create`);
+    } catch (error) {
+      console.error('Failed to create new JD version:', error);
+      setEditWarningDialog(prev => ({ ...prev, creating: false }));
+      toast.error('Could not create new version', {
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
     }
   };
 
@@ -464,6 +520,7 @@ export default function JobOpeningsPage() {
         onBulkDelete={hasPermission('canDeleteJD') || isTenantAdmin ? handleBulkDeleteJobs : undefined}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
+        forceListView={forceListView}
         masterDataLinks={canManageMasters ? MASTER_DATA_LINKS : undefined}
       />
 
@@ -477,10 +534,10 @@ export default function JobOpeningsPage() {
               </div>
               <div className="flex-1 pt-1">
                 <AlertDialogTitle className="text-lg font-semibold text-gray-900">
-                  Cannot Edit Job Description
+                  Create a New Version?
                 </AlertDialogTitle>
                 <AlertDialogDescription className="mt-1 text-sm text-gray-500">
-                  This job description is actively used and cannot be modified.
+                  This job description is actively used, so it can&apos;t be edited directly.
                 </AlertDialogDescription>
               </div>
             </div>
@@ -503,10 +560,10 @@ export default function JobOpeningsPage() {
             </div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <p className="text-sm text-gray-700">
-                <span className="font-medium text-gray-900">&quot;{editWarningDialog.jobTitle}&quot;</span> is linked to active modules above. To maintain data integrity, editing is disabled.
+                <span className="font-medium text-gray-900">&quot;{editWarningDialog.jobTitle}&quot;</span> is linked to the active modules above. To keep their data intact, editing creates a <span className="font-medium text-gray-900">new version</span> instead.
               </p>
               <p className="mt-1.5 text-sm text-gray-500">
-                Please create a new job description if changes are needed.
+                The new version is an independent copy (its own assessments, AI interviews and resume scoring). This version and its existing data are left untouched.
               </p>
             </div>
           </div>
@@ -514,15 +571,17 @@ export default function JobOpeningsPage() {
           <AlertDialogFooter className="mt-5 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <AlertDialogAction
               onClick={() => setEditWarningDialog({ open: false, jobTitle: '', usageDetails: [] })}
-              className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white text-sm"
-            >
-              I Understand
-            </AlertDialogAction>
-            <AlertDialogAction
-              onClick={() => { setEditWarningDialog({ open: false, jobTitle: '', usageDetails: [] }); router.push('/recruitment/jd-creation'); }}
+              disabled={editWarningDialog.creating}
               className="w-full sm:w-auto bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 text-sm"
             >
-              Create New JD
+              Cancel
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleCreateNewVersion(); }}
+              disabled={editWarningDialog.creating}
+              className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white text-sm disabled:opacity-60"
+            >
+              {editWarningDialog.creating ? 'Creating…' : 'Create New Version'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

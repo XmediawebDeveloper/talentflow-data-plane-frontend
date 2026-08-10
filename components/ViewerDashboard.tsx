@@ -200,7 +200,7 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
                 View all <ArrowUpRight className="w-4 h-4" />
               </button>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto tf-table-shell">
               <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
                   <tr>
@@ -277,7 +277,7 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
             <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Recent assessments</h2>
             <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Latest scored candidates</p>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
                 <tr>

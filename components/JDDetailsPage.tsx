@@ -139,7 +139,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
 
   if (loading && !results) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12 tf-loader-center">
         <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
         <span className="ml-3 text-gray-500">Loading assessment results...</span>
       </div>
@@ -243,7 +243,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
       {/* Results Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-12 tf-loader-center">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           </div>
         ) : results.items.length === 0 ? (
@@ -254,96 +254,98 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
           </div>
         ) : (
           <>
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Candidate
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Assessment
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    HR
-                  </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Technical
-                  </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Coding
-                  </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Overall
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Duration
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Completed
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {results.items.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-4">
-                      <div className="flex flex-col">
-                        <span className="font-medium text-gray-900">{item.candidate_name}</span>
-                        <span className="text-sm text-gray-500 flex items-center gap-1">
-                          <Mail className="w-3 h-3" />
-                          {item.candidate_email}
-                        </span>
-                        {item.candidate_phone && (
-                          <span className="text-sm text-gray-500 flex items-center gap-1">
-                            <Phone className="w-3 h-3" />
-                            {item.candidate_phone}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-sm text-gray-700">{item.assessment_title}</span>
-                    </td>
-                    <td className="px-4 py-4">
-                      {getStatusBadge(item.status, item.passed)}
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className={`font-medium ${getScoreColor(item.hr_score)}`}>
-                        {item.hr_score !== null ? `${item.hr_score}%` : '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className={`font-medium ${getScoreColor(item.technical_score)}`}>
-                        {item.technical_score !== null ? `${item.technical_score}%` : '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className={`font-medium ${getScoreColor(item.coding_score)}`}>
-                        {item.coding_score !== null ? `${item.coding_score}%` : '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className={`font-semibold ${getScoreColor(item.overall_score)}`}>
-                        {item.overall_score !== null ? `${item.overall_score}%` : '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-sm text-gray-600">
-                        {formatDuration(item.time_spent_seconds)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-sm text-gray-600">
-                        {formatIST(item.completed_at)}
-                      </span>
-                    </td>
+            <div className="tf-table-shell">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Candidate
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Assessment
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      HR
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Technical
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Coding
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Overall
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Duration
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Completed
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {results.items.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-gray-900">{item.candidate_name}</span>
+                          <span className="text-sm text-gray-500 flex items-center gap-1">
+                            <Mail className="w-3 h-3" />
+                            {item.candidate_email}
+                          </span>
+                          {item.candidate_phone && (
+                            <span className="text-sm text-gray-500 flex items-center gap-1">
+                              <Phone className="w-3 h-3" />
+                              {item.candidate_phone}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-sm text-gray-700">{item.assessment_title}</span>
+                      </td>
+                      <td className="px-4 py-4">
+                        {getStatusBadge(item.status, item.passed)}
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className={`font-medium ${getScoreColor(item.hr_score)}`}>
+                          {item.hr_score !== null ? `${item.hr_score}%` : '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className={`font-medium ${getScoreColor(item.technical_score)}`}>
+                          {item.technical_score !== null ? `${item.technical_score}%` : '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className={`font-medium ${getScoreColor(item.coding_score)}`}>
+                          {item.coding_score !== null ? `${item.coding_score}%` : '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className={`font-semibold ${getScoreColor(item.overall_score)}`}>
+                          {item.overall_score !== null ? `${item.overall_score}%` : '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-sm text-gray-600">
+                          {formatDuration(item.time_spent_seconds)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-sm text-gray-600">
+                          {formatIST(item.completed_at)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {/* Pagination */}
             {totalPages > 1 && (
@@ -430,7 +432,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
 
   if (loading && !resumes) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12 tf-loader-center">
         <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
         <span className="ml-3 text-gray-500">Loading scored resumes...</span>
       </div>
@@ -477,7 +479,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
       {/* Results Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-12 tf-loader-center">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           </div>
         ) : resumes.items.length === 0 ? (
@@ -488,46 +490,48 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
           </div>
         ) : (
           <>
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Candidate
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Match Status
-                  </th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Score
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Scored At
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {resumes.items.map((item: any) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-4">
-                      <span className="font-medium text-gray-900">{item.candidate_name || 'Unknown'}</span>
-                    </td>
-                    <td className="px-4 py-4">
-                      {getMatchBadge(item.match_status)}
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className="font-semibold text-gray-900">
-                        {item.overall_score !== null ? `${item.overall_score}%` : '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className="text-sm text-gray-600">
-                        {item.scored_at ? formatISTDate(item.scored_at) : '-'}
-                      </span>
-                    </td>
+            <div className="tf-table-shell">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Candidate
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Match Status
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Score
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Scored At
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {resumes.items.map((item: any) => (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4">
+                        <span className="font-medium text-gray-900">{item.candidate_name || 'Unknown'}</span>
+                      </td>
+                      <td className="px-4 py-4">
+                        {getMatchBadge(item.match_status)}
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="font-semibold text-gray-900">
+                          {item.overall_score !== null ? `${item.overall_score}%` : '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-sm text-gray-600">
+                          {item.scored_at ? formatISTDate(item.scored_at) : '-'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             {/* Pagination */}
             {totalPages > 1 && (

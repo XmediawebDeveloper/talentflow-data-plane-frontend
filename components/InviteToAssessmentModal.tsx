@@ -799,7 +799,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {isLoadingResumes ? (
-                        <div className="flex items-center justify-center py-10">
+                        <div className="flex items-center justify-center py-10 tf-loader-center tf-loader-center--compact">
                           <Loader2 className="w-5 h-5 animate-spin text-gray-400 dark:text-slate-500" />
                         </div>
                       ) : filteredDbResumes.length === 0 ? (

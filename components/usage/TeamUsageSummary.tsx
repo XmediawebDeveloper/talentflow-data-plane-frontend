@@ -107,7 +107,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12 tf-loader-center">
         <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
         <span className="ml-3 text-gray-600">Loading team usage data...</span>
       </div>

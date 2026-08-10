@@ -113,7 +113,7 @@ function JobDetailsContent() {
         workMode: data.remote_type,
         education: data.education_requirements?.degree,
         experience_level: data.experience_level || data.job_level,
-        currentVersion: data.current_version || 1, // Use from response, fallback to 1
+        currentVersion: (data as any).version_number ?? data.current_version ?? 1, // lineage version (v1, v2, ...) for the badge
         internalRecruiterComments: data.internal_comments ? [data.internal_comments] : [],
         mustHaveComments: data.must_have_comments || [],
         niceToHaveComments: data.nice_to_have_comments || [],
@@ -128,13 +128,8 @@ function JobDetailsContent() {
         hasAiMatchResults: false, // Will be checked separately
       };
 
-      // Fetch current version number
-      try {
-        const versionInfo = await jdService.getCurrentVersion(jobId);
-        convertedJob.currentVersion = versionInfo.current_version;
-      } catch (e) {
-        // Version info not available yet
-      }
+      // Badge shows the lineage version (version_number) from the JD response
+      // above; do NOT overwrite it with the republish counter (getCurrentVersion).
 
       // Check if AI Talent Match has been executed for this JD
       try {

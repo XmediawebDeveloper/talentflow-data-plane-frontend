@@ -865,145 +865,147 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
       {/* Users Table */}
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-12 tf-loader-center">
             <Loader2 className="w-8 h-8 text-gray-800 dark:text-slate-100 animate-spin" />
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
-                  User
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
-                  Role
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
-                  Permissions
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
-                  Last Login
-                </th>
-                <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-slate-700/60">
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        user.role === 'tenant_admin'
-                          ? 'bg-gradient-to-br from-gray-800 to-gray-900'
-                          : user.role === 'recruiter'
-                          ? 'bg-gradient-to-br from-gray-800 to-gray-900'
-                          : 'bg-gradient-to-br from-gray-500 to-gray-600'
-                      }`}>
-                        <span className="text-white text-sm font-medium">
-                          {(user.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{user.name || user.email || 'Unknown'}</div>
-                        <div className="text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1">
-                          <Mail className="w-3 h-3" />
-                          {user.email}
+          <div className="tf-table-shell">
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                    Role
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                    Permissions
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                    Last Login
+                  </th>
+                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-slate-700/60">
+                {filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          user.role === 'tenant_admin'
+                            ? 'bg-gradient-to-br from-gray-800 to-gray-900'
+                            : user.role === 'recruiter'
+                            ? 'bg-gradient-to-br from-gray-800 to-gray-900'
+                            : 'bg-gradient-to-br from-gray-500 to-gray-600'
+                        }`}>
+                          <span className="text-white text-sm font-medium">
+                            {(user.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{user.name || user.email || 'Unknown'}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1">
+                            <Mail className="w-3 h-3" />
+                            {user.email}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${roleBadgeColors[user.role]}`}>
-                      {roleLabels[user.role]}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1 max-w-xs">
-                      {Object.entries(user.permissions)
-                        .filter(([_, value]) => value)
-                        .slice(0, 3)
-                        .map(([key]) => (
-                          <span
-                            key={key}
-                            className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded"
-                          >
-                            {permissionLabels[key as keyof UserPermissions]}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${roleBadgeColors[user.role]}`}>
+                        {roleLabels[user.role]}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1 max-w-xs">
+                        {Object.entries(user.permissions)
+                          .filter(([_, value]) => value)
+                          .slice(0, 3)
+                          .map(([key]) => (
+                            <span
+                              key={key}
+                              className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded"
+                            >
+                              {permissionLabels[key as keyof UserPermissions]}
+                            </span>
+                          ))}
+                        {Object.values(user.permissions).filter(v => v).length > 3 && (
+                          <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded">
+                            +{Object.values(user.permissions).filter(v => v).length - 3} more
                           </span>
-                        ))}
-                      {Object.values(user.permissions).filter(v => v).length > 3 && (
-                        <span className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded">
-                          +{Object.values(user.permissions).filter(v => v).length - 3} more
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => handleToggleActive(user)}
-                      className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                        user.is_active
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {user.is_active ? 'Active' : 'Inactive'}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
-                      <Calendar className="w-4 h-4" />
-                      {user.last_login && user.last_login !== '-' ? formatISTDate(user.last_login) : '-'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-end gap-2">
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
                       <button
-                        onClick={() => {
-                          if (!canUpdateUser) {
-                            toast.error('You do not have permission to edit users');
-                            return;
-                          }
-                          setEditingUser(user);
-                        }}
-                        disabled={!canUpdateUser}
-                        title={!canUpdateUser ? 'You do not have permission to edit users' : ''}
-                        className={`p-2 rounded-lg transition-colors ${
-                          !canUpdateUser
-                            ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
-                            : 'text-gray-500 dark:text-slate-500 hover:text-gray-800 hover:bg-gray-50 dark:hover:bg-slate-800'
+                        onClick={() => handleToggleActive(user)}
+                        className={`px-2.5 py-1 text-xs font-medium rounded-full ${
+                          user.is_active
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-100 text-red-700'
                         }`}
                       >
-                        <Edit2 className="w-4 h-4" />
+                        {user.is_active ? 'Active' : 'Inactive'}
                       </button>
-                      <button
-                        onClick={() => {
-                          if (!canDeleteUser) {
-                            toast.error('You do not have permission to delete users');
-                            return;
-                          }
-                          handleDeleteUser(user.id);
-                        }}
-                        disabled={!canDeleteUser || user.id === currentUser?.id}
-                        title={!canDeleteUser ? 'You do not have permission to delete users' : (user.id === currentUser?.id ? 'Cannot delete yourself' : '')}
-                        className={`p-2 rounded-lg transition-colors ${
-                          !canDeleteUser || user.id === currentUser?.id
-                            ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
-                            : 'text-gray-500 dark:text-slate-500 hover:text-red-600 hover:bg-red-50'
-                        }`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
+                        <Calendar className="w-4 h-4" />
+                        {user.last_login && user.last_login !== '-' ? formatISTDate(user.last_login) : '-'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            if (!canUpdateUser) {
+                              toast.error('You do not have permission to edit users');
+                              return;
+                            }
+                            setEditingUser(user);
+                          }}
+                          disabled={!canUpdateUser}
+                          title={!canUpdateUser ? 'You do not have permission to edit users' : ''}
+                          className={`p-2 rounded-lg transition-colors ${
+                            !canUpdateUser
+                              ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
+                              : 'text-gray-500 dark:text-slate-500 hover:text-gray-800 hover:bg-gray-50 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!canDeleteUser) {
+                              toast.error('You do not have permission to delete users');
+                              return;
+                            }
+                            handleDeleteUser(user.id);
+                          }}
+                          disabled={!canDeleteUser || user.id === currentUser?.id}
+                          title={!canDeleteUser ? 'You do not have permission to delete users' : (user.id === currentUser?.id ? 'Cannot delete yourself' : '')}
+                          className={`p-2 rounded-lg transition-colors ${
+                            !canDeleteUser || user.id === currentUser?.id
+                              ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
+                              : 'text-gray-500 dark:text-slate-500 hover:text-red-600 hover:bg-red-50'
+                          }`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {!isLoading && filteredUsers.length === 0 && (
@@ -1339,7 +1341,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
               </h3>
 
               {isViewingPermsLoading ? (
-                <div className="flex items-center justify-center py-12">
+                <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                   <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
                 </div>
               ) : viewingRolePermissions.length === 0 ? (

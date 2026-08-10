@@ -179,7 +179,7 @@ export default function AIInterviewCandidateResults() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
+      <div className="flex items-center justify-center py-16 tf-loader-center">
         <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
         <span className="ml-2 text-sm text-gray-600 dark:text-slate-400">Loading candidate results…</span>
       </div>
@@ -291,7 +291,7 @@ export default function AIInterviewCandidateResults() {
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto tf-table-shell">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
                   <tr>

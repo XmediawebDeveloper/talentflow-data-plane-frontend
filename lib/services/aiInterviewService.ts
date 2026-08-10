@@ -180,6 +180,9 @@ export interface AIInterviewResponse {
   screen_recording_url?: string;
   invitation_sent: boolean;
   invitations_count?: number;
+  expires_at?: string | null;
+  revoked_at?: string | null;
+  revoked_by?: string | null;
   jd_short_id?: string;  // JD's short display ID e.g. "JD-003", injected by list endpoint
   jd_industry_type?: string;
   // JD freshness — set by single-config GET endpoint; null on list responses.
@@ -1082,6 +1085,36 @@ export const aiInterviewService = {
   }): Promise<{ message: string; session_id: string }> {
     const response = await api.post(`/ai-interview/session/${sessionId}/send-invite-email`, data);
     return response.data;
+  },
+
+  /**
+   * Revoke a sent invitation. The candidate's existing link stops working
+   * immediately; the invitation row/token are kept so it can be edited and
+   * resent afterwards.
+   */
+  async revokeInvitation(sessionId: string): Promise<AIInterviewResponse> {
+    try {
+      const response = await api.post<AIInterviewResponse>(`/ai-interview/session/${sessionId}/revoke`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Edit a REVOKED invitation's candidate name/email. Only allowed while
+   * the invitation is revoked — does not change status.
+   */
+  async updateInvitation(sessionId: string, data: {
+    candidate_name?: string;
+    candidate_email?: string;
+  }): Promise<AIInterviewResponse> {
+    try {
+      const response = await api.patch<AIInterviewResponse>(`/ai-interview/session/${sessionId}`, data);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
   },
 
   /**

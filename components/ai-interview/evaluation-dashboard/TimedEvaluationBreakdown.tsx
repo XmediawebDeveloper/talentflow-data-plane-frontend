@@ -257,7 +257,7 @@ function QuestionTable({
       <div className={`px-4 py-2 text-xs uppercase tracking-wider font-semibold ${palette.header}`} style={{ fontFamily: 'var(--font-mono)' }}>
         {title}
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto tf-table-shell">
         <table className="w-full text-xs" style={{ fontFamily: 'var(--font-mono)' }}>
           <thead className="bg-gray-50 text-gray-600">
             <tr>

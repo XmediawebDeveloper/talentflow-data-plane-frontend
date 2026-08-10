@@ -392,6 +392,35 @@ export const candidateAIInterviewService = {
     }
   },
 
+  /**
+   * AII17 — submit the candidate's post-interview feedback (whole-star 1-5
+   * ratings + an optional comment). Unlike the fire-and-forget calls above,
+   * this one is NOT swallowed: the candidate is watching the dialog, so a
+   * failure has to reach the UI as a retry rather than a fake "thank you".
+   * The backend only ever writes the feedback column, so this can never
+   * affect the interview result.
+   */
+  async submitFeedback(
+    token: string,
+    feedback: {
+      overall?: number | null;
+      question_quality?: number | null;
+      ai_experience?: number | null;
+      comment?: string;
+    },
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await candidateApi.post(
+      `/candidate/ai-interview/${token}/feedback`,
+      {
+        overall: feedback.overall ?? null,
+        question_quality: feedback.question_quality ?? null,
+        ai_experience: feedback.ai_experience ?? null,
+        comment: (feedback.comment || '').slice(0, 500),
+      },
+    );
+    return response.data;
+  },
+
   // Absolute URL for the unload-time keepalive fetch in clientLogForwarder
   // (used on disconnect/unload, when the axios instance / page may be tearing
   // down). NOT sendBeacon — see that file for why it can't be used here.

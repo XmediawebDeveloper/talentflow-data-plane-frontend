@@ -210,7 +210,7 @@ export default function CandidateResultDetailsPage() {
   return (
     <FeatureGate feature="assessment">
       <Suspense fallback={
-        <div className="flex items-center justify-center h-64 bg-slate-50">
+        <div className="tf-loader-page bg-slate-50">
           <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
         </div>
       }>

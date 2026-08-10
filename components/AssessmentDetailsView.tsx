@@ -2086,7 +2086,7 @@ export default function AssessmentDetailsView({
           </div>
 
           {jdLoading ? (
-            <div className="px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center">
+            <div className="px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center tf-loader-center">
               <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
             </div>
           ) : jdError ? (

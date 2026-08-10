@@ -401,7 +401,7 @@ export default function IntegrityCheckTab({
           ))}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-x-auto">
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-x-auto tf-table-shell">
           <table className="w-full text-sm min-w-[720px]">
             <thead className="bg-slate-50 border-b border-gray-100">
               <tr>

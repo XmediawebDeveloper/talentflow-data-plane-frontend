@@ -476,15 +476,6 @@ export default function AITalentMatchPage({
     });
   };
 
-  // Rating pill (1-10) shared by the per-job match table and the candidate roll-up.
-  const matchRatingBadgeClass = (rank?: number) => {
-    const value = rank || 0;
-    if (value >= 7) return 'bg-green-100 text-green-800 border border-green-300';
-    if (value >= 4) return 'bg-brand-orange/10 text-brand-orange-deep border border-brand-orange/20';
-    if (value >= 1) return 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700';
-    return 'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700';
-  };
-
   // Match-score badge colours mirror the Scored Resumes match-status pills.
   const candidateScoreBadgeClass = (score: number) => {
     if (score >= 80) return 'bg-green-100 text-green-700 border-green-300';
@@ -1674,7 +1665,7 @@ export default function AITalentMatchPage({
           {/* Bounded viewport: rows scroll vertically (and horizontally) while the
               header stays pinned. Header background/border live on the cells so the
               pinned row paints solid over the rows sliding underneath. */}
-          <div className="min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60">
+          <div className="min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
           <table className="w-full min-w-[1450px] table-auto">
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
@@ -2566,7 +2557,7 @@ export default function AITalentMatchPage({
             </div>
 
             {loadingCandidateRows ? (
-              <div className="flex items-center justify-center gap-2 text-gray-500 py-16">
+              <div className="flex items-center justify-center gap-2 text-gray-500 py-16 tf-loader-center tf-loader-center--compact">
                 <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
                 <span className="text-sm">Loading matched candidates...</span>
               </div>
@@ -2596,13 +2587,13 @@ export default function AITalentMatchPage({
               /* Table format, matching the Resume Scoring "Scored Resumes"
                  table: desktop table + mobile card fallback. */
               <>
-                <div className="hidden md:block min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60">
-                  <table className="w-full min-w-[1450px] table-auto">
+                <div className="hidden md:block min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
+                  <table className="w-full min-w-[1330px] table-auto">
                     {/* Sticky header — background/border live on the cells, since
                         a sticky <tr> doesn't paint them reliably. */}
                     <thead className="sticky top-0 z-10">
                       <tr>
-                        {['Match Rating', 'Candidate Name', 'Job Title', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Attachments', 'Scored Status'].map((label) => (
+                        {['Candidate Name', 'Job Title', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Attachments', 'Scored Status'].map((label) => (
                           <th
                             key={label}
                             className="text-left py-3 px-4 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700"
@@ -2628,16 +2619,6 @@ export default function AITalentMatchPage({
                               index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50/50 dark:bg-slate-800/30'
                             }`}
                           >
-                            <td className="py-3 px-4 align-middle whitespace-nowrap">
-                              <div className="flex items-center gap-2">
-                                <div className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-md font-bold text-sm ${matchRatingBadgeClass(row.best.rank)}`}>
-                                  {row.best.rank || '-'}
-                                </div>
-                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border tabular-nums ${candidateScoreBadgeClass(row.bestScore)}`}>
-                                  {Math.round(row.bestScore)}%
-                                </span>
-                              </div>
-                            </td>
                             <td className="py-3 px-4 align-middle whitespace-nowrap">
                               <div className="flex items-center gap-3">
                                 <div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium">
@@ -3305,7 +3286,7 @@ export default function AITalentMatchPage({
           {/* Candidates List */}
           <div>
           {isLoadingResultsFromHistory ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4">
+            <div className="flex flex-col items-center justify-center py-12 px-4 tf-loader-center tf-loader-center--compact">
               <Loader2 className="w-6 h-6 text-brand-blue animate-spin mb-3" />
               <p className="text-sm text-gray-600 dark:text-slate-400 text-center">Loading matched candidates...</p>
             </div>
@@ -3322,7 +3303,7 @@ export default function AITalentMatchPage({
           ) : (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
             {/* Bounded viewport so only the rows scroll — pagination below stays put. */}
-            <div className="min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto">
+            <div className="min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto tf-table-shell">
             <table className="w-full min-w-[1450px]">
               <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>

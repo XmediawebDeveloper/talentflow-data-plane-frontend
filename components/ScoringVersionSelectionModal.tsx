@@ -175,7 +175,7 @@ export default function ScoringVersionSelectionModal({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-8 sm:py-12">
+            <div className="flex flex-col items-center justify-center py-8 sm:py-12 tf-loader-center tf-loader-center--compact">
               <Loader2 className="w-8 h-8 text-gray-400 dark:text-slate-500 animate-spin mb-4" />
               <p className="text-sm sm:text-base text-gray-700 dark:text-slate-300 font-medium">Loading resume versions...</p>
             </div>

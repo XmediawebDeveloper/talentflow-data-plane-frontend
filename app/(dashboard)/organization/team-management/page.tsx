@@ -666,7 +666,7 @@ export default function TeamManagementPage() {
                         <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Try a different search query or assign users to a team.</p>
                       </div>
                     ) : (
-                      <div className="overflow-x-auto">
+                      <div className="overflow-x-auto tf-table-shell">
                         <table className="w-full min-w-[640px]">
                           <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                             <tr className="text-left">

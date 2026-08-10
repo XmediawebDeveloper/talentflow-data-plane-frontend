@@ -303,7 +303,7 @@ export default function AddSeatsModal({
           <div className="p-5 sm:p-7 space-y-5">
 
             {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <div className="flex flex-col items-center justify-center py-16 gap-3 tf-loader-center tf-loader-center--compact">
                 <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
                 <p className="text-sm text-gray-500 dark:text-slate-500">Loading pricing...</p>
               </div>

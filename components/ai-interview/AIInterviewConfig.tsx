@@ -387,6 +387,38 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
   const unclusteredSkills = config.skills.filter(s => !assignedSkillSet.has(s.name.toLowerCase()));
   const normalizeSkillName = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
 
+  // Framing/filler words that carry no skill identity — stripped so
+  // "Java Programming" and "Java" reduce to the same content tokens.
+  // Mirrors the backend `_SKILL_FRAMING_STOPWORDS` (ai_interview.py) so the
+  // config-page validation and the server-side cluster dedup agree.
+  const SKILL_STOPWORDS = new Set([
+    'a', 'an', 'the', 'of', 'in', 'on', 'to', 'and', 'or', 'for', 'with', 'using',
+    'your', 'their', 'this', 'that', 'these', 'those', 'is', 'are', 'be',
+    'knowledge', 'understanding', 'familiarity', 'experience', 'ability',
+    'skill', 'skills', 'proficiency', 'expertise', 'awareness', 'exposure',
+    'hands', 'on', 'handson', 'working', 'work', 'basic', 'strong', 'good',
+    'solid', 'excellent', 'demonstrated', 'proven', 'practical', 'deep',
+    'advanced', 'fundamental', 'fundamentals', 'concepts', 'concept', 'principles',
+    'tools', 'tool', 'such', 'as', 'like', 'e.g', 'eg', 'clear', 'concise',
+    'writing', 'write',
+  ]);
+  const skillContentTokens = (skill: string): Set<string> => {
+    const toks = (skill || '').toLowerCase().match(/[a-z0-9#+.]+/g) || [];
+    return new Set(toks.filter(t => t.length > 1 && !SKILL_STOPWORDS.has(t)));
+  };
+  // True when two skill phrases denote the SAME skill despite different wording
+  // (exact, equal content-token sets, or one a subset of the other).
+  const skillsSemanticallyEqual = (a: string, b: string): boolean => {
+    if (!a || !b) return false;
+    if (normalizeSkillName(a) === normalizeSkillName(b)) return true;
+    const ta = skillContentTokens(a), tb = skillContentTokens(b);
+    if (ta.size === 0 || tb.size === 0) return false;
+    const [small, large] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+    if (small.size === 0) return false;
+    for (const t of small) if (!large.has(t)) return false;
+    return true;
+  };
+
   const toggleCluster = (id: string) => {
     setCollapsedClusters(prev => {
       const next = new Set(prev);
@@ -427,6 +459,19 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
     if (exists) {
       setAddSkillError('This skill already exists');
       toast.error('Duplicate skills are not allowed');
+      return;
+    }
+
+    // Semantic-duplicate guard (2026-08-01): block a skill that means the SAME
+    // thing as an existing one worded differently — e.g. adding "Java Programming"
+    // when "Java" is already present. Otherwise both would flow into cluster
+    // generation as separate skills (duplicate skill mapping). Names the existing
+    // skill so the recruiter knows why it was rejected.
+    const similar = config.skills.find(skill => skillsSemanticallyEqual(skill.name, trimmed));
+    if (similar) {
+      const msg = `"${trimmed}" is too similar to the existing skill "${similar.name}"`;
+      setAddSkillError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -2101,8 +2146,13 @@ export default function AIInterviewConfig() {
       }
       if (!silent) toast.success('Draft saved!');
       return true;
-    } catch {
-      if (!silent) toast.error('Failed to save draft');
+    } catch (err: any) {
+      // Always surface the real reason, even for silent (background) saves —
+      // "silent" only suppresses the success confirmation, not failures.
+      // Swallowing errors here left callers unable to show anything but a
+      // generic "please save first" with no clue why the save itself failed
+      // (quota exceeded, validation error, network issue, etc).
+      toast.error(err?.message || 'Failed to save draft');
       return false;
     } finally {
       setSavingDraft(false);
@@ -2180,7 +2230,13 @@ export default function AIInterviewConfig() {
 
     // 1. Save draft first so the Clusters page reads the latest skills.
     const ok = await saveDraft(true);
-    if (!ok || !existingDraftIdRef.current) {
+    if (!ok) {
+      // saveDraft already surfaced the real failure reason — avoid stacking
+      // a second, less specific toast on top of it.
+      isNavigatingRef.current = false;
+      return;
+    }
+    if (!existingDraftIdRef.current) {
       isNavigatingRef.current = false;
       toast.error('Please save your configuration first');
       return;
@@ -2318,7 +2374,11 @@ export default function AIInterviewConfig() {
   const handleSaveAndNavigate = async () => {
     setShowUnsavedDialog(false);
     isNavigatingRef.current = true;
-    await saveDraft(true);
+    const ok = await saveDraft(true);
+    if (!ok) {
+      isNavigatingRef.current = false;
+      return;
+    }
     toast.success('Draft saved');
     if (pendingNavigation === '__back__') router.back();
     else if (pendingNavigation) router.push(pendingNavigation);
@@ -3015,40 +3075,42 @@ export default function AIInterviewConfig() {
                       <span className="text-xs font-medium text-brand-blue">Question Budget (Total: 15)</span>
                       <span className="text-xs text-gray-400">{totalFixed} min</span>
                     </div>
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-gray-100">
-                          <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
-                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
-                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
-                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-b border-gray-50">
-                          <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthMaxClusters}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
-                        </tr>
-                        {nth.enabled && (
+                    <div className="tf-table-shell">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-gray-100">
+                            <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
+                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
+                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
+                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                          </tr>
+                        </thead>
+                        <tbody>
                           <tr className="border-b border-gray-50">
-                            <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthMaxClusters}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
+                            <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthMaxClusters}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
                           </tr>
-                        )}
-                        {hrEnabled && (
-                          <tr>
-                            <td className="px-3 py-2 text-gray-600">HR Round</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr}</td>
-                            <td className="px-3 py-2 text-right text-gray-400">—</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin}m</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                          {nth.enabled && (
+                            <tr className="border-b border-gray-50">
+                              <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthMaxClusters}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
+                            </tr>
+                          )}
+                          {hrEnabled && (
+                            <tr>
+                              <td className="px-3 py-2 text-gray-600">HR Round</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr}</td>
+                              <td className="px-3 py-2 text-right text-gray-400">—</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin}m</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}
@@ -3093,50 +3155,52 @@ export default function AIInterviewConfig() {
                           {bufferEnabled ? '30 min base + 5 min buffer' : '30 min total'}
                         </span>
                       </div>
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-gray-100">
-                            <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
-                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
-                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr className="border-b border-gray-50">
-                            <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveMthMax}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexMthMin} min</td>
-                          </tr>
-                          {nth.enabled && (
+                      <div className="tf-table-shell">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-gray-100">
+                              <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
+                              <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
+                              <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                            </tr>
+                          </thead>
+                          <tbody>
                             <tr className="border-b border-gray-50">
-                              <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveNthMax}</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexNthMin} min</td>
+                              <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveMthMax}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexMthMin} min</td>
                             </tr>
-                          )}
-                          {hrEnabled && (
-                            <tr className={bufferEnabled ? 'border-b border-gray-50' : ''}>
-                              <td className="px-3 py-2 text-gray-600">HR Round</td>
-                              <td className="px-3 py-2 text-right text-gray-400">—</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexHrMin} min</td>
-                            </tr>
-                          )}
-                          {bufferEnabled && (
-                            <tr className="border-b border-gray-50 bg-brand-blue/5">
-                              <td className="px-3 py-2 text-brand-blue font-medium">Buffer Time</td>
-                              <td className="px-3 py-2 text-right text-gray-400">—</td>
-                              <td className="px-3 py-2 text-right font-semibold text-brand-blue">+5 min</td>
-                            </tr>
-                          )}
-                          {bufferEnabled && (
-                            <tr className="bg-slate-50">
-                              <td className="px-3 py-2 text-gray-700 font-semibold">Max</td>
-                              <td className="px-3 py-2 text-right text-gray-400">—</td>
-                              <td className="px-3 py-2 text-right font-bold text-gray-900">35 min</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+                            {nth.enabled && (
+                              <tr className="border-b border-gray-50">
+                                <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                                <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveNthMax}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexNthMin} min</td>
+                              </tr>
+                            )}
+                            {hrEnabled && (
+                              <tr className={bufferEnabled ? 'border-b border-gray-50' : ''}>
+                                <td className="px-3 py-2 text-gray-600">HR Round</td>
+                                <td className="px-3 py-2 text-right text-gray-400">—</td>
+                                <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexHrMin} min</td>
+                              </tr>
+                            )}
+                            {bufferEnabled && (
+                              <tr className="border-b border-gray-50 bg-brand-blue/5">
+                                <td className="px-3 py-2 text-brand-blue font-medium">Buffer Time</td>
+                                <td className="px-3 py-2 text-right text-gray-400">—</td>
+                                <td className="px-3 py-2 text-right font-semibold text-brand-blue">+5 min</td>
+                              </tr>
+                            )}
+                            {bufferEnabled && (
+                              <tr className="bg-slate-50">
+                                <td className="px-3 py-2 text-gray-700 font-semibold">Max</td>
+                                <td className="px-3 py-2 text-right text-gray-400">—</td>
+                                <td className="px-3 py-2 text-right font-bold text-gray-900">35 min</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>

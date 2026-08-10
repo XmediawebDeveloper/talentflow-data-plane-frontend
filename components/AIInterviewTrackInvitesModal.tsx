@@ -219,7 +219,7 @@ export default function AIInterviewTrackInvitesModal({
         {/* Candidate list */}
         <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-auto flex-1 min-h-0">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8 sm:py-12">
+            <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center tf-loader-center--compact">
               <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
             </div>
           ) : invitations.length === 0 ? (
@@ -301,7 +301,7 @@ export default function AIInterviewTrackInvitesModal({
 
               {/* Desktop table — fixed columns so every row is one line and the
                   cells stay in register down the list. */}
-              <div className="hidden sm:block overflow-x-auto">
+              <div className="hidden sm:block overflow-x-auto tf-table-shell tf-table-shell--compact">
                 <table className="w-full min-w-[860px] table-fixed">
                   <colgroup>
                     <col className="w-[260px]" />

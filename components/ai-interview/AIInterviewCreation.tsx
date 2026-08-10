@@ -367,7 +367,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
             </div>
 
             {loadingJds ? (
-              <div className="flex items-center justify-center py-16">
+              <div className="flex items-center justify-center py-16 tf-loader-center">
                 <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                 <span className="ml-2 text-sm text-gray-500">Loading job descriptions...</span>
               </div>

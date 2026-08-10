@@ -199,150 +199,152 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
     });
   };
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 w-full">
+    <div className="rounded-lg border border-gray-200 w-full">
       {/* w-full + table-auto = fill container; columns still size to content
           within the available width, so short responses sit in a narrow cell
           and long responses get more room. */}
-      <table className="w-full text-xs" style={{ tableLayout: 'auto' }}>
-        <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-[10px]">
-          <tr>
-            <th className="px-3 py-2 text-left font-semibold w-12 whitespace-nowrap">Q #</th>
-            <th className="px-3 py-2 text-left font-semibold">Question</th>
-            <th className="px-3 py-2 text-left font-semibold">Candidate Response</th>
-            <th className="px-3 py-2 text-left font-semibold w-32 whitespace-nowrap">Coverage</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100 bg-white">
-          {groups.map((g, i) => {
-            const mainLevel = qCoverage(g.score);
-            const fus = g.follow_ups || [];
-            const hasFu = fus.length > 0;
-            const clarifs = g.clarifications || [];
-            const hasClarif = clarifs.length > 0;
-            const isOpen = openRow.has(i);
-            return (
-              <tr key={i} className="align-top">
-                <td className="px-3 py-2 align-top whitespace-nowrap">
-                  <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
-                    Q{g.q_num}
-                  </span>
-                </td>
-                <td className="px-3 py-2 align-top" style={{ maxWidth: '28rem' }}>
-                  <div className="text-[12px] font-medium text-gray-800 leading-snug break-words">
-                    <TruncatedText text={g.question || ''} limit={160} />
-                  </div>
-                  {hasClarif && isOpen && (
-                    <div className="mt-2 pl-3 border-l-2 border-amber-200 space-y-2">
-                      {clarifs.map((cl, ci) => (
-                        <div key={`cl-${ci}`}>
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">
-                              CL{cl.clarification_number}
-                            </span>
-                          </div>
-                          <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
-                            <TruncatedText text={cl.question || ''} limit={140} />
-                          </div>
-                        </div>
-                      ))}
+      <div className="tf-table-shell">
+        <table className="w-full text-xs" style={{ tableLayout: 'auto' }}>
+          <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-[10px]">
+            <tr>
+              <th className="px-3 py-2 text-left font-semibold w-12 whitespace-nowrap">Q #</th>
+              <th className="px-3 py-2 text-left font-semibold">Question</th>
+              <th className="px-3 py-2 text-left font-semibold">Candidate Response</th>
+              <th className="px-3 py-2 text-left font-semibold w-32 whitespace-nowrap">Coverage</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 bg-white">
+            {groups.map((g, i) => {
+              const mainLevel = qCoverage(g.score);
+              const fus = g.follow_ups || [];
+              const hasFu = fus.length > 0;
+              const clarifs = g.clarifications || [];
+              const hasClarif = clarifs.length > 0;
+              const isOpen = openRow.has(i);
+              return (
+                <tr key={i} className="align-top">
+                  <td className="px-3 py-2 align-top whitespace-nowrap">
+                    <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
+                      Q{g.q_num}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 align-top" style={{ maxWidth: '28rem' }}>
+                    <div className="text-[12px] font-medium text-gray-800 leading-snug break-words">
+                      <TruncatedText text={g.question || ''} limit={160} />
                     </div>
-                  )}
-                  {hasClarif && !isOpen && !hasFu && (
-                    <div className="mt-2 pl-3 border-l-2 border-amber-200">
-                      <button onClick={() => toggle(i)} className="text-[10px] text-amber-700 hover:text-amber-900 flex items-center gap-1">
-                        <ChevronDown className="w-3 h-3" />
-                        {clarifs.length} clarification{clarifs.length > 1 ? 's' : ''}
-                      </button>
-                    </div>
-                  )}
-                  {hasFu && (
-                    <div className="mt-2 pl-3 border-l-2 border-violet-200">
-                      {!isOpen ? (
-                        <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
-                          <ChevronDown className="w-3 h-3" />
-                          {(() => {
-                            const dd = fus.filter(f => (f.question_intent || '').toLowerCase() === 'deep_dive').length;
-                            const fu2 = fus.length - dd;
-                            return [fu2 > 0 ? `${fu2} follow-up${fu2 > 1 ? 's' : ''}` : '', dd > 0 ? `${dd} deep dive${dd > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ');
-                          })()}
-                        </button>
-                      ) : (
-                        <div className="space-y-2">
-                          <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
-                            <ChevronUp className="w-3 h-3" />
-                            Hide
-                          </button>
-                          {(() => {
-                            let fCtr = 0; let dCtr = 0;
-                            return fus.map((fu, fi) => {
-                              const isDd = (fu.question_intent || '').toLowerCase() === 'deep_dive';
-                              const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
-                              const tagCls = isDd ? 'text-teal-700 bg-teal-100' : 'text-violet-700 bg-violet-100';
-                              return (
-                                <div key={fi}>
-                                  <div className="flex items-center gap-1.5 mb-0.5">
-                                    <span className={`text-[10px] font-semibold ${tagCls} rounded px-1.5 py-0.5`}>{tag}</span>
-                                  </div>
-                                  <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
-                                    <TruncatedText text={fu.question || ''} limit={140} />
-                                  </div>
-                                </div>
-                              );
-                            });
-                          })()}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </td>
-                <td className="px-3 py-2 align-top" style={{ maxWidth: '40rem' }}>
-                  <div className="text-[12px] text-gray-700 leading-snug whitespace-pre-wrap break-words">
-                    <TruncatedText text={g.answer || ''} limit={220} />
-                  </div>
-                  {hasClarif && isOpen && (
-                    <div className="mt-2 pl-3 border-l-2 border-amber-200 space-y-2">
-                      {clarifs.map((cl, ci) => (
-                        <div key={`cl-a-${ci}`} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap break-words">
-                          <span className="text-[10px] font-semibold text-amber-700 mr-1">CL{cl.clarification_number}:</span>
-                          <TruncatedText text={cl.answer || ''} limit={180} />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {hasFu && isOpen && (
-                    <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
-                      {(() => {
-                        let fCtr = 0; let dCtr = 0;
-                        return fus.map((fu, fi) => {
-                          const isDd = (fu.question_intent || '').toLowerCase() === 'deep_dive';
-                          const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
-                          const tagColor = isDd ? 'text-teal-700' : 'text-violet-700';
-                          return (
-                            <div key={fi} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap break-words">
-                              <span className={`text-[10px] font-semibold ${tagColor} mr-1`}>{tag}:</span>
-                              <TruncatedText text={fu.answer || ''} limit={180} />
+                    {hasClarif && isOpen && (
+                      <div className="mt-2 pl-3 border-l-2 border-amber-200 space-y-2">
+                        {clarifs.map((cl, ci) => (
+                          <div key={`cl-${ci}`}>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">
+                                CL{cl.clarification_number}
+                              </span>
                             </div>
-                          );
-                        });
-                      })()}
+                            <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
+                              <TruncatedText text={cl.question || ''} limit={140} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {hasClarif && !isOpen && !hasFu && (
+                      <div className="mt-2 pl-3 border-l-2 border-amber-200">
+                        <button onClick={() => toggle(i)} className="text-[10px] text-amber-700 hover:text-amber-900 flex items-center gap-1">
+                          <ChevronDown className="w-3 h-3" />
+                          {clarifs.length} clarification{clarifs.length > 1 ? 's' : ''}
+                        </button>
+                      </div>
+                    )}
+                    {hasFu && (
+                      <div className="mt-2 pl-3 border-l-2 border-violet-200">
+                        {!isOpen ? (
+                          <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                            <ChevronDown className="w-3 h-3" />
+                            {(() => {
+                              const dd = fus.filter(f => (f.question_intent || '').toLowerCase() === 'deep_dive').length;
+                              const fu2 = fus.length - dd;
+                              return [fu2 > 0 ? `${fu2} follow-up${fu2 > 1 ? 's' : ''}` : '', dd > 0 ? `${dd} deep dive${dd > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ');
+                            })()}
+                          </button>
+                        ) : (
+                          <div className="space-y-2">
+                            <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                              <ChevronUp className="w-3 h-3" />
+                              Hide
+                            </button>
+                            {(() => {
+                              let fCtr = 0; let dCtr = 0;
+                              return fus.map((fu, fi) => {
+                                const isDd = (fu.question_intent || '').toLowerCase() === 'deep_dive';
+                                const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
+                                const tagCls = isDd ? 'text-teal-700 bg-teal-100' : 'text-violet-700 bg-violet-100';
+                                return (
+                                  <div key={fi}>
+                                    <div className="flex items-center gap-1.5 mb-0.5">
+                                      <span className={`text-[10px] font-semibold ${tagCls} rounded px-1.5 py-0.5`}>{tag}</span>
+                                    </div>
+                                    <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
+                                      <TruncatedText text={fu.question || ''} limit={140} />
+                                    </div>
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 align-top" style={{ maxWidth: '40rem' }}>
+                    <div className="text-[12px] text-gray-700 leading-snug whitespace-pre-wrap break-words">
+                      <TruncatedText text={g.answer || ''} limit={220} />
                     </div>
-                  )}
-                </td>
-                <td className="px-3 py-2 align-top whitespace-nowrap">
-                  <CovBadge level={mainLevel} />
-                  {hasFu && isOpen && (
-                    <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
-                      {fus.map((fu, fi) => (
-                        <div key={fi}><CovBadge level={qCoverage(fu.score)} /></div>
-                      ))}
-                    </div>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    {hasClarif && isOpen && (
+                      <div className="mt-2 pl-3 border-l-2 border-amber-200 space-y-2">
+                        {clarifs.map((cl, ci) => (
+                          <div key={`cl-a-${ci}`} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap break-words">
+                            <span className="text-[10px] font-semibold text-amber-700 mr-1">CL{cl.clarification_number}:</span>
+                            <TruncatedText text={cl.answer || ''} limit={180} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {hasFu && isOpen && (
+                      <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
+                        {(() => {
+                          let fCtr = 0; let dCtr = 0;
+                          return fus.map((fu, fi) => {
+                            const isDd = (fu.question_intent || '').toLowerCase() === 'deep_dive';
+                            const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
+                            const tagColor = isDd ? 'text-teal-700' : 'text-violet-700';
+                            return (
+                              <div key={fi} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap break-words">
+                                <span className={`text-[10px] font-semibold ${tagColor} mr-1`}>{tag}:</span>
+                                <TruncatedText text={fu.answer || ''} limit={180} />
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 align-top whitespace-nowrap">
+                    <CovBadge level={mainLevel} />
+                    {hasFu && isOpen && (
+                      <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
+                        {fus.map((fu, fi) => (
+                          <div key={fi}><CovBadge level={qCoverage(fu.score)} /></div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

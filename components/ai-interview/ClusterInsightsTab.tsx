@@ -168,7 +168,7 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto tf-table-shell">
       <table className="w-full text-xs">
         <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-[10px]">
           <tr>

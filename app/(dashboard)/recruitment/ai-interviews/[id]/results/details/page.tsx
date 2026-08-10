@@ -89,10 +89,8 @@ function DetailsContent() {
 
   if (isLoading) {
     return (
-      <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8">
-        <div className="flex items-center justify-center h-64 bg-slate-50">
-          <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
-        </div>
+      <div className="tf-loader-page bg-slate-50">
+        <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
       </div>
     );
   }
@@ -144,10 +142,8 @@ function DetailsContent() {
 export default function AIInterviewResultDetailsPage() {
   return (
     <Suspense fallback={
-      <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8">
-        <div className="flex items-center justify-center h-64 bg-slate-50">
-          <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
-        </div>
+      <div className="tf-loader-page bg-slate-50">
+        <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
       </div>
     }>
       <DetailsContent />

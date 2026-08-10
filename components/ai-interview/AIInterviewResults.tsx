@@ -392,7 +392,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
         {isLoading ? (
-          <div className="flex items-center justify-center py-16">
+          <div className="flex items-center justify-center py-16 tf-loader-center">
             <Loader2 className="w-7 h-7 animate-spin text-brand-blue" />
           </div>
         ) : sessions.length === 0 ? (
@@ -407,7 +407,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           />
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto tf-table-shell">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-gray-100">
                   <tr>

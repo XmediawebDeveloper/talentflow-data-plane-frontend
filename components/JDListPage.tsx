@@ -692,7 +692,7 @@ export default function JDListPage() {
 
         {/* JD List */}
         {loading ? (
-          <div className="flex items-center justify-center py-20">
+          <div className="flex items-center justify-center py-20 tf-loader-center">
             <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
             <span className="ml-3 text-gray-600">Loading job descriptions...</span>
           </div>

@@ -163,7 +163,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
       </div>
 
       {/* Tenants Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden tf-table-shell">
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
             <tr>
