@@ -186,7 +186,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12 tf-loader-center">
         <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         <span className="ml-3 text-gray-600">Loading assessments...</span>
       </div>
@@ -303,7 +303,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
       {filteredAssessments.length > 0 && (
         <>
           {viewMode === 'list' ? (
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden tf-table-shell">
               <table className="w-full">
                 <thead className="bg-slate-50 border-b border-gray-100">
                   <tr>

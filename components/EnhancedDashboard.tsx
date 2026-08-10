@@ -822,7 +822,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           </CardHeader>
           <CardContent>
             {loadingJDs ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="flex items-center justify-center py-8 tf-loader-center">
                 <Loader2 className="h-6 w-6 animate-spin text-brand-blue" />
               </div>
             ) : publishedJDs.length === 0 ? (
@@ -924,7 +924,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           </CardHeader>
           <CardContent>
             {loadingJDs ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="flex items-center justify-center py-8 tf-loader-center">
                 <Loader2 className="h-6 w-6 animate-spin text-brand-orange" />
               </div>
             ) : draftJDs.length === 0 ? (
@@ -1086,7 +1086,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
         </CardHeader>
         <CardContent className="p-0">
           {loadingActivity ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-12 tf-loader-center">
               <Loader2 className="h-6 w-6 animate-spin text-brand-blue" />
             </div>
           ) : recentActivity24h.length === 0 ? (

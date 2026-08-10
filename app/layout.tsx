@@ -10,6 +10,7 @@ import SubscriptionInactiveModal from "@/components/SubscriptionInactiveModal";
 import SessionExpiredModal from "@/components/SessionExpiredModal";
 import GlobalScoringProgressIndicator from "@/components/GlobalScoringProgressIndicator";
 import { GlobalDialogProvider } from "@/components/providers/GlobalDialogProvider";
+import TableScrollbars from "@/components/TableScrollbars";
 
 // import localFont from "next/font/local";
 
@@ -153,6 +154,9 @@ export default function RootLayout({
                   <SessionExpiredModal />
                   {/* Global scoring progress indicator - floating bottom-right widget */}
                   <GlobalScoringProgressIndicator />
+                  {/* Draws every data table's vertical scrollbar below its sticky
+                      header. Renders nothing itself; finds tables by class. */}
+                  <TableScrollbars />
                 </ScoringProgressProvider>
               </GlobalDialogProvider>
             </ModalProvider>

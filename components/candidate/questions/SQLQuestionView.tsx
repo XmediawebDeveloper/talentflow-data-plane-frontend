@@ -314,7 +314,7 @@ export function SQLQuestionView({
 
                       {/* Results Table */}
                       {queryResult.results && queryResult.results.length > 0 ? (
-                        <div className="rounded-lg border border-gray-200">
+                        <div className="rounded-lg border border-gray-200 tf-table-shell">
                           <table className="w-full table-fixed divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                               <tr>

@@ -2961,7 +2961,7 @@ export default function AIInterviewClusters() {
                                   <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
                                     Must-To-Have ({mthDist.length})
                                   </div>
-                                  <div className="border border-gray-100 rounded-md overflow-hidden">
+                                  <div className="border border-gray-100 rounded-md overflow-hidden tf-table-shell">
                                     <table className="w-full text-left">
                                       <thead className="bg-gray-50 border-b border-gray-100">
                                         <tr>
@@ -2981,7 +2981,7 @@ export default function AIInterviewClusters() {
                                   <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
                                     Nice-To-Have ({nthDist.length})
                                   </div>
-                                  <div className="border border-gray-100 rounded-md overflow-hidden">
+                                  <div className="border border-gray-100 rounded-md overflow-hidden tf-table-shell">
                                     <table className="w-full text-left">
                                       <thead className="bg-gray-50 border-b border-gray-100">
                                         <tr>
@@ -3151,7 +3151,7 @@ export default function AIInterviewClusters() {
 
           {/* Generating overlay within content area */}
           {generating && (
-            <div className="flex items-center justify-center py-16">
+            <div className="flex items-center justify-center py-16 tf-loader-center">
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
                 <p className="text-sm text-gray-500">AI is analyzing skills and generating clusters...</p>
@@ -3596,40 +3596,42 @@ export default function AIInterviewClusters() {
                     <span className="text-xs font-medium text-brand-blue">Question Budget (Total: {timedAllocation.mthQuestions + timedAllocation.nthQuestions + timedAllocation.hrQuestions})</span>
                     <span className="text-xs text-gray-500">{fixedMthMin + fixedNthMin + fixedHrMin} min</span>
                   </div>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
-                        <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
-                        <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
-                        <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b border-gray-50">
-                        <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthQuestions}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{mthClusters.length > 0 ? mthClusters.length : mthMaxClusters}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
-                      </tr>
-                      {nthEnabled && (
+                  <div className="tf-table-shell">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
+                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
+                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
+                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                        </tr>
+                      </thead>
+                      <tbody>
                         <tr className="border-b border-gray-50">
-                          <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthQuestions}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{nthClusters.length > 0 ? nthClusters.length : nthMaxClusters}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
+                          <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthQuestions}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{mthClusters.length > 0 ? mthClusters.length : mthMaxClusters}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
                         </tr>
-                      )}
-                      {hrEnabled && (
-                        <tr>
-                          <td className="px-3 py-2 text-gray-600">HR Round</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.hrQuestions}</td>
-                          <td className="px-3 py-2 text-right text-gray-400">—</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin}m</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        {nthEnabled && (
+                          <tr className="border-b border-gray-50">
+                            <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthQuestions}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{nthClusters.length > 0 ? nthClusters.length : nthMaxClusters}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
+                          </tr>
+                        )}
+                        {hrEnabled && (
+                          <tr>
+                            <td className="px-3 py-2 text-gray-600">HR Round</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.hrQuestions}</td>
+                            <td className="px-3 py-2 text-right text-gray-400">—</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin}m</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 

@@ -40,6 +40,7 @@ export type CategoryKey =
   | 'attention'
   | 'device'
   | 'capture'
+  | 'environment'
   | 'ended'
   | 'advisory';
 
@@ -57,6 +58,7 @@ export const CATEGORY_ORDER: CategoryKey[] = [
   'device',
   'capture',
   'attention',
+  'environment',
   'advisory',
 ];
 
@@ -91,9 +93,14 @@ export const CATEGORIES: Record<CategoryKey, CategoryDef> = {
     title: 'Left or looked away from the interview',
     description: 'Attention moved off the interview window. Common and often accidental.',
   },
+  environment: {
+    key: 'environment',
+    title: 'Mobile environment verification',
+    description: 'The candidate’s phone camera check of their physical interview environment.',
+  },
   advisory: {
     key: 'advisory',
-    title: 'Environment (advisory — not counted)',
+    title: 'Quality signals (advisory — not counted)',
     description: 'Quality hints only. These do not affect the integrity score or the candidate’s result.',
   },
 };
@@ -114,6 +121,11 @@ export const ADVISORY_TYPES = new Set<string>([
   // against them, but must be visible so "no phone flags" isn't misread as
   // "we checked and found nothing".
   'object_detection_unavailable',
+  // A clean environment-verification pass, or the analysis itself failing
+  // (infra fault) — the backend already sends severity="info" for both, this
+  // is just belt-and-suspenders explicitness matching session_paused/resumed.
+  'environment_verification_clear',
+  'environment_verification_analysis_failed',
 ]);
 
 export const EVENT_META: Record<string, EventMeta> = {
@@ -150,6 +162,12 @@ export const EVENT_META: Record<string, EventMeta> = {
   window_blur:     { category: 'attention', label: 'Clicked away from the window' },
   tab_switch:      { category: 'attention', label: 'Switched browser tab or app' },
   fullscreen_exit: { category: 'attention', label: 'Exited fullscreen' },
+
+  // Mobile environment verification
+  environment_verification_flagged:         { category: 'environment', label: 'Environment check flagged something', confidence: 'possible' },
+  environment_verification_clear:           { category: 'environment', label: 'Environment check passed' },
+  environment_verification_timed_out:       { category: 'environment', label: 'Environment check not completed' },
+  environment_verification_analysis_failed: { category: 'environment', label: 'Environment check analysis unavailable' },
 
   // Terminal
   interview_terminated: { category: 'ended', label: 'Interview ended — candidate left the screen' },
@@ -467,6 +485,22 @@ export function describeViolation(v: ViolationRecord): string {
       return `Phone / prohibited-item detection could not start, so nothing was checked for. ` +
         `This does not count against the candidate — but a clean result here means "not checked", ` +
         `not "nothing found". Technical reason: ${why}`;
+    }
+    case 'environment_verification_flagged':
+    case 'environment_verification_clear': {
+      // details: { video_url, ai_summary, flagged_items, color_match, id_match }
+      const summary = typeof d.ai_summary === 'string' && d.ai_summary ? d.ai_summary : '';
+      if (summary) return summary;
+      return v.event_type === 'environment_verification_clear'
+        ? 'The mobile environment check completed with nothing flagged.'
+        : 'The mobile environment check flagged something for review — watch the video to confirm.';
+    }
+    case 'environment_verification_timed_out':
+      return 'The candidate did not complete the mobile environment check within the 3-minute window. The interview resumed automatically.';
+    case 'environment_verification_analysis_failed': {
+      const why = typeof d.reason === 'string' && d.reason ? d.reason : 'reason not recorded';
+      return `The environment-check video was submitted, but automated analysis could not complete. ` +
+        `This does not count against the candidate. Technical reason: ${why}`;
     }
     case 'background_noise':
       return 'A noisy environment was detected. This does not affect the result.';

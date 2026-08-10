@@ -56,7 +56,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
   if (isLoading) {
     return (
       <div className={`${compact ? 'p-3' : 'p-4'} bg-white rounded-xl border border-gray-200 shadow-sm`}>
-        <div className="flex items-center gap-2 text-gray-500">
+        <div className="flex items-center justify-center gap-2 text-gray-500">
           <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />
           <span className="text-sm">Loading limits...</span>
         </div>

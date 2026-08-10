@@ -57,7 +57,7 @@ const containsMeaningfulText = (text: string): boolean => {
 
 const jdMarkdownComponents: Components = {
   table: (props) => (
-    <div className="table-responsive my-4">
+    <div className="table-responsive my-4 tf-table-shell">
       <table {...props} />
     </div>
   ),

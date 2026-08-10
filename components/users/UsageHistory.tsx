@@ -493,7 +493,7 @@ function FeatureWiseTab({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
+      <div className="flex items-center justify-center py-16 tf-loader-center">
         <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
     );
@@ -513,7 +513,7 @@ function FeatureWiseTab({
 
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto tf-table-shell">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
@@ -666,7 +666,7 @@ function UserWiseTab({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
+      <div className="flex items-center justify-center py-16 tf-loader-center">
         <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
     );
@@ -685,7 +685,7 @@ function UserWiseTab({
 
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto tf-table-shell">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
@@ -774,7 +774,7 @@ function TeamWiseTab({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
+      <div className="flex items-center justify-center py-16 tf-loader-center">
         <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
     );
@@ -798,7 +798,7 @@ function TeamWiseTab({
 
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto tf-table-shell">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
@@ -950,7 +950,7 @@ function InlineTeamMembersUsage({
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-brand-blue">
+      <div className="flex items-center justify-center gap-2 text-sm text-brand-blue tf-loader-center">
         <Loader2 className="w-4 h-4 animate-spin" />
         Loading team users usage...
       </div>
@@ -989,7 +989,7 @@ function InlineTeamMembersUsage({
         </div>
         <span className="text-xs font-medium text-brand-blue px-2.5 py-1 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20">{members.length} user{members.length !== 1 ? 's' : ''}</span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto tf-table-shell">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
@@ -1070,7 +1070,7 @@ function RefundsTab({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16">
+      <div className="flex items-center justify-center py-16 tf-loader-center">
         <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
     );
@@ -1105,7 +1105,7 @@ function RefundsTab({
 
   return (
     <div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto tf-table-shell">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">

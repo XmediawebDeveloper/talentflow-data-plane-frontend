@@ -391,7 +391,7 @@ export default function LogVerificationPage() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto tf-table-shell">
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50/80 dark:bg-slate-800/50">

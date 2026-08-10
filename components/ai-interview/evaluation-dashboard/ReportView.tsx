@@ -85,7 +85,7 @@ export function ReportView({ data }: { data: DashboardData }) {
             <h2 className="text-2xl font-bold mb-2">2. Skill-Level Breakdown</h2>
             <p className="text-sm text-gray-500">Detailed assessment of each individual skill</p>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
                 <tr>
@@ -132,7 +132,7 @@ export function ReportView({ data }: { data: DashboardData }) {
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
           <h2 className="text-2xl font-bold mb-2">3. Cluster-Level Coverage Summary</h2>
           <p className="text-sm text-gray-500 mb-6">Skills addressed at adequate level across each cluster</p>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
                 <tr>

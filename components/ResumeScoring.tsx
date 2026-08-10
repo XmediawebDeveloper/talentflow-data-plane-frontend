@@ -291,7 +291,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
 
         {/* Scoring Results Table */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-5">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>

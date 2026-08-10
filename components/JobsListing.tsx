@@ -90,11 +90,18 @@ interface JobsListingProps {
   };
   // Initial status filter from URL
   initialStatusFilter?: string;
+  // Land straight on the full jobs list instead of the stat-tile overview, showing
+  // every job. Set when the caller's intent is explicitly "show me all the jobs" —
+  // e.g. "View All Jobs" after publishing a JD, where stopping on the tiles (or on
+  // a persisted narrowed view) hides the job the recruiter just created.
+  // Unlike a status deep-link this also clears the restored search/status/page, so
+  // "all jobs" really means all of them.
+  forceListView?: boolean;
   // Quick links to master-data screens — surfaced on this page instead of the sidebar
   masterDataLinks?: { id: string; label: string; href: string; icon: LucideIcon }[];
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, masterDataLinks }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, masterDataLinks }: JobsListingProps) {
   const dialog = useGlobalDialog();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJd ?? false);
@@ -182,13 +189,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   // toolbar + filters + jobs list. Initial render is 'cards' unless the URL
   // already carried a specific status (deep-link from a notification, etc.).
   // We deliberately ignore the default 'all' so a fresh visit lands on cards.
+  // `forceListView` also opens on the list: it means "show me every job", which the
+  // tiles can't do — and it survives the 'all' exclusion above, unlike a status filter.
   const [pageView, setPageView] = useState<'cards' | 'list'>(
-    initialStatusFilter && initialStatusFilter !== 'all' ? 'list' : 'cards',
+    forceListView || (initialStatusFilter && initialStatusFilter !== 'all') ? 'list' : 'cards',
   );
   // When URL changes to include a specific status filter, jump to list view.
   useEffect(() => {
     if (initialStatusFilter && initialStatusFilter !== 'all') setPageView('list');
   }, [initialStatusFilter]);
+  // Same for the explicit "show all jobs" entry (?view=list).
+  useEffect(() => {
+    if (forceListView) setPageView('list');
+  }, [forceListView]);
 
   const openListView = (statusFilterValue: string) => {
     search.setFilter('status', statusFilterValue);
@@ -225,7 +238,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       sortBy, sortOrder, currentPage, itemsPerPage, pageView,
     },
     (s) => {
-      if (typeof s.searchQuery === 'string') search.setQuery(s.searchQuery);
+      // "Show all jobs" outranks the saved snapshot: restoring a stale search,
+      // status or page here is what hid a just-published JD behind the previous
+      // narrowed view. Everything else (sort, density, column prefs) still restores.
+      if (typeof s.searchQuery === 'string') search.setQuery(forceListView ? '' : s.searchQuery);
       if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
       // Restore the two-step view too. Without this, coming back from a
       // job-details page always remounted on 'cards' — the filters and page
@@ -233,6 +249,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       // which read as "the table vanished". A deep link carrying an explicit
       // status still wins: it means "show me that list".
       if ((s.pageView === 'cards' || s.pageView === 'list')
+        && !forceListView
         && !(initialStatusFilter && initialStatusFilter !== 'all')) {
         setPageView(s.pageView);
       }
@@ -240,7 +257,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       // committed, so the More Filters highlight and Reset survive the round
       // trip without persisting a separate applied flag.
       search.setFilters({
-        status: typeof s.statusFilter === 'string' ? s.statusFilter : 'all',
+        status: forceListView
+          ? 'all'
+          : typeof s.statusFilter === 'string' ? s.statusFilter : 'all',
         creationMethod:
           s.creationMethodFilter === 'manual' || s.creationMethodFilter === 'ai'
             ? s.creationMethodFilter
@@ -257,7 +276,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       });
       if (typeof s.sortBy === 'string') setSortBy(s.sortBy as 'date' | 'applicants' | 'title' | 'status' | 'industry');
       if (s.sortOrder === 'asc' || s.sortOrder === 'desc') setSortOrder(s.sortOrder);
-      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+      if (typeof s.currentPage === 'number') setCurrentPage(forceListView ? 1 : s.currentPage);
       if (typeof s.itemsPerPage === 'number') setItemsPerPage(s.itemsPerPage);
     },
   );

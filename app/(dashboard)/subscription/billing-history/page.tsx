@@ -438,7 +438,7 @@ export default function BillingHistoryPage() {
                 </p>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto tf-table-shell">
               <table className="w-full min-w-[800px]">
                 <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                   <tr className="text-left">
@@ -557,7 +557,7 @@ export default function BillingHistoryPage() {
                 <p className="text-xs text-gray-500 dark:text-slate-500">Addons, seats &amp; one-time purchases</p>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto tf-table-shell">
               <table className="w-full min-w-[750px]">
                 <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                   <tr className="text-left">

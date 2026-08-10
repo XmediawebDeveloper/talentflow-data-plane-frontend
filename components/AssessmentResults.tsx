@@ -89,11 +89,6 @@ interface QuestionResult {
 export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
-  const tableScrollRef = useRef<HTMLDivElement | null>(null);
-  const stickyScrollbarRef = useRef<HTMLDivElement | null>(null);
-  const stickyScrollbarInnerRef = useRef<HTMLDivElement | null>(null);
-  const isSyncingScrollRef = useRef(false);
-  const [stickyScrollbarPosition, setStickyScrollbarPosition] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -142,7 +137,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Date range filter (submitted/completed date)
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [showStickyScrollbar, setShowStickyScrollbar] = useState(false);
 
   // AS-24: Column customization
   const COLUMN_PREFERENCES_KEY = 'assessment_results_columns_v2';
@@ -817,50 +811,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     setCurrentPage(1);
   }, [searchQuery, statusFilter, passFailFilter, roundFilters, dateFrom, dateTo]);
 
-  useEffect(() => {
-    const updateStickyScrollbar = () => {
-      const tableEl = tableScrollRef.current;
-      const innerEl = stickyScrollbarInnerRef.current;
-      if (!tableEl || !innerEl) return;
-
-      const hasHorizontalOverflow = tableEl.scrollWidth - tableEl.clientWidth > 1;
-      setShowStickyScrollbar(hasHorizontalOverflow);
-      innerEl.style.width = `${tableEl.scrollWidth}px`;
-
-      const rect = tableEl.getBoundingClientRect();
-      setStickyScrollbarPosition({
-        left: Math.max(rect.left, 0),
-        width: Math.max(rect.width, 0),
-      });
-    };
-
-    updateStickyScrollbar();
-
-    const tableEl = tableScrollRef.current;
-    if (!tableEl || typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateStickyScrollbar);
-      return () => window.removeEventListener('resize', updateStickyScrollbar);
-    }
-
-    const resizeObserver = new ResizeObserver(updateStickyScrollbar);
-    resizeObserver.observe(tableEl);
-    const tableChild = tableEl.firstElementChild;
-    if (tableChild) {
-      resizeObserver.observe(tableChild);
-    }
-
-    window.addEventListener('resize', updateStickyScrollbar);
-    window.addEventListener('scroll', updateStickyScrollbar, true);
-    const timer = window.setTimeout(updateStickyScrollbar, 150);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', updateStickyScrollbar);
-      window.removeEventListener('scroll', updateStickyScrollbar, true);
-      window.clearTimeout(timer);
-    };
-  }, [candidateResults.length, assessmentDetails, isFetching, totalItems]);
-
   // Use API results only (no mock data)
   const displayResults = candidateResults;
 
@@ -990,22 +940,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const inProgressCount = candidateResults.length > 0 ? apiStats.in_progress_count : filteredCandidates.filter(c => c.status === 'In Progress').length;
   const pendingCount = candidateResults.length > 0 ? apiStats.pending_count : filteredCandidates.filter(c => c.status === 'Pending').length;
   const stickyHeaderClass = 'bg-slate-50';
-
-  const syncHorizontalScroll = (source: 'table' | 'sticky') => {
-    const tableEl = tableScrollRef.current;
-    const stickyEl = stickyScrollbarRef.current;
-    if (!tableEl || !stickyEl || isSyncingScrollRef.current) return;
-
-    isSyncingScrollRef.current = true;
-    if (source === 'table') {
-      stickyEl.scrollLeft = tableEl.scrollLeft;
-    } else {
-      tableEl.scrollLeft = stickyEl.scrollLeft;
-    }
-    requestAnimationFrame(() => {
-      isSyncingScrollRef.current = false;
-    });
-  };
 
   return (
     <div ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
@@ -1531,11 +1465,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             )}
           </div>
 
-          <div
-            ref={tableScrollRef}
-            className="hidden xl:block overflow-x-auto"
-            onScroll={() => syncHorizontalScroll('table')}
-          >
+          <div className="hidden xl:block tf-table-shell">
             <table className="w-full min-w-[2040px] table-fixed [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_td]:align-middle">
               <thead className="bg-slate-50 border-b border-gray-100">
                 <tr>
@@ -1915,20 +1845,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           )}
         </div>
 
-        {showStickyScrollbar && (
-          <div
-            className="hidden xl:block fixed bottom-0 z-20 border-t border-gray-100 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
-            style={{ left: stickyScrollbarPosition.left, width: stickyScrollbarPosition.width }}
-          >
-            <div
-              ref={stickyScrollbarRef}
-              className="overflow-x-hidden overflow-y-hidden"
-              onScroll={() => syncHorizontalScroll('sticky')}
-            >
-              <div ref={stickyScrollbarInnerRef} className="h-4" />
-            </div>
-          </div>
-        )}
         </>
         )}
       </div>

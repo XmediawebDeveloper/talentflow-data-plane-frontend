@@ -35,8 +35,12 @@ export default function FeatureGate({
   // Only show spinner on the very first load (before availability is ever known)
   if (effectiveAvailable === null) {
     if (mode === 'hidden') return null;
+    // A page-mode gate stands in for the whole route, so its spinner belongs
+    // in the middle of the page rather than in a 128px box tucked under the
+    // header. A section-mode gate is one block inside a page that has already
+    // rendered, so it keeps an in-place box.
     return (
-      <div className="flex items-center justify-center p-12">
+      <div className={mode === 'section' ? 'flex items-center justify-center p-12' : 'tf-loader-page'}>
         <Loader2 className="w-8 h-8 text-gray-600 animate-spin" />
       </div>
     );

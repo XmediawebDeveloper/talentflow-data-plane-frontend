@@ -490,97 +490,99 @@ export default function BulkScoringProgressModal({
           {filteredData.length > 0 ? (
             <>
               {/* Desktop table */}
-              <table className="hidden sm:table w-full">
-                <thead className="sticky top-0 z-10">
-                  <tr>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate Name</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Scored Date &amp; Time</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Result</th>
-                    {onRetryFailed && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredData.map((item, index) => (
-                    <tr
-                      key={item.id}
-                      className={`border-b border-gray-100 dark:border-slate-700/60 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${
-                        index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800/50'
-                      }`}
-                    >
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
-                          <div className="font-medium text-gray-900 dark:text-slate-50">{item.candidateName}</div>
-                          {item.jobTitle && !filterByJobId && (
-                            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
-                              <Target className="w-3 h-3 flex-shrink-0" />
-                              <span className="truncate max-w-[260px]">{item.jobTitle}</span>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 border-gray-200 dark:border-slate-700">
-                          {item.source === 'Internal DB' ? <Database className="w-3 h-3" /> : <FolderOpen className="w-3 h-3" />}
-                          {item.source}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border w-fit ${getStatusBadgeClass(item.status)}`}>
-                            {getStatusIcon(item.status)}
-                            {item.status}
-                          </span>
-                          {item.status === 'Failed' && item.errorReason && (
-                            <div className="flex items-start gap-1 text-xs text-red-600 mt-1 max-w-[280px] whitespace-normal break-words">
-                              <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                              <span>{item.errorReason}</span>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        {item.scoredDateTime ? (
-                          <div className="text-sm text-gray-700 dark:text-slate-300">
-                            <div className="font-medium">{formatDateTimeIST(item.scoredDateTime).date}</div>
-                            <div className="text-xs text-gray-500 dark:text-slate-500">{formatDateTimeIST(item.scoredDateTime).time}</div>
-                          </div>
-                        ) : item.status === 'Scored successfully' ? (
-                          <div className="text-sm text-gray-700 dark:text-slate-300">
-                            <div className="font-medium">{formatDateTimeIST(new Date()).date}</div>
-                            <div className="text-xs text-gray-500 dark:text-slate-500">{formatDateTimeIST(new Date()).time}</div>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 whitespace-nowrap">
-                        {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>}
-                      </td>
-                      {onRetryFailed && (
+              <div className="tf-table-shell tf-table-shell--compact">
+                <table className="hidden sm:table w-full">
+                  <thead className="sticky top-0 z-10">
+                    <tr>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate Name</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Scored Date &amp; Time</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Result</th>
+                      {onRetryFailed && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Actions</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredData.map((item, index) => (
+                      <tr
+                        key={item.id}
+                        className={`border-b border-gray-100 dark:border-slate-700/60 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${
+                          index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800/50'
+                        }`}
+                      >
                         <td className="py-3 px-4 whitespace-nowrap">
-                          {item.status === 'Failed' ? (
-                            <button
-                              onClick={() => handleRetry(item)}
-                              disabled={retryingItems.has(item.id)}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                retryingItems.has(item.id)
-                                  ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                                  : 'bg-brand-blue/5 text-brand-blue hover:bg-brand-blue/10 ring-1 ring-brand-blue/20'
-                              }`}
-                            >
-                              {retryingItems.has(item.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Retrying...</> : <><RotateCcw className="w-3 h-3" />Retry</>}
-                            </button>
+                          <div className="flex flex-col gap-1">
+                            <div className="font-medium text-gray-900 dark:text-slate-50">{item.candidateName}</div>
+                            {item.jobTitle && !filterByJobId && (
+                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
+                                <Target className="w-3 h-3 flex-shrink-0" />
+                                <span className="truncate max-w-[260px]">{item.jobTitle}</span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 border-gray-200 dark:border-slate-700">
+                            {item.source === 'Internal DB' ? <Database className="w-3 h-3" /> : <FolderOpen className="w-3 h-3" />}
+                            {item.source}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <div className="flex flex-col gap-1">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border w-fit ${getStatusBadgeClass(item.status)}`}>
+                              {getStatusIcon(item.status)}
+                              {item.status}
+                            </span>
+                            {item.status === 'Failed' && item.errorReason && (
+                              <div className="flex items-start gap-1 text-xs text-red-600 mt-1 max-w-[280px] whitespace-normal break-words">
+                                <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                                <span>{item.errorReason}</span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          {item.scoredDateTime ? (
+                            <div className="text-sm text-gray-700 dark:text-slate-300">
+                              <div className="font-medium">{formatDateTimeIST(item.scoredDateTime).date}</div>
+                              <div className="text-xs text-gray-500 dark:text-slate-500">{formatDateTimeIST(item.scoredDateTime).time}</div>
+                            </div>
+                          ) : item.status === 'Scored successfully' ? (
+                            <div className="text-sm text-gray-700 dark:text-slate-300">
+                              <div className="font-medium">{formatDateTimeIST(new Date()).date}</div>
+                              <div className="text-xs text-gray-500 dark:text-slate-500">{formatDateTimeIST(new Date()).time}</div>
+                            </div>
                           ) : (
-                            <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
+                            <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>
                           )}
                         </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>}
+                        </td>
+                        {onRetryFailed && (
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            {item.status === 'Failed' ? (
+                              <button
+                                onClick={() => handleRetry(item)}
+                                disabled={retryingItems.has(item.id)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                  retryingItems.has(item.id)
+                                    ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                                    : 'bg-brand-blue/5 text-brand-blue hover:bg-brand-blue/10 ring-1 ring-brand-blue/20'
+                                }`}
+                              >
+                                {retryingItems.has(item.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Retrying...</> : <><RotateCcw className="w-3 h-3" />Retry</>}
+                              </button>
+                            ) : (
+                              <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               {/* Mobile card list */}
               <div className="sm:hidden space-y-2 pt-3">

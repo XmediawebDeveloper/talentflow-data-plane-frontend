@@ -154,7 +154,7 @@ export default function InviteToAIInterviewFlow({
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {isLoading ? (
-              <div className="flex items-center justify-center py-12">
+              <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                 <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
               </div>
             ) : visibleConfigs.length === 0 ? (

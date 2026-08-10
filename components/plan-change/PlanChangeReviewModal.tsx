@@ -99,7 +99,7 @@ function QuotaChangesTable({ changes }: { changes: NonNullable<PlanChangeSummary
         <Gauge className="w-4 h-4" />
         Quota Changes
       </h4>
-      <div className="overflow-hidden rounded-lg border border-gray-100">
+      <div className="overflow-hidden rounded-lg border border-gray-100 tf-table-shell tf-table-shell--compact">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50">

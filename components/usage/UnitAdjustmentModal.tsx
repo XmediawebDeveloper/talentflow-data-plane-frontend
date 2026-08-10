@@ -198,7 +198,7 @@ export default function UnitAdjustmentModal({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
               <Loader2 className="w-8 h-8 animate-spin text-gray-400 dark:text-slate-500" />
             </div>
           ) : showHistory ? (

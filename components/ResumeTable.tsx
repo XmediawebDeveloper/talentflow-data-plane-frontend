@@ -324,7 +324,7 @@ export default function ResumeTable({
           grew to fit every row and never scrolled — `sticky top-0` had nothing
           to stick to, and the header scrolled away with the page. Capping the
           height makes the rows scroll inside it and pins the header. */}
-      <div className="hidden md:block overflow-auto min-h-[320px] max-h-[calc(100vh-24rem)]">
+      <div className="hidden md:block overflow-auto min-h-[320px] max-h-[calc(100vh-24rem)] tf-table-shell">
         <table className="w-full min-w-[1200px] table-auto">
         {/* Background goes on the cells, not just <thead>: with separate cell
             backgrounds the rows would otherwise show through as they pass under. */}

@@ -17,7 +17,7 @@
 import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import {
   ShieldAlert, ShieldCheck, Users, Eye, Camera, Clipboard,
-  Play, ChevronDown, ChevronRight, AudioLines, Smartphone,
+  Play, ChevronDown, ChevronRight, AudioLines, Smartphone, QrCode,
 } from 'lucide-react';
 import {
   type ViolationRecord, type RecruiterSeverity, type CategoryKey,
@@ -85,6 +85,7 @@ const CATEGORY_ICON: Record<CategoryKey, ReactNode> = {
   device: <Camera className="w-5 h-5" />,
   capture: <Clipboard className="w-5 h-5" />,
   attention: <Eye className="w-5 h-5" />,
+  environment: <QrCode className="w-5 h-5" />,
   advisory: <AudioLines className="w-5 h-5" />,
 };
 
@@ -95,7 +96,7 @@ const CATEGORY_TONE: Record<CategoryKey, Tone> = {
   // detection. A confirmed phone still shows a Serious pill on its own row and
   // still drives the critical verdict banner.
   prohibited_item: 'warning',
-  device: 'warning', capture: 'warning', attention: 'info', advisory: 'neutral',
+  device: 'warning', capture: 'warning', attention: 'info', environment: 'warning', advisory: 'neutral',
 };
 
 const CARD_ACCENT: Record<Tone, string> = {
@@ -113,6 +114,40 @@ function ConfidenceTag({ record }: { record: ViolationRecord }) {
     <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 ring-1 ring-red-200">HIGH CONFIDENCE</span>
   ) : (
     <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full text-brand-orange-deep ring-1 ring-brand-orange/40">POSSIBLE</span>
+  );
+}
+
+/* ── environment verification: video link + match badges ─────────────────── */
+function EnvironmentVerificationDetail({ record }: { record: ViolationRecord }) {
+  if (!record.event_type.startsWith('environment_verification_')) return null;
+  const d = (record.details ?? {}) as Record<string, unknown>;
+  const videoUrl = typeof d.video_url === 'string' ? d.video_url : null;
+  const colorMatch = typeof d.color_match === 'boolean' ? d.color_match : null;
+  const idMatch = typeof d.id_match === 'boolean' ? d.id_match : null;
+  if (!videoUrl && colorMatch === null && idMatch === null) return null;
+  return (
+    <div className="flex items-center gap-2 flex-wrap mt-1.5">
+      {videoUrl && (
+        <a
+          href={videoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-[11px] font-medium"
+        >
+          <Play className="w-3 h-3" />Watch verification video
+        </a>
+      )}
+      {colorMatch !== null && (
+        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ring-1 ${colorMatch ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+          Color {colorMatch ? 'matched' : 'mismatch'}
+        </span>
+      )}
+      {idMatch !== null && (
+        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ring-1 ${idMatch ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+          ID {idMatch ? 'matched' : 'mismatch'}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -366,7 +401,7 @@ export default function IntegrityCheckTab({
           ))}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-x-auto">
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-x-auto tf-table-shell">
           <table className="w-full text-sm min-w-[720px]">
             <thead className="bg-slate-50 border-b border-gray-100">
               <tr>
@@ -407,6 +442,7 @@ export default function IntegrityCheckTab({
                       </td>
                       <td className="px-4 py-3 align-top text-xs text-gray-600 max-w-[34ch]">
                         {describeViolation(g.records[0]) || <span className="text-gray-300">—</span>}
+                        <EnvironmentVerificationDetail record={g.records[0]} />
                       </td>
                       <td className="px-4 py-3 align-top">
                         {canSeek ? (
@@ -436,7 +472,10 @@ export default function IntegrityCheckTab({
                           <tr key={`${g.key}-${ri}`} className="bg-slate-50/40">
                             <td className="px-4 py-2"></td>
                             <td className="px-4 py-2 text-xs text-gray-400 pl-10">Occurrence {ri + 1}</td>
-                            <td className="px-4 py-2 text-xs text-gray-500 max-w-[34ch]">{describeViolation(r) || '—'}</td>
+                            <td className="px-4 py-2 text-xs text-gray-500 max-w-[34ch]">
+                              {describeViolation(r) || '—'}
+                              <EnvironmentVerificationDetail record={r} />
+                            </td>
                             <td className="px-4 py-2">
                               {seek ? (
                                 <button onClick={() => off != null && hasRecording && onJumpToRecording(off)}
@@ -505,6 +544,7 @@ function shortCat(k: CategoryKey): string {
     case 'device': return 'Camera / mic';
     case 'capture': return 'Copy / capture';
     case 'ended': return 'Ended early';
+    case 'environment': return 'Environment check';
     default: return k;
   }
 }

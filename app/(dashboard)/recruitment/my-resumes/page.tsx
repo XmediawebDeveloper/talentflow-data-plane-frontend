@@ -4438,7 +4438,7 @@ export default function MyResumesPage() {
                   </div>
 
                   {loadingAssessments ? (
-                    <div className="flex items-center justify-center py-8">
+                    <div className="flex items-center justify-center py-8 tf-loader-center tf-loader-center--compact">
                       <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                     </div>
                   ) : (() => {
@@ -4843,7 +4843,7 @@ export default function MyResumesPage() {
             <AlertDialogDescription asChild>
               <div className="space-y-4">
                 {deleteFolderConfirm.loading ? (
-                  <div className="flex items-center justify-center py-6">
+                  <div className="flex items-center justify-center py-6 tf-loader-center tf-loader-center--compact">
                     <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                     <span className="ml-2 text-sm text-gray-500">Loading folder info...</span>
                   </div>

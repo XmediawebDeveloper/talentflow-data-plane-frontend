@@ -379,7 +379,7 @@ export default function JobOpeningsPage() {
 
         {/* Jobs Display */}
         {loading ? (
-          <div className="flex items-center justify-center py-20">
+          <div className="flex items-center justify-center py-20 tf-loader-center">
             <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
             <span className="ml-3 text-gray-600">Loading job openings...</span>
           </div>
@@ -597,7 +597,7 @@ export default function JobOpeningsPage() {
         ) : (
           /* List View */
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto tf-table-shell">
               <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>

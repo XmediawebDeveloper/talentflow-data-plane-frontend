@@ -2617,39 +2617,41 @@ export default function ResumeScoringPage({
                 {groups.length === 0 ? (
                   <div className="px-6 py-10 text-center text-sm text-gray-400 dark:text-slate-500">No scoring history available.</div>
                 ) : (
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 sticky top-0">
-                      <tr>
-                        <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Scored By</th>
-                        <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Date & Time</th>
-                        <th className="text-center px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Resumes</th>
-                        <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Source</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {groups.map((g, i) => (
-                        <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                                <span className="text-xs font-semibold text-brand-blue">{g.scoredBy.charAt(0).toUpperCase()}</span>
-                              </div>
-                              <span className="text-gray-800 dark:text-slate-100 font-medium">{g.scoredBy}</span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3.5 text-gray-600 dark:text-slate-400 text-xs whitespace-nowrap">{g.date}</td>
-                          <td className="px-5 py-3.5 text-center">
-                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-100 font-bold text-sm">{g.count}</span>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${g.source === 'My Resumes' ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20' : 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700'}`}>
-                              {g.source}
-                            </span>
-                          </td>
+                  <div className="tf-table-shell tf-table-shell--compact">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 sticky top-0">
+                        <tr>
+                          <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Scored By</th>
+                          <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Date & Time</th>
+                          <th className="text-center px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Resumes</th>
+                          <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Source</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {groups.map((g, i) => (
+                          <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-xs font-semibold text-brand-blue">{g.scoredBy.charAt(0).toUpperCase()}</span>
+                                </div>
+                                <span className="text-gray-800 dark:text-slate-100 font-medium">{g.scoredBy}</span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3.5 text-gray-600 dark:text-slate-400 text-xs whitespace-nowrap">{g.date}</td>
+                            <td className="px-5 py-3.5 text-center">
+                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-100 font-bold text-sm">{g.count}</span>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${g.source === 'My Resumes' ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20' : 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700'}`}>
+                                {g.source}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
               <div className="px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 flex justify-between items-center bg-gray-50 dark:bg-slate-800/50 shrink-0">

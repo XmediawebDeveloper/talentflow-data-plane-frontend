@@ -249,7 +249,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
   if (isLoading) {
     return (
       <div className={`${compact ? 'p-4' : 'p-6'} bg-white rounded-lg border border-gray-200`}>
-        <div className="flex items-center justify-center py-8">
+        <div className="flex items-center justify-center py-8 tf-loader-center">
           <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           <span className="ml-2 text-gray-500">Loading unit pool...</span>
         </div>

@@ -243,7 +243,7 @@ export default function NotificationsPage() {
       {/* Notifications List */}
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-10">
+          <div className="flex items-center justify-center py-10 tf-loader-center">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           </div>
         ) : notifications.length === 0 ? (

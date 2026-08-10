@@ -614,7 +614,7 @@ export default function Dashboard({
           </div>
           <div className="p-6">
             {loadingJDs ? (
-              <div className="flex items-center justify-center py-12">
+              <div className="flex items-center justify-center py-12 tf-loader-center">
                 <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
                 <span className="ml-3 text-gray-600">Loading published jobs...</span>
               </div>
@@ -728,7 +728,7 @@ export default function Dashboard({
           </div>
           <div className="p-6">
             {loadingJDs ? (
-              <div className="flex items-center justify-center py-12">
+              <div className="flex items-center justify-center py-12 tf-loader-center">
                 <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
                 <span className="ml-3 text-gray-600">Loading drafts...</span>
               </div>
@@ -816,7 +816,7 @@ export default function Dashboard({
         <div className={`grid gap-6 mb-6 ${user?.is_tenant_admin ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'}`}>
           {/* Recent Activity - Tenant Admin Only */}
           {user?.is_tenant_admin && (
-            <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto">
+            <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 shadow-sm">
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <h2 className="text-gray-900">Recent Activity</h2>
@@ -828,7 +828,7 @@ export default function Dashboard({
               </div>
             <div className="p-0">
               {loadingActivities ? (
-                <div className="flex items-center justify-center py-8">
+                <div className="flex items-center justify-center py-8 tf-loader-center">
                   <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                   <span className="ml-2 text-gray-600 text-sm">Loading activities...</span>
                 </div>
@@ -838,45 +838,47 @@ export default function Dashboard({
                   <p className="text-gray-500 text-sm">No recent activity</p>
                 </div>
               ) : (
-                <table className="w-full">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {recentActivities.map((log) => {
-                      const Icon = getActionIcon(log.action);
-                      const colors = getActionColor(log.action);
-                      const details = getActivityDetails(log);
-
-                      return (
-                        <tr key={log.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center flex-shrink-0`}>
-                                <Icon className={`w-4 h-4 ${colors.text}`} />
+                <div className="tf-table-shell">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {recentActivities.map((log) => {
+                        const Icon = getActionIcon(log.action);
+                        const colors = getActionColor(log.action);
+                        const details = getActivityDetails(log);
+  
+                        return (
+                          <tr key={log.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center flex-shrink-0`}>
+                                  <Icon className={`w-4 h-4 ${colors.text}`} />
+                                </div>
+                                <span className="text-sm text-gray-900">{log.action_label}</span>
                               </div>
-                              <span className="text-sm text-gray-900">{log.action_label}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-gray-600">{details}</span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm text-gray-900">{log.user_name}</span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm text-gray-500">{getRelativeTime(log.created_at)}</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="text-sm text-gray-600">{details}</span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="text-sm text-gray-900">{log.user_name}</span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="text-sm text-gray-500">{getRelativeTime(log.created_at)}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>

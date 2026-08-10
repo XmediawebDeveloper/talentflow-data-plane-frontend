@@ -5,7 +5,7 @@ import {
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
   MessageSquare, Info, AlertCircle, Timer, Zap,
   Video, Upload, Layers, ChevronRight, Camera, Play,
-  Lock, ArrowRightLeft, Mic,
+  Lock, ArrowRightLeft, Mic, QrCode,
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -1186,6 +1186,7 @@ export default function AIInterviewConfig() {
 
   /* Other settings */
   const [recordingEnabled, setRecordingEnabled] = useState(true);
+  const [environmentVerificationEnabled, setEnvironmentVerificationEnabled] = useState(false);
   const [availableLanguages, setAvailableLanguages] = useState<string[]>(['English']);
   const [languageInput, setLanguageInput] = useState('');
 
@@ -1687,6 +1688,7 @@ export default function AIInterviewConfig() {
           duration_minutes: mode === 'flexible' ? 30 : totalFixed,
           rounds_config: rounds,
           recording_enabled: recordingEnabled,
+          environment_verification_enabled: environmentVerificationEnabled,
           available_languages: availableLanguages,
           title: `${selectedJd.title} - AI Interview`,
           save_as_draft: true,
@@ -1711,7 +1713,7 @@ export default function AIInterviewConfig() {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, mode, sttModel, recordingEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
+  }, [mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, mode, sttModel, recordingEnabled, environmentVerificationEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
 
   /* ── Derived values ── */
   const nthAvailable = nth.skills.length > 0 || nth.enabled;
@@ -2129,6 +2131,7 @@ export default function AIInterviewConfig() {
         duration_minutes: mode === 'flexible' ? 30 : totalFixed,
         rounds_config: buildRounds(true, overrides),
         recording_enabled: recordingEnabled,
+        environment_verification_enabled: environmentVerificationEnabled,
         available_languages: availableLanguages,
         title: `${selectedJd.title} - AI Interview`,
         save_as_draft: true,
@@ -2954,6 +2957,30 @@ export default function AIInterviewConfig() {
 
               {/* Add language – hidden */}
             </div>
+
+            {/* Mobile Environment Verification */}
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                    <QrCode className="w-5 h-5 text-brand-blue" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-900 tracking-tight">Mobile Environment Verification</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={environmentVerificationEnabled}
+                    onChange={e => setEnvironmentVerificationEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+                </label>
+              </div>
+              <p className="text-xs text-gray-500">
+                Pause the interview once, after the first must-have-skills question, to verify the candidate's physical environment via a QR code and their phone's camera.
+              </p>
+            </div>
           </div>
 
           {/* ── Right: Summary sidebar ── */}
@@ -3033,40 +3060,42 @@ export default function AIInterviewConfig() {
                       <span className="text-xs font-medium text-brand-blue">Question Budget (Total: 15)</span>
                       <span className="text-xs text-gray-400">{totalFixed} min</span>
                     </div>
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-gray-100">
-                          <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
-                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
-                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
-                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-b border-gray-50">
-                          <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthMaxClusters}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
-                        </tr>
-                        {nth.enabled && (
+                    <div className="tf-table-shell">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-gray-100">
+                            <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
+                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
+                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
+                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                          </tr>
+                        </thead>
+                        <tbody>
                           <tr className="border-b border-gray-50">
-                            <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthMaxClusters}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
+                            <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthMaxClusters}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
                           </tr>
-                        )}
-                        {hrEnabled && (
-                          <tr>
-                            <td className="px-3 py-2 text-gray-600">HR Round</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr}</td>
-                            <td className="px-3 py-2 text-right text-gray-400">—</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin}m</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
+                          {nth.enabled && (
+                            <tr className="border-b border-gray-50">
+                              <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthMaxClusters}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
+                            </tr>
+                          )}
+                          {hrEnabled && (
+                            <tr>
+                              <td className="px-3 py-2 text-gray-600">HR Round</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr}</td>
+                              <td className="px-3 py-2 text-right text-gray-400">—</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin}m</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
               )}
@@ -3111,50 +3140,52 @@ export default function AIInterviewConfig() {
                           {bufferEnabled ? '30 min base + 5 min buffer' : '30 min total'}
                         </span>
                       </div>
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-gray-100">
-                            <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
-                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
-                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr className="border-b border-gray-50">
-                            <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveMthMax}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexMthMin} min</td>
-                          </tr>
-                          {nth.enabled && (
+                      <div className="tf-table-shell">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-gray-100">
+                              <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
+                              <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
+                              <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                            </tr>
+                          </thead>
+                          <tbody>
                             <tr className="border-b border-gray-50">
-                              <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveNthMax}</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexNthMin} min</td>
+                              <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveMthMax}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexMthMin} min</td>
                             </tr>
-                          )}
-                          {hrEnabled && (
-                            <tr className={bufferEnabled ? 'border-b border-gray-50' : ''}>
-                              <td className="px-3 py-2 text-gray-600">HR Round</td>
-                              <td className="px-3 py-2 text-right text-gray-400">—</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexHrMin} min</td>
-                            </tr>
-                          )}
-                          {bufferEnabled && (
-                            <tr className="border-b border-gray-50 bg-brand-blue/5">
-                              <td className="px-3 py-2 text-brand-blue font-medium">Buffer Time</td>
-                              <td className="px-3 py-2 text-right text-gray-400">—</td>
-                              <td className="px-3 py-2 text-right font-semibold text-brand-blue">+5 min</td>
-                            </tr>
-                          )}
-                          {bufferEnabled && (
-                            <tr className="bg-slate-50">
-                              <td className="px-3 py-2 text-gray-700 font-semibold">Max</td>
-                              <td className="px-3 py-2 text-right text-gray-400">—</td>
-                              <td className="px-3 py-2 text-right font-bold text-gray-900">35 min</td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
+                            {nth.enabled && (
+                              <tr className="border-b border-gray-50">
+                                <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                                <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveNthMax}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexNthMin} min</td>
+                              </tr>
+                            )}
+                            {hrEnabled && (
+                              <tr className={bufferEnabled ? 'border-b border-gray-50' : ''}>
+                                <td className="px-3 py-2 text-gray-600">HR Round</td>
+                                <td className="px-3 py-2 text-right text-gray-400">—</td>
+                                <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexHrMin} min</td>
+                              </tr>
+                            )}
+                            {bufferEnabled && (
+                              <tr className="border-b border-gray-50 bg-brand-blue/5">
+                                <td className="px-3 py-2 text-brand-blue font-medium">Buffer Time</td>
+                                <td className="px-3 py-2 text-right text-gray-400">—</td>
+                                <td className="px-3 py-2 text-right font-semibold text-brand-blue">+5 min</td>
+                              </tr>
+                            )}
+                            {bufferEnabled && (
+                              <tr className="bg-slate-50">
+                                <td className="px-3 py-2 text-gray-700 font-semibold">Max</td>
+                                <td className="px-3 py-2 text-right text-gray-400">—</td>
+                                <td className="px-3 py-2 text-right font-bold text-gray-900">35 min</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </div>

@@ -347,7 +347,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead className="bg-gray-50/80">
                 <tr className="text-left">
