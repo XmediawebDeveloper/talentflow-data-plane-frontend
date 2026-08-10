@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, CheckCircle, XCircle, Maximize2, Monitor, Clock, KeyRound, Mail } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, CheckCircle, XCircle, Maximize2, Monitor, Clock, KeyRound, Mail, Ban } from 'lucide-react';
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
 import { toast } from 'sonner';
 import { candidateAIInterviewService, getAiClientSessionId } from '@/lib/services/candidateAIInterviewService';
@@ -146,6 +146,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const [interview, setInterview] = useState<CandidateInterviewInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [isExpiredError, setIsExpiredError] = useState(false);
+  const [isRevokedError, setIsRevokedError] = useState(false);
 
   // Submitting states
   const [consentSubmitting, setConsentSubmitting] = useState(false);
@@ -468,6 +469,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (status === 410) {
         setIsExpiredError(true);
         setErrorMessage('This interview link has expired and is no longer available.');
+      } else if (status === 403 && /revoked/i.test(detail)) {
+        // Recruiter-revoked invitation — same no-retry treatment as expired.
+        setIsRevokedError(true);
+        setErrorMessage(detail);
       } else {
         setIsExpiredError(false);
         setErrorMessage(detail);
@@ -1774,17 +1779,19 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4" style={{ colorScheme: 'light' }}>
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${isExpiredError ? 'bg-amber-100' : 'bg-red-100'}`}>
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${(isExpiredError || isRevokedError) ? 'bg-amber-100' : 'bg-red-100'}`}>
             {isExpiredError
               ? <Clock className="w-8 h-8 text-amber-600" />
+              : isRevokedError
+              ? <Ban className="w-8 h-8 text-amber-600" />
               : <AlertTriangle className="w-8 h-8 text-red-600" />
             }
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-3">
-            {isExpiredError ? 'Interview Link Expired' : 'Unable to Load Interview'}
+            {isExpiredError ? 'Interview Link Expired' : isRevokedError ? 'Interview Revoked' : 'Unable to Load Interview'}
           </h1>
           <p className="text-gray-600 mb-6">{errorMessage || (isExpiredError ? 'This interview link has expired and is no longer available.' : 'An error occurred while loading your interview.')}</p>
-          {!isExpiredError && (
+          {!isExpiredError && !isRevokedError && (
             <button
               onClick={loadInterview}
               className="inline-flex items-center gap-2 mx-auto px-6 py-2.5 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm"
@@ -1793,8 +1800,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
               Retry
             </button>
           )}
-          {isExpiredError && (
-            <p className="text-sm text-gray-500">Please contact the recruiter if you believe this is a mistake.</p>
+          {(isExpiredError || isRevokedError) && (
+            <p className="text-sm text-gray-500">Please contact the recruiter.</p>
           )}
         </div>
       </div>
