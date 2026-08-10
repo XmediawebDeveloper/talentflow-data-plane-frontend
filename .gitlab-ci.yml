@@ -536,6 +536,57 @@ variables:
         psql -d "$QA_DB_NAME" -q < "$CI_PROJECT_DIR/.qa-seed.sql"
       fi
 
+    # Space is made BEFORE the build, not after it. The prune used to run at
+    # the end of this job, which is the one moment it cannot help: the build
+    # that needs the room happens first. #19771 stopped with 7G free having
+    # just written a 668 MB image into a disk it had not yet cleaned.
+    # ---- and from filling the disk -------------------------------------------
+    # Every pipeline tags three frontend images — `-e2e` for the Tier-1 job,
+    # `-qa` for this environment, `-staging` for the release — 668 MB each, and
+    # nothing removed the old ones. Fifty-six accumulated, the runner's disk hit
+    # 100%, and a green `Set up the test environment` was followed by two test
+    # jobs failing for a reason that had nothing to do with the code: the report
+    # they write came out zero bytes, because the write itself failed.
+    #
+    # `docker image prune` does not help — these are tagged, not dangling, so it
+    # skips every one of them. The count has to be bounded explicitly instead.
+    #
+    # Three things survive, and the order matters:
+    #   1. the newest KEEP tags, whatever they are — rollback headroom;
+    #   2. this pipeline's own tags, because `Release to staging` runs later in
+    #      this same pipeline and needs the `-staging` image to still exist;
+    #   3. anything a container is running, QA or staging.
+    # Only `$IMAGE` is touched. `talentflow-cp-*` and `talentflow-backend` are
+    # other projects' images and are not this job's to remove.
+    - |
+      # Two, not six. Every pipeline tags three images — -qa, -e2e, -staging — at
+      # 668 MB each, so six kept is nine on disk and six gigabytes, on a runner
+      # that also holds a 3.3 GB backend, a 3.2 GB Playwright image and 2 GB of
+      # another project's. #19771 stopped here with 7G free: the guard did its
+      # job, the number it guarded was wrong. Two is one pipeline of rollback,
+      # and any tag is rebuildable from its commit.
+      KEEP=2
+      INUSE=$(docker ps -a --format '{{.Image}}' | sort -u)
+      n=0; removed=0
+      for img in $(docker images "$IMAGE" --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$'); do
+        n=$((n + 1))
+        [ "$n" -le "$KEEP" ] && continue
+        case "$img" in *":$TAG-"*) continue ;; esac
+        echo "$INUSE" | grep -qx "$img" && continue
+        docker rmi "$img" >/dev/null 2>&1 && removed=$((removed + 1))
+      done
+      # The build cache needs a ceiling for the same reason the image count did.
+      # `until=48h` is a time bound, not a size bound, and 48 hours of this
+      # runner's builds came to 13 GB — more than every image on the box. Four
+      # gigabytes keeps the layers a same-day rebuild reuses and nothing older.
+      # `--max-used-space` on this Docker; `--keep-storage` was the older spelling
+      # and is not accepted here, so both are tried before falling back to the
+      # time bound that was never the right shape.
+      docker builder prune -f --max-used-space 4GB >/dev/null 2>&1 \
+        || docker builder prune -f --keep-storage 4GB >/dev/null 2>&1 \
+        || docker builder prune -f --filter until=24h >/dev/null 2>&1 || true
+      echo "$IMAGE: $n tag(s) on disk, removed $removed superseded"
+
     # ---- containers: replaced only when their spec changes -------------------
     - |
       set -e
@@ -653,37 +704,6 @@ variables:
         exit 1
       fi
 
-    # ---- and from filling the disk -------------------------------------------
-    # Every pipeline tags three frontend images — `-e2e` for the Tier-1 job,
-    # `-qa` for this environment, `-staging` for the release — 668 MB each, and
-    # nothing removed the old ones. Fifty-six accumulated, the runner's disk hit
-    # 100%, and a green `Set up the test environment` was followed by two test
-    # jobs failing for a reason that had nothing to do with the code: the report
-    # they write came out zero bytes, because the write itself failed.
-    #
-    # `docker image prune` does not help — these are tagged, not dangling, so it
-    # skips every one of them. The count has to be bounded explicitly instead.
-    #
-    # Three things survive, and the order matters:
-    #   1. the newest KEEP tags, whatever they are — rollback headroom;
-    #   2. this pipeline's own tags, because `Release to staging` runs later in
-    #      this same pipeline and needs the `-staging` image to still exist;
-    #   3. anything a container is running, QA or staging.
-    # Only `$IMAGE` is touched. `talentflow-cp-*` and `talentflow-backend` are
-    # other projects' images and are not this job's to remove.
-    - |
-      KEEP=6
-      INUSE=$(docker ps -a --format '{{.Image}}' | sort -u)
-      n=0; removed=0
-      for img in $(docker images "$IMAGE" --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$'); do
-        n=$((n + 1))
-        [ "$n" -le "$KEEP" ] && continue
-        case "$img" in *":$TAG-"*) continue ;; esac
-        echo "$INUSE" | grep -qx "$img" && continue
-        docker rmi "$img" >/dev/null 2>&1 && removed=$((removed + 1))
-      done
-      docker builder prune -f --filter until=48h >/dev/null 2>&1 || true
-      echo "$IMAGE: $n tag(s) on disk, removed $removed superseded"
 
     # A disk that is nearly full breaks the test jobs downstream in a way that
     # looks like a test failure, so it is caught here instead — where the message
