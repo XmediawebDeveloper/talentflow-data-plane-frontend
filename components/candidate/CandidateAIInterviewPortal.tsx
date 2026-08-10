@@ -21,6 +21,7 @@ import StepSystemCheck, { ENROLL_PASSAGE } from '@/components/candidate/StepSyst
 import StepIntroVideo from '@/components/candidate/StepIntroVideo';
 import StepLanguageSelect from '@/components/candidate/StepLanguageSelect';
 import StepSamplePractice from '@/components/candidate/StepSamplePractice';
+import InterviewFeedbackModal from '@/components/candidate/InterviewFeedbackModal';
 import {
   readInterviewStep,
   writeInterviewStep,
@@ -167,6 +168,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // already holds this interview link (blocks the second person from system
   // check onward). See the lease heartbeat effect.
   const [preInterviewBlocked, setPreInterviewBlocked] = useState(false);
+  // AII17 — post-interview feedback popup, shown once over the completion
+  // screen. Dismissed (submitted OR skipped) is remembered per interview token
+  // so a refresh or a revisit of the finished link doesn't nag the candidate.
+  const [showFeedback, setShowFeedback] = useState(false);
   const [screenShareDeclined, setScreenShareDeclined] = useState(false);
   const [screenShareDeclinedReason, setScreenShareDeclinedReason] = useState('');
   // True when the pre-start check found the camera/mic already in use by another
@@ -504,19 +509,44 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     }
   }, [step]);
 
-  // ── Single-active-session lease over the PRE-INTERVIEW flow ────────────────
-  // While the candidate is in a pre-interview step (system check → practice →
-  // final consent), heartbeat the DB lease keyed on this browser's stable
-  // client id. If another browser/device already holds it → block. The 'interview'
-  // step is EXCLUDED because the WebSocket takes over the same lock (same cid),
-  // so we must NOT double-heartbeat or release it here. Terminal steps release.
+  // ── AII17: open the feedback popup once the interview is complete ──────────
+  // Only on 'completed'. Deliberately NOT on 'terminated' — asking someone to
+  // rate their experience right after their interview was cut short for a
+  // malpractice flag would be tone-deaf, and the story scopes this to the
+  // completion flow. The per-token localStorage flag makes it once-only.
+  useEffect(() => {
+    if (step !== 'completed' || !token) return;
+    try {
+      if (window.localStorage.getItem(`tf_ai_feedback_done_${token}`)) return;
+    } catch {
+      /* private mode / storage blocked — fall through and just show it */
+    }
+    setShowFeedback(true);
+  }, [step, token]);
+
+  const dismissFeedback = useCallback(() => {
+    setShowFeedback(false);
+    try {
+      window.localStorage.setItem(`tf_ai_feedback_done_${token}`, '1');
+    } catch {
+      /* non-blocking: worst case the popup reappears on a manual refresh */
+    }
+  }, [token]);
+
+  // ── Single-active-session lease over the ENTIRE PRE-INTERVIEW flow ─────────
+  // The moment a candidate opens the link, this browser heartbeats a DB lease
+  // keyed on its stable client id. If ANOTHER browser/device already holds it →
+  // block IMMEDIATELY, on whatever screen they're on (consent, OTP/reauth,
+  // identity, system check, practice, fullscreen prompt …) — not only after OTP.
+  // Covers every step EXCEPT:
+  //   • 'loading'  — transient, step not known yet;
+  //   • 'interview' — the WebSocket takes over the SAME lock (same cid), so we
+  //     must not double-heartbeat/release here;
+  //   • terminal states ('completed'/'terminated'/'error') — which release it.
   useEffect(() => {
     if (!token) return;
-    const LEASE_STEPS: Step[] = [
-      'identity', 'system_check', 'intro_video', 'language_select',
-      'sample_practice', 'fullscreen_prompt', 'final_consent', 'hide_share_bar',
-    ];
-    if (!LEASE_STEPS.includes(step)) {
+    const NON_LEASE_STEPS: Step[] = ['loading', 'interview', 'completed', 'terminated', 'error'];
+    if (NON_LEASE_STEPS.includes(step)) {
       // Release the lease when the candidate reaches a terminal state (the WS
       // already released on 'interview' end). Best-effort.
       if (step === 'completed' || step === 'terminated' || step === 'error') {
@@ -539,7 +569,9 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       }
     };
     beat();
-    const iv = setInterval(beat, 8000);
+    // Heartbeat every 5s (well under the 90s stale window) so the block appears
+    // fast for a 2nd opener and the holder's lease never lapses mid-flow.
+    const iv = setInterval(beat, 5000);
     return () => { cancelled = true; clearInterval(iv); };
   }, [step, token]);
 
@@ -1765,6 +1797,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             You will be contacted with next steps. You may close this window.
           </p>
         </div>
+        {/* AII17 — feedback popup layered OVER the completion card, so closing
+            it leaves the candidate on the normal completion screen. */}
+        {showFeedback && (
+          <InterviewFeedbackModal token={token} onClose={dismissFeedback} />
+        )}
       </div>
     );
   }

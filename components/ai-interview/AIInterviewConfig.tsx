@@ -387,6 +387,38 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
   const unclusteredSkills = config.skills.filter(s => !assignedSkillSet.has(s.name.toLowerCase()));
   const normalizeSkillName = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
 
+  // Framing/filler words that carry no skill identity — stripped so
+  // "Java Programming" and "Java" reduce to the same content tokens.
+  // Mirrors the backend `_SKILL_FRAMING_STOPWORDS` (ai_interview.py) so the
+  // config-page validation and the server-side cluster dedup agree.
+  const SKILL_STOPWORDS = new Set([
+    'a', 'an', 'the', 'of', 'in', 'on', 'to', 'and', 'or', 'for', 'with', 'using',
+    'your', 'their', 'this', 'that', 'these', 'those', 'is', 'are', 'be',
+    'knowledge', 'understanding', 'familiarity', 'experience', 'ability',
+    'skill', 'skills', 'proficiency', 'expertise', 'awareness', 'exposure',
+    'hands', 'on', 'handson', 'working', 'work', 'basic', 'strong', 'good',
+    'solid', 'excellent', 'demonstrated', 'proven', 'practical', 'deep',
+    'advanced', 'fundamental', 'fundamentals', 'concepts', 'concept', 'principles',
+    'tools', 'tool', 'such', 'as', 'like', 'e.g', 'eg', 'clear', 'concise',
+    'writing', 'write',
+  ]);
+  const skillContentTokens = (skill: string): Set<string> => {
+    const toks = (skill || '').toLowerCase().match(/[a-z0-9#+.]+/g) || [];
+    return new Set(toks.filter(t => t.length > 1 && !SKILL_STOPWORDS.has(t)));
+  };
+  // True when two skill phrases denote the SAME skill despite different wording
+  // (exact, equal content-token sets, or one a subset of the other).
+  const skillsSemanticallyEqual = (a: string, b: string): boolean => {
+    if (!a || !b) return false;
+    if (normalizeSkillName(a) === normalizeSkillName(b)) return true;
+    const ta = skillContentTokens(a), tb = skillContentTokens(b);
+    if (ta.size === 0 || tb.size === 0) return false;
+    const [small, large] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+    if (small.size === 0) return false;
+    for (const t of small) if (!large.has(t)) return false;
+    return true;
+  };
+
   const toggleCluster = (id: string) => {
     setCollapsedClusters(prev => {
       const next = new Set(prev);
@@ -427,6 +459,19 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
     if (exists) {
       setAddSkillError('This skill already exists');
       toast.error('Duplicate skills are not allowed');
+      return;
+    }
+
+    // Semantic-duplicate guard (2026-08-01): block a skill that means the SAME
+    // thing as an existing one worded differently — e.g. adding "Java Programming"
+    // when "Java" is already present. Otherwise both would flow into cluster
+    // generation as separate skills (duplicate skill mapping). Names the existing
+    // skill so the recruiter knows why it was rejected.
+    const similar = config.skills.find(skill => skillsSemanticallyEqual(skill.name, trimmed));
+    if (similar) {
+      const msg = `"${trimmed}" is too similar to the existing skill "${similar.name}"`;
+      setAddSkillError(msg);
+      toast.error(msg);
       return;
     }
 
