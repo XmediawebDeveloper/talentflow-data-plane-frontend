@@ -30,7 +30,7 @@
  * check, which currently only requests `/` and should be asked to make one
  * authenticated call.
  */
-import { expect, Page, APIRequestContext, request as playwrightRequest } from "@playwright/test";
+import { expect, test, Page, APIRequestContext, request as playwrightRequest } from "@playwright/test";
 
 /**
  * Hosts that serve real customers.
@@ -592,6 +592,13 @@ export interface Defect {
   actual: string;
   /** Anything measured: status codes, request parameters, log lines. */
   evidence?: string[];
+  /**
+   * How badly it behaves, and how soon somebody should care. Both sit here
+   * rather than on the case, because a passing test has neither — printing
+   * "Priority: —" against 1,800 green rows is noise, not information.
+   */
+  severity?: "critical" | "major" | "minor";
+  priority?: "P1" | "P2" | "P3";
   /** Files or endpoints worth opening first. Not a diagnosis. */
   where?: string[];
   /** Who this is for: the app team, or whoever runs the infrastructure. */
@@ -626,6 +633,42 @@ export interface CaseNote {
   does: string;
   /** What must follow: "The app refuses and says why". */
   expects: string;
+  /**
+   * The same thing broken into the steps somebody would follow by hand.
+   *
+   * `does` is the one-line summary a list needs; this is what a person reads
+   * when they want to do it themselves and check the answer. Both, because a
+   * card cannot show five lines and a detail panel should not show one.
+   */
+  steps?: string[];
+  /**
+   * Whether this proves the thing works or proves it is refused.
+   *
+   * Written down rather than guessed. A title containing "refused" is usually a
+   * negative case and sometimes is not, and a category derived from a keyword is
+   * a category nobody can trust.
+   */
+  category?: "positive" | "negative";
+}
+
+/**
+ * The data a test actually used, recorded as it is created.
+ *
+ * Asked for as a field to fill in; captured instead. What a person needs when
+ * reproducing something by hand is the address that was really used, not a
+ * sentence describing the kind of address it was — and the helpers that make
+ * these records already know. Nothing to author, and it cannot drift from what
+ * ran.
+ */
+export async function recordTestData(fields: Record<string, string>): Promise<void> {
+  try {
+    await test.info().attach("data", {
+      body: JSON.stringify(fields, null, 2),
+      contentType: "application/json",
+    });
+  } catch {
+    /* called outside a test — seeding scripts use these helpers too */
+  }
 }
 
 export async function describeCase(
@@ -725,6 +768,7 @@ export async function seedJd(marker = uniqueSuffix()): Promise<{ id: string; tit
     experience_max: 5,
     status: "published",
   });
+  await recordTestData({ "job description": title, "jd id": String(created.id ?? "") });
   return { id: String(created.id ?? ""), title };
 }
 
@@ -768,5 +812,8 @@ export async function createUserForUi(
   } finally {
     await admin.dispose();
   }
+  // Captured here, where the value is real, rather than described in a field
+  // somebody has to keep in step with the code.
+  await recordTestData({ "user email": email, "user role": role, "user name": name });
   return { email, password, name };
 }

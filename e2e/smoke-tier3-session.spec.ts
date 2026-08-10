@@ -34,6 +34,14 @@ test.describe("Tier 3 — session and access", () => {
     await describeCase(testInfo, {
       does: "Sign in with a real email address and the wrong password",
       expects: "It is refused, and the screen says so rather than failing quietly",
+      category: "negative",
+      steps: [
+        "Open the login screen",
+        "Type a real email address",
+        "Type a password that is not the right one",
+        "Click Sign in",
+        "Check the screen says the sign-in failed",
+      ],
     });
 
     const tenant = readTier3Tenant();
@@ -69,6 +77,13 @@ test.describe("Tier 3 — session and access", () => {
     await describeCase(testInfo, {
       does: "Open a page that sits behind the login, without signing in first",
       expects: "The app sends the browser to the login screen instead of showing the page",
+      category: "negative",
+      steps: [
+        "Sign out, or open a fresh browser",
+        "Type the address of a page behind the login, e.g. /dashboard",
+        "Press enter",
+        "Check where the browser ends up",
+      ],
     });
 
     const calls = watchApiTraffic(page);
@@ -100,6 +115,13 @@ test.describe("Tier 3 — session and access", () => {
     await describeCase(testInfo, {
       does: "Sign in, then reload the page",
       expects: "Still signed in, still on the same page",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Wait for the dashboard",
+        "Press reload",
+        "Check you are still signed in and on the same page",
+      ],
     });
 
     const calls = watchApiTraffic(page);
@@ -125,6 +147,13 @@ test.describe("Tier 3 — session and access", () => {
     await describeCase(testInfo, {
       does: "Sign in, sign out, then try to open a page behind the login",
       expects: "It is refused and the browser goes back to the login screen",
+      category: "positive",
+      steps: [
+        "Sign in",
+        "Open the account menu and choose Sign out",
+        "Type the address of a page behind the login",
+        "Check the browser is sent to login",
+      ],
     });
 
     await signIn(page);
@@ -156,6 +185,13 @@ test.describe("Tier 3 — session and access", () => {
     await describeCase(testInfo, {
       does: "Put a damaged session token in the browser and open the app",
       expects: "The person is sent to the login screen, not shown an error page",
+      category: "negative",
+      steps: [
+        "Sign in so a token exists",
+        "Replace the stored token with a damaged value",
+        "Reload the app",
+        "Check you get the login screen and not a crash",
+      ],
     });
 
     await signIn(page);
@@ -201,6 +237,12 @@ test.describe("Tier 3 — session and access", () => {
     await describeCase(testInfo, {
       does: "Sign in as the tenant owner and look at the dashboard",
       expects: "Nothing covers the page \u2014 no upgrade wall, no paywall, no modal in the way",
+      category: "positive",
+      steps: [
+        "Sign in as the tenant owner",
+        "Wait for the dashboard",
+        "Check no overlay, banner or dialog is covering the page",
+      ],
     });
 
     const calls = watchApiTraffic(page);

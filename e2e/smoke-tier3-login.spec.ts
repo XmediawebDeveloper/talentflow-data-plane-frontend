@@ -31,6 +31,14 @@ test.describe("Tier 3 — real UI against a real backend", () => {
     await describeCase(testInfo, {
       does: "Sign in with the tenant's real email address and password",
       expects: "The dashboard opens, and it shows this account's own name and organisation",
+      category: "positive",
+      steps: [
+        "Open /login?org=<the organisation>",
+        "Type the tenant admin's email address",
+        "Type the correct password",
+        "Click Sign in",
+        "Read the name and organisation the dashboard greets you with",
+      ],
     });
 
     const { apiUrl } = readTier3Env();

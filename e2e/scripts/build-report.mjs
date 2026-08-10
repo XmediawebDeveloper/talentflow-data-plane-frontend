@@ -280,6 +280,8 @@ for (const spec of readReport()) {
   let screenshot = null;
   let defect = null;
   let note = null;
+  // Several: a test that creates a user and a job description records both.
+  const testData = {};
   for (const att of last.attachments ?? []) {
     if (att.name === "screenshot" && att.path) {
       screenshot = path.relative(ROOT, att.path);
@@ -293,13 +295,14 @@ for (const spec of readReport()) {
     // workbook row carries these as two columns somebody wrote by hand; a test
     // written straight into a spec file has only a title and code, and no
     // manual tester reads code. describeCase() closes that.
-    if (att.name === "defect" || att.name === "evidence" || att.name === "case") {
+    if (["defect", "evidence", "case", "data"].includes(att.name)) {
       const raw = readAttachment(att);
       if (!raw) continue;
       try {
         const parsed = JSON.parse(raw);
         if (att.name === "defect") defect = parsed;
         else if (att.name === "case") note = parsed;
+        else if (att.name === "data") Object.assign(testData, parsed);
         else evidence = parsed;
       } catch {
         /* a malformed attachment is not worth failing the report over */
@@ -313,6 +316,13 @@ for (const spec of readReport()) {
   // as blank to the tester it was shown to.
   if (note?.does) entry.what_to_check = String(note.does);
   if (note?.expects) entry.expected_result = String(note.expects);
+  // The rest of what a manual tester's test case carries. Steps are separate
+  // from `what_to_check`: one is the summary a list needs, the other is what
+  // somebody follows by hand, and a panel that shows only the first is the
+  // reason the dashboard could not be read.
+  if (Array.isArray(note?.steps) && note.steps.length) entry.steps = note.steps.map(String);
+  if (note?.category) entry.category = String(note.category);
+  if (Object.keys(testData).length) entry.test_data = testData;
 
   entry.run = {
     outcome: outcomeOf(spec),

@@ -85,6 +85,13 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Open the login screen and look for a way to recover a forgotten password",
       expects: "There is a 'Forgot password?' control, and it opens a dialog that asks for an email address",
+      category: "positive",
+      steps: [
+        "Open /login?org=<the organisation>",
+        "Look under the password field",
+        "Click 'Forgot password?'",
+        "Check a dialog opens asking for an email address",
+      ],
     });
 
     // The most common thing a real person does at a login screen, and until now
@@ -123,6 +130,14 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Open that dialog, type a real email address and ask for a code",
       expects: "The request is accepted and the dialog moves on to ask for the code",
+      category: "positive",
+      steps: [
+        "Open the login screen",
+        "Click 'Forgot password?'",
+        "Type an email address that has an account",
+        "Click 'Send Verification Code'",
+        "Check the dialog now asks for the code",
+      ],
     });
 
     // A user of its own. Three tests used to share the tenant admin's address
@@ -170,6 +185,13 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Ask to reset the password once for a real address, then once for one with no account",
       expects: "Both get the same answer, so the form cannot be used to find out who has an account here",
+      category: "negative",
+      steps: [
+        "Ask for a reset for an address that has an account",
+        "Note the answer",
+        "Ask for a reset for an address that has no account",
+        "Compare the two answers \u2014 status and message",
+      ],
     });
 
     // Account enumeration. If the answer differs, the reset form becomes a way
@@ -212,6 +234,13 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Ask for a reset, then submit a made-up six-digit code",
       expects: "The code is refused, and the refusal says why",
+      category: "negative",
+      steps: [
+        "Ask for a password reset",
+        "When the code is asked for, type 000000",
+        "Submit it",
+        "Check it is refused and a reason is given",
+      ],
     });
 
     // The OTP itself cannot be read here — it is delivered by mail and QA sends
@@ -243,6 +272,13 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Ask to reset the same address six times in a row",
       expects: "The product stops accepting them",
+      category: "negative",
+      steps: [
+        "Pick one email address",
+        "Ask for a password reset",
+        "Repeat it six times without waiting",
+        "Check the product starts refusing",
+      ],
     });
 
     // The backend has a rate limiter on this path and consumes it only for real,
@@ -273,6 +309,14 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Ask six times for an address that has an account, then six times for one that has none",
       expects: "The two sequences look the same. They do not: the one with an account starts refusing and the other never does, so six requests reveal who is registered",
+      category: "negative",
+      steps: [
+        "Ask for a reset six times for an address that HAS an account",
+        "Write down the six answers",
+        "Ask for a reset six times for an address with NO account",
+        "Write down those six",
+        "Compare the two sequences",
+      ],
     });
 
     // TC-T602 shows a single answer gives nothing away. This is what repeating
@@ -285,6 +329,8 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     // an attacker knows.
     test.fail();
     await recordDefect(testInfo, {
+      severity: "major",
+      priority: "P2",
       owner: "developer",
       summary:
         "Password reset tells an attacker which email addresses have accounts, " +
@@ -343,6 +389,14 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Create a user, check they can sign in, deactivate them, then try to sign in again",
       expects: "The second sign-in is refused",
+      category: "negative",
+      steps: [
+        "Sign in as a tenant admin",
+        "Create a user",
+        "Sign in as that user to confirm it works",
+        "Deactivate the user",
+        "Try to sign in as them again",
+      ],
     });
 
     // Deactivating somebody is what happens when they leave. If the check is
@@ -353,6 +407,8 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     // of the tenant database, sign in again (200).
     test.fail();
     await recordDefect(testInfo, {
+      severity: "critical",
+      priority: "P1",
       owner: "developer",
       summary:
         "A deactivated user can still sign in. Deactivation is recorded and then ignored.",
@@ -416,6 +472,12 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Sign in with a real address and the wrong password, then with an address that has no account",
       expects: "Both are refused in the same way, so the difference cannot be used to harvest addresses",
+      category: "negative",
+      steps: [
+        "Sign in with a real address and a wrong password; note the answer",
+        "Sign in with an address that has no account; note the answer",
+        "Compare the two",
+      ],
     });
 
     // The same enumeration question at the front door. "No such user" and "wrong
@@ -436,6 +498,13 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Sign in with real credentials but name an organisation that does not exist",
       expects: "It is refused, and the browser does not reach a dashboard",
+      category: "negative",
+      steps: [
+        "Open /login?org=<an organisation that does not exist>",
+        "Type a real email address and password",
+        "Click Sign in",
+        "Check it is refused and no dashboard opens",
+      ],
     });
 
     const { adminEmail, adminPassword } = readTier3Tenant();
@@ -465,6 +534,13 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Create a user, change their password, then try the new password and the old one",
       expects: "The new password signs in and the old one stops working",
+      category: "positive",
+      steps: [
+        "Create a user and sign in as them",
+        "Change their password to a new one",
+        "Sign in with the new password",
+        "Sign in with the old password",
+      ],
     });
 
     // Done to a user this test created. Changing the QA tenant's own admin
@@ -476,6 +552,8 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     // anything.
     test.fail();
     await recordDefect(testInfo, {
+      severity: "major",
+      priority: "P2",
       owner: "developer",
       summary:
         "Nobody in a tenant can change their own password: the endpoint is not implemented.",
@@ -537,6 +615,13 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Sign in, then exchange the refresh token for a new access token and use it",
       expects: "A new token is issued and the API accepts it, so a session outlives its first token",
+      category: "positive",
+      steps: [
+        "Sign in and keep both tokens",
+        "Exchange the refresh token for a new access token",
+        "Use the new token to ask who you are",
+        "Check the answer is accepted",
+      ],
     });
 
     // POST /auth/refresh is what stands between a working day and being thrown
@@ -578,6 +663,13 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Sign in, keep a copy of the token, sign out, then use that token again",
       expects: "It is refused \u2014 signing out ended the session, not just the browser's copy",
+      category: "negative",
+      steps: [
+        "Sign in and keep a copy of the access token",
+        "Confirm the token works",
+        "Sign out",
+        "Use the same token again",
+      ],
     });
 
     // Signing out in one place has to end the session everywhere, not just clear
@@ -589,6 +681,8 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     // other sessions". Both describe a session the server can end. It cannot.
     test.fail();
     await recordDefect(testInfo, {
+      severity: "critical",
+      priority: "P1",
       owner: "developer",
       summary:
         "Signing out does not end the session. The access token keeps working afterwards.",
@@ -644,6 +738,12 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     await describeCase(testInfo, {
       does: "Sign in with an email address and password alone",
       expects: "No second factor is asked for and the tokens are issued. This records how the tenant is set up today",
+      category: "positive",
+      steps: [
+        "Sign in with email and password only",
+        "Check no verification code is asked for",
+        "Check the sign-in succeeds",
+      ],
     });
 
     // Not a wish, a record. The product ships POST /auth/verify-2fa-login, and
