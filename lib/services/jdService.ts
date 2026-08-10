@@ -140,6 +140,20 @@ export interface JDGenerateInput {
   preGeneratedId?: string;
 }
 
+// A version in a JD's lineage. Each version is its OWN JobDescription row/id
+// (unlike JDVersion, which is a republish snapshot on one id).
+export interface JDLineageVersion {
+  id: string;              // this version's own JD id (open its full detail page)
+  job_id?: string;         // human JD-xxx code
+  title: string;
+  version_number: number;  // 1, 2, 3...
+  is_latest_version: boolean;
+  status: string;          // draft | published | disabled | archived
+  current_version?: number;
+  created_at?: string;
+  published_at?: string;
+}
+
 export interface JDVersion {
   id: string;
   jd_id: string;
@@ -555,6 +569,21 @@ export const jdService = {
   },
 
   /**
+   * Fork an in-use JD into a NEW independent version (a new JD row/id).
+   * The returned JD is a fresh DRAFT copy of the source content in the same
+   * version lineage (version N+1); downstream assessments/interviews/scores are
+   * NOT copied. Open the editor on the returned id.
+   */
+  async createNewVersion(id: string): Promise<JDResponse> {
+    try {
+      const response = await api.post<JDResponse>(`/jd/${id}/new-version`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Reformat JD with current parameters (Odoo-style regeneration)
    * Regenerates JD description including all must-have and nice-to-have comments
    */
@@ -700,6 +729,20 @@ export const jdService = {
   async getCurrentVersion(jdId: string): Promise<{ jd_id: string; current_version: number }> {
     try {
       const response = await api.get<{ jd_id: string; current_version: number }>(`/jd/${jdId}/current-version`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * List every version in a JD's lineage. Each version is its own JD (own id)
+   * with its own detail page + results. Used by the version switcher on the
+   * detail page to jump between whole versions (not just a content diff).
+   */
+  async getLineageVersions(jdId: string): Promise<JDLineageVersion[]> {
+    try {
+      const response = await api.get<JDLineageVersion[]>(`/jd/${jdId}/lineage`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

@@ -8,7 +8,7 @@ import type { User, Tenant } from '@/lib/types/tenant';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { jdService, JDVersion, JDUsageStatus } from '@/lib/services/jdService';
+import { jdService, JDLineageVersion, JDUsageStatus } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import ResumeUploadModal from './ResumeUploadModal';
@@ -401,8 +401,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // history modal; listing the versions under it lets a recruiter see what
   // exists — and pick one — without opening a modal to find out.
   const [showVersionMenu, setShowVersionMenu] = useState(false);
-  const [versionMenuList, setVersionMenuList] = useState<JDVersion[]>([]);
   const [versionMenuLoading, setVersionMenuLoading] = useState(false);
+  // Lineage versions (each is its own JD id/detail page) for the version switcher.
+  const [lineageVersions, setLineageVersions] = useState<JDLineageVersion[]>([]);
   // Which version the modal should open on, set by picking one in the dropdown.
   const [versionMenuSelection, setVersionMenuSelection] = useState<number | undefined>(undefined);
   const versionMenuRef = useRef<HTMLDivElement>(null);
@@ -915,14 +916,16 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const toggleVersionMenu = async () => {
     const opening = !showVersionMenu;
     setShowVersionMenu(opening);
-    if (!opening || versionMenuList.length > 0 || versionMenuLoading) return;
+    if (!opening || lineageVersions.length > 0 || versionMenuLoading) return;
     setVersionMenuLoading(true);
     try {
-      const data = await jdService.getVersionHistory(job.id);
-      setVersionMenuList(data.versions || []);
+      // Load the LINEAGE (each version is its own JD id/detail page), not the
+      // republish snapshot history.
+      const data = await jdService.getLineageVersions(job.id);
+      setLineageVersions(data || []);
     } catch (error) {
-      console.error('Failed to load JD versions:', error);
-      setVersionMenuList([]);
+      console.error('Failed to load JD lineage versions:', error);
+      setLineageVersions([]);
     } finally {
       setVersionMenuLoading(false);
     }
@@ -1936,43 +1939,54 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             Loading versions...
                           </div>
-                        ) : versionMenuList.length === 0 ? (
+                        ) : lineageVersions.length === 0 ? (
                           <div className="px-3 py-3 text-xs text-gray-500 dark:text-slate-400">
-                            No version history yet
+                            No other versions yet
                           </div>
                         ) : (
-                          versionMenuList.map((version, index) => (
-                            <button
-                              key={version.id}
-                              role="menuitem"
-                              onClick={() => {
-                                setShowVersionMenu(false);
-                                setVersionMenuSelection(version.version_number);
-                                setShowVersionHistory(true);
-                              }}
-                              className="w-full px-3 py-2 text-left hover:bg-brand-blue/5 transition-colors"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-semibold text-gray-900 dark:text-slate-100">
-                                  v{version.version_number}.0
-                                </span>
-                                {/* The API returns newest first, so index 0 is live. */}
-                                {index === 0 && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
-                                    Current
+                          lineageVersions.map((version) => {
+                            const isCurrentPage = version.id === job.id;
+                            return (
+                              <button
+                                key={version.id}
+                                role="menuitem"
+                                disabled={isCurrentPage}
+                                onClick={() => {
+                                  setShowVersionMenu(false);
+                                  if (isCurrentPage) return;
+                                  // Open the WHOLE detail page of that version (its own
+                                  // results/tabs), not a content-diff popup.
+                                  router.push(`/recruitment/job-details?id=${version.id}`);
+                                }}
+                                className={`w-full px-3 py-2 text-left transition-colors ${isCurrentPage ? 'bg-brand-blue/5 cursor-default' : 'hover:bg-brand-blue/5'}`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-semibold text-gray-900 dark:text-slate-100">
+                                    v{version.version_number}.0
                                   </span>
-                                )}
-                              </div>
-                              <div className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
-                                {version.published_at_ist
-                                  ? formatISTDateTime(version.published_at_ist)
-                                  : formatToIST(version.published_at)}
-                              </div>
-                              <div className="text-[11px] text-gray-400 dark:text-slate-500 truncate">
-                                By {version.published_by_name || 'Unknown User'}
-                              </div>
-                            </button>
-                          ))
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
+                                      {version.status}
+                                    </span>
+                                    {isCurrentPage && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                                        Viewing
+                                      </span>
+                                    )}
+                                    {version.is_latest_version && !isCurrentPage && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                                        Latest
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                                  {version.job_id || version.title}
+                                  {version.published_at ? ` • ${formatToIST(version.published_at)}` : ''}
+                                </div>
+                              </button>
+                            );
+                          })
                         )}
 
                         <div className="border-t border-gray-100 dark:border-slate-700 my-1" />
@@ -1986,7 +2000,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                           className="w-full px-3 py-2 text-left text-xs font-medium text-brand-blue hover:bg-brand-blue/5 transition-colors flex items-center gap-2"
                         >
                           <History className="w-3.5 h-3.5" />
-                          View full history
+                          View change history (this version)
                         </button>
                       </div>
                     )}

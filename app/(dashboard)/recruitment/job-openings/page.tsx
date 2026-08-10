@@ -42,6 +42,8 @@ export default function JobOpeningsPage() {
     open: boolean;
     jobTitle: string;
     usageDetails: string[];
+    jobId?: string;
+    creating?: boolean;
   }>({ open: false, jobTitle: '', usageDetails: [] });
   const [deleteWarningDialog, setDeleteWarningDialog] = useState<{
     open: boolean;
@@ -175,7 +177,7 @@ export default function JobOpeningsPage() {
         updated_at: jd.updated_at, // For last updated display
         creation_stage: jd.creation_stage, // For draft JDs
         creation_method: jd.creation_method, // AI or Manual
-        currentVersion: jd.current_version, // For republished status
+        currentVersion: (jd as any).version_number ?? jd.current_version, // lineage version (v1, v2, ...) for the badge
         experience_level: jd.job_level || jd.experience_level,
       }));
 
@@ -269,8 +271,10 @@ export default function JobOpeningsPage() {
 
         setEditWarningDialog({
           open: true,
+          jobId: job.id,
           jobTitle: job.title,
-          usageDetails
+          usageDetails,
+          creating: false,
         });
         return;
       }
@@ -281,6 +285,30 @@ export default function JobOpeningsPage() {
       console.error('Failed to check JD usage status:', error);
       // If usage check fails, allow navigation (backend will validate on save)
       router.push(`/recruitment/jd-creation?id=${job.id}&stage=create`);
+    }
+  };
+
+  // Version control: editing an in-use JD forks it into a NEW independent version
+  // (a fresh DRAFT copy with its own id) instead of mutating the in-use one. The
+  // editor then opens on the new version; the previous version keeps all its
+  // assessments/interviews/scores untouched.
+  const handleCreateNewVersion = async () => {
+    const sourceId = editWarningDialog.jobId;
+    if (!sourceId) return;
+    setEditWarningDialog(prev => ({ ...prev, creating: true }));
+    try {
+      const newJd = await jdService.createNewVersion(sourceId);
+      setEditWarningDialog({ open: false, jobTitle: '', usageDetails: [] });
+      toast.success('New version created', {
+        description: `Version ${(newJd as any).version_number ?? ''} created as a new draft. Edit and publish it independently.`,
+      });
+      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create`);
+    } catch (error) {
+      console.error('Failed to create new JD version:', error);
+      setEditWarningDialog(prev => ({ ...prev, creating: false }));
+      toast.error('Could not create new version', {
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
     }
   };
 
@@ -477,10 +505,10 @@ export default function JobOpeningsPage() {
               </div>
               <div className="flex-1 pt-1">
                 <AlertDialogTitle className="text-lg font-semibold text-gray-900">
-                  Cannot Edit Job Description
+                  Create a New Version?
                 </AlertDialogTitle>
                 <AlertDialogDescription className="mt-1 text-sm text-gray-500">
-                  This job description is actively used and cannot be modified.
+                  This job description is actively used, so it can&apos;t be edited directly.
                 </AlertDialogDescription>
               </div>
             </div>
@@ -503,10 +531,10 @@ export default function JobOpeningsPage() {
             </div>
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <p className="text-sm text-gray-700">
-                <span className="font-medium text-gray-900">&quot;{editWarningDialog.jobTitle}&quot;</span> is linked to active modules above. To maintain data integrity, editing is disabled.
+                <span className="font-medium text-gray-900">&quot;{editWarningDialog.jobTitle}&quot;</span> is linked to the active modules above. To keep their data intact, editing creates a <span className="font-medium text-gray-900">new version</span> instead.
               </p>
               <p className="mt-1.5 text-sm text-gray-500">
-                Please create a new job description if changes are needed.
+                The new version is an independent copy (its own assessments, AI interviews and resume scoring). This version and its existing data are left untouched.
               </p>
             </div>
           </div>
@@ -514,15 +542,17 @@ export default function JobOpeningsPage() {
           <AlertDialogFooter className="mt-5 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <AlertDialogAction
               onClick={() => setEditWarningDialog({ open: false, jobTitle: '', usageDetails: [] })}
-              className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white text-sm"
-            >
-              I Understand
-            </AlertDialogAction>
-            <AlertDialogAction
-              onClick={() => { setEditWarningDialog({ open: false, jobTitle: '', usageDetails: [] }); router.push('/recruitment/jd-creation'); }}
+              disabled={editWarningDialog.creating}
               className="w-full sm:w-auto bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 text-sm"
             >
-              Create New JD
+              Cancel
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleCreateNewVersion(); }}
+              disabled={editWarningDialog.creating}
+              className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white text-sm disabled:opacity-60"
+            >
+              {editWarningDialog.creating ? 'Creating…' : 'Create New Version'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
