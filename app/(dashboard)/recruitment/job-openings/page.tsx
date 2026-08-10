@@ -302,7 +302,8 @@ export default function JobOpeningsPage() {
       toast.success('New version created', {
         description: `Version ${(newJd as any).version_number ?? ''} created as a new draft. Edit and publish it independently.`,
       });
-      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create`);
+      // Land on Step 2 (Extract/review of the copied data), not the blank Step 1.
+      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=extract`);
     } catch (error) {
       console.error('Failed to create new JD version:', error);
       setEditWarningDialog(prev => ({ ...prev, creating: false }));
