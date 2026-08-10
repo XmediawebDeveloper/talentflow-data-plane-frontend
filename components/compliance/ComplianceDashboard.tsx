@@ -76,7 +76,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12 tf-loader-center">
         <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
       </div>
     );
@@ -291,7 +291,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
           </button>
           {expandedSection === 'attempts' && (
             <div className="p-6">
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto tf-table-shell">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>

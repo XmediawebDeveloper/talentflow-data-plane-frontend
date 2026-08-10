@@ -467,7 +467,7 @@ export default function AIInterviewPreview() {
         {/* ── Time Allocation Table (fixed mode only) ── */}
         {mode === 'fixed' && enabledRounds.length > 0 && (
           <SectionCard title="Time Allocation" icon={Clock}>
-            <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
+            <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02] tf-table-shell">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-left">

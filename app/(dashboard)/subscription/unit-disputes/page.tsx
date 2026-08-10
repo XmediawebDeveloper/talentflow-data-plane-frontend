@@ -659,7 +659,7 @@ export default function UnitDisputesPage() {
                 </p>
               </div>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto tf-table-shell">
               <table className="w-full min-w-[900px]">
                 <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                   <tr className="text-left">
@@ -913,7 +913,7 @@ export default function UnitDisputesPage() {
                     <p className="mb-4 text-sm text-gray-600 dark:text-slate-400">Select the consumption record you want to dispute.</p>
 
                     {loadingLogs && (
-                      <div className="flex flex-col items-center justify-center py-10">
+                      <div className="flex flex-col items-center justify-center py-10 tf-loader-center tf-loader-center--compact">
                         <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
                         <p className="mt-3 text-sm font-medium text-gray-600 dark:text-slate-400">Loading consumption history...</p>
                       </div>

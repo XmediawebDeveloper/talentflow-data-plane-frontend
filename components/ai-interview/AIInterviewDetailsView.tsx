@@ -799,7 +799,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               {/* Time Allocation Table (fixed mode only) */}
               {mode === 'fixed' && enabledRounds.length > 0 && (
                 <SectionCard title="Time Allocation" icon={Clock}>
-                  <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
+                  <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02] tf-table-shell">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-slate-50 text-left border-b border-gray-100">
@@ -1181,7 +1181,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                                       <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
                                         Must-To-Have ({mthDist.length})
                                       </div>
-                                      <div className="border border-gray-100 rounded-md overflow-hidden">
+                                      <div className="border border-gray-100 rounded-md overflow-hidden tf-table-shell">
                                         <table className="w-full text-left">
                                           <thead className="bg-gray-50 border-b border-gray-100">
                                             <tr>
@@ -1201,7 +1201,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                                       <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
                                         Nice-To-Have ({nthDist.length})
                                       </div>
-                                      <div className="border border-gray-100 rounded-md overflow-hidden">
+                                      <div className="border border-gray-100 rounded-md overflow-hidden tf-table-shell">
                                         <table className="w-full text-left">
                                           <thead className="bg-gray-50 border-b border-gray-100">
                                             <tr>
@@ -1373,7 +1373,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           {activeTab === 'activity' && (
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-6">
               {activityLoading ? (
-                <div className="flex items-center justify-center py-12">
+                <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                   <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                 </div>
               ) : recentActivity.length === 0 ? (
@@ -1940,7 +1940,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
                 {/* Candidate list */}
                 {activityLoading ? (
-                  <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                     <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                   </div>
                 ) : filtered.length === 0 ? (

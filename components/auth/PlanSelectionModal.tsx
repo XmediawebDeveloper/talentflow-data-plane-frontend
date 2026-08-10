@@ -446,7 +446,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
           className="flex-1 overflow-auto px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-6 lg:px-8"
         >
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-10 sm:py-16">
+            <div className="flex flex-col items-center justify-center py-10 sm:py-16 tf-loader-center tf-loader-center--compact">
               <Loader2 className="w-8 h-8 sm:w-10 sm:h-10" style={{ color: '#2563EB', animation: 'spin 1s linear infinite' }} />
               <p className="mt-3 sm:mt-4 text-xs sm:text-sm" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Loading plans...</p>
             </div>

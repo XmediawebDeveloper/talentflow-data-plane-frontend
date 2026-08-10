@@ -1614,3 +1614,222 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
     font-size: 16px;
   }
 }
+
+/* ── Data-table shell ──────────────────────────────────────────────────
+   One class giving every list table the three behaviours the app wants:
+   a bounded scroll viewport, a header that stays put while the body
+   scrolls, and cells that keep each record on a single line.
+
+   Both axes scroll on this one element, deliberately. A scrollbar is drawn
+   on the edges of the box that owns it, so keeping both here is what pins
+   the vertical bar to the right edge of the *visible* area and the
+   horizontal bar to its bottom edge — each stays put no matter how far the
+   table is scrolled. Moving the row overflow onto an inner element (an
+   earlier attempt at starting the vertical track below the header) puts
+   that element's right edge at the far end of a wide table, so the vertical
+   bar drifts off-screen until you scroll all the way across, and its own
+   horizontal overflow adds a second track next to the shell's. One scroll
+   container per table is the rule here; nothing inside or immediately
+   around a shell may scroll sideways as well.
+
+   That leaves the vertical track running the full height of the shell, header
+   included, since a native bar can only span the box that owns it. So the
+   native bars are hidden and redrawn as an overlay whose vertical track starts
+   below the header — see `.tf-vscroll-custom` further down and
+   `components/TableScrollbars.tsx`. Scrolling itself is still the browser's;
+   only the bars' rendering is ours.
+
+   The header background is set HERE rather than on each <th> because a
+   sticky row paints no background of its own — without an opaque cell
+   colour the body scrolls visibly *through* the header. It is applied to
+   the cells, not the <tr>, because a sticky <tr> does not paint reliably.
+
+   These rules are intentionally unlayered, so they beat the Tailwind
+   utilities (which live in @layer utilities) already sitting on these
+   wrappers — a stray max-h-[300px] or whitespace-normal can't undo them.
+   Cells that genuinely need to wrap opt out with `tf-wrap`. */
+.tf-table-shell {
+  min-height: 400px;
+  max-height: calc(100vh - 20rem);
+  overflow: auto;
+}
+.tf-table-shell thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.tf-table-shell thead th {
+  background-color: #ffffff;
+}
+.dark .tf-table-shell thead th {
+  background-color: oklch(0.208 0.042 265.755); /* slate-900, matches dark card surfaces */
+}
+.tf-table-shell th,
+.tf-table-shell td {
+  white-space: nowrap;
+}
+.tf-table-shell th.tf-wrap,
+.tf-table-shell td.tf-wrap {
+  white-space: normal;
+}
+
+/* Compact shell — for tables inside a dialog. Keeps the sticky header and the
+   single-line cells, drops the two height rules that only make sense on a full
+   page. Must come after the base rule: both are single-class selectors, so the
+   later definition is what wins.
+
+   `min-height: 0` does double duty. It removes the 400px floor that would
+   reserve half a dialog for a two-row table, and it lets the shell shrink below
+   its content as a flex child — every one of these dialogs is a
+   `flex flex-col overflow-hidden` box, where the default `min-height: auto`
+   would otherwise push the footer out of view instead of scrolling the rows.
+
+   The cap is vh-based but well under the dialogs' own `100dvh - 3rem`, so the
+   rows scroll inside the table rather than pushing the dialog past the
+   viewport. */
+.tf-table-shell--compact {
+  min-height: 0;
+  max-height: 55vh;
+}
+
+/* ── Custom scrollbars for the shell ───────────────────────────────────
+   The native vertical bar has to span the whole shell, header included,
+   because the shell is the scroll container and the header sits inside it.
+   `components/TableScrollbars.tsx` therefore hides the native bars and paints
+   its own, with the vertical track starting below the header; these are the
+   two halves of that.
+
+   Both axes go, not just the vertical one: `scrollbar-width` has no per-axis
+   form, and it is the only lever available here — Chrome ignores
+   `::-webkit-scrollbar` rules on an element as soon as `scrollbar-width` is
+   specified, which the app-wide rule at the top of this file does on `*`.
+   The webkit line is kept for older WebKit that predates the standard
+   property. `!important` for the same reason: it is overriding that `*` rule.
+
+   The class is added at runtime, and only after the component has measured
+   that these rules really do remove the native bars — so a browser that
+   ignores them keeps working native ones rather than getting none at all. */
+.tf-vscroll-custom {
+  scrollbar-width: none !important;
+}
+.tf-vscroll-custom::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Overlay lives at the end of <body>, outside React's tree, and is
+   positioned per frame from each shell's rect. It has to clear every overlay
+   in the app that can contain a table — dialogs here run as high as
+   z-[9999] — because a bar drawn behind its own dialog is a bar you can't
+   see. Stacking order is therefore not what keeps a *background* table's bars
+   off the top of an open modal; the component's occlusion check is. */
+.tf-vscroll-root {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+.tf-vscroll-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none; /* only the thumb is interactive — a live track would
+                           swallow clicks on whatever sits at the row's edge */
+}
+.tf-vscroll-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 999px;
+  background-color: rgba(148, 163, 184, 0.65);
+  pointer-events: auto;
+  cursor: default;
+  touch-action: none;
+  transition: background-color 0.15s ease;
+}
+.tf-vscroll-bar--y .tf-vscroll-thumb {
+  width: 100%;
+}
+.tf-vscroll-bar--x .tf-vscroll-thumb {
+  height: 100%;
+}
+.tf-vscroll-thumb:hover,
+.tf-vscroll-thumb.is-dragging {
+  background-color: rgba(100, 116, 139, 0.9);
+}
+.dark .tf-vscroll-thumb {
+  background-color: rgba(148, 163, 184, 0.45);
+}
+.dark .tf-vscroll-thumb:hover,
+.dark .tf-vscroll-thumb.is-dragging {
+  background-color: rgba(203, 213, 225, 0.75);
+}
+
+/* Guard rail for the one-scroll-container rule: a wrapper immediately around a
+   shell, or one immediately inside it, would draw a second horizontal track a
+   few pixels from the shell's own. Only the sideways-only
+   utilities are neutralised, so a wrapper that scrolls vertically (a dialog
+   body, say) keeps doing its job, and a scrollable <pre> deeper inside a cell
+   is left alone. */
+.tf-table-shell > .overflow-x-auto,
+.tf-table-shell > .overflow-x-scroll,
+:where(.overflow-x-auto, .overflow-x-scroll):has(> .tf-table-shell) {
+  overflow-x: visible;
+}
+
+/* ── Loading state box ─────────────────────────────────────────────────
+   For a spinner that stands in for a whole page, table, or card section —
+   not for the small spinner inside a button, and not for skeletons, which
+   are meant to trace the shape of the content and so stay top-aligned.
+
+   The 400px floor is the same one `.tf-table-shell` reserves, and that is
+   the point: a loader wrapped only in `py-12` is about 100px tall, so the
+   spinner hangs near the top of the region and the layout jumps down when
+   the rows arrive. Matching the two heights centres the spinner in the box
+   the content is about to fill, and the swap happens in place.
+
+   Unlayered, like the shell above, so it wins against the `flex`/`py-*`
+   utilities already on these wrappers. */
+.tf-loader-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+/* Compact — inside a dialog or a small panel, where a 400px floor would push
+   the footer out of view. Later definition wins, same as the shell pair. */
+.tf-loader-center--compact {
+  min-height: 200px;
+}
+
+/* ── Full-page loading state ───────────────────────────────────────────
+   For a spinner that stands in for an entire route — the only other thing
+   on screen is the app header. `.tf-loader-center` above is the
+   section-level sibling: that one matches the height of the table it is
+   standing in for so the swap happens in place, this one takes the whole
+   content area so the spinner lands in the middle of the page.
+
+   `flex: 1` is what does the work. The dashboard shell renders every page
+   into a `flex-1 overflow-y-auto flex flex-col` column, so a page-level
+   loader is a flex child of that column and grows to exactly the height
+   below the header — no vh arithmetic that would have to know how tall the
+   header is, and nothing to update when it changes.
+
+   The 60vh is a fallback for a loader mounted outside that column, where
+   there is no flex parent to grow into. It is `height`, deliberately, not
+   `min-height`: height acts as the flex basis and can still be shrunk, so
+   a squeezed content area (short window with the terms, plan-change and
+   admin-plan banners all showing) pulls the loader down with it. A
+   min-height would refuse to shrink there, forcing a scrollbar during
+   loading and pushing the spinner off-centre by the overflow.
+
+   Unlayered, like the rules above, so it wins against the `p-12`/`h-64`
+   utilities already sitting on these wrappers. */
+.tf-loader-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  height: 60vh;
+}

@@ -1353,7 +1353,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {isLoadingResumes ? (
-                        <div className="flex items-center justify-center py-12">
+                        <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                           <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                         </div>
                       ) : filteredResumes.length === 0 ? (

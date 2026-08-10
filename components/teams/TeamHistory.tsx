@@ -95,7 +95,7 @@ export default function TeamHistory() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
+        <div className="flex items-center justify-center py-20 tf-loader-center">
           <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
         </div>
       ) : items.length === 0 ? (

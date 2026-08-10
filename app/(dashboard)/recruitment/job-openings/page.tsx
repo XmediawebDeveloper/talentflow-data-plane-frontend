@@ -60,6 +60,31 @@ export default function JobOpeningsPage() {
   const { user, isTenantAdmin, hasPermission } = useAuth();
   const canManageMasters = hasPermission('canManageSettings');
 
+  // "?view=list" is a one-shot instruction from the JD flow's "View All Jobs":
+  // open the full list with every job showing, rather than the stat-tile overview
+  // or whatever narrowed view was last persisted. Captured on the first render so
+  // it stays stable for this mount, then stripped from the URL below.
+  const [forceListView] = useState(() => searchParams.get('view') === 'list');
+
+  // Landing at a restored scroll offset would drop the recruiter into the middle
+  // of the list they just asked to see from the top — and the newest JD sorts
+  // first. Drop the saved offset before the restore effect can read it (it is
+  // gated on !loading, so it has not run yet on this mount).
+  useEffect(() => {
+    if (!forceListView) return;
+    try { sessionStorage.removeItem('listScroll:job-openings'); } catch { /* ignore */ }
+  }, [forceListView]);
+
+  // Strip the param once consumed, so a later back-navigation from job-details
+  // restores the recruiter's own view instead of resetting it all over again.
+  useEffect(() => {
+    if (searchParams.get('view') !== 'list') return;
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete('view');
+    const query = next.toString();
+    router.replace(`/recruitment/job-openings${query ? `?${query}` : ''}`, { scroll: false });
+  }, [searchParams, router]);
+
   // Restore/persist the list's view state + scroll position so returning from a
   // job-details page lands the user exactly where they left off. The outer div
   // below is the outermost root that owns the scroll container, so the scroll
@@ -493,6 +518,7 @@ export default function JobOpeningsPage() {
         onBulkDelete={hasPermission('canDeleteJD') || isTenantAdmin ? handleBulkDeleteJobs : undefined}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
+        forceListView={forceListView}
         masterDataLinks={canManageMasters ? MASTER_DATA_LINKS : undefined}
       />
 

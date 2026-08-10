@@ -358,7 +358,7 @@ const helpArticles: Record<string, {
 
         <section>
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Managing Job Descriptions</h2>
-          <div className="overflow-hidden rounded-lg border border-gray-200">
+          <div className="overflow-hidden rounded-lg border border-gray-200 tf-table-shell">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
@@ -452,7 +452,7 @@ const helpArticles: Record<string, {
           <h2 className="text-xl font-semibold text-gray-900 mb-4">What AI Extracts</h2>
           <p className="text-gray-600 mb-4">Our AI parser automatically extracts the following information:</p>
 
-          <div className="overflow-hidden rounded-lg border border-gray-200">
+          <div className="overflow-hidden rounded-lg border border-gray-200 tf-table-shell">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
@@ -905,7 +905,7 @@ const helpArticles: Record<string, {
         <section className="mb-10">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Plans Overview</h2>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto tf-table-shell">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-gray-50">

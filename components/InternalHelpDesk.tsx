@@ -355,7 +355,7 @@ export default function InternalHelpDesk() {
               </div>
 
               {loading ? (
-                <div className="flex items-center justify-center py-12">
+                <div className="flex items-center justify-center py-12 tf-loader-center">
                   <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
                 </div>
               ) : tickets.length === 0 ? (
@@ -573,11 +573,11 @@ export default function InternalHelpDesk() {
 
               {/* Tickets Table */}
               {loading ? (
-                <div className="flex items-center justify-center py-12">
+                <div className="flex items-center justify-center py-12 tf-loader-center">
                   <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto tf-table-shell">
                   <table className="w-full">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>

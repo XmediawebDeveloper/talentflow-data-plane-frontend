@@ -135,7 +135,7 @@ export default function LegalCompliancePage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16">
+          <div className="flex items-center justify-center py-16 tf-loader-center">
             <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
             <span className="ml-2 font-medium text-gray-600 dark:text-slate-400">Loading history...</span>
           </div>
@@ -152,7 +152,7 @@ export default function LegalCompliancePage() {
             <p className="text-sm">No acceptance records found</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
@@ -247,7 +247,7 @@ export default function LegalCompliancePage() {
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-5 prose prose-sm max-w-none">
               {docLoading ? (
-                <div className="flex items-center justify-center py-16">
+                <div className="flex items-center justify-center py-16 tf-loader-center">
                   <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
                   <span className="ml-2 font-medium text-gray-600 dark:text-slate-400">Loading document...</span>
                 </div>

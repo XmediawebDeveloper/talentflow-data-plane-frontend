@@ -461,7 +461,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead>
                 <tr className="border-b-2 border-gray-200">

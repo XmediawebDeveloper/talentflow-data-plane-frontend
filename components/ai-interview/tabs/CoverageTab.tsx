@@ -269,7 +269,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
     });
   };
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 w-full">
+    <div className="overflow-x-auto rounded-lg border border-gray-200 w-full tf-table-shell">
       <table className="w-full text-xs" style={{ tableLayout: 'auto' }}>
         <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-[10px]">
           <tr>

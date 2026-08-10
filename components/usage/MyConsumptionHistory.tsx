@@ -157,7 +157,7 @@ export default function MyConsumptionHistory() {
   if (isLoading) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center py-8">
+        <div className="flex items-center justify-center py-8 tf-loader-center">
           <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
           <span className="ml-2 text-gray-500">Loading your consumption history...</span>
         </div>
@@ -280,7 +280,7 @@ export default function MyConsumptionHistory() {
 
       {/* Consumption History Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto tf-table-shell">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>

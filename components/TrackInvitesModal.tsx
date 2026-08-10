@@ -347,7 +347,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
         {/* Invitations Table / Cards */}
         <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-auto flex-1 min-h-0">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8 sm:py-12">
+            <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center tf-loader-center--compact">
               <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
             </div>
           ) : invitations.length === 0 ? (
@@ -515,7 +515,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                   when at least one row in the JD's invitations belongs to
                   an assessment that has that round enabled. Same rule as
                   the Results page: no all-empty columns. */}
-              <div className="hidden sm:block overflow-x-auto">
+              <div className="hidden sm:block overflow-x-auto tf-table-shell tf-table-shell--compact">
                 <table className="w-full min-w-[960px] table-fixed">
                   <colgroup>
                     <col className="w-[72px]" />

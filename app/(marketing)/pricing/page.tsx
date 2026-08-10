@@ -466,7 +466,7 @@ export default function PricingPage() {
               Choose the right plan for your team
             </h1>
           </div>
-          <div className="flex flex-col items-center justify-center py-20">
+          <div className="flex flex-col items-center justify-center py-20 tf-loader-center">
             <Loader2 className="w-12 h-12 text-gray-500 animate-spin" />
             <p className="mt-4 text-gray-600 dark:text-gray-400">Loading plans...</p>
           </div>
@@ -991,7 +991,7 @@ export default function PricingPage() {
           </div>
 
           {addonsLoading && (
-            <div className="flex flex-col items-center justify-center py-12">
+            <div className="flex flex-col items-center justify-center py-12 tf-loader-center">
               <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
               <p className="mt-4 text-gray-600 dark:text-gray-400">Loading add-ons...</p>
             </div>

@@ -571,7 +571,7 @@ export default function RoleManagement() {
               </div>
 
               {isLoading ? (
-                <div className="flex items-center justify-center py-20">
+                <div className="flex items-center justify-center py-20 tf-loader-center">
                   <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
                 </div>
               ) : filteredRoles.length === 0 ? (
@@ -584,7 +584,7 @@ export default function RoleManagement() {
                 </div>
               ) : (
                 <>
-                  <div className="hidden xl:block overflow-x-auto">
+                  <div className="hidden xl:block overflow-x-auto tf-table-shell">
                     <table className="w-full min-w-[980px]">
                       <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                         <tr className="text-left">
@@ -781,7 +781,7 @@ export default function RoleManagement() {
                   </div>
                 </div>
                 {isLoading ? (
-                  <div className="flex items-center justify-center py-20">
+                  <div className="flex items-center justify-center py-20 tf-loader-center">
                     <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
                   </div>
                 ) : userAssignmentRoles.length === 0 ? (
@@ -793,7 +793,7 @@ export default function RoleManagement() {
                     <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Users will appear here once roles are assigned to them.</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto tf-table-shell">
                     <table className="w-full min-w-[640px]">
                       <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                         <tr className="text-left">
@@ -847,7 +847,7 @@ export default function RoleManagement() {
                   </div>
                 </div>
                 {isLoading ? (
-                  <div className="flex items-center justify-center py-20">
+                  <div className="flex items-center justify-center py-20 tf-loader-center">
                     <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
                   </div>
                 ) : filteredPermissions.length === 0 ? (
@@ -915,7 +915,7 @@ export default function RoleManagement() {
               </div>
             ) : (
               <>
-                <div className="hidden lg:block overflow-x-auto">
+                <div className="hidden lg:block overflow-x-auto tf-table-shell">
                   <table className="w-full min-w-[980px]">
                     <thead className="bg-gray-50/80 dark:bg-slate-800/50">
                       <tr className="text-left">
