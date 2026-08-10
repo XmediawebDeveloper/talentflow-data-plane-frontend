@@ -535,28 +535,26 @@ export default function AssessmentDetailsView({
       {/* Breadcrumb — must be a DIRECT child of the card so `sticky` has the
           card's full height to travel within. Nested inside a padding wrapper it
           was boxed to its own height and could never actually stick. */}
+      {/* Previous / Next rides inside the breadcrumb bar, as on job-details, so
+          it stays reachable while the sticky crumb is pinned. Passed as
+          undefined when there is no list to page through, which leaves the bar
+          exactly as it was. */}
       <PageBreadcrumb
-        className="mb-3"
+        className="mb-4"
         items={breadcrumbItems ?? [
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Assessments', href: '/recruitment/assessments' },
           { label: stripVersionFromTitle(assessment.title) || assessment.short_id || 'Assessment Details' },
         ]}
-      />
-
-      {/* Previous / Next navigation — sits below the breadcrumb, as on
-          job-details. The row is dropped entirely when there is no list to
-          page through, so it leaves no empty gap. */}
-      {totalCount != null && totalCount > 0 && (
-        <div className="flex items-center justify-end mb-4">
+        actions={totalCount != null && totalCount > 0 ? (
           <RecordPager
             currentIndex={currentIndex}
             totalCount={totalCount}
             onPrev={onPrev}
             onNext={onNext}
           />
-        </div>
-      )}
+        ) : undefined}
+      />
 
       {/* Header — scrolls with the page. It used to be `sticky top-0`, pinned
           against the old full-bleed layout; inside the job-details card the

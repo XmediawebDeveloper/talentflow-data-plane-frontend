@@ -359,8 +359,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       filterCreatedBy,
       filterCreatedFrom,
       filterCreatedTo,
+      // The cards<->list drill-in. Everything else here was already restored,
+      // but pageView reset to 'cards' on every remount, so returning from a
+      // detail/results page hid the whole list behind the stat tiles.
+      pageView,
     },
     (s) => {
+      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
       if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as typeof activeTab);
       if (s.settingsSubTab === 'proctoring' || s.settingsSubTab === 'topics') setSettingsSubTab(s.settingsSubTab);
       if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
@@ -685,7 +690,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     } catch { /* ignore quota errors */ }
 
     const cid = result.candidate_display_id ? `&cid=${encodeURIComponent(result.candidate_display_id)}` : '';
-    router.push(`/recruitment/assessments/${result._assessment_id}/results/details?candidate_id=${attemptId}${cid}`);
+    // `from` marks the cross-assessment origin so the details breadcrumb stays
+    // flat instead of inserting an assessment crumb the recruiter never visited.
+    router.push(`/recruitment/assessments/${result._assessment_id}/results/details?candidate_id=${attemptId}${cid}&from=candidate-results`);
   };
 
   const loadAllCompletedCandidates = async () => {
@@ -1943,16 +1950,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </button>
                   </>
                 )}
-                {/* <button
+                <button
                   onClick={() => setActiveTab('archived')}
-                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
                     activeTab === 'archived'
                       ? 'border-brand-blue text-brand-blue font-medium'
                       : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                   }`}
                 >
+                  <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Archived
-                </button> */}
+                </button>
                 <button
                   onClick={() => setActiveTab('settings')}
                   className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
@@ -2962,83 +2970,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       openMenuId === assessment.id ? 'relative z-30' : 'relative'
                     }`}
                   >
-                    {/* Grid Card Header — icon on left, action buttons aligned in a straight line at the top right */}
-                    <div className="flex items-start justify-between gap-2 mb-3" onClick={(e) => e.stopPropagation()}>
+                    {/* Grid Card Header — icon only. A second action cluster
+                        used to sit here, so Share, Results and the ⋮ menu each
+                        appeared twice on every card. The row at the foot of the
+                        card is the one kept: it lays the buttons out full width
+                        and carries the fuller Share gating (revoked invites). */}
+                    <div className="mb-3" onClick={(e) => e.stopPropagation()}>
                       <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                         <FileText className="w-5 h-5 text-brand-blue" />
-                      </div>
-                      <div className="flex items-center gap-2 flex-nowrap">
-                        {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
-                          const shareBlockedReason =
-                            assessment.status === 'Draft' ? 'Publish assessment first to share' :
-                            assessment.status === 'Archived' ? 'Archived assessments cannot be shared' :
-                            '';
-                          const isShareBlocked = !!shareBlockedReason;
-                          return (
-                            <button
-                              onClick={() => {
-                                if (assessment.status === 'Draft') {
-                                  toast.warning('Please publish the assessment before sharing');
-                                  return;
-                                }
-                                if (assessment.status === 'Archived') {
-                                  toast.warning('Archived assessments cannot be shared');
-                                  return;
-                                }
-                                setSelectedAssessmentForShare(assessment);
-                                setShowShareModal(true);
-                              }}
-                              disabled={isShareBlocked}
-                              className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg transition-all text-xs whitespace-nowrap ${
-                                isShareBlocked
-                                  ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                                  : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                              }`}
-                              title={shareBlockedReason || 'Share via email'}
-                            >
-                              <Mail className="w-3.5 h-3.5" />
-                              Share
-                            </button>
-                          );
-                        })()}
-                        {assessment.candidates > 0 && (
-                          <button
-                            onClick={() => handleTrackInvites(assessment)}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-all text-xs whitespace-nowrap"
-                            aria-label="Track invitation status" title="Track invitation status"
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            Track ({assessment.candidates})
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (assessment.status === 'Draft') return;
-                            router.push(`/recruitment/assessments/${assessment.id}/results`);
-                          }}
-                          disabled={assessment.status === 'Draft'}
-                          title={assessment.status === 'Draft' ? 'Publish the assessment to view results' : ''}
-                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
-                            assessment.status === 'Draft'
-                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                              : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                          }`}
-                        >
-                          <BarChart className="w-3.5 h-3.5" />
-                          Results
-                        </button>
-                        <button
-                          data-assessment-menu-trigger
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenMenuId(openMenuId === assessment.id ? null : assessment.id);
-                          }}
-                          className="p-1.5 text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-300 rounded transition-colors"
-                          aria-label="More actions"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
                       </div>
                     </div>
 
@@ -3155,6 +3094,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </button>
                         );
                       })()}
+                      {/* Track invites — moved down from the removed header
+                          cluster, which was the only place the grid offered it. */}
+                      {assessment.candidates > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTrackInvites(assessment);
+                          }}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-all text-xs whitespace-nowrap"
+                          aria-label="Track invitation status" title="Track invitation status"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          Track ({assessment.candidates})
+                        </button>
+                      )}
                       {/* Results disabled for Draft — a draft has no candidates,
                           so the results page is empty. */}
                       <button

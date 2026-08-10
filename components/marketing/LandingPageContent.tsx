@@ -5,7 +5,6 @@ import {
   ArrowUpRight,
   Play,
   Shield,
-  CheckCircle2,
   Star,
   Video,
   X,
@@ -16,7 +15,6 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { displayFont, dataFont } from "./fonts";
 import { FeatureShowcase } from "./FeatureShowcase";
 import { PlanCard } from "./PlanCard";
 import { fetchMarketingPlans, type MarketingPlan } from "./plans";
@@ -94,35 +92,6 @@ function Reveal({
   );
 }
 
-/** Counts to `target` once `active` turns true. */
-function useCountUp(target: number, active: boolean, delay = 0) {
-  const reduced = usePrefersReducedMotion();
-  const [value, setValue] = useState(0);
-
-  useEffect(() => {
-    if (reduced || !active) return;
-    let frame = 0;
-    let startTime = 0;
-    const timer = window.setTimeout(() => {
-      const step = (now: number) => {
-        if (!startTime) startTime = now;
-        const progress = Math.min(1, (now - startTime) / 900);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        setValue(Math.round(target * eased));
-        if (progress < 1) frame = window.requestAnimationFrame(step);
-      };
-      frame = window.requestAnimationFrame(step);
-    }, delay);
-
-    return () => {
-      window.clearTimeout(timer);
-      window.cancelAnimationFrame(frame);
-    };
-  }, [target, active, delay, reduced]);
-
-  return reduced ? target : value;
-}
-
 /* ------------------------------------------------------------------ *
  * Shared section furniture
  * ------------------------------------------------------------------ */
@@ -137,7 +106,9 @@ const SECTION_Y = "py-10 sm:py-14 2xl:py-20";
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <span className="font-data text-[11px] sm:text-xs uppercase tracking-[0.22em] text-[#0F3C99] dark:text-[#7BA4FF]">
+    // Semibold: at 11px, uppercase and widely tracked, Inter needs the extra
+    // weight to hold the line the mono face used to hold on its own.
+    <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.22em] text-mkt-accent">
       {children}
     </span>
   );
@@ -166,7 +137,7 @@ function SectionHeading({
     <div className={`${align === "center" ? `text-center mx-auto ${measure}` : measure}`}>
       <Eyebrow>{eyebrow}</Eyebrow>
       <h2
-        className={`font-display mt-3 text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl font-bold tracking-[-0.03em] text-[#08132E] dark:text-white text-balance ${
+        className={`mt-3 text-3xl sm:text-4xl md:text-5xl 2xl:text-6xl font-extrabold tracking-[-0.035em] text-mkt-ink text-balance ${
           nowrap ? "lg:whitespace-nowrap" : ""
         }`}
       >
@@ -208,7 +179,7 @@ function BillingToggle({
     <div
       role="radiogroup"
       aria-label="Billing period"
-      className="inline-flex items-center gap-1 rounded-full border border-slate-200/90 bg-[#FFFFFF] p-1 shadow-sm dark:border-white/10 dark:bg-white/[0.05]"
+      className="inline-flex items-center gap-1 rounded-full border border-slate-200/90 bg-mkt-surface p-1 shadow-sm dark:border-white/10 dark:bg-white/[0.05]"
     >
       {options.map((option) => {
         const selected = option.yearly === isYearly;
@@ -219,19 +190,19 @@ function BillingToggle({
             role="radio"
             aria-checked={selected}
             onClick={() => onChange(option.yearly)}
-            className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F3C99] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#08132E] ${
+            className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid focus-visible:ring-offset-2 dark:focus-visible:ring-offset-mkt-navy ${
               selected
-                ? "bg-[#0F3C99] text-white"
-                : "text-slate-600 hover:text-[#08132E] dark:text-slate-400 dark:hover:text-white"
+                ? "bg-mkt-accent-solid text-white"
+                : "text-slate-600 hover:text-mkt-ink dark:text-slate-400 dark:hover:text-white"
             }`}
           >
             {option.label}
             {option.yearly && savePercent > 0 && (
               <span
-                className={`font-data rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
                   selected
-                    ? "bg-[#ED881C] text-[#08132E]"
-                    : "bg-[#ED881C]/15 text-[#B45B0C] dark:text-[#F0A44E]"
+                    ? "bg-mkt-amber text-mkt-ink"
+                    : "bg-mkt-amber/15 text-mkt-amber-ink"
                 }`}
               >
                 Save {savePercent}%
@@ -244,163 +215,32 @@ function BillingToggle({
   );
 }
 
-/* ------------------------------------------------------------------ *
- * Hero signature — the screening lane
- * ------------------------------------------------------------------ */
-
-const SHORTLIST = [
-  { initials: "AR", name: "Ananya Rao", role: "Senior React Engineer · 8 yrs", score: 94 },
-  { initials: "KM", name: "Krish Menon", role: "Frontend Lead · 7 yrs", score: 91 },
-  { initials: "DS", name: "Diego Santos", role: "Full-stack Engineer · 6 yrs", score: 87 },
-  { initials: "LW", name: "Lena Weber", role: "React Native Engineer · 5 yrs", score: 82 },
-  { initials: "TN", name: "Tomas Nowak", role: "UI Engineer · 4 yrs", score: 78 },
-];
-
-function ShortlistRow({
-  candidate,
-  index,
-  active,
-}: {
-  candidate: (typeof SHORTLIST)[number];
-  index: number;
-  active: boolean;
-}) {
-  const reduced = usePrefersReducedMotion();
-  const score = useCountUp(candidate.score, active, 280 + index * 110);
-  const top = index === 0;
-
-  return (
-    <li
-      style={{ transitionDelay: `${index * 110}ms` }}
-      className={`flex items-center gap-3 sm:gap-4 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 transition-[opacity,transform] duration-500 ease-out ${
-        active || reduced ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"
-      } ${
-        top
-          ? "bg-[#ED881C]/10 ring-1 ring-[#ED881C]/30 dark:bg-[#ED881C]/[0.14]"
-          : "bg-slate-50/80 dark:bg-white/[0.04]"
-      }`}
-    >
-      <span className="font-data text-xs tabular-nums text-slate-400 dark:text-slate-500 w-5">
-        {String(index + 1).padStart(2, "0")}
-      </span>
-      <span
-        className={`grid h-9 w-9 sm:h-10 sm:w-10 shrink-0 place-items-center rounded-full text-xs font-semibold ${
-          top
-            ? "bg-[#ED881C] text-white"
-            : "bg-[#0F3C99]/10 text-[#0F3C99] dark:bg-white/10 dark:text-slate-200"
-        }`}
-      >
-        {candidate.initials}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-[#08132E] dark:text-white">
-          {candidate.name}
-        </span>
-        <span className="block truncate text-xs text-slate-500 dark:text-slate-400">
-          {candidate.role}
-        </span>
-      </span>
-      <span className="flex items-center gap-2 sm:gap-3">
-        <span
-          aria-hidden="true"
-          className="hidden sm:block h-1.5 w-16 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10"
-        >
-          <span
-            className={`block h-full rounded-full transition-[width] duration-700 ease-out ${
-              top ? "bg-[#ED881C]" : "bg-[#079CC4]"
-            }`}
-            style={{ width: `${active || reduced ? candidate.score : 0}%` }}
-          />
-        </span>
-        <span
-          className={`font-data text-sm sm:text-base font-medium tabular-nums ${
-            top ? "text-[#B45B0C] dark:text-[#F0A44E]" : "text-[#08132E] dark:text-white"
-          }`}
-        >
-          {score}
-          <span className="text-[0.7em] text-slate-400 dark:text-slate-500">%</span>
-        </span>
-      </span>
-    </li>
-  );
-}
-
-function ScreeningPanel() {
-  const reduced = usePrefersReducedMotion();
-  const [started, setStarted] = useState(false);
-  const active = reduced || started;
-  const screened = useCountUp(1284, active, 120);
-
-  useEffect(() => {
-    if (reduced) return;
-    const timer = window.setTimeout(() => setStarted(true), 260);
-    return () => window.clearTimeout(timer);
-  }, [reduced]);
-
-  return (
-    <div className="relative">
-      <div
-        aria-hidden="true"
-        className="absolute -inset-3 sm:-inset-4 rounded-[28px] bg-gradient-to-br from-[#0F3C99]/10 via-[#079CC4]/10 to-transparent blur-xl"
-      />
-      <div className="relative rounded-2xl border border-slate-200/80 bg-white/95 p-4 sm:p-5 shadow-[0_24px_60px_-24px_rgba(8,19,46,0.35)] backdrop-blur dark:border-white/10 dark:bg-[#0C1732]/95">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 dark:border-white/10">
-          <span className="font-data text-[10px] sm:text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-            Screening · Senior React Engineer
-          </span>
-          <span className="flex items-center gap-1.5 rounded-full bg-[#079CC4]/10 px-2 py-1 font-data text-[10px] font-medium uppercase tracking-wider text-[#0A7A99] dark:text-[#5CC8E6]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#079CC4] motion-safe:animate-pulse" />
-            Live
-          </span>
-        </div>
-
-        <ul className="mt-3 space-y-1.5 sm:space-y-2">
-          {SHORTLIST.map((candidate, index) => (
-            <ShortlistRow
-              key={candidate.name}
-              candidate={candidate}
-              index={index}
-              active={active}
-            />
-          ))}
-        </ul>
-
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 font-data text-[11px] sm:text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
-          <span className="tabular-nums">
-            {screened.toLocaleString()} resumes screened
-          </span>
-          <span className="tabular-nums text-[#08132E] dark:text-white">
-            12 shortlisted · 3m 40s
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ------------------------------------------------------------------ *
  * Static content
  * ------------------------------------------------------------------ */
 
+/** Each label names what its number counts — "Satisfaction" and the like left
+ *  the reader to guess what 98% referred to. */
 const STATS = [
-  { value: "2,500+", label: "Active customers" },
-  { value: "5M+", label: "Resumes processed" },
-  { value: "40%", label: "Faster hiring" },
-  { value: "98%", label: "Satisfaction" },
+  { value: "2,500+", label: "Recruiting teams" },
+  { value: "5M+", label: "Resumes screened" },
+  { value: "40%", label: "Faster time to hire" },
+  { value: "98%", label: "Would recommend" },
 ];
 
 const STEPS = [
   {
-    title: "Create your account",
-    description: "Sign up in under two minutes. No credit card required.",
+    title: "Sign up",
+    description: "Two minutes, no credit card, no sales call.",
   },
   {
-    title: "Post your jobs",
-    description: "Add a job description and the AI parses the requirements for you.",
+    title: "Add the role",
+    description: "Paste a job description. TalentFlow pulls out the skills, seniority and must-haves.",
   },
   {
-    title: "Start hiring",
-    description: "Ranked candidates arrive with scores. Schedule interviews the same day.",
+    title: "Open the shortlist",
+    description: "Candidates arrive ranked and scored. Book interviews the same day.",
   },
 ];
 
@@ -468,86 +308,126 @@ export function LandingPageContent() {
   );
 
   return (
-    <div
-      className={`${displayFont.variable} ${dataFont.variable} bg-[#F7F8FB] text-[#08132E] dark:bg-[#08132E] dark:text-white`}
-    >
+    // One typeface for the whole page: Inter, inherited from <body>. Hierarchy
+    // is carried by weight, tracking and case instead of a second family.
+    <div className="bg-mkt-canvas text-mkt-ink">
       {/* ---------------------------------------------------------- Hero */}
       <section id="home" className="relative scroll-mt-16 overflow-hidden sm:scroll-mt-20">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_15%_0%,rgba(15,60,153,0.10),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.10),transparent_60%)] dark:bg-[radial-gradient(60%_50%_at_15%_0%,rgba(76,123,232,0.18),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.14),transparent_60%)]"
-        />
-        <div className={`${SHELL} relative py-9 sm:py-12 lg:py-16 2xl:py-24`}>
-          {/* grid-cols-1 keeps the single-column track from sizing to the
-              widest child — without it the hero overflows on 320px screens. */}
-          <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:gap-12 2xl:gap-16">
-            <div>
-              {/* Arbitrary hex rather than bg-white: globals.css repaints the
-                  literal .bg-white / .bg-white\/80 classes in dark mode. */}
-              <div className="inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-slate-200 bg-[#FFFFFF]/80 px-3 py-1.5 dark:border-white/10 dark:bg-white/[0.05]">
-                <span className="flex gap-0.5">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="h-3 w-3 fill-[#ED881C] text-[#ED881C]" />
-                  ))}
-                </span>
-                <span className="font-data text-[11px] tracking-wide text-slate-600 dark:text-slate-300">
-                  4.9/5 from 2,500+ recruitment teams
-                </span>
-              </div>
+        {/* The hero band is its own positioning context so the artwork can't
+            reach past it. When the layers were pinned to the whole <section>
+            they also spanned the stat band below, which pushed the image's
+            centre line down and hid the candidate cards along its bottom edge
+            behind that band. */}
+        <div className="relative xl:min-h-[680px]">
+          {/* Colour wash + dot field, both decorative. Gone from xl up in light
+              mode, where the artwork takes over — the wash tinted the photograph
+              and read as a haze laid over it.
+              Two elements rather than one with `xl:hidden dark:xl:block`: a
+              stacked responsive+dark pair leaves which rule wins up to variant
+              sort order. `hidden` twice can't conflict, and `hidden dark:block`
+              is the pairing Tailwind guarantees. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_15%_0%,rgba(15,60,153,0.10),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.10),transparent_60%)] xl:hidden dark:hidden"
+          />
+          {/* Dark mode shows no artwork, so it keeps its wash at every width. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(60%_50%_at_15%_0%,rgba(76,123,232,0.18),transparent_65%),radial-gradient(45%_40%_at_85%_10%,rgba(7,156,196,0.14),transparent_60%)] dark:block"
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:radial-gradient(var(--mkt-accent)_1px,transparent_1px)] [background-size:22px_22px] [mask-image:radial-gradient(65%_55%_at_50%_0%,black,transparent)] xl:hidden"
+          />
+          {/* Hero artwork at its natural size — no background-size, so it is
+              never scaled or distorted. Anchored top-right: right because that's
+              where the subject sits, top so the 680px image starts flush with
+              the band and its lower edge stays inside it. The left ~60% of the
+              image is deliberately empty, and that emptiness is where the copy
+              goes. Only from xl up: below that the image is wider than the
+              viewport and the subject would be pushed off-screen. Light mode
+              only — the artwork is white-on-white, so dark mode keeps the
+              gradients above instead. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 hidden bg-white bg-[url('/marketing/hero-bg.png')] bg-right-top bg-no-repeat opacity-100 xl:block dark:opacity-0"
+          />
+          {/* Padding below xl, where there is no artwork and the copy would
+              otherwise sit flush under the header. From xl the band is exactly
+              the artwork's 680px and the padding goes, so the image starts at
+              the top edge and the copy centres against it. */}
+          <div className={`${SHELL} relative py-12 text-left sm:py-16 lg:py-20 xl:flex xl:min-h-[680px] xl:items-center xl:py-0`}>
+          {/* Left-aligned in a capped column. From xl the artwork owns the right
+              half, so the column is held back to clear the subject; below that
+              the image is hidden and the column runs to its natural measure. */}
+          {/* The artwork is 1920px wide and unscaled, so its subject always
+              occupies a fixed ~770px at the right edge. What's left for the
+              copy is therefore viewport-width minus that, which is why the
+              column tightens at xl and only opens up again at 2xl. */}
+          <div className="max-w-2xl lg:max-w-4xl xl:max-w-[30rem] 2xl:max-w-[46rem]">
+            {/* Two imperatives rather than a category claim: the old headline
+                ("Hire smarter with AI-powered recruiting") named the market,
+                not what the product does for the reader. */}
+            {/* Steps back down at xl, where the artwork appears and the column
+                narrows — the headline has to sit beside the subject rather than
+                run under it, then opens up again at 2xl once there is room. */}
+            <h1 className="text-[1.75rem] font-extrabold leading-[1.02] tracking-[-0.045em] text-balance min-[400px]:text-[2.35rem] min-[400px]:leading-[0.98] sm:text-[3.1rem] md:text-[3.95rem] lg:text-[4.6rem] xl:text-[3rem] 2xl:text-[4.2rem]">
+              {/* No `whitespace-nowrap`: at 3.95rem the line is ~620px, which
+                  is wider than the usable width between 640 and ~700px, and the
+                  section clips its overflow — so the sentence lost its tail
+                  rather than wrapping. Left-aligned, that clipping is on the
+                  right edge and very visible. */}
+              <span className="block text-mkt-ink">Screen every applicant.</span>
+              {/* The payoff line carries the accent and a soft underglow — the
+                  page's one flourish, and it needs no box to hold it. */}
+              <span className="relative mt-1 block text-mkt-accent">
+                Shortlist in minutes.
+                {/* Runs from the left edge now the hero is left-aligned — a
+                    symmetrical fade read as off-centre against flush type. */}
+                <span
+                  aria-hidden="true"
+                  className="absolute -bottom-2 left-0 h-px w-2/3 bg-gradient-to-r from-mkt-amber to-transparent"
+                />
+              </span>
+            </h1>
 
-              <h1 className="font-display mt-5 text-[2.1rem] font-bold leading-[1.02] tracking-[-0.04em] min-[400px]:text-[2.6rem] min-[400px]:leading-[0.98] sm:text-6xl lg:text-7xl">
-                <span className="block text-[#08132E] dark:text-white">Hire smarter with</span>
-                <span className="block text-[#0F3C99] dark:text-[#7BA4FF]">
-                  AI-powered recruiting
-                </span>
-              </h1>
+            <p className="mt-8 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-lg 2xl:text-xl">
+              Resume screening, assessments and AI interviews run as one pass, so
+              the shortlist is ready before your first call. Teams get back{" "}
+              <span className="font-semibold text-mkt-ink">
+                15+ hours a week
+              </span>
+              .
+            </p>
 
-              <p className="mt-4 max-w-xl 2xl:max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300 sm:text-lg 2xl:text-xl">
-                Intelligent resume screening, automated assessments and AI-assisted
-                interviews in one place. Recruiting teams save{" "}
-                <span className="font-semibold text-[#08132E] dark:text-white">
-                  15+ hours every week
-                </span>
-                .
-              </p>
-
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                <Link
-                  href="/signup"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#0F3C99] px-6 text-sm font-semibold text-white shadow-lg shadow-[#0F3C99]/25 transition-colors hover:bg-[#0E3B98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ED881C] focus-visible:ring-offset-2 dark:focus-visible:ring-offset-[#08132E] sm:text-base"
-                >
-                  Get started free
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => setDemoModalOpen(true)}
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-[#FFFFFF] px-6 text-sm font-semibold text-[#08132E] transition-colors hover:border-[#0F3C99]/40 hover:text-[#0F3C99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F3C99] dark:border-white/15 dark:bg-white/[0.04] dark:text-white dark:hover:border-white/30 sm:text-base"
-                >
-                  <Play className="h-4 w-4" />
-                  Watch demo
-                </button>
-              </div>
-
-              <ul className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600 dark:text-slate-400">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-[#079CC4]" />
-                  {trialDays}-day free trial
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-[#079CC4]" />
-                  No credit card required
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-[#079CC4]" />
-                  Setup in 5 minutes
-                </li>
-              </ul>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-start">
+              <Link
+                href="/signup"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-mkt-accent-solid px-6 text-sm font-semibold text-white shadow-lg shadow-mkt-accent-solid/25 transition-colors hover:bg-mkt-accent-solid-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-amber focus-visible:ring-offset-2 dark:focus-visible:ring-offset-mkt-navy sm:text-base"
+              >
+                {/* Same words as the other trial buttons — one action, one name. */}
+                Start free trial
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <button
+                type="button"
+                onClick={() => setDemoModalOpen(true)}
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-mkt-surface px-6 text-sm font-semibold text-mkt-ink transition-colors hover:border-mkt-accent/40 hover:text-mkt-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid dark:border-white/15 dark:bg-white/[0.04] dark:hover:border-white/30 sm:text-base"
+              >
+                <Play className="h-4 w-4" />
+                Watch demo
+              </button>
             </div>
 
-            <ScreeningPanel />
+            {/* One quiet line where a three-item checklist used to sit. The
+                same reassurance, without competing with the headline. */}
+            <p className="mt-5 text-sm text-slate-500 dark:text-slate-400">
+              {trialDays}-day free trial · no credit card
+            </p>
+            </div>
           </div>
         </div>
+        {/* /hero band */}
 
         {/* Stat band — the page's proof line, set as data rather than cards. */}
         <div className="border-y border-slate-200/80 bg-white/70 dark:border-white/10 dark:bg-white/[0.03]">
@@ -557,7 +437,7 @@ export function LandingPageContent() {
                 <div key={stat.label} className="px-2 py-4 text-center md:py-5 2xl:py-7">
                   <dt className="sr-only">{stat.label}</dt>
                   <dd>
-                    <span className="font-data block text-2xl font-medium tabular-nums text-[#08132E] dark:text-white sm:text-3xl">
+                    <span className="block text-2xl font-extrabold tabular-nums tracking-[-0.02em] text-mkt-ink sm:text-3xl">
                       {stat.value}
                     </span>
                     <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
@@ -577,8 +457,8 @@ export function LandingPageContent() {
           <Reveal>
             <SectionHeading
               eyebrow="Features"
-              title="Everything you need to hire better"
-              lead="AI-powered tools for every step of recruitment — from the first resume to the signed offer."
+              title="Every stage, one system"
+              lead="Screen, assess, interview and decide without exporting a spreadsheet or switching tools."
               nowrap
             />
           </Reveal>
@@ -594,7 +474,7 @@ export function LandingPageContent() {
       {/* -------------------------------------------------- How it works */}
       <section
         id="how-it-works"
-        className={`scroll-mt-16 border-y border-slate-200/80 bg-[#FFFFFF] dark:border-white/10 dark:bg-white/[0.02] sm:scroll-mt-20 ${SECTION_Y}`}
+        className={`scroll-mt-16 border-y border-slate-200/80 bg-mkt-surface dark:border-white/10 dark:bg-white/[0.02] sm:scroll-mt-20 ${SECTION_Y}`}
       >
         <div className={SHELL}>
           <Reveal>
@@ -618,10 +498,10 @@ export function LandingPageContent() {
                     />
                   )}
                   <Reveal delay={index * 100}>
-                    <span className="font-data relative z-10 inline-grid h-10 w-10 place-items-center rounded-full border border-slate-300 bg-[#F7F8FB] text-sm font-medium tabular-nums text-[#0F3C99] dark:border-white/15 dark:bg-[#0C1732] dark:text-[#7BA4FF]">
-                      {String(index + 1).padStart(2, "0")}
+                    <span className="relative z-10 inline-grid h-10 w-10 place-items-center rounded-full border border-slate-300 bg-mkt-canvas text-sm font-semibold tabular-nums text-mkt-accent dark:border-white/15 dark:bg-mkt-surface">
+                {String(index + 1).padStart(2, "0")}
                     </span>
-                    <h3 className="font-display mt-4 text-xl font-bold tracking-[-0.02em] text-[#08132E] dark:text-white">
+                    <h3 className="mt-4 text-xl font-bold tracking-[-0.02em] text-mkt-ink">
                       {step.title}
                     </h3>
                     <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
@@ -644,13 +524,13 @@ export function LandingPageContent() {
             <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
               <SectionHeading
                 eyebrow="Pricing"
-                title="Plans that scale with your hiring"
-                lead={`Start on a ${trialDays}-day free trial. Move to a paid plan when your pipeline outgrows it.`}
+                title="Pay for the pipeline you run"
+                lead={`Start on a ${trialDays}-day free trial. Move up when your pipeline outgrows it.`}
                 nowrap
               />
               <Link
                 href="/pricing"
-                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-[#0F3C99] hover:underline dark:text-[#7BA4FF]"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-mkt-accent hover:underline"
               >
                 Compare every plan
                 <ArrowUpRight className="h-4 w-4" />
@@ -684,19 +564,18 @@ export function LandingPageContent() {
                   <Reveal delay={VISIBLE_PLANS * 80} className="col-span-full">
                     <Link
                       href="/pricing"
-                      className="group flex flex-col items-start gap-4 rounded-2xl border border-dashed border-slate-300 bg-[#FFFFFF] p-6 transition-colors hover:border-[#ED881C] hover:bg-[#ED881C]/[0.04] dark:border-white/15 dark:bg-white/[0.03] dark:hover:bg-[#ED881C]/[0.06] sm:flex-row sm:items-center sm:justify-between sm:p-7"
+                      className="group flex flex-col items-start gap-4 rounded-2xl border border-dashed border-slate-300 bg-mkt-surface p-6 transition-colors hover:border-mkt-amber hover:bg-mkt-amber/[0.04] dark:border-white/15 dark:bg-white/[0.03] dark:hover:bg-mkt-amber/[0.06] sm:flex-row sm:items-center sm:justify-between sm:p-7"
                     >
                       <div>
-                        <p className="font-display text-lg font-bold tracking-[-0.02em] text-[#08132E] dark:text-white">
-                          {hiddenPlanCount} more {hiddenPlanCount === 1 ? "plan" : "plans"} to
-                          explore
+                        <p className="text-lg font-bold tracking-[-0.02em] text-mkt-ink">
+                          {hiddenPlanCount} more {hiddenPlanCount === 1 ? "plan" : "plans"}
                         </p>
                         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                          Full quotas, a feature-by-feature comparison and enterprise options.
+                          Full quotas, side-by-side features and enterprise options.
                         </p>
                       </div>
-                      <span className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-300 px-5 text-sm font-semibold text-[#08132E] transition-colors group-hover:border-[#ED881C] group-hover:text-[#B45B0C] dark:border-white/15 dark:text-white dark:group-hover:text-[#F0A44E]">
-                        Explore all plans
+                      <span className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl border border-slate-300 px-5 text-sm font-semibold text-mkt-ink transition-colors group-hover:border-mkt-amber group-hover:text-mkt-amber-ink dark:border-white/15 dark:group-hover:text-mkt-amber-ink">
+                        See all plans
                         <ArrowRight className="h-4 w-4" />
                       </span>
                     </Link>
@@ -706,7 +585,7 @@ export function LandingPageContent() {
             </>
           ) : (
             <Reveal>
-              <div className="mt-7 rounded-2xl border border-slate-200/80 bg-[#FFFFFF] p-8 text-center dark:border-white/10 dark:bg-white/[0.03] sm:mt-9 sm:p-10">
+              <div className="mt-7 rounded-2xl border border-slate-200/80 bg-mkt-surface p-8 text-center dark:border-white/10 dark:bg-white/[0.03] sm:mt-9 sm:p-10">
                 <p className="text-base text-slate-600 dark:text-slate-300">
                   {plansFailed
                     ? "Plan details live on the pricing page."
@@ -714,7 +593,7 @@ export function LandingPageContent() {
                 </p>
                 <Link
                   href="/pricing"
-                  className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#0F3C99] px-6 text-sm font-semibold text-white transition-colors hover:bg-[#0E3B98]"
+                  className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-mkt-accent-solid px-6 text-sm font-semibold text-white transition-colors hover:bg-mkt-accent-solid-hover"
                 >
                   View pricing
                   <ArrowRight className="h-4 w-4" />
@@ -728,36 +607,34 @@ export function LandingPageContent() {
       {/* --------------------------------------------------------- About */}
       <section
         id="about"
-        className={`scroll-mt-16 border-y border-slate-200/80 bg-[#FFFFFF] dark:border-white/10 dark:bg-white/[0.02] sm:scroll-mt-20 ${SECTION_Y}`}
+        className={`scroll-mt-16 border-y border-slate-200/80 bg-mkt-surface dark:border-white/10 dark:bg-white/[0.02] sm:scroll-mt-20 ${SECTION_Y}`}
       >
         <div className={SHELL}>
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)] lg:gap-12">
             <Reveal>
               <SectionHeading
                 eyebrow="About"
-                title="We're on a mission to transform hiring"
+                title="Built by people who were drowning in resumes"
               />
               <div className="mt-5 space-y-3 text-base leading-relaxed text-slate-600 dark:text-slate-400">
                 <p>
-                  TalentFlow started when our founders experienced the challenges of
-                  modern recruitment firsthand. As hiring managers at growing tech
-                  companies, they spent countless hours sifting through resumes,
-                  coordinating interviews and managing candidate pipelines.
+                  TalentFlow began as a spreadsheet. Our founders were hiring managers at
+                  fast-growing tech companies, where every open role meant hundreds of
+                  resumes read by hand, interviews chased over email, and good candidates
+                  lost in the gaps.
                 </p>
                 <p>
-                  They knew there had to be a better way, so they built TalentFlow — an
-                  AI-powered platform that automates the tedious parts of recruiting while
-                  keeping the human element at its core.
+                  So they built the system they wanted: one that does the sorting, scoring
+                  and scheduling, and leaves the judgement to people.
                 </p>
                 <p>
-                  Today TalentFlow helps thousands of companies find and hire the best
-                  talent, processing millions of resumes a year for teams that range from
+                  Today it processes millions of resumes a year for teams from ten-person
                   startups to Fortune 500 enterprises.
                 </p>
               </div>
               <Link
                 href="/about"
-                className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F3C99] hover:underline dark:text-[#7BA4FF]"
+                className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-mkt-accent hover:underline"
               >
                 Read our story
                 <ArrowUpRight className="h-4 w-4" />
@@ -769,12 +646,12 @@ export function LandingPageContent() {
                 {ABOUT_FIGURES.map((figure) => (
                   <div
                     key={figure.label}
-                    className="bg-[#FFFFFF] p-6 dark:bg-[#0C1732] sm:p-8"
+                    className="bg-mkt-surface p-6 dark:bg-mkt-surface sm:p-8"
                   >
-                    <dt className="font-data text-[11px] uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                       {figure.label}
                     </dt>
-                    <dd className="font-data mt-2 text-2xl font-medium tabular-nums text-[#08132E] dark:text-white sm:text-3xl">
+                    <dd className="mt-2 text-2xl font-extrabold tabular-nums tracking-[-0.02em] text-mkt-ink sm:text-3xl">
                       {figure.value}
                     </dd>
                   </div>
@@ -786,20 +663,20 @@ export function LandingPageContent() {
       </section>
 
       {/* ----------------------------------------------------- Final CTA */}
-      <section className={`relative overflow-hidden bg-[#08132E] text-white ${SECTION_Y}`}>
+      <section className={`relative overflow-hidden bg-mkt-navy text-white ${SECTION_Y}`}>
         <div className={`${SHELL} relative text-center`}>
           <Reveal>
-            <h2 className="font-display mx-auto max-w-3xl text-3xl font-bold tracking-[-0.03em] sm:text-5xl">
-              Ready to transform your hiring?
+            <h2 className="mx-auto max-w-3xl text-3xl font-extrabold tracking-[-0.035em] sm:text-5xl">
+              Your next hire is already in the pile.
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-base text-white/75 sm:text-lg">
-              Join 2,500+ companies using TalentFlow to build great teams faster.
+              2,500+ recruiting teams use TalentFlow to find them faster.
             </p>
             <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
                 href={TRIAL_LINK}
                 prefetch={false}
-                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#FFFFFF] px-7 text-sm font-semibold text-[#08132E] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ED881C] focus-visible:ring-offset-2 focus-visible:ring-offset-[#08132E] dark:bg-[#ED881C] dark:text-[#08132E] dark:hover:bg-[#F0A44E] dark:focus-visible:ring-white sm:w-auto sm:text-base"
+                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-mkt-surface px-7 text-sm font-semibold text-mkt-ink transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-amber focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-navy dark:bg-mkt-amber dark:text-mkt-navy dark:hover:bg-mkt-amber-ink dark:focus-visible:ring-white sm:w-auto sm:text-base"
               >
                 Start free trial
                 <ArrowRight className="h-4 w-4" />
@@ -811,7 +688,7 @@ export function LandingPageContent() {
                 View pricing
               </Link>
             </div>
-            <ul className="mt-7 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 font-data text-xs uppercase tracking-[0.16em] text-white/60">
+            <ul className="mt-7 flex flex-wrap items-center justify-center gap-x-8 gap-y-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/60">
               <li className="flex items-center gap-2">
                 <Shield className="h-4 w-4" />
                 SOC 2 certified
@@ -835,20 +712,20 @@ export function LandingPageContent() {
           role="dialog"
           aria-modal="true"
           aria-label="TalentFlow product demo"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#08132E]/90 p-3 backdrop-blur-sm sm:p-6"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-mkt-navy/90 p-3 backdrop-blur-sm sm:p-6"
           onClick={() => setDemoModalOpen(false)}
         >
           <div
-            className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[#0C1732] text-white shadow-2xl"
+            className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-mkt-navy-surface text-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
               <div>
-                <p className="font-data text-[11px] uppercase tracking-[0.18em] text-white/60">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/60">
                   Product demo
                 </p>
-                <h3 className="font-display mt-1 text-lg font-bold tracking-[-0.02em]">
-                  See TalentFlow end to end
+                <h3 className="mt-1 text-lg font-bold tracking-[-0.02em]">
+                  One role, start to finish
                 </h3>
               </div>
               <button
@@ -863,14 +740,15 @@ export function LandingPageContent() {
 
             <div className="px-5 py-6 sm:px-8 sm:py-8">
               <p className="text-sm text-white/70">
-                Watch how TalentFlow moves a role from resume upload to hiring decision.
+                Follow one role from bulk upload to a ranked shortlist and a booked
+                interview.
               </p>
               <ul className="mt-5 grid gap-3 sm:grid-cols-2">
                 {[
-                  { icon: Upload, text: "Bulk resume upload and parsing" },
-                  { icon: Search, text: "AI-powered candidate scoring" },
-                  { icon: Send, text: "Automated assessment delivery" },
-                  { icon: Video, text: "AI video interview analysis" },
+                  { icon: Upload, text: "Bulk upload and parsing" },
+                  { icon: Search, text: "Candidate scoring and ranking" },
+                  { icon: Send, text: "Assessments sent automatically" },
+                  { icon: Video, text: "Video interview analysis" },
                 ].map((item) => {
                   const Icon = item.icon;
                   return (
@@ -891,7 +769,7 @@ export function LandingPageContent() {
                 <Link
                   href={TRIAL_LINK}
                   prefetch={false}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#FFFFFF] px-6 text-sm font-semibold text-[#08132E] transition-colors hover:bg-slate-100"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-mkt-surface px-6 text-sm font-semibold text-mkt-ink transition-colors hover:bg-slate-100"
                 >
                   Start free trial
                   <ArrowRight className="h-4 w-4" />

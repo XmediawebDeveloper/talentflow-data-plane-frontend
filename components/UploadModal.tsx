@@ -1,6 +1,7 @@
 'use client';
 
-import { X, Upload, File, Trash2, FolderPlus, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, CreditCard, Target, Eye } from 'lucide-react';
+import { X, Upload, File, Trash2, FolderPlus, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, CreditCard, Target } from 'lucide-react';
+import ViewResumeButton from '@/components/ui/view-resume-button';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
@@ -8,6 +9,7 @@ import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } fr
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { FOLDER_NAME_MAX_LENGTH } from './FolderTree';
 import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
 import ErrorModal from './ErrorModal';
 
@@ -900,15 +902,16 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                               )}
                             </div>
                             {onViewResume && (
-                              <button
+                              <ViewResumeButton
                                 onClick={() => {
                                   onViewResume(error.existingResume!.id);
                                   onClose();
                                 }}
-                                className="px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors flex-shrink-0 w-full sm:w-auto text-center"
-                              >
-                                View Resume
-                              </button>
+                                // Layout-only additions — the row stacks full
+                                // width on mobile and must not shrink beside
+                                // the duplicate's details on desktop.
+                                className="flex-shrink-0 w-full sm:w-auto justify-center"
+                              />
                             )}
                           </div>
                         </div>
@@ -988,10 +991,13 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                           }
                         }}
                         placeholder="e.g., Senior Developers, Frontend Team..."
+                        maxLength={FOLDER_NAME_MAX_LENGTH}
                         autoFocus
                         className="w-full px-3 sm:px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-sm"
                       />
-                      <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1">Press Enter to create, Esc to cancel</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1">
+                        Press Enter to create, Esc to cancel · {newFolderName.length}/{FOLDER_NAME_MAX_LENGTH}
+                      </p>
                     </div>
                   </div>
 

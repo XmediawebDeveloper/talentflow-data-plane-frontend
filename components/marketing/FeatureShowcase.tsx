@@ -18,12 +18,12 @@ function PreviewFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-[#FFFFFF] p-4 shadow-[0_20px_50px_-30px_rgba(8,19,46,0.45)] dark:border-white/10 dark:bg-[#0C1732] sm:p-5">
-      <p className="font-data border-b border-slate-100 pb-3 text-[10px] uppercase tracking-[0.18em] text-slate-500 dark:border-white/10 dark:text-slate-400 sm:text-[11px]">
+    <div className="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-mkt-surface p-4 shadow-[0_20px_50px_-30px_rgba(8,19,46,0.45)] dark:border-white/10 sm:p-5">
+      <p className="border-b border-slate-100 pb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:border-white/10 dark:text-slate-400 sm:text-[11px]">
         {label}
       </p>
       <div className="flex-1 py-4">{children}</div>
-      <p className="font-data border-t border-slate-100 pt-3 text-[10px] tracking-wide text-slate-500 dark:border-white/10 dark:text-slate-400 sm:text-[11px]">
+      <p className="border-t border-slate-100 pt-3 text-[10px] font-medium tracking-wide text-slate-500 dark:border-white/10 dark:text-slate-400 sm:text-[11px]">
         {footer}
       </p>
     </div>
@@ -48,19 +48,19 @@ function ScoringPreview() {
               <span className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10 sm:block">
                 <span
                   className={`block h-full rounded-full ${
-                    row.value >= 80 ? "bg-[#079CC4]" : row.value >= 60 ? "bg-[#ED881C]" : "bg-slate-400"
+                    row.value >= 80 ? "bg-mkt-cyan" : row.value >= 60 ? "bg-mkt-amber" : "bg-slate-400"
                   }`}
                   style={{ width: `${row.value}%` }}
                 />
               </span>
-              <span className="font-data w-9 text-right text-sm tabular-nums text-[#08132E] dark:text-white">
+              <span className="w-9 text-right text-sm font-semibold tabular-nums text-mkt-ink">
                 {row.value}
               </span>
             </span>
           </li>
         ))}
       </ul>
-      <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#079CC4]/10 px-2.5 py-1 text-xs font-medium text-[#0A7A99] dark:text-[#5CC8E6]">
+      <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-mkt-cyan/10 px-2.5 py-1 text-xs font-medium text-mkt-cyan-ink">
         <Check className="h-3.5 w-3.5" />
         Strong match · shortlist
       </p>
@@ -77,7 +77,7 @@ function AssessmentPreview() {
 
   return (
     <PreviewFrame label="Question 3 of 12 · React" footer="Graded the moment it is submitted">
-      <p className="text-sm font-medium text-[#08132E] dark:text-white">
+      <p className="text-sm font-medium text-mkt-ink">
         What does useMemo do in a React component?
       </p>
       <ul className="mt-3 space-y-2">
@@ -86,12 +86,12 @@ function AssessmentPreview() {
             key={option.text}
             className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 text-sm ${
               option.correct
-                ? "border-[#079CC4]/40 bg-[#079CC4]/[0.07] text-[#08132E] dark:text-white"
+                ? "border-mkt-cyan/40 bg-mkt-cyan/[0.07] text-mkt-ink"
                 : "border-slate-200/80 text-slate-600 dark:border-white/10 dark:text-slate-400"
             }`}
           >
             {option.correct ? (
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#079CC4]" />
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-mkt-cyan" />
             ) : (
               <X className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />
             )}
@@ -114,7 +114,7 @@ function InterviewPreview() {
       <ul className="space-y-3">
         {transcript.map((line) => (
           <li key={line.time} className="flex gap-3">
-            <span className="font-data pt-0.5 text-xs tabular-nums text-slate-400 dark:text-slate-500">
+            <span className="pt-0.5 text-xs font-medium tabular-nums text-slate-400 dark:text-slate-500">
               {line.time}
             </span>
             <span className="text-sm text-slate-600 dark:text-slate-300">{line.text}</span>
@@ -128,10 +128,10 @@ function InterviewPreview() {
           { label: "Sentiment", value: "+0.62" },
         ].map((metric) => (
           <div key={metric.label}>
-            <dt className="font-data text-[10px] uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+            <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
               {metric.label}
             </dt>
-            <dd className="font-data mt-0.5 text-sm tabular-nums text-[#08132E] dark:text-white">
+            <dd className="mt-0.5 text-sm font-semibold tabular-nums text-mkt-ink">
               {metric.value}
             </dd>
           </div>
@@ -152,17 +152,17 @@ function CollaborationPreview() {
       <ul className="space-y-3">
         {thread.map((entry) => (
           <li key={entry.initials} className="flex items-start gap-3">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#0F3C99]/10 text-[11px] font-semibold text-[#0F3C99] dark:bg-white/10 dark:text-slate-200">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-mkt-accent-solid/10 text-[11px] font-semibold text-mkt-accent dark:bg-white/10 dark:text-slate-200">
               {entry.initials}
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-[#08132E] dark:text-white">{entry.name}</span>
+                <span className="text-sm font-medium text-mkt-ink">{entry.name}</span>
                 <span
-                  className={`font-data rounded-full px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] ${
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
                     entry.verdict === "Advance"
-                      ? "bg-[#079CC4]/12 text-[#0A7A99] dark:text-[#5CC8E6]"
-                      : "bg-[#ED881C]/12 text-[#B45B0C] dark:text-[#F0A44E]"
+                      ? "bg-mkt-cyan/12 text-mkt-cyan-ink"
+                      : "bg-mkt-amber/12 text-mkt-amber-ink"
                   }`}
                 >
                   {entry.verdict}
@@ -275,16 +275,16 @@ export function FeatureShowcase() {
               aria-controls={`feature-panel-${feature.id}`}
               tabIndex={selected ? 0 : -1}
               onClick={() => setActiveId(feature.id)}
-              className={`group relative shrink-0 snap-start rounded-xl px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F3C99] lg:w-full lg:rounded-none lg:border-b lg:border-slate-200/80 lg:px-0 lg:py-5 lg:dark:border-white/10 ${
+              className={`group relative shrink-0 snap-start rounded-xl px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid lg:w-full lg:rounded-none lg:border-b lg:border-slate-200/80 lg:px-0 lg:py-5 lg:dark:border-white/10 ${
                 selected
-                  ? "bg-[#0F3C99]/[0.06] lg:bg-transparent"
+                  ? "bg-mkt-accent-solid/[0.06] lg:bg-transparent"
                   : "hover:bg-slate-100/70 lg:hover:bg-transparent dark:hover:bg-white/[0.04]"
               }`}
             >
               {/* Active marker: a rule that only the chosen stage carries. */}
               <span
                 aria-hidden="true"
-                className={`absolute left-0 top-0 hidden h-full w-[3px] rounded-full bg-[#ED881C] transition-opacity lg:block ${
+                className={`absolute left-0 top-0 hidden h-full w-[3px] rounded-full bg-mkt-amber transition-opacity lg:block ${
                   selected ? "opacity-100" : "opacity-0"
                 }`}
               />
@@ -292,19 +292,19 @@ export function FeatureShowcase() {
                 <span
                   className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition-colors ${
                     selected
-                      ? "bg-[#0F3C99] text-white"
-                      : "bg-[#0F3C99]/8 text-[#0F3C99] dark:bg-white/10 dark:text-[#7BA4FF]"
+                      ? "bg-mkt-accent-solid text-white"
+                      : "bg-mkt-accent-solid/8 text-mkt-accent dark:bg-white/10"
                   }`}
                 >
                   <Icon className="h-4.5 w-4.5" />
                 </span>
                 <span className="min-w-0">
-                  <span className="font-data block text-[10px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                     {feature.stage}
                   </span>
                   <span
-                    className={`font-display block whitespace-nowrap text-base font-bold tracking-[-0.02em] lg:text-lg ${
-                      selected ? "text-[#08132E] dark:text-white" : "text-slate-600 dark:text-slate-300"
+                    className={`block whitespace-nowrap text-base font-bold tracking-[-0.02em] lg:text-lg ${
+                      selected ? "text-mkt-ink" : "text-slate-600 dark:text-slate-300"
                     }`}
                   >
                     {feature.title}

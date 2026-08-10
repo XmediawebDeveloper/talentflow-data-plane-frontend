@@ -1385,17 +1385,41 @@ export default function ResumeScoringPage({
       <main className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Resume Scoring', onClick: () => {
-            setViewMode('history');
-            setSelectedHistoryItem(null);
-            setSelectedStatusFilter('all');
-          } },
-          { label: selectedHistoryItem.jobTitle },
-        ]} />
-        {/* Job header — Prev/Next now sits inside the card, immediately before the
-            Score New Resumes action, instead of on its own row above. */}
+        {/* Previous / Next rides inside the breadcrumb bar, as on job-details,
+            so it stays reachable while the sticky crumb is pinned. */}
+        <PageBreadcrumb
+          className="mb-4 md:mb-6"
+          items={[
+            { label: 'Dashboard', href: '/dashboard' },
+            { label: 'Resume Scoring', onClick: () => {
+              setViewMode('history');
+              setSelectedHistoryItem(null);
+              setSelectedStatusFilter('all');
+            } },
+            { label: selectedHistoryItem.jobTitle },
+          ]}
+          actions={scoredHistory.length > 1 ? (() => {
+            const historyIdx = scoredHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
+            const prevItem = historyIdx > 0 ? scoredHistory[historyIdx - 1] : null;
+            const nextItem = historyIdx >= 0 && historyIdx < scoredHistory.length - 1 ? scoredHistory[historyIdx + 1] : null;
+            const goToHistoryItem = (item: ScoredResumeData) => {
+              setSelectedHistoryItem(item);
+              setSelectedScoredResumes([]);
+              setSelectedStatusFilter('all');
+              onLoadJdScores?.(item.jobId, item.jobTitle);
+            };
+            return (
+              <RecordPager
+                currentIndex={historyIdx >= 0 ? historyIdx : 0}
+                totalCount={scoredHistory.length}
+                onPrev={prevItem ? () => goToHistoryItem(prevItem) : undefined}
+                onNext={nextItem ? () => goToHistoryItem(nextItem) : undefined}
+              />
+            );
+          })() : undefined}
+        />
+        {/* Job header — the Prev/Next that used to sit beside Score New Resumes
+            moved into the breadcrumb. */}
         <div className="mb-5">
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -1437,27 +1461,6 @@ export default function ResumeScoringPage({
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto sm:flex-shrink-0">
                 {/* Prev/Next — placed before the Score New Resumes action */}
-                {scoredHistory.length > 1 && (() => {
-                  const historyIdx = scoredHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
-                  const prevItem = historyIdx > 0 ? scoredHistory[historyIdx - 1] : null;
-                  const nextItem = historyIdx >= 0 && historyIdx < scoredHistory.length - 1 ? scoredHistory[historyIdx + 1] : null;
-                  const goToHistoryItem = (item: ScoredResumeData) => {
-                    setSelectedHistoryItem(item);
-                    setSelectedScoredResumes([]);
-                    setSelectedStatusFilter('all');
-                    onLoadJdScores?.(item.jobId, item.jobTitle);
-                  };
-                  return (
-                    <RecordPager
-                      currentIndex={historyIdx >= 0 ? historyIdx : 0}
-                      totalCount={scoredHistory.length}
-                      onPrev={prevItem ? () => goToHistoryItem(prevItem) : undefined}
-                      onNext={nextItem ? () => goToHistoryItem(nextItem) : undefined}
-                      className="justify-between sm:justify-end"
-                    />
-                  );
-                })()}
-
                 {canRunScoring && (
                   <button
                     onClick={() => setViewMode('new')}

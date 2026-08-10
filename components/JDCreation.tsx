@@ -647,6 +647,9 @@ interface JDCreationProps {
   isEmbedded?: boolean;  // Flag to indicate embedded mode
 }
 
+// How many skills a category shows before the rest collapse behind "+N more".
+const SKILL_PREVIEW_LIMIT = 10;
+
 interface DraggableSkillProps {
   skill: string;
   index: number;
@@ -996,7 +999,6 @@ const FALLBACK_EXPERIENCE_LEVELS: ExperienceLevel[] = [
   { id: 5, code: 'architect', label: 'Architect Level (10+ Years)', min_years: 10, max_years: null, sort_order: 5, is_active: true },
   { id: 6, code: 'management', label: 'Management Level (10+ Years)', min_years: 10, max_years: null, sort_order: 6, is_active: true },
 ];
-const CUSTOM_EXPERIENCE_VALUE = '__custom_experience__';
 
 const FALLBACK_EDUCATION_LEVELS: EducationLevel[] = [
   { id: 1, code: 'diploma', label: 'Diploma', level: 1, sort_order: 1, is_active: true },
@@ -1232,6 +1234,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [usCitiesByState, setUsCitiesByState] = useState<Record<string, string[]>>({});
   const [isLoadingUsLocations, setIsLoadingUsLocations] = useState(false);
   
+  // Long skill lists are collapsed to the first SKILL_PREVIEW_LIMIT entries so
+  // one column can't push the other two off the fold; the rest sit behind a
+  // "+N more" toggle, per category.
+  const [expandedSkillCategories, setExpandedSkillCategories] = useState<{
+    mustHaveSkills: boolean;
+    niceToHaveSkills: boolean;
+  }>({ mustHaveSkills: false, niceToHaveSkills: false });
+
+  const toggleSkillCategory = (category: 'mustHaveSkills' | 'niceToHaveSkills') =>
+    setExpandedSkillCategories(prev => ({ ...prev, [category]: !prev[category] }));
+
   // Inline editing states
   const [editingSkillIndex, setEditingSkillIndex] = useState<{ category: 'mustHaveSkills' | 'niceToHaveSkills'; index: number } | null>(null);
   const [editingSkillValue, setEditingSkillValue] = useState('');
@@ -1323,6 +1336,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Lets handleNext / handleConfirmPublish detect "no changes since load" and skip
   // the extraction / reformat LLM calls on a no-op edit pass-through.
   const stage1LoadBaseline = useRef<{ jobTitle: string; aiPrompt: string; generatedJD: string; manualJD: string } | null>(null);
+  // Tracks which creation mode produced the CURRENT extractedData. If the user
+  // switches AI<->Manual and re-extracts, the source content is fundamentally
+  // different, so the extraction must NOT preserve the previous mode's values
+  // (that caused old AI-generated data to linger after switching to Manual).
+  const lastExtractionSourceMode = useRef<CreationMode | null>(null);
 
   // Validation errors for inline display
   const [validationErrors, setValidationErrors] = useState<{
@@ -1639,7 +1657,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const normalized = value?.toLowerCase().trim() || '';
     if (!normalized) return {};
 
-    const rangeMatch = normalized.match(/(\d{1,2})\s*(?:-|to|–)\s*(\d{1,2})/);
+    const rangeMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*(?:-|to|–)\s*(\d{1,2}(?:\.\d+)?)/);
     if (rangeMatch) {
       const first = Number(rangeMatch[1]);
       const second = Number(rangeMatch[2]);
@@ -1651,7 +1669,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     }
 
-    const plusMatch = normalized.match(/(\d{1,2})\s*(?:\+|plus|or more|and above)/);
+    const plusMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*(?:\+|plus|or more|and above)/);
     if (plusMatch) {
       const years = Number(plusMatch[1]);
       if (!Number.isNaN(years)) {
@@ -1659,7 +1677,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     }
 
-    const minimumMatch = normalized.match(/(?:minimum|min\.?|at least)\s*(\d{1,2})/);
+    const minimumMatch = normalized.match(/(?:minimum|min\.?|at least)\s*(\d{1,2}(?:\.\d+)?)/);
     if (minimumMatch) {
       const years = Number(minimumMatch[1]);
       if (!Number.isNaN(years)) {
@@ -1667,7 +1685,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     }
 
-    const singleMatch = normalized.match(/(\d{1,2})\s*(?:years?|yrs?)/);
+    const singleMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)/);
     if (singleMatch) {
       const years = Number(singleMatch[1]);
       if (!Number.isNaN(years)) {
@@ -1676,6 +1694,76 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
 
     return {};
+  };
+
+  // ── NUMBERS-FIRST experience helpers ──────────────────────────────────────
+  // The experience field stores the recruiter's ACTUAL years as a canonical
+  // "From-To Years" string ("4-7 Years", "7+ Years") instead of a fixed level
+  // bucket. These helpers convert between that string and raw numbers, and
+  // derive a level CODE from the numbers so downstream screens/scoring that read
+  // job_level keep working unchanged.
+  const buildExperienceYearsString = (min?: number | null, max?: number | null): string => {
+    const hasMin = min !== null && min !== undefined && !Number.isNaN(Number(min));
+    const hasMax = max !== null && max !== undefined && !Number.isNaN(Number(max));
+    if (hasMin && hasMax) return `${Number(min)}-${Number(max)} Years`;
+    if (hasMin) return `${Number(min)}+ Years`;
+    if (hasMax) return `0-${Number(max)} Years`;
+    return '';
+  };
+
+  const parseExperienceYearsString = (value?: string | null): { from: string; to: string } => {
+    const range = inferExperienceRangeFromCustomValue(value || '');
+    return {
+      from: range.experienceMin !== undefined ? String(range.experienceMin) : '',
+      to: range.experienceMax !== undefined ? String(range.experienceMax) : '',
+    };
+  };
+
+  const deriveExperienceCodeFromYears = (min?: number | null, max?: number | null): string => {
+    const value =
+      min !== null && min !== undefined && !Number.isNaN(Number(min))
+        ? Number(min)
+        : max !== null && max !== undefined && !Number.isNaN(Number(max))
+          ? Number(max)
+          : null;
+    if (value === null) return '';
+    const levels = experienceLevels || [];
+    if (levels.length) {
+      const containing = levels.filter((l) => {
+        const lo = l.min_years ?? 0;
+        const hi = l.max_years == null ? Number.POSITIVE_INFINITY : l.max_years;
+        return value >= lo && value <= hi;
+      });
+      if (containing.length) {
+        containing.sort((a, b) => {
+          const wa = (a.max_years == null ? Number.POSITIVE_INFINITY : a.max_years) - (a.min_years ?? 0);
+          const wb = (b.max_years == null ? Number.POSITIVE_INFINITY : b.max_years) - (b.min_years ?? 0);
+          return wa - wb;
+        });
+        return containing[0].code;
+      }
+      const byMin = [...levels].sort((a, b) => (b.min_years ?? 0) - (a.min_years ?? 0));
+      if (byMin.length) return byMin[0].code;
+    }
+    // Fallback thresholds when master levels are unavailable.
+    if (value >= 7) return 'senior';
+    if (value >= 5) return 'mid';
+    if (value >= 2) return 'junior';
+    return 'entry';
+  };
+
+  // When the JD is completely silent on experience (no years, no level word),
+  // apply the recruiter's fallback rule: a SIMPLE JD (few skills/tools) defaults
+  // to the lowest master level's years; a COMPLEX JD (many skills/tools) is left
+  // BLANK so the recruiter fills From/To manually after extraction.
+  const EXPERIENCE_COMPLEX_SKILL_THRESHOLD = 6;
+  const applyExperienceFallback = (mapped: string, skillCount: number): string => {
+    if (mapped) return mapped;
+    if (skillCount >= EXPERIENCE_COMPLEX_SKILL_THRESHOLD) return '';
+    const levels = experienceLevels || [];
+    if (!levels.length) return '';
+    const lowest = [...levels].sort((a, b) => (a.min_years ?? 0) - (b.min_years ?? 0))[0];
+    return buildExperienceYearsString(lowest.min_years, lowest.max_years);
   };
 
   const resolveExperiencePayload = (value?: string | null) => {
@@ -1700,8 +1788,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
 
     const { experienceMin, experienceMax } = inferExperienceRangeFromCustomValue(normalized);
+    // Derive a level CODE from the raw years so downstream consumers that read
+    // job_level (scoring, interview, list/badge screens) keep working; keep the
+    // raw text only if no master level maps to the number.
+    const derivedCode = deriveExperienceCodeFromYears(experienceMin, experienceMax);
     return {
-      jobLevel: normalized,
+      jobLevel: derivedCode || normalized,
       experienceMin,
       experienceMax,
       isCustom: true,
@@ -1895,19 +1987,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
 
       if (!experienceValue) {
-        return rawExperienceValue;
+        // Could not resolve the level word → let the caller apply its fallback.
+        return '';
       }
     }
 
-    return experienceValue;
+    // NUMBERS-FIRST OUTPUT: always return a canonical "From-To Years" string.
+    // - explicit years in the JD -> use those numbers verbatim
+    // - only a level word         -> use the matched master level's From/To years
+    if (hasExpMin || hasExpMax) {
+      return buildExperienceYearsString(hasExpMin ? expMin : null, hasExpMax ? expMax : null);
+    }
+    const matchedLevel = getExperienceLevelByCode(experienceValue);
+    return matchedLevel ? buildExperienceYearsString(matchedLevel.min_years, matchedLevel.max_years) : '';
   };
 
-  const selectedExperienceLevel = getExperienceLevelByCode(extractedData.experience);
-  const experienceSelectValue = selectedExperienceLevel
-    ? selectedExperienceLevel.code
-    : showCustomExperienceInput
-      ? CUSTOM_EXPERIENCE_VALUE
-      : '';
 
   // Check max_jobs quota on mount
   useEffect(() => {
@@ -2160,7 +2254,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const processExtractedParams = (params: any, experienceSourceText: string) => {
       console.log('[TalentFlow] Processing extracted params from generation:', params);
 
-      const expValue = mapExtractedExperienceValue(params, experienceSourceText);
+      const expValue = applyExperienceFallback(
+        mapExtractedExperienceValue(params, experienceSourceText),
+        (params.must_have_skills?.length || 0) + (params.nice_to_have_skills?.length || 0)
+      );
       const hasExplicitExperienceYears = (
         params.experience_min !== null
         && params.experience_min !== undefined
@@ -2171,9 +2268,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         && !Number.isNaN(Number(params.experience_max))
       );
 
-      // When in edit mode, preserve existing values if extraction returns empty arrays
-      const isEditMode = !!editingId;
+      // When in edit mode, preserve existing values if extraction returns empty
+      // arrays — but NOT when the creation mode changed since the last extraction
+      // (switching Manual->AI must not preserve stale Manual-derived data).
+      const extractionSourceModeChanged =
+        lastExtractionSourceMode.current !== null && lastExtractionSourceMode.current !== mode;
+      const isEditMode = !!editingId && !extractionSourceModeChanged;
       const nextExperienceValue = expValue || (isEditMode ? extractedData.experience : '');
+      lastExtractionSourceMode.current = mode;
 
       setShowCustomExperienceInput(Boolean(nextExperienceValue && !getExperienceLevelByCode(nextExperienceValue)));
       setExperienceYearsExplicit(hasExplicitExperienceYears);
@@ -2630,14 +2732,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         hasExpMax
       });
 
-      const experienceValue = mapExtractedExperienceValue(
-        {
-          experience_min: params.experience_min,
-          experience_max: params.experience_max,
-          experience_level: params.experience_level,
-          job_level: params.job_level,
-        },
-        jdText
+      const experienceValue = applyExperienceFallback(
+        mapExtractedExperienceValue(
+          {
+            experience_min: params.experience_min,
+            experience_max: params.experience_max,
+            experience_level: params.experience_level,
+            job_level: params.job_level,
+          },
+          jdText
+        ),
+        (params.must_have_skills?.length || 0) + (params.nice_to_have_skills?.length || 0)
       );
 
       // Log if still no experience extracted
@@ -2779,8 +2884,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
 
       // When in edit mode, preserve existing values if extraction returns empty arrays
-      // This prevents losing manually edited comments/skills when re-extracting
-      const isEditMode = !!editingId;
+      // This prevents losing manually edited comments/skills when re-extracting.
+      // BUT if the creation mode changed since the last extraction (e.g. the user
+      // generated via AI, went back, switched to Manual and pasted new content),
+      // the source is fundamentally different — treat it as a FRESH extraction so
+      // stale prior-mode (AI-generated) data does not linger in the other fields.
+      const extractionSourceModeChanged =
+        lastExtractionSourceMode.current !== null && lastExtractionSourceMode.current !== mode;
+      const isEditMode = !!editingId && !extractionSourceModeChanged;
 
       // FIX: If user has modified extracted data (deleted/edited skills/comments), preserve their changes
       // Don't let AI extraction overwrite user's manual edits
@@ -2855,6 +2966,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         niceToHaveComments: extraction.niceToHaveComments
       });
       setExtractedData(extraction);
+      lastExtractionSourceMode.current = mode;
       // We now hold the authoritative extracted data in state. Saving below sets
       // the JD id into the URL (ensureJDCreationUrl), which makes the page re-fetch
       // the JD and re-populate `editingJD`. Without this flag, the load effect would
@@ -3045,6 +3157,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }));
       setNewSkill('');
       setEditingCategory(null);
+      // A new skill appends to the end, which is behind the "+N more" fold on a
+      // long list — expand so the recruiter sees what they just added.
+      setExpandedSkillCategories(prev => ({ ...prev, [category]: true }));
       markExtractedDataModified();
 
       // Clear validation error when skill is added
@@ -4816,7 +4931,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       // Restore the creation mode based on saved creation_method
       if (effectiveEditingJD.creation_method) {
-        setMode(effectiveEditingJD.creation_method === 'ai_generated' ? 'ai' : 'manual');
+        const loadedMode: CreationMode = effectiveEditingJD.creation_method === 'ai_generated' ? 'ai' : 'manual';
+        setMode(loadedMode);
+        lastExtractionSourceMode.current = loadedMode;
       }
 
       // Load extracted data if:
@@ -4826,37 +4943,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Calculate actual values first, then set Required based on whether value exists
         const educationValue = effectiveEditingJD.education_requirements?.degree || '';
 
-        // Map experience_min/max to level codes (entry, junior, mid, senior, architect, management)
-        const mapExpToLevel = (min: number | null | undefined, max: number | null | undefined): string => {
-          // Check for null/undefined but allow 0 as valid value
-          if (min === null || min === undefined) return '';
-
-          // 10+ years
-          if (min >= 10) {
-            // Check JD description for architect/management keywords
-            const desc = (effectiveEditingJD.description || '').toLowerCase();
-            const isArchitect = desc.includes('architect') || desc.includes('architecture');
-            const isManagement = desc.includes('manager') || desc.includes('management') || desc.includes('director') || desc.includes('lead');
-
-            if (isArchitect && !isManagement) return 'architect';
-            if (isManagement) return 'management';
-            return 'senior';
+        // NUMBERS-FIRST: prefill the From/To years from the saved range. For
+        // legacy JDs that only stored a level code (job_level) and no numbers,
+        // fall back to that level's master From/To range so the boxes still fill.
+        let experienceValue = buildExperienceYearsString(
+          effectiveEditingJD.experience_min,
+          effectiveEditingJD.experience_max
+        );
+        if (!experienceValue && effectiveEditingJD.job_level) {
+          const legacyLevel = getExperienceLevelByCode(effectiveEditingJD.job_level);
+          if (legacyLevel) {
+            experienceValue = buildExperienceYearsString(legacyLevel.min_years, legacyLevel.max_years);
           }
-
-          // 7-10 years = Senior
-          if (min >= 7) return 'senior';
-
-          // 5-7 years = Mid
-          if (min >= 5) return 'mid';
-
-          // 2-4 years = Junior
-          if (min >= 2) return 'junior';
-
-          // 0-2 years = Entry
-          return 'entry';
-        };
-
-        const experienceValue = effectiveEditingJD.job_level || mapExpToLevel(effectiveEditingJD.experience_min, effectiveEditingJD.experience_max);
+        }
         const hasPersistedExperienceYears = (
           effectiveEditingJD.experience_min !== null
           && effectiveEditingJD.experience_min !== undefined
@@ -4866,8 +4965,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         );
         // Restore industry type from saved draft
         const industryValue = effectiveEditingJD.industry_type || '';
-        setShowCustomExperienceInput(Boolean(experienceValue && !getExperienceLevelByCode(experienceValue)));
-        setExperienceYearsExplicit(hasPersistedExperienceYears);
+        setShowCustomExperienceInput(false);
+        setExperienceYearsExplicit(hasPersistedExperienceYears || Boolean(experienceValue));
 
         console.log('[DEBUG] Loading effectiveEditingJD data:');
         console.log('[DEBUG] - experience_min from API:', effectiveEditingJD.experience_min);
@@ -5643,7 +5742,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     category="mustHaveSkills"
                     onDrop={(skill, fromCategory) => handleDropSkill(skill, fromCategory, 'mustHaveSkills')}
                   >
-                    {extractedData.mustHaveSkills.map((skill, index) => (
+                    {/* Sliced from the front so each chip keeps its real index —
+                        remove/edit/drag all address the array by position. */}
+                    {(expandedSkillCategories.mustHaveSkills
+                      ? extractedData.mustHaveSkills
+                      : extractedData.mustHaveSkills.slice(0, SKILL_PREVIEW_LIMIT)
+                    ).map((skill, index) => (
                       <DraggableSkill
                         key={index}
                         skill={skill}
@@ -5661,6 +5765,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       />
                     ))}
                   </DroppableSkillsContainer>
+                  {extractedData.mustHaveSkills.length > SKILL_PREVIEW_LIMIT && (
+                    <button
+                      type="button"
+                      onClick={() => toggleSkillCategory('mustHaveSkills')}
+                      className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg hover:bg-brand-blue/10 transition-colors"
+                    >
+                      {expandedSkillCategories.mustHaveSkills
+                        ? 'Show less'
+                        : `+${extractedData.mustHaveSkills.length - SKILL_PREVIEW_LIMIT} more`}
+                    </button>
+                  )}
                   {validationErrors.mustHaveSkills && (
                     <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4" />
@@ -5706,7 +5821,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     category="niceToHaveSkills"
                     onDrop={(skill, fromCategory) => handleDropSkill(skill, fromCategory, 'niceToHaveSkills')}
                   >
-                    {extractedData.niceToHaveSkills.map((skill, index) => (
+                    {(expandedSkillCategories.niceToHaveSkills
+                      ? extractedData.niceToHaveSkills
+                      : extractedData.niceToHaveSkills.slice(0, SKILL_PREVIEW_LIMIT)
+                    ).map((skill, index) => (
                       <DraggableSkill
                         key={index}
                         skill={skill}
@@ -5724,6 +5842,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       />
                     ))}
                   </DroppableSkillsContainer>
+                  {extractedData.niceToHaveSkills.length > SKILL_PREVIEW_LIMIT && (
+                    <button
+                      type="button"
+                      onClick={() => toggleSkillCategory('niceToHaveSkills')}
+                      className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg hover:bg-brand-blue/10 transition-colors"
+                    >
+                      {expandedSkillCategories.niceToHaveSkills
+                        ? 'Show less'
+                        : `+${extractedData.niceToHaveSkills.length - SKILL_PREVIEW_LIMIT} more`}
+                    </button>
+                  )}
                 </div>
 
                 {/* Column 3: Comments (Split - Must-Have on top, Nice-to-Have below) */}
@@ -5868,85 +5997,57 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
                     </label>
                   </div>
-                  <select
-                    value={experienceSelectValue}
-                    onChange={(e) => {
-                      const nextValue = e.target.value;
-                      if (nextValue === CUSTOM_EXPERIENCE_VALUE) {
-                        setShowCustomExperienceInput(true);
-                        setExperienceYearsExplicit(false);
-                        setExtractedData(prev => ({
-                          ...prev,
-                          experience: getExperienceLevelByCode(prev.experience) ? '' : prev.experience,
-                        }));
-                        markExtractedDataModified();
-                        return;
-                      }
-
+                  {/* NUMBERS-FIRST: recruiter enters the actual From/To years. The
+                      value is stored as a canonical "From-To Years" string on
+                      extractedData.experience; persistence parses it back into
+                      experience_min/experience_max and derives job_level. */}
+                  {(() => {
+                    const { from, to } = parseExperienceYearsString(extractedData.experience);
+                    const commitYears = (nextFrom: string, nextTo: string) => {
+                      const canonical = buildExperienceYearsString(
+                        nextFrom === '' ? null : Number(nextFrom),
+                        nextTo === '' ? null : Number(nextTo)
+                      );
                       setShowCustomExperienceInput(false);
-                      // A level picked from the dropdown is a deliberate user choice,
-                      // and each level carries a definitional year range (e.g. "Junior
-                      // Level" = 2-4 years). Mark years as explicit so the range
-                      // persists into Step 3 and the published JD. (Without this, the
-                      // selected experience was silently dropped before reaching Step 3.)
-                      const selectedLevel = getExperienceLevelByCode(nextValue);
-                      const levelHasYears = !!selectedLevel
-                        && (selectedLevel.min_years != null || selectedLevel.max_years != null);
-                      setExperienceYearsExplicit(levelHasYears);
-                      setExtractedData(prev => ({ ...prev, experience: nextValue }));
+                      setExperienceYearsExplicit(nextFrom !== '' || nextTo !== '');
+                      setExtractedData(prev => ({ ...prev, experience: canonical }));
                       markExtractedDataModified();
-                      // Clear validation error when user makes a selection
-                      if (nextValue) {
+                      if (nextFrom !== '' || nextTo !== '') {
                         setValidationErrors(prev => ({ ...prev, experience: undefined }));
                       }
-                    }}
-                    className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black mb-3 ${
+                    };
+                    const inputClass = `w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black ${
                       validationErrors.experience ? 'border-red-500' : 'border-gray-200'
-                    } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                    disabled={masterDataLoading || isRegenerating}
-                  >
-                    <option value="">{masterDataLoading ? 'Loading...' : 'Select experience level'}</option>
-                    {experienceLevels.map((level) => (
-                      <option key={level.id} value={level.code}>{level.label}</option>
-                    ))}
-                    <option value={CUSTOM_EXPERIENCE_VALUE}>Custom experience</option>
-                  </select>
-                  {showCustomExperienceInput && (
-                    <input
-                      type="text"
-                      value={selectedExperienceLevel ? '' : extractedData.experience}
-                      onChange={(e) => {
-                        const nextValue = e.target.value;
-                        if (nextValue && !isEnglishOnly(nextValue)) {
-                          setValidationErrors(prev => ({
-                            ...prev,
-                            experience: 'Custom experience must be written in English only.',
-                          }));
-                          toast.error({
-                            title: 'English only',
-                            description: 'Custom experience must be written in English only. Other languages are not supported.',
-                          });
-                          return;
-                        }
-
-                        setExtractedData(prev => ({ ...prev, experience: nextValue }));
-                        const customRange = inferExperienceRangeFromCustomValue(nextValue);
-                        setExperienceYearsExplicit(
-                          customRange.experienceMin !== undefined || customRange.experienceMax !== undefined
-                        );
-                        markExtractedDataModified();
-                        if (nextValue.trim()) {
-                          setValidationErrors(prev => ({ ...prev, experience: undefined }));
-                        }
-                      }}
-                      placeholder="Enter custom experience, e.g. 3-5 years in SaaS"
-                      maxLength={50}
-                      className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black mb-3 ${
-                        validationErrors.experience ? 'border-red-500' : 'border-gray-200'
-                      } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                      disabled={isRegenerating}
-                    />
-                  )}
+                    } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`;
+                    return (
+                      <div className="flex items-center gap-2 mb-3">
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          step={0.5}
+                          value={from}
+                          onChange={(e) => commitYears(e.target.value, to)}
+                          placeholder="From (years)"
+                          disabled={isRegenerating}
+                          className={inputClass}
+                        />
+                        <span className="text-sm text-gray-500 dark:text-slate-400">to</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          step={0.5}
+                          value={to}
+                          onChange={(e) => commitYears(from, e.target.value)}
+                          placeholder="To (years)"
+                          disabled={isRegenerating}
+                          className={inputClass}
+                        />
+                        <span className="text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">years</span>
+                      </div>
+                    );
+                  })()}
                   {validationErrors.experience && (
                     <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4" />
@@ -6138,19 +6239,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
-              {/* Locations Section */}
-              <div>
+              {/* Locations Section — boxed like the page's other panels
+                  (same border / ring / shadow and the same p-4 sm:p-6 inner
+                  padding as the card that wraps this step). */}
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Locations</h3>
-                  <label className={`flex items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Locations <span className="text-red-500">*</span></h3>
+                  <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={extractedData.locationsRequired}
                       onChange={(e) => { setExtractedData(prev => ({ ...prev, locationsRequired: e.target.checked })); markExtractedDataModified(); }}
-                      className="w-4 h-4 text-gray-600 border-gray-300 rounded focus:ring-gray-500"
+                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                       disabled={isRegenerating}
                     />
-                    <span className="text-gray-500 dark:text-slate-500 text-xs">(Required)</span>
+                    <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
                   </label>
                 </div>
 
@@ -7213,8 +7316,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
-              {/* Employment Type & Work Model - Side by Side */}
-              <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              {/* Employment Type & Work Model - Side by Side, in a panel that
+                  matches the Locations box above it. */}
+              <div className="mt-4 sm:mt-6 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Employment Type */}
                 <div>
                   <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-2">Employment Type</h3>

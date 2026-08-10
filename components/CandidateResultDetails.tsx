@@ -1,13 +1,15 @@
 'use client';
 
 import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
-import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
+import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
+import { assessmentService, DetailedResultResponse, InvitationResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
 import { formatISTDate, formatISTTime, formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
+import ResumeDetailView from '@/components/ResumeDetailView';
+import ViewResumeButton from '@/components/ui/view-resume-button';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -40,6 +42,13 @@ interface CandidateResultDetailsProps {
    * can name its deepest crumb after the candidate instead of a generic label.
    */
   onCandidateLoaded?: (name: string) => void;
+  /**
+   * Fired when the in-page resume view opens or closes. A parent that owns the
+   * breadcrumb (the standalone results/details route) uses it to append the
+   * "Resume" crumb and to hang the way back off the candidate crumb — hence
+   * the `closeResume` callback handed over on open.
+   */
+  onResumeViewChange?: (viewing: boolean, closeResume?: () => void) => void;
 }
 
 interface CandidateBasicInfo {
@@ -58,6 +67,15 @@ interface CandidateBasicInfo {
     weightedScore: number;
   }[];
 }
+
+type CandidateDetailTab = {
+  id: string;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  count?: number;
+  isQuestionTab?: boolean;
+  danger?: boolean;
+};
 
 function getCodingEvaluationState(q: QuestionEvaluation) {
   const judged = q.candidate_test_results;
@@ -165,6 +183,7 @@ export default function CandidateResultDetails({
   showRecordPager = true,
   breadcrumbItems,
   onCandidateLoaded,
+  onResumeViewChange,
 }: CandidateResultDetailsProps) {
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
@@ -181,6 +200,76 @@ export default function CandidateResultDetails({
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [eventsPage, setEventsPage] = useState(1);
   const EVENTS_PER_PAGE = 10;
+
+  // View Resume — same flow the resume-scoring candidate page uses
+  // (CandidateScoringDetailPage): pull the resume record, run it through
+  // convertApiResume because the API is snake_case, and hand it to
+  // ResumeDetailView. Shown as ResumeDetailView's own overlay rather than
+  // swapping the page body, so the result stays put underneath.
+  const [resumeId, setResumeId] = useState<string | null>(null);
+  const [resumeDetail, setResumeDetail] = useState<any>(null);
+  const [isLoadingResume, setIsLoadingResume] = useState(false);
+  const [showResume, setShowResume] = useState(false);
+  const detailContentRef = useRef<HTMLDivElement>(null);
+
+  // One tab row now owns both summary panels and detailed question panels.
+  // `activeTab` is still kept for the proctoring-events fetch trigger, but the
+  // visible panel is driven by this top-level selection.
+  const [overviewTab, setOverviewTab] = useState<string>('jd-summary');
+  // A tab is offered only when its panel has something to render — the JD
+  // snapshot may not have loaded (or the JD captured nothing), and insights
+  // only exist once scoring completes. Without this, switching could land the
+  // recruiter on a blank panel.
+  const overviewTabs: CandidateDetailTab[] = [
+    ...(assessmentMeta ? [{ id: 'jd-summary', label: 'Job Description Summary', icon: FileText }] : []),
+    { id: 'section-performance', label: 'Section-wise Performance', icon: Activity },
+    ...(detailedResult && detailedResult.scoring_status === 'completed'
+      ? [{ id: 'candidate-insights', label: 'AI-Generated Candidate Insights', icon: Award }]
+      : []),
+  ];
+  const formatRoundTabLabel = (roundType: string) =>
+    `${roundType.toLowerCase() === 'hr' ? 'HR' : roundType.charAt(0).toUpperCase() + roundType.slice(1)} Round`;
+  const analysisTabs: CandidateDetailTab[] = detailedResult && detailedResult.scoring_status !== 'processing'
+    ? [
+        ...detailedResult.round_scores.map((round) => ({
+          id: round.round_type,
+          label: formatRoundTabLabel(round.round_type),
+          icon: Clipboard,
+          count: detailedResult.question_evaluations.filter(q => q.round_type === round.round_type).length,
+          isQuestionTab: true,
+        })),
+        {
+          id: 'violations',
+          label: 'Violations',
+          icon: ShieldAlert,
+          count: detailedResult.proctoring_stats?.total_violations || 0,
+          isQuestionTab: true,
+          danger: true,
+        },
+      ]
+    : [];
+  const detailTabs = [...overviewTabs, ...analysisTabs];
+  // Falls back while the selected tab is still unavailable, e.g. the JD
+  // snapshot request hasn't returned yet on first paint.
+  const currentDetailTab = detailTabs.some(tab => tab.id === overviewTab)
+    ? overviewTab
+    : (detailTabs[0]?.id ?? 'section-performance');
+  const isQuestionAnalysisTab = analysisTabs.some(tab => tab.id === currentDetailTab);
+  const activeQuestionTab = isQuestionAnalysisTab ? currentDetailTab : activeTab;
+  const scrollDetailContentToTop = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      detailContentRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+        inline: 'nearest',
+      });
+    });
+  }, []);
+  const handleDetailTabClick = useCallback((tab: CandidateDetailTab) => {
+    setOverviewTab(tab.id);
+    if (tab.isQuestionTab) setActiveTab(tab.id);
+    scrollDetailContentToTop();
+  }, [scrollDetailContentToTop]);
 
   // Group events by minute + event_type so each row shows: event, timestamp (HH:MM), count
   const groupedEvents = Object.values(
@@ -281,9 +370,16 @@ export default function CandidateResultDetails({
           status,
           sections
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to fetch detailed results:', error);
-        setDetailsError('Failed to load detailed results. Please try again.');
+        // A 404 here means the id doesn't name a result — most often the
+        // candidate was invited but never started. "Please try again" sends
+        // the recruiter into a retry loop over something retrying can't fix.
+        setDetailsError(
+          error?.status === 404
+            ? 'No result found for this candidate — they may not have started the assessment yet.'
+            : 'Failed to load detailed results. Please try again.'
+        );
       } finally {
         setIsLoadingDetails(false);
       }
@@ -308,6 +404,138 @@ export default function CandidateResultDetails({
     })();
     return () => { cancelled = true; };
   }, [assessmentId]);
+
+  // The detailed-result payload carries no resume reference, so the id has to
+  // be worked backwards. Two independent routes, because neither is reliable on
+  // its own: the invitation the candidate was sent may carry `resume_id` (only
+  // when they were invited from a resume), and failing that the resume library
+  // is searched by email.
+  //
+  // Resolved on click, not on load: an upfront lookup costs a request the
+  // recruiter may never need, and — the reason the button didn't show before —
+  // a lookup that comes back empty must not be what decides whether the button
+  // exists at all.
+  const resolveResumeId = async (): Promise<string | null> => {
+    const email = detailedResult?.candidate_email?.trim().toLowerCase();
+    const name = detailedResult?.candidate_name?.trim().toLowerCase();
+    const displayId = candidateDisplayId || detailedResult?.candidate_display_id;
+
+    // Step 1 — attempt → invitation. The results list is the only payload that
+    // ties this attempt id to an invitation id, and the invitation is what
+    // carries resume_id (ShareAssessmentModal sets it when the candidate is
+    // invited from a scored resume).
+    let invitationId: string | undefined;
+    try {
+      const results = await assessmentService.listResults(assessmentId, { page_size: 200 });
+      invitationId = (results.items || []).find(item => item.id === candidateId)?.invitation_id;
+    } catch (err) {
+      console.warn('[CandidateResultDetails] Results lookup failed:', err);
+    }
+
+    // Step 2 — invitation → resume_id. Deliberately no `search` filter: the
+    // first version passed the candidate's email and came back empty, because
+    // the backend filter doesn't match on it. Page through and match locally.
+    try {
+      const invitations: InvitationResponse[] = [];
+      for (let page = 1; page <= 3; page++) {
+        const response = await assessmentService.listInvitations(assessmentId, { page, page_size: 100 });
+        const items = response.items || [];
+        invitations.push(...items);
+        if (items.length < 100 || invitations.length >= (response.total ?? 0)) break;
+      }
+      const match =
+        (invitationId ? invitations.find(item => item.id === invitationId) : undefined) ||
+        invitations.find(item => item.attempt_id && item.attempt_id === candidateId) ||
+        (displayId ? invitations.find(item => item.candidate_display_id === displayId) : undefined) ||
+        (email ? invitations.find(item => item.candidate_email?.trim().toLowerCase() === email) : undefined);
+      // Logged so a failed lookup can be told apart from a candidate who
+      // genuinely has no resume attached.
+      console.info('[CandidateResultDetails] resume lookup', {
+        invitations: invitations.length,
+        invitationId,
+        matchedInvitation: match?.id,
+        resumeId: match?.resume_id,
+      });
+      if (match?.resume_id) return match.resume_id;
+    } catch (err) {
+      console.warn('[CandidateResultDetails] Invitation lookup failed:', err);
+    }
+
+    // Step 3 — the invitation had no resume_id, which is the normal case for
+    // manually-invited candidates. Search the resume library instead: by email
+    // first, then by name. A single search hit is accepted on its own, since
+    // the query was specific enough to return exactly one record.
+    const { resumeService } = await import('@/lib/services/resumeService');
+    const findInLibrary = async (query: string, matcher: (item: any) => boolean) => {
+      try {
+        const results = await resumeService.list({ search: query, page_size: 20 });
+        const items = results.items || [];
+        return items.find(matcher)?.id || (items.length === 1 ? items[0].id : null);
+      } catch (err) {
+        console.warn('[CandidateResultDetails] Resume search failed:', err);
+        return null;
+      }
+    };
+
+    if (email) {
+      const byEmail = await findInLibrary(
+        email,
+        item => (item.candidate_email || item.email || '').trim().toLowerCase() === email
+      );
+      if (byEmail) return byEmail;
+    }
+    if (name) {
+      const byName = await findInLibrary(
+        name,
+        item => (item.candidate_name || '').trim().toLowerCase() === name
+      );
+      if (byName) return byName;
+    }
+    return null;
+  };
+
+  const closeResume = useCallback(() => {
+    setShowResume(false);
+    onResumeViewChange?.(false);
+  }, [onResumeViewChange]);
+
+  const handleViewResume = async () => {
+    // Already fetched once — reopening shouldn't hit the API again.
+    if (resumeDetail) {
+      setShowResume(true);
+      onResumeViewChange?.(true, closeResume);
+      return;
+    }
+
+    setIsLoadingResume(true);
+    try {
+      const id = resumeId || (await resolveResumeId());
+      if (!id) {
+        toast.error('No resume is linked to this candidate');
+        return;
+      }
+      setResumeId(id);
+
+      const { resumeService } = await import('@/lib/services/resumeService');
+      const { convertApiResume } = await import('@/lib/utils/resumeMapper');
+      // The API record is snake_case — ResumeDetailView needs the mapped shape.
+      const [data, versions] = await Promise.all([
+        resumeService.get(id),
+        resumeService.getVersions(id).catch(() => []),
+      ]);
+      setResumeDetail(convertApiResume(data, versions || []));
+      setShowResume(true);
+      // Told to the parent rather than derived there: the page owns the
+      // breadcrumb on the standalone route, so it needs both the fact that the
+      // resume is open and a way to close it from the candidate crumb.
+      onResumeViewChange?.(true, closeResume);
+    } catch (err) {
+      console.error('[CandidateResultDetails] Failed to load resume:', err);
+      toast.error('Could not load the resume. Please try again.');
+    } finally {
+      setIsLoadingResume(false);
+    }
+  };
 
   // Poll for scoring completion when AI evaluation is still running
   useEffect(() => {
@@ -445,14 +673,82 @@ export default function CandidateResultDetails({
     );
   }
 
+  // Resume view — a page of its own rather than an overlay, so it gets a real
+  // breadcrumb trail ending in "Resume". Returned early instead of wrapping the
+  // result body, which is a thousand lines of JSX further down.
+  //
+  // The breadcrumb is only rendered here when this component owns one (the
+  // embedded JobDetailView case). On the standalone route the page above owns
+  // it and is told about the resume view through onResumeViewChange.
+  if (showResume) {
+    const resumeBody = isLoadingResume || !resumeDetail ? (
+      <div className="flex items-center justify-center gap-2 text-gray-500 py-20">
+        <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+        <span className="text-sm">Loading resume...</span>
+      </div>
+    ) : (
+      <ResumeDetailView
+        embedded
+        resume={resumeDetail}
+        onClose={closeResume}
+      />
+    );
+
+    // Standalone route: the page above already supplies the centred
+    // max-w-[1400px] card, its p-4 md:p-8 and the breadcrumb, so the resume is
+    // returned bare. Wrapping it again is what previously double-padded it and
+    // painted a slate-50 block inside the white card.
+    if (!breadcrumbItems || breadcrumbItems.length === 0) return resumeBody;
+
+    // Embedded host (JobDetailView) renders this component as the whole page,
+    // so the shell has to come from here. Same measurements as the
+    // resume-scoring candidate page: max-w-[1400px], p-4 md:p-8, my-4 md:my-5,
+    // and mb-4 md:mb-6 under the breadcrumb.
+    return (
+      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <PageBreadcrumb
+              className="mb-4 md:mb-6"
+              items={[
+                ...breadcrumbItems.slice(0, -1),
+                // onClick, not href: the candidate crumb points at the route
+                // we're already on, which a link cannot re-trigger.
+                { ...breadcrumbItems[breadcrumbItems.length - 1], href: undefined, onClick: closeResume },
+                { label: 'Resume' },
+              ]}
+            />
+            {resumeBody}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <div className="flex-1 bg-slate-50 overflow-y-auto">
+    <div className="flex-1 bg-slate-50">
       {breadcrumbItems && breadcrumbItems.length > 0 && (
         <div className="px-3 sm:px-4 pt-3">
-          <PageBreadcrumb className="mb-0" sticky={false} items={breadcrumbItems} />
+          {/* Previous / Next rides inside the breadcrumb bar, as on
+              job-details. Only when this component owns a breadcrumb — the
+              standalone route passes showRecordPager={false} and puts the pager
+              in its own breadcrumb instead. */}
+          <PageBreadcrumb
+            className="mb-0"
+            sticky={false}
+            items={breadcrumbItems}
+            actions={showRecordPager && totalCount != null && totalCount > 0 ? (
+              <RecordPager
+                currentIndex={currentIndex}
+                totalCount={totalCount}
+                onPrev={onPrev}
+                onNext={onNext}
+              />
+            ) : undefined}
+          />
         </div>
       )}
-      {showRecordPager && totalCount != null && totalCount > 0 && (
+      {showRecordPager && totalCount != null && totalCount > 0 && !(breadcrumbItems && breadcrumbItems.length > 0) && (
         <div className="flex justify-end px-3 sm:px-4 pt-3">
           <RecordPager
             currentIndex={currentIndex}
@@ -462,9 +758,9 @@ export default function CandidateResultDetails({
           />
         </div>
       )}
-      {/* Sticky Header — kept below the shared breadcrumb (z-30), but above the
-          inner Question-Analysis tab nav. */}
-      <div className="bg-brand-blue border-b border-brand-blue-2/40 sticky top-0 z-20 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
+      {/* Candidate/assessment header. This must scroll normally so it does not
+          cover the sticky side menu or question content. */}
+      <div className="bg-brand-blue border-b border-brand-blue-2/40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
         <div className="px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
             {/* No back arrow here — the breadcrumb above owns the way back. */}
@@ -549,6 +845,10 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3 self-start sm:self-auto">
+              {/* View Resume — always rendered, like the resume-scoring
+                  candidate page's button. Whether a resume can be found is
+                  decided on click, not by hiding the control. */}
+              <ViewResumeButton onClick={handleViewResume} loading={isLoadingResume} />
               {/* Status Badge */}
               {(() => {
                 let displayStatus = candidateData?.status || 'In Progress';
@@ -660,12 +960,62 @@ export default function CandidateResultDetails({
           </div>
         </div>
 
+        {/* Unified detail layout: vertical navigation on the left, selected content on the right. */}
+        <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+          <aside className="sticky top-20 self-start bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+          {/* No border-b here — the card's own border already draws the
+              baseline the active tab's underline sits on. Adding one gave a
+              doubled 2px rule under the row. */}
+          <div className="p-2 sm:p-3">
+            <div className="flex flex-col gap-1.5">
+              {detailTabs.map(tab => {
+                const isActive = currentDetailTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleDetailTabClick(tab)}
+                    className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center justify-between gap-2 ${
+                      isActive
+                        ? tab.danger
+                          ? 'bg-red-50 text-red-700 font-medium ring-1 ring-red-200'
+                          : 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
+                        : tab.danger
+                          ? 'text-gray-600 hover:bg-red-50 hover:text-red-700'
+                          : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                      <span className="min-w-0 leading-snug">{tab.label}</span>
+                    </span>
+                    {typeof tab.count === 'number' && (
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        tab.danger
+                          ? isActive || tab.count > 0
+                            ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
+                            : 'bg-slate-100 text-gray-600'
+                          : isActive
+                            ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
+                            : 'bg-slate-100 text-gray-600'
+                      }`}>
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          </aside>
+
+          <div ref={detailContentRef} className="min-w-0 overflow-x-auto scroll-mt-24">
+
         {/* JD Summary — Must-Have & Nice-to-Have skills snapshotted from the
             JD when the assessment was generated. Both sections always render
             (with an empty-state placeholder) so the layout is consistent
             even when the JD didn't capture preferred skills. Same shape as
             the AI-Interview detail page's Overview tab. */}
-        {(() => {
+        {currentDetailTab === 'jd-summary' && (() => {
           const skillDepth: any[] = (assessmentMeta?.jd_skill_depth as any[]) || [];
           const niceToHaveSkills: any[] = (assessmentMeta?.jd_nice_to_have_skills as any[]) || [];
           if (!assessmentMeta) return null;
@@ -735,8 +1085,10 @@ export default function CandidateResultDetails({
           );
         })()}
 
-        {/* Score Calculation Notice - Show if individual questions are all 0 */}
-        {detailedResult && candidateData && (() => {
+        {/* Score Calculation Notice - Show if individual questions are all 0.
+            Rides with the Section-wise Performance tab because it explains the
+            weighted section maths shown there. */}
+        {currentDetailTab === 'section-performance' && detailedResult && candidateData && (() => {
           // Check if all questions show 0 points
           const allQuestionsZero = detailedResult.question_evaluations.every(q => q.points_earned === 0);
           const sectionsHaveScores = detailedResult.round_scores.some(r => (r.raw_score ?? 0) > 0);
@@ -774,6 +1126,7 @@ export default function CandidateResultDetails({
         })()}
 
         {/* Section Scores */}
+        {currentDetailTab === 'section-performance' && (
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 mb-4 sm:mb-6">
           <h2 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4 tracking-tight font-semibold">Section-wise Performance</h2>
           <div className="space-y-4">
@@ -913,6 +1266,7 @@ export default function CandidateResultDetails({
             })}
           </div>
         </div>
+        )}
 
         {/* Scoring Rules & Pass/Fail Criteria — hidden */}
         {false && <div className="bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
@@ -1027,7 +1381,7 @@ export default function CandidateResultDetails({
         </div>}
 
         {/* Candidate Insights - AI Generated Analysis */}
-        {detailedResult && detailedResult.scoring_status === 'completed' && (
+        {currentDetailTab === 'candidate-insights' && detailedResult && detailedResult.scoring_status === 'completed' && (
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden mb-6">
             <div className="bg-gray-50 border-b border-brand-blue/15 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="flex items-center gap-3">
@@ -1146,47 +1500,8 @@ export default function CandidateResultDetails({
           </div>
         )}
 
-        {/* Detailed Answers */}
+        {isQuestionAnalysisTab && (
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-          <div className="bg-brand-blue px-4 sm:px-6 py-4 sm:py-5 ring-1 ring-white/10">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-              <div>
-                <h2 className="text-white text-sm sm:text-base tracking-tight font-semibold">Detailed Question Analysis</h2>
-                <p className="text-white/80 text-xs sm:text-sm mt-1">Review questions and answers for each section</p>
-              </div>
-              {/* Agent Status Badge */}
-              {detailedResult && (
-                <div className={`px-4 py-2 rounded-lg flex items-center gap-2 ring-1 ${
-                  detailedResult.scoring_status === 'completed'
-                    ? 'bg-green-500/20 text-green-100 ring-green-400/30'
-                    : detailedResult.scoring_status === 'processing'
-                    ? 'bg-brand-orange/20 text-white ring-brand-orange/40'
-                    : detailedResult.scoring_status === 'error'
-                    ? 'bg-red-500/20 text-red-100 ring-red-400/30'
-                    : 'bg-white/10 text-white ring-white/20'
-                }`}>
-                  {detailedResult.scoring_status === 'processing' && (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  )}
-                  {detailedResult.scoring_status === 'completed' && (
-                    <CheckCircle className="w-4 h-4" />
-                  )}
-                  {detailedResult.scoring_status === 'pending' && (
-                    <Clock className="w-4 h-4" />
-                  )}
-                  {detailedResult.scoring_status === 'error' && (
-                    <XCircle className="w-4 h-4" />
-                  )}
-                  <span className="text-sm font-medium">
-                    {detailedResult.scoring_status === 'completed' && 'Scoring Complete'}
-                    {detailedResult.scoring_status === 'processing' && 'Processing...'}
-                    {detailedResult.scoring_status === 'pending' && 'Scoring Pending'}
-                    {detailedResult.scoring_status === 'error' && 'Scoring Failed - Needs Retry'}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
 
           {/* Agent Processing State */}
           {detailedResult && detailedResult.scoring_status === 'processing' && (
@@ -1210,69 +1525,10 @@ export default function CandidateResultDetails({
           {/* Content when loaded */}
           {detailedResult && detailedResult.scoring_status !== 'processing' && (
             <>
-              {/* Tab Navigation — sticky so the candidate viewer can switch
-                  between HR / Technical / Coding / Violations without
-                  scrolling all the way back up on long question lists.
-                  z-10 keeps it above question cards but BELOW the page-level
-                  brand header (z-20), so it can never overlap the title /
-                  Prev/Next / Export Results bar during scroll. */}
-              <div className="sticky top-[64px] sm:top-[80px] z-10 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm">
-                <div className="flex flex-wrap gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3">
-                  {detailedResult.round_scores.map((round, idx) => {
-                    const isActive = activeTab === round.round_type;
-                    const questionsForRound = detailedResult.question_evaluations.filter(
-                      q => q.round_type === round.round_type
-                    );
-
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => setActiveTab(round.round_type)}
-                        className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
-                          isActive
-                            ? 'bg-white text-brand-blue border-t-2 border-x border-brand-blue font-medium shadow-sm'
-                            : 'bg-white/60 text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
-                        }`}
-                      >
-                        <span className="font-medium capitalize text-xs sm:text-sm">{round.round_type} Round</span>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          isActive ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' : 'bg-slate-100 text-gray-600'
-                        }`}>
-                          {questionsForRound.length}
-                        </span>
-                      </button>
-                    );
-                  })}
-
-                  {/* Violations Tab */}
-                  <button
-                    onClick={() => setActiveTab('violations')}
-                    className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
-                      activeTab === 'violations'
-                        ? 'bg-white text-red-700 border-t-2 border-x border-red-500 font-medium shadow-sm'
-                        : 'bg-white/60 text-gray-600 hover:bg-red-50 hover:text-red-700'
-                    }`}
-                  >
-                    <ShieldAlert className="w-4 h-4" />
-                    <span className="font-medium">Violations</span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      activeTab === 'violations'
-                        ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
-                        : (detailedResult.proctoring_stats?.total_violations || 0) > 0
-                          ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
-                          : 'bg-slate-100 text-gray-600'
-                    }`}>
-                      {detailedResult.proctoring_stats?.total_violations || 0}
-                    </span>
-                  </button>
-
-                </div>
-              </div>
-
-              {/* Tab Content */}
+              {/* Question or violation content selected from the unified tab row above. */}
               <div className="p-3 sm:p-4 md:p-6">
                 {detailedResult.round_scores.map((round, roundIdx) => {
-                  const isActiveTab = activeTab === round.round_type;
+                  const isActiveTab = activeQuestionTab === round.round_type;
                   if (!isActiveTab) return null;
                   const isHRRound = round.round_type === 'hr';
 
@@ -1955,7 +2211,7 @@ export default function CandidateResultDetails({
                 })}
 
                 {/* Violations Tab Content */}
-                {activeTab === 'violations' && detailedResult.proctoring_stats && (
+                {activeQuestionTab === 'violations' && detailedResult.proctoring_stats && (
                   <div className="space-y-4 sm:space-y-6">
                     {/* Violations Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-100">
@@ -2527,6 +2783,9 @@ export default function CandidateResultDetails({
               </div>
             </>
           )}
+        </div>
+        )}
+        </div>
         </div>
       </div>
     </div>

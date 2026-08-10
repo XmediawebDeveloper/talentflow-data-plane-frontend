@@ -19,6 +19,10 @@ function DetailsContent() {
   const candidateId = searchParams.get('candidate_id');
   // cid = human-readable candidate display ID (e.g. CID-05), passed by the results list
   const candidateDisplayId = searchParams.get('cid') || '';
+  // Opened from the Assessments list's Candidate Results tab, which spans every
+  // assessment. Only carried across Prev/Next now, so paging keeps the origin —
+  // the trail itself names the assessment either way.
+  const fromCandidateResults = searchParams.get('from') === 'candidate-results';
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
   const [assessmentShortId, setAssessmentShortId] = useState<string>('');
@@ -29,6 +33,11 @@ function DetailsContent() {
   // Reported by CandidateResultDetails once the result loads, so the deepest
   // crumb can name the candidate rather than saying "Candidate Details".
   const [candidateName, setCandidateName] = useState<string>('');
+  // The View Resume button swaps the body for the resume in place. It stays on
+  // this route, so the trail has to gain the extra crumb here rather than
+  // through navigation. `close` comes back from the child so the candidate
+  // crumb can return to the result.
+  const [resumeView, setResumeView] = useState<{ viewing: boolean; close?: () => void }>({ viewing: false });
 
   // Prev/Next navigation: AssessmentResults stores the visible candidate list
   // in sessionStorage when the user opens the details view, so the user can
@@ -43,8 +52,11 @@ function DetailsContent() {
   const navIndex = navList.findIndex(n => n.id === candidateId);
   const prev = navIndex > 0 ? navList[navIndex - 1] : null;
   const next = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
+  // Carries the origin across Prev/Next — without it, paging to the next
+  // candidate would silently re-add the assessment crumb mid-session.
   const buildNavUrl = (entry: { id: string; cid: string }) =>
-    `/recruitment/assessments/${assessmentId}/results/details?candidate_id=${entry.id}${entry.cid ? `&cid=${encodeURIComponent(entry.cid)}` : ''}`;
+    `/recruitment/assessments/${assessmentId}/results/details?candidate_id=${entry.id}${entry.cid ? `&cid=${encodeURIComponent(entry.cid)}` : ''}` +
+    (fromCandidateResults ? '&from=candidate-results' : '');
 
   useEffect(() => {
     const fetchAssessmentInfo = async () => {
@@ -81,39 +93,53 @@ function DetailsContent() {
     router.push(`/recruitment/assessments/${assessmentId}/results`);
   };
 
-  const breadcrumb = (
-    <div className="mb-4 md:mb-8">
-      <PageBreadcrumb
-        className="mb-3"
-        // Flat trail: Dashboard › Assessments › <candidate>, matching the AI
-        // interview candidate view. The assessment crumb that sat in between is
-        // gone — Back and the Prev/Next pager still return to its results list,
-        // and rows reached from the cross-assessment Candidate Results tab never
-        // passed through that page anyway.
-        items={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Assessments', href: '/recruitment/assessments' },
-          { label: candidateName || candidateDisplayId || 'Candidate Details' },
-        ]}
-      />
+  const showRecordPagerRow = navList.length > 0 && !resumeView.viewing;
 
-      {/* Previous / Next sits below the breadcrumb, as on job-details. The row
-          is dropped when there is no list to page through. */}
-      {navList.length > 0 && (
-        <div className="flex items-center justify-end">
+  // Fragment, not a wrapper div. PageBreadcrumb is sticky by default, but a
+  // sticky element can only travel inside its parent's box — the div this used
+  // to sit in was only as tall as the crumb row plus the pager, so it unpinned
+  // and scrolled away almost immediately. As a direct child of the page card it
+  // stays pinned for the whole scroll.
+  const breadcrumb = (
+    <>
+      <PageBreadcrumb
+        className="mb-4 md:mb-8"
+        // Previous / Next rides inside the breadcrumb bar, as on job-details,
+        // so it stays reachable while the sticky crumb is pinned.
+        actions={showRecordPagerRow ? (
           <RecordPager
             currentIndex={navIndex >= 0 ? navIndex : undefined}
             totalCount={navList.length || undefined}
             onPrev={prev ? () => router.replace(buildNavUrl(prev)) : undefined}
             onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
           />
-        </div>
-      )}
-    </div>
+        ) : undefined}
+        // Always the full chain: Dashboard › Assessments › <assessment> ›
+        // <candidate>. The assessment is a real step between the list and this
+        // page, so it stays in the trail no matter which route the recruiter
+        // came in by — including the cross-assessment Candidate Results tab,
+        // where it's the only thing naming which assessment this result is for.
+        items={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Assessments', href: '/recruitment/assessments' },
+          {
+            label: assessmentTitle || 'Assessment',
+            href: `/recruitment/assessments/${assessmentId}/results`,
+          },
+          // onClick, not href: the candidate crumb points at the route we're
+          // already on, so a link couldn't switch the body back.
+          resumeView.viewing
+            ? { label: candidateName || candidateDisplayId || 'Candidate Details', onClick: () => resumeView.close?.() }
+            : { label: candidateName || candidateDisplayId || 'Candidate Details' },
+          ...(resumeView.viewing ? [{ label: 'Resume' }] : []),
+        ]}
+      />
+
+    </>
   );
 
   const wrapState = (children: React.ReactNode) => (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main className="flex-1 bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           {breadcrumb}
@@ -152,7 +178,7 @@ function DetailsContent() {
   }
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main className="flex-1 bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           {breadcrumb}
@@ -172,6 +198,7 @@ function DetailsContent() {
         onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
         showRecordPager={false}
         onCandidateLoaded={setCandidateName}
+        onResumeViewChange={(viewing, close) => setResumeView({ viewing, close })}
       />
         </div>
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar, RotateCcw, Package, Sparkles, X, ChevronLeft } from 'lucide-react';
+import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar, RotateCcw, Package, Sparkles, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api from '@/lib/services/api';
 import { generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
@@ -374,15 +374,10 @@ export default function BillingHistoryPage() {
 
         {pageView === 'list' && (
           <>
-            {/* Back to overview */}
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <button
-                onClick={() => setPageView('cards')}
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-                Back to overview
-              </button>
+            {/* justify-end, not justify-between: the Back to overview button
+                that used to hold the left slot is gone, and the status line
+                belongs on the right. */}
+            <div className="mb-4 flex items-center justify-end gap-2">
               <span className="text-xs text-gray-500 dark:text-slate-400">
                 {statusFilter === 'paid' && 'Showing paid invoices'}
                 {statusFilter === 'open' && 'Showing open / pending invoices'}

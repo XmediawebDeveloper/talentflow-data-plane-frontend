@@ -230,7 +230,13 @@ export default function AITalentMatchPage({
     setHistoryPageView('candidates');
     candidateSearch.setQuery('');
     setHistoryListScrollRequest((request) => request + 1);
+    await buildCandidateRows();
+  };
 
+  // The roll-up itself, split out from the click handler so a restored
+  // 'candidates' view can rebuild its rows once match history has loaded —
+  // otherwise returning from a resume landed on an empty candidates table.
+  const buildCandidateRows = async () => {
     if (matchHistory.length === 0) {
       setCandidateRows([]);
       return;
@@ -548,6 +554,11 @@ export default function AITalentMatchPage({
       searchQuery, filterThreshold, filterPhone, filterLocation,
       filterExperienceMin, filterExperienceMax, sortBy,
       currentPage, itemsPerPage,
+      // The cards -> list/candidates drill-in. Restored with the filters below
+      // rather than unconditionally: it belongs to the same "came back from a
+      // resume" round trip. Without it the view reset to the stat cards and the
+      // list the user had been reading was simply gone.
+      historyPageView,
     },
     (s) => {
       // Layout choices are harmless to restore from any entry point.
@@ -565,6 +576,9 @@ export default function AITalentMatchPage({
       } catch { /* ignore */ }
       if (!keepFilters) return;
 
+      if (s.historyPageView === 'cards' || s.historyPageView === 'list' || s.historyPageView === 'candidates') {
+        setHistoryPageView(s.historyPageView);
+      }
       if (typeof s.showHistoryFilters === 'boolean') setShowHistoryFilters(s.showHistoryFilters);
       if (typeof s.historySearchQuery === 'string') historySearch.setQuery(s.historySearchQuery);
       historySearch.setFilters({
@@ -603,6 +617,21 @@ export default function AITalentMatchPage({
       if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
     },
   );
+
+  // Restored straight into the candidate roll-up: its rows are built on click,
+  // not fetched by the page load, so rebuild them once match history is in.
+  // Guarded on empty rows so it can't re-run over a roll-up that's already
+  // there, and it deliberately leaves the restored candidate search alone.
+  const rebuiltRestoredCandidatesRef = useRef(false);
+  useEffect(() => {
+    if (rebuiltRestoredCandidatesRef.current) return;
+    if (historyPageView !== 'candidates') return;
+    if (loadingCandidateRows || candidateRows.length > 0) return;
+    if (matchHistory.length === 0) return;
+    rebuiltRestoredCandidatesRef.current = true;
+    buildCandidateRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyPageView, matchHistory.length, loadingCandidateRows, candidateRows.length]);
 
   useEffect(() => {
     if (historyListScrollRequest === 0) return;
@@ -1397,6 +1426,9 @@ export default function AITalentMatchPage({
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <div className="flex items-center justify-between gap-3 mb-4 md:mb-6">
+              {/* Previous / Next rides inside the breadcrumb bar, as on
+                  job-details. Run AI Match stays down in the actions row — only
+                  the pager moved. */}
               <PageBreadcrumb
                 className="mb-0 flex-1"
                 items={[
@@ -1405,6 +1437,14 @@ export default function AITalentMatchPage({
                   // Deepest crumb names the job this match belongs to.
                   { label: selectedHistoryItem?.jobTitle || 'Match Details' },
                 ]}
+                actions={matchHistory.length > 1 ? (
+                  <RecordPager
+                    currentIndex={_matchIdx >= 0 ? _matchIdx : 0}
+                    totalCount={matchHistory.length}
+                    onPrev={_prevMatch ? () => _goToMatch(_prevMatch) : undefined}
+                    onNext={_nextMatch ? () => _goToMatch(_nextMatch) : undefined}
+                  />
+                ) : undefined}
               />
             </div>
         {/* Header Section */}
@@ -1423,7 +1463,8 @@ export default function AITalentMatchPage({
               <>
                 <div className="flex justify-end mb-4">
                   <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
-                    {/* Run AI Match — sits before the Previous/Next pager */}
+                    {/* Run AI Match — now alone in this row; the Previous/Next
+                        pager it used to sit beside moved into the breadcrumb. */}
                     {canRunAIMatch && (
                       <button
                         onClick={() => {
@@ -1448,14 +1489,6 @@ export default function AITalentMatchPage({
                         <Sparkles className="w-3.5 h-3.5" />
                         Run AI Match
                       </button>
-                    )}
-                    {matchHistory.length > 1 && (
-                      <RecordPager
-                        currentIndex={_matchIdx >= 0 ? _matchIdx : 0}
-                        totalCount={matchHistory.length}
-                        onPrev={_prevMatch ? () => _goToMatch(_prevMatch) : undefined}
-                        onNext={_nextMatch ? () => _goToMatch(_nextMatch) : undefined}
-                      />
                     )}
                   </div>
                 </div>
