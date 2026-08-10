@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye, Download } from 'lucide-react';
 import { jdService, JDVersion, JDVersionHistoryResponse } from '@/lib/services/jdService';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -46,6 +47,7 @@ export default function JDVersionHistoryModal({
   jdTitle,
   initialVersionNumber,
 }: JDVersionHistoryModalProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [versionHistory, setVersionHistory] = useState<JDVersionHistoryResponse | null>(null);
   const [selectedVersion, setSelectedVersion] = useState<JDVersion | null>(null);
@@ -68,11 +70,27 @@ export default function JDVersionHistoryModal({
   const fetchVersionHistory = async () => {
     setLoading(true);
     try {
-      const data = await jdService.getVersionHistory(jdId);
-      console.log('Version history loaded:', data);
-      setVersionHistory(data);
+      // Show the whole VERSION LINEAGE (v1, v2, ... — each is its own JD), not
+      // the per-row republish snapshots. Each row links to that version's own
+      // detail page.
+      const lineage = await jdService.getLineageVersions(jdId);
+      const mapped = {
+        current_version: lineage.length
+          ? Math.max(...lineage.map((v) => v.version_number || 1))
+          : 1,
+        total: lineage.length,
+        versions: lineage.map((v) => ({
+          id: v.id,
+          version_number: v.version_number,
+          title: v.title,
+          status: v.status,
+          published_at: v.published_at || v.created_at || '',
+          published_by_name: undefined,
+        })),
+      } as unknown as JDVersionHistoryResponse;
+      setVersionHistory(mapped);
     } catch (error) {
-      console.error('Failed to fetch version history:', error);
+      console.error('Failed to fetch version lineage:', error);
       toast.error('Failed to load version history');
     } finally {
       setLoading(false);
@@ -93,17 +111,11 @@ export default function JDVersionHistoryModal({
     return `${Math.floor(diffDays / 365)} years ago`;
   };
 
-  const handleVersionClick = (version: JDVersion, index: number) => {
-    console.log('Version clicked:', version.version_number, version);
-    setSelectedVersion(version);
-    // Find the previous version for diff comparison
-    if (versionHistory && index < versionHistory.versions.length - 1) {
-      const prevVersion = versionHistory.versions[index + 1];
-      console.log('Previous version for diff:', prevVersion?.version_number);
-      setPreviousVersion(prevVersion);
-    } else {
-      setPreviousVersion(null);
-    }
+  const handleVersionClick = (version: JDVersion) => {
+    // Each version is its own JD — open its full detail page (own tabs/results).
+    if (!version?.id) return;
+    onClose();
+    router.push(`/recruitment/job-details?id=${version.id}`);
   };
 
   // Land on the version the caller picked, once the list has arrived. Back
@@ -113,7 +125,7 @@ export default function JDVersionHistoryModal({
     const index = versionHistory.versions.findIndex(
       (v) => v.version_number === initialVersionNumber
     );
-    if (index >= 0) handleVersionClick(versionHistory.versions[index], index);
+    if (index >= 0) handleVersionClick(versionHistory.versions[index]);
   }, [isOpen, initialVersionNumber, versionHistory]);
 
   const handleBack = () => {
@@ -327,7 +339,7 @@ export default function JDVersionHistoryModal({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      handleVersionClick(version, index);
+                      handleVersionClick(version);
                     }}
                     className={`bg-white dark:bg-slate-900 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 cursor-pointer transition-all hover:shadow-md text-left w-full ${
                       isLatest
