@@ -308,7 +308,7 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
   test("TC-T605 asking repeatedly does not reveal which addresses have accounts", async ({}, testInfo) => {
     await describeCase(testInfo, {
       does: "Ask six times for an address that has an account, then six times for one that has none",
-      expects: "The two sequences look the same. They do not: the one with an account starts refusing and the other never does, so six requests reveal who is registered",
+      expects: "The two sequences are identical, so the answers give away nothing about who has an account here",
       category: "negative",
       steps: [
         "Ask for a reset six times for an address that HAS an account",
