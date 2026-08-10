@@ -282,6 +282,7 @@ for (const spec of readReport()) {
   let note = null;
   // Several: a test that creates a user and a job description records both.
   const testData = {};
+  const observed = {};
   for (const att of last.attachments ?? []) {
     if (att.name === "screenshot" && att.path) {
       screenshot = path.relative(ROOT, att.path);
@@ -295,7 +296,7 @@ for (const spec of readReport()) {
     // workbook row carries these as two columns somebody wrote by hand; a test
     // written straight into a spec file has only a title and code, and no
     // manual tester reads code. describeCase() closes that.
-    if (["defect", "evidence", "case", "data"].includes(att.name)) {
+    if (["defect", "evidence", "case", "data", "observed"].includes(att.name)) {
       const raw = readAttachment(att);
       if (!raw) continue;
       try {
@@ -303,6 +304,7 @@ for (const spec of readReport()) {
         if (att.name === "defect") defect = parsed;
         else if (att.name === "case") note = parsed;
         else if (att.name === "data") Object.assign(testData, parsed);
+        else if (att.name === "observed") Object.assign(observed, parsed);
         else evidence = parsed;
       } catch {
         /* a malformed attachment is not worth failing the report over */
@@ -323,6 +325,7 @@ for (const spec of readReport()) {
   if (Array.isArray(note?.steps) && note.steps.length) entry.steps = note.steps.map(String);
   if (note?.category) entry.category = String(note.category);
   if (Object.keys(testData).length) entry.test_data = testData;
+  if (Object.keys(observed).length) entry.observed = observed;
 
   entry.run = {
     outcome: outcomeOf(spec),

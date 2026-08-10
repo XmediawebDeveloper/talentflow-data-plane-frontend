@@ -18,6 +18,7 @@ import {
   assertTrafficStayedInQa,
   loginForReal,
   describeCase,
+  recordObserved,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -85,5 +86,12 @@ test.describe("Tier 3 — real UI against a real backend", () => {
 
     // Nothing touched production, and something did touch QA.
     assertTrafficStayedInQa(calls, apiUrl);
+
+    await recordObserved({
+      "landed on": new URL(page.url()).pathname,
+      "login answered": String(login?.status ?? "no call"),
+      "authenticated calls that followed": String(authed.length),
+    });
+
   });
 });

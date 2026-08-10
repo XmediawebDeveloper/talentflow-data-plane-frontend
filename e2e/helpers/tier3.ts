@@ -256,6 +256,17 @@ export function describe(calls: ApiCall[]): string {
  * is the test that says so.
  */
 export async function loginForReal(page: Page, tenant: Tier3Tenant): Promise<void> {
+  // Signing in is data too. The first version of this recorded only what the
+  // helpers *created*, so a test that signs in as the existing admin and creates
+  // nothing showed "not written down yet" against a run that plainly used an
+  // address and an organisation. Recorded here rather than in signIn, because
+  // several tests call this directly and this is the one place every sign-in
+  // passes through.
+  //
+  // The password is never recorded. It is the one value a reproduction can be
+  // handed separately, and the one that must not sit in a report.
+  await recordTestData({ "signed in as": tenant.adminEmail, organisation: tenant.subdomain });
+
   // `org` is not optional: without it the backend resolves no tenant and the
   // credentials are correct for nobody.
   await page.goto(`/login?org=${encodeURIComponent(tenant.subdomain)}`);
@@ -668,6 +679,29 @@ export async function recordTestData(fields: Record<string, string>): Promise<vo
     });
   } catch {
     /* called outside a test — seeding scripts use these helpers too */
+  }
+}
+
+/**
+ * What the run actually saw, in the words of the thing it saw.
+ *
+ * "Actual result: It did." was true and useless — it points back at the expected
+ * result and says nothing on its own, which is not what a manual tester means by
+ * that field. They write down what was in front of them: the name the dashboard
+ * greeted, the number the page printed, the status the API answered.
+ *
+ * So a test records the value it already had to read in order to assert on it.
+ * Where nothing is recorded the panel says so, rather than dressing an absence
+ * up as a result.
+ */
+export async function recordObserved(fields: Record<string, string | number>): Promise<void> {
+  try {
+    await test.info().attach("observed", {
+      body: JSON.stringify(fields, null, 2),
+      contentType: "application/json",
+    });
+  } catch {
+    /* called outside a test */
   }
 }
 
