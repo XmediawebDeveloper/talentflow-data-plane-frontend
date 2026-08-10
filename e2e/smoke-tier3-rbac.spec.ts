@@ -23,6 +23,7 @@ import {
   settle,
   createUserForUi,
   adminApi,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -42,7 +43,12 @@ test.describe("Tier 3 — permissions, in a real browser", () => {
     readTier3Tenant();
   });
 
-  test("TC-T330 a viewer signs in and is not offered the admin sections", async ({ page }) => {
+  test("TC-T330 a viewer signs in and is not offered the admin sections", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in as a viewer and look at what the navigation offers",
+      expects: "The admin sections are not offered",
+    });
+
     const viewer = await createUserForUi("viewer");
     const calls = watchApiTraffic(page);
 
@@ -70,7 +76,12 @@ test.describe("Tier 3 — permissions, in a real browser", () => {
     }
   });
 
-  test("TC-T331 and the API refuses the viewer the same thing the UI hides", async () => {
+  test("TC-T331 and the API refuses the viewer the same thing the UI hides", async ({}, testInfo) => {
+    await describeCase(testInfo, {
+      does: "As that viewer, ask the API directly for the things the UI hid",
+      expects: "The API refuses them too \u2014 the menu is not the only thing standing in the way",
+    });
+
     const viewer = await createUserForUi("viewer");
     const { apiUrl } = readTier3Env();
     const tenant = readTier3Tenant();
@@ -112,7 +123,12 @@ test.describe("Tier 3 — permissions, in a real browser", () => {
     }
   });
 
-  test("TC-T332 an admin is offered what the viewer is not", async ({ page }) => {
+  test("TC-T332 an admin is offered what the viewer is not", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in as an admin and look at the same navigation",
+      expects: "The admin sections are offered, so the viewer's result was a permission and not a missing page",
+    });
+
     // The control. Without it, TC-T330 passes just as happily on a sidebar that
     // failed to render at all, which is a broken app reported as a working
     // permission system.
@@ -133,7 +149,12 @@ test.describe("Tier 3 — permissions, in a real browser", () => {
     ).toBeGreaterThan(0);
   });
 
-  test("TC-T333 a viewer's session cannot be widened by asking the API directly", async () => {
+  test("TC-T333 a viewer's session cannot be widened by asking the API directly", async ({}, testInfo) => {
+    await describeCase(testInfo, {
+      does: "As a viewer, ask the API to give the session more permissions than it has",
+      expects: "It is refused",
+    });
+
     // The last gap: a UI that never offers the action, and an API that refuses
     // it on the obvious route, can still leak through a second route to the
     // same resource. Checked on the tenant's own user list, which is the most

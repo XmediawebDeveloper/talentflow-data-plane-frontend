@@ -598,6 +598,46 @@ export interface Defect {
   owner?: "developer" | "infrastructure";
 }
 
+/**
+ * What this case does, and what should happen — in the words a tester uses.
+ *
+ * A manual tester was shown the dashboard and could not tell what any of it
+ * meant. The reason turned out to be structural rather than cosmetic: cases
+ * that came from a workbook carry two columns somebody wrote by hand — "Apply
+ * experience range" / "Results match experience range" — and the dashboard
+ * prints them. Cases written straight into a spec file carry a title and code.
+ * The code is the steps, but no manual tester reads
+ * `loginForReal(page, { ...tenant, adminPassword: "definitely-not-…" })`.
+ *
+ * Measured across the suite the gap was invisible — 96% of all cases had the
+ * text — and total in the one place it was looked at: Sign in, 23 cases, 0%.
+ * Sign in is almost all hand-written, and hand-written is where the strongest
+ * tests live. The module a tester opened first was the one with nothing to
+ * read.
+ *
+ * So each test says it in two sentences. Not documentation of the code — a
+ * statement of the check, which is what somebody has to agree with or argue
+ * against. `expects` is the half that was missing entirely: the report already
+ * derives `what_to_check` from the title, and had nothing at all for the
+ * expected result.
+ */
+export interface CaseNote {
+  /** What is done, as an instruction: "Sign in with the wrong password". */
+  does: string;
+  /** What must follow: "The app refuses and says why". */
+  expects: string;
+}
+
+export async function describeCase(
+  testInfo: { attach: (name: string, options: { body: string; contentType: string }) => Promise<void> },
+  note: CaseNote,
+): Promise<void> {
+  await testInfo.attach("case", {
+    body: JSON.stringify(note, null, 2),
+    contentType: "application/json",
+  });
+}
+
 export async function recordDefect(
   testInfo: { attach: (name: string, options: { body: string; contentType: string }) => Promise<void> },
   defect: Defect,

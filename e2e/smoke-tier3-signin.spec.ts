@@ -39,6 +39,7 @@ import {
   adminApi,
   uniqueSuffix,
   recordDefect,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -78,9 +79,14 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
 
   // --------------------------------------------------- forgetting a password --
 
-  test("TC-T340 the login screen offers a way back when the password is forgotten", async ({
+  test("TC-T600 the login screen offers a way back when the password is forgotten", async ({
     page,
-  }) => {
+  }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open the login screen and look for a way to recover a forgotten password",
+      expects: "There is a 'Forgot password?' control, and it opens a dialog that asks for an email address",
+    });
+
     // The most common thing a real person does at a login screen, and until now
     // nothing checked the route existed. A control that opens nothing is the
     // failure mode: the link is in the layout, the modal never mounts.
@@ -113,7 +119,12 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     ).toBeVisible({ timeout: 15_000 });
   });
 
-  test("TC-T341 a reset request is accepted and moves on to the code", async ({ page }) => {
+  test("TC-T601 a reset request is accepted and moves on to the code", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open that dialog, type a real email address and ask for a code",
+      expects: "The request is accepted and the dialog moves on to ask for the code",
+    });
+
     // A user of its own. Three tests used to share the tenant admin's address
     // while one of them deliberately exhausted its rate limit, so this one got a
     // 429 from work another test had done — in an earlier run, because the limit
@@ -155,13 +166,18 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     ).toBe(true);
   });
 
-  test("TC-T342 an address that does not exist is answered exactly like one that does", async () => {
+  test("TC-T602 an address that does not exist is answered exactly like one that does", async ({}, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Ask to reset the password once for a real address, then once for one with no account",
+      expects: "Both get the same answer, so the form cannot be used to find out who has an account here",
+    });
+
     // Account enumeration. If the answer differs, the reset form becomes a way
     // to ask "does this person have an account here?" — and the backend's own
     // comment says it always returns success for exactly this reason, which is a
     // claim worth holding it to.
     // One request each, and both addresses are new — this is about what a single
-    // answer reveals. What repeating it reveals is TC-T352, and it is worse.
+    // answer reveals. What repeating it reveals is TC-T605, and it is worse.
     const { subdomain } = readTier3Tenant();
     const user = await createUserForUi("recruiter");
     const api = await anonApi();
@@ -192,7 +208,12 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     ).toBe(message(realBody));
   });
 
-  test("TC-T343 a wrong verification code is refused", async () => {
+  test("TC-T603 a wrong verification code is refused", async ({}, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Ask for a reset, then submit a made-up six-digit code",
+      expects: "The code is refused, and the refusal says why",
+    });
+
     // The OTP itself cannot be read here — it is delivered by mail and QA sends
     // none — so the happy path is out of reach. The refusal is not, and it is
     // the half that matters: a reset that accepts any six digits is not a reset.
@@ -218,7 +239,12 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     ).not.toBe("");
   });
 
-  test("TC-T344 asking again and again is rate limited", async () => {
+  test("TC-T604 asking again and again is rate limited", async ({}, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Ask to reset the same address six times in a row",
+      expects: "The product stops accepting them",
+    });
+
     // The backend has a rate limiter on this path and consumes it only for real,
     // activated accounts. Untested, it is a line of code somebody can delete.
     const { subdomain } = readTier3Tenant();
@@ -243,8 +269,13 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     ).toBe(true);
   });
 
-  test("TC-T352 asking repeatedly does not reveal which addresses have accounts", async ({}, testInfo) => {
-    // TC-T342 shows a single answer gives nothing away. This is what repeating
+  test("TC-T605 asking repeatedly does not reveal which addresses have accounts", async ({}, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Ask six times for an address that has an account, then six times for one that has none",
+      expects: "The two sequences look the same. They do not: the one with an account starts refusing and the other never does, so six requests reveal who is registered",
+    });
+
+    // TC-T602 shows a single answer gives nothing away. This is what repeating
     // it gives away, and the generic answer was the whole defence.
     //
     // The backend refuses a real address after a few tries and never refuses one
@@ -308,7 +339,12 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
 
   // ----------------------------------------------- who is allowed in at all --
 
-  test("TC-T345 a deactivated user cannot sign in", async ({ page }, testInfo) => {
+  test("TC-T606 a deactivated user cannot sign in", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Create a user, check they can sign in, deactivate them, then try to sign in again",
+      expects: "The second sign-in is refused",
+    });
+
     // Deactivating somebody is what happens when they leave. If the check is
     // only in the UI, or only on new sessions, they have not actually left.
     //
@@ -376,7 +412,12 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     ).not.toMatch(/dashboard/);
   });
 
-  test("TC-T346 an unknown address is refused the same way as a wrong password", async () => {
+  test("TC-T607 an unknown address is refused the same way as a wrong password", async ({}, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in with a real address and the wrong password, then with an address that has no account",
+      expects: "Both are refused in the same way, so the difference cannot be used to harvest addresses",
+    });
+
     // The same enumeration question at the front door. "No such user" and "wrong
     // password" as different answers is a way to harvest addresses.
     const { subdomain, adminEmail } = readTier3Tenant();
@@ -391,7 +432,12 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     ).toBe(wrongPassword.status);
   });
 
-  test("TC-T347 signing in to an organisation that does not exist is refused", async ({ page }) => {
+  test("TC-T608 signing in to an organisation that does not exist is refused", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in with real credentials but name an organisation that does not exist",
+      expects: "It is refused, and the browser does not reach a dashboard",
+    });
+
     const { adminEmail, adminPassword } = readTier3Tenant();
     const nonsense = `no-such-org-${uniqueSuffix()}`;
 
@@ -415,7 +461,12 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
 
   // ------------------------------------------------- changing it on purpose --
 
-  test("TC-T348 a changed password takes effect, and the old one stops working", async ({}, testInfo) => {
+  test("TC-T609 a changed password takes effect, and the old one stops working", async ({}, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Create a user, change their password, then try the new password and the old one",
+      expects: "The new password signs in and the old one stops working",
+    });
+
     // Done to a user this test created. Changing the QA tenant's own admin
     // password would break every other test in the suite, so it is never done.
     //
@@ -482,7 +533,12 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
 
   // ---------------------------------------------------- keeping the session --
 
-  test("TC-T349 a session can be renewed without signing in again", async () => {
+  test("TC-T610 a session can be renewed without signing in again", async ({}, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in, then exchange the refresh token for a new access token and use it",
+      expects: "A new token is issued and the API accepts it, so a session outlives its first token",
+    });
+
     // POST /auth/refresh is what stands between a working day and being thrown
     // out every time an access token expires. Nothing exercised it.
     const { subdomain, adminEmail, adminPassword } = readTier3Tenant();
@@ -516,9 +572,14 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     expect(me.status(), "the renewed access token is not accepted by the API").toBe(200);
   });
 
-  test("TC-T350 a token is not accepted after the session that issued it is ended", async ({
+  test("TC-T611 a token is not accepted after the session that issued it is ended", async ({
     page,
   }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in, keep a copy of the token, sign out, then use that token again",
+      expects: "It is refused \u2014 signing out ended the session, not just the browser's copy",
+    });
+
     // Signing out in one place has to end the session everywhere, not just clear
     // the browser's copy of the token.
     //
@@ -579,7 +640,12 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     ).toBeGreaterThanOrEqual(400);
   });
 
-  test("TC-T351 signing in is not gated by a second factor for this tenant", async () => {
+  test("TC-T612 signing in is not gated by a second factor for this tenant", async ({}, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in with an email address and password alone",
+      expects: "No second factor is asked for and the tokens are issued. This records how the tenant is set up today",
+    });
+
     // Not a wish, a record. The product ships POST /auth/verify-2fa-login, and
     // whether it stands in the way depends on configuration nobody outside the
     // tenant can see. This states what is true today, so that turning 2FA on

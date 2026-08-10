@@ -21,6 +21,7 @@ import {
   signIn,
   settle,
   waitForCall,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -49,7 +50,12 @@ test.describe("Tier 3 — the organisation record and settings", () => {
 
   // -------------------------------------------------------- organisation ----
 
-  test("TC-T440 Company Profile is filled from the organisation record", async ({ page }) => {
+  test("TC-T440 Company Profile is filled from the organisation record", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open Company Profile and compare the form with the organisation record the API returns",
+      expects: "The form is filled from that record, and there is a way to change it",
+    });
+
     const calls = watchApiTraffic(page);
     await signIn(page);
     await page.goto("/organization/company-profile");
@@ -101,7 +107,12 @@ test.describe("Tier 3 — the organisation record and settings", () => {
 
   // ------------------------------------------------------------ sessions ----
 
-  test("TC-T441 Security Settings lists the sessions the API knows about", async ({ page }) => {
+  test("TC-T441 Security Settings lists the sessions the API knows about", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open Security Settings and compare the session list with what the API knows",
+      expects: "Every session is listed, each can be revoked, and there is a way to end all the others",
+    });
+
     // A session list that is wrong is worse than none: it is what someone reads
     // when they suspect their account is being used by somebody else.
     const calls = watchApiTraffic(page);
@@ -134,7 +145,12 @@ test.describe("Tier 3 — the organisation record and settings", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T442 the password can be changed from Security Settings", async ({ page }) => {
+  test("TC-T442 the password can be changed from Security Settings", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Click Change Password on Security Settings",
+      expects: "Something opens that takes a password",
+    });
+
     // Not exercised end to end on purpose — changing the QA tenant's password
     // would break every other test in this suite. What is checked is that the
     // control exists and opens something, which is the part that silently

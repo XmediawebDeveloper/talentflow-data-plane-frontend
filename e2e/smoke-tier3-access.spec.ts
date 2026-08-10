@@ -22,6 +22,7 @@ import {
   settle,
   waitForCall,
   createUserForUi,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -43,7 +44,12 @@ test.describe("Tier 3 — roles and permissions", () => {
 
   // --------------------------------------------------------------- roles ----
 
-  test("TC-T430 the role count on screen is the number the API defines", async ({ page }) => {
+  test("TC-T430 the role count on screen is the number the API defines", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open Role Management and read the 'Total Roles' figure",
+      expects: "It is the number of roles the API defines",
+    });
+
     const calls = watchApiTraffic(page);
     await signIn(page);
     await page.goto("/organization/role-management");
@@ -63,7 +69,12 @@ test.describe("Tier 3 — roles and permissions", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T431 the permission catalogue is the size the API reports", async ({ page }) => {
+  test("TC-T431 the permission catalogue is the size the API reports", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Read the 'Permissions Catalog' figure on the same page",
+      expects: "It is the number of permissions the API lists",
+    });
+
     // 197 permissions is the vocabulary the whole access system is built from.
     // A page showing a different number is describing a different system.
     const calls = watchApiTraffic(page);
@@ -81,7 +92,12 @@ test.describe("Tier 3 — roles and permissions", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T432 each role's permission count matches what the API grants it", async ({ page }) => {
+  test("TC-T432 each role's permission count matches what the API grants it", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open Permissions & Roles and read the permission count beside each role",
+      expects: "Each one matches what the API grants that role \u2014 the figure people read before handing a role out",
+    });
+
     // The per-role figure is the one people actually read when deciding whether
     // a role is safe to hand out. It is also the easiest to compute in the
     // browser and get subtly wrong.
@@ -112,7 +128,12 @@ test.describe("Tier 3 — roles and permissions", () => {
     ).toEqual([]);
   });
 
-  test("TC-T433 a viewer cannot open role management at all", async ({ page }) => {
+  test("TC-T433 a viewer cannot open role management at all", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in as a viewer and open Role Management directly by its address",
+      expects: "It is refused, and no role or permission data is served on the way",
+    });
+
     // The page that hands out permissions is the one that must never be
     // reachable by someone without them. Checked by opening it directly, not by
     // looking for a hidden link — a route guard that only exists in the sidebar

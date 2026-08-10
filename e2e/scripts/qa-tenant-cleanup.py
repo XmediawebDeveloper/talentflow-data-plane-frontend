@@ -40,9 +40,26 @@ import sys
 import urllib.error
 import urllib.request
 
-# resource path -> the field its display name lives in
-RESOURCES = [("jd", ("title",)), ("teams", ("name",))]
-MARKER = "E2E T3 "
+# resource path -> the fields to read a name from -> the prefixes that mark it
+# as this suite's work.
+#
+# Users were added after the QA tenant reached 356 of them, 354 made by tests,
+# and TC-T390 started failing: it compares the list on screen against the list
+# the API returns, and at that size the two are different pages of the same
+# thing. The suite creates about seven users a run — a viewer here, a recruiter
+# there, each one to check that a permission actually holds — and nothing ever
+# removed them. Same shape as the images filling the disk and the invite mail
+# spending the quota: state accumulating in a shared place with no one
+# responsible for it.
+#
+# Users match on email, not on a display name, and only on `e2e-t3-`. The QA
+# tenant's own admin is `e2e-admin-…` and a looser prefix would delete the
+# account every other test signs in with.
+RESOURCES = [
+    ("jd", ("title",), ("E2E T3 ",)),
+    ("teams", ("name",), ("E2E T3 ",)),
+    ("users", ("email",), ("e2e-t3-", "deactivate-proof-", "mailproof-")),
+]
 
 
 def request(api, token, method, path):
@@ -68,8 +85,8 @@ def parse_when(value):
         return None
 
 
-def collect(api, token, resource, name_fields):
-    """Every record carrying the marker, with a usable timestamp."""
+def collect(api, token, resource, name_fields, prefixes):
+    """Every record carrying one of the markers, with a usable timestamp."""
     found, page = [], 1
     while page <= 50:
         status, body = request(api, token, "GET", f"/{resource}?page={page}&page_size=100")
@@ -78,7 +95,7 @@ def collect(api, token, resource, name_fields):
         items = body if isinstance(body, list) else (body.get("items") or [])
         for item in items:
             name = next((str(item[f]) for f in name_fields if item.get(f)), "")
-            if not name.startswith(MARKER):
+            if not any(name.lower().startswith(p.lower()) for p in prefixes):
                 continue
             when = parse_when(item.get("created_at"))
             if when and item.get("id"):
@@ -99,8 +116,8 @@ def main():
     args = ap.parse_args()
 
     total_removed = 0
-    for resource, name_fields in RESOURCES:
-        records = collect(args.api, args.token, resource, name_fields)
+    for resource, name_fields, prefixes in RESOURCES:
+        records = collect(args.api, args.token, resource, name_fields, prefixes)
         if not records:
             print(f"  {resource}: nothing this suite created")
             continue

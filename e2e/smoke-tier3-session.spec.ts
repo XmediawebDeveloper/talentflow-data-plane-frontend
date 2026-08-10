@@ -20,6 +20,7 @@ import {
   acceptTermsIfBlocked,
   loginForReal,
   settle,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -29,7 +30,12 @@ test.describe("Tier 3 — session and access", () => {
     readTier3Tenant();
   });
 
-  test("TC-T302 a wrong password is refused, and the app says so", async ({ page }) => {
+  test("TC-T302 a wrong password is refused, and the app says so", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in with a real email address and the wrong password",
+      expects: "It is refused, and the screen says so rather than failing quietly",
+    });
+
     const tenant = readTier3Tenant();
     const calls = watchApiTraffic(page);
 
@@ -59,7 +65,12 @@ test.describe("Tier 3 — session and access", () => {
     expect(stored, "a refused login still wrote a token to localStorage").not.toMatch(/eyJ/);
   });
 
-  test("TC-T303 a protected page cannot be opened without a session", async ({ page }) => {
+  test("TC-T303 a protected page cannot be opened without a session", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open a page that sits behind the login, without signing in first",
+      expects: "The app sends the browser to the login screen instead of showing the page",
+    });
+
     const calls = watchApiTraffic(page);
 
     await page.goto("/dashboard");
@@ -85,7 +96,12 @@ test.describe("Tier 3 — session and access", () => {
     ).toEqual([]);
   });
 
-  test("TC-T304 a reload keeps the session", async ({ page }) => {
+  test("TC-T304 a reload keeps the session", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in, then reload the page",
+      expects: "Still signed in, still on the same page",
+    });
+
     const calls = watchApiTraffic(page);
     await signIn(page);
     const landed = page.url();
@@ -105,7 +121,12 @@ test.describe("Tier 3 — session and access", () => {
     assertNoServerErrors(calls, "the dashboard after a reload");
   });
 
-  test("TC-T305 signing out ends the session for real", async ({ page }) => {
+  test("TC-T305 signing out ends the session for real", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in, sign out, then try to open a page behind the login",
+      expects: "It is refused and the browser goes back to the login screen",
+    });
+
     await signIn(page);
     await signOut(page);
 
@@ -131,7 +152,12 @@ test.describe("Tier 3 — session and access", () => {
     expect(stored, "a token survived sign-out in localStorage").not.toMatch(/eyJ/);
   });
 
-  test("TC-T306 a corrupt token is recovered from, not crashed on", async ({ page }) => {
+  test("TC-T306 a corrupt token is recovered from, not crashed on", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Put a damaged session token in the browser and open the app",
+      expects: "The person is sent to the login screen, not shown an error page",
+    });
+
     await signIn(page);
 
     // A token can go bad in the field for reasons the app does not control:
@@ -171,7 +197,12 @@ test.describe("Tier 3 — session and access", () => {
    * this environment deliberately cannot reach, so the provider fails open.
    * Both paths end at the same requirement — the app is usable.
    */
-  test("TC-T307 no blocking overlay stands between a signed-in owner and the app", async ({ page }) => {
+  test("TC-T307 no blocking overlay stands between a signed-in owner and the app", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in as the tenant owner and look at the dashboard",
+      expects: "Nothing covers the page \u2014 no upgrade wall, no paywall, no modal in the way",
+    });
+
     const calls = watchApiTraffic(page);
     const tenant = readTier3Tenant();
 

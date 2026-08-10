@@ -140,6 +140,7 @@ const inventory =
       ];
 
 const byId = new Map();
+const collisions = [];
 for (const row of inventory) {
   if (byId.has(row.tc_id)) {
     throw new Error(
@@ -239,6 +240,12 @@ for (const spec of readReport()) {
     spec.title.match(TC)?.[1] ??
     `${process.env.CI_JOB_NAME ?? "local"}::${group ? `${group} › ` : ""}${spec.title}`.slice(0, 120);
   let entry = byId.get(id);
+  // Two tests answering to one id is not a reporting quirk, it is data loss:
+  // the second overwrites the first's result and the case disappears from the
+  // report. Seven ids collided this way when a new spec reused a block another
+  // file already held, and nothing said so — the count simply came out seven
+  // short. Collected here and refused at the end, named.
+  if (entry?.run) collisions.push(`${id}  ${entry.title || ""} / ${spec.title}`);
   if (!entry && (only === "tier3" || only === "quarantine")) {
     // Tier 3 describes itself. The title after the id is the whole statement of
     // what the journey proves, and the spec file names the group.
@@ -272,6 +279,7 @@ for (const spec of readReport()) {
   let evidence = null;
   let screenshot = null;
   let defect = null;
+  let note = null;
   for (const att of last.attachments ?? []) {
     if (att.name === "screenshot" && att.path) {
       screenshot = path.relative(ROOT, att.path);
@@ -281,18 +289,30 @@ for (const spec of readReport()) {
     // the click path, what should happen, what does, and what was measured.
     // Without this the dashboard can only say "TC-T401 failed", and the person
     // who has to fix it starts by reading the test to work out what it did.
-    if (att.name === "defect" || att.name === "evidence") {
+    // What the case does and what must follow, in the words a tester uses. A
+    // workbook row carries these as two columns somebody wrote by hand; a test
+    // written straight into a spec file has only a title and code, and no
+    // manual tester reads code. describeCase() closes that.
+    if (att.name === "defect" || att.name === "evidence" || att.name === "case") {
       const raw = readAttachment(att);
       if (!raw) continue;
       try {
         const parsed = JSON.parse(raw);
         if (att.name === "defect") defect = parsed;
+        else if (att.name === "case") note = parsed;
         else evidence = parsed;
       } catch {
         /* a malformed attachment is not worth failing the report over */
       }
     }
   }
+
+  // The test's own words win over anything derived. For a Tier-3 row the
+  // derived value was the title for `what_to_check` and nothing at all for
+  // `expected_result` — which is why a module made of hand-written specs read
+  // as blank to the tester it was shown to.
+  if (note?.does) entry.what_to_check = String(note.does);
+  if (note?.expects) entry.expected_result = String(note.expects);
 
   entry.run = {
     outcome: outcomeOf(spec),
@@ -339,6 +359,15 @@ function attachScreenshots() {
   return found;
 }
 const rescued = attachScreenshots();
+if (collisions.length) {
+  console.error(
+    `[build-report] ${collisions.length} test id(s) are claimed by more than one test. ` +
+      `The second result overwrites the first and that case is lost from the report:`,
+  );
+  for (const c of collisions) console.error(`  ${c}`);
+  process.exit(1);
+}
+
 const shots = [...byId.values()].filter((c) => c.run?.screenshot).length;
 
 // ------------------------------------------------------------------- output --

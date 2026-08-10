@@ -22,6 +22,7 @@ import {
   createUserForUi,
   revealList,
   adminApi,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -47,7 +48,12 @@ test.describe("Tier 3 — users, roles and the signed-in account", () => {
     readTier3Tenant();
   });
 
-  test("TC-T390 the Users list shows the API's users, and nobody else's", async ({ page }) => {
+  test("TC-T390 the Users list shows the API's users, and nobody else's", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open Users and compare the list on screen with the list the API returns",
+      expects: "Every user shown belongs to this organisation, and nobody else appears",
+    });
+
     // Created before the page opens, by something the browser knows nothing
     // about — the same situation as a colleague adding someone.
     await createUserForUi("recruiter");
@@ -111,7 +117,12 @@ test.describe("Tier 3 — users, roles and the signed-in account", () => {
     ).toEqual([]);
   });
 
-  test("TC-T391 the user count on screen is the number the API reports", async ({ page }) => {
+  test("TC-T391 the user count on screen is the number the API reports", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Read the user count printed on the Users page",
+      expects: "It is the number the API reports, not a count of one page of it",
+    });
+
     await createUserForUi("viewer");
     const calls = watchApiTraffic(page);
 
@@ -140,7 +151,12 @@ test.describe("Tier 3 — users, roles and the signed-in account", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("TC-T392 the roles the UI offers are the roles the API defines", async ({ page }) => {
+  test("TC-T392 the roles the UI offers are the roles the API defines", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open the role picker and compare the roles offered with the roles the API defines",
+      expects: "The UI offers exactly the roles that exist",
+    });
+
     // A role list that drifts from the backend's is how someone gets assigned a
     // role that does not exist, or is never offered one that does. Both are
     // silent: the dropdown looks fine either way.
@@ -179,7 +195,12 @@ test.describe("Tier 3 — users, roles and the signed-in account", () => {
     ).toBeGreaterThan(0);
   });
 
-  test("TC-T393 the profile page is filled from the signed-in account", async ({ page }) => {
+  test("TC-T393 the profile page is filled from the signed-in account", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Open the profile page while signed in",
+      expects: "It is filled with the signed-in account's own name and email",
+    });
+
     // Settings pages are where a stale cache shows one person another person's
     // details. The form must be populated from this session, not from anything
     // left over.
@@ -201,7 +222,12 @@ test.describe("Tier 3 — users, roles and the signed-in account", () => {
     ).toBe(tenant.adminEmail.toLowerCase());
   });
 
-  test("TC-T394 a new user can sign in and lands in the same tenant", async ({ page }) => {
+  test("TC-T394 a new user can sign in and lands in the same tenant", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Create a user, then sign in as them",
+      expects: "They reach the dashboard, inside the same organisation",
+    });
+
     // The round trip that matters for user management: created here, usable
     // there. A user row that exists but cannot sign in is a support ticket, and
     // no amount of list-rendering coverage would notice.

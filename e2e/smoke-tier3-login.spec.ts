@@ -17,6 +17,7 @@ import {
   watchApiTraffic,
   assertTrafficStayedInQa,
   loginForReal,
+  describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
 
@@ -26,7 +27,12 @@ test.describe("Tier 3 — real UI against a real backend", () => {
     readTier3Tenant();
   });
 
-  test("TC-T301 a real login reaches the dashboard as the real user", async ({ page }) => {
+  test("TC-T301 a real login reaches the dashboard as the real user", async ({ page }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Sign in with the tenant's real email address and password",
+      expects: "The dashboard opens, and it shows this account's own name and organisation",
+    });
+
     const { apiUrl } = readTier3Env();
     const tenant = readTier3Tenant();
     const calls = watchApiTraffic(page);
