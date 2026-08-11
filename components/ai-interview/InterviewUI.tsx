@@ -922,18 +922,42 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // question_timer_started, so this stays false for them and the mic reopens
   // immediately with no get-ready countdown after a nudge.
   const getReadyArmedRef = useRef(false);
-  // ── Mid-speech silence countdown (Change 2) ──────────────────────────────
-  // Once the candidate has spoken and then pauses, the first ~8s is silent
-  // (normal listening, no counter). For the LAST 7s of the 15s silence window
-  // we show a big 7→1 countdown; if they resume speaking it disappears and we
-  // go back to normal listening; if it reaches 0 the turn ends and we move on.
+  // ── AII14-PARKED: mid-speech silence COUNTDOWN (the old auto-advance) ─────
+  // DISABLED, NOT DELETED. Previously: after ~5s of silence a 10→1 countdown
+  // appeared and, when it ran out, the turn ended and the interview moved on by
+  // itself. AII14 AC3 forbids that ("shall not automatically move to the next
+  // question based only on silence detection") — a confirmation popup with a
+  // Submit button replaces it (see midSilenceConfirm below).
+  //
+  // The state below is intentionally LEFT LIVE: the shared countdown overlay and
+  // `bannerVisible` still reference it, and AC1's pre-turn 3..2..1 shares that
+  // overlay. It is simply never set to a non-null value any more, so the
+  // mid-silence branch never renders. Full original code (driver + overlay
+  // branch + VAD auto end-turn) is preserved verbatim in
+  // ./parked/silence-auto-advance.parked.md
+  //
+  // const SILENCE_COUNTDOWN_WINDOW_MS = 10000; // final 10s of the 15s window (5s silent, then 10→1)
   const [midSilenceCountdown, setMidSilenceCountdown] = useState<number | null>(null);
   const midSilenceCountdownRef = useRef<number | null>(null);
-  const SILENCE_COUNTDOWN_WINDOW_MS = 10000; // show the counter for the final 10s of the 15s window (first ~5s silent, then 10→1)
   const setMidSilenceCountdown_ = useCallback((val: number | null) => {
     if (midSilenceCountdownRef.current !== val) {
       midSilenceCountdownRef.current = val;
       setMidSilenceCountdown(val);
+    }
+  }, []);
+
+  // ── AII14: "Are you done with your response?" confirmation ────────────────
+  // Shown after DONE_CONFIRM_SILENCE_MS of CONTINUOUS silence following the
+  // candidate's speech. It does NOT end the turn — the mic stays open and
+  // recording continues. The candidate either speaks again (popup closes, the
+  // 15s window restarts) or clicks Submit to finalize and move on.
+  const DONE_CONFIRM_SILENCE_MS = 15000; // AC2: 15 seconds
+  const [midSilenceConfirm, setMidSilenceConfirm] = useState(false);
+  const midSilenceConfirmRef = useRef(false);
+  const setMidSilenceConfirm_ = useCallback((val: boolean) => {
+    if (midSilenceConfirmRef.current !== val) {
+      midSilenceConfirmRef.current = val;
+      setMidSilenceConfirm(val);
     }
   }, []);
 
@@ -2344,6 +2368,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   // VAD settings
   const silenceStartRef = useRef<number | null>(null);
+  // AII14 — one-shot guard so the "holding turn open" line is logged once per
+  // pause instead of every analyser frame. Reset when speech resumes / the turn
+  // changes (see the confirmation driver effect).
+  const silenceHoldLoggedRef = useRef(false);
   const speechDetectedRef = useRef(false);
   const speechDetectedAtRef = useRef<number | null>(null);
   const speechStartSentRef = useRef(false); // fires speech_started once per recording session
@@ -6278,25 +6306,44 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   // sit idle until the 130 s hard cap (the "answer finished but stays
                   // idle" bug). This threshold is generous so a normal pause is never
                   // pre-empted — it only rescues a genuinely stuck turn.
-                  if (serverEotEnabledRef.current) {
-                    if (nowMs - silenceSince > SERVER_EOT_SILENCE_FALLBACK_MS) {
-                      console.warn('[INTERVIEW-DEBUG] server_end_turn missing — silence safety-net force-ending turn', {
-                        silenceMs: nowMs - silenceSince,
-                        fallbackMs: SERVER_EOT_SILENCE_FALLBACK_MS,
-                      });
-                      stopRecording();
-                    }
-                    return;
+                  // ── AII14-PARKED: silence NO LONGER ends the turn ──────────
+                  // AC3: "The system shall not automatically move to the next
+                  // question based only on silence detection." The silence clock
+                  // still runs (the confirmation-popup driver reads
+                  // silenceStartRef), but neither branch below may call
+                  // stopRecording() any more — the candidate ends the turn via
+                  // Submit / Next. The per-question hard cap
+                  // (question_window_hard_cap) is untouched and remains the
+                  // backstop against a turn idling forever.
+                  //
+                  // Original code preserved verbatim in
+                  // ./parked/silence-auto-advance.parked.md — to restore, delete
+                  // the log below and un-comment both blocks.
+                  //
+                  // if (serverEotEnabledRef.current) {
+                  //   if (nowMs - silenceSince > SERVER_EOT_SILENCE_FALLBACK_MS) {
+                  //     console.warn('[INTERVIEW-DEBUG] server_end_turn missing — silence safety-net force-ending turn', {
+                  //       silenceMs: nowMs - silenceSince,
+                  //       fallbackMs: SERVER_EOT_SILENCE_FALLBACK_MS,
+                  //     });
+                  //     stopRecording();
+                  //   }
+                  //   return;
+                  // }
+                  // console.log('[INTERVIEW-DEBUG] Silence timeout -> stopRecording', { ... });
+                  // stopRecording();
+                  // return;
+                  if (!silenceHoldLoggedRef.current) {
+                    silenceHoldLoggedRef.current = true;
+                    console.log('[INTERVIEW-DEBUG] AII14: silence window elapsed — HOLDING turn open (awaiting Submit/Next)', {
+                      silenceMs: nowMs - silenceSince,
+                      effectiveSilenceMs,
+                      serverEot: serverEotEnabledRef.current,
+                      // Both thresholds are logged for diagnosis only — neither
+                      // ends the turn any more (see AII14-PARKED above).
+                      parkedServerEotFallbackMs: SERVER_EOT_SILENCE_FALLBACK_MS,
+                    });
                   }
-                  console.log('[INTERVIEW-DEBUG] Silence timeout -> stopRecording', {
-                    avgLevel: Number(avgLevel.toFixed(4)),
-                    softVoiceFloor: Number(softVoiceFloor.toFixed(4)),
-                    inTurnActivityThreshold: Number(inTurnActivityThreshold.toFixed(4)),
-                    strongInTurnActivityThreshold: Number(strongInTurnActivityThreshold.toFixed(4)),
-                    transcriptLedTurn,
-                    silenceMs: nowMs - silenceSince,
-                  });
-                  stopRecording();
                   return;
                 }
               }
@@ -6487,7 +6534,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     };
     runPreTurnCountdownRef.current = (onComplete: () => void) => {
       cancelPreTurnCountdownRef.current();
-      let n = PRE_TURN_COUNTDOWN_FROM;              // 5
+      let n = PRE_TURN_COUNTDOWN_FROM;              // 3 (AII14 AC1)
       preTurnCountdownRef.current = n;
       setPreTurnCountdown(n);
       setStatus("Get ready…");
@@ -6511,32 +6558,52 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     };
   });
 
-  // ── Mid-speech silence countdown driver (Change 2) ─────────────────────────
-  // While the candidate's turn is open, poll the VAD's silenceStartRef every
-  // 200ms. Show a big 7→1 countdown ONLY for the final 7s of the (15s) silence
-  // window; show nothing for the first ~8s of a pause. The instant the candidate
-  // resumes speaking, the VAD resets silenceStartRef → we clear the countdown and
-  // it's back to normal listening. The actual end-turn is still driven by the VAD
-  // itself (this is display-only). Uses Date.now() to match the VAD's clock.
+  // ── AII14: silence → "Are you done?" confirmation driver ───────────────────
+  // Polls the VAD's silenceStartRef every 200ms while the candidate's turn is
+  // open. Once silence has run CONTINUOUSLY for 15s, raise the confirmation
+  // popup. The instant the candidate speaks again the VAD resets
+  // silenceStartRef → the popup closes and the 15s window starts over (AC3).
+  //
+  // Measured against DONE_CONFIRM_SILENCE_MS directly, NOT against the VAD's own
+  // silence window: the story fixes this at 15s, while the VAD window is a
+  // tuning value that varies per device/deployment (and no longer ends the turn
+  // anyway now that the auto-advance is parked).
+  //
+  // AII14-PARKED: the previous version of this effect drove the 10→1 countdown
+  // and is preserved verbatim in ./parked/silence-auto-advance.parked.md
   useEffect(() => {
-    if (!isRecording) { setMidSilenceCountdown_(null); return; }
+    if (!isRecording) { setMidSilenceConfirm_(false); setMidSilenceCountdown_(null); return; }
     const id = setInterval(() => {
       if (!isRecordingRef.current || isAiSpeakingRef.current || isProcessingRef.current) {
-        setMidSilenceCountdown_(null);
+        setMidSilenceConfirm_(false);
         return;
       }
       const start = silenceStartRef.current;
-      if (start == null) { setMidSilenceCountdown_(null); return; }
-      const eff = silenceDurationMsRef.current * (micSilenceMultiplierRef.current || 1);
-      const remaining = eff - (Date.now() - start);
-      if (remaining > 0 && remaining <= SILENCE_COUNTDOWN_WINDOW_MS) {
-        setMidSilenceCountdown_(Math.max(1, Math.ceil(remaining / 1000)));
-      } else {
-        setMidSilenceCountdown_(null);
+      if (start == null) {
+        // Candidate is speaking (VAD cleared the silence clock) — close the
+        // popup and re-arm the one-shot hold log for the NEXT pause (AC3).
+        silenceHoldLoggedRef.current = false;
+        setMidSilenceConfirm_(false);
+        return;
       }
+      setMidSilenceConfirm_((Date.now() - start) >= DONE_CONFIRM_SILENCE_MS);
     }, 200);
-    return () => { clearInterval(id); setMidSilenceCountdown_(null); };
-  }, [isRecording, setMidSilenceCountdown_]);
+    return () => {
+      clearInterval(id);
+      silenceHoldLoggedRef.current = false;
+      setMidSilenceConfirm_(false);
+    };
+  }, [isRecording, setMidSilenceConfirm_, setMidSilenceCountdown_, DONE_CONFIRM_SILENCE_MS]);
+
+  // AII14 AC4 — "Submit": finalize the CURRENT response and move on.
+  // stopRecording() is the normal end-of-turn path (the same one the parked
+  // auto-advance used), so the answer is transcribed, stored against this
+  // question, and the next question follows. Deliberately NOT handleNextQuestion,
+  // which is the SKIP path and would discard the answer.
+  const handleSubmitResponse = useCallback(() => {
+    setMidSilenceConfirm_(false);
+    stopRecording();
+  }, [setMidSilenceConfirm_, stopRecording]);
 
   const disconnect = useCallback(() => {
     const wasCompleted = isClosingRef.current || shouldDisconnectAfterAudioRef.current;
@@ -7736,7 +7803,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // even though turnBanner is suppressed then — otherwise the padding collapses
   // (pb-52→pb-4), scrollHeight drops ~192px and the chat un-pins from the bottom
   // (reported: "auto scroll at bottom not working" during the countdown).
-  const bannerVisible = turnBanner !== null || preTurnCountdown != null || midSilenceCountdown != null;
+  const bannerVisible = turnBanner !== null || preTurnCountdown != null || midSilenceCountdown != null || midSilenceConfirm;
 
   return (
     <>
@@ -8586,7 +8653,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               const _sec = `${num} second${num === 1 ? '' : 's'}`;
               const title = isPre ? 'Get ready to answer' : 'Are you done with your response?';
               const subtitle = isPre
-                ? 'Speak when it’s your turn.'
+                ? 'You may speak now.'   // AII14 AC1 wording
                 : isLastQ
                   ? `Ending the interview in ${_sec}. If you’re not done with your response, kindly speak up.`
                   : `Moving on to the next question in ${_sec}. If you’re not done with your response, kindly speak up.`;
@@ -8621,6 +8688,45 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 </div>
               );
             })()}
+            {/* ── AII14: "Are you done with your response?" confirmation ──────
+                Raised after 15s of continuous silence. It does NOT end the turn:
+                the mic stays open and recording continues underneath, so the
+                candidate can simply keep talking and the popup disappears (AC3).
+                Ending the turn is always an explicit choice — Submit (finalize
+                this answer, AC4) or Next (AC5). */}
+            {midSilenceConfirm && (
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 z-[104] flex flex-col items-center justify-center px-4">
+                <div className="pointer-events-auto w-full max-w-sm rounded-2xl bg-black/80 backdrop-blur-md ring-1 ring-amber-400/40 shadow-2xl px-5 py-4 text-center">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    <p className="text-base font-bold text-amber-300">Are you done with your response?</p>
+                  </div>
+                  <p className="text-xs sm:text-sm text-white/90 leading-snug mb-4">
+                    If you are not done, please speak up to continue your response.
+                    If you have completed your answer, click Submit to move to the next question.
+                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSubmitResponse}
+                      className="inline-flex items-center gap-1.5 px-5 py-2 rounded-full bg-emerald-500 text-white text-sm font-semibold shadow-lg hover:bg-emerald-600 transition-colors"
+                    >
+                      Submit
+                    </button>
+                    {!(questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) && (
+                      <button
+                        type="button"
+                        onClick={() => handleNextQuestion()}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/10 text-white text-sm font-medium ring-1 ring-white/20 hover:bg-white/20 transition-colors"
+                      >
+                        Next question →
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-3 text-[11px] text-white/60">Still recording — just keep speaking to continue.</p>
+                </div>
+              </div>
+            )}
             {/* Turn banner — centred within the CHAT panel (never overlaps the
                 video), sitting above the fade mask. All chat content stays above
                 it via the reserved bottom padding. */}
