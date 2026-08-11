@@ -5,7 +5,7 @@ import {
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
   MessageSquare, Info, AlertCircle, Timer, Zap,
   Video, Upload, Layers, ChevronRight, Camera, Play,
-  Lock, ArrowRightLeft, Mic,
+  Lock, ArrowRightLeft, Mic, QrCode,
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -1186,6 +1186,7 @@ export default function AIInterviewConfig() {
 
   /* Other settings */
   const [recordingEnabled, setRecordingEnabled] = useState(true);
+  const [environmentVerificationEnabled, setEnvironmentVerificationEnabled] = useState(false);
   const [availableLanguages, setAvailableLanguages] = useState<string[]>(['English']);
   const [languageInput, setLanguageInput] = useState('');
 
@@ -1687,6 +1688,7 @@ export default function AIInterviewConfig() {
           duration_minutes: mode === 'flexible' ? 30 : totalFixed,
           rounds_config: rounds,
           recording_enabled: recordingEnabled,
+          environment_verification_enabled: environmentVerificationEnabled,
           available_languages: availableLanguages,
           title: `${selectedJd.title} - AI Interview`,
           save_as_draft: true,
@@ -1711,7 +1713,7 @@ export default function AIInterviewConfig() {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, mode, sttModel, recordingEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
+  }, [mth, nth, hrPct, hrEnabled, hrSelectedIds, hrQuestionStages, mode, sttModel, recordingEnabled, environmentVerificationEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
 
   /* ── Derived values ── */
   const nthAvailable = nth.skills.length > 0 || nth.enabled;
@@ -2129,6 +2131,7 @@ export default function AIInterviewConfig() {
         duration_minutes: mode === 'flexible' ? 30 : totalFixed,
         rounds_config: buildRounds(true, overrides),
         recording_enabled: recordingEnabled,
+        environment_verification_enabled: environmentVerificationEnabled,
         available_languages: availableLanguages,
         title: `${selectedJd.title} - AI Interview`,
         save_as_draft: true,
@@ -2143,8 +2146,13 @@ export default function AIInterviewConfig() {
       }
       if (!silent) toast.success('Draft saved!');
       return true;
-    } catch {
-      if (!silent) toast.error('Failed to save draft');
+    } catch (err: any) {
+      // Always surface the real reason, even for silent (background) saves —
+      // "silent" only suppresses the success confirmation, not failures.
+      // Swallowing errors here left callers unable to show anything but a
+      // generic "please save first" with no clue why the save itself failed
+      // (quota exceeded, validation error, network issue, etc).
+      toast.error(err?.message || 'Failed to save draft');
       return false;
     } finally {
       setSavingDraft(false);
@@ -2222,7 +2230,13 @@ export default function AIInterviewConfig() {
 
     // 1. Save draft first so the Clusters page reads the latest skills.
     const ok = await saveDraft(true);
-    if (!ok || !existingDraftIdRef.current) {
+    if (!ok) {
+      // saveDraft already surfaced the real failure reason — avoid stacking
+      // a second, less specific toast on top of it.
+      isNavigatingRef.current = false;
+      return;
+    }
+    if (!existingDraftIdRef.current) {
       isNavigatingRef.current = false;
       toast.error('Please save your configuration first');
       return;
@@ -2360,7 +2374,11 @@ export default function AIInterviewConfig() {
   const handleSaveAndNavigate = async () => {
     setShowUnsavedDialog(false);
     isNavigatingRef.current = true;
-    await saveDraft(true);
+    const ok = await saveDraft(true);
+    if (!ok) {
+      isNavigatingRef.current = false;
+      return;
+    }
     toast.success('Draft saved');
     if (pendingNavigation === '__back__') router.back();
     else if (pendingNavigation) router.push(pendingNavigation);
@@ -2953,6 +2971,30 @@ export default function AIInterviewConfig() {
               </div>
 
               {/* Add language – hidden */}
+            </div>
+
+            {/* Mobile Environment Verification */}
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                    <QrCode className="w-5 h-5 text-brand-blue" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-900 tracking-tight">Mobile Environment Verification</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={environmentVerificationEnabled}
+                    onChange={e => setEnvironmentVerificationEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+                </label>
+              </div>
+              <p className="text-xs text-gray-500">
+                Pause the interview once, after the first must-have-skills question, to verify the candidate's physical environment via a QR code and their phone's camera.
+              </p>
             </div>
           </div>
 
