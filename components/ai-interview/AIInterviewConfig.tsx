@@ -354,6 +354,10 @@ interface SkillSectionProps {
   questionCount: number;
   flexibleMinutes: number;
   onChange: (updated: Partial<CategoryConfig>) => void;
+  /** Skill names in the OTHER bucket (MTH↔NTH). Used to block adding a skill
+   *  here that already exists (exactly or semantically) in the other section —
+   *  a skill must live in exactly one bucket. */
+  otherBucketSkills?: string[];
   /** Flexible mode only: callback to transfer a skill to the opposite category */
   onMoveSkill?: (skillName: string) => void;
   /** Flexible mode only: true when clusters have been generated — locks add/remove */
@@ -366,7 +370,7 @@ interface SkillSectionProps {
   hideClustersView?: boolean;
 }
 
-function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, flexibleMinutes, onChange, onMoveSkill, isLocked = false, onResetClusters, hideClustersView = false }: SkillSectionProps) {
+function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, flexibleMinutes, onChange, otherBucketSkills = [], onMoveSkill, isLocked = false, onResetClusters, hideClustersView = false }: SkillSectionProps) {
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
   const [skillToDelete, setSkillToDelete] = useState<string | null>(null);
@@ -470,6 +474,22 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
     const similar = config.skills.find(skill => skillsSemanticallyEqual(skill.name, trimmed));
     if (similar) {
       const msg = `"${trimmed}" is too similar to the existing skill "${similar.name}"`;
+      setAddSkillError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    // CROSS-BUCKET guard (2026-08-01): a skill must live in exactly ONE section.
+    // Block adding here a skill that already exists (exactly or semantically) in
+    // the OTHER bucket — e.g. adding "Java" to Nice-to-Have when "Java" is a
+    // Must-Have skill. Without this, both survive into cluster generation as a
+    // cross-bucket duplicate.
+    const otherLabel = category === 'mth' ? 'Nice-to-Have' : 'Must-Have';
+    const crossDup = (otherBucketSkills || []).find(
+      s => normalizeSkillName(s) === normalized || skillsSemanticallyEqual(s, trimmed),
+    );
+    if (crossDup) {
+      const msg = `"${trimmed}" is already in the ${otherLabel} section (as "${crossDup}") — a skill can only be in one section`;
       setAddSkillError(msg);
       toast.error(msg);
       return;
@@ -2609,6 +2629,7 @@ export default function AIInterviewConfig() {
               questionCount={timedQDist.mth}
               flexibleMinutes={flexMthMin}
               onChange={patch => setMth(prev => ({ ...prev, ...patch }))}
+              otherBucketSkills={nth.enabled ? nth.skills.map(s => s.name) : []}
               onMoveSkill={mode === 'flexible' ? moveMthToNth : undefined}
               isLocked={flexSkillsLocked}
               onResetClusters={handleResetClusters}
@@ -2659,6 +2680,7 @@ export default function AIInterviewConfig() {
                     questionCount={timedQDist.nth}
                     flexibleMinutes={flexNthMin}
                     onChange={patch => setNth(prev => ({ ...prev, ...patch }))}
+                    otherBucketSkills={mth.skills.map(s => s.name)}
                     onMoveSkill={mode === 'flexible' ? moveNthToMth : undefined}
                     isLocked={flexSkillsLocked}
                     onResetClusters={handleResetClusters}
