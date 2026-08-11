@@ -86,7 +86,8 @@ export interface Job {
   workMode?: string; // Remote type: onsite, hybrid, remote
   education?: string; // Education requirement: bachelors, masters, doctorate, etc.
   experience_level?: string; // Experience level: entry, junior, mid, senior, architect, management
-  currentVersion?: number;
+  currentVersion?: number;   // republish counter on this row (drives the "Republished" label)
+  versionNumber?: number;    // lineage version for the v1/v2 badge (same JD-ID across versions)
   versionHistory?: JobSnapshot[];
   assignedTo?: string; // Team member ID
   created_at?: string; // ISO timestamp for sorting

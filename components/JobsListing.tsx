@@ -507,7 +507,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
         job.title,
         job.status,
         (job as any).creation_method === 'ai_generated' ? 'AI' : (job as any).creation_method === 'manual' ? 'Manual' : '',
-        (job as any).currentVersion ? `v${(job as any).currentVersion}` : '',
+        (job as any).versionNumber ? `v${(job as any).versionNumber}` : '',
         (job as any).industry_type || '',
         job.department || '',
         job.employmentType || '',
@@ -1206,10 +1206,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             <div className={`w-1.5 h-1.5 rounded-full ${creationMethodConfig.dot}`}></div>
                             {creationMethodConfig.label}
                           </span>
-                          {job.currentVersion && job.currentVersion >= 1 && (
+                          {job.versionNumber && job.versionNumber >= 1 && (
                             <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5">
                               <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
-                              v{job.currentVersion}
+                              v{job.versionNumber}
                             </span>
                           )}
                         </div>
@@ -1512,10 +1512,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             <div className={`w-1.5 h-1.5 rounded-full ${creationMethodConfig.dot}`}></div>
                             {creationMethodConfig.label}
                           </span>
-                          {job.currentVersion && job.currentVersion >= 1 && (
+                          {job.versionNumber && job.versionNumber >= 1 && (
                             <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0">
                               <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
-                              v{job.currentVersion}
+                              v{job.versionNumber}
                             </span>
                           )}
                         </div>
