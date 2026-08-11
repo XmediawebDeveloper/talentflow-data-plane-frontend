@@ -3490,7 +3490,7 @@ export default function AIInterviewClusters() {
                     </div>
                   </button>
                 ) : (
-                  <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                  <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
                     <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
                       <div className="flex items-center gap-2.5">
                         <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">

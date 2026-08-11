@@ -56,7 +56,7 @@ export default function ConfirmationDialog({
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
         {/* Header */}
         <div className="px-6 sm:px-8 py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
           <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">{title}</h2>

@@ -163,7 +163,7 @@ export default function AIInterviewAuditTrail() {
       </div>
 
       {/* Main Audit Trail */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 tf-round-edges">
         {/* Header */}
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">

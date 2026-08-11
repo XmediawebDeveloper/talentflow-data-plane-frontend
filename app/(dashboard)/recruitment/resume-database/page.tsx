@@ -1002,7 +1002,11 @@ export default function ResumeDatabasePage() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+      {/* tf-round-edges, not overflow-hidden: SearchFilterBarCompact opens its
+          filter panel and sort menu as absolutely positioned children, and
+          clipping the card would cut them off. Without it the bar's white and
+          the pager's slate square off the corners they sit in. */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
         <SearchFilterBarCompact
           searchQuery={searchQuery}
           onSearchChange={handleSearchChange}

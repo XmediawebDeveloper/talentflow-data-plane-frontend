@@ -2969,7 +2969,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         {showPublishSuccessModal && (
           <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="assessment-published-title">
-            <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col">
+            <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
               <div className="px-6 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between shrink-0">
                 <h2 id="assessment-published-title" className="text-lg font-bold text-gray-900 tracking-tight">Assessment Published</h2>
                 <button
