@@ -82,7 +82,7 @@ export default function BulkActionProgress({
   }
 
   return (
-    <div className="fixed bottom-4 right-4 bg-white rounded-lg shadow-xl border border-gray-200 w-96 z-50 animate-slide-up max-h-[600px] flex flex-col">
+    <div className="fixed bottom-4 right-4 bg-white rounded-lg shadow-xl border border-gray-200 w-96 z-50 animate-slide-up max-h-[600px] flex flex-col tf-round-edges">
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200">
         <div className="flex items-center justify-between">

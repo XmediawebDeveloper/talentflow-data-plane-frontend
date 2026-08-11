@@ -2809,7 +2809,7 @@ export default function AIInterview() {
       {/* Confirmation Dialog */}
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
             <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{confirmAction.title}</h3>
               <button
@@ -2847,7 +2847,7 @@ export default function AIInterview() {
 
       {showPublishedModal && (
         <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-          <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col">
+          <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
             <div className="px-6 pt-5 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
               <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 tracking-tight">AI Interview Published</h2>
               <button
@@ -2982,13 +2982,13 @@ export default function AIInterview() {
             setRevokeInviteTarget(null);
           }
         }}
-        title="Revoke this invitation?"
+        title="Revoke Interview Link?"
         description={
           revokeInviteTarget
-            ? `The interview link already sent to ${revokeInviteTarget.candidate_email} will stop working immediately. You'll be able to edit the candidate's details and send a new invitation afterwards.`
+            ? `This will immediately expire the interview link sent to ${revokeInviteTarget.candidate_email}. The candidate will no longer be able to access the interview using this link. You'll be able to edit the candidate's details and send a new invitation afterwards.`
             : ''
         }
-        confirmText={revokingInviteFor && revokingInviteFor === revokeInviteTarget?.id ? 'Revoking…' : 'Yes, revoke'}
+        confirmText={revokingInviteFor && revokingInviteFor === revokeInviteTarget?.id ? 'Revoking…' : 'Confirm'}
         cancelText="Cancel"
         variant="danger"
       />
@@ -3024,9 +3024,9 @@ export default function AIInterview() {
             setBulkRevokeConfirmOpen(false);
           }
         }}
-        title="Revoke selected invitations?"
-        description={`${selectedInviteIds.size} interview link${selectedInviteIds.size === 1 ? '' : 's'} will stop working immediately.`}
-        confirmText={isBulkRevoking ? 'Revoking…' : 'Yes, revoke selected'}
+        title={`Revoke ${selectedInviteIds.size} Interview Link${selectedInviteIds.size === 1 ? '' : 's'}?`}
+        description="The selected interview links will be immediately expired and candidates will no longer be able to access them."
+        confirmText={isBulkRevoking ? 'Revoking…' : 'Confirm'}
         cancelText="Cancel"
         variant="danger"
       >

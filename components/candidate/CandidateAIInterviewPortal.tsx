@@ -1825,9 +1825,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             }
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-3">
-            {isExpiredError ? 'Interview Link Expired' : isRevokedError ? 'Interview Revoked' : 'Unable to Load Interview'}
+            {isRevokedError
+              ? 'Your interview link has expired.'
+              : isExpiredError ? 'Interview Link Expired' : 'Unable to Load Interview'}
           </h1>
-          <p className="text-gray-600 mb-6">{errorMessage || (isExpiredError ? 'This interview link has expired and is no longer available.' : 'An error occurred while loading your interview.')}</p>
+          <p className="text-gray-600 mb-6">
+            {isRevokedError
+              ? 'Please reach out to the interviewer for further assistance.'
+              : errorMessage || (isExpiredError ? 'This interview link has expired and is no longer available.' : 'An error occurred while loading your interview.')}
+          </p>
           {!isExpiredError && !isRevokedError && (
             <button
               onClick={loadInterview}
@@ -1837,7 +1843,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
               Retry
             </button>
           )}
-          {(isExpiredError || isRevokedError) && (
+          {isExpiredError && (
             <p className="text-sm text-gray-500">Please contact the recruiter.</p>
           )}
         </div>

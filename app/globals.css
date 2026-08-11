@@ -1803,6 +1803,35 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
   min-height: 200px;
 }
 
+/* ── Corner repair for rounded containers that cannot clip ─────────────
+   A child's background is not clipped by its parent's border-radius, so a
+   header strip or footer bar that reaches the container's edge paints its own
+   square corner straight over the rounded one. `overflow-hidden` is the usual
+   fix, and it is wrong wherever the container holds something that must escape
+   it — a filter panel, a sort menu, a select. This restates the parent's radius
+   on the two children that touch the edges instead, and clips nothing.
+
+   `inherit`, not a fixed length: the child takes whatever radius the parent
+   computed, so one class serves rounded-lg, -xl and -2xl alike and cannot drift
+   out of sync when a container's radius changes. The third rule reaches one
+   level further for a table shell — it scrolls, so it clips its own rows once
+   it has the radius, which covers a card whose last child is the table itself.
+
+   Unlayered, like the rules above, so it beats the Tailwind corner utilities
+   that may already sit on these children. */
+.tf-round-edges > *:first-child {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+.tf-round-edges > *:last-child {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+.tf-round-edges > *:last-child .tf-table-shell {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+
 /* ── Full-page loading state ───────────────────────────────────────────
    For a spinner that stands in for an entire route — the only other thing
    on screen is the app header. `.tf-loader-center` above is the

@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Star, X, CheckCircle, Loader2 } from "lucide-react";
+import { Star, X, CheckCircle, Loader2, AlertCircle } from "lucide-react";
 import { candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
 
 const COMMENT_MAX = 500;
@@ -141,12 +141,20 @@ export default function InterviewFeedbackModal({ token, onClose }: InterviewFeed
         ai_experience: ratings.ai_experience || null,
         comment,
       });
+      // The endpoint answers HTTP 200 even when it could not save (so a
+      // candidate never sees a raw error page), so success is carried in the
+      // BODY — a 200 alone does not mean it was stored.
       if (!result?.success) throw new Error(result?.message || "Failed to save feedback");
       setSubmitted(true);
       // Brief confirmation, then close itself so the candidate is left on the
       // completion screen rather than having to dismiss one more thing.
       closeTimerRef.current = setTimeout(() => onClose(), 2500);
-    } catch {
+    } catch (err) {
+      // Log the real reason — without this a failed save is indistinguishable
+      // from "the thank-you message never appeared", which is exactly how the
+      // missing-column case presented. The server logs the matching [FEEDBACK]
+      // line with the underlying exception.
+      console.error("[FEEDBACK] submit failed:", err);
       setError("Could not save your feedback. Please try again.");
       setSubmitting(false);
     }
@@ -230,7 +238,13 @@ export default function InterviewFeedbackModal({ token, onClose }: InterviewFeed
               </div>
 
               {error && (
-                <p className="text-sm text-red-600" role="alert">{error}</p>
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-50 border border-red-200"
+                >
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700 leading-snug">{error}</p>
+                </div>
               )}
             </div>
 

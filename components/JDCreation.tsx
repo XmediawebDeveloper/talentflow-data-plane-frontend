@@ -7627,7 +7627,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
 
             {/* Final JD Document View */}
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-md shadow-brand-blue/10">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-md shadow-brand-blue/10 tf-round-edges">
               <div className="bg-brand-blue/[0.04] px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                   <div className="min-w-0">
@@ -7736,7 +7736,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             </div>
 
             {/* Extracted Data Summary Preview - Collapsible */}
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
               {/* Section Header with Toggle */}
               <button
                 onClick={() => setShowExtractedSummary(!showExtractedSummary)}

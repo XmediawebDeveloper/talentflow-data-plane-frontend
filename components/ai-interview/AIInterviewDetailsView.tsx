@@ -1453,7 +1453,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
           {/* Version History Tab */}
           {activeTab === 'versions' && (
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
               <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
                 <div className="flex items-center gap-2.5 mb-1">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
@@ -1587,7 +1587,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             const DESC_PREVIEW_CHARS = 280;
             const descTruncated = jdDesc.length > DESC_PREVIEW_CHARS;
             return (
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
                 <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50">
                   <div className="flex items-center gap-2.5 mb-1">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
