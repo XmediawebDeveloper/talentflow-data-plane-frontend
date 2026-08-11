@@ -39,6 +39,7 @@ import {
   adminApi,
   uniqueSuffix,
   recordDefect,
+  recordObserved,
   describeCase,
   describe as describeCalls,
 } from "./helpers/tier3";
@@ -385,9 +386,9 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
 
   // ----------------------------------------------- who is allowed in at all --
 
-  test("TC-T606 a deactivated user cannot sign in", async ({ page }, testInfo) => {
+  test("TC-T606 a deactivated user cannot get tokens from the API", async ({ page }, testInfo) => {
     await describeCase(testInfo, {
-      does: "Create a user, check they can sign in, deactivate them, then try to sign in again",
+      does: "Create a user, check they can sign in, deactivate them, then ask the API for tokens again",
       expects: "The second sign-in is refused",
       category: "negative",
       steps: [
@@ -449,23 +450,96 @@ test.describe("Tier 3 — signing in, and the ways back in", () => {
     expect(off.status(), "deactivating the user did not succeed").toBeLessThan(400);
 
     const after = await loginApi(user.email, user.password, readTier3Tenant().subdomain);
+
+    await recordObserved({
+      "sign-in before deactivating": String(before.status),
+      "deactivate answered": String(off.status()),
+      "sign-in after deactivating": String(after.status),
+      "tokens issued afterwards": String(Boolean(after.body?.tokens?.access_token)),
+    });
     expect(
       after.status,
       `a deactivated user signed in and was issued tokens (${after.status}). ` +
         `Deactivation is what happens when somebody leaves the company.`,
     ).toBeGreaterThanOrEqual(400);
 
-    // And the screen has to say so rather than looking like a typo.
-    await page.goto(`/login?org=${readTier3Tenant().subdomain}`);
+  });
+
+  test("TC-T613 a deactivated user cannot sign in through the login screen", async ({
+    page,
+  }, testInfo) => {
+    await describeCase(testInfo, {
+      does: "Deactivate a user, then try to sign in as them at the real login screen",
+      expects: "The screen refuses and does not reach the dashboard",
+      category: "negative",
+      steps: [
+        "Sign in as a tenant admin",
+        "Create a user and confirm they can sign in",
+        "Deactivate the user",
+        "Open the login screen and type that user's email and password",
+        "Click Sign in",
+        "Check where the browser ends up",
+      ],
+    });
+    // Split out of TC-T606, which checked the API and the screen in one test.
+    // Playwright stops a test at its first failed expect, and the API assertion
+    // came first — so the screen half never ran and the report said nothing
+    // about it. Somebody who had checked the screen by hand could read that
+    // report and find no answer to what they had seen. Two cases now, so each
+    // reports what it found whatever the other did.
+    test.fail();
+    await recordDefect(testInfo, {
+      severity: "critical",
+      priority: "P1",
+      owner: "developer",
+      summary:
+        "A deactivated user reaches the dashboard through the login screen, not only through the API.",
+      steps: [
+        "Sign in as a tenant admin",
+        "Create a user, and confirm they can sign in",
+        "Deactivate them (Organisation -> Users -> Deactivate)",
+        "Open the login screen and sign in as that user",
+      ],
+      expected: "The screen refuses, and says the account is not active.",
+      actual:
+        "The browser reaches /dashboard, and nothing on the page says the account " +
+        "was ended. The front end does not stand in the way either.",
+      evidence: [
+        "POST /api/v1/users/{id}/deactivate -> 200",
+        "SELECT is_active FROM users WHERE email=... -> false",
+        "browser lands on /dashboard, no message about the account",
+      ],
+      where: ["app/services/auth.py (the login path)"],
+    });
+
+    const { subdomain } = readTier3Tenant();
+    const user = await createUserForUi("recruiter");
+    const record = await findUser(user.email);
+    expect(record, `GET /users does not list ${user.email}, which was just created`).toBeTruthy();
+
+    const api = await adminApi();
+    const off = await api.post(`/api/v1/users/${record!.id}/deactivate`);
+    await api.dispose();
+    expect(off.status(), "deactivating the user did not succeed").toBeLessThan(400);
+
+    await page.goto(`/login?org=${subdomain}`);
     await settle(page, 3000);
     await page.getByPlaceholder(/email/i).first().fill(user.email);
     await page.getByPlaceholder(/password/i).first().fill(user.password);
     await page.getByRole("button", { name: /sign in/i }).first().click();
     await settle(page, 5000);
-    expect(
-      new URL(page.url()).pathname,
-      "a deactivated user was let through to the application",
-    ).not.toMatch(/dashboard/);
+
+    const landed = new URL(page.url()).pathname;
+    const body = (await page.locator("body").innerText()).replace(/\s+/g, " ");
+    const said = /deactivat|suspend|disabled|not active|contact your/i.exec(body);
+    await recordObserved({
+      "landed on": landed,
+      "what the screen said about the account": said ? said[0] : "nothing",
+    });
+
+    expect(landed, "a deactivated user was let through to the application").not.toMatch(
+      /dashboard/,
+    );
   });
 
   test("TC-T607 an unknown address is refused the same way as a wrong password", async ({}, testInfo) => {
