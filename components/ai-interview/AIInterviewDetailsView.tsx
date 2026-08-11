@@ -8,7 +8,7 @@ import {
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch, Eye,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, Brain, Sparkles,
   Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download, Send,
-  Search, Ban, TrendingUp, X,
+  Search, Ban, TrendingUp, X, QrCode,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -793,6 +793,28 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       </div>
                     </>
                   )}
+                </div>
+              </SectionCard>
+
+              {/* Mobile Environment Verification */}
+              <SectionCard title="Mobile Environment Verification" icon={QrCode}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${config.environment_verification_enabled ? 'bg-brand-blue/10 ring-1 ring-brand-blue/20' : 'bg-gray-100 ring-1 ring-gray-200'}`}>
+                      <QrCode className={`w-5 h-5 ${config.environment_verification_enabled ? 'text-brand-blue' : 'text-gray-400'}`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {config.environment_verification_enabled ? 'QR Trigger Enabled' : 'QR Trigger Disabled'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Pauses the interview once, after the first must-have-skills question, to verify the candidate's physical environment via a QR code and their phone's camera.
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 whitespace-nowrap ${config.environment_verification_enabled ? 'bg-green-100 text-green-700 ring-green-200' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
+                    {config.environment_verification_enabled ? 'Enabled' : 'Disabled'}
+                  </span>
                 </div>
               </SectionCard>
 
@@ -1710,6 +1732,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       </div>
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.recording_enabled ? 'bg-green-100 text-green-700 ring-green-200' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
                         {config.recording_enabled ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+
+                    {/* Mobile Environment Verification */}
+                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                          <QrCode className="w-4 h-4 text-brand-blue" />
+                        </div>
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mobile Environment Verification</span>
+                      </div>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.environment_verification_enabled ? 'bg-green-100 text-green-700 ring-green-200' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
+                        {config.environment_verification_enabled ? 'Enabled' : 'Disabled'}
                       </span>
                     </div>
 

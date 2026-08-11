@@ -1383,6 +1383,9 @@ export default function AIInterviewConfig() {
           if ((existingDraft as any).introduction_video_url) {
             setIntroVideoUrl((existingDraft as any).introduction_video_url);
           }
+          if ((existingDraft as any).environment_verification_enabled !== undefined) {
+            setEnvironmentVerificationEnabled(Boolean((existingDraft as any).environment_verification_enabled));
+          }
         }
 
         if (existingDraft?.rounds_config?.length) {
