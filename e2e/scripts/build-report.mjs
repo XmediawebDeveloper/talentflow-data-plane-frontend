@@ -327,6 +327,24 @@ for (const spec of readReport()) {
   if (Object.keys(testData).length) entry.test_data = testData;
   if (Object.keys(observed).length) entry.observed = observed;
 
+  // The route the test actually opened, for the column that names one.
+  //
+  // A workbook row carries a route in a column of its own; a Tier-3 case has no
+  // workbook row, so `target` was filled with the spec's file name and the
+  // Route/endpoint column read "smoke-tier3-modules.spec.ts" — the file, not the
+  // page. assertPageHealthy records every path it checks, so the real answer was
+  // already being collected and simply was not being used.
+  //
+  // Only paths. `observed` also holds counts and statuses, and a route column
+  // showing "login answered: 200" would be worse than the file name.
+  if (!/^\//.test(String(entry.target ?? ""))) {
+    const paths = [...new Set(Object.values(observed).map(String).filter((v) => /^\/\w/.test(v)))];
+    if (paths.length) {
+      entry.target = paths.length > 2 ? `${paths[0]} +${paths.length - 1} more` : paths.join(", ");
+      entry.spec_file = String(file);
+    }
+  }
+
   entry.run = {
     outcome: outcomeOf(spec),
     ms: results.reduce((sum, r) => sum + (r.duration ?? 0), 0),
