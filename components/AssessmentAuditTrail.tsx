@@ -204,7 +204,7 @@ export default function AssessmentAuditTrail() {
       </div>
 
       {/* Main Audit Trail */}
-      <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02]">
+      <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] tf-round-edges">
         {/* Header */}
         <div className="p-3 sm:p-6 border-b border-gray-100">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">

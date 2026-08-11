@@ -85,7 +85,7 @@ export default function DowngradeWarningModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm">
-      <div className="relative w-full max-w-[95vw] sm:max-w-2xl mx-4 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-h-[90vh] flex flex-col">
+      <div className="relative w-full max-w-[95vw] sm:max-w-2xl mx-4 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-h-[90vh] flex flex-col tf-round-edges">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-orange-50 to-red-50 shrink-0">
           <div className="flex items-center gap-3">

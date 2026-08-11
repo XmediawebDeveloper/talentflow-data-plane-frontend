@@ -2260,7 +2260,7 @@ export default function UserManagement() {
       </div>
 
       {/* Users Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 tf-round-edges">
         {isLoading ? (
           <div className="flex items-center justify-center py-8 sm:py-12 bg-slate-50 dark:bg-slate-950 tf-loader-center">
             <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
@@ -2497,7 +2497,7 @@ export default function UserManagement() {
       {/* Create User Modal */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
             {/* Header strip */}
             <div className="bg-brand-blue px-5 sm:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
@@ -2744,7 +2744,7 @@ export default function UserManagement() {
       {/* Edit User Modal - Redesigned */}
       {editingUser && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
             {/* Header */}
             <div className="bg-brand-blue flex items-center justify-between px-4 sm:px-6 py-4 gap-3 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
@@ -3384,7 +3384,7 @@ export default function UserManagement() {
       {/* View Role Permissions Popup */}
       {viewingRolePopup && (
         <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
             {/* Header */}
             <div className="bg-brand-blue px-4 sm:px-6 py-4 flex items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">

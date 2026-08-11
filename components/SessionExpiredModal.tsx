@@ -29,7 +29,7 @@ export default function SessionExpiredModal() {
         aria-modal="true"
         aria-labelledby="session-expired-title"
         aria-describedby="session-expired-desc"
-        className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md mx-4 max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200"
+        className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md mx-4 max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200 tf-round-edges"
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">

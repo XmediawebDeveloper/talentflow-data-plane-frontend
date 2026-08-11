@@ -1,4 +1,4 @@
-import { X, Download, Printer, ZoomIn, ZoomOut, FileText } from 'lucide-react';
+~import { X, Download, Printer, ZoomIn, ZoomOut, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
