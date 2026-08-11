@@ -423,7 +423,7 @@ variables:
       # ~100 variables by hand would rot the moment the backend gains one.
       ENVFILE="$QA_STATE_DIR/api.env"
       docker inspect "$STAGING_API" --format '{{range .Config.Env}}{{println .}}{{end}}' \
-        | grep -vE '^(DATABASE_NAME|SHARED_DATABASE_NAME|ADMIN_API_URL|BASE_DOMAIN|CORS_ORIGINS|FRONTEND_URL|BACKEND_URL|SMTP_USER|SMTP_PASSWORD|PATH|HOSTNAME|HOME|LANG|GPG_KEY|PYTHON_|_=|$)' \
+        | grep -vE '^(DATABASE_NAME|SHARED_DATABASE_NAME|ADMIN_API_URL|BASE_DOMAIN|CORS_ORIGINS|FRONTEND_URL|BACKEND_URL|SMTP_USER|SMTP_PASSWORD|OPENAI_API_KEY|GROQ_API_KEY|GEMINI_API_KEY|DEEPGRAM_API_KEY|ASSEMBLYAI_API_KEY|SARVAM_API_KEY|PATH|HOSTNAME|HOME|LANG|GPG_KEY|PYTHON_|_=|$)' \
         > "$ENVFILE.new"
       {
         printf 'DATABASE_NAME=%s\n' "$QA_DB_NAME"
@@ -456,6 +456,25 @@ variables:
         # instead hang on connect and make ninety tests slow and flaky.
         printf 'SMTP_USER=\n'
         printf 'SMTP_PASSWORD=\n'
+        # And no model provider, for the same reason and by the same route.
+        #
+        # Creating an assessment against a job description with no must-have
+        # skills calls openai_service.extract_jd_params, which is a real
+        # completion — app/services/assessment.py:604, "has no NHS — extracting
+        # via LLM". The suite did that twelve times on the customers' key,
+        # inherited here the same way SMTP was.
+        #
+        # Blank rather than absent: extract_jd_params checks is_available() and
+        # raises "AI service is not configured", so the path stops at the door
+        # instead of dialling out. A test that needs an answer from a model
+        # fails loudly, which is the right outcome — it was never testing the
+        # model, and it should not be the thing that spends the quota.
+        printf 'OPENAI_API_KEY=\n'
+        printf 'GROQ_API_KEY=\n'
+        printf 'GEMINI_API_KEY=\n'
+        printf 'DEEPGRAM_API_KEY=\n'
+        printf 'ASSEMBLYAI_API_KEY=\n'
+        printf 'SARVAM_API_KEY=\n'
       } >> "$ENVFILE.new"
       mv "$ENVFILE.new" "$ENVFILE"
       chmod 600 "$ENVFILE"
@@ -477,6 +496,17 @@ variables:
       # credential inherited from staging that lets a test suite spend something
       # the customers own. Checked rather than assumed, because the value is
       # copied from a container whose environment this file does not control.
+      # A model key is the same mistake as a mail credential: something the
+      # customers pay for, inherited into a place that runs a suite thousands of
+      # times a week.
+      if grep -qE '^(OPENAI|GROQ|GEMINI|DEEPGRAM|ASSEMBLYAI|SARVAM)_API_KEY=.+' "$ENVFILE"; then
+        echo "the QA environment file carries a live model provider key:"
+        grep -nE '^(OPENAI|GROQ|GEMINI|DEEPGRAM|ASSEMBLYAI|SARVAM)_API_KEY=' "$ENVFILE" | sed 's/=.*/=<set>/'
+        echo "Creating an assessment can call a completion (assessment.py:604),"
+        echo "and this suite creates hundreds of them. QA must not be able to spend"
+        echo "a model quota at all."
+        exit 1
+      fi
       if grep -qE '^SMTP_(USER|PASSWORD)=.+' "$ENVFILE"; then
         echo "the QA environment file carries live mail credentials:"
         grep -nE '^SMTP_(USER|PASSWORD)=' "$ENVFILE" | sed 's/=.*/=<set>/'
