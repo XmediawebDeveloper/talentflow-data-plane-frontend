@@ -2982,13 +2982,13 @@ export default function AIInterview() {
             setRevokeInviteTarget(null);
           }
         }}
-        title="Revoke this invitation?"
+        title="Revoke Interview Link?"
         description={
           revokeInviteTarget
-            ? `The interview link already sent to ${revokeInviteTarget.candidate_email} will stop working immediately. You'll be able to edit the candidate's details and send a new invitation afterwards.`
+            ? `This will immediately expire the interview link sent to ${revokeInviteTarget.candidate_email}. The candidate will no longer be able to access the interview using this link. You'll be able to edit the candidate's details and send a new invitation afterwards.`
             : ''
         }
-        confirmText={revokingInviteFor && revokingInviteFor === revokeInviteTarget?.id ? 'Revoking…' : 'Yes, revoke'}
+        confirmText={revokingInviteFor && revokingInviteFor === revokeInviteTarget?.id ? 'Revoking…' : 'Confirm'}
         cancelText="Cancel"
         variant="danger"
       />
@@ -3024,9 +3024,9 @@ export default function AIInterview() {
             setBulkRevokeConfirmOpen(false);
           }
         }}
-        title="Revoke selected invitations?"
-        description={`${selectedInviteIds.size} interview link${selectedInviteIds.size === 1 ? '' : 's'} will stop working immediately.`}
-        confirmText={isBulkRevoking ? 'Revoking…' : 'Yes, revoke selected'}
+        title={`Revoke ${selectedInviteIds.size} Interview Link${selectedInviteIds.size === 1 ? '' : 's'}?`}
+        description="The selected interview links will be immediately expired and candidates will no longer be able to access them."
+        confirmText={isBulkRevoking ? 'Revoking…' : 'Confirm'}
         cancelText="Cancel"
         variant="danger"
       >
