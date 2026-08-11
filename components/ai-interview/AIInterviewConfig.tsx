@@ -2166,8 +2166,13 @@ export default function AIInterviewConfig() {
       }
       if (!silent) toast.success('Draft saved!');
       return true;
-    } catch {
-      if (!silent) toast.error('Failed to save draft');
+    } catch (err: any) {
+      // Always surface the real reason, even for silent (background) saves —
+      // "silent" only suppresses the success confirmation, not failures.
+      // Swallowing errors here left callers unable to show anything but a
+      // generic "please save first" with no clue why the save itself failed
+      // (quota exceeded, validation error, network issue, etc).
+      toast.error(err?.message || 'Failed to save draft');
       return false;
     } finally {
       setSavingDraft(false);
@@ -2245,7 +2250,13 @@ export default function AIInterviewConfig() {
 
     // 1. Save draft first so the Clusters page reads the latest skills.
     const ok = await saveDraft(true);
-    if (!ok || !existingDraftIdRef.current) {
+    if (!ok) {
+      // saveDraft already surfaced the real failure reason — avoid stacking
+      // a second, less specific toast on top of it.
+      isNavigatingRef.current = false;
+      return;
+    }
+    if (!existingDraftIdRef.current) {
       isNavigatingRef.current = false;
       toast.error('Please save your configuration first');
       return;
@@ -2383,7 +2394,11 @@ export default function AIInterviewConfig() {
   const handleSaveAndNavigate = async () => {
     setShowUnsavedDialog(false);
     isNavigatingRef.current = true;
-    await saveDraft(true);
+    const ok = await saveDraft(true);
+    if (!ok) {
+      isNavigatingRef.current = false;
+      return;
+    }
     toast.success('Draft saved');
     if (pendingNavigation === '__back__') router.back();
     else if (pendingNavigation) router.push(pendingNavigation);
