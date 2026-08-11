@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ArrowUpRight, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2, AlertCircle, Zap, ClipboardList } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -11,6 +11,8 @@ import remarkBreaks from 'remark-breaks';
 import { jdService, JDLineageVersion, JDUsageStatus } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
+import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
+import ConfirmationDialog from './ConfirmationDialog';
 import ResumeUploadModal from './ResumeUploadModal';
 import ResumeScoring from './ResumeScoring';
 import JobApplicants from './JobApplicants';
@@ -43,6 +45,7 @@ import { toast } from 'sonner';
 import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { buildUnifiedDiff, buildDiffSidePairs } from '@/lib/utils/textDiff';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 
@@ -51,71 +54,162 @@ const formatToIST = formatIST;
 const formatISTDateTime = formatIST;
 type ScoredResumesMatchFilter = 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
 
-// ✅ PERMISSIONS: Reusable Quick Action Button Component
-interface QuickActionButtonProps {
+/**
+ * Quick Actions palette.
+ *
+ * One accent per group so the three sections read apart at a glance, drawn
+ * only from the brand tokens in globals.css — no stray greens or purples. The
+ * class strings are spelled out rather than composed (`bg-brand-${x}`) because
+ * Tailwind only ships classes it can find literally in the source.
+ */
+const QUICK_ACTION_ACCENTS = {
+  blue: {
+    badge: 'bg-brand-blue',
+    icon: 'text-brand-blue',
+    tile: 'hover:border-brand-blue/40 hover:bg-brand-blue/5',
+  },
+  cyan: {
+    badge: 'bg-brand-cyan',
+    icon: 'text-brand-cyan',
+    tile: 'hover:border-brand-cyan/40 hover:bg-brand-cyan/5',
+  },
+  orange: {
+    badge: 'bg-brand-orange',
+    icon: 'text-brand-orange',
+    tile: 'hover:border-brand-orange/40 hover:bg-brand-orange/5',
+  },
+} as const;
+
+type QuickActionAccent = keyof typeof QUICK_ACTION_ACCENTS;
+
+/** Group heading: a filled accent disc carrying the group's icon, then the title. */
+function QuickActionHeader({ icon, title, accent }: {
+  icon: React.ReactNode;
+  title: string;
+  accent: QuickActionAccent;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 mb-3">
+      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0 ${QUICK_ACTION_ACCENTS[accent].badge}`}>
+        {icon}
+      </span>
+      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">{title}</h3>
+    </div>
+  );
+}
+
+/**
+ * The hover tooltip that explains why an action is unavailable.
+ *
+ * Wraps instead of running off-screen: `whitespace-nowrap` forced every reason
+ * onto one line, so longer ones (e.g. "Publish the draft before inviting
+ * candidates.") shot past the sidebar and overlapped whatever sat to the right.
+ * `w-max` keeps short reasons compact while the viewport-aware max-width caps
+ * long ones on small screens.
+ */
+function QuickActionTooltip({ text, align = 'left' }: { text: string; align?: 'left' | 'center' }) {
+  return (
+    <div className={`absolute top-full mt-1.5 z-40 w-max max-w-[min(14rem,calc(100vw-2rem))] px-2.5 py-1.5 bg-gray-900 dark:bg-slate-700 text-white text-[11px] font-medium leading-snug rounded-md shadow-lg ring-1 ring-black/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal break-words ${
+      align === 'center' ? 'left-1/2 -translate-x-1/2 text-center' : 'left-0'
+    }`}>
+      {text}
+    </div>
+  );
+}
+
+interface QuickActionProps {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   disabled?: boolean;
   disabledTooltip?: string;
-  className?: string;
-  /** Shows a spinner in place of the trailing arrow and blocks re-clicks while
-   *  the action resolves what it needs to open (e.g. fetching a config). */
+  /** Shows a spinner in place of the icon and blocks re-clicks while the action
+   *  resolves what it needs to open (e.g. fetching a config). */
   loading?: boolean;
+  accent?: QuickActionAccent;
 }
 
-function QuickActionButton({
+/**
+ * A full-width action, for the ungrouped list at the top of the card. Rows sit
+ * inside one bordered box and are separated by hairlines, so the group reads as
+ * a single list rather than three floating buttons.
+ */
+function QuickActionRow({
   icon,
   label,
   onClick,
   disabled = false,
   disabledTooltip,
-  className = '',
-  loading = false
-}: QuickActionButtonProps) {
-  // Native `title` only while enabled, where it surfaces a label the half-width
-  // grid slot truncated. When disabled, the styled tooltip below is the one and
-  // only tooltip — setting `title` too made the browser draw a second, plain
-  // one on top of it with the same text.
-  const hoverTitle = disabled ? undefined : label;
+  loading = false,
+  accent = 'blue',
+}: QuickActionProps) {
   return (
     <div className="relative group">
       <button
         onClick={onClick}
         disabled={disabled || loading}
-        className={`
-          w-full px-3 py-2.5 text-sm font-medium rounded-lg transition-all text-left flex items-center gap-2.5
-          ${disabled
-            ? 'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed border border-gray-200 dark:border-slate-700'
-            : `cursor-pointer ${className || 'bg-brand-blue text-white hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10'}`
-          }
-        `}
-        title={hoverTitle}
+        // Native `title` only while enabled. When disabled the styled tooltip is
+        // the one and only tooltip — setting `title` too made the browser draw a
+        // second, plain one on top of it.
+        title={disabled ? undefined : label}
+        className={`w-full px-3 py-2.5 flex items-center gap-2.5 text-left text-sm font-medium transition-colors ${
+          disabled
+            ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed'
+            : 'text-gray-800 dark:text-slate-200 hover:bg-brand-blue/5 cursor-pointer'
+        }`}
       >
-        <span className="shrink-0">{icon}</span>
+        <span className={`shrink-0 ${disabled ? 'text-gray-300 dark:text-slate-600' : QUICK_ACTION_ACCENTS[accent].icon}`}>
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
+        </span>
         <span className="flex-1 min-w-0 truncate">{label}</span>
-        {/* Trailing affordance: lock when gated, otherwise the same diagonal
-            arrow StatsCard/job-openings use for "this opens something", nudged
-            up-and-right on hover. */}
-        {loading
-          ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
-          : disabled
+        {disabled
           ? <Lock className="w-3 h-3 shrink-0" />
-          : <ArrowUpRight className="w-4 h-4 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-        }
+          : <ChevronRight className="w-4 h-4 shrink-0 text-gray-400 dark:text-slate-500 transition-transform group-hover:translate-x-0.5" />}
       </button>
 
-      {/* Tooltip on hover when disabled.
-          Wraps instead of running off-screen: `whitespace-nowrap` forced every
-          reason onto one line, so longer ones (e.g. "Publish the draft before
-          inviting candidates.") shot past the sidebar and overlapped whatever
-          sat to the right. `w-max` keeps short reasons compact while the
-          viewport-aware max-width caps long ones on small screens. */}
-      {disabled && disabledTooltip && (
-        <div className="absolute left-0 top-full mt-1.5 z-40 w-max max-w-[min(14rem,calc(100vw-2rem))] px-2.5 py-1.5 bg-gray-900 dark:bg-slate-700 text-white text-[11px] font-medium leading-snug rounded-md shadow-lg ring-1 ring-black/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal break-words">
-          {disabledTooltip}
-        </div>
-      )}
+      {disabled && disabledTooltip && <QuickActionTooltip text={disabledTooltip} />}
+    </div>
+  );
+}
+
+/**
+ * A compact square action, for the four-up grids under Assessment and AI
+ * Interview. Icon over label so four fit across the sidebar column without the
+ * labels truncating.
+ */
+function QuickActionTile({
+  icon,
+  label,
+  onClick,
+  disabled = false,
+  disabledTooltip,
+  loading = false,
+  accent = 'blue',
+}: QuickActionProps) {
+  const colors = QUICK_ACTION_ACCENTS[accent];
+  return (
+    <div className="relative group">
+      <button
+        onClick={onClick}
+        disabled={disabled || loading}
+        title={disabled ? undefined : label}
+        className={`w-full px-1 py-2.5 rounded-lg border transition-colors flex flex-col items-center justify-center gap-1.5 ${
+          disabled
+            ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 cursor-not-allowed'
+            : `border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer ${colors.tile}`
+        }`}
+      >
+        <span className={`shrink-0 ${disabled ? 'text-gray-300 dark:text-slate-600' : colors.icon}`}>
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
+        </span>
+        <span className={`text-[11px] font-medium leading-none ${
+          disabled ? 'text-gray-400 dark:text-slate-500' : 'text-gray-700 dark:text-slate-300'
+        }`}>
+          {label}
+        </span>
+      </button>
+
+      {disabled && disabledTooltip && <QuickActionTooltip text={disabledTooltip} align="center" />}
     </div>
   );
 }
@@ -306,9 +400,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // publish prompt below instead of navigating to a half-finished details page.
   const [draftAssessment, setDraftAssessment] = useState<any>(null);
   const [publishingDraft, setPublishingDraft] = useState(false);
-  // Whether this JD has any assessment at all — gates Send Invite, which has
-  // nothing to invite to until one is created. False while still loading.
+  // Whether this JD has any assessment at all, draft included. Distinguishes
+  // "none created" from "created but not published" so the gates below can name
+  // the actual blocker. False while still loading.
   const [hasAnyAssessment, setHasAnyAssessment] = useState(false);
+  // Whether one of them is actually PUBLISHED. This is what Send Invite needs —
+  // a draft has nothing to invite candidates to, and clicking through would only
+  // bounce them back with "publish it first". False while still loading.
+  const [hasPublishedAssessment, setHasPublishedAssessment] = useState(false);
   // Same pair for AI Interview.
   const [resolvingAIInterviewTarget, setResolvingAIInterviewTarget] = useState(false);
   const [draftAIInterview, setDraftAIInterview] = useState<any>(null);
@@ -397,6 +496,32 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const [jdHistory, setJdHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<any>(null);
+  // JD version comparison, mirroring the resume-view page: tick two versions in
+  // the history timeline, then diff them old-vs-new. Holds history-item ids in
+  // click order; the third tick evicts the oldest so the pair keeps moving
+  // rather than making the user untick something first.
+  const [jdCompareChecked, setJdCompareChecked] = useState<string[]>([]);
+  const [showJDCompare, setShowJDCompare] = useState(false);
+  const [jdCompareViewMode, setJdCompareViewMode] = useState<'side-by-side' | 'unified'>('side-by-side');
+
+  const handleJDCompareCheck = (itemId: string) => {
+    setJdCompareChecked((prev) => {
+      if (prev.includes(itemId)) return prev.filter((id) => id !== itemId);
+      if (prev.length >= 2) return [prev[1], itemId];
+      return [...prev, itemId];
+    });
+  };
+
+  // Resolve the ticked pair into older/newer by version number, so the left
+  // panel is always the earlier JD regardless of which box was ticked first.
+  const jdComparePair = (() => {
+    if (jdCompareChecked.length !== 2) return null;
+    const a = jdHistory.find((h: any) => h.id === jdCompareChecked[0]);
+    const b = jdHistory.find((h: any) => h.id === jdCompareChecked[1]);
+    if (!a || !b) return null;
+    const versionOf = (h: any) => h?.version?.version_number ?? 0;
+    return versionOf(a) <= versionOf(b) ? { older: a, newer: b } : { older: b, newer: a };
+  })();
   // Version badge dropdown. The badge used to jump straight into the full
   // history modal; listing the versions under it lets a recruiter see what
   // exists — and pick one — without opening a modal to find out.
@@ -430,6 +555,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
   // AI Talent Match panel state
   const [showAIMatchPanel, setShowAIMatchPanel] = useState(false);
+  // Asked before the panel mounts. A match run scans the whole resume database
+  // and consumes units, and the panel starts the moment it renders — so there is
+  // no way back out once it is up. Every entry point routes through here.
+  const [showAIMatchConfirm, setShowAIMatchConfirm] = useState(false);
 
   // Assessment results state
   const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
@@ -851,7 +980,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     if (!initialAction || !job?.id) return;
     if (initialAction === 'ai-talent-match') {
       if (permissions.canRunAiMatch && aiTalentMatchAvailable && features.ai_talent_match && job.status !== 'Disabled') {
-        setShowAIMatchPanel(true);
+        // Deep link from the job-openings menu — same action, so it gets the
+        // same prompt rather than starting a run the moment the page loads.
+        setShowAIMatchConfirm(true);
       }
     } else if (initialAction === 'score-resumes') {
       if (permissions.canRunScoring && hasPlanFeature('resume_scoring') && job.status !== 'Disabled') {
@@ -1082,7 +1213,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       const assessments = assessmentsResponse.items || [];
       // Derived here rather than in a separate request — this list is already
       // loaded, and it's the same source Create uses to decide its destination.
+      // Published/active is the same pair handleOpenShareAssessment treats as
+      // invitable, so the button's enabled state matches what clicking it does.
+      // Revoked ones are deliberately NOT excluded here: that case has its own
+      // "duplicate one to start a fresh round" message, which only lands if the
+      // click gets through.
       setHasAnyAssessment(assessments.length > 0);
+      setHasPublishedAssessment(
+        assessments.some((a: any) => ['published', 'active'].includes(String(a?.status || '').toLowerCase()))
+      );
 
       // For each assessment, get the completed results
       const allResults: any[] = [];
@@ -1356,8 +1495,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     }
   };
 
+  // Every "AI Talent Match" / "Run AI Match" trigger lands here — it only asks.
   const handleAITalentMatch = () => {
-    // Show AI matching panel directly on this page
+    setShowAIMatchConfirm(true);
+  };
+
+  // Yes on the prompt: close it and mount the panel, which starts the run.
+  const confirmAITalentMatch = () => {
+    setShowAIMatchConfirm(false);
     setShowAIMatchPanel(true);
   };
 
@@ -1680,93 +1825,148 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // rather than inline because each tab hands them to a child toolbar (and the
   // AI interview tab also falls back to a standalone strip when there are no
   // results to hang a toolbar off).
-  const assessmentTabActions =
+  // Same gate for the Scored Resumes toolbar button and its empty-state CTA, so
+  // the tab never offers scoring in one place and withholds it in the other.
+  const canScoreResumesFromTab =
+    permissions.canRunScoring && hasPlanFeature('resume_scoring') && job.status !== 'Disabled';
+
+  // `aiInterviewConfig` comes from findLiveConfigForJd, which only matches
+  // published/in-use configs — so its presence IS "there is something to invite
+  // candidates to". A draft leaves it null, which is what we want: the AI
+  // Interview Send Invite gate mirrors the assessment one exactly.
+  const hasLiveAIInterview = !!aiInterviewConfig;
+
+  // Split into single buttons so the toolbar and the empty state can each take
+  // the set that suits them, without the markup existing twice.
+  const assessmentCreateAction =
     permissions.canCreateAssessments && hasPlanFeature('assessment') ? (
-      <>
-        <button
-          onClick={handleCreateAssessment}
-          disabled={!features.assessment || job.status === 'Disabled' || resolvingAssessmentTarget}
-          title={
-            !features.assessment
-              ? 'Assessments not enabled'
-              : job.status === 'Disabled'
-                ? 'JD is disabled'
-                : undefined
-          }
-          className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-        >
-          {resolvingAssessmentTarget
-            ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <Sparkles className="w-4 h-4" />}
-          Create
-        </button>
-        <button
-          onClick={handleOpenShareAssessment}
-          disabled={!features.assessment || job.status === 'Disabled' || isLoadingShareAssessments || !hasAnyAssessment}
-          title={
-            !features.assessment
-              ? 'Assessments not enabled'
-              : job.status === 'Disabled'
-                ? 'JD is disabled'
-                : !hasAnyAssessment
-                  ? 'Create an assessment first'
+      <button
+        onClick={handleCreateAssessment}
+        disabled={!features.assessment || job.status === 'Disabled' || resolvingAssessmentTarget}
+        title={
+          !features.assessment
+            ? 'Assessments not enabled'
+            : job.status === 'Disabled'
+              ? 'JD is disabled'
+              : undefined
+        }
+        className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+      >
+        {resolvingAssessmentTarget
+          ? <Loader2 className="w-4 h-4 animate-spin" />
+          : <Sparkles className="w-4 h-4" />}
+        Create
+      </button>
+    ) : null;
+
+  const assessmentInviteAction =
+    permissions.canCreateAssessments && hasPlanFeature('assessment') ? (
+      <button
+        onClick={handleOpenShareAssessment}
+        disabled={!features.assessment || job.status === 'Disabled' || isLoadingShareAssessments || !hasPublishedAssessment}
+        title={
+          !features.assessment
+            ? 'Assessments not enabled'
+            : job.status === 'Disabled'
+              ? 'JD is disabled'
+              : !hasAnyAssessment
+                ? 'Create an assessment first'
+                : !hasPublishedAssessment
+                  ? 'Publish the assessment first'
                   : undefined
-          }
-          className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-        >
-          {isLoadingShareAssessments
-            ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <UserPlus className="w-4 h-4" />}
-          Send Invite
-        </button>
+        }
+        className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+      >
+        {isLoadingShareAssessments
+          ? <Loader2 className="w-4 h-4 animate-spin" />
+          : <UserPlus className="w-4 h-4" />}
+        Send Invite
+      </button>
+    ) : null;
+
+  const assessmentTabActions =
+    hasPublishedAssessment
+      // Published: Create has done its job, and the next step is inviting. It
+      // comes off entirely rather than sitting there offering to make a second
+      // assessment nobody asked for.
+      ? assessmentInviteAction
+      // Not published yet: Create leads, with Send Invite alongside it —
+      // visible-but-disabled, so the step after this one is discoverable and
+      // its tooltip can say what's blocking it.
+      : assessmentCreateAction || assessmentInviteAction ? (
+        <>
+          {assessmentCreateAction}
+          {assessmentInviteAction}
+        </>
+      ) : null;
+
+  // Same swap for the empty state, minus the disabled placeholder — a CTA that
+  // can only explain why it won't work isn't worth the space here.
+  const assessmentEmptyActions = hasPublishedAssessment
+    ? assessmentInviteAction
+    : assessmentCreateAction;
+
+  const aiInterviewCreateAction =
+    permissions.canCreateAIInterviews && hasPlanFeature('ai_interview') ? (
+      <button
+        onClick={handleCreateAIInterview}
+        disabled={!features.ai_interview || job.status === 'Disabled' || resolvingAIInterviewTarget}
+        title={
+          !features.ai_interview
+            ? 'AI Interviews not enabled'
+            : job.status === 'Disabled'
+              ? 'JD is disabled'
+              : undefined
+        }
+        className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+      >
+        {resolvingAIInterviewTarget
+          ? <Loader2 className="w-4 h-4 animate-spin" />
+          : <Sparkles className="w-4 h-4" />}
+        Create
+      </button>
+    ) : null;
+
+  const aiInterviewInviteAction =
+    permissions.canShareAIInterviews && hasPlanFeature('ai_interview') ? (
+      <button
+        onClick={handleInviteAIInterview}
+        disabled={!features.ai_interview || job.status === 'Disabled' || resolvingInviteConfig || !hasLiveAIInterview}
+        title={
+          !features.ai_interview
+            ? 'AI Interviews not enabled'
+            : job.status === 'Disabled'
+              ? 'JD is disabled'
+              : !hasAnyAIInterview
+                ? 'Create an AI interview first'
+                : !hasLiveAIInterview
+                  ? 'Publish the AI interview first'
+                  : undefined
+        }
+        className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+      >
+        {resolvingInviteConfig
+          ? <Loader2 className="w-4 h-4 animate-spin" />
+          : <UserPlus className="w-4 h-4" />}
+        Send Invite
+      </button>
+    ) : null;
+
+  // Same swap as the assessment pair — and it matters more here: a JD can only
+  // ever have one live AI interview, so once it is published Create has nothing
+  // left to do but bounce the recruiter with "already exists".
+  const aiInterviewTabActions = hasLiveAIInterview
+    ? aiInterviewInviteAction
+    : aiInterviewCreateAction || aiInterviewInviteAction ? (
+      <>
+        {aiInterviewCreateAction}
+        {aiInterviewInviteAction}
       </>
     ) : null;
 
-  const aiInterviewTabActions =
-    (permissions.canCreateAIInterviews || permissions.canShareAIInterviews) && hasPlanFeature('ai_interview') ? (
-      <>
-        {permissions.canCreateAIInterviews && (
-          <button
-            onClick={handleCreateAIInterview}
-            disabled={!features.ai_interview || job.status === 'Disabled' || resolvingAIInterviewTarget}
-            title={
-              !features.ai_interview
-                ? 'AI Interviews not enabled'
-                : job.status === 'Disabled'
-                  ? 'JD is disabled'
-                  : undefined
-            }
-            className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-          >
-            {resolvingAIInterviewTarget
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <Sparkles className="w-4 h-4" />}
-            Create
-          </button>
-        )}
-        {permissions.canShareAIInterviews && (
-          <button
-            onClick={handleInviteAIInterview}
-            disabled={!features.ai_interview || job.status === 'Disabled' || resolvingInviteConfig || !hasAnyAIInterview}
-            title={
-              !features.ai_interview
-                ? 'AI Interviews not enabled'
-                : job.status === 'Disabled'
-                  ? 'JD is disabled'
-                  : !hasAnyAIInterview
-                    ? 'Create an AI interview first'
-                    : undefined
-            }
-            className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-          >
-            {resolvingInviteConfig
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <UserPlus className="w-4 h-4" />}
-            Send Invite
-          </button>
-        )}
-      </>
-    ) : null;
+  const aiInterviewEmptyActions = hasLiveAIInterview
+    ? aiInterviewInviteAction
+    : aiInterviewCreateAction;
 
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
@@ -2512,11 +2712,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         <div className="lg:col-span-4 space-y-5">
           {/* Quick Actions */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Quick Actions</h3>
-            <div className="space-y-2">
+            <QuickActionHeader icon={<Zap className="w-4 h-4" />} title="Quick Actions" accent="blue" />
+
+            {/* The ungrouped actions, as one bordered list. */}
+            <div className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-800 overflow-hidden">
               {/* 1. View JD History */}
               {permissions.canReadJD && (
-                <QuickActionButton
+                <QuickActionRow
                   icon={<History className="w-4 h-4" />}
                   label="View JD History"
                   onClick={() => setShowJDHistory(true)}
@@ -2525,10 +2727,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
               {/* 2. AI Talent Match */}
               {permissions.canRunAiMatch && aiTalentMatchAvailable && (
-                <QuickActionButton
+                <QuickActionRow
                   icon={<Brain className="w-4 h-4" />}
                   label="AI Talent Match"
-                  onClick={() => setShowAIMatchPanel(true)}
+                  onClick={handleAITalentMatch}
                   disabled={!features.ai_talent_match || job.status === 'Disabled'}
                   disabledTooltip={
                     !features.ai_talent_match
@@ -2540,7 +2742,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
               {/* 3. Score Resumes */}
               {permissions.canRunScoring && hasPlanFeature('resume_scoring') && (
-                <QuickActionButton
+                <QuickActionRow
                   icon={<Target className="w-4 h-4" />}
                   label="Score Resumes"
                   onClick={() => setShowSelectSourceModal(true)}
@@ -2548,148 +2750,150 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   disabledTooltip="JD is disabled"
                 />
               )}
-
-              {/* Assessment — Create and Send Invite share a row, Track Invite
-                  and Result share the next. The AI Interview group mirrors it. */}
-              {(permissions.canCreateAssessments || permissions.canViewAssessments) && hasPlanFeature('assessment') && (
-                <div className="pt-2 mt-2 border-t border-gray-100 dark:border-slate-800">
-                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
-                    Assessment
-                  </p>
-                  <div className="space-y-2">
-                    {permissions.canCreateAssessments && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <QuickActionButton
-                          icon={<Sparkles className="w-4 h-4" />}
-                          label="Create"
-                          onClick={handleCreateAssessment}
-                          loading={resolvingAssessmentTarget}
-                          disabled={!features.assessment || job.status === 'Disabled'}
-                          disabledTooltip={
-                            !features.assessment
-                              ? 'Assessments not enabled'
-                              : 'JD is disabled'
-                          }
-                        />
-
-                        <QuickActionButton
-                          icon={<UserPlus className="w-4 h-4" />}
-                          label="Send Invite"
-                          onClick={handleOpenShareAssessment}
-                          loading={isLoadingShareAssessments}
-                          disabled={!features.assessment || job.status === 'Disabled' || !hasAnyAssessment}
-                          disabledTooltip={
-                            !features.assessment
-                              ? 'Assessments not enabled'
-                              : job.status === 'Disabled'
-                                ? 'JD is disabled'
-                                : 'Create an assessment first'
-                          }
-                        />
-                      </div>
-                    )}
-
-                    {permissions.canViewAssessments && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <QuickActionButton
-                          icon={<Users className="w-4 h-4" />}
-                          label="Track Invite"
-                          onClick={handleTrackAssessmentInvites}
-                          disabled={!features.assessment || !hasAnyAssessment}
-                          disabledTooltip={
-                            !features.assessment
-                              ? 'Assessments not enabled'
-                              : 'Create an assessment first'
-                          }
-                        />
-
-                        <QuickActionButton
-                          icon={<BarChart className="w-4 h-4" />}
-                          label="Result"
-                          onClick={handleAssessmentStatus}
-                          disabled={!features.assessment}
-                          disabledTooltip="Assessments not enabled"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews || permissions.canViewAIInterviews) && hasPlanFeature('ai_interview') && (
-                <div className="pt-2 mt-2 border-t border-gray-100 dark:border-slate-800">
-                  <p className="px-1 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
-                    AI Interview
-                  </p>
-                  <div className="space-y-2">
-                    {/* Create and Send Invite share one row */}
-                    {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews) && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {permissions.canCreateAIInterviews && (
-                          <QuickActionButton
-                            icon={<Sparkles className="w-4 h-4" />}
-                            label="Create"
-                            onClick={handleCreateAIInterview}
-                            loading={resolvingAIInterviewTarget}
-                            disabled={!features.ai_interview || job.status === 'Disabled'}
-                            disabledTooltip={
-                              !features.ai_interview
-                                ? 'AI Interviews not enabled'
-                                : 'JD is disabled'
-                            }
-                          />
-                        )}
-
-                        {permissions.canShareAIInterviews && (
-                          <QuickActionButton
-                            icon={<UserPlus className="w-4 h-4" />}
-                            label="Send Invite"
-                            onClick={handleInviteAIInterview}
-                            loading={resolvingInviteConfig}
-                            disabled={!features.ai_interview || job.status === 'Disabled' || !hasAnyAIInterview}
-                            disabledTooltip={
-                              !features.ai_interview
-                                ? 'AI Interviews not enabled'
-                                : job.status === 'Disabled'
-                                  ? 'JD is disabled'
-                                  : 'Create an AI interview first'
-                            }
-                          />
-                        )}
-                      </div>
-                    )}
-
-                    {/* Track Invite and Result share the row below */}
-                    {permissions.canViewAIInterviews && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <QuickActionButton
-                          icon={<Users className="w-4 h-4" />}
-                          label="Track Invite"
-                          onClick={handleTrackAIInterviewInvites}
-                          loading={resolvingTrackInvitesConfig}
-                          disabled={!features.ai_interview || !hasAnyAIInterview}
-                          disabledTooltip={
-                            !features.ai_interview
-                              ? 'AI Interviews not enabled'
-                              : 'Create an AI interview first'
-                          }
-                        />
-
-                        <QuickActionButton
-                          icon={<BarChart className="w-4 h-4" />}
-                          label="Result"
-                          onClick={handleAIInterviewStatus}
-                          disabled={!features.ai_interview}
-                          disabledTooltip="AI Interviews not enabled"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Add Applicants - hidden */}
             </div>
+
+            {/* Assessment — Create, Invite, Track and Result four-up. The AI
+                Interview group below mirrors it, on its own accent. */}
+            {(permissions.canCreateAssessments || permissions.canViewAssessments) && hasPlanFeature('assessment') && (
+              <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
+                <QuickActionHeader icon={<ClipboardList className="w-4 h-4" />} title="Assessment" accent="cyan" />
+                <div className="grid grid-cols-4 gap-2">
+                  {permissions.canCreateAssessments && (
+                    <>
+                      <QuickActionTile
+                        icon={<Sparkles className="w-4 h-4" />}
+                        label="Create"
+                        accent="cyan"
+                        onClick={handleCreateAssessment}
+                        loading={resolvingAssessmentTarget}
+                        disabled={!features.assessment || job.status === 'Disabled'}
+                        disabledTooltip={
+                          !features.assessment
+                            ? 'Assessments not enabled'
+                            : 'JD is disabled'
+                        }
+                      />
+
+                      <QuickActionTile
+                        icon={<UserPlus className="w-4 h-4" />}
+                        label="Invite"
+                        accent="cyan"
+                        onClick={handleOpenShareAssessment}
+                        loading={isLoadingShareAssessments}
+                        disabled={!features.assessment || job.status === 'Disabled' || !hasPublishedAssessment}
+                        disabledTooltip={
+                          !features.assessment
+                            ? 'Assessments not enabled'
+                            : job.status === 'Disabled'
+                              ? 'JD is disabled'
+                              : !hasAnyAssessment
+                                ? 'Create an assessment first'
+                                : 'Publish the assessment first'
+                        }
+                      />
+                    </>
+                  )}
+
+                  {permissions.canViewAssessments && (
+                    <>
+                      <QuickActionTile
+                        icon={<Users className="w-4 h-4" />}
+                        label="Track"
+                        accent="cyan"
+                        onClick={handleTrackAssessmentInvites}
+                        disabled={!features.assessment || !hasAnyAssessment}
+                        disabledTooltip={
+                          !features.assessment
+                            ? 'Assessments not enabled'
+                            : 'Create an assessment first'
+                        }
+                      />
+
+                      <QuickActionTile
+                        icon={<BarChart className="w-4 h-4" />}
+                        label="Result"
+                        accent="cyan"
+                        onClick={handleAssessmentStatus}
+                        disabled={!features.assessment}
+                        disabledTooltip="Assessments not enabled"
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews || permissions.canViewAIInterviews) && hasPlanFeature('ai_interview') && (
+              <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
+                <QuickActionHeader icon={<Brain className="w-4 h-4" />} title="AI Interview" accent="orange" />
+                <div className="grid grid-cols-4 gap-2">
+                  {permissions.canCreateAIInterviews && (
+                    <QuickActionTile
+                      icon={<Sparkles className="w-4 h-4" />}
+                      label="Create"
+                      accent="orange"
+                      onClick={handleCreateAIInterview}
+                      loading={resolvingAIInterviewTarget}
+                      disabled={!features.ai_interview || job.status === 'Disabled'}
+                      disabledTooltip={
+                        !features.ai_interview
+                          ? 'AI Interviews not enabled'
+                          : 'JD is disabled'
+                      }
+                    />
+                  )}
+
+                  {permissions.canShareAIInterviews && (
+                    <QuickActionTile
+                      icon={<UserPlus className="w-4 h-4" />}
+                      label="Invite"
+                      accent="orange"
+                      onClick={handleInviteAIInterview}
+                      loading={resolvingInviteConfig}
+                      disabled={!features.ai_interview || job.status === 'Disabled' || !hasLiveAIInterview}
+                      disabledTooltip={
+                        !features.ai_interview
+                          ? 'AI Interviews not enabled'
+                          : job.status === 'Disabled'
+                            ? 'JD is disabled'
+                            : !hasAnyAIInterview
+                              ? 'Create an AI interview first'
+                              : 'Publish the AI interview first'
+                      }
+                    />
+                  )}
+
+                  {permissions.canViewAIInterviews && (
+                    <>
+                      <QuickActionTile
+                        icon={<Users className="w-4 h-4" />}
+                        label="Track"
+                        accent="orange"
+                        onClick={handleTrackAIInterviewInvites}
+                        loading={resolvingTrackInvitesConfig}
+                        disabled={!features.ai_interview || !hasAnyAIInterview}
+                        disabledTooltip={
+                          !features.ai_interview
+                            ? 'AI Interviews not enabled'
+                            : 'Create an AI interview first'
+                        }
+                      />
+
+                      <QuickActionTile
+                        icon={<BarChart className="w-4 h-4" />}
+                        label="Result"
+                        accent="orange"
+                        onClick={handleAIInterviewStatus}
+                        disabled={!features.ai_interview}
+                        disabledTooltip="AI Interviews not enabled"
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Add Applicants - hidden */}
           </div>
 
           {/* Applicant Statistics */}
@@ -2836,13 +3040,20 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               <span className="ml-3 text-gray-600 dark:text-slate-400 text-sm">Loading scored resumes...</span>
             </div>
           ) : scoredResumes.length === 0 ? (
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
-              <Users className="w-12 h-12 text-gray-300 dark:text-slate-500 mx-auto mb-3" />
-              <p className="text-gray-500 dark:text-slate-500 text-base sm:text-lg">No scored resumes yet</p>
-              <p className="text-gray-400 dark:text-slate-500 text-sm mt-2">
-                Upload and score resumes against this job description to see them here
-              </p>
-            </div>
+            <TabEmptyState
+              icon={Users}
+              title="No Scored Resumes"
+              description="Score resumes against this job description to see the candidates here."
+              action={canScoreResumesFromTab ? (
+                <button
+                  onClick={() => setShowSelectSourceModal(true)}
+                  className={TAB_EMPTY_ACTION_CLASS}
+                >
+                  <Target className="w-4 h-4" />
+                  Score Resumes
+                </button>
+              ) : undefined}
+            />
           ) : (
             <ScoredResumesTable
               resumes={scoredResumes}
@@ -2853,9 +3064,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               // Same gate and target as the Score Resumes quick action — opens
               // "Select Applicants to Score" in place on this page.
               onScoreResumes={
-                permissions.canRunScoring && hasPlanFeature('resume_scoring') && job.status !== 'Disabled'
-                  ? () => setShowSelectSourceModal(true)
-                  : undefined
+                canScoreResumesFromTab ? () => setShowSelectSourceModal(true) : undefined
               }
               onViewCandidate={(resume) => {
                 // Pass resume directly - data already formatted by fetchScoredResumes
@@ -2888,6 +3097,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             jobTitle={job.title}
             jobId={job.id}
             toolbarActions={assessmentTabActions}
+            emptyStateAction={assessmentEmptyActions}
             canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
             canBatchDownload={isTenantAdmin || (user?.permissions?.canExport ?? false)}
             onViewResultDetail={(result) => {
@@ -2910,16 +3120,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           drops its own <main>/breadcrumb chrome and stays inside this page. */}
       {activeTab === 'ai-interview-results' && (
         <div className="mt-0" ref={aiInterviewResultsSectionRef}>
-          {/* With results on screen the actions ride in that view's toolbar,
-              ahead of More Filters. The other branches have no toolbar to sit
-              in, so they keep the standalone strip — Create has to stay
-              reachable when no interview exists yet, which is exactly when it
-              matters most. */}
-          {!aiInterviewConfig && aiInterviewTabActions && (
-            <div className="flex flex-wrap items-center justify-end gap-2 mb-3">
-              {aiInterviewTabActions}
-            </div>
-          )}
           {loadingAIInterviewConfig ? (
             <div className="flex items-center justify-center py-16 tf-loader-center">
               <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
@@ -2939,6 +3139,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             <AIInterviewResults
               embedded
               toolbarActions={aiInterviewTabActions}
+              emptyStateAction={aiInterviewEmptyActions}
               configId={aiInterviewConfig.id}
               configTitle={aiInterviewConfig.position || aiInterviewConfig.jd_title || 'AI Interview'}
               jdTitle={aiInterviewConfig.jd_title || ''}
@@ -2946,15 +3147,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               onViewCandidate={handleAIInterviewCandidateClick}
             />
           ) : (
-            <div className="text-center py-16">
-              <div className="w-16 h-16 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 mx-auto mb-4 flex items-center justify-center">
-                <Brain className="w-8 h-8 text-brand-blue" />
-              </div>
-              <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">No AI interview for this job yet</p>
-              <p className="text-xs text-gray-500 dark:text-slate-400">
-                Create and publish an AI interview to see candidate results here.
-              </p>
-            </div>
+            /* No interview exists for this JD yet. Create has to stay reachable
+               here — this is exactly when it matters most — so the tab actions
+               ride the empty state rather than a separate strip above it. */
+            <TabEmptyState
+              icon={Brain}
+              title="No AI Interview Results"
+              description="Create and publish an AI interview to see candidate results here."
+              action={aiInterviewEmptyActions ?? undefined}
+            />
           )}
         </div>
       )}
@@ -2967,7 +3168,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           sessions={aiMatchSessions}
           loading={loadingAiMatch}
           canRunAiMatch={permissions.canRunAiMatch}
-          onRunMatch={() => setShowAIMatchPanel(true)}
+          onRunMatch={handleAITalentMatch}
           onScoreSelected={(selected) => startAiMatchScoring(selected)}
           onScoreAll={() => startAiMatchScoring(aiMatchCandidates.filter((c) => {
             const scoredIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
@@ -3349,6 +3550,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 onClick={() => {
                   setShowJDHistory(false);
                   setSelectedHistoryVersion(null);
+                  setJdCompareChecked([]);
                 }}
                 className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors flex-shrink-0"
                aria-label="Close">
@@ -3550,13 +3752,34 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 </div>
               ) : (
                 <>
-              <div className="mb-4 flex items-center justify-between">
+              <div className="mb-4 flex flex-wrap items-center gap-2 justify-between">
                 <p className="text-sm text-gray-600 dark:text-slate-400">
-                  Complete timeline of all published versions
+                  {jdHistory.length > 1
+                    ? 'Complete timeline of all published versions — tick two to compare them'
+                    : 'Complete timeline of all published versions'}
                 </p>
-                <span className="text-xs bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 px-3 py-1 rounded-full font-medium">
-                  {jdHistory.length} Version{jdHistory.length !== 1 ? 's' : ''}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 px-3 py-1 rounded-full font-medium">
+                    {jdHistory.length} Version{jdHistory.length !== 1 ? 's' : ''}
+                  </span>
+                  {jdHistory.length > 1 && (
+                    <button
+                      onClick={() => setShowJDCompare(true)}
+                      disabled={jdCompareChecked.length !== 2}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        jdCompareChecked.length === 2
+                          ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                          : 'bg-slate-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {jdCompareChecked.length === 2
+                        ? 'Compare Selected'
+                        : jdCompareChecked.length === 1
+                          ? 'Select 1 more to compare'
+                          : 'Select 2 versions to compare'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Timeline */}
@@ -3597,11 +3820,27 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                         </div>
 
                         {/* Content Card - Now Clickable */}
-                        <div className={`flex-1 pb-5 ${!isLast ? '' : 'pb-0'}`}>
+                        <div className={`flex-1 pb-5 ${!isLast ? '' : 'pb-0'} flex items-start gap-2.5`}>
+                          {/* Compare tick — a sibling of the card button, not a
+                              child: a checkbox nested inside a <button> is
+                              invalid and the card's click would swallow it. */}
+                          {jdHistory.length > 1 && (
+                            <label
+                              className="mt-4 shrink-0 flex items-center cursor-pointer"
+                              title={`Select v${item.version?.version_number}.0 to compare`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={jdCompareChecked.includes(item.id)}
+                                onChange={() => handleJDCompareCheck(item.id)}
+                                className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 cursor-pointer"
+                              />
+                            </label>
+                          )}
                           <button
                             type="button"
                             onClick={() => setSelectedHistoryVersion(item)}
-                            className={`w-full text-left rounded-lg border-2 ${bgColorClasses} p-3 sm:p-4 shadow-sm hover:shadow-md transition-all`}
+                            className={`flex-1 min-w-0 text-left rounded-lg border-2 ${bgColorClasses} p-3 sm:p-4 shadow-sm hover:shadow-md transition-all`}
                           >
                             {/* Action Header */}
                             <div className="flex items-start justify-between mb-2 gap-2">
@@ -3660,6 +3899,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 onClick={() => {
                   setShowJDHistory(false);
                   setSelectedHistoryVersion(null);
+                  setJdCompareChecked([]);
                 }}
                 className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm text-sm w-full sm:w-auto text-center"
               >
@@ -3670,6 +3910,234 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         </div>
       )}
 
+      {/* JD Version Comparison — same shape as the resume-view page's version
+          compare: older on the left in red, newer on the right in green, with a
+          unified fallback. Stacks above the history modal, which stays mounted
+          underneath so closing this returns to the timeline. */}
+      {showJDCompare && jdComparePair && (() => {
+        const { older, newer } = jdComparePair;
+        const olderText = older.version?.description || '';
+        const newerText = newer.version?.description || '';
+        const diff = buildUnifiedDiff(olderText, newerText);
+        const sidePairs = buildDiffSidePairs(diff.lines);
+
+        const closeCompare = () => {
+          setShowJDCompare(false);
+          setJdCompareChecked([]);
+        };
+
+        // JD descriptions are markdown, so heading level is stated outright by
+        // the leading #s — no need for the resume view's guesswork against a
+        // list of known section names.
+        const headingDepth = (text: string) => (text.match(/^(#{1,6})\s/)?.[1].length ?? 0);
+        const stripMarks = (text: string) =>
+          text.replace(/^#{1,6}\s+/, '').replace(/\*\*(.*?)\*\*/g, '$1').trim();
+
+        const renderLine = (
+          line: { text: string; type: 'added' | 'removed' | 'unchanged' } | null,
+          idx: number,
+          side: 'left' | 'right',
+        ) => {
+          // Blank spacer keeping the two columns aligned across an uneven edit.
+          if (!line) return <div key={idx} className="h-7 bg-gray-50 dark:bg-slate-800/40" />;
+
+          const trimmed = line.text.trim();
+          if (!trimmed) return <div key={idx} className="h-3" />;
+
+          let tone = 'text-gray-800 dark:text-slate-200';
+          let marker = '';
+          if (line.type === 'removed' && side === 'left') {
+            tone = 'text-red-800';
+            marker = 'bg-red-50 border-l-4 border-red-400 pl-2';
+          } else if (line.type === 'added' && side === 'right') {
+            tone = 'text-green-800';
+            marker = 'bg-green-50 border-l-4 border-green-400 pl-2';
+          }
+
+          const depth = headingDepth(trimmed);
+          const body = stripMarks(trimmed);
+
+          if (depth > 0) {
+            return (
+              <h3 key={idx} className={`text-xs font-bold mt-4 mb-1.5 pb-1 border-b border-gray-300 dark:border-slate-700 uppercase tracking-wide ${marker} ${tone}`}>
+                {body}
+              </h3>
+            );
+          }
+
+          const isBullet = /^[-*+•]\s/.test(trimmed);
+          return (
+            <p key={idx} className={`text-xs leading-relaxed mb-0.5 py-0.5 ${isBullet ? 'pl-3' : ''} ${marker} ${tone}`}>
+              {body}
+            </p>
+          );
+        };
+
+        return (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+            <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full ${jdCompareViewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85vh] flex flex-col overflow-hidden transition-all duration-300`}>
+              {/* Header */}
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 flex-shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                    <History className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                      Version Comparison
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-slate-400 truncate">
+                      Version {older.version?.version_number}.0 vs Version {newer.version?.version_number}.0
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+                    <button
+                      onClick={() => setJdCompareViewMode('side-by-side')}
+                      className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+                        jdCompareViewMode === 'side-by-side'
+                          ? 'bg-white dark:bg-slate-900 text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15'
+                          : 'text-gray-500 dark:text-slate-400 hover:text-brand-blue'
+                      }`}
+                    >
+                      Side by Side
+                    </button>
+                    <button
+                      onClick={() => setJdCompareViewMode('unified')}
+                      className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+                        jdCompareViewMode === 'unified'
+                          ? 'bg-white dark:bg-slate-900 text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15'
+                          : 'text-gray-500 dark:text-slate-400 hover:text-brand-blue'
+                      }`}
+                    >
+                      Unified
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-full text-green-700">
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      +{diff.addedCount}
+                    </span>
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 border border-red-200 rounded-full text-red-700">
+                      <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                      −{diff.removedCount}
+                    </span>
+                  </div>
+                  <button
+                    onClick={closeCompare}
+                    className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                    aria-label="Close"
+                  >
+                    <X className="w-5 h-5 text-gray-500 dark:text-slate-400" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-slate-950">
+                {!olderText && !newerText ? (
+                  <div className="text-center text-gray-500 dark:text-slate-400 py-12">
+                    <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-600" />
+                    <p>No description recorded on either version.</p>
+                  </div>
+                ) : diff.addedCount === 0 && diff.removedCount === 0 ? (
+                  <div className="text-center text-gray-500 dark:text-slate-400 py-12">
+                    <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-400" />
+                    <p className="font-medium">No changes detected</p>
+                    <p className="text-sm mt-1">Content is identical between these versions.</p>
+                  </div>
+                ) : jdCompareViewMode === 'side-by-side' ? (
+                  <div className="flex h-full gap-0">
+                    {/* Older */}
+                    <div className="flex-1 flex flex-col border-r border-gray-300 dark:border-slate-700 min-w-0">
+                      <div className="px-4 py-2.5 bg-red-50 border-b border-gray-200 flex-shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 bg-red-400 rounded-full"></span>
+                          <span className="text-sm font-semibold text-red-800">Version {older.version?.version_number}.0</span>
+                          <span className="text-xs text-red-600 ml-1">(older)</span>
+                        </div>
+                        <p className="text-xs text-red-600 mt-0.5 truncate">{older.version?.title || job.title}</p>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-4">
+                        <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-5">
+                          {sidePairs.map((pair, idx) => renderLine(pair.left, idx, 'left'))}
+                        </div>
+                      </div>
+                    </div>
+                    {/* Newer */}
+                    <div className="flex-1 flex flex-col min-w-0">
+                      <div className="px-4 py-2.5 bg-green-50 border-b border-gray-200 flex-shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                          <span className="text-sm font-semibold text-green-800">Version {newer.version?.version_number}.0</span>
+                          <span className="text-xs text-green-600 ml-1">(newer)</span>
+                        </div>
+                        <p className="text-xs text-green-600 mt-0.5 truncate">{newer.version?.title || job.title}</p>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-4">
+                        <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-5">
+                          {sidePairs.map((pair, idx) => renderLine(pair.right, idx, 'right'))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Unified */
+                  <div className="h-full overflow-y-auto p-4 sm:p-6">
+                    <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6 sm:p-8 max-w-3xl mx-auto">
+                      {diff.lines.map((line, idx) => {
+                        const trimmed = line.text.trim();
+                        if (!trimmed) return <div key={idx} className="h-3" />;
+
+                        const marker = line.type === 'added'
+                          ? 'bg-green-100 border-l-4 border-green-500 pl-3'
+                          : line.type === 'removed'
+                            ? 'bg-red-50 border-l-4 border-red-400 pl-3 line-through opacity-70'
+                            : '';
+                        const tone = line.type === 'added'
+                          ? 'text-green-900'
+                          : line.type === 'removed'
+                            ? 'text-red-700'
+                            : 'text-gray-800 dark:text-slate-200';
+
+                        const depth = headingDepth(trimmed);
+                        const body = stripMarks(trimmed);
+
+                        if (depth > 0) {
+                          return (
+                            <h3 key={idx} className={`text-base font-bold mt-5 mb-2 pb-1 border-b border-gray-300 dark:border-slate-700 uppercase tracking-wide rounded ${marker} ${tone}`}>
+                              {body}
+                            </h3>
+                          );
+                        }
+
+                        const isBullet = /^[-*+•]\s/.test(trimmed);
+                        return (
+                          <p key={idx} className={`text-sm leading-relaxed mb-0.5 rounded ${isBullet ? 'pl-4' : ''} ${marker} ${tone}`}>
+                            {body}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex-shrink-0">
+                <button
+                  onClick={closeCompare}
+                  className="px-5 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Resume Detail View Modal */}
       {viewingResume && (
         <ResumeDetailView
@@ -3679,6 +4147,20 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       )}
 
       {/* Scored Resume Detail - now handled by CandidateScoringDetailPage above */}
+
+      {/* Confirm before running AI Talent Match. No is the do-nothing path —
+          the panel never mounts, so no run starts and no units are spent. */}
+      <ConfirmationDialog
+        isOpen={showAIMatchConfirm}
+        type="info"
+        icon={FileText}
+        title="Find matching candidates from the Resume Database?"
+        message={`AI Talent Match will scan your resume database against "${job.title}" and rank the closest candidates.`}
+        confirmText="Yes"
+        cancelText="No"
+        onConfirm={confirmAITalentMatch}
+        onCancel={() => setShowAIMatchConfirm(false)}
+      />
 
       {/* AI Talent Match Progress Panel */}
       {showAIMatchPanel && (
@@ -3849,22 +4331,20 @@ function AIMatchTabContent({
 
   if (candidates.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <Brain className="w-12 h-12 text-gray-300 dark:text-slate-500 mb-3" />
-        <h3 className="text-base font-medium text-gray-700 dark:text-slate-300 mb-2">No AI Talent Match Results</h3>
-        <p className="text-sm text-gray-500 dark:text-slate-500 max-w-sm">
-          Run an AI Talent Match session to find the best candidates for this role.
-        </p>
-        {canRunAiMatch && (
+      <TabEmptyState
+        icon={Brain}
+        title="No AI Talent Match Results"
+        description="Run an AI Talent Match session to find the best candidates for this role."
+        action={canRunAiMatch ? (
           <button
             onClick={onRunMatch}
-            className="mt-4 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2"
+            className={TAB_EMPTY_ACTION_CLASS}
           >
             <Sparkles className="w-4 h-4" />
             Run AI Match
           </button>
-        )}
-      </div>
+        ) : undefined}
+      />
     );
   }
 

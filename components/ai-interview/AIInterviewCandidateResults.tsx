@@ -6,6 +6,7 @@ import ListEmptyState from '@/components/ui/list-empty-state';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Eye, Loader2, Users } from 'lucide-react';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -260,6 +261,13 @@ export default function AIInterviewCandidateResults() {
             </div>
           </div>
         }
+        countBadge={
+          <ListCountBadge
+            filtered={filteredRows.length}
+            total={rows.length}
+            noun="result"
+          />
+        }
       >
         <select
           value={statusFilter}
@@ -272,12 +280,6 @@ export default function AIInterviewCandidateResults() {
           ))}
         </select>
       </ListToolbar>
-
-      <div className="mb-3 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-        <span className="font-semibold text-gray-900 dark:text-slate-50">{filteredRows.length.toLocaleString()}</span>
-        {' '}result{filteredRows.length === 1 ? '' : 's'} across all AI interviews
-        {filteredRows.length !== rows.length && ` (of ${rows.length.toLocaleString()})`}
-      </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
         {filteredRows.length === 0 ? (

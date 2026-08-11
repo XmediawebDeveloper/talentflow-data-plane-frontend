@@ -1,6 +1,7 @@
 import { ArrowLeft, Sparkles, Mail, Phone, MapPin, Building2, Clock, CheckCircle2, Star, TrendingUp, Filter, Download, Share2 } from 'lucide-react';
 import { useState } from 'react';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 
@@ -175,11 +176,15 @@ export default function AIMatchResults({ job, results, onBack, onSelectCandidate
             filtersApplied={search.filtersApplied}
             onClearFilters={search.reset}
             className="mb-0"
-          >
-            <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
-              <span className="text-brand-blue font-semibold">{filteredResults.length}</span> of {results.length}
-            </div>
-          </ListToolbar>
+            countBadge={
+              <ListCountBadge
+                filtered={filteredResults.length}
+                total={results.length}
+                noun="candidate"
+                selected={selectedCandidates.length}
+              />
+            }
+          />
 
           {/* Expanded Filters */}
           {showFilters && (

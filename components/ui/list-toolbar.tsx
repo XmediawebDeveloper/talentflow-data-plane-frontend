@@ -10,7 +10,7 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
  * /recruitment/job-openings (components/JobsListing.tsx) — the reference page.
  *
  * Layout, left to right:
- *   [ search ..................... ]  [ ▦ | ☰ ]  [ ⚙ More Filters ③ ]  [ ✕ Clear ]
+ *   [ search ............ ]  [ ☰ | ▦ ]  [ ⚙ More Filters ③ ]  [ ✕ Clear ]  [ 24 of 56 ]
  *
  * Every part after the search box is optional, so pages that have no view
  * toggle or no advanced-filter panel can still use this and stay consistent
@@ -73,6 +73,15 @@ export interface ListToolbarProps {
   children?: React.ReactNode;
 
   /**
+   * The list's count badge (`<ListCountBadge>`), pinned to the very end of the
+   * row — past the view toggle, More Filters, Reset and anything in `children`.
+   * It has its own slot rather than riding `children` because its position is
+   * the point: it lands in the same right-hand corner on every list, so the eye
+   * knows where to find it without reading the row.
+   */
+  countBadge?: React.ReactNode;
+
+  /**
    * The advanced-filter panel, rendered directly under the toolbar row when
    * `filtersOpen` is true. Pages used to place this themselves, which is why the
    * gap above it, the divider, and whether it sat inside or outside the card all
@@ -97,6 +106,7 @@ export default function ListToolbar({
   onClearFilters,
   leadingActions,
   children,
+  countBadge,
   filterPanel,
   className,
 }: ListToolbarProps) {
@@ -166,20 +176,7 @@ export default function ListToolbar({
 
         {showViewToggle && (
           <div className="flex items-center gap-1 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-1 rounded-lg">
-            <button
-              type="button"
-              onClick={() => onViewModeChange!('grid')}
-              className={cn(
-                'p-1.5 rounded transition-all',
-                viewMode === 'grid'
-                  ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
-                  : 'text-gray-600 hover:text-brand-blue',
-              )}
-              aria-label="Grid view"
-              title="Grid view"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
+            {/* List first, then grid — the order every toggle in the app uses. */}
             <button
               type="button"
               onClick={() => onViewModeChange!('list')}
@@ -193,6 +190,20 @@ export default function ListToolbar({
               title="List view"
             >
               <List className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onViewModeChange!('grid')}
+              className={cn(
+                'p-1.5 rounded transition-all',
+                viewMode === 'grid'
+                  ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
+                  : 'text-gray-600 hover:text-brand-blue',
+              )}
+              aria-label="Grid view"
+              title="Grid view"
+            >
+              <LayoutGrid className="w-4 h-4" />
             </button>
           </div>
         )}
@@ -240,6 +251,9 @@ export default function ListToolbar({
         )}
 
         {children}
+
+        {/* Always last — see `countBadge`. */}
+        {countBadge}
       </div>
     </div>
   );

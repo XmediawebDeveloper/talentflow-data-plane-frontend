@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import TabEmptyState from '@/components/ui/tab-empty-state';
 import { formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 
@@ -37,6 +38,17 @@ interface AssessmentResult {
   invitedBy: string;
   inviteSource?: string;
   status?: string; // completed, in_progress, pending
+  /**
+   * AI scoring state, distinct from `status` (the candidate's submission
+   * state). A candidate can be 'completed' while scoring is still running, so
+   * the Tech/Coding score cells and the PDF download gate on this and show '—'
+   * until it reads 'completed'.
+   *
+   * Was missing from this interface even though the code below reads it in five
+   * places and JobDetailView passes it in explicitly — the union matches
+   * ScoringStatus in assessmentService. Optional because the API can omit it.
+   */
+  scoring_status?: 'pending' | 'processing' | 'completed' | 'error';
   sent_at?: string;
   started_at?: string;
   completed_at?: string;
@@ -62,9 +74,16 @@ interface AssessmentResultsTableProps {
    * the table's own toolbar instead of a separate strip above it.
    */
   toolbarActions?: React.ReactNode;
+  /**
+   * Action for the nothing-recorded-yet empty state. Kept separate from
+   * `toolbarActions` because the two want different sets: the toolbar shows
+   * Send Invite always (disabled until it can be used), while the empty state
+   * only includes it once an assessment exists to invite people to.
+   */
+  emptyStateAction?: React.ReactNode;
 }
 
-export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail, canDownloadPDF = false, canBatchDownload = false, toolbarActions }: AssessmentResultsTableProps) {
+export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail, canDownloadPDF = false, canBatchDownload = false, toolbarActions, emptyStateAction }: AssessmentResultsTableProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const [searchTerm, setSearchTerm] = useState('');
@@ -511,6 +530,22 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     if (percentage >= 40) return 'text-brand-orange-deep';
     return 'text-red-600';
   };
+  // Nothing has been recorded for this job yet — not even an invitation. The
+  // header, filters, column picker, export controls and table headings would
+  // all be acting on nothing, so drop the whole shell and show the same
+  // message-plus-action empty state the AI Talent Match tab uses. Filters that
+  // narrow a non-empty list to zero still fall through to the in-table empty
+  // row below, which keeps the controls on screen to undo them.
+  if (results.length === 0) {
+    return (
+      <TabEmptyState
+        icon={BarChart3}
+        title="No Assessment Results"
+        description="Create an assessment for this job and invite candidates to see their results here."
+        action={emptyStateAction ?? undefined}
+      />
+    );
+  }
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
