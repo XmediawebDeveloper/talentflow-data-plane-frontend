@@ -21,7 +21,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw, Lightbulb } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -166,14 +166,6 @@ interface InterviewVadConfig {
   silence_duration_ms?: number;
 }
 
-/** AII16 — coaching tips Bina speaks at the end of the opening role/JD warm-up.
- *  Arrives on the `role_intro` message as a structured copy of text Bina is
- *  ALREADY speaking, so the on-screen card and the audio always match. */
-interface InterviewTips {
-  lead_in?: string;
-  tips?: string[];
-  closing?: string;
-}
 
 interface InterviewSocketMessage {
   type?: string;
@@ -220,7 +212,6 @@ interface InterviewSocketMessage {
   stt_model?: string;
   text?: string;
   timer_state?: unknown;
-  tips?: InterviewTips;
   to_cluster?: string;
   token?: string;
   total_questions?: number;
@@ -895,14 +886,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   useEffect(() => { currentTranscriptRef.current = currentTranscript; }, [currentTranscript]);
   // Keep isClarificationRef in sync with state — used as a gate in timer intervals
   useEffect(() => { isClarificationRef.current = isClarification; }, [isClarification]);
-
-  // ── AII16: interview coaching tips ───────────────────────────────────────
-  // Set from the `role_intro` message (same content Bina is speaking) and shown
-  // as a pinned card above the chat so the candidate can READ the tips as well
-  // as hear them. Cleared the moment the first question's answer window opens
-  // (question_timer_started) — by then the interview has genuinely begun and
-  // the card would only compete with the question for attention.
-  const [interviewTips, setInterviewTips] = useState<InterviewTips | null>(null);
 
   // ── Pre-turn "get ready" countdown (Change 1) ────────────────────────────
   // After Bina finishes speaking, before the mic opens, we show a big 5→1
@@ -3601,14 +3584,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // runs saveAiMessage BEFORE the roleIntro early-return — always commits
         // the role bubble before Q1's tokens arrive. That closes the old race
         // that made the bubble vanish / delayed Q1's mic.
-        console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}, tips=${data.tips?.tips?.length ?? 0}`);
-        // AII16 — the tips are ALREADY part of `data.text` (Bina speaks them as
-        // one continuous utterance); this structured copy only drives the
-        // readable on-screen card. If the backend has tips disabled the field
-        // is absent and nothing renders.
-        if (data.tips?.tips?.length) {
-          setInterviewTips(data.tips);
-        }
+        // AII16 — the coaching tips are part of `data.text` itself (Bina speaks
+        // the role summary + tips as ONE utterance), so they stream into this
+        // bubble like any other message. Nothing extra to render.
+        console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}`);
         roleIntroActiveRef.current = true;
         roleIntroTextRef.current = (data.text as string) ?? "";  // lip-sync fallback in speaking_started
         tokenBufferRef.current = (data.text as string) ?? "";     // STREAM it, like the greeting / questions
@@ -3968,9 +3947,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // on finalize commits no bubble. The audio_end that follows still opens
         // the mic; the backend's silence ladder handles the (rare) blank turn.
         console.warn(`[WS ${timestamp}] tts_failed — suppressing silent question text`);
-        // Same rule for the AII16 tips card: it is the on-screen half of speech
-        // that never happened, so it must not linger silently either.
-        if (roleIntroActiveRef.current) setInterviewTips(null);
         if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
         tokenBufferRef.current = "";
         currentAiTextRef.current = "";
@@ -4555,9 +4531,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // / repeat) — arm the pre-turn "get ready" 5→1 countdown. Consumed by
         // finalizePlayback when the mic is about to open. Nudges never send this.
         getReadyArmedRef.current = true;
-        // AII16 — the interview proper has started; retire the tips card so it
-        // doesn't compete with the question the candidate now has to answer.
-        setInterviewTips(null);
         console.log('[INTERVIEW-DEBUG] question_timer_started received', {
           seconds: data.seconds,
           total_seconds: data.total_seconds,
@@ -8466,34 +8439,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             </div>
           )}
 
-          {/* ── AII16: Interview Tips card ──
-              Bina SPEAKS these tips as the tail of her opening warm-up; this
-              card is the "displayed on the screen" half of the same content
-              (identical strings, sent on the role_intro message). Pinned above
-              the chat so it stays readable while she talks, and retired at the
-              first question_timer_started. */}
-          {interviewTips?.tips?.length ? (
-            <div className="flex-shrink-0 px-4 py-3 bg-amber-50 border-b border-amber-200">
-              <div className="flex items-center gap-2 mb-2">
-                <Lightbulb className="w-4 h-4 text-amber-600 shrink-0" />
-                <span className="text-xs font-semibold text-amber-800">Interview Tips</span>
-              </div>
-              {interviewTips.lead_in && (
-                <p className="text-xs text-amber-800/90 leading-snug mb-1.5">{interviewTips.lead_in}</p>
-              )}
-              <ul className="space-y-1">
-                {interviewTips.tips.map((tip, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs text-amber-900 leading-snug">
-                    <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                    <span>{tip}</span>
-                  </li>
-                ))}
-              </ul>
-              {interviewTips.closing && (
-                <p className="text-xs text-amber-800/90 leading-snug mt-1.5">{interviewTips.closing}</p>
-              )}
-            </div>
-          ) : null}
+          {/* AII16 — the separate "Interview Tips" card was REMOVED per UX
+              review: it duplicated, word for word, the tips Bina is already
+              speaking and streaming into her opening bubble, so the candidate
+              read the same list twice on one screen. The tips remain both
+              SPOKEN and DISPLAYED — they are part of the role_intro text in the
+              chat bubble below. */}
 
           {/* Chat messages — wrapped in a relative container so a bottom
               gradient mask can fade any content into the chat background before
