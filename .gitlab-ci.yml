@@ -1132,6 +1132,16 @@ variables:
         --build-arg NEXT_PUBLIC_RAZORPAY_KEY_ID="$NEXT_PUBLIC_RAZORPAY_KEY_ID"
         -t "$IMAGE:$TAG-$CI_ENVIRONMENT_SLUG"
         -t "$IMAGE:e2e" .
+    # Traceability artifact: which commit produced which image, and when — the
+    # raw material the talentflow-e2e-pipeline release's `prepare` job checks
+    # against when a FRONTEND_SHA is put through a coordinated release.
+    - |
+      printf '{"repo":"talentflow-data-plane-frontend","sha":"%s","short_sha":"%s","image":"%s","built_at":"%s","pipeline_url":"%s"}\n' \
+        "$CI_COMMIT_SHA" "$CI_COMMIT_SHORT_SHA" "$IMAGE:$TAG-$CI_ENVIRONMENT_SLUG" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$CI_PIPELINE_URL" \
+        > build-manifest.json
+  artifacts:
+    paths: [build-manifest.json]
+    expire_in: 6 months
   environment:
     name: staging
     action: prepare
