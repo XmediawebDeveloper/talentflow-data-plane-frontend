@@ -858,7 +858,11 @@ function buildPerQuestionDetailsFromGroups(
     });
 
   const computeQuestionScore = (skills: PerQuestionSkill[]): number => {
-    const scored = skills.filter(k => k.score > 0);
+    // AIU104: Σ(score×weight) / Σ(weight) over EVERY assigned skill the
+    // evaluator scored — a 0-score skill (asked, not demonstrated) is a real gap
+    // and MUST count. Only skills with NO evaluator score (is_unscored) are
+    // excluded, so we never fabricate a 0 for an unevaluated skill.
+    const scored = skills.filter(k => !k.is_unscored);
     const sumW = scored.reduce((s, k) => s + k.weight, 0);
     const sumWS = scored.reduce((s, k) => s + k.score * k.weight, 0);
     return sumW > 0 ? Math.round((sumWS / sumW) * 10) / 10 : 0;
@@ -1381,14 +1385,14 @@ function buildPerQuestionDetailsFromHistory(
     skills.sort((a, b) => b.weight - a.weight || b.score - a.score);
 
     // Weighted question score = Σ(score × weight) / Σ(weight) — the spec's
-    // exact formula, computed from the SAME per-skill scores shown on the
-    // card so the displayed arithmetic is always self-consistent (this is
-    // what fixes the "44.0 ÷ 11 = 2.40" mismatch: the question score must be
-    // the weighted average of the rows the recruiter sees, not a separately
-    // sourced entry.score). Unscored skills (no evaluator row) are EXCLUDED,
-    // and true 0-scored skills are excluded as well to match the backend's
-    // question-score rule (`score > 0` contributes; pure no-evidence rows do not).
-    const scoredSkills = skills.filter(k => !k.is_unscored && k.score > 0);
+    // exact formula (AIU104), computed from the SAME per-skill scores shown on
+    // the card so the displayed arithmetic is always self-consistent (this is
+    // what fixes the "56.0 ÷ 27 = 8.00" mismatch: the question score must be the
+    // weighted average of the rows the recruiter sees). Only skills with NO
+    // evaluator score (is_unscored — cancelled/incomplete eval) are EXCLUDED; a
+    // real 0-scored skill (asked but not demonstrated) is a genuine gap and MUST
+    // count, so a strong answer on one skill can't hide zeros on the others.
+    const scoredSkills = skills.filter(k => !k.is_unscored);
     const hasEvaluatedSkill = skills.some(k => !k.is_unscored);
     const sumW = scoredSkills.reduce((s, k) => s + k.weight, 0);
     const sumWS = scoredSkills.reduce((s, k) => s + k.score * k.weight, 0);
