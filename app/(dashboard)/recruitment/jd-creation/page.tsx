@@ -208,6 +208,9 @@ function JDCreationContent() {
   const searchParams = useSearchParams();
   const jdId = searchParams.get('id');
   const stageFromUrl = searchParams.get('stage') as 'create' | 'extract' | 'review' | null;
+  // Per-click nonce from "Create JD" (?new=<ts>). Used only to force a fresh
+  // remount of the create form so a new JD never resumes the last draft.
+  const freshParam = searchParams.get('new');
 
   // Which module sent the recruiter here — derived from the URL on every
   // render, never latched. The old version remembered "came from assessments"
@@ -300,6 +303,12 @@ function JDCreationContent() {
           } catch (error) {
             console.error('Failed to fetch JD:', error);
           }
+        } else {
+          // Fresh "Create JD" (no id) — clear any stale edit state left in the
+          // cached route segment so we never resume the previous draft/JD.
+          setEditingJD(null);
+          setIsJDInUse(false);
+          setJdUsageMessage('');
         }
         setLoading(false);
       } catch (error) {
@@ -313,13 +322,17 @@ function JDCreationContent() {
           } catch (fetchError) {
             console.error('Failed to fetch JD:', fetchError);
           }
+        } else {
+          setEditingJD(null);
+          setIsJDInUse(false);
+          setJdUsageMessage('');
         }
         setLoading(false);
       }
     };
 
     checkAccess();
-  }, [jdId]);
+  }, [jdId, freshParam]);
 
   /**
    * Where the assessment flow resumes — the JD picker the recruiter left.
@@ -481,6 +494,9 @@ function JDCreationContent() {
     <DndProvider backend={HTML5Backend}>
       <div className="flex h-[calc(100vh-64px)] flex-col overflow-hidden bg-slate-50">
         <JDCreation
+          // Remount fresh per edit-target / per "Create JD" click so the cached
+          // route segment never carries a prior draft's in-progress state.
+          key={jdId ?? (freshParam ? `new-${freshParam}` : 'new')}
           onBack={handleViewAllJobs}
           onPublish={handleJDPublish}
           editingJD={memoizedEditingJD}

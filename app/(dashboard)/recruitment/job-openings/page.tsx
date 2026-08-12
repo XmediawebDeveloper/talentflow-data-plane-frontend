@@ -237,7 +237,13 @@ export default function JobOpeningsPage() {
   };
 
   const handleCreateNew = () => {
-    router.push('/recruitment/jd-creation');
+    // Always start a BRAND-NEW JD — never resume the last autosaved draft.
+    // The jd-creation route segment is cached by the App Router, so a bare
+    // "/recruitment/jd-creation" push reuses the previous in-progress form
+    // state (step 2, autosaved draft id, extracted data). A unique `new` nonce
+    // makes each click a distinct URL → fresh segment → the page remounts the
+    // form clean. (Existing drafts are still resumable via Edit, which passes ?id.)
+    router.push(`/recruitment/jd-creation?new=${Date.now()}`);
   };
 
   const handleViewJob = (job: Job) => {
