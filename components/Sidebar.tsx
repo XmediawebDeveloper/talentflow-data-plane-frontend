@@ -5,8 +5,11 @@ import {
   Settings,
   BarChart3,
   HelpCircle,
+  BrainCircuit,
+  FileSearch,
+  FileSignature,
   FileText,
-  Target,
+  FolderOpen,
   Sparkles,
   ClipboardList,
   Video,
@@ -26,7 +29,6 @@ import {
   TrendingUp,
   ChevronDown,
   ChevronRight,
-  Briefcase,
   Eye,
   DollarSign,
   MessageCircle
@@ -150,11 +152,11 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
         // JD Creation - requires create permission
         { id: 'jd-creation', label: 'JD Creation', icon: FileText, permission: 'canCreateJD', feature: 'jd_create' },
         // Job Openings - requires view permission (will show if user can view JDs)
-        { id: 'job-openings', label: 'Job Openings', icon: Briefcase, permission: 'canViewJD', feature: 'jd_manage' },
+        { id: 'job-openings', label: 'Job Openings', icon: FileSignature, permission: 'canViewJD', feature: 'jd_manage' },
         // Resume Scoring - requires scoring view permission
-        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, permission: 'canViewScoring', feature: 'resume_scoring' },
+        { id: 'resume-scoring', label: 'Resume Scoring', icon: FileSearch, permission: 'canViewScoring', feature: 'resume_scoring' },
         // AI Talent Match - requires AI match view permission
-        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, permission: 'canViewAiMatch', feature: 'ai_talent_match' },
+        { id: 'ai-talent-match', label: 'AI Talent Match', icon: BrainCircuit, permission: 'canViewAiMatch', feature: 'ai_talent_match' },
         // Assessments - requires create assessment permission (or view for viewing results)
         { id: 'assessments', label: 'Assessments', icon: ClipboardList, permission: 'canViewAssessments', feature: 'assessment' },
         // AI Interviews - requires AI interview view permission
@@ -162,7 +164,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
         // HR Question Bank - separate evaluation page
         { id: 'hr-question-bank', label: 'HR Question Bank', icon: ClipboardList, permission: 'canViewHRQuestionBank', feature: 'assessment' },
         // My Resumes - requires resume view permission (upload button hidden separately inside the page)
-        { id: 'my-resumes', label: 'My Resumes', icon: Users, permission: 'canViewResumes', feature: 'resume_upload' },
+        { id: 'my-resumes', label: 'My Resumes', icon: FolderOpen, permission: 'canViewResumes', feature: 'resume_upload' },
         // Internal Resume Database - requires internal DB access
         { id: 'resume-database', label: 'Internal Resume Database', icon: Database, permission: 'canViewInternalDB', feature: 'resume_database_access' },
       ]
@@ -185,7 +187,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
       label: 'User Management',
       icon: UserCog,
       children: [
-        { id: 'user-management', label: 'Users', icon: Users, adminOnly: true },
+        { id: 'user-management', label: 'User Management', icon: Users, adminOnly: true },
         { id: 'role-management', label: 'Roles & Permissions', icon: Shield, adminOnly: true },
         { id: 'team-management', label: 'Teams', icon: Users, permission: 'canViewTeams' },
         { id: 'team-chat', label: 'Chat', icon: MessageCircle },  // ✅ Available to ALL users

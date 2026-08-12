@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import InviteShareModal from './InviteShareModal';
@@ -89,13 +90,13 @@ interface ScoredResumesTableProps {
   onSelectAll?: (resumeIds: string[]) => void;
   isGlobalView?: boolean; // Show job title column in global view
   /**
-   * Extra controls rendered on the right of the search/filter row — used by
-   * ResumeScoringPage to put "Select candidates" + "Download N Scorecards (ZIP)"
-   * on the same row as the search instead of in a separate bar above the table.
-   * Passed down rather than lifting this component's seven filter states up,
-   * which would force the same plumbing on JobDetailView, which has no bulk bar.
+   * Host-supplied bulk actions, rendered in the selection row beside Download
+   * and Bulk Invite and only while rows are picked — ResumeScoringPage uses it
+   * for "Download N Scorecards (ZIP)". Passed down rather than lifting this
+   * component's seven filter states up, which would force the same plumbing on
+   * JobDetailView, which has no bulk actions of its own.
    */
-  toolbarActions?: React.ReactNode;
+  bulkActions?: React.ReactNode;
   /**
    * Opens the caller's "Select Applicants to Score" flow. Optional so the
    * button only appears where a host has somewhere to send it — JobDetailView
@@ -115,7 +116,7 @@ export default function ScoredResumesTable({
   onSelectResume,
   onSelectAll,
   isGlobalView = false,
-  toolbarActions,
+  bulkActions,
   onScoreResumes
 }: ScoredResumesTableProps) {
   const { tenant, isTenantAdmin, user } = useAuth();  // Get tenant info from auth context
@@ -550,87 +551,22 @@ export default function ScoredResumesTable({
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      {/* Header */}
+      {/* Header — title and the one page-level action. Everything that acts on
+          the list lives in the toolbar below, and everything that acts on a
+          selection lives in its own row under that, same as job-openings. */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-        <div>
-          <h2 className="text-gray-900">Scored Resumes</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            {filteredResumes.length} of {resumes.length} candidates
-            {selectedResumes.length > 0 && ` • ${selectedResumes.length} selected`}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Score Resumes — sits before Customize Columns. Opens the host's
-              "Select Applicants to Score" modal in place. */}
-          {onScoreResumes && (
-            <button
-              onClick={onScoreResumes}
-              className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2"
-            >
-              <Target className="w-4 h-4" />
-              <span className="hidden sm:inline">Score Resumes</span>
-              <span className="sm:hidden">Score</span>
-            </button>
-          )}
-          {/* Customize Columns - Hide on mobile */}
+        <h2 className="text-gray-900">Scored Resumes</h2>
+        {/* Score Resumes — opens the host's "Select Applicants to Score" modal. */}
+        {onScoreResumes && (
           <button
-            onClick={() => setShowColumnModal(true)}
-            className="hidden sm:flex px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors items-center gap-2"
+            onClick={onScoreResumes}
+            className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 self-start sm:self-auto"
           >
-            <SlidersHorizontal className="w-4 h-4" />
-            <span className="hidden md:inline">Customize Columns</span>
-            <span className="md:hidden">Columns</span>
+            <Target className="w-4 h-4" />
+            <span className="hidden sm:inline">Score Resumes</span>
+            <span className="sm:hidden">Score</span>
           </button>
-          {selectedResumes.length > 0 && (
-            <>
-              {canExport && (
-              <button
-                onClick={handleDownloadBulkScorecards}
-                disabled={bulkDownloading}
-                className="px-3 sm:px-4 py-2 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {bulkDownloading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4" />
-                )}
-                <span className="hidden sm:inline">{bulkDownloading ? 'Downloading...' : `Download (${selectedResumes.length})`}</span>
-                <span className="sm:hidden">{selectedResumes.length}</span>
-              </button>
-              )}
-              {canExport && (
-              <button
-                onClick={handleExportExcel}
-                className="px-3 sm:px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
-              >
-                <FileDown className="w-4 h-4" />
-                <span className="hidden sm:inline">Export</span>
-              </button>
-              )}
-              {canCreateAssessments && (
-                <button
-                  onClick={() => setShowBulkInviteModal(true)}
-                  disabled={availableUnits === 0}
-                  className="px-3 sm:px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={availableUnits === 0 ? 'No assessment units available' : `Bulk invite ${selectedResumes.length} candidates`}
-                >
-                  <Send className="w-4 h-4" />
-                  <span className="hidden sm:inline">Bulk Invite ({selectedResumes.length})</span>
-                  <span className="sm:hidden">{selectedResumes.length}</span>
-                </button>
-              )}
-            </>
-          )}
-          {selectedResumes.length === 0 && canExport && (
-            <button
-              onClick={handleExportExcel}
-              className="px-3 sm:px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
-            >
-              <FileDown className="w-4 h-4" />
-              <span className="hidden sm:inline">Export</span>
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Search and Filter Bar */}
@@ -650,8 +586,42 @@ export default function ScoredResumesTable({
           filtersApplied={search.filtersApplied}
           onClearFilters={search.reset}
           className="mb-0"
+          countBadge={
+            <ListCountBadge
+              filtered={filteredResumes.length}
+              total={resumes.length}
+              noun="candidate"
+              selected={selectedResumes.length}
+            />
+          }
         >
-          {toolbarActions}
+          {/* Customize Columns — hidden on the narrowest screens, where the row
+              has no space for it and the table scrolls horizontally anyway. */}
+          <button
+            onClick={() => setShowColumnModal(true)}
+            className="hidden sm:flex px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors items-center gap-2 whitespace-nowrap"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            <span className="hidden md:inline">Customize Columns</span>
+            <span className="md:hidden">Columns</span>
+          </button>
+
+          {/* One Export for both states — handleExportExcel already exports the
+              selection, and asks for one when there isn't any. It just leads
+              more strongly once rows are picked. */}
+          {canExport && (
+            <button
+              onClick={handleExportExcel}
+              className={`px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap ${
+                selectedResumes.length > 0
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <FileDown className="w-4 h-4" />
+              Export
+            </button>
+          )}
         </ListToolbar>
 
         {/* Advanced Filters */}
@@ -746,6 +716,70 @@ export default function ScoredResumesTable({
                 Done
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Selection row — its own strip under the search/filter row, divided by
+            a rule, exactly like job-openings' "Select all + Bulk Actions" line.
+            Bulk buttons only appear once something is picked, so the row stays
+            quiet until it has work to do. */}
+        {filteredResumes.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-3 border-t border-gray-200">
+            <button
+              onClick={handleSelectAll}
+              className={`group inline-flex items-center gap-2 h-9 pl-2.5 pr-3.5 rounded-full border text-sm font-medium transition-all ${
+                selectedResumes.length > 0
+                  ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                  : 'bg-white text-gray-700 border-gray-400 hover:border-brand-blue/40 hover:text-brand-blue'
+              }`}
+            >
+              <span className={`flex h-5 w-5 items-center justify-center rounded-full transition-colors ${
+                selectedResumes.length > 0 ? 'bg-white/20' : 'bg-gray-100 group-hover:bg-brand-blue/10'
+              }`}>
+                {selectedResumes.length === filteredResumes.length ? (
+                  <CheckSquare className={`w-3.5 h-3.5 ${selectedResumes.length > 0 ? 'text-white' : 'text-brand-blue'}`} />
+                ) : selectedResumes.length > 0 ? (
+                  <span className="h-2 w-2 rounded-full bg-white" />
+                ) : (
+                  <Square className="w-3.5 h-3.5 text-gray-400 group-hover:text-brand-blue" />
+                )}
+              </span>
+              <span>
+                {selectedResumes.length > 0 ? `${selectedResumes.length} selected` : 'Select all'}
+              </span>
+            </button>
+
+            {selectedResumes.length > 0 && (
+              <>
+                {canExport && (
+                  <button
+                    onClick={handleDownloadBulkScorecards}
+                    disabled={bulkDownloading}
+                    className="h-9 px-3.5 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {bulkDownloading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
+                    {bulkDownloading ? 'Downloading...' : `Download (${selectedResumes.length})`}
+                  </button>
+                )}
+                {canCreateAssessments && (
+                  <button
+                    onClick={() => setShowBulkInviteModal(true)}
+                    disabled={availableUnits === 0}
+                    className="h-9 px-3.5 text-sm bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={availableUnits === 0 ? 'No assessment units available' : `Bulk invite ${selectedResumes.length} candidates`}
+                  >
+                    <Send className="w-4 h-4" />
+                    Bulk Invite ({selectedResumes.length})
+                  </button>
+                )}
+                {/* Host-supplied bulk action — Download N Scorecards (ZIP). */}
+                {bulkActions}
+              </>
+            )}
           </div>
         )}
       </div>

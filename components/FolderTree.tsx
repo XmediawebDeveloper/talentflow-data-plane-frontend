@@ -1,24 +1,66 @@
 'use client'
 
-import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload, Edit2, Trash2, LayoutGrid, Archive } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload, Edit2, Trash2, LayoutGrid, Archive, FolderRoot } from 'lucide-react';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import { Folder as FolderType, Resume } from '@/lib/types/types';
 import { toast } from 'sonner';
 
-// Max folder depth (root → level1 → level2 → level3 = 3 levels of nesting)
-const MAX_FOLDER_DEPTH = 3;
+// Max folder depth (root → level1 → level2 → level3 = 3 levels of nesting).
+// Exported so the card view's create control enforces the same ceiling as the
+// tree's own "Create Subfolder" action.
+export const MAX_FOLDER_DEPTH = 3;
 
 /** Longest folder name we accept. Exported so every entry point — the tree's
  *  create/rename inputs, the upload modal, and the pages' own submit handlers —
  *  enforces the same number. */
-export const FOLDER_NAME_MAX_LENGTH = 14;
+export const FOLDER_NAME_MAX_LENGTH = 60;
+
+/* ---- Tree guide geometry -------------------------------------------------
+ * The rows are a flat list indented with padding, not nested boxes, so the
+ * connector lines are drawn per row from the same numbers that produce the
+ * indent. `TREE_COLUMN_CENTER` is half the 20px chevron/spacer column, i.e.
+ * where a parent's toggle sits — so the trunk drops out of the chevron and the
+ * elbow lands on the child's icon.
+ */
+const TREE_INDENT = 16;
+const TREE_BASE_PADDING = 12;
+const TREE_COLUMN_CENTER = 10;
+/** x of the vertical line belonging to a folder at `depth`. */
+const treeGuideX = (depth: number) => TREE_BASE_PADDING + depth * TREE_INDENT + TREE_COLUMN_CENTER;
+/**
+ * Elbow reach, which depends on what the row leads with.
+ *
+ * A childless row's first glyph is the folder icon, 28px in, so the elbow can
+ * cross the empty toggle column and stop in the gutter just before it. A row
+ * that expands leads with a chevron sitting at the very start of that column,
+ * so the same reach would draw straight through the chevron — the row paints
+ * over the guides, but the chevron is an outline, so the line showed through
+ * its gaps. There the elbow stops at the chevron's left edge and lets the
+ * chevron terminate the branch.
+ */
+const TREE_ELBOW_TO_ICON = TREE_INDENT + TREE_COLUMN_CENTER;
+const TREE_ELBOW_TO_CHEVRON = TREE_INDENT - TREE_COLUMN_CENTER + 2;
+/**
+ * Guide colours, in two weights. The row's own branch is the line that says
+ * "this folder hangs off that one", so it reads darker; the ancestor trunks
+ * running past it stay a step lighter and recede. Both are stronger than the
+ * gray-200 hairline these started as, which all but vanished against the white
+ * panel.
+ */
+const TREE_BRANCH_COLOR = 'bg-gray-400';
+const TREE_TRUNK_COLOR = 'bg-gray-300';
 
 // Panel width bounds — the same ones the container's min/max styles enforce, so
 // a drag can never push it outside what CSS would clamp back anyway.
 const MIN_PANEL_WIDTH = 200;
 const MAX_PANEL_WIDTH = 400;
 const DEFAULT_PANEL_WIDTH = 240;
+/** Height of the scrolling folder list. Fixed rather than viewport-relative so
+ *  the panel looks the same on every screen. Applied as an inline style —
+ *  Tailwind only ships classes it can find spelled out in the source, so a
+ *  `max-h-[${...}]` built from this constant would never be generated. */
+const FOLDER_LIST_MAX_HEIGHT = 420;
 /** One keyboard nudge of the resize handle. */
 const RESIZE_STEP = 16;
 
@@ -85,7 +127,10 @@ function DroppableFolderItem({
   return (
     <div
       ref={drop as unknown as React.Ref<HTMLDivElement>}
-      className={`group w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer ${
+      // `relative` so the row paints over the tree guide lines behind it — both
+      // are positioned, so DOM order wins and the elbow passes under the icon
+      // instead of striking through it.
+      className={`group relative w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors cursor-pointer ${
         isDropTarget
           ? 'bg-blue-100 border-2 border-blue-500 border-dashed'
           : isSelected
@@ -115,13 +160,20 @@ function DroppableFolderItem({
         <LayoutGrid className="w-4 h-4 text-blue-600" />
       ) : folder.name === 'Archived Resumes' && !folder.parentId ? (
         <Archive className="w-4 h-4 text-amber-600" />
+      ) : folder.name.toLowerCase() === 'root' && !folder.parentId ? (
+        // The default landing folder for uploads — its own icon, so it doesn't
+        // read as just another user folder in the system section.
+        <FolderRoot className="w-4 h-4 text-brand-cyan" />
       ) : isExpanded && hasChildren ? (
         <FolderOpen className="w-4 h-4" />
       ) : (
         <Folder className="w-4 h-4" />
       )}
-      <span className="flex-1 text-left">{folder.name}</span>
-      <span className="text-xs text-gray-500">({count})</span>
+      {/* `min-w-0` + truncate is what keeps a long name inside the panel — a
+          60-character folder would otherwise push the row wider than the
+          column and run out over the table beside it. */}
+      <span className="flex-1 min-w-0 text-left truncate" title={folder.name}>{folder.name}</span>
+      <span className="flex-shrink-0 text-xs text-gray-500">({count})</span>
       {folder.id !== 'all' && !(folder.name.toLowerCase() === 'root' && !folder.parentId) && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
         <button
           type="button"
@@ -275,6 +327,17 @@ export default function FolderTree({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isCreatingFolder, creatingSubFolderFor, showFolderMenu]);
 
+  // The actions menu is absolutely positioned inside the scrolling folder list,
+  // so a row near the bottom would open its menu below the visible edge and get
+  // clipped. `block: 'nearest'` nudges the list just far enough to show it.
+  useEffect(() => {
+    if (!showFolderMenu) return;
+    const frame = requestAnimationFrame(() => {
+      menuRef.current?.scrollIntoView({ block: 'nearest' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [showFolderMenu]);
+
   // Helper function to flatten folder tree for depth calculation
   const flattenFolders = useCallback((folderList: FolderType[]): FolderType[] => {
     const result: FolderType[] = [];
@@ -349,7 +412,34 @@ export default function FolderTree({
     }
   };
 
-  const renderFolder = (folder: FolderType, level: number = 0) => {
+  /**
+   * The three fixtures — All Resumes, root and Archived Resumes — are pinned
+   * above the "Folders" heading. They aren't user folders (none can be renamed
+   * or deleted), and keeping them out of the scrolling list means they stay
+   * reachable no matter how far down the user has scrolled.
+   */
+  const pinnedRank = (folder: FolderType): number => {
+    if (folder.id === 'all') return 0;
+    if (!folder.parentId && folder.name.toLowerCase() === 'root') return 1;
+    if (!folder.parentId && folder.name === 'Archived Resumes') return 2;
+    return -1;
+  };
+  const pinnedFolders = folders
+    .filter((f) => pinnedRank(f) >= 0)
+    .sort((a, b) => pinnedRank(a) - pinnedRank(b));
+  const regularFolders = folders.filter((f) => pinnedRank(f) < 0);
+
+  /**
+   * @param isLast  last among its siblings — its trunk stops at this row.
+   * @param trunks  one flag per ancestor column: whether that ancestor's line
+   *                still has rows below this one and must keep running past it.
+   */
+  const renderFolder = (
+    folder: FolderType,
+    level: number = 0,
+    isLast: boolean = true,
+    trunks: boolean[] = [],
+  ) => {
     const isExpanded = expandedFolders.includes(folder.id);
     const isSelected = selectedFolder === folder.id;
     const hasChildren = folder.children && folder.children.length > 0;
@@ -363,9 +453,49 @@ export default function FolderTree({
 
     return (
       <div key={folder.id} className="relative">
+        {/* Row-level wrapper: the guides span this row only, never the
+            children rendered below it. */}
+        <div className="relative">
+          {level > 0 && (
+            <>
+              {/* Ancestor trunks passing this row on their way further down. */}
+              {trunks.map((keepsGoing, depth) => keepsGoing && (
+                <span
+                  key={depth}
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute inset-y-0 w-px ${TREE_TRUNK_COLOR}`}
+                  style={{ left: `${treeGuideX(depth)}px` }}
+                />
+              ))}
+              {/* This row's own connector: down from the parent to the row's
+                  middle, then across to the folder icon. */}
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none absolute top-0 h-1/2 w-px ${TREE_BRANCH_COLOR}`}
+                style={{ left: `${treeGuideX(level - 1)}px` }}
+              />
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none absolute top-1/2 h-px ${TREE_BRANCH_COLOR}`}
+                style={{
+                  left: `${treeGuideX(level - 1)}px`,
+                  width: `${hasChildren ? TREE_ELBOW_TO_CHEVRON : TREE_ELBOW_TO_ICON}px`,
+                }}
+              />
+              {/* Carries on below only while siblings follow, so the last child
+                  ends the branch instead of leaving a line dangling. */}
+              {!isLast && (
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute top-1/2 bottom-0 w-px ${TREE_BRANCH_COLOR}`}
+                  style={{ left: `${treeGuideX(level - 1)}px` }}
+                />
+              )}
+            </>
+          )}
         {isRenaming ? (
           // Inline rename mode
-          <div className="px-3 py-2" style={{ paddingLeft: `${12 + level * 16}px` }}>
+          <div className="relative px-3 py-2" style={{ paddingLeft: `${12 + level * 16}px` }}>
             <input
               type="text"
               value={renameValue}
@@ -399,6 +529,7 @@ export default function FolderTree({
             onMoveToFolder={onMoveToFolder}
           />
         )}
+        </div>
 
         {hasMenu && folder.id !== 'all' && (
           <div
@@ -528,7 +659,16 @@ export default function FolderTree({
 
         {hasChildren && isExpanded && (
           <div>
-            {folder.children!.map(child => renderFolder(child, level + 1))}
+            {folder.children!.map((child, index) =>
+              // Top-level rows sit under no trunk at all, so their children
+              // start a fresh set rather than inheriting a phantom column.
+              renderFolder(
+                child,
+                level + 1,
+                index === folder.children!.length - 1,
+                level === 0 ? [] : [...trunks, !isLast],
+              )
+            )}
           </div>
         )}
       </div>
@@ -569,8 +709,26 @@ export default function FolderTree({
         />
       </div>
 
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-gray-900">Folders</h3>
+      {/* Pinned fixtures — All Resumes, root, Archived Resumes. Named as their
+          own section so it's clear why they can't be renamed or deleted. */}
+      {pinnedFolders.length > 0 && (
+        <>
+          <h3 className="text-gray-900 mb-2 flex items-center gap-2">
+            System Folders
+            <span className="h-1.5 w-1.5 rounded-full bg-brand-cyan" aria-hidden="true" />
+          </h3>
+          {/* Outlined rather than filled: the rows carry their own hover and
+              selection tints, and a section fill sat underneath them. The cyan
+              border reads apart from the blue the tree uses for selection, so
+              the section never looks like it is the selected one. */}
+          <div className="space-y-1 rounded-lg border border-brand-cyan/30 p-1.5">
+            {pinnedFolders.map(folder => renderFolder(folder))}
+          </div>
+        </>
+      )}
+
+      <div className="flex items-center justify-between mt-4 mb-3">
+        <h3 className="text-gray-900">My Folders</h3>
         <button
           type="button"
           onClick={() => setIsCreatingFolder(true)}
@@ -621,8 +779,21 @@ export default function FolderTree({
         </div>
       )}
 
-      <div className="space-y-1">
-        {folders.map(folder => renderFolder(folder))}
+      {/* The user's own folders scroll on their own. A fixed cap rather than a
+          flex one: the page lays this column out in a plain `flex md:flex-row`
+          with no height of its own, so `flex-1 min-h-0` would have nothing to
+          measure against and a long list would stretch the whole row instead of
+          scrolling. `pr-1 -mr-1` keeps the scrollbar off the folder rows
+          without shifting them. */}
+      <div
+        className="space-y-1 overflow-y-auto overscroll-contain pr-1 -mr-1"
+        style={{ maxHeight: `${FOLDER_LIST_MAX_HEIGHT}px` }}
+      >
+        {regularFolders.length > 0 ? (
+          regularFolders.map(folder => renderFolder(folder))
+        ) : (
+          <p className="px-3 py-2 text-xs text-gray-500">No folders yet.</p>
+        )}
       </div>
     </div>
   );

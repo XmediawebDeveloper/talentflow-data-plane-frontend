@@ -1,7 +1,7 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
-import { Zap } from 'lucide-react';
+import { Coins } from 'lucide-react';
 import { cn } from './utils';
 
 type QuotaTone = 'neutral' | 'warning' | 'danger';
@@ -11,6 +11,9 @@ interface QuotaBadgeProps {
   availableUnits: number | null;
   totalUnits?: number;
   isUnlimited?: boolean;
+  /** Defaults to the coins mark. Units are one currency across the product, so
+   *  every quota badge should carry the same icon — override only for a badge
+   *  that is measuring something other than units. */
   icon?: LucideIcon;
   unitLabel?: string;
   className?: string;
@@ -21,7 +24,7 @@ export default function QuotaBadge({
   availableUnits,
   totalUnits,
   isUnlimited = false,
-  icon: Icon = Zap,
+  icon: Icon = Coins,
   unitLabel = 'units',
   className,
 }: QuotaBadgeProps) {
