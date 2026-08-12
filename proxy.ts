@@ -19,6 +19,7 @@ const publicRoutes = [
   '/set-password',   // Invite-based first-login password setup
   '/assessment', // Candidate assessment portal (public)
   '/ai-interview', // Candidate AI interview portal (public)
+  '/verify', // Candidate mobile environment verification portal (public)
 ];
 
 // Define protected dashboard routes (authentication required)
@@ -250,7 +251,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Subdomain: only /login, /reset-password, /assessment, /ai-interview
+  // Subdomain: only /login, /reset-password, /assessment, /ai-interview, /verify
   // and protected dashboard routes are allowed. Everything else (marketing pages
   // like /pricing, /features, /about, etc.) → redirect to /login.
   const subdomainAllowedPaths = [
@@ -260,6 +261,7 @@ export async function proxy(request: NextRequest) {
     '/complete-payment',
     '/assessment',
     '/ai-interview',
+    '/verify', // Candidate mobile environment verification portal (public)
     ...protectedRoutes,
   ];
   if (tenantSubdomain) {
