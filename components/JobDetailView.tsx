@@ -66,34 +66,167 @@ const QUICK_ACTION_ACCENTS = {
   blue: {
     badge: 'bg-brand-blue',
     icon: 'text-brand-blue',
-    tile: 'hover:border-brand-blue/40 hover:bg-brand-blue/5',
+    tile: 'hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:shadow-md hover:shadow-brand-blue/10',
+    row: 'hover:bg-brand-blue/5',
+    labelHover: 'group-hover:text-brand-blue',
   },
   cyan: {
     badge: 'bg-brand-cyan',
     icon: 'text-brand-cyan',
-    tile: 'hover:border-brand-cyan/40 hover:bg-brand-cyan/5',
+    tile: 'hover:border-brand-cyan/40 hover:bg-brand-cyan/5 hover:shadow-md hover:shadow-brand-cyan/10',
+    row: 'hover:bg-brand-cyan/5',
+    labelHover: 'group-hover:text-brand-cyan',
   },
   orange: {
     badge: 'bg-brand-orange',
     icon: 'text-brand-orange',
-    tile: 'hover:border-brand-orange/40 hover:bg-brand-orange/5',
+    tile: 'hover:border-brand-orange/40 hover:bg-brand-orange/5 hover:shadow-md hover:shadow-brand-orange/10',
+    row: 'hover:bg-brand-orange/5',
+    labelHover: 'group-hover:text-brand-orange',
   },
 } as const;
 
 type QuickActionAccent = keyof typeof QUICK_ACTION_ACCENTS;
 
-/** Group heading: a filled accent disc carrying the group's icon, then the title. */
-function QuickActionHeader({ icon, title, accent }: {
+/** Shared timing for the accordion — heading margin, chevron and panel all move
+ *  together, so they have to share one curve and duration. */
+const QUICK_ACTION_EASE = 'duration-300 ease-in-out';
+
+/** Hover timing. Quicker than the accordion so pointer feedback stays snappy,
+ *  but the same curve so the card reads as one piece of motion. Every action —
+ *  View JD History, AI Talent Match, Score Resumes and the Create / Invite /
+ *  Track / Result tiles — moves on this. */
+const QUICK_ACTION_HOVER_EASE = 'duration-200 ease-in-out motion-reduce:transition-none';
+
+/**
+ * Group heading: a filled accent disc carrying the group's icon, then the title.
+ *
+ * Pass `onToggle` to turn the whole heading into the accordion trigger for the
+ * section below it — the chevron flips and the bottom margin drops away while
+ * collapsed so the three groups stack tightly.
+ */
+function QuickActionHeader({ icon, title, accent, open, onToggle, controls }: {
   icon: React.ReactNode;
   title: string;
   accent: QuickActionAccent;
+  open?: boolean;
+  onToggle?: () => void;
+  /** id of the panel this heading opens, for aria-controls. */
+  controls?: string;
 }) {
+  const disc = (
+    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0 ${QUICK_ACTION_ACCENTS[accent].badge}`}>
+      {icon}
+    </span>
+  );
+
+  if (!onToggle) {
+    return (
+      <div className="flex items-center gap-2.5 mb-3">
+        {disc}
+        <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">{title}</h3>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-2.5 mb-3">
-      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0 ${QUICK_ACTION_ACCENTS[accent].badge}`}>
-        {icon}
-      </span>
-      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">{title}</h3>
+    // The margin is transitioned along with the panel below, so the heading
+    // slides down to meet the group divider instead of snapping into place.
+    <h3 className={`transition-[margin] ${QUICK_ACTION_EASE} motion-reduce:transition-none ${open ? 'mb-3' : 'mb-0'}`}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={controls}
+        title={open ? `Collapse ${title}` : `Expand ${title}`}
+        className={`group w-full flex items-center gap-2.5 text-left rounded-lg cursor-pointer transition-opacity ${QUICK_ACTION_HOVER_EASE} hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40`}
+      >
+        {disc}
+        <span className="text-base font-semibold text-gray-900 dark:text-slate-50">{title}</span>
+        {/* Rotation follows the panel's timing; the nudge down on hover is the
+            faster hover curve, so both read as intended. */}
+        <ChevronDown
+          className={`w-4 h-4 ml-auto shrink-0 text-gray-400 dark:text-slate-500 transition-transform ${QUICK_ACTION_EASE} motion-reduce:transition-none group-hover:translate-y-0.5 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+    </h3>
+  );
+}
+
+/**
+ * Expand/collapse animation for a Quick Actions group.
+ *
+ * Animates `max-height` off the measured content height rather than using the
+ * `grid-rows-[0fr→1fr]` trick, because the rows and tiles inside carry hover
+ * tooltips that hang below them: any height animation has to clip, and that
+ * clipping must be lifted again once the panel settles or the tooltips get cut
+ * off. So overflow is hidden only while a transition is in flight or the panel
+ * is shut, and the height is released back to `none` when it finishes — which
+ * also keeps the panel correct if its content grows later (a permission or
+ * feature flag resolving, say).
+ */
+function QuickActionPanel({ id, open, className = '', children }: {
+  id: string;
+  open: boolean;
+  /** Classes for the inner content box (grid/list layout of the group). */
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [maxHeight, setMaxHeight] = useState<string>(open ? 'none' : '0px');
+  const [animating, setAnimating] = useState(false);
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    // Skip the first pass so an already-open group doesn't animate on load.
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    const el = contentRef.current;
+    if (!el) return;
+
+    const contentHeight = `${el.scrollHeight}px`;
+    setAnimating(true);
+
+    if (open) {
+      // Currently 0px — go to the measured height, then release it on arrival.
+      setMaxHeight(contentHeight);
+      // Backstop for the release: with `prefers-reduced-motion` the transition
+      // is off, so no transitionend ever arrives and the panel would stay
+      // pinned to the height it had when it opened.
+      const settle = setTimeout(() => {
+        setAnimating(false);
+        setMaxHeight('none');
+      }, 400);
+      return () => clearTimeout(settle);
+    } else {
+      // Pin the height it is actually at ('none' can't be transitioned from),
+      // then collapse on the next frame so the browser has a start value.
+      setMaxHeight(contentHeight);
+      const frame = requestAnimationFrame(() => setMaxHeight('0px'));
+      return () => cancelAnimationFrame(frame);
+    }
+  }, [open]);
+
+  return (
+    <div
+      id={id}
+      style={{ maxHeight }}
+      onTransitionEnd={(e) => {
+        if (e.propertyName !== 'max-height' || e.target !== e.currentTarget) return;
+        setAnimating(false);
+        if (open) setMaxHeight('none');
+      }}
+      className={`transition-[max-height,opacity] ${QUICK_ACTION_EASE} motion-reduce:transition-none ${
+        open ? 'opacity-100' : 'opacity-0'
+      } ${open && !animating ? '' : 'overflow-hidden'}`}
+      // Keeps collapsed actions out of the tab order and off screen readers.
+      inert={!open || undefined}
+    >
+      <div ref={contentRef} className={className}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -109,7 +242,7 @@ function QuickActionHeader({ icon, title, accent }: {
  */
 function QuickActionTooltip({ text, align = 'left' }: { text: string; align?: 'left' | 'center' }) {
   return (
-    <div className={`absolute top-full mt-1.5 z-40 w-max max-w-[min(14rem,calc(100vw-2rem))] px-2.5 py-1.5 bg-gray-900 dark:bg-slate-700 text-white text-[11px] font-medium leading-snug rounded-md shadow-lg ring-1 ring-black/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-normal break-words ${
+    <div className={`absolute top-full mt-1.5 z-40 w-max max-w-[min(14rem,calc(100vw-2rem))] px-2.5 py-1.5 bg-gray-900 dark:bg-slate-700 text-white text-[11px] font-medium leading-snug rounded-md shadow-lg ring-1 ring-black/10 opacity-0 group-hover:opacity-100 transition-opacity ${QUICK_ACTION_HOVER_EASE} pointer-events-none whitespace-normal break-words ${
       align === 'center' ? 'left-1/2 -translate-x-1/2 text-center' : 'left-0'
     }`}>
       {text}
@@ -152,19 +285,25 @@ function QuickActionRow({
         // the one and only tooltip — setting `title` too made the browser draw a
         // second, plain one on top of it.
         title={disabled ? undefined : label}
-        className={`w-full px-3 py-2.5 flex items-center gap-2.5 text-left text-sm font-medium transition-colors ${
+        className={`w-full px-3 py-2.5 flex items-center gap-2.5 text-left text-sm font-medium transition-colors ${QUICK_ACTION_HOVER_EASE} ${
           disabled
             ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed'
-            : 'text-gray-800 dark:text-slate-200 hover:bg-brand-blue/5 cursor-pointer'
+            : `text-gray-800 dark:text-slate-200 cursor-pointer ${QUICK_ACTION_ACCENTS[accent].row}`
         }`}
       >
-        <span className={`shrink-0 ${disabled ? 'text-gray-300 dark:text-slate-600' : QUICK_ACTION_ACCENTS[accent].icon}`}>
+        {/* The icon nudges along with the chevron so the whole row leans into
+            the hover rather than only its right edge. */}
+        <span
+          className={`shrink-0 transition-transform ${QUICK_ACTION_HOVER_EASE} ${
+            disabled ? 'text-gray-300 dark:text-slate-600' : `${QUICK_ACTION_ACCENTS[accent].icon} group-hover:translate-x-0.5`
+          }`}
+        >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
         </span>
-        <span className="flex-1 min-w-0 truncate">{label}</span>
+        <span className={`flex-1 min-w-0 truncate transition-transform ${QUICK_ACTION_HOVER_EASE} ${disabled ? '' : 'group-hover:translate-x-0.5'}`}>{label}</span>
         {disabled
           ? <Lock className="w-3 h-3 shrink-0" />
-          : <ChevronRight className="w-4 h-4 shrink-0 text-gray-400 dark:text-slate-500 transition-transform group-hover:translate-x-0.5" />}
+          : <ChevronRight className={`w-4 h-4 shrink-0 text-gray-400 dark:text-slate-500 transition-transform ${QUICK_ACTION_HOVER_EASE} group-hover:translate-x-0.5`} />}
       </button>
 
       {disabled && disabledTooltip && <QuickActionTooltip text={disabledTooltip} />}
@@ -193,17 +332,23 @@ function QuickActionTile({
         onClick={onClick}
         disabled={disabled || loading}
         title={disabled ? undefined : label}
-        className={`w-full px-1 py-2.5 rounded-lg border transition-colors flex flex-col items-center justify-center gap-1.5 ${
+        // Colour, shadow and the lift all animate together, so the tile rises
+        // and settles on one curve instead of the border snapping ahead of it.
+        className={`w-full px-1 py-2.5 rounded-lg border flex flex-col items-center justify-center gap-1.5 transition-[color,background-color,border-color,box-shadow,transform] ${QUICK_ACTION_HOVER_EASE} ${
           disabled
             ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 cursor-not-allowed'
-            : `border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer ${colors.tile}`
+            : `border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer hover:-translate-y-0.5 active:translate-y-0 ${colors.tile}`
         }`}
       >
-        <span className={`shrink-0 ${disabled ? 'text-gray-300 dark:text-slate-600' : colors.icon}`}>
+        <span
+          className={`shrink-0 transition-transform ${QUICK_ACTION_HOVER_EASE} ${
+            disabled ? 'text-gray-300 dark:text-slate-600' : `${colors.icon} group-hover:scale-110`
+          }`}
+        >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
         </span>
-        <span className={`text-[11px] font-medium leading-none ${
-          disabled ? 'text-gray-400 dark:text-slate-500' : 'text-gray-700 dark:text-slate-300'
+        <span className={`text-[11px] font-medium leading-none transition-colors ${QUICK_ACTION_HOVER_EASE} ${
+          disabled ? 'text-gray-400 dark:text-slate-500' : `text-gray-700 dark:text-slate-300 ${colors.labelHover}`
         }`}>
           {label}
         </span>
@@ -379,6 +524,16 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     }
   };
   const [showAddApplicantsMenu, setShowAddApplicantsMenu] = useState(false);
+  // Quick Actions accordion. The three groups collapse independently (not
+  // one-at-a-time) so a recruiter can keep, say, Assessment and AI Interview
+  // both in view; all start open so nothing that used to be visible is hidden.
+  const [openActionGroups, setOpenActionGroups] = useState({
+    actions: true,
+    assessment: true,
+    aiInterview: true,
+  });
+  const toggleActionGroup = (group: keyof typeof openActionGroups) =>
+    setOpenActionGroups(prev => ({ ...prev, [group]: !prev[group] }));
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showScoringView, setShowScoringView] = useState(false);
   const [showApplicantsView, setShowApplicantsView] = useState(false);
@@ -2712,10 +2867,21 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         <div className="lg:col-span-4 space-y-5">
           {/* Quick Actions */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <QuickActionHeader icon={<Zap className="w-4 h-4" />} title="Quick Actions" accent="blue" />
+            <QuickActionHeader
+              icon={<Zap className="w-4 h-4" />}
+              title="Quick Actions"
+              accent="blue"
+              open={openActionGroups.actions}
+              onToggle={() => toggleActionGroup('actions')}
+              controls="quick-actions-panel"
+            />
 
             {/* The ungrouped actions, as one bordered list. */}
-            <div className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-800 overflow-hidden">
+            <QuickActionPanel
+              id="quick-actions-panel"
+              open={openActionGroups.actions}
+              className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-800"
+            >
               {/* 1. View JD History */}
               {permissions.canReadJD && (
                 <QuickActionRow
@@ -2750,14 +2916,25 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   disabledTooltip="JD is disabled"
                 />
               )}
-            </div>
+            </QuickActionPanel>
 
             {/* Assessment — Create, Invite, Track and Result four-up. The AI
                 Interview group below mirrors it, on its own accent. */}
             {(permissions.canCreateAssessments || permissions.canViewAssessments) && hasPlanFeature('assessment') && (
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
-                <QuickActionHeader icon={<ClipboardList className="w-4 h-4" />} title="Assessment" accent="cyan" />
-                <div className="grid grid-cols-4 gap-2">
+                <QuickActionHeader
+                  icon={<ClipboardList className="w-4 h-4" />}
+                  title="Assessment"
+                  accent="cyan"
+                  open={openActionGroups.assessment}
+                  onToggle={() => toggleActionGroup('assessment')}
+                  controls="quick-actions-assessment-panel"
+                />
+                <QuickActionPanel
+                  id="quick-actions-assessment-panel"
+                  open={openActionGroups.assessment}
+                  className="grid grid-cols-4 gap-2"
+                >
                   {permissions.canCreateAssessments && (
                     <>
                       <QuickActionTile
@@ -2819,14 +2996,25 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       />
                     </>
                   )}
-                </div>
+                </QuickActionPanel>
               </div>
             )}
 
             {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews || permissions.canViewAIInterviews) && hasPlanFeature('ai_interview') && (
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
-                <QuickActionHeader icon={<Brain className="w-4 h-4" />} title="AI Interview" accent="orange" />
-                <div className="grid grid-cols-4 gap-2">
+                <QuickActionHeader
+                  icon={<Brain className="w-4 h-4" />}
+                  title="AI Interview"
+                  accent="orange"
+                  open={openActionGroups.aiInterview}
+                  onToggle={() => toggleActionGroup('aiInterview')}
+                  controls="quick-actions-ai-interview-panel"
+                />
+                <QuickActionPanel
+                  id="quick-actions-ai-interview-panel"
+                  open={openActionGroups.aiInterview}
+                  className="grid grid-cols-4 gap-2"
+                >
                   {permissions.canCreateAIInterviews && (
                     <QuickActionTile
                       icon={<Sparkles className="w-4 h-4" />}
@@ -2889,7 +3077,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       />
                     </>
                   )}
-                </div>
+                </QuickActionPanel>
               </div>
             )}
 

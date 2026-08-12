@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, Coins } from 'lucide-react';
+import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -1770,7 +1770,6 @@ export default function ResumeScoringPage({
               <QuotaBadge
                 label="Available Units"
                 availableUnits={availableUnits}
-                icon={Coins}
               />
             )}
 

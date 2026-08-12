@@ -1,8 +1,7 @@
 'use client';
 
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X } from 'lucide-react';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
-import ResumeDetailView from './ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
@@ -110,6 +109,24 @@ interface CandidateScoringDetailPageProps {
   breadcrumbItems?: BreadcrumbCrumb[];
 }
 
+/**
+ * Newest upload first — the one ordering of a resume's version chain.
+ *
+ * `version` is authoritative, with the upload date breaking ties and covering
+ * rows the API hands back without a version number (which would otherwise all
+ * collapse to 1 and leave "latest" as whatever the endpoint happened to return
+ * first). Reads both the raw API row (`created_at`) and the mapped one
+ * (`uploadDate`), so Version History and View Resume agree on which upload is
+ * the latest.
+ */
+function byNewestVersion(a: any, b: any): number {
+  const versionDelta = (b?.version || 0) - (a?.version || 0);
+  if (versionDelta !== 0) return versionDelta;
+  const aTime = new Date(a?.created_at || a?.uploadDate || 0).getTime();
+  const bTime = new Date(b?.created_at || b?.uploadDate || 0).getTime();
+  return bTime - aTime;
+}
+
 export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
@@ -130,11 +147,9 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [showInviteMenu, setShowInviteMenu] = useState(false);
   const inviteMenuRef = useRef<HTMLDivElement>(null);
 
-  // Resume opens as a modal over this page (the same overlay ResumeDetailView
-  // renders on job-details), so the score stays visible underneath. It used to
-  // swap the candidate body out, which lost that context on the way in and back.
-  const [showResumeModal, setShowResumeModal] = useState(false);
-  const [resumeDetail, setResumeDetail] = useState<any>(null);
+  // View Resume leaves this page for the full Resume Details route rather than
+  // opening an overlay. The flag only covers the moment spent resolving which
+  // version to open, so the button can show a spinner instead of looking dead.
   const [loadingResumeDetail, setLoadingResumeDetail] = useState(false);
 
   // Invite flows — both render their existing modal over this page.
@@ -146,6 +161,26 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [loadingInvite, setLoadingInvite] = useState<'assessment' | 'ai-interview' | null>(null);
   const [shareAIConfig, setShareAIConfig] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo' | 'viewjd'>('overview');
+  // The tabs + panels block, so opening the JD from the job title can bring the
+  // tab strip to the top rather than jumping the whole page back to its header.
+  const tabsSectionRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Job title → the full job description.
+   *
+   * Switching the tab alone isn't enough: the click usually happens well down
+   * the Overview tab, so the JD would open mid-document. Scrolls to the tab
+   * strip — not the page top — so the JD starts right under the tabs.
+   *
+   * `scrollIntoView` rather than `window.scrollTo` because the page scrolls
+   * inside `<main>` (and the dashboard shell around it), not the window — it
+   * walks every scrollable ancestor. The landing point is set by the section's
+   * `scroll-mt-*`, which keeps it clear of the sticky breadcrumb.
+   */
+  const handleOpenJobDescription = () => {
+    setActiveTab('viewjd');
+    tabsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
   const [fullResumeLoaded, setFullResumeLoaded] = useState(false);
@@ -167,6 +202,62 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       if (prev.length >= 2) return [prev[1], versionId];
       return [...prev, versionId];
     });
+  };
+
+  // Per-row "View Changes": diff one upload against the one before it. Rather
+  // than a second pair of ids, it drives the same `compareChecked` the tick
+  // boxes use, so the modal below needs no new wiring.
+  const handleViewVersionChanges = (previousVersionId: string, versionId: string) => {
+    setCompareChecked([previousVersionId, versionId]);
+    setShowCompareModal(true);
+  };
+
+  // Single-version preview (the eye), mirroring resume-view: the extracted text
+  // rendered document-style. Versions past the fifth are listed without their
+  // text (see the capped fetch below), so those fall back to a lookup on open.
+  const [versionPreview, setVersionPreview] = useState<{ id: string; versionNumber: number; fileName?: string; text: string } | null>(null);
+  // Holds the id being fetched, not a bare boolean, so only the row that was
+  // clicked shows a spinner.
+  const [versionPreviewLoadingId, setVersionPreviewLoadingId] = useState<string | null>(null);
+
+  const handleVersionPreview = async (version: any, versionNumber: number) => {
+    if (version.extractedText) {
+      setVersionPreview({ id: version.id, versionNumber, fileName: version.fileName, text: version.extractedText });
+      return;
+    }
+
+    setVersionPreviewLoadingId(version.id);
+    try {
+      const { resumeService } = await import('@/lib/services/resumeService');
+      const data: any = await resumeService.get(version.id);
+      const text = data?.extracted_text || '';
+      if (!text) toast.info('Preview not available for this file.');
+      setVersionPreview({ id: version.id, versionNumber, fileName: version.fileName, text });
+    } catch (err) {
+      console.error('[CandidateScoringDetailPage] Failed to load version preview:', err);
+      toast.error('Failed to load preview');
+    } finally {
+      setVersionPreviewLoadingId(null);
+    }
+  };
+
+  // Each version is its own resume record, so it downloads by its own id.
+  const handleVersionDownload = async (version: any, versionNumber: number) => {
+    try {
+      const { resumeService } = await import('@/lib/services/resumeService');
+      const blob = await resumeService.download(version.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = version.fileName || `resume-v${versionNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[CandidateScoringDetailPage] Failed to download version:', err);
+      toast.error('Failed to download version');
+    }
   };
 
   // Resolve the ticked pair into older/newer by version number, so the left
@@ -582,23 +673,35 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       toast.error('Resume is not available for this candidate');
       return;
     }
-    setShowResumeModal(true);
-    if (resumeDetail || loadingResumeDetail) return;
+    if (loadingResumeDetail) return;
 
     setLoadingResumeDetail(true);
     try {
       const { resumeService } = await import('@/lib/services/resumeService');
-      const { convertApiResume } = await import('@/lib/utils/resumeMapper');
-      // The API record is snake_case — ResumeDetailView needs the mapped shape.
-      const [data, versions] = await Promise.all([
-        resumeService.get(viewResumeId),
-        resumeService.getVersions(viewResumeId).catch(() => []),
-      ]);
-      setResumeDetail(convertApiResume(data, versions || []));
+
+      // `viewResumeId` is the upload that was *scored*, which is not
+      // necessarily the newest one — a candidate who re-uploaded after scoring
+      // leaves the score pointing at the older file. View Resume should always
+      // open the latest, i.e. the row Version History marks "Latest", so the
+      // version chain is resolved first and the highest version wins.
+      const versions: any[] = await resumeService.getVersions(viewResumeId).catch(() => []);
+      const latestVersion = [...(versions || [])].sort(byNewestVersion)[0];
+      const targetId = latestVersion?.id || viewResumeId;
+
+      // Opens the same preview the Version History eye opens — that popup is
+      // the master copy, so this hands it the latest version rather than
+      // building a second, differently-shaped resume viewer.
+      const loadedVersion = resumeVersions.find((v) => v.id === targetId);
+      await handleVersionPreview(
+        loadedVersion ?? {
+          id: targetId,
+          fileName: latestVersion?.file_name || fullResumeData.fileName,
+        },
+        latestVersion?.version || loadedVersion?.version || 1,
+      );
     } catch (err) {
-      console.error('[CandidateScoringDetailPage] Failed to load resume:', err);
+      console.error('[CandidateScoringDetailPage] Failed to open the resume preview:', err);
       toast.error('Could not load the resume. Please try again.');
-      setShowResumeModal(false);
     } finally {
       setLoadingResumeDetail(false);
     }
@@ -869,8 +972,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                             <Mail className="w-4 h-4 text-brand-blue" />
                           </span>
                           <span className="min-w-0">
-                            <span className="block text-sm font-medium text-gray-900">Assessment Invite</span>
-                            <span className="block text-xs text-gray-500">Send a skills assessment for this job</span>
+                            <span className="block text-sm font-medium text-gray-900">Assessment</span>
                           </span>
                         </button>
                       )}
@@ -885,7 +987,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                           </span>
                           <span className="min-w-0">
                             <span className="block text-sm font-medium text-gray-900">AI Interview</span>
-                            <span className="block text-xs text-gray-500">Invite the candidate to an AI interview</span>
                           </span>
                         </button>
                       )}
@@ -918,7 +1019,19 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                 {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
               </span>
               <span className="hidden sm:inline text-gray-400">|</span>
-              <span className="text-xs sm:text-sm font-normal text-gray-700 truncate"><span className="font-bold text-gray-800">Job Title :</span> {jobTitle}</span>
+              {/* The title is the shortcut into the View JD tab — recruiters
+                  reading a score reach for the JD from here constantly. */}
+              <span className="text-xs sm:text-sm font-normal text-gray-700 truncate">
+                <span className="font-bold text-gray-800">Job Title :</span>{' '}
+                <button
+                  type="button"
+                  onClick={handleOpenJobDescription}
+                  title={`View the job description for ${jobTitle}`}
+                  className="font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2 transition-colors duration-200 ease-in-out cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
+                >
+                  {jobTitle}
+                </button>
+              </span>
             </div>
             <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
               {fullResumeData.scoredDate && !isNaN(new Date(fullResumeData.scoredDate).getTime())
@@ -929,9 +1042,18 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="pt-4 sm:pt-6">
-        <div className="bg-white rounded-t-xl border-x-2 border-t-2 border-gray-200">
+      {/* Tab strip and panels share one wrapper on purpose: a sticky element is
+          bounded by its own parent, so pinning the strip inside a tabs-only
+          <div> would unpin it again the moment that div scrolled past. */}
+      {/* `scroll-mt-*` is what stops the job-title jump under the sticky
+          breadcrumb: scrollIntoView honours scroll-margin, so the strip lands
+          just below the 52px crumb bar. The two values undo this wrapper's own
+          pt-4 / sm:pt-6, so the strip itself — not the padding above it —
+          settles at that mark. */}
+      <div ref={tabsSectionRef} className="pt-4 sm:pt-6 scroll-mt-9 sm:scroll-mt-7">
+        {/* Pinned below the breadcrumb, which is itself sticky at top-0 and
+            ~52px tall — the same offset job-details uses for its tab bar. */}
+        <div className="sticky top-[52px] z-20 bg-white rounded-t-xl border-x-2 border-t-2 border-gray-200 shadow-sm">
           <div className="flex gap-1 px-3 sm:px-6 pt-2 overflow-x-auto scrollbar-hide">
             {[
               { id: 'overview', label: 'Overview' },
@@ -953,10 +1075,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
             ))}
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <div>
+        {/* Content */}
         <div className="bg-white rounded-b-xl border-x-2 border-b-2 border-gray-200 p-4 sm:p-6 lg:p-8">
           {/* {activeTab === 'comparison' && (
             <div className="space-y-6">
@@ -1699,10 +1819,14 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                     )}
                   </div>
                   <div className="space-y-3">
-                    {[...resumeVersions]
-                      .sort((a, b) => (b.version || 0) - (a.version || 0))
-                      .map((version, index) => {
+                    {(() => {
+                      const sortedVersions = [...resumeVersions].sort(byNewestVersion);
+                      return sortedVersions.map((version, index) => {
                         const isLatest = index === 0;
+                        const versionNumber = version.version || (sortedVersions.length - index);
+                        // Sorted newest-first, so the next row down is the
+                        // upload this one is diffed against.
+                        const previousVersion = index < sortedVersions.length - 1 ? sortedVersions[index + 1] : null;
                         return (
                           <div
                             key={version.id}
@@ -1756,11 +1880,56 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                                   </div>
                                 </div>
                               </div>
-                              <span className="text-xs text-gray-600 whitespace-nowrap">{version.size}</span>
+                              {/* Size sits with the row actions, matching
+                                  resume-view's View Changes / view / download
+                                  cluster. */}
+                              <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
+                                <span className="text-xs text-gray-600 whitespace-nowrap">{version.size}</span>
+                                {previousVersion ? (
+                                  <button
+                                    onClick={() => handleViewVersionChanges(previousVersion.id, version.id)}
+                                    title={`Compare Version ${previousVersion.version} with Version ${versionNumber}`}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue cursor-pointer"
+                                  >
+                                    <History className="w-3 h-3" />
+                                    View Changes
+                                  </button>
+                                ) : (
+                                  <span className="px-3 py-1.5 text-xs text-gray-400 italic">First version</span>
+                                )}
+                                <button
+                                  onClick={() => handleVersionPreview(version, versionNumber)}
+                                  disabled={versionPreviewLoadingId === version.id}
+                                  aria-label="View resume"
+                                  title="View resume"
+                                  className={`p-2 rounded-md transition-colors cursor-pointer disabled:cursor-wait ${
+                                    isLatest
+                                      ? 'text-brand-blue hover:bg-brand-blue/10'
+                                      : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
+                                  }`}
+                                >
+                                  {versionPreviewLoadingId === version.id
+                                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                                    : <Eye className="w-4 h-4" />}
+                                </button>
+                                <button
+                                  onClick={() => handleVersionDownload(version, versionNumber)}
+                                  aria-label="Download this version"
+                                  title="Download this version"
+                                  className={`p-2 rounded-md transition-colors cursor-pointer ${
+                                    isLatest
+                                      ? 'text-brand-blue hover:bg-brand-blue/10'
+                                      : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
+                                  }`}
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );
-                      })}
+                      });
+                    })()}
                   </div>
                 </div>
               )}
@@ -2107,26 +2276,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
         </div>
       </div>
           </>
-
-          {/* View Resume — an overlay over the candidate page. ResumeDetailView
-              brings its own backdrop in this (non-embedded) form; the loading
-              state needs a matching one so the popup appears on click rather
-              than after the fetch settles. */}
-          {showResumeModal && (
-            loadingResumeDetail || !resumeDetail ? (
-              <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-xl shadow-2xl px-6 py-5 flex items-center gap-3">
-                  <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
-                  <span className="text-sm text-gray-600">Loading resume...</span>
-                </div>
-              </div>
-            ) : (
-              <ResumeDetailView
-                resume={resumeDetail}
-                onClose={() => setShowResumeModal(false)}
-              />
-            )
-          )}
 
           {/* Assessment picker — only when this JD has more than one invitable
               published assessment. */}
@@ -2488,6 +2637,115 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                     >
                       Close
                     </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Single-version preview (the eye on a Version History row). Resume
+              text is plain, not markdown, so headings are guessed the same way
+              the comparison does — one shared list of CV section names. */}
+          {versionPreview && (() => {
+            const lines = versionPreview.text.split('\n');
+            const sectionHeaders = [
+              'experience', 'work experience', 'employment', 'professional experience',
+              'education', 'academic', 'qualifications',
+              'skills', 'technical skills', 'core competencies', 'expertise', 'key skills',
+              'summary', 'professional summary', 'objective', 'profile', 'about',
+              'certifications', 'certificates', 'licenses',
+              'projects', 'key projects',
+              'achievements', 'accomplishments', 'awards',
+              'languages', 'contact', 'personal', 'references', 'hobbies', 'interests',
+            ];
+            const firstNonEmpty = lines.findIndex((l) => l.trim().length > 0);
+            // View Resume always lands here on the newest upload, so say which
+            // one it is — the eye can also open older versions.
+            const isLatestPreview = [...resumeVersions].sort(byNewestVersion)[0]?.id === versionPreview.id;
+
+            return (
+              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90vh] flex flex-col overflow-hidden">
+                  {/* Header */}
+                  <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                        <Eye className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">Version {versionPreview.versionNumber}</h2>
+                          {isLatestPreview && (
+                            <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                              Latest
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-500 truncate">{versionPreview.fileName}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleVersionDownload(
+                          { id: versionPreview.id, fileName: versionPreview.fileName },
+                          versionPreview.versionNumber,
+                        )}
+                        className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span className="hidden sm:inline">Download</span>
+                      </button>
+                      <button
+                        onClick={() => setVersionPreview(null)}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                        aria-label="Close"
+                      >
+                        <X className="w-5 h-5 text-gray-500" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Resume content — document style */}
+                  <div className="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6">
+                    {versionPreview.text ? (
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full">
+                        {lines.map((line, idx) => {
+                          const trimmed = line.trim();
+                          if (!trimmed) return <div key={idx} className="h-3" />;
+
+                          const lower = trimmed.toLowerCase().replace(/[:\-_]/g, ' ').trim();
+                          const isHeader = trimmed.length < 50 && sectionHeaders.some(
+                            (h) => lower === h || lower.startsWith(`${h} `) || lower.endsWith(` ${h}`)
+                          );
+
+                          if (isHeader) {
+                            return (
+                              <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide">
+                                {trimmed}
+                              </h3>
+                            );
+                          }
+
+                          // The first line of a CV is almost always the name.
+                          if (idx === firstNonEmpty) {
+                            return <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1">{trimmed}</h2>;
+                          }
+
+                          const isBullet = /^[•\-*]\s?/.test(trimmed);
+                          return (
+                            <p key={idx} className={`text-sm text-gray-700 leading-relaxed mb-0.5 ${isBullet ? 'pl-4' : ''}`}>
+                              {trimmed}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center text-center">
+                        <FileText className="w-10 h-10 text-gray-400 mb-3" />
+                        <p className="text-sm font-medium text-gray-900">Preview not available</p>
+                        <p className="text-sm text-gray-500 mt-1">Download the resume to view the original file.</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

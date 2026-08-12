@@ -1639,7 +1639,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 availableUnits={availableUnits}
                 totalUnits={totalUnits}
                 isUnlimited={isUnlimited}
-                icon={Zap}
               />
             )}
             {/* Send Invite — same permission as the per-row Share action. */}
