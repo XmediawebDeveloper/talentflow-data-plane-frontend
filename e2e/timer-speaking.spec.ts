@@ -7,55 +7,17 @@
  *  - Silence nudge banner appears
  */
 import { test, expect, Page } from "@playwright/test";
+import {
+  mockCandidateApi,
+  interviewInfo as mockInterviewInfo,
+  assertMocksCoverTheApp,
+} from "./helpers/ai-interview-mocks";
 
 const INTERVIEW_TOKEN = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const INTERVIEW_URL = `/ai-interview/${INTERVIEW_TOKEN}`;
 
 function fakePcmChunk(bytes = 4800): ArrayBuffer {
   return new ArrayBuffer(bytes);
-}
-
-function mockInterviewInfo(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "int-001",
-    candidate_name: "Test Candidate",
-    candidate_email: "test@example.com",
-    position: "Senior Python Developer",
-    interview_type: "ai",
-    duration_minutes: 30,
-    total_questions: 15,
-    status: "in_progress",
-    consent_accepted_at: new Date().toISOString(),
-    system_check_passed: true,
-    available_languages: ["English"],
-    selected_language: "English",
-    jd_title: "Senior Python Developer",
-    jd_must_have_skills: ["Python", "Django"],
-    jd_nice_to_have_skills: ["AWS"],
-    interview_mode: "fixed",
-    identity_verified: true,
-    copy_paste_blocking: false,
-    introduction_video_url: null,
-    ...overrides,
-  };
-}
-
-async function mockCandidateApi(page: Page, overrides: Record<string, unknown> = {}) {
-  const token = INTERVIEW_TOKEN;
-  const info = mockInterviewInfo(overrides);
-  await page.route(`**/candidate/ai-interview/${token}`, (route) => {
-    if (route.request().method() === "GET") {
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(info) });
-    }
-    return route.continue();
-  });
-  for (const suffix of ["consent", "system-check", "languages", "language-select",
-    "identity-verify", "ai-health", "transcribe-practice", "practice-complete",
-    "upload-recording", "proctor-event"]) {
-    await page.route(`**/candidate/ai-interview/${token}/${suffix}`, (route) =>
-      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, available_languages: ["English"], selected_language: "English", text: "ok", status: "healthy" }) })
-    );
-  }
 }
 
 async function setupWsMock(page: Page) {

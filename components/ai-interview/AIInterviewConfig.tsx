@@ -406,15 +406,53 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
     'tools', 'tool', 'such', 'as', 'like', 'e.g', 'eg', 'clear', 'concise',
     'writing', 'write',
   ]);
-  const skillContentTokens = (skill: string): Set<string> => {
-    const toks = (skill || '').toLowerCase().match(/[a-z0-9#+.]+/g) || [];
-    return new Set(toks.filter(t => t.length > 1 && !SKILL_STOPWORDS.has(t)));
+  // Curated tech acronym / variant expansions — mirrors backend `_SKILL_ALIASES`.
+  // Lets "API"≡"Application Programming Interface", "CI/CD"≡"Continuous
+  // Integration Continuous Deployment", "C#"≡"C Sharp", etc. be caught at the
+  // config page (the QA-team duplicate list, duplicate.xlsx, 2026-08-12).
+  const SKILL_ALIASES: Record<string, string> = {
+    api: 'application programming interface', apis: 'application programming interface',
+    ui: 'user interface', ux: 'user experience',
+    sql: 'structured query language', db: 'database', dbs: 'database',
+    qa: 'quality assurance', qc: 'quality control',
+    ci: 'continuous integration', cd: 'continuous deployment',
+    cicd: 'continuous integration continuous deployment',
+    ms: 'microsoft', js: 'javascript', ts: 'typescript', k8s: 'kubernetes',
+    oop: 'object oriented programming', ml: 'machine learning', ai: 'artificial intelligence',
+    csharp: 'c sharp', 'c#': 'c sharp', 'c++': 'c plus plus', dotnet: 'dot net',
+    aws: 'amazon web services', gcp: 'google cloud platform',
   };
-  // True when two skill phrases denote the SAME skill despite different wording
-  // (exact, equal content-token sets, or one a subset of the other).
+  // Light stemmer — mirrors backend `_skill_stem` (plurals + gerunds only).
+  const skillStem = (t: string): string => {
+    if (t.length <= 3) return t;
+    if (t.endsWith('ies') && t.length > 4) return t.slice(0, -3) + 'y';   // libraries -> library
+    if (t.endsWith('ing') && t.length > 5) return t.slice(0, -3);          // testing -> test
+    if (t.endsWith('s') && !t.endsWith('ss') && t.length > 3) return t.slice(0, -1); // databases -> database
+    return t;
+  };
+  // Punctuation/space-stripped form (keeps # and + so C#≠C++). Mirrors `_skill_squish`.
+  const skillSquish = (s: string): string => (s || '').toLowerCase().replace(/[^a-z0-9#+]/g, '');
+  const skillContentTokens = (skill: string): Set<string> => {
+    const norm = (skill || '').toLowerCase().replace(/[._/\-]/g, ' ');
+    const raw = norm.match(/[a-z0-9#+]+/g) || [];
+    const out = new Set<string>();
+    for (const t of raw) {
+      for (const w of (SKILL_ALIASES[t] || t).split(' ')) {
+        const st = skillStem(w);
+        if (st.length > 1 && !SKILL_STOPWORDS.has(st)) out.add(st);
+      }
+    }
+    return out;
+  };
+  // True when two skill phrases denote the SAME skill despite different wording:
+  // exact, squished-equal (Front-end≡Frontend), or canonical-token equal/subset
+  // (SQL≡Structured Query Language, API Testing⊆Familiarity with API testing).
+  // Mirrors backend `_skills_semantically_equal`.
   const skillsSemanticallyEqual = (a: string, b: string): boolean => {
     if (!a || !b) return false;
     if (normalizeSkillName(a) === normalizeSkillName(b)) return true;
+    const sa = skillSquish(a);
+    if (sa.length > 1 && sa === skillSquish(b)) return true;
     const ta = skillContentTokens(a), tb = skillContentTokens(b);
     if (ta.size === 0 || tb.size === 0) return false;
     const [small, large] = ta.size <= tb.size ? [ta, tb] : [tb, ta];

@@ -19,10 +19,31 @@
 # NOTE: the frontend build needs ~8GB RAM (NODE_OPTIONS in the Dockerfile).
 # =============================================================================
 
+# ── How to read the pipeline page ────────────────────────────────────────────
+# Jobs are named for what they check, not for the tool that checks it. A job
+# marked "(advisory)" reports a problem and lets the release through; every
+# other job must pass before anything is released.
+#
+#   Code style (advisory)            formatting and lint warnings
+#   Build the app                    produces the image that will be released
+#   Set up the test environment      brings up the QA backend, frontend and database
+#   Test 1 of 3 · Screens            every screen renders correctly, with test data
+#   Test 2 of 3 · API and database   the API behaves and the data really persists
+#   Test 3 of 3 · Real browser       a real person's journey, nothing faked
+#   Known failures (advisory)        tests already broken before this pipeline existed
+#   Release to staging / production  the deploy itself
+#
+# The three test jobs are separate because they answer different questions and
+# fail for different reasons. When one is red, its name says which layer broke.
+#
+# Order matters: the tests exercise the image the build job produces, so build
+# runs first. A job may only `needs:` a job in an earlier stage.
 stages:
-  - test
+  - check
   - build
-  - deploy
+  - test environment
+  - test
+  - release
 
 # NOTE: gitlab.mo.vc has no instance-level Container Registry configured
 # ($CI_REGISTRY is empty), so images are built and used LOCALLY on the VM —
@@ -36,9 +57,68 @@ variables:
   # every job gets a clean working copy.
   GIT_STRATEGY: clone
 
+  # ---- the persistent QA environment (see the `deploy:qa` job) --------------
+  # These containers are long-lived and are UPDATED in place by deploy:qa. They
+  # are never created per pipeline run: a throwaway backend per run cost ~40s of
+  # startup and provisioning on every push, and left orphaned containers and
+  # tenant databases behind whenever a runner was killed mid-job.
+  QA_API_CONTAINER: tf-qa-api
+  QA_APP_CONTAINER: tf-qa-frontend-ci
+  QA_CP_CONTAINER: tf-qa-control-plane
+  QA_API_PORT: "8200"
+  QA_APP_PORT: "3201"
+  QA_CP_PORT: "8299"
+  QA_DB_NAME: talentflow_e2e
+  QA_STATE_DIR: /opt/talentflow/qa
+
+  # What the QA frontend bundle is built to call, and what Tier 3 points a
+  # browser at. NEXT_PUBLIC_* are baked in at build time, so these decide the
+  # image, not the container.
+  #
+  # The VM's own address, and the reason is a measurement rather than a
+  # preference. Running Tier 3 through https://enthira.in works — 82 of 84
+  # passed — but signing in through it is flaky: ten consecutive runs of the
+  # login journey gave nine passes and one failure, always the same way, with
+  # `POST /auth/login` returning 200 and the app still sitting on /login.
+  #
+  # Every one of the 84 tests signs in. A one-in-ten flake per login is a
+  # blocking pipeline that fails most pushes for reasons no developer can act
+  # on, and a suite people learn to re-run rather than read. Against the
+  # container the same suite has not failed once across several full runs.
+  #
+  # This is not a retreat from the domains. api.enthira.in is fine and its CORS
+  # is correct; the apex survived a full 13-minute run; and the earlier problems
+  # there are all fixed. What is left is a login race that shows up only with
+  # Cloudflare's added latency — the page is interactive later than the test
+  # expects — and until that is understood, the gating suite runs where it is
+  # deterministic. Switching back is these two values and nothing else.
+  QA_API_URL: http://192.168.2.12:8200
+  QA_APP_URL: http://192.168.2.12:3201
+
+  # QA declares its own build values instead of borrowing the NEXT_PUBLIC_*
+  # ones. Those are environment-scoped in GitLab (Settings -> CI/CD -> Variables,
+  # scope staging / production), and deploy:qa deliberately declares no
+  # `environment:` — so every one of them would arrive EMPTY here. The QA
+  # frontend would build with no base domain and no payment configuration, and
+  # the only symptom would be Tier 3 failing somewhere that looks unrelated.
+  #
+  # Being explicit is also more honest: QA is its own environment, not a copy of
+  # staging with two URLs swapped.
+  # Must equal the host the app is served from. `getSubdomain()` returns null
+  # when the host equals BASE_DOMAIN and the prefix when it ends with
+  # `.BASE_DOMAIN` — so serving the app at the apex and setting the apex here
+  # means no tenant is inferred from the URL and `?org=` supplies it, which is
+  # how every test signs in. Serving it at a subdomain and setting the
+  # registrable domain instead makes the app read that subdomain as a tenant,
+  # find none, and redirect.
+  QA_BASE_DOMAIN: enthira.in
+  # QA must never reach a real payment gateway, so the bypass is on and no key
+  # is supplied. A key that is absent cannot be charged against by accident.
+  QA_RAZORPAY_BYPASS: "true"
+
 # ---------------------------------------------------------------- test ------
-lint:
-  stage: test
+"Code style (advisory)":
+  stage: check
   tags: [talentflow]
   script:
     # --user: run as the runner's uid so no root-owned files land in the
@@ -50,12 +130,20 @@ lint:
   rules:
     - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'
 
-# ---------------------------------------------------------------- e2e -------
+# ------------------------------------------------- Test 1 of 3 · Screens ----
 # Playwright runs in two jobs so the whole suite still executes on every push
 # while only the trustworthy part can block a deploy:
 #
-#   e2e            BLOCKING  — build/deploy require it (see `needs:` below).
-#   e2e:quarantine NON-BLOCK — specs that were already failing before this
+#   Test 1 of 3    BLOCKING  — the release requires it (see `needs:` below).
+#                              499 tests: 353 pass, 146 skipped-with-a-reason
+#                              (rows needing a live interview/assessment
+#                              runtime, real proctoring hardware, or a database
+#                              assertion — none of them counted as passing).
+#                              318 of the 319 active rows assert real rendered
+#                              behaviour, not just that the page loaded.
+#                              Includes the KI-13 test.fail() pin. ~3 min.
+#                              A skipped row is tracked in e2e/TEST-PLAN.md.
+#   Known failures NON-BLOCK — specs that were already failing before this
 #                              pipeline existed (proof: the repo ships a
 #                              committed test-results/.last-run.json with
 #                              status "failed" for the timer-slot-based specs).
@@ -63,48 +151,986 @@ lint:
 #
 # Backend APIs are mocked inside the specs, so no live services are needed.
 # The Playwright image tag must match @playwright/test in package.json.
+#
+# --memory / --shm-size are not tuning, they are a blast radius limit. This
+# runner shares its VM with the staging containers it deploys to, and the first
+# run of the full suite exhausted the host: the kernel OOM-killed Firefox twice,
+# thrashed for twenty minutes and rebooted the box, taking staging down with it.
+# Capping the container means a runaway test run dies on its own instead of
+# taking production with it. Serving the built image instead of `next dev` is
+# what makes 8g comfortable: the standalone server holds no compiler state,
+# where `next dev` reached 3.3GB RSS compiling 19 routes and was OOM-killed.
+# --shm-size is Playwright's documented requirement (the 64m default crashes
+# browsers under load).
+
+# Each screens job starts the image that is about to be deployed on a scratch port
+# and tests that, then removes it in after_script. Nothing about the real
+# staging deployment is touched.
+#
+# The serve steps are written out in both jobs rather than shared through a
+# !reference: this config has to run on whatever GitLab version the instance is
+# on, and a plain script list is the one form every version accepts.
+#
+# `needs` uses optional:true because only one of the two build jobs exists in a
+# given pipeline — "Build the app" on ci/cd-staging, its production twin on aws.
 .playwright: &playwright
   stage: test
   tags: [talentflow]
+  needs:
+    - job: "Build the app"
+      optional: true
+    - job: "Build the app (production)"
+      optional: true
   artifacts:
     when: always
     expire_in: 1 week
     paths:
-      - playwright-report
       - test-results
+      - qa-cases-*.json
+    # What is uploaded is the screenshots the dashboard shows, and the report it
+    # reads. Nothing else.
+    #
+    # Pipelines #19757 and #19758 both uploaded nothing at all — 413 Request
+    # Entity Too Large, job failed — after every test in them had passed. The
+    # first fix here excluded traces on the theory that they were the bulk. They
+    # were not: with traces excluded the bundle still measured 153 MB, and the
+    # size report added alongside said where it actually was.
+    #
+    #   58 MB  playwright-report/data
+    #    4 MB  test-results/<one test>
+    #    3 MB  test-results/<one test>  ...
+    #
+    # playwright-report/data is Playwright's HTML report copying every
+    # attachment — so each screenshot was uploaded twice, and the second copy is
+    # read by nothing here. The dashboard has its own UI and fetches screenshots
+    # from their test-results path; it does not reference playwright-report at
+    # all. Dropping it costs nothing and takes back 58 MB.
+    #
+    # Traces stay excluded. They are the other thing nothing here reads — using
+    # one means downloading the zip and running `npx playwright show-trace` by
+    # hand — and they are the part that varies with how flaky the run was.
+    exclude:
+      - "**/trace.zip"
+      - "**/*.trace.zip"
+    # Feeds GitLab's Tests tab: per-test pass/fail/skip, searchable, with the
+    # failing tc_id named. Reading a 1,268-line job log to find one red row is
+    # not a reporting strategy.
+    reports:
+      junit: junit-*.xml
   rules:
     - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'
 
-e2e:
+# build-report stamps its output with the commit, branch, pipeline and job it
+# came from — but it runs inside the Playwright container, which inherits none
+# of the runner's environment. Without the four `-e CI_*` forwards below, every
+# artifact the dashboard receives is labelled "commit: null" and it cannot say
+# which pipeline it is looking at. Forwarded by name, so no value is written
+# into this file.
+"Test 1 of 3 · Screens":
   <<: *playwright
+  variables:
+    APP_PORT: "3999"
   script:
-    - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+    - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
+    - docker run -d --name "e2e-app-$CI_JOB_ID" -p "$APP_PORT:3000" "$IMAGE:e2e"
+    # Shaped like .deploy-template's smoke check: `if` guards the probe and the
+    # give-up branch lives after the loop, so nothing in the retry path can trip
+    # the runner's `set -e`.
+    - |
+      for i in $(seq 1 24); do
+        if curl -fsS "http://localhost:$APP_PORT/" >/dev/null 2>&1; then
+          echo "app up on $APP_PORT after $((i * 5))s"
+          break
+        fi
+        sleep 5
+      done
+      if ! curl -fsS "http://localhost:$APP_PORT/" >/dev/null 2>&1; then
+        echo "built image never answered on $APP_PORT"
+        docker logs --tail=50 "e2e-app-$CI_JOB_ID"
+        exit 1
+      fi
+    - docker run --rm --network=host --user "$(id -u):$(id -g)"
+        -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+        -e E2E_EXTERNAL=1 -e E2E_SCREENSHOT_ALL=0 -e BASE_URL="http://localhost:$APP_PORT"
+        -e PLAYWRIGHT_JUNIT_OUTPUT_NAME="junit-$CI_JOB_NAME_SLUG.xml"
+        -e PLAYWRIGHT_JSON_OUTPUT_NAME="report.json"
+        -e CI_COMMIT_SHORT_SHA -e CI_COMMIT_BRANCH -e CI_PIPELINE_ID -e CI_JOB_NAME
+        --memory=8g --memory-swap=8g --shm-size=1g
         -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy
         sh -c "npm ci --no-audit --no-fund
                && npx playwright install firefox
-               && npx playwright test smoke-auth smoke-dashboard smoke-jd excel-data-driven
-                    --reporter=line,html"
+               && npx playwright test smoke-tier1 smoke-score-consistency
+                    smoke-auth smoke-dashboard smoke-jd excel-data-driven
+                    --reporter=line,html,junit,json
+               ; rc=\$?
+               ; node e2e/scripts/build-report.mjs --only tier1 --out qa-cases-tier1.json
+               ; exit \$rc"
+  after_script:
+    # What is about to be uploaded, before the upload decides. GitLab refuses the
+    # whole bundle over its limit and the job dies with "413 Request Entity Too
+    # Large" — after every test has passed, with no clue in the log about what
+    # was big. This prints the answer where it will be looked for.
+    - |
+      MB=$(du -sm playwright-report test-results qa-cases-*.json 2>/dev/null | awk '{s+=$1} END{print s+0}')
+      echo "artifact bundle: ${MB} MB"
+      if [ "${MB:-0}" -gt 70 ]; then
+        echo "that is close to the limit a job upload is refused at. The largest parts:"
+        du -sm playwright-report/* test-results/* 2>/dev/null | sort -rn | head -8
+      fi
+    - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
   allow_failure: false   # a red suite stops the deploy
 
-e2e:quarantine:
+"Known failures (advisory)":
   <<: *playwright
+  variables:
+    APP_PORT: "3998"
   script:
-    - docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+    - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
+    - docker run -d --name "e2e-app-$CI_JOB_ID" -p "$APP_PORT:3000" "$IMAGE:e2e"
+    # Shaped like .deploy-template's smoke check: `if` guards the probe and the
+    # give-up branch lives after the loop, so nothing in the retry path can trip
+    # the runner's `set -e`.
+    - |
+      for i in $(seq 1 24); do
+        if curl -fsS "http://localhost:$APP_PORT/" >/dev/null 2>&1; then
+          echo "app up on $APP_PORT after $((i * 5))s"
+          break
+        fi
+        sleep 5
+      done
+      if ! curl -fsS "http://localhost:$APP_PORT/" >/dev/null 2>&1; then
+        echo "built image never answered on $APP_PORT"
+        docker logs --tail=50 "e2e-app-$CI_JOB_ID"
+        exit 1
+      fi
+    - docker run --rm --network=host --user "$(id -u):$(id -g)"
+        -e HOME=/tmp -e npm_config_cache=/tmp/.npm
+        -e E2E_EXTERNAL=1 -e E2E_SCREENSHOT_ALL=0 -e BASE_URL="http://localhost:$APP_PORT"
+        -e PLAYWRIGHT_JUNIT_OUTPUT_NAME="junit-$CI_JOB_NAME_SLUG.xml"
+        -e PLAYWRIGHT_JSON_OUTPUT_NAME="report.json"
+        -e CI_COMMIT_SHORT_SHA -e CI_COMMIT_BRANCH -e CI_PIPELINE_ID -e CI_JOB_NAME
+        --memory=8g --memory-swap=8g --shm-size=1g
         -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy
         sh -c "npm ci --no-audit --no-fund
                && npx playwright install firefox
                && npx playwright test ai-interview-pipeline timer-slot-based timer-speaking
-                    --reporter=line,html"
+                    --reporter=line,html,junit,json
+               ; rc=\$?
+               ; node e2e/scripts/build-report.mjs --only quarantine --out qa-cases-quarantine.json
+               ; exit \$rc"
+  after_script:
+    # What is about to be uploaded, before the upload decides. GitLab refuses the
+    # whole bundle over its limit and the job dies with "413 Request Entity Too
+    # Large" — after every test has passed, with no clue in the log about what
+    # was big. This prints the answer where it will be looked for.
+    - |
+      MB=$(du -sm playwright-report test-results qa-cases-*.json 2>/dev/null | awk '{s+=$1} END{print s+0}')
+      echo "artifact bundle: ${MB} MB"
+      if [ "${MB:-0}" -gt 70 ]; then
+        echo "that is close to the limit a job upload is refused at. The largest parts:"
+        du -sm playwright-report/* test-results/* 2>/dev/null | sort -rn | head -8
+      fi
+    - docker rm -f "e2e-app-$CI_JOB_ID" >/dev/null 2>&1 || true
   allow_failure: true    # known-red today — reported, but does not gate the deploy
 
+# --------------------------------------------- Set up the test environment --
+# The QA environment: a real backend, a real frontend and a real database that
+# Tier 2 and Tier 3 both run against.
+#
+# It is UPDATED, never recreated. Each container carries a `qa.spec` label
+# holding a hash of everything that decides what it should be — its image, its
+# environment, the port it publishes. A container whose label already matches is
+# left alone; only a changed spec causes a replacement. So a push that does not
+# touch the backend image or the QA configuration costs nothing here, and the
+# containers keep their uptime, their logs and their warm caches.
+#
+# That is a deliberate reversal of how Tier 2 used to work. It stood up a
+# throwaway backend on port 8199 on every single push: ~40s of container start
+# plus tenant provisioning before a single assertion ran, an orphaned container
+# and a pile of `tenant_e2e%` databases every time a runner was killed mid-job,
+# and a blocking job that then failed on "port is already allocated" until
+# someone logged in and cleaned up by hand.
+#
+# ── Why the control-plane stub ───────────────────────────────────────────────
+# The backend proxies entitlements, quotas and T&C to ADMIN_API_URL. The shipped
+# value is https://rmscp.q2a.in — the control plane that serves real customers.
+# QA must never send traffic there. Pointing it at nothing is not an option
+# either: with no entitlement source every module renders "Feature Not
+# Available", and most of Tier 3 becomes untestable.
+#
+# So this stands up e2e/scripts/qa-control-plane-stub.mjs and points the backend
+# at that. It is a test double for an external system at its network boundary —
+# the backend, the frontend, the database and the browser under test are all
+# still the real ones.
+#
+# ── What lives outside the repo ──────────────────────────────────────────────
+# $QA_STATE_DIR/tenant.json holds the reusable QA tenant's credentials. It stays
+# on the VM and is deliberately NOT a CI artifact: an artifact is downloadable
+# from the GitLab UI by anyone with read access to the project, and these are
+# working credentials for a real login.
+"Set up the test environment":
+  stage: test environment
+  tags: [talentflow]
+  needs:
+    - job: "Build the app"
+      optional: true
+    - job: "Build the app (production)"
+      optional: true
+  variables:
+    STAGING_API: tf-backend-staging-api-1
+    PG_IMAGE: postgres:17-alpine
+  script:
+    - |
+      set -e
+      if ! docker inspect "$STAGING_API" >/dev/null 2>&1; then
+        echo "the QA environment borrows its backend image and database"
+        echo "credentials from the staging backend container ($STAGING_API),"
+        echo "which is not running."
+        exit 1
+      fi
+      BACKEND_IMAGE=$(docker inspect "$STAGING_API" --format '{{.Config.Image}}')
+      echo "backend image: $BACKEND_IMAGE"
+
+      # The state directory holds the QA env file and the reusable tenant, and it
+      # outlives the job. Checked explicitly because the failure otherwise is a
+      # bare "Permission denied" on a redirect, several lines further down, with
+      # nothing saying which directory or which user.
+      #
+      # This job runs as the runner's own user, not root. The directory was
+      # first created by hand during setup and was root-owned, so the first
+      # pipeline died here — everything had been verified as root, which is not
+      # who runs it.
+      mkdir -p "$QA_STATE_DIR" 2>/dev/null || true
+      if ! ( [ -d "$QA_STATE_DIR" ] && [ -w "$QA_STATE_DIR" ] ); then
+        echo "$QA_STATE_DIR is not writable by $(id -un), which is the user this"
+        echo "job runs as. Fix on the runner host:"
+        echo "    sudo mkdir -p $QA_STATE_DIR"
+        echo "    sudo chown -R $(id -un):$(id -gn) $QA_STATE_DIR"
+        ls -ld "$QA_STATE_DIR" 2>/dev/null || true
+        exit 1
+      fi
+      for f in api.env tenant.json; do
+        if [ -e "$QA_STATE_DIR/$f" ] && [ ! -w "$QA_STATE_DIR/$f" ]; then
+          echo "$QA_STATE_DIR/$f exists but is not writable by $(id -un):"
+          ls -l "$QA_STATE_DIR/$f"
+          echo "    sudo chown $(id -un):$(id -gn) $QA_STATE_DIR/$f"
+          exit 1
+        fi
+      done
+
+      # Reuse the staging environment wholesale, then override only what decides
+      # which database is written and which control plane is called. Listing
+      # ~100 variables by hand would rot the moment the backend gains one.
+      ENVFILE="$QA_STATE_DIR/api.env"
+      docker inspect "$STAGING_API" --format '{{range .Config.Env}}{{println .}}{{end}}' \
+        | grep -vE '^(DATABASE_NAME|SHARED_DATABASE_NAME|ADMIN_API_URL|BASE_DOMAIN|CORS_ORIGINS|FRONTEND_URL|BACKEND_URL|SMTP_USER|SMTP_PASSWORD|OPENAI_API_KEY|GROQ_API_KEY|GEMINI_API_KEY|DEEPGRAM_API_KEY|ASSEMBLYAI_API_KEY|SARVAM_API_KEY|PATH|HOSTNAME|HOME|LANG|GPG_KEY|PYTHON_|_=|$)' \
+        > "$ENVFILE.new"
+      {
+        printf 'DATABASE_NAME=%s\n' "$QA_DB_NAME"
+        printf 'SHARED_DATABASE_NAME=%s_shared\n' "$QA_DB_NAME"
+        # 172.17.0.1 is the docker bridge gateway: the address a container uses
+        # to reach a service published on the host.
+        printf 'ADMIN_API_URL=http://172.17.0.1:%s/api/v1\n' "$QA_CP_PORT"
+        # BASE_DOMAIN builds tenant subdomains. Staging ships q2a.in, which is
+        # the customers' domain — harmless here in the sense that nothing is
+        # dialled, but wrong, and the guard below rightly refuses it.
+        printf 'BASE_DOMAIN=%s\n' "$QA_BASE_DOMAIN"
+        printf 'CORS_ORIGINS=%s\n' "$QA_APP_URL"
+        printf 'FRONTEND_URL=%s\n' "$QA_APP_URL"
+        printf 'BACKEND_URL=%s\n' "$QA_API_URL"
+        # No mail credentials, deliberately blank rather than absent.
+        #
+        # `POST /api/v1/users` calls send_user_invite_email, and this suite creates
+        # roughly ninety users a run — a viewer here, a recruiter there, each one
+        # to check that a permission actually holds. Copying staging's environment
+        # wholesale brought the real SMTP account with it, so every one of those
+        # was a live send against a 50-a-day limit, to addresses ending
+        # @example.com that could only bounce. Two bad outcomes at once: the
+        # customers' quota spent by a test, and bounces charged to the sending
+        # reputation of an account they depend on.
+        #
+        # Blank is the right value, not a fake host. send_user_invite_email checks
+        # `if not smtp_user or not smtp_password` and returns ("SMTP not
+        # configured") without raising, so user creation still succeeds and every
+        # RBAC test still runs — nothing leaves the machine. A dummy host would
+        # instead hang on connect and make ninety tests slow and flaky.
+        printf 'SMTP_USER=\n'
+        printf 'SMTP_PASSWORD=\n'
+        # And no model provider, for the same reason and by the same route.
+        #
+        # Creating an assessment against a job description with no must-have
+        # skills calls openai_service.extract_jd_params, which is a real
+        # completion — app/services/assessment.py:604, "has no NHS — extracting
+        # via LLM". The suite did that twelve times on the customers' key,
+        # inherited here the same way SMTP was.
+        #
+        # Blank rather than absent: extract_jd_params checks is_available() and
+        # raises "AI service is not configured", so the path stops at the door
+        # instead of dialling out. A test that needs an answer from a model
+        # fails loudly, which is the right outcome — it was never testing the
+        # model, and it should not be the thing that spends the quota.
+        printf 'OPENAI_API_KEY=\n'
+        printf 'GROQ_API_KEY=\n'
+        printf 'GEMINI_API_KEY=\n'
+        printf 'DEEPGRAM_API_KEY=\n'
+        printf 'ASSEMBLYAI_API_KEY=\n'
+        printf 'SARVAM_API_KEY=\n'
+      } >> "$ENVFILE.new"
+      mv "$ENVFILE.new" "$ENVFILE"
+      chmod 600 "$ENVFILE"
+
+      # A guard in the job itself, in case someone edits QA_DB_NAME.
+      case "$QA_DB_NAME" in
+        talentflow_landlord|talentflow_shared|talentflow_trail|postgres|machine)
+          echo "QA_DB_NAME=$QA_DB_NAME is a live database. Refusing."; exit 1 ;;
+      esac
+      # And one for the control plane, which is the mistake that actually
+      # happened: the QA backend spent a day calling rmscp.q2a.in.
+      if grep -q 'q2a\.in' "$ENVFILE"; then
+        echo "the QA environment file still points at a q2a.in host:"
+        grep -n 'q2a\.in' "$ENVFILE"
+        echo "QA must never send traffic to a customer-facing system."
+        exit 1
+      fi
+      # And one for mail, which is the same mistake in a different costume: a
+      # credential inherited from staging that lets a test suite spend something
+      # the customers own. Checked rather than assumed, because the value is
+      # copied from a container whose environment this file does not control.
+      # A model key is the same mistake as a mail credential: something the
+      # customers pay for, inherited into a place that runs a suite thousands of
+      # times a week.
+      if grep -qE '^(OPENAI|GROQ|GEMINI|DEEPGRAM|ASSEMBLYAI|SARVAM)_API_KEY=.+' "$ENVFILE"; then
+        echo "the QA environment file carries a live model provider key:"
+        grep -nE '^(OPENAI|GROQ|GEMINI|DEEPGRAM|ASSEMBLYAI|SARVAM)_API_KEY=' "$ENVFILE" | sed 's/=.*/=<set>/'
+        echo "Creating an assessment can call a completion (assessment.py:604),"
+        echo "and this suite creates hundreds of them. QA must not be able to spend"
+        echo "a model quota at all."
+        exit 1
+      fi
+      if grep -qE '^SMTP_(USER|PASSWORD)=.+' "$ENVFILE"; then
+        echo "the QA environment file carries live mail credentials:"
+        grep -nE '^SMTP_(USER|PASSWORD)=' "$ENVFILE" | sed 's/=.*/=<set>/'
+        echo "POST /api/v1/users sends an invite email. This suite creates ~90 users"
+        echo "a run, against a 50-a-day limit, to @example.com addresses that bounce."
+        echo "QA must not be able to send mail at all."
+        exit 1
+      fi
+
+    # ---- database: created once, then reused ---------------------------------
+    - |
+      set -e
+      ENVFILE="$QA_STATE_DIR/api.env"
+      PGHOST=$(grep -m1 '^DATABASE_HOST=' "$ENVFILE" | cut -d= -f2-)
+      PGUSER=$(grep -m1 '^DATABASE_USER=' "$ENVFILE" | cut -d= -f2-)
+      PGPASSWORD=$(grep -m1 '^DATABASE_PASSWORD=' "$ENVFILE" | cut -d= -f2-)
+      export PGPASSWORD
+      psql() { docker run --rm -i -e PGPASSWORD "$PG_IMAGE" psql -h "$PGHOST" -U "$PGUSER" "$@"; }
+
+      for db in "$QA_DB_NAME" "${QA_DB_NAME}_shared"; do
+        if [ "$(psql -d postgres -tAc "select 1 from pg_database where datname='$db'")" != "1" ]; then
+          psql -d postgres -c "CREATE DATABASE $db"
+          echo "created $db"
+        fi
+      done
+
+      # Schema: copied from the landlord database, which is the only authority
+      # on what this backend build expects. Read-only — pg_dump never writes.
+      #
+      # `alembic upgrade head` is NOT how this is created: the first migration is
+      # a baseline over an existing schema, so on an empty database the second
+      # migration dies with `relation "users" does not exist`.
+      TABLES=$(psql -d "$QA_DB_NAME" -tAc \
+        "select count(*) from information_schema.tables where table_schema='public'")
+      if [ "$TABLES" -lt 50 ]; then
+        echo "bootstrapping schema into $QA_DB_NAME (had $TABLES tables)"
+        docker run --rm -e PGPASSWORD "$PG_IMAGE" pg_dump -h "$PGHOST" -U "$PGUSER" \
+          -d talentflow_landlord --schema-only --no-owner --no-privileges \
+          > "$CI_PROJECT_DIR/.qa-schema.sql"
+        psql -d "$QA_DB_NAME" -q < "$CI_PROJECT_DIR/.qa-schema.sql"
+      fi
+
+      # Reference data only. Tenant provisioning fails without it —
+      # `fk_tenants_plan_id` needs plans row 1 to exist. Every table listed here
+      # is master data; no tenant, user, invoice or audit row is copied.
+      PLANS=$(psql -d "$QA_DB_NAME" -tAc "select count(*) from plans")
+      if [ "$PLANS" = "0" ]; then
+        echo "seeding reference tables"
+        SEED="countries permissions roles role_permissions plans features plan_features
+              ai_models ai_model_assignments add_ons terms_and_conditions plan_setting
+              global_ai_budget_thresholds alembic_version alembic_version_dataplane"
+        ARGS=""
+        for t in $SEED; do ARGS="$ARGS -t public.$t"; done
+        docker run --rm -e PGPASSWORD "$PG_IMAGE" pg_dump -h "$PGHOST" -U "$PGUSER" \
+          -d talentflow_landlord --data-only --no-owner --no-privileges \
+          --disable-triggers $ARGS > "$CI_PROJECT_DIR/.qa-seed.sql"
+        psql -d "$QA_DB_NAME" -q < "$CI_PROJECT_DIR/.qa-seed.sql"
+      fi
+
+    # Space is made BEFORE the build, not after it. The prune used to run at
+    # the end of this job, which is the one moment it cannot help: the build
+    # that needs the room happens first. #19771 stopped with 7G free having
+    # just written a 668 MB image into a disk it had not yet cleaned.
+    # ---- and from filling the disk -------------------------------------------
+    # Every pipeline tags three frontend images — `-e2e` for the Tier-1 job,
+    # `-qa` for this environment, `-staging` for the release — 668 MB each, and
+    # nothing removed the old ones. Fifty-six accumulated, the runner's disk hit
+    # 100%, and a green `Set up the test environment` was followed by two test
+    # jobs failing for a reason that had nothing to do with the code: the report
+    # they write came out zero bytes, because the write itself failed.
+    #
+    # `docker image prune` does not help — these are tagged, not dangling, so it
+    # skips every one of them. The count has to be bounded explicitly instead.
+    #
+    # Three things survive, and the order matters:
+    #   1. the newest KEEP tags, whatever they are — rollback headroom;
+    #   2. this pipeline's own tags, because `Release to staging` runs later in
+    #      this same pipeline and needs the `-staging` image to still exist;
+    #   3. anything a container is running, QA or staging.
+    # Only `$IMAGE` is touched. `talentflow-cp-*` and `talentflow-backend` are
+    # other projects' images and are not this job's to remove.
+    - |
+      # Two, not six. Every pipeline tags three images — -qa, -e2e, -staging — at
+      # 668 MB each, so six kept is nine on disk and six gigabytes, on a runner
+      # that also holds a 3.3 GB backend, a 3.2 GB Playwright image and 2 GB of
+      # another project's. #19771 stopped here with 7G free: the guard did its
+      # job, the number it guarded was wrong. Two is one pipeline of rollback,
+      # and any tag is rebuildable from its commit.
+      KEEP=2
+      INUSE=$(docker ps -a --format '{{.Image}}' | sort -u)
+      n=0; removed=0
+      for img in $(docker images "$IMAGE" --format '{{.Repository}}:{{.Tag}}' | grep -v ':<none>$'); do
+        n=$((n + 1))
+        [ "$n" -le "$KEEP" ] && continue
+        # This pipeline's own tags. `:qa` and `:e2e` are named here explicitly
+        # because they no longer carry the commit — and `e2e` in particular is
+        # built by an earlier job and used by a later one, with this prune in
+        # between. Matching only on the sha would have deleted it out from under
+        # `Test 1 of 3`, which builds nothing and would simply not find it.
+        case "$img" in *":$TAG-"*|*":qa"|*":e2e") continue ;; esac
+        echo "$INUSE" | grep -qx "$img" && continue
+        docker rmi "$img" >/dev/null 2>&1 && removed=$((removed + 1))
+      done
+      # The build cache needs a ceiling for the same reason the image count did.
+      # `until=48h` is a time bound, not a size bound, and 48 hours of this
+      # runner's builds came to 13 GB — more than every image on the box. Four
+      # gigabytes keeps the layers a same-day rebuild reuses and nothing older.
+      # `--max-used-space` on this Docker; `--keep-storage` was the older spelling
+      # and is not accepted here, so both are tried before falling back to the
+      # time bound that was never the right shape.
+      # `qa` and `e2e` are rebuilt under the same name every pipeline, so the
+      # image each one replaces loses its tag and becomes dangling — which is
+      # exactly what `docker image prune` removes, and the one case where it
+      # helps. It never could before: every tag carried a commit and none of
+      # them was ever untagged.
+      docker image prune -f >/dev/null 2>&1 || true
+      docker builder prune -f --max-used-space 4GB >/dev/null 2>&1 \
+        || docker builder prune -f --keep-storage 4GB >/dev/null 2>&1 \
+        || docker builder prune -f --filter until=24h >/dev/null 2>&1 || true
+      echo "$IMAGE: $n tag(s) on disk, removed $removed superseded"
+
+    # ---- containers: replaced only when their spec changes -------------------
+    - |
+      set -e
+      BACKEND_IMAGE=$(docker inspect "$STAGING_API" --format '{{.Config.Image}}')
+      ENVFILE="$QA_STATE_DIR/api.env"
+
+      # Replace a container only if what it should be has changed. The spec hash
+      # covers every input; a matching, running container is left untouched.
+      ensure() {
+        name=$1; spec=$2; shift 2
+        want=$(printf '%s' "$spec" | sha256sum | cut -c1-16)
+        have=$(docker inspect "$name" --format '{{index .Config.Labels "qa.spec"}}' 2>/dev/null || true)
+        running=$(docker inspect "$name" --format '{{.State.Running}}' 2>/dev/null || echo false)
+        if [ "$have" = "$want" ] && [ "$running" = "true" ]; then
+          echo "$name is already up to date (spec $want) — left running"
+          return 0
+        fi
+        echo "$name: spec ${have:-none} -> $want, replacing"
+        docker rm -f "$name" >/dev/null 2>&1 || true
+        docker run -d --name "$name" --restart unless-stopped \
+          --label "qa.spec=$want" "$@" >/dev/null
+      }
+
+      # The control plane stub. Its spec includes the script's own hash, so
+      # editing e2e/scripts/qa-control-plane-stub.mjs is enough to roll it.
+      STUB=e2e/scripts/qa-control-plane-stub.mjs
+      cp "$STUB" "$QA_STATE_DIR/qa-control-plane-stub.mjs"
+      ensure "$QA_CP_CONTAINER" "cp:$(sha256sum "$STUB" | cut -d' ' -f1):$QA_CP_PORT" \
+        -p "$QA_CP_PORT:$QA_CP_PORT" -e "PORT=$QA_CP_PORT" \
+        -v "$QA_STATE_DIR/qa-control-plane-stub.mjs:/app/stub.mjs:ro" \
+        --memory=256m node:22-alpine node /app/stub.mjs
+
+      ensure "$QA_API_CONTAINER" "api:$BACKEND_IMAGE:$(sha256sum "$ENVFILE" | cut -d' ' -f1):$QA_API_PORT" \
+        --env-file "$ENVFILE" -p "$QA_API_PORT:8001" --memory=2g "$BACKEND_IMAGE"
+
+      for i in $(seq 1 36); do
+        if curl -fsS "http://127.0.0.1:$QA_API_PORT/health" >/dev/null 2>&1; then
+          echo "QA backend healthy after $((i * 5))s"
+          break
+        fi
+        sleep 5
+      done
+      if ! curl -fsS "http://127.0.0.1:$QA_API_PORT/health" >/dev/null 2>&1; then
+        echo "the QA backend never answered on $QA_API_PORT"
+        docker logs --tail=60 "$QA_API_CONTAINER"
+        exit 1
+      fi
+
+    # ---- the QA frontend image -----------------------------------------------
+    # A second build of the same commit. NEXT_PUBLIC_* are baked in at build
+    # time, so a frontend that calls the QA backend cannot be produced by
+    # configuring the staging image at runtime — it has to be its own build.
+    #
+    # The cost is one extra `docker build`, and it is the price of Tier 3 running
+    # against the code that is about to ship rather than against a dev server.
+    - |
+      set -e
+      docker build --pull \
+        --build-arg NEXT_PUBLIC_ENVIRONMENT=qa \
+        --build-arg NEXT_PUBLIC_API_URL="$QA_API_URL/api/v1" \
+        --build-arg NEXT_PUBLIC_ADMIN_API_URL="$QA_API_URL/api/v1" \
+        --build-arg NEXT_PUBLIC_BILLING_API_URL="$QA_API_URL/api/v1" \
+        --build-arg NEXT_PUBLIC_USAGE_API_URL="$QA_API_URL/api/v1" \
+        --build-arg NEXT_PUBLIC_WS_URL="$(printf '%s' "$QA_API_URL" | sed 's|^http|ws|')" \
+        --build-arg NEXT_PUBLIC_APP_URL="$QA_APP_URL" \
+        --build-arg NEXT_PUBLIC_BASE_DOMAIN="$QA_BASE_DOMAIN" \
+        --build-arg NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED="$QA_RAZORPAY_BYPASS" \
+        --build-arg NEXT_PUBLIC_RAZORPAY_KEY_ID="" \
+        -t "$IMAGE:qa" .
+
+      # Assert the URL really is in the bundle. A build-arg typo produces an
+      # image that starts, serves, and quietly calls the wrong backend — and the
+      # only symptom is Tier 3 failing for a reason that looks like anything but
+      # a build-arg typo.
+      BAKED=$(docker run --rm --entrypoint sh "$IMAGE:qa" -c \
+        "grep -rlo '$QA_API_URL/api/v1' /app/.next 2>/dev/null | head -1" || true)
+      if [ -z "$BAKED" ]; then
+        echo "the QA frontend image does not contain $QA_API_URL/api/v1."
+        echo "NEXT_PUBLIC_API_URL did not reach the build."
+        exit 1
+      fi
+      echo "QA frontend bundle calls $QA_API_URL/api/v1"
+
+    - |
+      set -e
+      ensure() {
+        name=$1; spec=$2; shift 2
+        want=$(printf '%s' "$spec" | sha256sum | cut -c1-16)
+        have=$(docker inspect "$name" --format '{{index .Config.Labels "qa.spec"}}' 2>/dev/null || true)
+        running=$(docker inspect "$name" --format '{{.State.Running}}' 2>/dev/null || echo false)
+        if [ "$have" = "$want" ] && [ "$running" = "true" ]; then
+          echo "$name is already up to date (spec $want) — left running"
+          return 0
+        fi
+        echo "$name: spec ${have:-none} -> $want, replacing"
+        docker rm -f "$name" >/dev/null 2>&1 || true
+        docker run -d --name "$name" --restart unless-stopped \
+          --label "qa.spec=$want" "$@" >/dev/null
+      }
+      # The image ID, not the tag. `ensure` replaces the container when its spec
+      # changes, and the spec used to carry the commit through the tag name —
+      # which worked only because every commit produced a new tag. The tag is
+      # fixed now, so a fresh build under the same name would have left the old
+      # container running against the previous bytes, and the tests would have
+      # passed on code that is no longer the code. The ID changes when the image
+      # does, which is the thing actually being asked about.
+      QA_APP_ID=$(docker image inspect "$IMAGE:qa" --format '{{.Id}}')
+      ensure "$QA_APP_CONTAINER" "app:$QA_APP_ID:$QA_APP_PORT" \
+        -p "$QA_APP_PORT:3000" --memory=1g "$IMAGE:qa"
+
+      for i in $(seq 1 24); do
+        if curl -fsS "http://127.0.0.1:$QA_APP_PORT/login?org=probe" >/dev/null 2>&1; then
+          echo "QA frontend up after $((i * 5))s"
+          break
+        fi
+        sleep 5
+      done
+      if ! curl -fsS "http://127.0.0.1:$QA_APP_PORT/login?org=probe" >/dev/null 2>&1; then
+        echo "the QA frontend never answered on $QA_APP_PORT"
+        docker logs --tail=60 "$QA_APP_CONTAINER"
+        exit 1
+      fi
+
+
+    # A disk that is nearly full breaks the test jobs downstream in a way that
+    # looks like a test failure, so it is caught here instead — where the message
+    # can say what is actually wrong and what to do about it.
+    - |
+      FREE=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+      echo "${FREE}G free on / after cleanup"
+      if [ "${FREE:-0}" -lt 8 ]; then
+        echo
+        echo "less than 8G free on the runner. The test jobs would still start and"
+        echo "then write truncated or zero-byte reports, so this job stops here."
+        docker system df
+        echo
+        echo "what is using it:"
+        docker images --format '{{.Size}}\t{{.Repository}}:{{.Tag}}' | sort -rh | head -15
+        exit 1
+      fi
+
+    # ---- keep the QA tenant from growing without limit -----------------------
+    # Every Tier-3 run writes real rows. Measured over one afternoon, job
+    # descriptions went from 114 to 235 and audit rows from 606 to 1,383. Left
+    # alone that breaks the suite twice: pages get slower, and the tests that
+    # assert on an empty list start describing a database that is no longer one.
+    #
+    # The sweep lives in e2e/scripts/qa-tenant-cleanup.py rather than inline
+    # here — it needs to be readable and runnable by hand, and the first inline
+    # attempt got the timestamp comparison wrong in a way that silently removed
+    # nothing. The script explains why (the backend writes local time with no
+    # offset) and measures age against the data instead of the clock.
+    #
+    # Failure here is reported, not fatal: a tenant that did not get tidied is a
+    # slower suite, not a broken one, and it must never stop the tests running.
+    - |
+      TENANT="$QA_STATE_DIR/tenant.json"
+      if [ -f "$TENANT" ]; then
+        MAIL=$(python3 -c "import json;print(json.load(open('$TENANT'))['adminEmail'])")
+        PASS=$(python3 -c "import json;print(json.load(open('$TENANT'))['adminPassword'])")
+        SUB=$(python3 -c "import json;print(json.load(open('$TENANT'))['subdomain'])")
+        TOKEN=$(curl -fsS -m 20 -X POST "http://127.0.0.1:$QA_API_PORT/api/v1/auth/login" \
+          -H 'Content-Type: application/json' \
+          -d "{\"email\":\"$MAIL\",\"password\":\"$PASS\",\"subdomain\":\"$SUB\"}" \
+          | python3 -c "import sys,json;print(json.load(sys.stdin)['tokens']['access_token'])") || TOKEN=""
+        if [ -n "$TOKEN" ]; then
+          python3 "$CI_PROJECT_DIR/e2e/scripts/qa-tenant-cleanup.py" \
+            --api "http://127.0.0.1:$QA_API_PORT" --token "$TOKEN" --hours 6 \
+            || echo "  tenant cleanup did not finish — continuing"
+        else
+          echo "  could not sign in to tidy the QA tenant — continuing"
+        fi
+      fi
+
+    # ---- the reusable QA tenant ---------------------------------------------
+    # Provisioned once and kept. Tier 3 signs in as this tenant on every run.
+    #
+    # This does NOT go over HTTP: POST /api/v1/tenants/register raises TypeError
+    # in the backend and 500s on every request (the router passes one argument to
+    # a two-argument service). The script drives ProvisioningService directly —
+    # the same code path the control plane uses — and lives in this repo so the
+    # backend source stays untouched.
+    - |
+      set -e
+      TENANT="$QA_STATE_DIR/tenant.json"
+      REUSABLE=0
+      if [ -f "$TENANT" ]; then
+        SUB=$(python3 -c "import json;print(json.load(open('$TENANT'))['subdomain'])" 2>/dev/null || true)
+        MAIL=$(python3 -c "import json;print(json.load(open('$TENANT'))['adminEmail'])" 2>/dev/null || true)
+        PASS=$(python3 -c "import json;print(json.load(open('$TENANT'))['adminPassword'])" 2>/dev/null || true)
+        # Reused only if it can still log in. A tenant record that survived a
+        # database rebuild but no longer authenticates would otherwise fail every
+        # Tier-3 test with a misleading message.
+        if [ -n "$SUB" ] && curl -fsS -o /dev/null \
+             -X POST "http://127.0.0.1:$QA_API_PORT/api/v1/auth/login" \
+             -H 'Content-Type: application/json' \
+             -d "{\"email\":\"$MAIL\",\"password\":\"$PASS\",\"subdomain\":\"$SUB\"}"; then
+          echo "reusing QA tenant $SUB"
+          REUSABLE=1
+        else
+          echo "the recorded QA tenant can no longer log in — provisioning a new one"
+        fi
+      fi
+      if [ "$REUSABLE" = "0" ]; then
+        docker run --rm --env-file "$QA_STATE_DIR/api.env" \
+          -v "$CI_PROJECT_DIR/e2e/scripts/tier2-provision.py:/app/tier2-provision.py:ro" \
+          "$(docker inspect "$QA_API_CONTAINER" --format '{{.Config.Image}}')" \
+          python /app/tier2-provision.py > "$CI_PROJECT_DIR/.qa-tenant.raw"
+        tail -1 "$CI_PROJECT_DIR/.qa-tenant.raw" > "$TENANT"
+        chmod 600 "$TENANT"
+        echo "provisioned QA tenant: $(python3 -c "import json;print(json.load(open('$TENANT'))['subdomain'])")"
+      fi
+  after_script:
+    - rm -f "$CI_PROJECT_DIR/.qa-schema.sql" "$CI_PROJECT_DIR/.qa-seed.sql"
+        "$CI_PROJECT_DIR/.qa-tenant.raw"
+  # ci/cd-staging removed: this QA environment is now owned exclusively by
+  # talentflow-e2e-pipeline, which starts it from the exact FRONTEND_SHA +
+  # BACKEND_SHA release pair. Running it here too meant two pipelines fighting
+  # over the same containers (hit in practice: this job's own rebuild replaced
+  # the e2e-pipeline's tested image under tf-qa-frontend-ci mid-release).
+  # aws kept as-is — the old production release path is untouched for now.
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "aws"'
+
+# ---------------------------------------- Test 2 of 3 · API and database ----
+# Tier 2 is the half of the suite a mock cannot express: state that has to really
+# exist. A JD that survives a reload, an audit row written as a side effect,
+# units that actually came off a balance, a viewer who really gets a 403.
+#
+# It no longer stands up its own backend. "Set up the test environment" keeps one
+# running, and this job just uses it — removing ~40s of container start per push
+# and, more importantly, removes the failure mode where a runner killed mid-job
+# left a container holding port 8199 and every subsequent pipeline died on
+# "port is already allocated" until someone logged in and cleaned up.
+#
+# What it still does per run is provision its own tenant. That is deliberate:
+# 819 assertions were written against a tenant that starts empty, and pointing
+# them at a long-lived one would quietly change what several of them mean.
+# The tenant databases it creates are dropped in after_script — all except the
+# reusable one Tier 3 signs in as.
+#
+# The safety argument is unchanged and still the point. The runner shares this
+# VM, this docker daemon and this disk with the staging containers it deploys
+# to, and the staging backend points at `talentflow_landlord` — the database
+# real clients read. Three things keep Tier 2 away from it:
+#   1. It talks to $QA_API_PORT. The systemd services on 8000/8001 that real
+#      clients use are never touched, and neither is the staging container on
+#      8101 — that one points at the live database.
+#   2. DATABASE_NAME=talentflow_e2e, asserted rather than assumed. Both
+#      e2e/helpers/tier2-backend.ts and e2e/scripts/tier2-provision.py refuse to
+#      start if the port or the database name looks live, so a mistake fails on
+#      the first line instead of on the hundredth write.
+#   3. Everything the live databases give up is read-only: one schema-only
+#      pg_dump and one data dump of reference tables. Nothing is written back.
+"Test 2 of 3 · API and database":
+  stage: test
+  tags: [talentflow]
+  needs: ["Set up the test environment"]
+  variables:
+    PG_IMAGE: postgres:17-alpine
+    STAGING_API: tf-backend-staging-api-1
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - test-results
+      - qa-cases-*.json
+    # What is uploaded is the screenshots the dashboard shows, and the report it
+    # reads. Nothing else.
+    #
+    # Pipelines #19757 and #19758 both uploaded nothing at all — 413 Request
+    # Entity Too Large, job failed — after every test in them had passed. The
+    # first fix here excluded traces on the theory that they were the bulk. They
+    # were not: with traces excluded the bundle still measured 153 MB, and the
+    # size report added alongside said where it actually was.
+    #
+    #   58 MB  playwright-report/data
+    #    4 MB  test-results/<one test>
+    #    3 MB  test-results/<one test>  ...
+    #
+    # playwright-report/data is Playwright's HTML report copying every
+    # attachment — so each screenshot was uploaded twice, and the second copy is
+    # read by nothing here. The dashboard has its own UI and fetches screenshots
+    # from their test-results path; it does not reference playwright-report at
+    # all. Dropping it costs nothing and takes back 58 MB.
+    #
+    # Traces stay excluded. They are the other thing nothing here reads — using
+    # one means downloading the zip and running `npx playwright show-trace` by
+    # hand — and they are the part that varies with how flaky the run was.
+    exclude:
+      - "**/trace.zip"
+      - "**/*.trace.zip"
+    # Feeds GitLab's Tests tab: per-test pass/fail/skip, searchable, with the
+    # failing tc_id named. Reading a 1,268-line job log to find one red row is
+    # not a reporting strategy.
+    reports:
+      junit: junit-*.xml
+  script:
+    - |
+      set -e
+      if ! curl -fsS "http://127.0.0.1:$QA_API_PORT/health" >/dev/null 2>&1; then
+        echo "the QA backend is not answering on $QA_API_PORT — deploy:qa should"
+        echo "have left it running."
+        docker logs --tail=40 "$QA_API_CONTAINER" 2>/dev/null || true
+        exit 1
+      fi
+    - |
+      set -e
+      # A tenant of this run's own, provisioned directly rather than over HTTP:
+      # POST /api/v1/tenants/register raises TypeError in the backend and 500s on
+      # every request.
+      docker run --rm --env-file "$QA_STATE_DIR/api.env" \
+        -v "$CI_PROJECT_DIR/e2e/scripts/tier2-provision.py:/app/tier2-provision.py:ro" \
+        "$(docker inspect "$QA_API_CONTAINER" --format '{{.Config.Image}}')" \
+        python /app/tier2-provision.py > "$CI_PROJECT_DIR/.tier2-tenant.raw"
+      tail -1 "$CI_PROJECT_DIR/.tier2-tenant.raw" > "$CI_PROJECT_DIR/.tier2-tenant.json"
+      echo "provisioned tenant: $(python3 -c "import json;print(json.load(open('$CI_PROJECT_DIR/.tier2-tenant.json'))['subdomain'])")"
+    - |
+      set -e
+      SUB=$(python3 -c "import json;print(json.load(open('$CI_PROJECT_DIR/.tier2-tenant.json'))['subdomain'])")
+      MAIL=$(python3 -c "import json;print(json.load(open('$CI_PROJECT_DIR/.tier2-tenant.json'))['adminEmail'])")
+      PASS=$(python3 -c "import json;print(json.load(open('$CI_PROJECT_DIR/.tier2-tenant.json'))['adminPassword'])")
+      # BASE_URL is required by playwright.config.ts but unused here: every Tier-2
+      # assertion is an API call, so no page is ever opened.
+      docker run --rm --network=host --user "$(id -u):$(id -g)" \
+        -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
+        -e E2E_EXTERNAL=1 -e BASE_URL="http://127.0.0.1:$QA_API_PORT" \
+        -e TIER2_API_URL="http://127.0.0.1:$QA_API_PORT" \
+        -e TIER2_DB_NAME="$QA_DB_NAME" \
+        -e TIER2_TENANT_SUBDOMAIN="$SUB" \
+        -e TIER2_ADMIN_EMAIL="$MAIL" \
+        -e TIER2_ADMIN_PASSWORD="$PASS" \
+        -e PLAYWRIGHT_JUNIT_OUTPUT_NAME="junit-tier2.xml" \
+        -e PLAYWRIGHT_JSON_OUTPUT_NAME="report.json" \
+        -e CI_COMMIT_SHORT_SHA -e CI_COMMIT_BRANCH -e CI_PIPELINE_ID -e CI_JOB_NAME \
+        --memory=8g --memory-swap=8g --shm-size=1g \
+        -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy \
+        sh -c "npm ci --no-audit --no-fund \
+               && npx playwright install firefox \
+               && npx playwright test smoke-tier2- --reporter=line,html,junit,json \
+               ; rc=\$? \
+               ; node e2e/scripts/build-report.mjs --only tier2 --out qa-cases-tier2.json \
+               ; exit \$rc"
+  after_script:
+    # Runs even when the suite fails, so a red run never leaves a pile of tenant
+    # databases behind. The reusable tenant Tier 3 signs in as is excluded by
+    # name — dropping it would work, and would then cost a full reprovision on
+    # the next run for no reason.
+    - |
+      KEEP=""
+      if [ -f "$QA_STATE_DIR/tenant.json" ]; then
+        KEEP=$(python3 -c "import json;print(json.load(open('$QA_STATE_DIR/tenant.json')).get('databaseName',''))" 2>/dev/null || true)
+      fi
+      ENVFILE="$QA_STATE_DIR/api.env"
+      if [ -f "$ENVFILE" ]; then
+        PGHOST=$(grep -m1 '^DATABASE_HOST=' "$ENVFILE" | cut -d= -f2-)
+        PGUSER=$(grep -m1 '^DATABASE_USER=' "$ENVFILE" | cut -d= -f2-)
+        PGPASSWORD=$(grep -m1 '^DATABASE_PASSWORD=' "$ENVFILE" | cut -d= -f2-)
+        export PGPASSWORD
+        # Only databases this suite creates match `tenant_e2e%`; the live ones
+        # are talentflow_*.
+        for db in $(docker run --rm -e PGPASSWORD "$PG_IMAGE" psql -h "$PGHOST" -U "$PGUSER" -d postgres \
+                      -tAc "select datname from pg_database where datname like 'tenant_e2e%'" 2>/dev/null); do
+          [ "$db" = "$KEEP" ] && continue
+          docker run --rm -e PGPASSWORD "$PG_IMAGE" psql -h "$PGHOST" -U "$PGUSER" -d postgres \
+            -c "DROP DATABASE IF EXISTS $db WITH (FORCE)" >/dev/null 2>&1 || true
+        done
+      fi
+    - rm -f "$CI_PROJECT_DIR/.tier2-tenant.raw" "$CI_PROJECT_DIR/.tier2-tenant.json"
+  allow_failure: false   # a red Tier-2 stops the deploy, same as e2e
+  # ci/cd-staging removed: real backend integration now runs exclusively in
+  # talentflow-e2e-pipeline, against the deliberately-chosen release pair —
+  # not "whichever backend happens to be running" (which is what this job
+  # tested against here). aws kept as-is, untouched for now.
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "aws"'
+
+# ---------------------------------------------- Test 3 of 3 · Real browser --
+# Tier 3: a real browser against the real frontend, which calls the real backend
+# at the URL baked into its own bundle, which writes to a real database. No
+# page.route, no interception, no substitution of any kind.
+#
+# It exists for one class of bug the other two tiers cannot see between them:
+# the UI and the API disagreeing about a shape. Tier 1 renders its own mock, so
+# it agrees with itself by construction. Tier 2 reads the real shape but has no
+# DOM to compare it against. The login response nests its token at
+# `tokens.access_token`; a client reading `access_token` off the root gets
+# undefined and 401s on every later call — and both other tiers stay green while
+# nobody can log in.
+#
+# It has found three real defects so far, none of which any amount of Tier 1 or
+# Tier 2 coverage could have surfaced:
+#   - nginx adding a second set of Access-Control-Allow-* headers on top of the
+#     backend's, so the browser saw "*, *", blocked every response, and the UI
+#     reported "Network Error" while the API returned 200
+#   - the QA backend calling https://rmscp.q2a.in, a customer-facing control
+#     plane, for entitlements and T&C
+#   - Export CSV on the Audit Trail requesting page_size=1000 from an endpoint
+#     that caps it at 100, getting a 422, and reporting nothing to the user.
+#     Pinned as a known defect in TC-T376 rather than left red — see the comment
+#     on that test.
+#
+# 50 journeys, ~9 minutes, one worker. One worker is not caution: these write
+# real rows to a shared tenant, and several assert on record counts.
+"Test 3 of 3 · Real browser":
+  stage: test
+  tags: [talentflow]
+  needs: ["Set up the test environment"]
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - test-results
+      - qa-cases-*.json
+    # What is uploaded is the screenshots the dashboard shows, and the report it
+    # reads. Nothing else.
+    #
+    # Pipelines #19757 and #19758 both uploaded nothing at all — 413 Request
+    # Entity Too Large, job failed — after every test in them had passed. The
+    # first fix here excluded traces on the theory that they were the bulk. They
+    # were not: with traces excluded the bundle still measured 153 MB, and the
+    # size report added alongside said where it actually was.
+    #
+    #   58 MB  playwright-report/data
+    #    4 MB  test-results/<one test>
+    #    3 MB  test-results/<one test>  ...
+    #
+    # playwright-report/data is Playwright's HTML report copying every
+    # attachment — so each screenshot was uploaded twice, and the second copy is
+    # read by nothing here. The dashboard has its own UI and fetches screenshots
+    # from their test-results path; it does not reference playwright-report at
+    # all. Dropping it costs nothing and takes back 58 MB.
+    #
+    # Traces stay excluded. They are the other thing nothing here reads — using
+    # one means downloading the zip and running `npx playwright show-trace` by
+    # hand — and they are the part that varies with how flaky the run was.
+    exclude:
+      - "**/trace.zip"
+      - "**/*.trace.zip"
+    reports:
+      junit: junit-*.xml
+  script:
+    - |
+      set -e
+      for probe in "$QA_API_URL/health" "$QA_APP_URL/login?org=probe"; do
+        if ! curl -fsS "$probe" >/dev/null 2>&1; then
+          echo "the QA environment is not answering at $probe — deploy:qa should"
+          echo "have left it running."
+          exit 1
+        fi
+      done
+      # The stub is what makes the modules testable; without it every page
+      # renders "Feature Not Available" and half these tests fail for a reason
+      # that has nothing to do with the code under test.
+      if ! curl -fsS "http://127.0.0.1:$QA_CP_PORT/api/v1/external/usage/probe/quota-status" >/dev/null 2>&1; then
+        echo "the QA control-plane stub is not answering on $QA_CP_PORT"
+        docker logs --tail=40 "$QA_CP_CONTAINER" 2>/dev/null || true
+        exit 1
+      fi
+    - |
+      set -e
+      TENANT="$QA_STATE_DIR/tenant.json"
+      test -f "$TENANT" || { echo "no QA tenant at $TENANT — deploy:qa should have written one"; exit 1; }
+      SUB=$(python3 -c "import json;print(json.load(open('$TENANT'))['subdomain'])")
+      MAIL=$(python3 -c "import json;print(json.load(open('$TENANT'))['adminEmail'])")
+      PASS=$(python3 -c "import json;print(json.load(open('$TENANT'))['adminPassword'])")
+      docker run --rm --network=host --user "$(id -u):$(id -g)" \
+        -e HOME=/tmp -e npm_config_cache=/tmp/.npm \
+        -e E2E_EXTERNAL=1 -e BASE_URL="$QA_APP_URL" \
+        -e TIER3_APP_URL="$QA_APP_URL" \
+        -e TIER3_API_URL="$QA_API_URL" \
+        -e TIER3_TENANT_SUBDOMAIN="$SUB" \
+        -e TIER3_ADMIN_EMAIL="$MAIL" \
+        -e TIER3_ADMIN_PASSWORD="$PASS" \
+        -e PLAYWRIGHT_JUNIT_OUTPUT_NAME="junit-tier3.xml" \
+        -e PLAYWRIGHT_JSON_OUTPUT_NAME="report.json" \
+        -e CI_COMMIT_SHORT_SHA -e CI_COMMIT_BRANCH -e CI_PIPELINE_ID -e CI_JOB_NAME \
+        --memory=8g --memory-swap=8g --shm-size=1g \
+        -v "$CI_PROJECT_DIR:/src" -w /src mcr.microsoft.com/playwright:v1.59.1-jammy \
+        sh -c "npm ci --no-audit --no-fund \
+               && npx playwright install firefox \
+               && npx playwright test smoke-tier3 --reporter=line,html,junit,json -j 1 \
+               ; rc=\$? \
+               ; node e2e/scripts/build-report.mjs --only tier3 --out qa-cases-tier3.json \
+               ; exit \$rc"
+  allow_failure: false   # a red Tier-3 stops the deploy, same as e2e and tier2
+  # ci/cd-staging removed: real browser + real backend integration now runs
+  # exclusively in talentflow-e2e-pipeline, against the deliberately-chosen
+  # release pair. aws kept as-is, untouched for now.
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "aws"'
+
 # --------------------------------------------------------------- build ------
-# `needs: [e2e]` is the deploy gate: a red Playwright run stops the pipeline
-# here, so nothing is built or shipped. Stage order alone would not be enough —
-# it has to be an explicit dependency for the failure to block.
-build-image:
+# This runs BEFORE e2e now. Building is not deploying: it only writes an image
+# to the VM's local docker. e2e then starts a throwaway container from that
+# image and tests it, and `deploy:staging` needs a green e2e before anything
+# replaces the running staging container. So the gate is unchanged — what
+# changed is that the tests now exercise the artifact that will actually ship,
+# instead of a `next dev` server that ships to nobody.
+"Build the app":
   stage: build
   tags: [talentflow]
-  needs: ["e2e"]
+  needs: []            # builds first; e2e tests the artifact this produces
   script:
     - docker build --pull
         --build-arg NEXT_PUBLIC_ENVIRONMENT="$NEXT_PUBLIC_ENVIRONMENT"
@@ -117,7 +1143,18 @@ build-image:
         --build-arg NEXT_PUBLIC_BASE_DOMAIN="$NEXT_PUBLIC_BASE_DOMAIN"
         --build-arg NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED="$NEXT_PUBLIC_RAZORPAY_BYPASS_ENABLED"
         --build-arg NEXT_PUBLIC_RAZORPAY_KEY_ID="$NEXT_PUBLIC_RAZORPAY_KEY_ID"
-        -t "$IMAGE:$TAG-$CI_ENVIRONMENT_SLUG" .
+        -t "$IMAGE:$TAG-$CI_ENVIRONMENT_SLUG"
+        -t "$IMAGE:e2e" .
+    # Traceability artifact: which commit produced which image, and when — the
+    # raw material the talentflow-e2e-pipeline release's `prepare` job checks
+    # against when a FRONTEND_SHA is put through a coordinated release.
+    - |
+      printf '{"repo":"talentflow-data-plane-frontend","sha":"%s","short_sha":"%s","image":"%s","built_at":"%s","pipeline_url":"%s"}\n' \
+        "$CI_COMMIT_SHA" "$CI_COMMIT_SHORT_SHA" "$IMAGE:$TAG-$CI_ENVIRONMENT_SLUG" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$CI_PIPELINE_URL" \
+        > build-manifest.json
+  artifacts:
+    paths: [build-manifest.json]
+    expire_in: 6 months
   environment:
     name: staging
     action: prepare
@@ -126,9 +1163,11 @@ build-image:
 
 # Separate build for production: NEXT_PUBLIC_* are environment-scoped, so the
 # prod image must be built with prod-scoped variable values.
-build-image:production:
-  extends: build-image
-  needs: ["e2e"]
+"Build the app (production)":
+  # Quoted because the name has spaces; GitLab rejects the whole config if this
+  # does not resolve, and the rename missed it once already.
+  extends: "Build the app"
+  needs: []
   environment:
     name: production
     action: prepare
@@ -137,7 +1176,7 @@ build-image:production:
 
 # -------------------------------------------------------------- deploy ------
 .deploy-template: &deploy
-  stage: deploy
+  stage: release
   tags: [talentflow]
   script:
     - mkdir -p "$DEPLOY_DIR"
@@ -158,9 +1197,14 @@ build-image:production:
       done
       echo "smoke check FAILED after 60s"; docker compose logs --tail=100 frontend; exit 1
 
-deploy:staging:
+# DISABLED (kept, not deleted): staging deployment is now owned exclusively
+# by talentflow-e2e-pipeline, which tests the exact FRONTEND_SHA+BACKEND_SHA
+# pair together before deploying. Proven replacement: talentflow-e2e-pipeline
+# deploy:staging (pipeline #19838, full green). To re-enable in an emergency,
+# restore the `if:` rule below.
+"Release to staging":
   <<: *deploy
-  needs: ["build-image"]          # which in turn needs a green e2e
+  needs: ["Build the app", "Test 1 of 3 · Screens", "Test 2 of 3 · API and database", "Test 3 of 3 · Real browser"]   # all three suites gate; build-image supplies the image
   variables:
     DEPLOY_DIR: /opt/talentflow/staging/frontend
     COMPOSE_PROJECT_NAME: tf-frontend-staging
@@ -169,11 +1213,12 @@ deploy:staging:
   environment:
     name: staging
   rules:
-    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging"'
+    - when: never
+    # - if: '$CI_COMMIT_BRANCH == "ci/cd-staging"'
 
-deploy:production:
+"Release to production":
   <<: *deploy
-  needs: ["build-image:production"]   # which in turn needs a green e2e
+  needs: ["Build the app (production)", "Test 1 of 3 · Screens", "Test 2 of 3 · API and database", "Test 3 of 3 · Real browser"]   # all three suites gate
   variables:
     DEPLOY_DIR: /opt/talentflow/frontend
     COMPOSE_PROJECT_NAME: tf-frontend-prod

@@ -614,11 +614,31 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (!nothingRecorded) {
         const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
         const blob = new Blob(chunks, { type: mimeType });
-        try {
-          await candidateAIInterviewService.uploadScreenRecording(token, blob, segmentIndex, true);
-          screenSegmentIndexRef.current = segmentIndex + 1;
-        } catch (e) {
-          console.warn('[ScreenRecording] Final upload failed:', e);
+        const sizeMb = (blob.size / 1024 / 1024).toFixed(1);
+        // RETRY the final upload, exactly like the webcam recording. This is the
+        // request that assembles every uploaded part into a playable object — a
+        // single unretried 502 here loses the whole screen recording. The blob is
+        // held across attempts so nothing is discarded between tries, and the
+        // request is idempotent server-side (same segment_index → same part
+        // number; an already-assembled object is reported back, not rebuilt).
+        const FINAL_UPLOAD_ATTEMPTS = 4;
+        for (let attempt = 1; attempt <= FINAL_UPLOAD_ATTEMPTS; attempt++) {
+          try {
+            await candidateAIInterviewService.uploadScreenRecording(token, blob, segmentIndex, true);
+            screenSegmentIndexRef.current = segmentIndex + 1;
+            if (attempt > 1) console.log(`[ScreenRecording] Final upload succeeded on attempt ${attempt}`);
+            break;
+          } catch (e) {
+            if (attempt < FINAL_UPLOAD_ATTEMPTS) {
+              const waitMs = 800 * attempt;
+              console.warn(`[ScreenRecording] Final upload attempt ${attempt}/${FINAL_UPLOAD_ATTEMPTS} failed (${sizeMb} MB) — retrying in ${waitMs}ms:`, e);
+              await new Promise((r) => setTimeout(r, waitMs));
+              continue;
+            }
+            // Parts already in MinIO are NOT lost — the interview-close salvage
+            // (finalize_pending) assembles them server-side.
+            console.error(`[ScreenRecording] Final upload FAILED after ${FINAL_UPLOAD_ATTEMPTS} attempts (${sizeMb} MB) — server-side salvage should assemble the uploaded parts:`, e);
+          }
         }
       }
       // Cleanup always runs, whether or not we uploaded.
