@@ -131,6 +131,8 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
         autoPlay
         playsInline
         muted
+        disablePictureInPicture
+        controlsList="nodownload nofullscreen noremoteplayback nopictureinpicture"
         className="w-full h-full object-cover"
         style={{ transform: "scaleX(-1)" }}
       />

@@ -97,7 +97,8 @@ export function Avatar({ state, isAiSpeaking, className = "", style }: AvatarPro
 
       {/* Idle — always underneath */}
       <video ref={idleRef} src="/linda-idle.mp4"
-        autoPlay loop muted playsInline preload="auto"
+        autoPlay loop muted playsInline preload="auto" disablePictureInPicture
+        controlsList="nodownload nofullscreen noremoteplayback nopictureinpicture"
         style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center", display: "block" }}
       />
 
@@ -108,10 +109,12 @@ export function Avatar({ state, isAiSpeaking, className = "", style }: AvatarPro
         opacity: isSpeaking ? 1 : 0,
         transition: isSpeaking ? "opacity 0.2s ease-in" : "opacity 0.4s ease-out",
       }}>
-        <video ref={slotARef} src="/linda.mp4" muted playsInline preload="auto"
+        <video ref={slotARef} src="/linda.mp4" muted playsInline preload="auto" disablePictureInPicture
+          controlsList="nodownload nofullscreen noremoteplayback nopictureinpicture"
           style={{ ...fill, opacity: active === "a" ? 1 : 0 }}
         />
-        <video ref={slotBRef} src="/linda.mp4" muted playsInline preload="auto"
+        <video ref={slotBRef} src="/linda.mp4" muted playsInline preload="auto" disablePictureInPicture
+          controlsList="nodownload nofullscreen noremoteplayback nopictureinpicture"
           style={{ ...fill, opacity: active === "b" ? 1 : 0 }}
         />
       </div>

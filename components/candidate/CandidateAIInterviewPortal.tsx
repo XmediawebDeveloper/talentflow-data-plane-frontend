@@ -107,6 +107,7 @@ const TERMINATION_MESSAGES: Record<string, string> = {
   left_screen_tab_hidden: 'Switched to another tab or minimized the window',
   left_screen_focus_lost: 'Moved focus away from the interview window',
   left_screen: 'Left the interview screen',
+  picture_in_picture: 'Opened a video in Picture-in-Picture',
 };
 const terminationMessage = (reason: string): string =>
   TERMINATION_MESSAGES[reason] || 'Left the interview screen';
@@ -1364,6 +1365,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       setStep('fullscreen_prompt');
       return;
     }
+    // A video floating in Picture-in-Picture sits on top of every window
+    // (including fullscreen) and can hide the interview / proctoring view.
+    // Block on the CURRENT state every time Continue is clicked — do not let
+    // them through until it's actually closed. Re-checked on every click, so
+    // there's no way to proceed while it's still open.
+    if (document.pictureInPictureElement) {
+      setShareBarError('We detected another window or Picture-in-Picture floating over this page. Please close it, then press Continue again — the interview cannot start until it is closed.');
+      return;
+    }
     // Keep the start IN fullscreen (this click is the required user gesture).
     if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* verified in UI */ } }
     // Resume audio (Bina TTS) on this gesture too.
@@ -1389,7 +1399,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         return;
       }
       const res = await candidateAIInterviewService.verifyShareBarHidden(token, frame);
-      if (res.hidden) {
+      if (res.pip_detected) {
+        // Vision check saw a floating PiP/mini-player ANYWHERE on the screen —
+        // this catches PiP popped out from a DIFFERENT tab/site, which
+        // document.pictureInPictureElement can never see (it's scoped to our
+        // own page only). Same re-promptable gate as the share-bar check.
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        console.warn(`[ShareBar] PiP detected on screen (attempt ${nextAttempt}) — re-prompting, not proceeding`);
+        setShareBarError('We detected a floating Picture-in-Picture / mini video window on your screen. Please close it, then press Continue again — the interview cannot start until it is closed.');
+      } else if (res.hidden) {
         await startInterviewNow();
       } else {
         // HARD GATE (per requirement): do NOT allow the interview to start until
@@ -1458,14 +1477,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       console.warn('[Portal] AudioContext resume on final consent failed:', e);
     }
 
-    // When the vision-LLM share-bar gate is enabled, route through it instead of
-    // starting immediately. It captures a screen frame, verifies the bar is
+    // The vision-LLM share-bar gate is ALWAYS enforced (regardless of the
+    // backend's verify_share_bar_hidden flag) — it must never be possible to
+    // slip into the interview without hiding the bar. Route through it instead
+    // of starting immediately: it captures a screen frame, verifies the bar is
     // hidden, and only then consumes a unit + starts. The whole step is inside
     // fullscreen with the screen recorder running, so the recording captures the
     // candidate hiding the bar → interview start.
     // Only Chromium (Chrome/Edge/Brave) has the hideable "sharing your screen"
     // bar; on Safari/Firefox there's nothing to hide, so skip the step and start.
-    if (interview?.verify_share_bar_hidden && isChromiumBrowser()) {
+    if (isChromiumBrowser()) {
       setShareBarError(null);
       setShareBarAttempts(0);
       setStartSubmitting(false);
@@ -1623,6 +1644,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (isMetaKey(e)) terminateNow('key_meta');
     };
     const onVisibility = () => { if (document.hidden) terminateNow('left_screen_tab_hidden'); };
+    // Popping the webcam/avatar video into Picture-in-Picture floats it above
+    // every window (including fullscreen) and is an evasion vector — treat it
+    // exactly like leaving the screen. `enterpictureinpicture` bubbles up from
+    // whichever <video> the candidate right-clicked, so one document listener
+    // catches all of them.
+    const onEnterPiP = () => { terminateNow('picture_in_picture'); };
 
     // A window `blur` is NOT proof the candidate left the interview. While
     // sharing Entire Screen, Chrome's "<site> is sharing your screen" bar is
@@ -1707,8 +1734,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       // Capture phase so we see the key before the browser acts on it.
       window.addEventListener('keydown', onKeyDown, true);
       window.addEventListener('keyup', onKeyUp, true);
+      document.addEventListener('enterpictureinpicture', onEnterPiP, true);
       // If the candidate already left during the settle window, catch it now.
       if (document.hidden) terminateNow('left_screen_tab_hidden');
+      if (document.pictureInPictureElement) terminateNow('picture_in_picture');
     }, 1200);
 
     return () => {
@@ -1719,6 +1748,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
+      document.removeEventListener('enterpictureinpicture', onEnterPiP, true);
       document.removeEventListener(fsEvent, onFsChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
