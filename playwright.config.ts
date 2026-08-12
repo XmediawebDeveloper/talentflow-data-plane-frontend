@@ -18,6 +18,15 @@ export default defineConfig({
   retries: 1,           // retry once on flaky failures (dev-server recompile, etc.)
   expect: { timeout: 15_000 },
 
+  // Playwright defaults to half the logical cores — 6 on this 12-core runner.
+  // Six Firefox instances plus a `next dev` compiling on demand exhausted the
+  // VM's memory on the first CI run: the kernel OOM-killed Firefox at 08:02 and
+  // 08:12, thrashed for twenty minutes, and rebooted the whole box at 08:28,
+  // taking staging down with it. There is no swap, so memory pressure goes
+  // straight to a kill. Two workers is what the suite was measured at (~2.7
+  // min); the cap only applies in CI so local runs still use the machine.
+  workers: process.env.CI ? 2 : "50%",
+
   // Auto-start Next.js dev server before running tests (skipped for external targets).
   webServer: external
     ? undefined
@@ -33,6 +42,37 @@ export default defineConfig({
     headless: true,
     // Note: Firefox doesn't support "camera"/"microphone" permissions via CDP.
     // Fake media stream flags handle this instead (--use-fake-ui-for-media-stream).
+
+    // Evidence on failure, and only on failure.
+    //
+    // A Tier-1 row that fails says "expected 'Match Status' to be visible" —
+    // true, but it does not say what WAS on the page, and the run is gone by the
+    // time anyone reads it. A screenshot answers that in one look: wrong route,
+    // session-expired modal, empty state, or a genuinely missing column.
+    //
+    // "only-on-failure" rather than "on": a green run writes nothing. That
+    // matters here — this runner filled its disk to 100% once already and took
+    // the pipeline down with it, and a passing 1,268-test run would otherwise
+    // leave a screenshot per test behind every push.
+    // Every test, not only the failures. A tester verifying a case wants to see
+    // the screen it asserted against — "Insufficient Units" being on the page is
+    // a different kind of evidence from a line saying it was.
+    //
+    // Measured cost is in the Tier-1 job only: the 817 Tier-2 rows are API calls
+    // that never open a page, so there is nothing to photograph and this setting
+    // does not touch them.
+    screenshot: process.env.E2E_SCREENSHOT_ALL === "0" ? "only-on-failure" : "on",
+
+    // The trace is the heavier artifact — DOM snapshots, network, console, a
+    // step timeline — so it is spent only on the retry of something that already
+    // failed once. `retries: 1` above means a flaky test produces exactly one,
+    // and a consistently-failing one produces exactly one too.
+    trace: "on-first-retry",
+
+    // Video stays off deliberately. It is recorded for the whole run rather than
+    // on demand, costs far more disk than a screenshot, and shows less than the
+    // trace does for a headless assertion failure.
+    video: "off",
   },
   projects: [
     {

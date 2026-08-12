@@ -990,11 +990,16 @@ const DroppableCommentsContainer = ({ category, onDrop, children }: DroppableCom
   );
 };
 
-// Fallback master data in case API fails or returns empty
+// Fallback master data in case API fails or returns empty. MUST stay in sync
+// with the real experience_levels master table (see MasterDataService) — a
+// mismatched boundary here creates a years-value that falls in a GAP between
+// two fallback buckets (e.g. the old 2-3/4-7 split left 3-4 uncovered), which
+// makes bucket-matching logic fall through to its "no containing range"
+// branch and pick the wrong level for perfectly valid years like 3.5.
 const FALLBACK_EXPERIENCE_LEVELS: ExperienceLevel[] = [
   { id: 1, code: 'entry', label: 'Entry Level (0-2 Years)', min_years: 0, max_years: 2, sort_order: 1, is_active: true },
-  { id: 2, code: 'junior', label: 'Junior Level (2-3 Years)', min_years: 2, max_years: 3, sort_order: 2, is_active: true },
-  { id: 3, code: 'mid', label: 'Mid Level (4-7 Years)', min_years: 4, max_years: 7, sort_order: 3, is_active: true },
+  { id: 2, code: 'junior', label: 'Junior Level (2-4 Years)', min_years: 2, max_years: 4, sort_order: 2, is_active: true },
+  { id: 3, code: 'mid', label: 'Mid Level (5-7 Years)', min_years: 5, max_years: 7, sort_order: 3, is_active: true },
   { id: 4, code: 'senior', label: 'Senior Level (7-10 Years)', min_years: 7, max_years: 10, sort_order: 4, is_active: true },
   { id: 5, code: 'architect', label: 'Architect Level (10+ Years)', min_years: 10, max_years: null, sort_order: 5, is_active: true },
   { id: 6, code: 'management', label: 'Management Level (10+ Years)', min_years: 10, max_years: null, sort_order: 6, is_active: true },
@@ -1859,8 +1864,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
 
       if (min >= 7 || (max && max >= 7 && min >= 5)) return 'senior';
-      if (min >= 4 || (max && max >= 5 && min >= 3)) return 'mid';
-      if (min >= 2 || (max && max >= 2 && min >= 1)) return 'junior';
+      if (min >= 5 || (max && max >= 7 && min >= 4)) return 'mid';
+      if (min >= 2 || (max && max >= 4 && min >= 1)) return 'junior';
       return 'entry';
     };
 
@@ -2512,12 +2517,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     );
   };
 
+  // True once ANY field the extraction step produces has a value. Checking only
+  // skills/comments made this false for short JDs that state just an experience
+  // requirement (e.g. "...with 3.5 years of experience.") with no explicit skill
+  // list, which incorrectly signalled "not yet extracted" and let a page refresh
+  // fall through to a fresh (non-deterministic) LLM re-extraction that clobbered
+  // an already-correct, already-saved value like experience_min.
   const hasExtractedRequirementData = (): boolean =>
     (extractedData.mustHaveSkills?.length || 0) +
       (extractedData.niceToHaveSkills?.length || 0) +
       (extractedData.mustHaveComments?.length || 0) +
       (extractedData.niceToHaveComments?.length || 0) >
-    0;
+    0 ||
+    Boolean(extractedData.experience?.trim()) ||
+    Boolean(extractedData.education?.trim()) ||
+    Boolean(extractedData.industryType?.trim());
 
   const handleNext = async () => {
     const trimmedJobTitle = jobTitle.trim();
@@ -2598,7 +2612,38 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Note: Removed code pattern validation here since AI-generated content is trusted
     // Validation only applies to AI prompt input, not the generated JD content
 
-    // EDIT FLOW — NO CHANGE, NO LLM:
+    // EDIT FLOW — NO CHANGE, NO LLM (checked directly against the freshly-fetched
+    // DB record, not against any client-side ref/state):
+    // Compare the live form values straight to effectiveEditingJD, which is
+    // exactly what a page refresh re-fetches. This cannot be defeated by any
+    // hydration-timing gap in stage1LoadBaseline/lastExtractedJD/originalStage1Values
+    // (those are kept below as a secondary layer) — if the text and title match
+    // what's already persisted, and that record already went through extraction,
+    // there is nothing new to extract, full stop.
+    if (effectiveEditingJD && effectiveEditingJD.creation_stage !== 'create') {
+      const alreadyExtracted = Boolean(
+        effectiveEditingJD.experience_min != null ||
+        effectiveEditingJD.experience_max != null ||
+        (effectiveEditingJD.must_have_skills?.length || 0) > 0 ||
+        (effectiveEditingJD.must_have_comments?.length || 0) > 0 ||
+        (effectiveEditingJD.nice_to_have_skills?.length || 0) > 0 ||
+        (effectiveEditingJD.nice_to_have_comments?.length || 0) > 0 ||
+        effectiveEditingJD.education_requirements?.degree ||
+        effectiveEditingJD.industry_type
+      );
+      const textUnchangedFromPersisted =
+        jdText.trim() === (effectiveEditingJD.description || '').trim() &&
+        trimmedJobTitle === (effectiveEditingJD.title || '').trim();
+
+      if (alreadyExtracted && textUnchangedFromPersisted) {
+        console.log('[TalentFlow] JD text/title match the already-extracted persisted record — skipping extraction LLM');
+        setHasProceededToExtract(true);
+        setStep('extract');
+        return;
+      }
+    }
+
+    // EDIT FLOW — NO CHANGE, NO LLM (secondary check against client-side state):
     // If we loaded an existing JD (draft or published) and the user has not changed
     // ANY Step-1 field since load, and extracted data already exists, skip extraction
     // entirely and go straight to Step 2. This prevents an extraction LLM call when
@@ -2650,18 +2695,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     console.log('[TalentFlow] handleNext check:', { hasProceededToReview, hasOriginalStage1Values: !!originalStage1Values });
 
-    // If user has proceeded to review and returned to Stage 1
-    if (hasProceededToReview && originalStage1Values) {
+    // originalStage1Values is populated both right after a fresh extraction and
+    // (as of this fix) when an already-extracted draft is loaded/reloaded — so its
+    // mere presence, not hasProceededToReview, is the correct "we know the baseline"
+    // signal. Gating on hasProceededToReview too used to mean a refresh at the
+    // 'extract' stage (hasProceededToReview still false) fell through to the
+    // weaker checks below and could trigger an unnecessary re-extraction.
+    if (originalStage1Values) {
       if (!hasStage1FieldsChanged()) {
         // No fields modified - skip extraction, go directly to Stage 2
         // Keep current extractedData as-is (user may have deleted items)
-        console.log('[TalentFlow] No Stage 1 fields modified after review, keeping current extractedData');
+        console.log('[TalentFlow] No Stage 1 fields modified since load/extraction, keeping current extractedData');
         setHasProceededToExtract(true);
         setStep('extract');
         return;
       } else {
         // Fields modified - need to re-extract, also reset hasProceededToReview
-        console.log('[TalentFlow] Stage 1 fields modified after review, triggering re-extraction');
+        console.log('[TalentFlow] Stage 1 fields modified, triggering re-extraction');
         setHasProceededToReview(false); // Reset so Stage 2 becomes editable again
       }
     } else if (lastExtractedJD && jdText.trim() === lastExtractedJD.trim()) {
@@ -4905,10 +4955,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         manualJD: effectiveEditingJD.creation_method === 'manual' ? (effectiveEditingJD.description || '') : '',
       };
 
-      // Set lastExtractedJD to the loaded description only if extraction has already happened.
-      // For drafts saved at 'create' stage, leave it empty so handleNext triggers extraction.
+      // Hydrate lastExtractedJD/originalStage1Values from the persisted JD only if
+      // extraction has already happened. For drafts saved at 'create' stage, leave
+      // them empty so handleNext triggers extraction. This is what lets a page
+      // refresh recognize "this JD text was already extracted" instead of forcing
+      // a fresh (non-deterministic) LLM call that could return a different value
+      // (e.g. overwriting a correctly-saved experience_min of 3.5 with 2) for text
+      // that never changed.
       if (effectiveEditingJD.creation_stage !== 'create') {
         setLastExtractedJD(effectiveEditingJD.description || '');
+        setOriginalStage1Values({
+          jobTitle: effectiveEditingJD.title || '',
+          aiPrompt: effectiveEditingJD.ai_prompt || '',
+          generatedJD: effectiveEditingJD.description || '',
+          manualJD: effectiveEditingJD.creation_method === 'manual' ? (effectiveEditingJD.description || '') : ''
+        });
       }
 
       setStep(effectiveEditingJD.creation_stage);
@@ -4919,14 +4980,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       if (effectiveEditingJD.creation_stage === 'review') {
         setHasFormattedForReview(true);
         setHasProceededToReview(true);
-
-        // Save original Stage 1 values so we can detect modifications if user goes back to Stage 1
-        setOriginalStage1Values({
-          jobTitle: effectiveEditingJD.title || '',
-          aiPrompt: effectiveEditingJD.ai_prompt || '',
-          generatedJD: effectiveEditingJD.description || '',
-          manualJD: effectiveEditingJD.creation_method === 'manual' ? (effectiveEditingJD.description || '') : ''
-        });
       }
 
       // Restore the creation mode based on saved creation_method
