@@ -1234,6 +1234,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const isFinalizingUploadRef = useRef(false);
   const uploadCheckpointRef = useRef<() => Promise<void>>(async () => {});
   const uploadRecordingRef = useRef<() => Promise<void>>(async () => {});
+  // SINGLE-FLIGHT guard for the FINAL recording flush. The final upload is
+  // triggered from several places that can all fire for one interview close —
+  // the ws.onclose handlers and the unmount cleanup. Each used to POST its own
+  // final segment; landing on two uvicorn workers at once, they interleaved
+  // upload_part/complete on the same multipart upload and the loser died with
+  // `InvalidPart` → 502 → recording lost. Holding the in-flight promise here
+  // means every later caller AWAITS the first upload instead of starting a
+  // second one. This is the client half of that fix; the server half is the
+  // per-key lock + idempotent completion in recording_mpu_service.py.
+  const finalUploadPromiseRef = useRef<Promise<void> | null>(null);
   // S3 multipart-upload segment index (0-based → backend part_number = idx + 1).
   // recordedChunksRef now holds only the UNFLUSHED clusters since the last
   // segment; we flush a segment once the buffer reaches RECORDING_MIN_SEGMENT_BYTES.
@@ -5309,6 +5319,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // uploading — prevents the race-condition where the final chunk was still
   // in the encoder buffer when we read recordedChunksRef.
   const uploadRecording = useCallback((): Promise<void> => {
+    // SINGLE-FLIGHT: if a final flush is already running (or finished), reuse it.
+    // Without this the ws.onclose path and the unmount path each POST their own
+    // final segment for the same recording — the duplicate-final race that lost
+    // recordings with a 502 InvalidPart.
+    if (finalUploadPromiseRef.current) {
+      console.log('[Recording] Final upload already in flight — joining it instead of starting a second');
+      return finalUploadPromiseRef.current;
+    }
+
     const recorder = mediaRecorderRef.current;
     // Take ownership of the recorder away from the checkpoint path.
     isFinalizingUploadRef.current = true;
@@ -5334,27 +5353,54 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       const segmentIndex = recordingSegmentIndexRef.current;
       const mimeType = (recorder?.mimeType || 'video/webm').split(';')[0];
       const blob = new Blob(chunks, { type: mimeType });
-      console.log(`[Recording] Final segment ${segmentIndex}: ${chunks.length} chunks, ${(blob.size / 1024 / 1024).toFixed(1)} MB, recorder=${recorder?.state ?? 'null'}`);
-      try {
-        await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, true);
-        recordingSegmentIndexRef.current = segmentIndex + 1;
-        console.log('[Recording] Final upload + multipart completion succeeded');
-      } catch (err: unknown) {
-        // Log detailed error — most common cause is nginx client_max_body_size too small
-        console.error(`[Recording] Final upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${getErrorMessage(err)}`);
+      const sizeMb = (blob.size / 1024 / 1024).toFixed(1);
+      console.log(`[Recording] Final segment ${segmentIndex}: ${chunks.length} chunks, ${sizeMb} MB, recorder=${recorder?.state ?? 'null'}`);
+
+      // RETRY the final upload. This request is what turns the already-uploaded
+      // parts into a playable object — if it is the only attempt and it 502s,
+      // the whole recording is lost. The blob is held in this closure across
+      // attempts, so nothing is discarded between tries, and the request is
+      // idempotent server-side (same segment_index → same part number; an
+      // already-assembled object is reported back rather than rebuilt).
+      const FINAL_UPLOAD_ATTEMPTS = 4;
+      for (let attempt = 1; attempt <= FINAL_UPLOAD_ATTEMPTS; attempt++) {
+        try {
+          await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, true);
+          recordingSegmentIndexRef.current = segmentIndex + 1;
+          console.log(`[Recording] Final upload + multipart completion succeeded${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+          return;
+        } catch (err: unknown) {
+          const msg = getErrorMessage(err);
+          if (attempt < FINAL_UPLOAD_ATTEMPTS) {
+            // Back off and try again — 502s here are usually the transient
+            // completion race, which the server now resolves on a retry.
+            const waitMs = 800 * attempt;
+            console.warn(`[Recording] Final upload attempt ${attempt}/${FINAL_UPLOAD_ATTEMPTS} failed (${sizeMb} MB): ${msg} — retrying in ${waitMs}ms`);
+            await new Promise((r) => setTimeout(r, waitMs));
+            continue;
+          }
+          // Out of attempts. The parts already in MinIO are NOT lost: the
+          // backend leaves them in place and the interview-close salvage
+          // (finalize_pending) assembles them. Log loudly so this is greppable.
+          console.error(`[Recording] Final upload FAILED after ${FINAL_UPLOAD_ATTEMPTS} attempts — size: ${sizeMb} MB, error: ${msg} — server-side salvage should assemble the uploaded parts`);
+        }
       }
     };
 
     // Recorder already stopped — upload whatever chunks we have now
     if (!recorder || recorder.state === 'inactive') {
-      return doUpload();
+      const p = doUpload();
+      finalUploadPromiseRef.current = p;
+      return p;
     }
 
     // Recorder still running — stop it and wait for onstop before uploading
-    return new Promise<void>((resolve) => {
-      recorder.onstop = () => { doUpload().then(resolve); };
+    const p = new Promise<void>((resolve) => {
+      recorder.onstop = () => { doUpload().then(resolve).catch(() => resolve()); };
       recorder.stop();
     });
+    finalUploadPromiseRef.current = p;
+    return p;
   }, [token]);
 
   // Keep a live ref to uploadRecording so the unmount-only cleanup can flush the
