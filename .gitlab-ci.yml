@@ -843,8 +843,14 @@ variables:
   after_script:
     - rm -f "$CI_PROJECT_DIR/.qa-schema.sql" "$CI_PROJECT_DIR/.qa-seed.sql"
         "$CI_PROJECT_DIR/.qa-tenant.raw"
+  # ci/cd-staging removed: this QA environment is now owned exclusively by
+  # talentflow-e2e-pipeline, which starts it from the exact FRONTEND_SHA +
+  # BACKEND_SHA release pair. Running it here too meant two pipelines fighting
+  # over the same containers (hit in practice: this job's own rebuild replaced
+  # the e2e-pipeline's tested image under tf-qa-frontend-ci mid-release).
+  # aws kept as-is — the old production release path is untouched for now.
   rules:
-    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'
+    - if: '$CI_COMMIT_BRANCH == "aws"'
 
 # ---------------------------------------- Test 2 of 3 · API and database ----
 # Tier 2 is the half of the suite a mock cannot express: state that has to really
@@ -992,8 +998,12 @@ variables:
       fi
     - rm -f "$CI_PROJECT_DIR/.tier2-tenant.raw" "$CI_PROJECT_DIR/.tier2-tenant.json"
   allow_failure: false   # a red Tier-2 stops the deploy, same as e2e
+  # ci/cd-staging removed: real backend integration now runs exclusively in
+  # talentflow-e2e-pipeline, against the deliberately-chosen release pair —
+  # not "whichever backend happens to be running" (which is what this job
+  # tested against here). aws kept as-is, untouched for now.
   rules:
-    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'
+    - if: '$CI_COMMIT_BRANCH == "aws"'
 
 # ---------------------------------------------- Test 3 of 3 · Real browser --
 # Tier 3: a real browser against the real frontend, which calls the real backend
@@ -1104,8 +1114,11 @@ variables:
                ; node e2e/scripts/build-report.mjs --only tier3 --out qa-cases-tier3.json \
                ; exit \$rc"
   allow_failure: false   # a red Tier-3 stops the deploy, same as e2e and tier2
+  # ci/cd-staging removed: real browser + real backend integration now runs
+  # exclusively in talentflow-e2e-pipeline, against the deliberately-chosen
+  # release pair. aws kept as-is, untouched for now.
   rules:
-    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging" || $CI_COMMIT_BRANCH == "aws"'
+    - if: '$CI_COMMIT_BRANCH == "aws"'
 
 # --------------------------------------------------------------- build ------
 # This runs BEFORE e2e now. Building is not deploying: it only writes an image
@@ -1184,6 +1197,11 @@ variables:
       done
       echo "smoke check FAILED after 60s"; docker compose logs --tail=100 frontend; exit 1
 
+# DISABLED (kept, not deleted): staging deployment is now owned exclusively
+# by talentflow-e2e-pipeline, which tests the exact FRONTEND_SHA+BACKEND_SHA
+# pair together before deploying. Proven replacement: talentflow-e2e-pipeline
+# deploy:staging (pipeline #19838, full green). To re-enable in an emergency,
+# restore the `if:` rule below.
 "Release to staging":
   <<: *deploy
   needs: ["Build the app", "Test 1 of 3 · Screens", "Test 2 of 3 · API and database", "Test 3 of 3 · Real browser"]   # all three suites gate; build-image supplies the image
@@ -1195,7 +1213,8 @@ variables:
   environment:
     name: staging
   rules:
-    - if: '$CI_COMMIT_BRANCH == "ci/cd-staging"'
+    - when: never
+    # - if: '$CI_COMMIT_BRANCH == "ci/cd-staging"'
 
 "Release to production":
   <<: *deploy
