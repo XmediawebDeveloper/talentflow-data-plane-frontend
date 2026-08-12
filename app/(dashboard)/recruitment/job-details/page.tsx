@@ -113,7 +113,8 @@ function JobDetailsContent() {
         workMode: data.remote_type,
         education: data.education_requirements?.degree,
         experience_level: data.experience_level || data.job_level,
-        currentVersion: (data as any).version_number ?? data.current_version ?? 1, // lineage version (v1, v2, ...) for the badge
+        currentVersion: data.current_version ?? 1, // republish counter → "Republished" label
+        versionNumber: (data as any).version_number ?? 1, // lineage version → v1/v2 badge (same JD-ID)
         internalRecruiterComments: data.internal_comments ? [data.internal_comments] : [],
         mustHaveComments: data.must_have_comments || [],
         niceToHaveComments: data.nice_to_have_comments || [],

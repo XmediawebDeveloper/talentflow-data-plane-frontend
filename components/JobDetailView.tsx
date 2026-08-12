@@ -1915,7 +1915,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {/* Version Badge — opens a dropdown of every published version.
                     Picking one opens it in the history modal; the last entry
                     still reaches the full history the badge used to open. */}
-                {job.currentVersion && job.currentVersion > 0 ? (
+                {job.versionNumber && job.versionNumber > 0 ? (
                   <div className="relative" ref={versionMenuRef}>
                     <button
                       onClick={toggleVersionMenu}
@@ -1925,7 +1925,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       aria-expanded={showVersionMenu}
                       title="View version history"
                     >
-                      v{job.currentVersion}.0
+                      v{job.versionNumber}.0
                       <ChevronDown className={`w-3 h-3 transition-transform ${showVersionMenu ? 'rotate-180' : ''}`} />
                     </button>
 
@@ -2248,7 +2248,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg shadow-sm">
                   <History className="w-4 h-4" />
                   <span className="text-sm font-medium">
-                    Version {job.currentVersion && job.currentVersion > 0 ? `${job.currentVersion}.0` : '1.0'}
+                    Version {job.versionNumber && job.versionNumber > 0 ? `${job.versionNumber}.0` : '1.0'}
                   </span>
                 </div>
               </div>

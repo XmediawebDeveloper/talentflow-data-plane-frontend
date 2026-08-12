@@ -21,7 +21,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw, Lightbulb } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -166,14 +166,6 @@ interface InterviewVadConfig {
   silence_duration_ms?: number;
 }
 
-/** AII16 — coaching tips Bina speaks at the end of the opening role/JD warm-up.
- *  Arrives on the `role_intro` message as a structured copy of text Bina is
- *  ALREADY speaking, so the on-screen card and the audio always match. */
-interface InterviewTips {
-  lead_in?: string;
-  tips?: string[];
-  closing?: string;
-}
 
 interface InterviewSocketMessage {
   type?: string;
@@ -220,7 +212,6 @@ interface InterviewSocketMessage {
   stt_model?: string;
   text?: string;
   timer_state?: unknown;
-  tips?: InterviewTips;
   to_cluster?: string;
   token?: string;
   total_questions?: number;
@@ -896,14 +887,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Keep isClarificationRef in sync with state — used as a gate in timer intervals
   useEffect(() => { isClarificationRef.current = isClarification; }, [isClarification]);
 
-  // ── AII16: interview coaching tips ───────────────────────────────────────
-  // Set from the `role_intro` message (same content Bina is speaking) and shown
-  // as a pinned card above the chat so the candidate can READ the tips as well
-  // as hear them. Cleared the moment the first question's answer window opens
-  // (question_timer_started) — by then the interview has genuinely begun and
-  // the card would only compete with the question for attention.
-  const [interviewTips, setInterviewTips] = useState<InterviewTips | null>(null);
-
   // ── Pre-turn "get ready" countdown (Change 1) ────────────────────────────
   // After Bina finishes speaking, before the mic opens, we show a big 5→1
   // countdown under the question ("Get ready… 5,4,3,2,1 → Now it's your turn").
@@ -1234,6 +1217,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const isFinalizingUploadRef = useRef(false);
   const uploadCheckpointRef = useRef<() => Promise<void>>(async () => {});
   const uploadRecordingRef = useRef<() => Promise<void>>(async () => {});
+  // SINGLE-FLIGHT guard for the FINAL recording flush. The final upload is
+  // triggered from several places that can all fire for one interview close —
+  // the ws.onclose handlers and the unmount cleanup. Each used to POST its own
+  // final segment; landing on two uvicorn workers at once, they interleaved
+  // upload_part/complete on the same multipart upload and the loser died with
+  // `InvalidPart` → 502 → recording lost. Holding the in-flight promise here
+  // means every later caller AWAITS the first upload instead of starting a
+  // second one. This is the client half of that fix; the server half is the
+  // per-key lock + idempotent completion in recording_mpu_service.py.
+  const finalUploadPromiseRef = useRef<Promise<void> | null>(null);
   // S3 multipart-upload segment index (0-based → backend part_number = idx + 1).
   // recordedChunksRef now holds only the UNFLUSHED clusters since the last
   // segment; we flush a segment once the buffer reaches RECORDING_MIN_SEGMENT_BYTES.
@@ -3591,14 +3584,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // runs saveAiMessage BEFORE the roleIntro early-return — always commits
         // the role bubble before Q1's tokens arrive. That closes the old race
         // that made the bubble vanish / delayed Q1's mic.
-        console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}, tips=${data.tips?.tips?.length ?? 0}`);
-        // AII16 — the tips are ALREADY part of `data.text` (Bina speaks them as
-        // one continuous utterance); this structured copy only drives the
-        // readable on-screen card. If the backend has tips disabled the field
-        // is absent and nothing renders.
-        if (data.tips?.tips?.length) {
-          setInterviewTips(data.tips);
-        }
+        // AII16 — the coaching tips are part of `data.text` itself (Bina speaks
+        // the role summary + tips as ONE utterance), so they stream into this
+        // bubble like any other message. Nothing extra to render.
+        console.log(`[WS ${timestamp}] Role intro: text_length=${data.text?.length}`);
         roleIntroActiveRef.current = true;
         roleIntroTextRef.current = (data.text as string) ?? "";  // lip-sync fallback in speaking_started
         tokenBufferRef.current = (data.text as string) ?? "";     // STREAM it, like the greeting / questions
@@ -3958,9 +3947,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // on finalize commits no bubble. The audio_end that follows still opens
         // the mic; the backend's silence ladder handles the (rare) blank turn.
         console.warn(`[WS ${timestamp}] tts_failed — suppressing silent question text`);
-        // Same rule for the AII16 tips card: it is the on-screen half of speech
-        // that never happened, so it must not linger silently either.
-        if (roleIntroActiveRef.current) setInterviewTips(null);
         if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
         tokenBufferRef.current = "";
         currentAiTextRef.current = "";
@@ -4545,9 +4531,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // / repeat) — arm the pre-turn "get ready" 5→1 countdown. Consumed by
         // finalizePlayback when the mic is about to open. Nudges never send this.
         getReadyArmedRef.current = true;
-        // AII16 — the interview proper has started; retire the tips card so it
-        // doesn't compete with the question the candidate now has to answer.
-        setInterviewTips(null);
         console.log('[INTERVIEW-DEBUG] question_timer_started received', {
           seconds: data.seconds,
           total_seconds: data.total_seconds,
@@ -5309,6 +5292,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // uploading — prevents the race-condition where the final chunk was still
   // in the encoder buffer when we read recordedChunksRef.
   const uploadRecording = useCallback((): Promise<void> => {
+    // SINGLE-FLIGHT: if a final flush is already running (or finished), reuse it.
+    // Without this the ws.onclose path and the unmount path each POST their own
+    // final segment for the same recording — the duplicate-final race that lost
+    // recordings with a 502 InvalidPart.
+    if (finalUploadPromiseRef.current) {
+      console.log('[Recording] Final upload already in flight — joining it instead of starting a second');
+      return finalUploadPromiseRef.current;
+    }
+
     const recorder = mediaRecorderRef.current;
     // Take ownership of the recorder away from the checkpoint path.
     isFinalizingUploadRef.current = true;
@@ -5334,27 +5326,54 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       const segmentIndex = recordingSegmentIndexRef.current;
       const mimeType = (recorder?.mimeType || 'video/webm').split(';')[0];
       const blob = new Blob(chunks, { type: mimeType });
-      console.log(`[Recording] Final segment ${segmentIndex}: ${chunks.length} chunks, ${(blob.size / 1024 / 1024).toFixed(1)} MB, recorder=${recorder?.state ?? 'null'}`);
-      try {
-        await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, true);
-        recordingSegmentIndexRef.current = segmentIndex + 1;
-        console.log('[Recording] Final upload + multipart completion succeeded');
-      } catch (err: unknown) {
-        // Log detailed error — most common cause is nginx client_max_body_size too small
-        console.error(`[Recording] Final upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${getErrorMessage(err)}`);
+      const sizeMb = (blob.size / 1024 / 1024).toFixed(1);
+      console.log(`[Recording] Final segment ${segmentIndex}: ${chunks.length} chunks, ${sizeMb} MB, recorder=${recorder?.state ?? 'null'}`);
+
+      // RETRY the final upload. This request is what turns the already-uploaded
+      // parts into a playable object — if it is the only attempt and it 502s,
+      // the whole recording is lost. The blob is held in this closure across
+      // attempts, so nothing is discarded between tries, and the request is
+      // idempotent server-side (same segment_index → same part number; an
+      // already-assembled object is reported back rather than rebuilt).
+      const FINAL_UPLOAD_ATTEMPTS = 4;
+      for (let attempt = 1; attempt <= FINAL_UPLOAD_ATTEMPTS; attempt++) {
+        try {
+          await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, true);
+          recordingSegmentIndexRef.current = segmentIndex + 1;
+          console.log(`[Recording] Final upload + multipart completion succeeded${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+          return;
+        } catch (err: unknown) {
+          const msg = getErrorMessage(err);
+          if (attempt < FINAL_UPLOAD_ATTEMPTS) {
+            // Back off and try again — 502s here are usually the transient
+            // completion race, which the server now resolves on a retry.
+            const waitMs = 800 * attempt;
+            console.warn(`[Recording] Final upload attempt ${attempt}/${FINAL_UPLOAD_ATTEMPTS} failed (${sizeMb} MB): ${msg} — retrying in ${waitMs}ms`);
+            await new Promise((r) => setTimeout(r, waitMs));
+            continue;
+          }
+          // Out of attempts. The parts already in MinIO are NOT lost: the
+          // backend leaves them in place and the interview-close salvage
+          // (finalize_pending) assembles them. Log loudly so this is greppable.
+          console.error(`[Recording] Final upload FAILED after ${FINAL_UPLOAD_ATTEMPTS} attempts — size: ${sizeMb} MB, error: ${msg} — server-side salvage should assemble the uploaded parts`);
+        }
       }
     };
 
     // Recorder already stopped — upload whatever chunks we have now
     if (!recorder || recorder.state === 'inactive') {
-      return doUpload();
+      const p = doUpload();
+      finalUploadPromiseRef.current = p;
+      return p;
     }
 
     // Recorder still running — stop it and wait for onstop before uploading
-    return new Promise<void>((resolve) => {
-      recorder.onstop = () => { doUpload().then(resolve); };
+    const p = new Promise<void>((resolve) => {
+      recorder.onstop = () => { doUpload().then(resolve).catch(() => resolve()); };
       recorder.stop();
     });
+    finalUploadPromiseRef.current = p;
+    return p;
   }, [token]);
 
   // Keep a live ref to uploadRecording so the unmount-only cleanup can flush the
@@ -8420,34 +8439,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             </div>
           )}
 
-          {/* ── AII16: Interview Tips card ──
-              Bina SPEAKS these tips as the tail of her opening warm-up; this
-              card is the "displayed on the screen" half of the same content
-              (identical strings, sent on the role_intro message). Pinned above
-              the chat so it stays readable while she talks, and retired at the
-              first question_timer_started. */}
-          {interviewTips?.tips?.length ? (
-            <div className="flex-shrink-0 px-4 py-3 bg-amber-50 border-b border-amber-200">
-              <div className="flex items-center gap-2 mb-2">
-                <Lightbulb className="w-4 h-4 text-amber-600 shrink-0" />
-                <span className="text-xs font-semibold text-amber-800">Interview Tips</span>
-              </div>
-              {interviewTips.lead_in && (
-                <p className="text-xs text-amber-800/90 leading-snug mb-1.5">{interviewTips.lead_in}</p>
-              )}
-              <ul className="space-y-1">
-                {interviewTips.tips.map((tip, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs text-amber-900 leading-snug">
-                    <span className="mt-1 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                    <span>{tip}</span>
-                  </li>
-                ))}
-              </ul>
-              {interviewTips.closing && (
-                <p className="text-xs text-amber-800/90 leading-snug mt-1.5">{interviewTips.closing}</p>
-              )}
-            </div>
-          ) : null}
+          {/* AII16 — the separate "Interview Tips" card was REMOVED per UX
+              review: it duplicated, word for word, the tips Bina is already
+              speaking and streaming into her opening bubble, so the candidate
+              read the same list twice on one screen. The tips remain both
+              SPOKEN and DISPLAYED — they are part of the role_intro text in the
+              chat bubble below. */}
 
           {/* Chat messages — wrapped in a relative container so a bottom
               gradient mask can fade any content into the chat background before

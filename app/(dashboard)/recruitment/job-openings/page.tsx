@@ -202,7 +202,8 @@ export default function JobOpeningsPage() {
         updated_at: jd.updated_at, // For last updated display
         creation_stage: jd.creation_stage, // For draft JDs
         creation_method: jd.creation_method, // AI or Manual
-        currentVersion: (jd as any).version_number ?? jd.current_version, // lineage version (v1, v2, ...) for the badge
+        currentVersion: jd.current_version, // republish counter → drives "Republished" label
+        versionNumber: (jd as any).version_number ?? 1, // lineage version → v1/v2 badge (same JD-ID)
         experience_level: jd.job_level || jd.experience_level,
       }));
 
