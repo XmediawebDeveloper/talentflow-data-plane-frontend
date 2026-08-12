@@ -799,6 +799,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     qrCodeDataUri: string | null;
     verificationUrl: string | null;
     expiresAt: string | null;
+    challengeColor: string | null;
+    challengeId: string | null;
   }>(null);
 
   // Session ID — populated from `connected` WS event, used for violation event logging
@@ -3513,6 +3515,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           qrCodeDataUri: typeof data.qr_code_data_uri === 'string' ? data.qr_code_data_uri : null,
           verificationUrl: typeof data.verification_url === 'string' ? data.verification_url : null,
           expiresAt: typeof data.expires_at === 'string' ? data.expires_at : null,
+          challengeColor: typeof data.challenge_color === 'string' ? data.challenge_color : null,
+          challengeId: typeof data.challenge_id === 'string' ? data.challenge_id : null,
         });
         setStatus('Interview paused — verify your environment on your phone');
         break;
@@ -9121,6 +9125,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         qrCodeDataUri={envVerification?.qrCodeDataUri ?? null}
         verificationUrl={envVerification?.verificationUrl ?? null}
         expiresAt={envVerification?.expiresAt ?? null}
+        challengeColor={envVerification?.challengeColor ?? null}
+        challengeId={envVerification?.challengeId ?? null}
         onExpired={() => {
           // Candidate never completed verification in time — never hard-stall
           // the interview on it. Resume ourselves; the backend independently

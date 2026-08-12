@@ -70,7 +70,7 @@ interface CandidateResultsViewProps {
   breadcrumbItems?: { label: string; href?: string; onClick?: () => void }[];
 }
 
-type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios';
+type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios' | 'verification';
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -1236,6 +1236,15 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const totalViolations = violations.length;
   // Recruiter-facing summary (serious/moderate/minor, advisory excluded) — see violationTaxonomy.
   const violationSummary = useMemo(() => summarizeViolations(violations), [violations]);
+  // Mobile QR environment-verification attempts — same source as Integrity
+  // Check's grouped violations, filtered down to just this event family so
+  // the dedicated "QR Verification" tab can show them front-and-center
+  // (video + color/ID match + AI summary) without digging through the
+  // broader Integrity Check list.
+  const envVerificationRecords: ViolationRecord[] = useMemo(
+    () => violations.filter(v => v.event_type.startsWith('environment_verification_')),
+    [violations],
+  );
   // Legacy inline violations UI retained (disabled) for quick rollback; superseded by IntegrityCheckTab.
   const showLegacyViolations = false;
 
@@ -1315,6 +1324,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     // visible tab nav.
     // { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
+    { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: envVerificationRecords.length || undefined, badgeTone: 'neutral' },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Integrity Check',  icon: <ShieldAlert className="w-4 h-4" />, badge: violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
   ];
@@ -2700,6 +2710,82 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   screenError={screenError}
                   seekRequest={recordingSeek}
                 />
+              )
+            )}
+
+            {/* QR Verification Tab — mobile environment-verification attempts for
+                this interview (video + color/ID match + AI summary), pulled from
+                the same proctoring_violations source as Integrity Check. */}
+            {!evaluationPending && activeTab === 'verification' && (
+              envVerificationRecords.length === 0 ? (
+                renderPlaceholder(
+                  liveSession.environment_verification_enabled
+                    ? 'No QR verification was triggered during this interview.'
+                    : 'Mobile Environment Verification was not enabled for this interview.'
+                )
+              ) : (
+                <div className="space-y-4">
+                  {envVerificationRecords.map((record, idx) => {
+                    const d = (record.details ?? {}) as Record<string, unknown>;
+                    const videoUrl = typeof d.video_url === 'string' ? d.video_url : null;
+                    const colorMatch = typeof d.color_match === 'boolean' ? d.color_match : null;
+                    const idMatch = typeof d.id_match === 'boolean' ? d.id_match : null;
+                    const aiSummary = typeof d.ai_summary === 'string' ? d.ai_summary : null;
+                    const flaggedItems = Array.isArray(d.flagged_items) ? d.flagged_items as Array<Record<string, unknown>> : [];
+                    return (
+                      <div key={idx} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
+                        <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <ShieldAlert className="w-4 h-4 text-brand-blue" />
+                            <span className="text-sm font-semibold text-gray-900">Environment Verification</span>
+                            {record.timestamp && (
+                              <span className="text-xs text-gray-500">{formatTs(record.timestamp)}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {colorMatch !== null && (
+                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ring-1 ${colorMatch ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                Color {colorMatch ? 'matched' : 'mismatch'}
+                              </span>
+                            )}
+                            {idMatch !== null && (
+                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ring-1 ${idMatch ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                ID {idMatch ? 'matched' : 'mismatch'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="p-4 sm:p-5 space-y-4">
+                          {videoUrl ? (
+                            <video controls preload="metadata" className="w-full max-w-lg rounded-lg bg-black">
+                              <source src={videoUrl} />
+                            </video>
+                          ) : (
+                            <p className="text-sm text-gray-400 italic">No video available for this attempt.</p>
+                          )}
+                          {aiSummary && (
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">AI Summary</p>
+                              <p className="text-sm text-gray-700 leading-relaxed">{aiSummary}</p>
+                            </div>
+                          )}
+                          {flaggedItems.length > 0 && (
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Flagged Items</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {flaggedItems.map((item, i) => (
+                                  <span key={i} className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 ring-1 ring-red-200">
+                                    {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )
             )}
 
