@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, Coins } from 'lucide-react';
+import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -23,6 +23,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 
 const formatEmploymentType = (type: string | undefined): string => {
@@ -459,7 +460,12 @@ export default function ResumeScoringPage({
   );
 
   // Fetch all scored resumes for global view
-  const fetchGlobalScoredResumes = async () => {
+  /**
+   * @param silent Suppresses the failure toast. Set by the background prefetch —
+   *   the user never asked for that request, so a red toast for it would be
+   *   noise about something they can't act on. The on-demand path still reports.
+   */
+  const fetchGlobalScoredResumes = async ({ silent = false }: { silent?: boolean } = {}) => {
     setIsLoadingGlobal(true);
     try {
       const response = await scoringService.getAllScoredResumes({
@@ -499,7 +505,7 @@ export default function ResumeScoringPage({
       setGlobalScoredResumes(converted);
     } catch (error) {
       console.error('Failed to fetch global scored resumes:', error);
-      toast.error('Failed to load all scored candidates');
+      if (!silent) toast.error('Failed to load all scored candidates');
     } finally {
       setIsLoadingGlobal(false);
     }
@@ -517,10 +523,60 @@ export default function ResumeScoringPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGlobalView]);
 
+  /**
+   * Guards the prefetch below to one run per mount, and gets reset by
+   * `invalidateGlobalScoredResumes` when new scores make the cache stale.
+   */
+  const globalPrefetchedRef = useRef(false);
+
+  /**
+   * Drop the cached global list so the next visit refetches.
+   *
+   * Needed because re-entering the view no longer refetches on its own: a
+   * scoring run that finishes mid-session would otherwise leave View All
+   * Candidates showing the list as it was before those candidates existed.
+   * Called wherever the scoring history is refreshed — the same moment new
+   * scores become real.
+   */
+  const invalidateGlobalScoredResumes = () => {
+    setGlobalScoredResumes([]);
+    globalPrefetchedRef.current = false;
+  };
+
+  /**
+   * Warm the "View All Candidates" list in the background, so clicking that card
+   * renders rows instead of a spinner.
+   *
+   * The card shows its count from `scoredHistory`, which is already loaded — so
+   * the user can click the moment the page paints, while the rows themselves
+   * hadn't been requested yet. Fetching them during the seconds spent reading
+   * the cards moves that wait off the click.
+   *
+   * Deliberately after `historyLoading` clears: the history IS the page, and
+   * this request must not compete with it for the connection.
+   *
+   * `prefetchedRef` makes this fire at most once per mount. Without it a failed
+   * request would leave the list empty, the effect would re-satisfy its own
+   * conditions, and it would retry forever.
+   */
+  useEffect(() => {
+    if (historyLoading) return;
+    // Already in the view — the effect above is handling it.
+    if (isGlobalView) return;
+    if (globalScoredResumes.length > 0 || isLoadingGlobal) return;
+    if (globalPrefetchedRef.current) return;
+
+    globalPrefetchedRef.current = true;
+    void fetchGlobalScoredResumes({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyLoading, isGlobalView, globalScoredResumes.length, isLoadingGlobal]);
+
   const openScoringListView = (globalView: boolean) => {
     if (globalView) {
       if (!isGlobalView) {
-        void fetchGlobalScoredResumes();
+        // No fetch here — the effect above owns it, and it only fires when the
+        // list is actually empty. This used to refetch all 100 records every
+        // time the view was re-entered, discarding rows already in memory.
         setIsGlobalView(true);
         setSelectedScoredResumes([]);
       }
@@ -873,6 +929,7 @@ export default function ResumeScoringPage({
 
               if (onRefreshHistory) {
                 console.log('[ResumeScoringPage] Refreshing scored history...');
+                invalidateGlobalScoredResumes();
                 await onRefreshHistory();
                 setShowProgressModal(false);
                 setPendingAutoSelectJdId(jobId);
@@ -1009,6 +1066,7 @@ export default function ResumeScoringPage({
             // Step 2: Wait 3 seconds so user can read the correct match results,
             // then refresh history and close modal
             setTimeout(() => {
+              invalidateGlobalScoredResumes();
               onRefreshHistory().then(() => {
                 setShowProgressModal(false);
                 // Trigger auto-navigation to the details view for this JD
@@ -1157,7 +1215,10 @@ export default function ResumeScoringPage({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const jdName = (selectedHistoryItem?.jobTitle || 'TalentFlow').replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
+      // View All Candidates spans every JD, so naming the file after one of them
+      // would be wrong — it gets All_Jobs instead.
+      const rawName = isGlobalView ? 'All Jobs' : (selectedHistoryItem?.jobTitle || 'TalentFlow');
+      const jdName = rawName.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
       a.download = `${jdName}_Scorecards.zip`;
       document.body.appendChild(a);
       a.click();
@@ -1178,6 +1239,30 @@ export default function ResumeScoringPage({
       setIsBulkDownloading(false);
     }
   };
+
+  // "Download N Scorecards (ZIP)" for ScoredResumesTable's selection row. Built
+  // once and handed to both the per-JD list and View All Candidates — the
+  // handler works off `selectedScoredResumes`, which both views populate, so
+  // there was never a reason for only one of them to offer it.
+  const bulkScorecardAction = canExport ? (
+    <button
+      onClick={handleBulkDownloadScorecards}
+      disabled={isBulkDownloading}
+      className="h-9 px-3.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-full transition-all text-sm font-medium flex items-center gap-2 whitespace-nowrap shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {isBulkDownloading ? (
+        <>
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Generating ZIP...
+        </>
+      ) : (
+        <>
+          <Download className="w-4 h-4" />
+          Download {selectedScoredResumes.length} Scorecard{selectedScoredResumes.length > 1 ? 's' : ''} (ZIP)
+        </>
+      )}
+    </button>
+  ) : null;
 
   const publishedJobs = jobs.filter(j => j.status === 'Published' || j.status === 'Active');
   const selectedJobData = jobs.find(j => j.id === selectedJob);
@@ -1475,56 +1560,14 @@ export default function ResumeScoringPage({
           </div>
         </div>
 
-        {/* Scored Resumes Table — the select-all + Download ZIP controls that used
-            to sit in their own bar above are passed in as `toolbarActions` so they
-            share one row with the table's search and filters. */}
+        {/* Scored Resumes Table — the Download ZIP control is passed in as
+            `bulkActions` so it joins the table's own selection row rather than
+            sitting in a separate bar above it. */}
         <ScoredResumesTable
           resumes={scoredResumesData}
           jobTitle={selectedHistoryItem.jobTitle}
           jobId={selectedHistoryItem.jobId}
-          toolbarActions={scoredResumesData.length > 0 ? (
-            <>
-              <label className="flex items-center gap-2 whitespace-nowrap cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedScoredResumes.length === scoredResumesData.length && scoredResumesData.length > 0}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedScoredResumes(scoredResumesData.map(r => r.id));
-                    } else {
-                      setSelectedScoredResumes([]);
-                    }
-                  }}
-                  className="w-4 h-4 text-brand-blue border-gray-300 dark:border-slate-700 rounded focus:ring-brand-blue/40"
-                />
-                <span className="text-sm text-gray-700 dark:text-slate-300 font-medium">
-                  {selectedScoredResumes.length > 0
-                    ? `${selectedScoredResumes.length} selected`
-                    : 'Select candidates'}
-                </span>
-              </label>
-
-              {selectedScoredResumes.length > 0 && canExport && (
-                <button
-                  onClick={handleBulkDownloadScorecards}
-                  disabled={isBulkDownloading}
-                  className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm font-medium flex items-center gap-2 whitespace-nowrap shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isBulkDownloading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating ZIP...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-4 h-4" />
-                      Download {selectedScoredResumes.length} Scorecard{selectedScoredResumes.length > 1 ? 's' : ''} (ZIP)
-                    </>
-                  )}
-                </button>
-              )}
-            </>
-          ) : undefined}
+          bulkActions={bulkScorecardAction}
           availableUnits={availableASUnits ?? 10}
           onViewCandidate={(resume) => {
             setSelectedCandidateForView(resume);
@@ -1727,7 +1770,6 @@ export default function ResumeScoringPage({
               <QuotaBadge
                 label="Available Units"
                 availableUnits={availableUnits}
-                icon={Coins}
               />
             )}
 
@@ -1880,9 +1922,14 @@ export default function ResumeScoringPage({
         {isGlobalView ? (
           <div className="space-y-4">
             {isLoadingGlobal ? (
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-10 text-center">
-                <Loader2 className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
-                <p className="text-sm text-gray-600 dark:text-slate-400">Loading all scored candidates...</p>
+              /* No card while loading — a bordered box around a spinner reads as
+                 an empty table that has finished. `tf-loader-center` gives the
+                 spinner the table's own height to sit in the middle of, so it
+                 lands where the rows will be rather than at the top of a
+                 short padded box. */
+              <div className="tf-loader-center">
+                <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+                <span className="ml-3 text-sm text-gray-600 dark:text-slate-400">Loading all scored candidates...</span>
               </div>
             ) : globalScoredResumes.length === 0 ? (
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-10 text-center">
@@ -1897,6 +1944,7 @@ export default function ResumeScoringPage({
                 resumes={globalScoredResumes}
                 jobTitle="All Jobs"
                 jobId="global"
+                bulkActions={bulkScorecardAction}
                 availableUnits={availableASUnits ?? 10}
                 onViewCandidate={(resume) => {
                   setSelectedCandidateForView(resume);
@@ -1955,11 +2003,15 @@ export default function ResumeScoringPage({
               filtersApplied={historySearch.filtersApplied}
               onClearFilters={clearHistoryFilters}
               className="mb-0"
-            >
-              <div className="text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
-                <span className="text-brand-blue font-semibold">{displayHistory.length}</span> of {scoredHistory.length + (processingEntry ? 1 : 0)} jobs
-              </div>
-            </ListToolbar>
+              countBadge={
+                <ListCountBadge
+                  filtered={displayHistory.length}
+                  total={scoredHistory.length + (processingEntry ? 1 : 0)}
+                  noun="job"
+                  selected={selectedHistoryItems.size}
+                />
+              }
+            />
 
             {/* Expanded Filters */}
             {showHistoryFilters && (() => {
@@ -2445,9 +2497,11 @@ export default function ResumeScoringPage({
           />
           </>
         ) : historyLoading && scoredHistory.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
-            <Loader2 className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
-            <p className="text-gray-600 dark:text-slate-400 text-sm">Loading scoring history...</p>
+          /* Same treatment as View All Candidates above — no card, centred in
+             the space the list will occupy. */
+          <div className="tf-loader-center">
+            <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+            <span className="ml-3 text-gray-600 dark:text-slate-400 text-sm">Loading scoring history...</span>
           </div>
         ) : scoredHistory.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-10 text-center">

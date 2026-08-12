@@ -3,13 +3,14 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { buildUnifiedDiff, buildDiffSidePairs } from '@/lib/utils/textDiff';
 import RecordPager from '@/components/RecordPager';
 import {
   ArrowLeft, Download, Mail, Phone, MapPin, Briefcase, Calendar, Award,
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Linkedin, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
-  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search
+  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database
 } from 'lucide-react';
 
 // Full Resume Content Component with better UI
@@ -508,57 +509,6 @@ export default function ResumeViewPage() {
     } finally {
       setPreviewLoading(false);
     }
-  };
-
-  // Build unified diff: interleave added/removed/unchanged lines preserving reading order
-  const buildUnifiedDiff = (olderText: string, newerText: string) => {
-    const normalize = (text: string) =>
-      text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-
-    const olderLines = normalize(olderText);
-    const newerLines = normalize(newerText);
-
-    if (!olderText && !newerText) return { lines: [] as { text: string; type: 'added' | 'removed' | 'unchanged' }[], addedCount: 0, removedCount: 0, unchangedCount: 0 };
-
-    // Simple LCS-based diff for proper interleaving
-    const olderLen = olderLines.length;
-    const newerLen = newerLines.length;
-
-    // Build LCS table
-    const dp: number[][] = Array.from({ length: olderLen + 1 }, () => Array(newerLen + 1).fill(0));
-    for (let i = 1; i <= olderLen; i++) {
-      for (let j = 1; j <= newerLen; j++) {
-        if (olderLines[i - 1] === newerLines[j - 1]) {
-          dp[i][j] = dp[i - 1][j - 1] + 1;
-        } else {
-          dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-        }
-      }
-    }
-
-    // Backtrack to build diff
-    type DiffLine = { text: string; type: 'added' | 'removed' | 'unchanged' };
-    const result: DiffLine[] = [];
-    let i = olderLen, j = newerLen;
-
-    while (i > 0 || j > 0) {
-      if (i > 0 && j > 0 && olderLines[i - 1] === newerLines[j - 1]) {
-        result.unshift({ text: olderLines[i - 1], type: 'unchanged' });
-        i--; j--;
-      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-        result.unshift({ text: newerLines[j - 1], type: 'added' });
-        j--;
-      } else {
-        result.unshift({ text: olderLines[i - 1], type: 'removed' });
-        i--;
-      }
-    }
-
-    const addedCount = result.filter(l => l.type === 'added').length;
-    const removedCount = result.filter(l => l.type === 'removed').length;
-    const unchangedCount = result.filter(l => l.type === 'unchanged').length;
-
-    return { lines: result, addedCount, removedCount, unchangedCount };
   };
 
   useEffect(() => {
@@ -1203,56 +1153,122 @@ Best regards`);
       <div>
         <div className="space-y-6">
 
-          {/* Personal Info Card */}
-          <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-6 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
-            <div className="flex items-start">
-              <div className="flex-1">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">{resume.name || 'Unknown'}</h2>
-                    <p className="text-xl text-gray-700 mb-3">{resume.title}</p>
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                      {resume.location && (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
-                          {resume.location}
-                        </span>
-                      )}
-                      <span className="flex items-center gap-1">
-                        <Briefcase className="w-4 h-4" />
-                        {resume.experience}
+          {/* Personal Info Card
+              Identity on one line — avatar, name, role, then the facts about the
+              person as chips. Contact used to trail off the bottom as two loose
+              lines of text with nothing holding them; it now sits below a rule
+              as proper tiles, so it reads as a deliberate block rather than
+              leftovers. */}
+          {(() => {
+            // The API mapper substitutes these placeholders for missing values,
+            // so treat them as empty rather than printing "N/A" at people.
+            // Takes `unknown` because a few Resume fields are typed loosely
+            // (`string | any[]`) and only the string form is displayable here.
+            const asText = (value: unknown): string => {
+              if (typeof value !== 'string') return '';
+              const trimmed = value.trim();
+              return ['N/A', 'No email', 'No phone', 'Unknown'].includes(trimmed) ? '' : trimmed;
+            };
+
+            const name = asText(resume.name) || 'Unknown';
+            const title = asText(resume.title);
+            const email = asText(resume.email);
+            const phone = asText(resume.phone);
+
+            const initials = name
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((part) => part[0]?.toUpperCase() ?? '')
+              .join('') || '?';
+
+            const facts = [
+              { icon: MapPin, text: asText(resume.location) },
+              { icon: Briefcase, text: asText(resume.experience) },
+              { icon: Building2, text: asText(resume.currentCompany) },
+              { icon: Clock, text: asText(resume.noticePeriod) && `Notice: ${asText(resume.noticePeriod)}` },
+            ].filter((fact) => !!fact.text);
+
+            const contacts = [
+              email && { icon: Mail, label: 'Email', value: email, href: `mailto:${email}` },
+              phone && { icon: Phone, label: 'Phone', value: phone, href: `tel:${phone}` },
+            ].filter(Boolean) as { icon: typeof Mail; label: string; value: string; href: string }[];
+
+            return (
+              <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-5 sm:p-6 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
+                {/* Identity row */}
+                <div className="flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-xl bg-brand-blue text-white flex items-center justify-center text-lg font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex-shrink-0">
+                    {initials}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h2 className="text-2xl font-bold text-gray-900 tracking-tight truncate">
+                          {name}
+                        </h2>
+                        {title && (
+                          <p className="text-base text-gray-600 truncate">{title}</p>
+                        )}
+                      </div>
+
+                      {/* Source, as a chip rather than a floating stat — it's a
+                          label for the record, not a headline number. */}
+                      <span className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/20">
+                        <Database className="w-3.5 h-3.5" />
+                        {resume.source}
                       </span>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500">Source</div>
-                      <div className="text-lg font-medium text-gray-900">
-                        {resume.source}
+
+                    {facts.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-3">
+                        {facts.map(({ icon: Icon, text }, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 text-xs text-gray-700 ring-1 ring-brand-blue/10"
+                          >
+                            <Icon className="w-3.5 h-3.5 text-brand-blue" />
+                            {text}
+                          </span>
+                        ))}
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Contact Info */}
-                <div className="grid grid-cols-2 gap-3 mb-4">
-                  {resume.email && resume.email !== 'No email' && (
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <Mail className="w-4 h-4 text-gray-500" />
-                      <a href={`mailto:${resume.email}`} className="hover:text-gray-900">{resume.email}</a>
+                {/* Contact — its own block under a rule, so it stops reading as
+                    an afterthought hanging off the bottom of the card. */}
+                {contacts.length > 0 && (
+                  <div className="mt-5 pt-5 border-t border-brand-blue/10">
+                    {/* Tiles hug their content rather than splitting the card in
+                        half — a phone number in a half-width box is mostly empty
+                        box. `max-w-xs` caps a long email instead of letting it
+                        stretch the row. */}
+                    <div className="flex flex-wrap gap-3">
+                      {contacts.map(({ icon: Icon, label, value, href }) => (
+                        <a
+                          key={label}
+                          href={href}
+                          className="group flex items-center gap-2.5 py-2 pl-2 pr-3.5 rounded-lg bg-white/70 ring-1 ring-brand-blue/10 hover:ring-brand-blue/30 hover:bg-white transition-all min-w-0 max-w-xs"
+                        >
+                          <span className="w-8 h-8 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                            <Icon className="w-4 h-4 text-brand-blue" />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-[11px] leading-none text-gray-500 mb-0.5">{label}</span>
+                            <span className="block text-sm text-gray-900 truncate group-hover:text-brand-blue transition-colors">
+                              {value}
+                            </span>
+                          </span>
+                        </a>
+                      ))}
                     </div>
-                  )}
-                  {resume.phone && resume.phone !== 'No phone' && (
-                    <div className="flex items-center gap-2 text-sm text-gray-700">
-                      <Phone className="w-4 h-4 text-gray-500" />
-                      <a href={`tel:${resume.phone}`} className="hover:text-gray-900">{resume.phone}</a>
-                    </div>
-                  )}
-                </div>
-
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Professional Summary */}
           {detailedResume.summary && (
@@ -1959,37 +1975,7 @@ Best regards`);
         const olderText = leftVersion.extractedText || '';
         const newerText = rightVersion.extractedText || '';
         const diff = buildUnifiedDiff(olderText, newerText);
-
-        // Build side-by-side aligned pairs from diff lines
-        type SidePair = { left: { text: string; type: 'added' | 'removed' | 'unchanged' } | null; right: { text: string; type: 'added' | 'removed' | 'unchanged' } | null };
-        const sidePairs: SidePair[] = [];
-        {
-          let i = 0;
-          while (i < diff.lines.length) {
-            if (diff.lines[i].type === 'unchanged') {
-              sidePairs.push({ left: diff.lines[i], right: diff.lines[i] });
-              i++;
-            } else {
-              const removed: typeof diff.lines = [];
-              const added: typeof diff.lines = [];
-              while (i < diff.lines.length && diff.lines[i].type === 'removed') {
-                removed.push(diff.lines[i]);
-                i++;
-              }
-              while (i < diff.lines.length && diff.lines[i].type === 'added') {
-                added.push(diff.lines[i]);
-                i++;
-              }
-              const maxLen = Math.max(removed.length, added.length);
-              for (let j = 0; j < maxLen; j++) {
-                sidePairs.push({
-                  left: j < removed.length ? removed[j] : null,
-                  right: j < added.length ? added[j] : null,
-                });
-              }
-            }
-          }
-        }
+        const sidePairs = buildDiffSidePairs(diff.lines);
 
         const compareSectionHeaders = [
           'experience', 'work experience', 'employment', 'professional experience',

@@ -9,17 +9,40 @@
  *    test's budget, keeps the suite from timing out on a fresh checkout.
  */
 import type { FullConfig } from "@playwright/test";
-import { xlsxToJson } from "./helpers/excel";
+import { xlsxToJson, loadRowsSync } from "./helpers/excel";
 
-/** Routes whose first-request compile would otherwise land inside a test. */
-const ROUTES = ["/login?org=test", "/dashboard", "/recruitment/job-openings"];
+/** Routes every run needs, whatever the data files say. */
+const BASE_ROUTES = ["/login?org=test", "/dashboard", "/recruitment/job-openings"];
+
+/**
+ * Every route the Tier-1 rows actually visit, read from the generated mapping
+ * rather than hard-coded — so it stays correct when the mapping changes.
+ *
+ * This matters more than it looks. The suite drives ~18 distinct routes, and
+ * `next dev` compiles each one on its first request. Warming only three of them
+ * left the other fifteen compiling *inside* a test, which is what produced the
+ * intermittent 15s expect-timeouts on the card-click pages: the click landed
+ * while the route was still building. Locally those tests pass 9/9 in
+ * isolation; the flake only appears under a full concurrent run.
+ */
+function tier1Routes(): string[] {
+  try {
+    const rows = loadRowsSync<{ route: string; query: string; status: string }>("tier1-cases");
+    const active = rows.filter((r) => r.status === "active" && r.route);
+    return [...new Set(active.map((r) => (r.query ? `${r.route}?${r.query}` : r.route)))];
+  } catch {
+    // The mapping file is optional here — a missing one is already reported
+    // loudly by the suite itself (runTier1Cases registers a failing test).
+    return [];
+  }
+}
 
 const WARMUP_DEADLINE_MS = 10 * 60_000;
 
-async function warmRoutes(baseURL: string) {
+async function warmRoutes(baseURL: string, routes: string[]) {
   const deadline = Date.now() + WARMUP_DEADLINE_MS;
 
-  for (const route of ROUTES) {
+  for (const route of routes) {
     const url = new URL(route, baseURL).toString();
     const started = Date.now();
     while (Date.now() < deadline) {
@@ -45,5 +68,10 @@ export default async function globalSetup(config: FullConfig) {
   await xlsxToJson();
 
   const baseURL = config.projects[0]?.use?.baseURL;
-  if (baseURL) await warmRoutes(baseURL);
+  if (!baseURL) return;
+
+  // xlsxToJson() has to have run first — tier1Routes() reads its output.
+  const routes = [...new Set([...BASE_ROUTES, ...tier1Routes()])];
+  console.log(`[warmup] compiling ${routes.length} routes before the run`);
+  await warmRoutes(baseURL, routes);
 }

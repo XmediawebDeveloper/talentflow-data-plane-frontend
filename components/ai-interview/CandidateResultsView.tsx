@@ -1538,6 +1538,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
             left_screen_tab_hidden: 'Switched to another tab or minimized the window',
             left_screen_focus_lost: 'Moved focus away from the interview window',
             left_screen: 'Left the interview screen',
+            picture_in_picture: 'Opened a video in Picture-in-Picture',
           };
           const reason = typeof d.reason === 'string' ? d.reason : '';
           const what = (typeof d.message === 'string' && d.message)

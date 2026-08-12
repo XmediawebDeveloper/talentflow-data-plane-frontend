@@ -1,10 +1,17 @@
 import { AlertTriangle, CheckCircle, Info, XCircle, Loader2, X } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
   title: string;
   message: string;
   type?: 'warning' | 'danger' | 'info' | 'success';
+  /**
+   * Replaces the icon `type` would pick, when the dialog is about a specific
+   * kind of thing rather than a severity — a document, a candidate, a job.
+   * Keeps the type's colour and disc so the tone still reads correctly.
+   */
+  icon?: LucideIcon;
   confirmText?: string;
   cancelText?: string;
   onConfirm: () => void;
@@ -17,6 +24,7 @@ export default function ConfirmationDialog({
   title,
   message,
   type = 'info',
+  icon,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   onConfirm,
@@ -52,7 +60,8 @@ export default function ConfirmationDialog({
     },
   };
 
-  const { icon: Icon, iconColor, iconBg, confirmButton } = config[type];
+  const { icon: typeIcon, iconColor, iconBg, confirmButton } = config[type];
+  const Icon = icon ?? typeIcon;
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">

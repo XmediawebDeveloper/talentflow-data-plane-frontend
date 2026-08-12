@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Loader2, FileText, Briefcase, ClipboardList, Video, X } from 'lucide-react';
+import { Search, Loader2, FileText, Briefcase, ClipboardList, Video, X, Folder as FolderIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { resumeService, Resume } from '@/lib/services/resumeService';
+import { resumeService, folderService, Resume, Folder } from '@/lib/services/resumeService';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { assessmentService, AssessmentResponse } from '@/lib/services/assessmentService';
 import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
@@ -18,6 +18,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [resumes, setResumes] = useState<Resume[]>([]);
+  const [folders, setFolders] = useState<{ folder: Folder; path: string }[]>([]);
   const [jds, setJds] = useState<JDResponse[]>([]);
   const [assessments, setAssessments] = useState<AssessmentResponse[]>([]);
   const [aiInterviews, setAiInterviews] = useState<AIInterviewResponse[]>([]);
@@ -26,11 +27,29 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const hasResults =
-    resumes.length > 0 || jds.length > 0 || assessments.length > 0 || aiInterviews.length > 0;
+    folders.length > 0 || resumes.length > 0 || jds.length > 0 || assessments.length > 0 || aiInterviews.length > 0;
+
+  const flattenFolders = useCallback((items: Folder[], query: string) => {
+    const matches: { folder: Folder; path: string }[] = [];
+    const normalized = query.trim().toLowerCase();
+    const walk = (foldersToWalk: Folder[], parentPath: string[] = []) => {
+      for (const folder of foldersToWalk) {
+        const pathParts = [...parentPath, folder.name];
+        const path = pathParts.join(' / ');
+        if (`${folder.name} ${path}`.toLowerCase().includes(normalized)) {
+          matches.push({ folder, path });
+        }
+        if (folder.children?.length) walk(folder.children, pathParts);
+      }
+    };
+    walk(items);
+    return matches.slice(0, 5);
+  }, []);
 
   const performSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResumes([]);
+      setFolders([]);
       setJds([]);
       setAssessments([]);
       setAiInterviews([]);
@@ -40,14 +59,16 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
 
     setIsLoading(true);
     try {
-      const [resumeRes, jdRes, assessmentRes, aiInterviewRes] = await Promise.allSettled([
+      const [resumeRes, folderRes, jdRes, assessmentRes, aiInterviewRes] = await Promise.allSettled([
         resumeService.list({ search: searchQuery, page_size: 5 }),
+        folderService.list(),
         jdService.list({ search: searchQuery, page_size: 5 }),
         assessmentService.list({ search: searchQuery, page_size: 5 }),
         aiInterviewService.list({ search: searchQuery, page_size: 5 }),
       ]);
 
       setResumes(resumeRes.status === 'fulfilled' ? resumeRes.value.items : []);
+      setFolders(folderRes.status === 'fulfilled' ? flattenFolders(folderRes.value, searchQuery) : []);
       setJds(jdRes.status === 'fulfilled' ? jdRes.value.items : []);
       setAssessments(assessmentRes.status === 'fulfilled' ? assessmentRes.value.items : []);
       setAiInterviews(aiInterviewRes.status === 'fulfilled' ? aiInterviewRes.value.items : []);
@@ -56,13 +77,14 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [flattenFolders]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (!query.trim()) {
       setResumes([]);
+      setFolders([]);
       setJds([]);
       setAssessments([]);
       setAiInterviews([]);
@@ -112,6 +134,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
   function clearSearch() {
     setQuery('');
     setResumes([]);
+    setFolders([]);
     setJds([]);
     setAssessments([]);
     setAiInterviews([]);
@@ -140,7 +163,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
           onFocus={() => {
             if (query.trim()) setIsOpen(true);
           }}
-          placeholder="Search candidates, jobs, assessments, interviews or IDs..."
+          placeholder="Search folders, resumes, jobs, assessments, interviews or IDs..."
           className="w-full pl-8 pr-8 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400 focus:border-transparent bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 [&::-webkit-search-cancel-button]:hidden"
         />
         {isLoading && (
@@ -170,12 +193,41 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
             </div>
           ) : (
             <>
-              {/* Candidates / Resumes */}
+              {/* Folders */}
+              {folders.length > 0 && (
+                <div>
+                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
+                    <FolderIcon className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
+                    Folders ({folders.length})
+                  </div>
+                  {folders.map(({ folder, path }) => (
+                    <button
+                      key={folder.id}
+                      onClick={() => handleSelect(`/recruitment/my-resumes?folder_id=${folder.id}`)}
+                      className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-[11px] font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                          Folder
+                        </span>
+                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
+                          {folder.name}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                        {path}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Resumes */}
               {resumes.length > 0 && (
                 <div>
                   <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
                     <FileText className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
-                    Candidates ({resumes.length})
+                    Resumes ({resumes.length})
                   </div>
                   {resumes.map((resume) => (
                     <button
@@ -183,8 +235,13 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                       onClick={() => handleSelect(`/recruitment/resume-view/${resume.id}`)}
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
-                      <div className="font-medium text-sm text-gray-900 dark:text-gray-100">
-                        {resume.candidate_name || resume.file_name}
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700 ring-1 ring-green-200">
+                          Resume
+                        </span>
+                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
+                          {resume.candidate_name || resume.file_name}
+                        </span>
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                         {[resume.current_title, resume.current_company, resume.location].filter(Boolean).join(' · ') || resume.candidate_email || resume.file_name}

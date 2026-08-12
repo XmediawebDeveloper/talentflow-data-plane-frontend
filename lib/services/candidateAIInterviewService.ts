@@ -305,7 +305,7 @@ export const candidateAIInterviewService = {
   async verifyShareBarHidden(
     token: string,
     blob: Blob,
-  ): Promise<{ enabled: boolean; hidden: boolean; reason?: string }> {
+  ): Promise<{ enabled: boolean; hidden: boolean; pip_detected?: boolean; reason?: string }> {
     const fd = new FormData();
     fd.append('file', blob, 'screen.jpg');
     const url = `${API_BASE_URL}/candidate/ai-interview/${token}/verify-share-bar`;

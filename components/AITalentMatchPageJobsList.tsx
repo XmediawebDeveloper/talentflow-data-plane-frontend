@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import ListPagination from '@/components/ListPagination';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -170,11 +171,15 @@ export default function AITalentMatchPageJobsList({
           filtersApplied={search.filtersApplied}
           onClearFilters={search.reset}
           className="mb-0"
-        >
-          <div className="text-xs sm:text-sm text-gray-700 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
-            <span className="text-brand-blue font-semibold">{filteredJobs.length}</span> of {publishedJobs.length}
-          </div>
-        </ListToolbar>
+          countBadge={
+            <ListCountBadge
+              filtered={filteredJobs.length}
+              total={publishedJobs.length}
+              noun="job"
+              selected={selectedJobs.length}
+            />
+          }
+        />
 
         {/* Expanded Filters */}
         {showFilters && (

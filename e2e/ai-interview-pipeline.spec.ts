@@ -11,6 +11,11 @@
  *      - Edge cases: noise filter, empty transcript, disconnect/reconnect
  */
 import { test, expect, Page } from "@playwright/test";
+import {
+  mockCandidateApi,
+  interviewInfo as mockInterviewInfo,
+  assertMocksCoverTheApp,
+} from "./helpers/ai-interview-mocks";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -23,97 +28,7 @@ function fakePcmChunk(bytes = 4800): ArrayBuffer {
 }
 
 /** Build the mock interview info returned by GET /candidate/ai-interview/:token */
-function mockInterviewInfo(overrides: Record<string, unknown> = {}) {
-  return {
-    id: "int-001",
-    candidate_name: "Test Candidate",
-    candidate_email: "test@example.com",
-    position: "Senior Software Engineer",
-    interview_type: "ai",
-    duration_minutes: 30,
-    total_questions: 15,
-    status: "in_progress",
-    consent_accepted_at: "2026-04-01T10:00:00Z",
-    system_check_passed: true,
-    available_languages: ["English"],
-    selected_language: "English",
-    jd_title: "Senior Software Engineer",
-    jd_must_have_skills: ["React", "TypeScript", "Node.js"],
-    jd_nice_to_have_skills: ["Python"],
-    interview_mode: "fixed",
-    identity_verified: true,
-    copy_paste_blocking: false,
-    introduction_video_url: null,
-    ...overrides,
-  };
-}
-
 // ─── API Route Mocking ─────────────────────────────────────────────────────────
-
-async function mockCandidateApi(page: Page) {
-  // Use glob patterns to intercept regardless of the API base URL configured in .env.
-  // This handles both local (localhost:8000) and staging (talentflowdata.stgapi.mo.vc) URLs.
-  const token = INTERVIEW_TOKEN;
-
-  await page.route(`**/candidate/ai-interview/${token}`, (route) => {
-    if (route.request().method() === "GET") {
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockInterviewInfo()) });
-    }
-    return route.continue();
-  });
-
-  await page.route(`**/candidate/ai-interview/${token}/consent`, (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) })
-  );
-
-  await page.route(`**/candidate/ai-interview/${token}/system-check`, (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) })
-  );
-
-  await page.route(`**/candidate/ai-interview/${token}/languages`, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ available_languages: ["English"], selected_language: "English" }),
-    })
-  );
-
-  await page.route(`**/candidate/ai-interview/${token}/language-select`, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ success: true, selected_language: "English", message: "Language selected" }),
-    })
-  );
-
-  await page.route(`**/candidate/ai-interview/${token}/identity-verify`, (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) })
-  );
-
-  await page.route(`**/candidate/ai-interview/${token}/ai-health`, (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "healthy" }) })
-  );
-
-  await page.route(`**/candidate/ai-interview/${token}/transcribe-practice`, (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ text: "Hello this is a test" }),
-    })
-  );
-
-  await page.route(`**/candidate/ai-interview/${token}/practice-complete`, (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) })
-  );
-
-  await page.route(`**/candidate/ai-interview/${token}/upload-recording`, (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) })
-  );
-
-  await page.route(`**/candidate/ai-interview/${token}/proctor-event`, (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true }) })
-  );
-}
 
 // ─── WebSocket Simulation ───────────────────────────────────────────────────────
 

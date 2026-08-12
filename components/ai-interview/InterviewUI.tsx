@@ -755,6 +755,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Bina's farewell never pre-empts processing the candidate's final answer.
   const pendingEndAfterTranscriptRef = useRef(false);
   const [isFullscreenExited, setIsFullscreenExited] = useState(false);
+  // True while the interview window has lost OS focus but is still visible
+  // and still fullscreen — e.g. the candidate clicked Chrome's "<site> is
+  // sharing your screen" bar (Hide/Stop) or a similar browser-chrome overlay.
+  // A real tab switch / minimize is caught separately by
+  // CandidateAIInterviewPortal's document.hidden watcher, which terminates
+  // the interview outright — this state is deliberately non-destructive: it
+  // just blocks interaction and shows a warning until focus returns, so an
+  // innocuous click on the sharing bar can no longer go completely unnoticed
+  // (previously only a low-severity, non-blocking log entry).
+  const [isWindowBlurred, setIsWindowBlurred] = useState(false);
   // Seconds left in the 10s grace window before the session hard-pauses.
   // null = no grace period active (either before any exit, or after the
   // grace elapsed and the session is fully paused).
