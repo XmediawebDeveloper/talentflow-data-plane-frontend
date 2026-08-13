@@ -156,6 +156,25 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
+  /** Fallback poll for the laptop side of mobile QR environment verification
+   *  (InterviewUI.tsx) — recovers state when a WS push (opened/
+   *  recording_started/submitted) never arrives, e.g. because the phone's
+   *  request landed on a different backend worker than the one holding this
+   *  laptop's socket. Never returns challenge_color/id/colors — those stay
+   *  laptop-only via the original WS trigger payload. */
+  async getEnvironmentVerificationStatus(verificationToken: string): Promise<{
+    status: string;
+    analysis_status: string | null;
+    expires_at: string | null;
+    recording_started_at: string | null;
+    verification_id: string | null;
+  }> {
+    const response = await candidateApi.get(
+      `/candidate/environment-verify/${verificationToken}/status`,
+    );
+    return response.data;
+  },
+
   async recordConsent(
     token: string,
     data: CandidateConsentRequest,
