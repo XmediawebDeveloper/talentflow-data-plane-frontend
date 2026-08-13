@@ -21,7 +21,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2 } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -811,6 +811,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     expiresAt: string | null;
     challengeColor: string | null;
     challengeId: string | null;
+    // False until "environment_verification_opened" arrives — i.e. the
+    // moment the candidate's phone actually opens the verify link. Keeps the
+    // laptop's background dark/neutral until then instead of revealing the
+    // challenge color the instant the QR itself appears.
+    challengeRevealed: boolean;
+    // 5 sequential colors (1 per second) for the phone's first 5s recording
+    // phase — populated by "environment_verification_triggered", cycled
+    // starting from recordingStartedAt (below), NOT from when the QR/link
+    // was opened, so candidate-side delays can't desync the sequence from
+    // what their phone is actually filming.
+    challengeColors: string[] | null;
+    // Set only once "environment_verification_recording_started" arrives —
+    // the phone's confirmed t=0 for the RGB cycle.
+    recordingStartedAt: string | null;
   }>(null);
 
   // Session ID — populated from `connected` WS event, used for violation event logging
@@ -3527,8 +3541,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           expiresAt: typeof data.expires_at === 'string' ? data.expires_at : null,
           challengeColor: typeof data.challenge_color === 'string' ? data.challenge_color : null,
           challengeId: typeof data.challenge_id === 'string' ? data.challenge_id : null,
+          challengeRevealed: false,
+          challengeColors: Array.isArray(data.challenge_colors) ? data.challenge_colors : null,
+          recordingStartedAt: null,
         });
         setStatus('Interview paused — verify your environment on your phone');
+        break;
+      }
+      case "environment_verification_opened": {
+        // Candidate's phone actually opened the verify link — reveal the
+        // challenge color/ID on the laptop now, synced to this moment rather
+        // than showing it from when the QR first appeared.
+        console.log(`[WS ${timestamp}] Environment verification link opened on phone — revealing challenge`);
+        setEnvVerification(prev => prev ? { ...prev, challengeRevealed: true } : prev);
+        break;
+      }
+      case "environment_verification_recording_started": {
+        // Phone confirmed MediaRecorder is actually recording — this is the
+        // authoritative t=0 the 1-color-per-second cycle is keyed against.
+        console.log(`[WS ${timestamp}] Environment verification recording started — beginning RGB cycle`);
+        setEnvVerification(prev => prev ? {
+          ...prev,
+          recordingStartedAt: typeof data.recording_started_at === 'string' ? data.recording_started_at : null,
+          challengeColors: Array.isArray(data.challenge_colors) ? data.challenge_colors : prev.challengeColors,
+        } : prev);
         break;
       }
       case "environment_verification_submitted": {
@@ -9095,6 +9131,33 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           The interview cannot resume from this state — the candidate must
           restore permissions AND restart the session from scratch, which
           matches the product rule "do not allow to start the interview again". */}
+      {/* ── Picture-in-Picture overlay — hard-blocks the interview while a video
+          is detached into a floating always-on-top window. Unlike the
+          fullscreen-exit overlay, there's no grace countdown: entering PiP is
+          a deliberate action, not an accidental blur, so the block is
+          immediate. It auto-clears the moment leavepictureinpicture fires
+          (proctoringState.isPiPActive flips back to false in the monitor
+          hook) — no separate "resume" flow needed. ── */}
+      {proctoringState.isPiPActive && isConnected && !isClosing && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 backdrop-blur-md">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/20 border border-red-400/40">
+              <PictureInPicture2 className="w-6 h-6 text-red-400" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-base mb-1">Picture-in-Picture Detected</h3>
+              <p className="text-[#cbd5e1] text-sm leading-relaxed">
+                A video was detached into a floating window. This has been logged
+                as a proctoring violation.
+              </p>
+              <p className="text-[#94A3B8] text-sm leading-relaxed mt-2">
+                Please exit Picture-in-Picture mode to continue the interview.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {mediaBlocked && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md">
           <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
@@ -9137,6 +9200,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         expiresAt={envVerification?.expiresAt ?? null}
         challengeColor={envVerification?.challengeColor ?? null}
         challengeId={envVerification?.challengeId ?? null}
+        challengeRevealed={envVerification?.challengeRevealed ?? false}
+        challengeColors={envVerification?.challengeColors ?? null}
+        recordingStartedAt={envVerification?.recordingStartedAt ?? null}
         onExpired={() => {
           // Candidate never completed verification in time — never hard-stall
           // the interview on it. Resume ourselves; the backend independently

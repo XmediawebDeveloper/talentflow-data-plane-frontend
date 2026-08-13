@@ -440,7 +440,7 @@ export default function IntegrityCheckTab({
                           <ConfidenceTag record={g.records[0]} />
                         </div>
                       </td>
-                      <td className="px-4 py-3 align-top text-xs text-gray-600 max-w-[34ch]">
+                      <td className="tf-wrap px-4 py-3 align-top text-xs text-gray-600 max-w-[34ch] whitespace-normal break-words">
                         {describeViolation(g.records[0]) || <span className="text-gray-300">—</span>}
                         <EnvironmentVerificationDetail record={g.records[0]} />
                       </td>
@@ -472,7 +472,7 @@ export default function IntegrityCheckTab({
                           <tr key={`${g.key}-${ri}`} className="bg-slate-50/40">
                             <td className="px-4 py-2"></td>
                             <td className="px-4 py-2 text-xs text-gray-400 pl-10">Occurrence {ri + 1}</td>
-                            <td className="px-4 py-2 text-xs text-gray-500 max-w-[34ch]">
+                            <td className="tf-wrap px-4 py-2 text-xs text-gray-500 max-w-[34ch] whitespace-normal break-words">
                               {describeViolation(r) || '—'}
                               <EnvironmentVerificationDetail record={r} />
                             </td>
