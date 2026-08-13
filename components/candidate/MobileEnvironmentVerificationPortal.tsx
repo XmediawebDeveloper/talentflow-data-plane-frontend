@@ -12,6 +12,7 @@ type Phase =
   | 'error'
   | 'instructions'
   | 'requesting_permission'
+  | 'get_ready'
   | 'permission_denied'
   | 'recording_screen'
   | 'recording_pan'
@@ -21,6 +22,7 @@ type Phase =
 
 const RECORD_SCREEN_MS = 5000;
 const RECORD_PAN_MS = 5000;
+const GET_READY_SECONDS = 3;
 
 interface MobileEnvironmentVerificationPortalProps {
   token: string;
@@ -43,6 +45,11 @@ interface MobileEnvironmentVerificationPortalProps {
 export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironmentVerificationPortalProps) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  const [getReadyCount, setGetReadyCount] = useState(GET_READY_SECONDS);
+  // Two SEPARATE 5s countdowns (resets at the phase switch), not one
+  // continuous 10s countdown — matches the spec's own wording ("start 5 secs
+  // timer" for phase 1, "another 5 secs timer" for phase 2).
+  const [recordingCountdown, setRecordingCountdown] = useState(5);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -106,17 +113,49 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           if (!cancelled) setPhase('ready_to_submit');
         };
         recorderRef.current = recorder;
-        recorder.start();
 
-        setPhase('recording_screen');
-        setTimeout(() => {
+        // Brief "Get Ready" countdown before recording actually starts, so the
+        // candidate has a moment to position their phone after granting
+        // permission rather than recording starting the instant it's granted.
+        setGetReadyCount(GET_READY_SECONDS);
+        setPhase('get_ready');
+        let remaining = GET_READY_SECONDS;
+        const countdownInterval = setInterval(() => {
+          remaining -= 1;
+          if (cancelled) { clearInterval(countdownInterval); return; }
+          if (remaining <= 0) {
+            clearInterval(countdownInterval);
+            recorderRef.current?.start();
+            runPhase('recording_screen', RECORD_SCREEN_MS, () => {
+              runPhase('recording_pan', RECORD_PAN_MS, () => {
+                recorderRef.current?.stop();
+              });
+            });
+          } else {
+            setGetReadyCount(remaining);
+          }
+        }, 1000);
+
+        // Drives both the visible countdown ("5s" ticking to "0s") and the
+        // phase transition itself from a single interval, so the on-screen
+        // number and the actual timing can never drift apart. Resets to 5
+        // fresh for each phase rather than continuing from the prior phase.
+        function runPhase(nextPhase: Phase, durationMs: number, onDone: () => void) {
           if (cancelled) return;
-          setPhase('recording_pan');
-          setTimeout(() => {
-            if (cancelled) return;
-            recorderRef.current?.stop();
-          }, RECORD_PAN_MS);
-        }, RECORD_SCREEN_MS);
+          setPhase(nextPhase);
+          let secondsLeft = Math.round(durationMs / 1000);
+          setRecordingCountdown(secondsLeft);
+          const phaseInterval = setInterval(() => {
+            secondsLeft -= 1;
+            if (cancelled) { clearInterval(phaseInterval); return; }
+            if (secondsLeft <= 0) {
+              clearInterval(phaseInterval);
+              onDone();
+            } else {
+              setRecordingCountdown(secondsLeft);
+            }
+          }, 1000);
+        }
       } catch {
         if (!cancelled) setPhase('permission_denied');
       }
@@ -203,24 +242,38 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           already available the instant getUserMedia resolves, above —
           otherwise the stream has nowhere to attach to and the preview
           stays black even though recording is happening. Hidden outside
-          the recording phases via `hidden` rather than unmounted. */}
-      <div className={`w-full max-w-sm space-y-4 ${(phase === 'recording_screen' || phase === 'recording_pan') ? '' : 'hidden'}`}>
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="w-full aspect-video rounded-xl bg-black object-cover"
-        />
-        <div className="flex items-center justify-center gap-2 text-red-400 text-xs font-medium">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          Recording
+          the get-ready/recording phases via `hidden` rather than unmounted. */}
+      <div className={`w-full max-w-sm space-y-4 ${(phase === 'get_ready' || phase === 'recording_screen' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+        <div className="relative">
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className="w-full aspect-video rounded-xl bg-black object-cover"
+          />
+          {phase === 'get_ready' && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-xl">
+              <span className="text-6xl font-bold text-white drop-shadow-lg">{getReadyCount}</span>
+            </div>
+          )}
         </div>
-        <p className="text-sm leading-relaxed">
-          {phase === 'recording_screen'
-            ? 'Recording your screen with this frame — point your camera at your laptop screen and keep it steady.'
-            : 'Now slowly turn your mobile from left to right, and right to left.'}
-        </p>
+        {phase === 'get_ready' ? (
+          <p className="text-sm leading-relaxed font-medium">Get ready — recording starts now…</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-center gap-2 text-red-400 text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              Recording
+              <span className="text-white font-mono">· {recordingCountdown}s</span>
+            </div>
+            <p className="text-sm leading-relaxed">
+              {phase === 'recording_screen'
+                ? 'Recording your screen with this frame — point your camera at your laptop screen and keep it steady.'
+                : 'Now slowly turn your mobile from left to right, and right to left.'}
+            </p>
+          </>
+        )}
       </div>
 
       {phase === 'ready_to_submit' && (
