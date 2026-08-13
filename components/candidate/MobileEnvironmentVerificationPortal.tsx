@@ -76,95 +76,149 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     return () => { cancelled = true; };
   }, [token]);
 
-  useEffect(() => {
-    if (phase !== 'requesting_permission') return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
-          audio: true,
-        });
-        if (cancelled) {
-          stream.getTracks().forEach(t => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        // The <video> element is always mounted (see render below) precisely
-        // so this ref is guaranteed non-null here — it used to only render
-        // during the recording_screen/recording_pan phases, which hadn't
-        // started yet at this point in the effect, leaving srcObject unset
-        // and the preview permanently black even though recording worked.
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => { /* autoplay may need a user gesture on some browsers; recording still proceeds */ });
-        }
+  // Guards against starting this lifecycle more than once — covers React
+  // StrictMode's double-invoke in dev, rapid double-taps on Next, and any
+  // other re-entrancy. Once true, startVerificationFlow() is a no-op.
+  const startedRef = useRef(false);
 
-        const mimeType = ['video/webm;codecs=vp8,opus', 'video/webm']
-          .find(t => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t));
-        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-        chunksRef.current = [];
-        recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-        // Recording stops after both timed phases complete — hand control to
-        // the candidate instead of auto-uploading, per spec Step 6 ("the
-        // candidate have to submit the recordings").
-        recorder.onstop = () => {
-          streamRef.current?.getTracks().forEach(t => t.stop());
-          if (!cancelled) setPhase('ready_to_submit');
-        };
-        recorderRef.current = recorder;
+  // ── The entire permission → get-ready → record → stop lifecycle ──
+  //
+  // ROOT CAUSE OF THE "stuck after countdown" BUG (fixed here): this used to
+  // live inside a `useEffect(() => {...}, [phase])`. That effect called
+  // `setPhase(...)` on itself multiple times (to 'get_ready', then later
+  // 'recording_screen'/'recording_pan') — and since `phase` was the effect's
+  // own dependency, every one of those internal setPhase calls caused React
+  // to tear down and re-run the effect. The teardown's `cancelled = true`
+  // poisoned the ORIGINAL running countdown/recording closures (they all
+  // checked the same `cancelled` variable each tick), so the very first
+  // internal phase change silently killed the countdown before it ever
+  // reached zero — recorder.start() was never called, and the UI froze on
+  // "Get ready — recording starts now…" exactly as reported.
+  //
+  // Fix: this is now a plain async function, called ONCE from the Next
+  // button's onClick — not a useEffect — so no internal setState call can
+  // ever retrigger it. Timing is elapsed-time based (Date.now() deltas)
+  // rather than chained setTimeout, so drift/re-render timing can't cause
+  // a phase to be skipped or double-fired.
+  const startVerificationFlow = async () => {
+    if (startedRef.current) return; // prevents any double-entry
+    startedRef.current = true;
 
-        // Brief "Get Ready" countdown before recording actually starts, so the
-        // candidate has a moment to position their phone after granting
-        // permission rather than recording starting the instant it's granted.
-        setGetReadyCount(GET_READY_SECONDS);
-        setPhase('get_ready');
-        let remaining = GET_READY_SECONDS;
-        const countdownInterval = setInterval(() => {
-          remaining -= 1;
-          if (cancelled) { clearInterval(countdownInterval); return; }
-          if (remaining <= 0) {
-            clearInterval(countdownInterval);
-            recorderRef.current?.start();
-            runPhase('recording_screen', RECORD_SCREEN_MS, () => {
-              runPhase('recording_pan', RECORD_PAN_MS, () => {
-                recorderRef.current?.stop();
-              });
-            });
-          } else {
-            setGetReadyCount(remaining);
-          }
-        }, 1000);
+    setPhase('requesting_permission');
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: true,
+      });
+    } catch {
+      setPhase('permission_denied');
+      return;
+    }
 
-        // Drives both the visible countdown ("5s" ticking to "0s") and the
-        // phase transition itself from a single interval, so the on-screen
-        // number and the actual timing can never drift apart. Resets to 5
-        // fresh for each phase rather than continuing from the prior phase.
-        function runPhase(nextPhase: Phase, durationMs: number, onDone: () => void) {
-          if (cancelled) return;
-          setPhase(nextPhase);
-          let secondsLeft = Math.round(durationMs / 1000);
-          setRecordingCountdown(secondsLeft);
-          const phaseInterval = setInterval(() => {
-            secondsLeft -= 1;
-            if (cancelled) { clearInterval(phaseInterval); return; }
-            if (secondsLeft <= 0) {
-              clearInterval(phaseInterval);
-              onDone();
-            } else {
-              setRecordingCountdown(secondsLeft);
-            }
-          }, 1000);
-        }
-      } catch {
-        if (!cancelled) setPhase('permission_denied');
+    // Verify the stream actually has a live video track before proceeding —
+    // per spec, never enable the countdown on an invalid stream.
+    const videoTrack = stream.getVideoTracks()[0];
+    if (!videoTrack || videoTrack.readyState !== 'live') {
+      stream.getTracks().forEach(t => t.stop());
+      setErrorMessage('Camera stream could not be started. Please try again.');
+      setPhase('permission_denied');
+      return;
+    }
+
+    streamRef.current = stream;
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => { /* autoplay may need a user gesture on some browsers; recording still proceeds */ });
+    }
+
+    const mimeType = ['video/webm;codecs=vp8,opus', 'video/webm']
+      .find(t => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t));
+    if (!mimeType && typeof MediaRecorder === 'undefined') {
+      stream.getTracks().forEach(t => t.stop());
+      setErrorMessage('Video recording is not supported in this browser.');
+      setPhase('permission_denied');
+      return;
+    }
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    chunksRef.current = [];
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    recorder.onstop = () => {
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      // Blob validation (spec #17) before ever offering Upload — never show
+      // a fake success state on an empty/invalid recording.
+      const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'video/webm' });
+      if (!blob || blob.size === 0) {
+        setErrorMessage('Recording failed. Please close this page and rescan the QR code to try again.');
+        setPhase('error');
+        return;
       }
-    })();
-    return () => {
-      cancelled = true;
+      setPhase('ready_to_submit');
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+    recorderRef.current = recorder;
+
+    // Elapsed-time-based countdown/phase driver (spec #27) — a single
+    // 200ms-tick interval computes each stage from Date.now() deltas rather
+    // than chaining setTimeout durations, so rendering delays can't cause
+    // drift or a skipped transition.
+    const getReadyStart = Date.now();
+    setGetReadyCount(GET_READY_SECONDS);
+    setPhase('get_ready');
+
+    await new Promise<void>(resolve => {
+      const tick = setInterval(() => {
+        const elapsedSec = (Date.now() - getReadyStart) / 1000;
+        const remaining = Math.max(0, Math.ceil(GET_READY_SECONDS - elapsedSec));
+        if (elapsedSec >= GET_READY_SECONDS) {
+          clearInterval(tick);
+          resolve();
+        } else {
+          setGetReadyCount(remaining);
+        }
+      }, 200);
+    });
+
+    // Guard: only ever call .start() once, and only if not already recording
+    // (spec #5, #28) — verify actual recorder.state afterward rather than
+    // assuming success.
+    if (recorderRef.current && (recorderRef.current.state as string) !== 'recording') {
+      recorderRef.current.start();
+      const stateAfterStart: string = recorderRef.current.state;
+      if (stateAfterStart !== 'recording') {
+        setErrorMessage('Recording could not be started. Please try again.');
+        setPhase('error');
+        return;
+      }
+      // Tell the backend the INSTANT recording is confirmed live — this is
+      // what the laptop's 1-color-per-second RGB cycle syncs to, not link-
+      // open time, so candidate-side delays (reading instructions, granting
+      // permission) never desync the sequence from what's actually being
+      // filmed. Best-effort/fire-and-forget: a failed push just means the
+      // laptop keeps showing color #1 a little longer — never blocks the
+      // phone's own recording, which is already running by this point.
+      verifyApi.post(`/candidate/environment-verify/${token}/recording-started`).catch(() => { /* best-effort */ });
+    }
+
+    const runElapsedPhase = (nextPhase: Phase, durationMs: number) => new Promise<void>(resolve => {
+      const phaseStart = Date.now();
+      setPhase(nextPhase);
+      setRecordingCountdown(Math.round(durationMs / 1000));
+      const tick = setInterval(() => {
+        const elapsedMs = Date.now() - phaseStart;
+        const remaining = Math.max(0, Math.ceil((durationMs - elapsedMs) / 1000));
+        if (elapsedMs >= durationMs) {
+          clearInterval(tick);
+          resolve();
+        } else {
+          setRecordingCountdown(remaining);
+        }
+      }, 200);
+    });
+
+    await runElapsedPhase('recording_screen', RECORD_SCREEN_MS);
+    await runElapsedPhase('recording_pan', RECORD_PAN_MS);
+    recorderRef.current?.stop(); // triggers onstop → Blob validation → ready_to_submit
+  };
 
   useEffect(() => {
     return () => {
@@ -217,7 +271,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           </div>
           <button
             type="button"
-            onClick={() => setPhase('requesting_permission')}
+            onClick={() => { void startVerificationFlow(); }}
             className="w-full py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
           >
             Next

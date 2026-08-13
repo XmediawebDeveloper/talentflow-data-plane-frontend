@@ -12,6 +12,11 @@ interface EnvironmentVerificationOverlayProps {
   challengeId: string | null;
   /** True once the candidate's phone has actually opened the verify link. */
   challengeRevealed: boolean;
+  /** 5 sequential colors, one per second, for the 1s-RGB anti-replay check. */
+  challengeColors: string[] | null;
+  /** Set once the phone confirms MediaRecorder is actually recording — the
+   *  authoritative t=0 the 1-color-per-second cycle is keyed against. */
+  recordingStartedAt: string | null;
   onExpired: () => void;
 }
 
@@ -46,9 +51,15 @@ export function EnvironmentVerificationOverlay({
   challengeColor,
   challengeId,
   challengeRevealed,
+  challengeColors,
+  recordingStartedAt,
   onExpired,
 }: EnvironmentVerificationOverlayProps) {
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
+  // Index into challengeColors, driven by elapsed time since
+  // recordingStartedAt — 1 color per second for the first 5 seconds, then
+  // holds on the last color (phone has moved into its pan phase by then).
+  const [colorIndex, setColorIndex] = useState(0);
 
   useEffect(() => {
     if (!active || !expiresAt) return;
@@ -63,16 +74,38 @@ export function EnvironmentVerificationOverlay({
     return () => clearInterval(interval);
   }, [active, expiresAt, onExpired]);
 
+  useEffect(() => {
+    if (!recordingStartedAt || !challengeColors || challengeColors.length === 0) {
+      setColorIndex(0);
+      return;
+    }
+    const startedAtMs = new Date(recordingStartedAt).getTime();
+    const tick = () => {
+      const elapsedSec = (Date.now() - startedAtMs) / 1000;
+      const idx = Math.min(challengeColors.length - 1, Math.max(0, Math.floor(elapsedSec)));
+      setColorIndex(idx);
+    };
+    tick();
+    const interval = setInterval(tick, 200);
+    return () => clearInterval(interval);
+  }, [recordingStartedAt, challengeColors]);
+
   if (!active) return null;
 
   const minutes = Math.floor(secondsRemaining / 60);
   const seconds = secondsRemaining % 60;
   const hasChallenge = Boolean(challengeColor && challengeId && challengeRevealed);
+  // Before recording actually starts, hold on color #1 (static) so there's
+  // still something correct on screen; once recordingStartedAt arrives,
+  // cycle through the full sequence via colorIndex.
+  const displayColor = challengeColors && challengeColors.length > 0
+    ? challengeColors[colorIndex]
+    : challengeColor;
 
   return (
     <div
       className="fixed inset-0 z-[300] flex items-center justify-center transition-colors duration-300"
-      style={{ backgroundColor: challengeColor || 'rgba(0,0,0,0.9)' }}
+      style={{ backgroundColor: displayColor || 'rgba(0,0,0,0.9)' }}
     >
       {hasChallenge ? (
         // Once the phone has opened the link, the QR/card's job is done —

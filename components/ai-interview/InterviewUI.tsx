@@ -816,6 +816,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // laptop's background dark/neutral until then instead of revealing the
     // challenge color the instant the QR itself appears.
     challengeRevealed: boolean;
+    // 5 sequential colors (1 per second) for the phone's first 5s recording
+    // phase — populated by "environment_verification_triggered", cycled
+    // starting from recordingStartedAt (below), NOT from when the QR/link
+    // was opened, so candidate-side delays can't desync the sequence from
+    // what their phone is actually filming.
+    challengeColors: string[] | null;
+    // Set only once "environment_verification_recording_started" arrives —
+    // the phone's confirmed t=0 for the RGB cycle.
+    recordingStartedAt: string | null;
   }>(null);
 
   // Session ID — populated from `connected` WS event, used for violation event logging
@@ -3533,6 +3542,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           challengeColor: typeof data.challenge_color === 'string' ? data.challenge_color : null,
           challengeId: typeof data.challenge_id === 'string' ? data.challenge_id : null,
           challengeRevealed: false,
+          challengeColors: Array.isArray(data.challenge_colors) ? data.challenge_colors : null,
+          recordingStartedAt: null,
         });
         setStatus('Interview paused — verify your environment on your phone');
         break;
@@ -3543,6 +3554,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // than showing it from when the QR first appeared.
         console.log(`[WS ${timestamp}] Environment verification link opened on phone — revealing challenge`);
         setEnvVerification(prev => prev ? { ...prev, challengeRevealed: true } : prev);
+        break;
+      }
+      case "environment_verification_recording_started": {
+        // Phone confirmed MediaRecorder is actually recording — this is the
+        // authoritative t=0 the 1-color-per-second cycle is keyed against.
+        console.log(`[WS ${timestamp}] Environment verification recording started — beginning RGB cycle`);
+        setEnvVerification(prev => prev ? {
+          ...prev,
+          recordingStartedAt: typeof data.recording_started_at === 'string' ? data.recording_started_at : null,
+          challengeColors: Array.isArray(data.challenge_colors) ? data.challenge_colors : prev.challengeColors,
+        } : prev);
         break;
       }
       case "environment_verification_submitted": {
@@ -9152,6 +9174,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         challengeColor={envVerification?.challengeColor ?? null}
         challengeId={envVerification?.challengeId ?? null}
         challengeRevealed={envVerification?.challengeRevealed ?? false}
+        challengeColors={envVerification?.challengeColors ?? null}
+        recordingStartedAt={envVerification?.recordingStartedAt ?? null}
         onExpired={() => {
           // Candidate never completed verification in time — never hard-stall
           // the interview on it. Resume ourselves; the backend independently

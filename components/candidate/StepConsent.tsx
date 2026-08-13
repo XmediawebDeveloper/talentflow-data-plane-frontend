@@ -36,6 +36,13 @@ interface StepConsentProps {
   interviewType?: string;
   interviewMode?: string | null;
   totalQuestions?: number;
+  /** When true, informs the candidate before the interview starts that they
+   *  will need their mobile phone to complete a proxy verification process —
+   *  per the "AI Interview configuration" section of the Mobile QR
+   *  Environment Verification spec ("the candidate will be informed on this
+   *  process before interview starts where they will be requiring their
+   *  mobile to complete proxy verification process"). */
+  environmentVerificationEnabled?: boolean;
 }
 
 type ConsentKey = 'consent_video' | 'consent_audio' | 'consent_biometric' | 'consent_ai_analysis' | 'consent_terms';
@@ -86,6 +93,7 @@ export default function StepConsent({
   interviewType,
   interviewMode,
   totalQuestions,
+  environmentVerificationEnabled,
 }: StepConsentProps) {
   const [showFullDesc, setShowFullDesc] = useState(false);
   const [showConsentModal, setShowConsentModal] = useState(false);
@@ -325,6 +333,13 @@ export default function StepConsent({
               <li>• If a genuine network or client failure occurs, the assessment can recover from the saved server state</li>
               <li>• Ensure you are in a quiet, well-lit environment</li>
               <li>• Tab switching and copy/paste are monitored</li>
+              {environmentVerificationEnabled && (
+                <li>
+                  • At some point during the interview, you&apos;ll be asked to scan a QR code
+                  with your <strong>mobile phone</strong> to briefly verify your physical
+                  environment — have your phone within reach
+                </li>
+              )}
             </ul>
           </div>
         </div>
