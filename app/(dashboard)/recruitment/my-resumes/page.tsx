@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical, RefreshCw, Ban, Brain } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical, RefreshCw, Ban, Brain, Edit2 } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
@@ -12,7 +12,7 @@ import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import Pagination from '@/components/Pagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
-import FolderTree, { FOLDER_NAME_MAX_LENGTH } from '@/components/FolderTree';
+import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadModal from '@/components/UploadModal';
 import type { DuplicateFile, ExistingResume } from '@/components/DuplicateResumeModal';
@@ -64,9 +64,289 @@ const formatDateTimeIST = formatIST;
 // Drag item type for resumes (must match ResumeTable and FolderTree)
 const RESUME_DRAG_TYPE = 'RESUME';
 
+/** Height of the expanded subfolder list on a folder card — roughly five rows,
+ *  after which it scrolls rather than growing the card. Applied inline:
+ *  Tailwind only ships classes spelled out in the source, so a `max-h-[${...}]`
+ *  built from this constant would never be generated. */
+const SUBFOLDER_PEEK_MAX_HEIGHT = 180;
+/** Width of the third-level flyout that opens beside the subfolder list. */
+const SUBFOLDER_PEEK_PANEL_WIDTH = 224;
+/** Approximate folder action menu height; used to decide whether to open upward. */
+const FOLDER_ACTION_MENU_HEIGHT = 188;
+
+type CardFolderFilter = 'all' | 'with-resumes' | 'empty' | 'with-subfolders' | 'max-depth';
+type CardResumeFilter = 'all' | 'active' | 'archived' | 'with-skills' | 'with-email' | 'with-phone';
+
+const CARD_FOLDER_FILTER_OPTIONS: { value: CardFolderFilter; label: string }[] = [
+  { value: 'all', label: 'All folders' },
+  { value: 'with-resumes', label: 'Has resumes' },
+  { value: 'empty', label: 'Empty' },
+  { value: 'with-subfolders', label: 'Has subfolders' },
+  { value: 'max-depth', label: 'Max depth' },
+];
+
+const CARD_RESUME_FILTER_OPTIONS: { value: CardResumeFilter; label: string }[] = [
+  { value: 'all', label: 'All resumes' },
+  { value: 'active', label: 'Active' },
+  { value: 'archived', label: 'Archived' },
+  { value: 'with-skills', label: 'Has skills' },
+  { value: 'with-email', label: 'Has email' },
+  { value: 'with-phone', label: 'Has phone' },
+];
+
 interface DragItem {
   id: string;
   ids: string[];
+}
+
+function UnifiedFolderResumeSearch({
+  query,
+  onQueryChange,
+  onClear,
+  folders,
+  resumes,
+  isLoading,
+  onSelectFolder,
+  onSelectResume,
+}: {
+  query: string;
+  onQueryChange: (value: string) => void;
+  onClear: () => void;
+  folders: FolderType[];
+  resumes: Resume[];
+  isLoading: boolean;
+  onSelectFolder: (folderId: string) => void;
+  onSelectResume: (resume: Resume) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const searchTerm = query.trim().toLowerCase();
+
+  const folderResults = useMemo(() => {
+    if (!searchTerm) return [];
+    const out: { folder: FolderType; path: string }[] = [];
+    const walk = (items: FolderType[], parentPath: string[] = []) => {
+      for (const folder of items) {
+        if (folder.id === 'all') continue;
+        const pathParts = [...parentPath, folder.name];
+        const path = pathParts.join(' / ');
+        if (`${folder.name} ${path}`.toLowerCase().includes(searchTerm)) {
+          out.push({ folder, path });
+        }
+        if (folder.children?.length) walk(folder.children, pathParts);
+      }
+    };
+    walk(folders);
+    return out.slice(0, 8);
+  }, [folders, searchTerm]);
+
+  const resumeResults = useMemo(() => {
+    if (!searchTerm) return [];
+    return resumes
+      .filter((resume) => {
+        const skills = getDisplaySkills(resume).join(' ');
+        const haystack = [
+          resume.name,
+          resume.candidate_name,
+          resume.title,
+          resume.fileName,
+          resume.file_name,
+          resume.email,
+          resume.phone,
+          resume.location,
+          skills,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(searchTerm);
+      })
+      .slice(0, 8);
+  }, [resumes, searchTerm]);
+
+  const hasResults = folderResults.length > 0 || resumeResults.length > 0;
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (containerRef.current?.contains(event.target as Node)) return;
+      setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+        inputRef.current?.blur();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const clear = () => {
+    onClear();
+    setIsOpen(false);
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          ref={inputRef}
+          type="search"
+          value={query}
+          onChange={(e) => {
+            onQueryChange(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            if (query.trim()) setIsOpen(true);
+          }}
+          placeholder="Search folders and resumes..."
+          className="w-full h-10 pl-10 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-400 [&::-webkit-search-cancel-button]:hidden"
+          role="searchbox"
+          aria-label="Search folders and resumes"
+          aria-autocomplete="list"
+        />
+        {isLoading && query.trim() ? (
+          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
+        ) : query ? (
+          <button
+            type="button"
+            onClick={clear}
+            className="absolute right-2 top-1/2 -translate-y-1/2 hover:bg-gray-200 rounded-full p-1 transition-colors"
+            aria-label="Clear global search"
+          >
+            <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+          </button>
+        ) : null}
+      </div>
+
+      {isOpen && query.trim() && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[420px] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02]">
+          {isLoading && !hasResults ? (
+            <div className="flex items-center justify-center py-8 text-sm text-gray-500">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Searching...
+            </div>
+          ) : !hasResults ? (
+            <div className="py-8 text-center text-sm text-gray-500">
+              No results found
+            </div>
+          ) : (
+            <>
+              {folderResults.length > 0 && (
+                <div>
+                  <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Folders ({folderResults.length})
+                  </div>
+                  {folderResults.map(({ folder, path }) => (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        onClear();
+                        onSelectFolder(folder.id);
+                      }}
+                      className="w-full border-b border-gray-50 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-brand-blue/5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-[11px] font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                          Folder
+                        </span>
+                        <span className="min-w-0 truncate text-sm font-medium text-gray-900">{folder.name}</span>
+                      </div>
+                      <div className="mt-0.5 truncate text-xs text-gray-500">{path}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {resumeResults.length > 0 && (
+                <div>
+                  <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Resumes ({resumeResults.length})
+                  </div>
+                  {resumeResults.map((resume) => (
+                    <button
+                      key={resume.id}
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        onClear();
+                        onSelectResume(resume);
+                      }}
+                      className="w-full border-b border-gray-50 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-brand-blue/5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700 ring-1 ring-green-200">
+                          Resume
+                        </span>
+                        <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+                          {resume.name || resume.candidate_name || resume.fileName || 'Resume'}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 truncate text-xs text-gray-500">
+                        {[resume.title, resume.email, resume.location].filter(Boolean).join(' / ') || resume.fileName || resume.file_name}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToolbarFilterSelect<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  icon,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+  icon: ReactNode;
+}) {
+  const isActive = value !== 'all';
+
+  return (
+    <label className="relative min-w-[180px] flex-1 sm:flex-none">
+      <span className="sr-only">{label}</span>
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+        {icon}
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className={`h-10 w-full appearance-none rounded-lg border pl-9 pr-8 text-sm text-black transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 ${
+          isActive
+            ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
+            : 'border-gray-300 bg-gray-50 hover:bg-white'
+        }`}
+        aria-label={label}
+        title={label}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+    </label>
+  );
 }
 
 // Droppable folder card for card view
@@ -76,8 +356,16 @@ interface DroppableFolderCardProps {
   hasSubfolders: boolean;
   isArchived: boolean;
   isRoot: boolean;
+  canUpload?: boolean;
+  canCreateSubfolder?: boolean;
+  canRename?: boolean;
+  canDelete?: boolean;
   onNavigate: (folderId: string) => void;
   onMoveToFolder?: (resumeIds: string[], folderId: string) => void;
+  onUploadToFolder?: (folderId: string) => void;
+  onCreateSubfolder?: (folderId: string) => void;
+  onStartRename?: (folder: FolderType) => void;
+  onDeleteFolder?: (folderId: string) => void;
 }
 
 function DroppableFolderCard({
@@ -86,8 +374,16 @@ function DroppableFolderCard({
   hasSubfolders,
   isArchived,
   isRoot,
+  canUpload = false,
+  canCreateSubfolder = false,
+  canRename = false,
+  canDelete = false,
   onNavigate,
   onMoveToFolder,
+  onUploadToFolder,
+  onCreateSubfolder,
+  onStartRename,
+  onDeleteFolder,
 }: DroppableFolderCardProps) {
   const [{ isOver, canDrop }, drop] = useDrop<DragItem, void, { isOver: boolean; canDrop: boolean }>({
     accept: RESUME_DRAG_TYPE,
@@ -107,10 +403,139 @@ function DroppableFolderCard({
 
   const isDropTarget = isOver && canDrop;
 
+  // Subfolders peek. Expanding beats making the user open the folder just to
+  // see what is in it, and beats a hover flyout: it survives the pointer
+  // leaving, and works on touch and keyboard.
+  const [showSubfolders, setShowSubfolders] = useState(false);
+  const subfolders = folder.children ?? [];
+  const [showActions, setShowActions] = useState(false);
+  const [actionsDropUp, setActionsDropUp] = useState(false);
+
+  // The list is drawn as a floating panel, not in the card's flow. In flow it
+  // grew the card, and a grid row is as tall as its tallest item — so opening
+  // one card left every neighbour in that row padded with dead space. Floating
+  // it keeps all the cards the same height and the grid on its rhythm.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const attachRefs = useCallback((node: HTMLDivElement | null) => {
+    cardRef.current = node;
+    (drop as unknown as (n: HTMLDivElement | null) => void)(node);
+  }, [drop]);
+
+  // Cards in the last row sit against the bottom of the page's white panel,
+  // which is `overflow-hidden` — a panel hanging below them gets cut off, and
+  // no z-index fixes clipping. So measure first and open upward when the room
+  // below runs out.
+  const [dropUp, setDropUp] = useState(false);
+
+  // Third level: the child row being hovered, and which side its panel opens
+  // on. Held on the card rather than inside the scrolling list, because that
+  // list is `overflow-y-auto` — a flyout rendered inside it would be clipped
+  // at its edge no matter what z-index it carried.
+  const [peekChild, setPeekChild] = useState<FolderType | null>(null);
+  const [peekOnLeft, setPeekOnLeft] = useState(false);
+
+  useEffect(() => {
+    if (!showSubfolders) setPeekChild(null);
+  }, [showSubfolders]);
+
+  useEffect(() => {
+    if (!peekChild) return;
+    const card = cardRef.current;
+    if (!card) return;
+    // Right by default; flip when the card sits against the right edge of the
+    // page panel, where a right-hand flyout would be cut off.
+    const rect = card.getBoundingClientRect();
+    setPeekOnLeft(window.innerWidth - rect.right < SUBFOLDER_PEEK_PANEL_WIDTH + 16);
+  }, [peekChild]);
+
+  const toggleSubfolders = () => {
+    if (showSubfolders) {
+      setShowSubfolders(false);
+      return;
+    }
+
+    const card = cardRef.current;
+    if (card) {
+      // The edge that actually clips is the nearest scroll/overflow ancestor,
+      // not the viewport — for the last row those are different by hundreds of
+      // pixels. Fall back to the viewport when the card is in normal flow.
+      let clipBottom = window.innerHeight;
+      for (let node = card.parentElement; node; node = node.parentElement) {
+        const { overflow, overflowY } = window.getComputedStyle(node);
+        if (overflow !== 'visible' || overflowY !== 'visible') {
+          clipBottom = Math.min(clipBottom, node.getBoundingClientRect().bottom);
+          break;
+        }
+      }
+      const rect = card.getBoundingClientRect();
+      const roomBelow = clipBottom - rect.bottom;
+      const roomAbove = rect.top;
+      const needed = SUBFOLDER_PEEK_MAX_HEIGHT + 8;
+      // Down unless it won't fit and up genuinely fits better.
+      setDropUp(roomBelow < needed && roomAbove > roomBelow);
+    }
+
+    setShowSubfolders(true);
+  };
+
+  const toggleActions = () => {
+    if (!showActions) {
+      const card = cardRef.current;
+      const rect = card?.getBoundingClientRect();
+      if (rect) {
+        const boundary = card.closest('[data-folder-card-boundary]')?.getBoundingClientRect();
+        const boundaryBottom = Math.min(window.innerHeight, boundary?.bottom ?? window.innerHeight);
+        const boundaryTop = Math.max(0, boundary?.top ?? 0);
+        const roomBelow = boundaryBottom - rect.bottom;
+        const roomAbove = rect.top - boundaryTop;
+        setActionsDropUp(roomBelow < FOLDER_ACTION_MENU_HEIGHT && roomAbove > roomBelow);
+      } else {
+        setActionsDropUp(false);
+      }
+      setShowSubfolders(false);
+    }
+
+    setShowActions((current) => !current);
+  };
+
+  // A floating panel that outlives a click elsewhere would sit over unrelated
+  // cards, so close it the way any popover closes.
+  useEffect(() => {
+    if (!showSubfolders) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (cardRef.current?.contains(event.target as Node)) return;
+      setShowSubfolders(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [showSubfolders]);
+
+  useEffect(() => {
+    if (!showActions) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      if (cardRef.current?.contains(event.target as Node)) return;
+      setShowActions(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [showActions]);
+
+  const runFolderAction = (event: React.MouseEvent, action?: () => void, disabled = false) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (disabled || !action) return;
+    action();
+    setShowActions(false);
+  };
+
   return (
     <div
-      ref={drop as unknown as React.Ref<HTMLDivElement>}
-      className={`bg-white border rounded-xl shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 transition-all ${
+      ref={attachRefs}
+      className={`group relative bg-white border rounded-xl shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 transition-all ${
+        // High enough to clear the sections that follow the grid (the resumes
+        // table and its own layers), not just the neighbouring cards.
+        showActions ? 'z-50' : showSubfolders ? 'z-40' : ''
+      } ${
         isDropTarget
           ? 'border-brand-blue border-2 border-dashed bg-brand-blue/5'
           : isArchived
@@ -120,6 +545,9 @@ function DroppableFolderCard({
               : 'border-gray-100 hover:border-brand-blue/30 hover:-translate-y-0.5 duration-150'
       }`}
       onClick={() => onNavigate(folder.id)}
+      // The flyout is a descendant, so this doesn't fire while the pointer is
+      // on it — only when it leaves the card and its panels for good.
+      onMouseLeave={() => setPeekChild(null)}
     >
       <div className="flex items-center gap-3 p-3">
         <div className={`w-9 h-9 rounded-lg flex items-center justify-center ring-1 ${
@@ -135,16 +563,293 @@ function DroppableFolderCard({
             <Folder className={`w-4 h-4 ${isRoot ? 'text-green-600' : 'text-brand-blue'}`} />
           )}
         </div>
-        <div className="flex-1">
-          <h3 className="font-semibold text-sm text-gray-900">
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-sm text-gray-900 truncate">
             {isRoot ? 'Root (Default)' : folder.name}
           </h3>
           <p className="text-xs text-gray-500">
-            {hasSubfolders && `${folder.children!.length} subfolder${folder.children!.length !== 1 ? 's' : ''} • `}
+            {hasSubfolders && `${subfolders.length} subfolder${subfolders.length !== 1 ? 's' : ''} • `}
             {resumeCount} resume{resumeCount !== 1 ? 's' : ''}
           </p>
         </div>
-        <ChevronRight className="w-4 h-4 text-gray-400" />
+        {/* Peek toggle. `stopPropagation` so it never triggers the card's own
+            navigate — the whole point is to look without leaving. */}
+        <div className="relative flex-shrink-0">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleActions();
+            }}
+            className={`p-1 rounded-md transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 ${
+              showActions
+                ? 'opacity-100 pointer-events-auto bg-brand-blue/10 text-brand-blue'
+                : 'opacity-100 text-gray-500 hover:bg-brand-blue/10 hover:text-brand-blue sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100'
+            }`}
+            aria-haspopup="menu"
+            aria-expanded={showActions}
+            aria-label={`Folder actions for ${folder.name}`}
+            title="Folder actions"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+
+          {showActions && (
+            <div
+              role="menu"
+              className={`absolute right-0 w-52 rounded-lg border border-gray-200 bg-white py-1 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] z-50 ${
+                actionsDropUp ? 'bottom-full mb-1' : 'top-full mt-1'
+              }`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canUpload || !onUploadToFolder}
+                onClick={(e) => runFolderAction(e, () => onUploadToFolder?.(folder.id), !canUpload || !onUploadToFolder)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 disabled:text-gray-400 disabled:hover:bg-white disabled:hover:text-gray-400 transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                Upload to Folder
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canCreateSubfolder || !onCreateSubfolder}
+                onClick={(e) => runFolderAction(e, () => onCreateSubfolder?.(folder.id), !canCreateSubfolder || !onCreateSubfolder)}
+                title={!canCreateSubfolder ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : undefined}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 disabled:text-gray-400 disabled:hover:bg-white disabled:hover:text-gray-400 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create Subfolder</span>
+                {!canCreateSubfolder && <span className="ml-auto text-xs text-gray-400">(max)</span>}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canRename || !onStartRename}
+                onClick={(e) => runFolderAction(e, () => onStartRename?.(folder), !canRename || !onStartRename)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 disabled:text-gray-400 disabled:hover:bg-white disabled:hover:text-gray-400 transition-colors"
+              >
+                <Edit2 className="w-4 h-4" />
+                Rename Folder
+              </button>
+              <div className="my-1 border-t border-gray-100" />
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!canDelete || !onDeleteFolder}
+                onClick={(e) => runFolderAction(e, () => onDeleteFolder?.(folder.id), !canDelete || !onDeleteFolder)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 disabled:text-gray-400 disabled:hover:bg-white transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Folder
+              </button>
+            </div>
+          )}
+        </div>
+
+        {hasSubfolders && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleSubfolders();
+            }}
+            aria-expanded={showSubfolders}
+            aria-label={showSubfolders ? `Hide subfolders of ${folder.name}` : `Show subfolders of ${folder.name}`}
+            title={showSubfolders ? 'Hide subfolders' : 'Show subfolders'}
+            className="p-1 rounded-md text-gray-500 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors flex-shrink-0 cursor-pointer"
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ease-in-out ${showSubfolders ? 'rotate-180' : ''}`} />
+          </button>
+        )}
+        {/* One chevron per card: a folder with subfolders shows the peek
+            toggle, everything else keeps the plain navigate arrow. Showing
+            both read as two competing affordances. */}
+        {!hasSubfolders && <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+      </div>
+
+      {hasSubfolders && showSubfolders && (
+        // Anchored to the card and floating over whatever follows, so the grid
+        // never reflows. Capped at ~5 rows, then it scrolls;
+        // `overscroll-contain` keeps that scroll from chaining to the page.
+        <div
+          className={`absolute left-0 right-0 z-40 rounded-xl border border-gray-200 bg-white shadow-lg shadow-brand-blue/10 overflow-y-auto overscroll-contain ${
+            dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
+          }`}
+          style={{ maxHeight: `${SUBFOLDER_PEEK_MAX_HEIGHT}px` }}
+        >
+          {subfolders.map((child) => {
+            const childSubfolders = child.children?.length ?? 0;
+            return (
+              <button
+                key={child.id}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNavigate(child.id);
+                }}
+                // Hovering a row with its own subfolders opens the third level
+                // beside this panel — one more step visible without navigating.
+                onMouseEnter={() => setPeekChild(childSubfolders > 0 ? child : null)}
+                onFocus={() => setPeekChild(childSubfolders > 0 ? child : null)}
+                title={`Open ${child.name}`}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left border-b border-gray-100 last:border-b-0 transition-colors cursor-pointer ${
+                  peekChild?.id === child.id ? 'bg-brand-blue/5' : 'hover:bg-brand-blue/5'
+                }`}
+              >
+                <span aria-hidden="true" className="text-gray-300 text-xs leading-none">└</span>
+                <Folder className="w-3.5 h-3.5 text-brand-blue/70 flex-shrink-0" />
+                <span className="flex-1 min-w-0 truncate text-xs text-gray-700">{child.name}</span>
+                <span className="text-[11px] text-gray-500 flex-shrink-0">
+                  {childSubfolders > 0 && `${childSubfolders} sub • `}
+                  {child.count || 0}
+                </span>
+                <ChevronRight className={`w-3.5 h-3.5 flex-shrink-0 ${
+                  childSubfolders > 0 ? 'text-brand-blue' : 'text-gray-400'
+                }`} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Third level. Sits beside the subfolder list, top-aligned with it, and
+          at z-50 so it clears the list (z-40) it overlaps. No gap between the
+          two: a margin here would let the pointer cross dead space on its way
+          over, closing the flyout before it arrived. */}
+      {hasSubfolders && showSubfolders && peekChild && (
+        <div
+          className={`absolute z-50 rounded-xl border border-gray-200 bg-white shadow-xl shadow-brand-blue/10 overflow-y-auto overscroll-contain ${
+            dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
+          } ${peekOnLeft ? 'right-full' : 'left-full'}`}
+          style={{ width: `${SUBFOLDER_PEEK_PANEL_WIDTH}px`, maxHeight: `${SUBFOLDER_PEEK_MAX_HEIGHT}px` }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-1.5 text-[11px] font-medium text-gray-500 bg-slate-50 border-b border-gray-100 truncate">
+            {peekChild.name}
+          </div>
+          {(peekChild.children ?? []).map((grandChild) => (
+            <button
+              key={grandChild.id}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onNavigate(grandChild.id);
+              }}
+              title={`Open ${grandChild.name}`}
+              className="w-full flex items-center gap-2 px-3 py-2 text-left border-b border-gray-100 last:border-b-0 hover:bg-brand-blue/5 transition-colors cursor-pointer"
+            >
+              <Folder className="w-3.5 h-3.5 text-brand-blue/70 flex-shrink-0" />
+              <span className="flex-1 min-w-0 truncate text-xs text-gray-700">{grandChild.name}</span>
+              <span className="text-[11px] text-gray-500 flex-shrink-0">{grandChild.count || 0}</span>
+              <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Inline name field for creating a folder from the card view.
+ *
+ * Mirrors the folder tree's create input — same cap, same Enter to submit /
+ * Esc to cancel — so the two entry points behave identically. Sized to a card
+ * column rather than full width so it reads as "a folder will appear here".
+ */
+function CardFolderNameInput({
+  value,
+  onChange,
+  onSubmit,
+  onCancel,
+  placeholder,
+  submitLabel = 'Create',
+  inline = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  placeholder: string;
+  submitLabel?: string;
+  inline?: boolean;
+}) {
+  if (inline) {
+    return (
+      <div className="absolute right-0 top-full z-40 mt-2 w-full max-w-xl">
+      <div className="flex flex-col gap-2 rounded-lg border border-brand-blue/20 bg-white p-2 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] sm:flex-row sm:items-center">
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onSubmit();
+            if (e.key === 'Escape') onCancel();
+          }}
+          placeholder={placeholder}
+          maxLength={FOLDER_NAME_MAX_LENGTH}
+          autoFocus
+          className="min-w-0 flex-1 rounded-md border border-brand-blue px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+        />
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">{value.length}/{FOLDER_NAME_MAX_LENGTH}</span>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={!value.trim()}
+            className="rounded bg-brand-blue px-3 py-1.5 text-xs text-white shadow-sm shadow-brand-blue/20 ring-1 ring-white/10 hover:bg-brand-blue-2 disabled:cursor-not-allowed disabled:bg-gray-300"
+          >
+            {submitLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded border border-brand-blue/30 px-3 py-1.5 text-xs text-brand-blue hover:bg-brand-blue/5 hover:text-brand-blue-2"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3 sm:mb-4 max-w-sm">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSubmit();
+          if (e.key === 'Escape') onCancel();
+        }}
+        placeholder={placeholder}
+        maxLength={FOLDER_NAME_MAX_LENGTH}
+        autoFocus
+        className="w-full px-3 py-1.5 text-sm border border-brand-blue rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+      />
+      <div className="flex items-center gap-2 mt-2">
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={!value.trim()}
+          className="px-3 py-1 text-xs bg-brand-blue text-white rounded hover:bg-brand-blue-2 disabled:bg-gray-300 disabled:cursor-not-allowed cursor-pointer"
+        >
+          {submitLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1 text-xs border border-brand-blue/30 rounded hover:bg-brand-blue/5 text-brand-blue hover:text-brand-blue-2 cursor-pointer"
+        >
+          Cancel
+        </button>
+        <span className="text-xs text-gray-400 ml-auto">{value.length}/{FOLDER_NAME_MAX_LENGTH}</span>
       </div>
     </div>
   );
@@ -337,6 +1042,17 @@ export default function MyResumesPage() {
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list');
   const [cardViewFolder, setCardViewFolder] = useState<string | null>(null); // Selected folder in card view
   const [breadcrumbPath, setBreadcrumbPath] = useState<{ id: string; name: string }[]>([]); // Breadcrumb navigation path
+  // Inline folder creation in card view — the tree panel isn't on screen here,
+  // so the grid needs its own entry point. Holds the target parent (null = a
+  // top-level folder) rather than a boolean, so the same input serves both the
+  // root grid and the "Subfolders" grid inside a folder.
+  const [cardFolderParentId, setCardFolderParentId] = useState<string | null | undefined>(undefined);
+  const [cardNewFolderName, setCardNewFolderName] = useState('');
+  const [cardRenamingFolderId, setCardRenamingFolderId] = useState<string | null>(null);
+  const [cardRenameValue, setCardRenameValue] = useState('');
+  const [cardFolderFilter, setCardFolderFilter] = useState<CardFolderFilter>('all');
+  const [cardResumeFilter, setCardResumeFilter] = useState<CardResumeFilter>('all');
+  const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string | undefined>();
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -1068,6 +1784,15 @@ export default function MyResumesPage() {
     return path;
   }, [getFolderById]);
 
+  const getFolderDepth = useCallback((folderId: string | null): number => {
+    return buildBreadcrumbPath(folderId).length;
+  }, [buildBreadcrumbPath]);
+
+  const canCreateNestedFolder = useCallback((parentId: string | null | undefined): boolean => {
+    if (!parentId) return true;
+    return getFolderDepth(parentId) < MAX_FOLDER_DEPTH;
+  }, [getFolderDepth]);
+
   // Navigate to folder in card view
   const navigateToFolder = useCallback((folderId: string | null) => {
     setCardViewFolder(folderId);
@@ -1093,6 +1818,15 @@ export default function MyResumesPage() {
       setBreadcrumbPath([]);
     }
   }, [buildBreadcrumbPath]);
+
+  useEffect(() => {
+    const folderIdFromUrl = searchParams.get('folder_id');
+    if (!folderIdFromUrl || !getFolderById(folderIdFromUrl)) return;
+
+    setViewMode('card');
+    navigateToFolder(folderIdFromUrl);
+    router.replace('/recruitment/my-resumes', { scroll: false });
+  }, [searchParams, getFolderById, navigateToFolder, router]);
 
   const handleSelectResume = (id: string) => {
     setSelectedResumes(prev =>
@@ -1726,6 +2460,10 @@ export default function MyResumesPage() {
 
   const handleCreateFolder = async (name: string, parentId?: string) => {
     try {
+      if (!canCreateNestedFolder(parentId)) {
+        toast.error(`Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)`);
+        return;
+      }
       if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
         toast.error('Folder name must not contain HTML or script content');
         return;
@@ -1793,6 +2531,59 @@ export default function MyResumesPage() {
     }
   };
 
+  const openCardFolderInput = (parentId: string | null) => {
+    if (!canCreateNestedFolder(parentId)) {
+      toast.error(`Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)`);
+      return;
+    }
+    setCardNewFolderName('');
+    setCardFolderParentId(parentId);
+  };
+
+  const closeCardFolderInput = () => {
+    setCardFolderParentId(undefined);
+    setCardNewFolderName('');
+  };
+
+  const submitCardFolder = async () => {
+    const name = cardNewFolderName.trim();
+    if (!name || cardFolderParentId === undefined) return;
+    if (!canCreateNestedFolder(cardFolderParentId)) {
+      toast.error(`Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)`);
+      closeCardFolderInput();
+      return;
+    }
+    await handleCreateFolder(name, cardFolderParentId ?? undefined);
+    closeCardFolderInput();
+  };
+
+  const openCardFolderRename = (folder: FolderType) => {
+    if ((folder.name.toLowerCase() === 'root' || folder.name === 'Archived Resumes') && !folder.parentId) {
+      toast.error('System folders cannot be renamed');
+      return;
+    }
+    closeCardFolderInput();
+    setCardRenamingFolderId(folder.id);
+    setCardRenameValue(folder.name);
+  };
+
+  const closeCardFolderRename = () => {
+    setCardRenamingFolderId(null);
+    setCardRenameValue('');
+  };
+
+  const submitCardFolderRename = async (folderId: string) => {
+    const name = cardRenameValue.trim();
+    if (!name) return;
+    await handleRenameFolder(folderId, name);
+    closeCardFolderRename();
+  };
+
+  const openUploadToFolder = (folderId?: string) => {
+    setUploadTargetFolderId(folderId);
+    setIsUploadModalOpen(true);
+  };
+
   const handleRenameFolder = async (id: string, name: string) => {
     try {
       if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
@@ -1804,7 +2595,7 @@ export default function MyResumesPage() {
         return;
       }
       // Prevent renaming "Archived Resumes" folder
-      const folderToRename = folders.find(f => f.id === id);
+      const folderToRename = getFolderById(id);
       if (folderToRename && folderToRename.name === 'Archived Resumes' && !folderToRename.parentId) {
         toast.error('Archived Resumes folder cannot be renamed');
         return;
@@ -1837,7 +2628,13 @@ export default function MyResumesPage() {
       }
 
       await folderService.update(id, { name });
-      setFolders(prev => prev.map(f => f.id === id ? { ...f, name } : f));
+      const renameInTree = (folderList: FolderType[]): FolderType[] =>
+        folderList.map((folder) => ({
+          ...folder,
+          name: folder.id === id ? name : folder.name,
+          children: folder.children ? renameInTree(folder.children) : folder.children,
+        }));
+      setFolders(prev => renameInTree(prev));
       toast.success('Folder renamed');
     } catch (error) {
       toast.error('Failed to rename folder');
@@ -1846,7 +2643,7 @@ export default function MyResumesPage() {
 
   const handleDeleteFolder = async (id: string) => {
     // Find the folder to check if it's a system folder
-    const folderToDelete = folders.find(f => f.id === id);
+    const folderToDelete = getFolderById(id);
 
     // Prevent deletion of root folder
     if (folderToDelete && folderToDelete.name.toLowerCase() === 'root' && !folderToDelete.parentId) {
@@ -1865,7 +2662,7 @@ export default function MyResumesPage() {
 
     // Find parent folder info
     const parentFolder = folderToDelete?.parentId
-      ? folders.find(f => f.id === folderToDelete.parentId)
+      ? getFolderById(folderToDelete.parentId)
       : null;
 
     // Find root folder
@@ -2432,6 +3229,16 @@ export default function MyResumesPage() {
   const totalResumes = resumes.length;
   const appliedResumes = 0; // Would need job applications data
   const availableResumes = totalResumes - appliedResumes;
+  const selectedCardFolderFilterLabel = CARD_FOLDER_FILTER_OPTIONS.find(option => option.value === cardFolderFilter)?.label;
+  const selectedCardResumeFilterLabel = CARD_RESUME_FILTER_OPTIONS.find(option => option.value === cardResumeFilter)?.label;
+  const gridToolbarFilterChips = [
+    ...(cardFolderFilter !== 'all' && selectedCardFolderFilterLabel
+      ? [{ key: 'folder-filter', label: `Folder: ${selectedCardFolderFilterLabel}`, onClear: () => setCardFolderFilter('all') }]
+      : []),
+    ...(cardResumeFilter !== 'all' && selectedCardResumeFilterLabel
+      ? [{ key: 'resume-filter', label: `Resume: ${selectedCardResumeFilterLabel}`, onClear: () => setCardResumeFilter('all') }]
+      : []),
+  ];
 
   // Handle duplicate resolution
   const handleResolveDuplicates = async (resolutions: { fileIndex: number; action: 'discard' | 'overwrite' | 'version' }[]) => {
@@ -2529,7 +3336,7 @@ export default function MyResumesPage() {
           )}
           {canUploadMyResumes && (
             <button
-              onClick={() => setIsUploadModalOpen(true)}
+              onClick={() => openUploadToFolder(undefined)}
               className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-md transition-all text-sm flex-1 sm:flex-initial bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
@@ -2572,49 +3379,128 @@ export default function MyResumesPage() {
           );
         })()}
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b border-gray-200">
-          <div className="flex-1 border-b sm:border-b-0 sm:border-r border-gray-200">
-            <SearchFilterBarCompact
-              searchQuery={searchQuery}
-              onSearchChange={handleSearchChange}
-              filters={filters}
-              onFiltersChange={(newFilters: any) => search.setFilters(newFilters)}
-              sortBy={sortBy}
-              onSortChange={(newSort: string) => { setSortBy(newSort); setCurrentPage(1); }}
-            />
-          </div>
-          {/* View Toggle */}
-          <div className="flex items-center justify-center gap-1 px-3 sm:px-4 py-2 sm:py-3">
-            <span className="text-xs text-gray-500 mr-1 sm:mr-2">View:</span>
-            <div className="flex items-center gap-1 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-1 rounded-lg">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 sm:p-2 rounded transition-all ${
-                  viewMode === 'list'
-                    ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
-                    : 'text-gray-600 hover:text-brand-blue'
-                }`}
-                aria-label="List View" title="List View"
-              >
-                <List className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('card')}
-                className={`p-1.5 sm:p-2 rounded transition-all ${
-                  viewMode === 'card'
-                    ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
-                    : 'text-gray-600 hover:text-brand-blue'
-                }`}
-                aria-label="Card View" title="Card View"
-              >
-                <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </button>
+        <div className="border-b border-gray-200 bg-white p-3">
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 xl:flex-row xl:items-start">
+              <div className="min-w-0 flex-1">
+                <UnifiedFolderResumeSearch
+                  query={searchQuery}
+                  onQueryChange={handleSearchChange}
+                  onClear={() => handleSearchChange('')}
+                  folders={folders}
+                  resumes={resumes}
+                  isLoading={loading || isPaginating}
+                  onSelectFolder={(folderId) => {
+                    if (viewMode === 'card') {
+                      navigateToFolder(folderId);
+                    } else {
+                      setSelectedFolder(folderId);
+                      setCurrentPage(1);
+                    }
+                  }}
+                  onSelectResume={(resume) => {
+                    sessionStorage.setItem('resumeNavList', JSON.stringify(resumes.map((r) => r.id)));
+                    sessionStorage.setItem('resumeNavSource', 'my-resumes');
+                    router.push(`/recruitment/resume-view/${resume.id}`);
+                  }}
+                />
+              </div>
+
+              {viewMode === 'card' && (
+                <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-auto xl:min-w-[380px]">
+                  <ToolbarFilterSelect<CardFolderFilter>
+                    label="Folder Filters"
+                    value={cardFolderFilter}
+                    options={CARD_FOLDER_FILTER_OPTIONS}
+                    onChange={setCardFolderFilter}
+                    icon={<Folder className="h-4 w-4" />}
+                  />
+                  <ToolbarFilterSelect<CardResumeFilter>
+                    label="Resume Filters"
+                    value={cardResumeFilter}
+                    options={CARD_RESUME_FILTER_OPTIONS}
+                    onChange={setCardResumeFilter}
+                    icon={<FileText className="h-4 w-4" />}
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-start gap-2 xl:w-auto">
+                <SearchFilterBarCompact
+                  searchQuery={searchQuery}
+                  onSearchChange={handleSearchChange}
+                  filters={filters}
+                  onFiltersChange={(newFilters: any) => search.setFilters(newFilters)}
+                  sortBy={sortBy}
+                  onSortChange={(newSort: string) => { setSortBy(newSort); setCurrentPage(1); }}
+                  hideSearch
+                  inline
+                />
+
+                <div className="flex h-10 items-center justify-center gap-1 rounded-lg bg-brand-blue/5 px-2 ring-1 ring-brand-blue/10">
+                  <span className="mr-1 text-xs text-gray-500">View</span>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('list')}
+                    className={`rounded p-2 transition-all ${
+                      viewMode === 'list'
+                        ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
+                        : 'text-gray-600 hover:text-brand-blue'
+                    }`}
+                    aria-label="List View" title="List View"
+                  >
+                    <List className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('card')}
+                    className={`rounded p-2 transition-all ${
+                      viewMode === 'card'
+                        ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
+                        : 'text-gray-600 hover:text-brand-blue'
+                    }`}
+                    aria-label="Grid View" title="Grid View"
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
+
+            {viewMode === 'card' && gridToolbarFilterChips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-gray-500">Grid filters:</span>
+                {gridToolbarFilterChips.map((chip) => (
+                  <span key={chip.key} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/5 px-2 py-0.5 text-xs text-brand-blue ring-1 ring-brand-blue/20">
+                    {chip.label}
+                    <button
+                      type="button"
+                      onClick={chip.onClear}
+                      className="rounded-full p-0.5 transition-colors hover:bg-brand-blue/10"
+                      aria-label={`Clear ${chip.label}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCardFolderFilter('all');
+                    setCardResumeFilter('all');
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-red-600 transition-colors hover:bg-red-50"
+                >
+                  <X className="h-3 w-3" />
+                  Clear grid filters
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Search Results Summary */}
-        {appliedSearchQuery && (
+        {viewMode === 'list' && appliedSearchQuery && (
           <div className="px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-gray-500" />
@@ -2649,7 +3535,7 @@ export default function MyResumesPage() {
               onUploadToFolder={(folderId) => {
                 if (!canUploadMyResumes) return;
                 setSelectedFolder(folderId);
-                setIsUploadModalOpen(true);
+                openUploadToFolder(folderId);
               }}
               onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
               selectedResumes={selectedResumes}
@@ -2734,11 +3620,16 @@ export default function MyResumesPage() {
           </div>
         ) : (
           // Card View - Folders as Cards with Breadcrumb Navigation
-          <div className="p-3 sm:p-4 md:p-6">
+          <div className="p-3 sm:p-4 md:p-6" data-folder-card-boundary>
             {(() => {
               // Get current folder data and children
               const currentFolderData = cardViewFolder ? getFolderById(cardViewFolder) : null;
               const folderName = currentFolderData?.name || 'All Folders';
+              const currentFolderDepth = cardViewFolder && cardViewFolder !== 'all' ? getFolderDepth(cardViewFolder) : 0;
+              const currentFolderCanCreateSubfolder =
+                cardViewFolder !== null &&
+                cardViewFolder !== 'all' &&
+                canCreateNestedFolder(cardViewFolder);
 
               // Get folders to display (top-level or children of current folder)
               const foldersToDisplay = cardViewFolder === null
@@ -2764,6 +3655,121 @@ export default function MyResumesPage() {
                   }
                 });
               }
+
+              // The fixtures, split out of the folder list so the root view can
+              // lead with them — same grouping the list view's folder tree uses.
+              const isSystemFolder = (f: FolderType) =>
+                !f.parentId && (f.name.toLowerCase() === 'root' || f.name === 'Archived Resumes');
+              const systemRank = (f: FolderType) => (f.name.toLowerCase() === 'root' ? 0 : 1);
+              const systemFolders = foldersToDisplay
+                .filter(isSystemFolder)
+                .sort((a, b) => systemRank(a) - systemRank(b));
+              const myFolders = foldersToDisplay.filter(f => !isSystemFolder(f));
+              const folderSearchTerm = searchQuery.trim().toLowerCase();
+              const folderControlsActive = !!folderSearchTerm || cardFolderFilter !== 'all';
+
+              const folderMatchesGridControls = (folder: FolderType) => {
+                const matchesSearch = !folderSearchTerm || folder.name.toLowerCase().includes(folderSearchTerm);
+                if (!matchesSearch) return false;
+
+                const folderResumeCount = folder.count || 0;
+                const folderSubfolderCount = folder.children?.length || 0;
+                switch (cardFolderFilter) {
+                  case 'with-resumes':
+                    return folderResumeCount > 0;
+                  case 'empty':
+                    return folderResumeCount === 0 && folderSubfolderCount === 0;
+                  case 'with-subfolders':
+                    return folderSubfolderCount > 0;
+                  case 'max-depth':
+                    return folder.id !== 'all' && getFolderDepth(folder.id) >= MAX_FOLDER_DEPTH;
+                  default:
+                    return true;
+                }
+              };
+
+              const allResumesCardFolder: FolderType = { id: 'all', name: 'All Resumes', count: totalItems };
+              const showAllResumesCard = cardViewFolder === null && folderMatchesGridControls(allResumesCardFolder);
+              const visibleSystemFolders = systemFolders.filter(folderMatchesGridControls);
+              const visibleMyFolders = myFolders.filter(folderMatchesGridControls);
+              const visibleFoldersToDisplay = foldersToDisplay.filter(folderMatchesGridControls);
+              const hasCurrentSubfolders = foldersToDisplay.length > 0;
+
+              const activeServerResumeFilterCount = Object.entries(filters).filter(([key, value]) => {
+                if (key === 'skills') return false;
+                if (key === 'experienceRange') return value && ((value as any).min !== undefined || (value as any).max !== undefined);
+                if (key === 'uploadDateRange') return value && ((value as any).start || (value as any).end);
+                return value !== null && value !== undefined && value !== '';
+              }).length;
+
+              const resumeMatchesGridFilter = (resume: Resume) => {
+                switch (cardResumeFilter) {
+                  case 'active':
+                    return !isResumeArchived(resume);
+                  case 'archived':
+                    return isResumeArchived(resume);
+                  case 'with-skills':
+                    return getDisplaySkills(resume).length > 0;
+                  case 'with-email':
+                    return !!resume.email;
+                  case 'with-phone':
+                    return !!resume.phone && resume.phone !== 'No phone';
+                  default:
+                    return true;
+                }
+              };
+              const visibleFolderResumes = folderResumes.filter(resumeMatchesGridFilter);
+              const resumeControlsActive = !!searchQuery.trim() || cardResumeFilter !== 'all' || activeServerResumeFilterCount > 0;
+              const renderFolderCard = (folder: FolderType) => {
+                const isArchivedFolder = folder.name === 'Archived Resumes' && !folder.parentId;
+                const isRootFolder = folder.name.toLowerCase() === 'root' && !folder.parentId;
+                const isSystemCard = isArchivedFolder || isRootFolder;
+
+                return (
+                  <div key={folder.id} className="space-y-2">
+                    <DroppableFolderCard
+                      folder={folder}
+                      // Use folder.count from the API (total) rather than recounting
+                      // the current page of resumes.
+                      resumeCount={folder.count || 0}
+                      hasSubfolders={(folder.children && folder.children.length > 0) || false}
+                      isArchived={isArchivedFolder}
+                      isRoot={isRootFolder}
+                      canUpload={canUploadMyResumes}
+                      canCreateSubfolder={canUploadMyResumes && canCreateNestedFolder(folder.id)}
+                      canRename={canUpdateMyResumes && !isSystemCard}
+                      canDelete={canDeleteMyResumes && !isSystemCard}
+                      onNavigate={navigateToFolder}
+                      onMoveToFolder={handleMoveToFolder}
+                      onUploadToFolder={openUploadToFolder}
+                      onCreateSubfolder={openCardFolderInput}
+                      onStartRename={openCardFolderRename}
+                      onDeleteFolder={handleDeleteFolder}
+                    />
+
+                    {cardFolderParentId === folder.id && canCreateNestedFolder(folder.id) && (
+                      <CardFolderNameInput
+                        value={cardNewFolderName}
+                        onChange={setCardNewFolderName}
+                        onSubmit={submitCardFolder}
+                        onCancel={closeCardFolderInput}
+                        placeholder="Sub-folder name..."
+                      />
+                    )}
+
+                    {cardRenamingFolderId === folder.id && (
+                      <CardFolderNameInput
+                        value={cardRenameValue}
+                        onChange={setCardRenameValue}
+                        onSubmit={() => submitCardFolderRename(folder.id)}
+                        onCancel={closeCardFolderRename}
+                        placeholder="Folder name..."
+                        submitLabel="Save"
+                      />
+                    )}
+                  </div>
+                );
+              };
 
               // Count resumes in a folder (including nested subfolders)
               const getResumeCountRecursive = (folder: FolderType): number => {
@@ -2814,7 +3820,9 @@ export default function MyResumesPage() {
 
                   {/* Current Folder Header (when inside a folder) */}
                   {cardViewFolder !== null && cardViewFolder !== 'all' && currentFolderData && (
-                    <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                    <div className="relative mb-4 sm:mb-6">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                       <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ${
                         currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId
                           ? 'bg-brand-orange/10 ring-brand-orange/15'
@@ -2840,11 +3848,39 @@ export default function MyResumesPage() {
                         </h2>
                         <p className="text-xs sm:text-sm text-gray-500">
                           {foldersToDisplay.length > 0 && `${foldersToDisplay.length} subfolder${foldersToDisplay.length !== 1 ? 's' : ''}`}
-                          {foldersToDisplay.length > 0 && folderResumes.length > 0 && ' • '}
-                          {folderResumes.length > 0 && `${folderResumes.length} resume${folderResumes.length !== 1 ? 's' : ''}`}
-                          {foldersToDisplay.length === 0 && folderResumes.length === 0 && 'Empty folder'}
+                          {foldersToDisplay.length > 0 && visibleFolderResumes.length > 0 && ' • '}
+                          {visibleFolderResumes.length > 0 && `${visibleFolderResumes.length} resume${visibleFolderResumes.length !== 1 ? 's' : ''}`}
+                          {foldersToDisplay.length === 0 && visibleFolderResumes.length === 0 && !resumeControlsActive && 'Empty folder'}
+                          {folderResumes.length > 0 && visibleFolderResumes.length === 0 && resumeControlsActive && 'No matching resumes'}
                         </p>
                       </div>
+                        </div>
+                        {canUploadMyResumes && currentFolderCanCreateSubfolder ? (
+                          <button
+                            type="button"
+                            onClick={() => openCardFolderInput(cardViewFolder)}
+                            className="inline-flex items-center justify-center gap-1 rounded-md border border-brand-blue/20 bg-white px-3 py-2 text-sm text-blue-600 shadow-sm shadow-brand-blue/5 transition-colors hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-blue-700 sm:self-start"
+                          >
+                            <Plus className="w-4 h-4" />
+                            New Subfolder
+                          </button>
+                        ) : currentFolderDepth >= MAX_FOLDER_DEPTH ? (
+                          <span className="text-xs sm:text-sm text-gray-500 sm:self-start">
+                            Maximum depth reached ({MAX_FOLDER_DEPTH} levels)
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {cardFolderParentId === cardViewFolder && currentFolderCanCreateSubfolder && (
+                        <CardFolderNameInput
+                          value={cardNewFolderName}
+                          onChange={setCardNewFolderName}
+                          onSubmit={submitCardFolder}
+                          onCancel={closeCardFolderInput}
+                          placeholder="Sub-folder name..."
+                          inline
+                        />
+                      )}
                     </div>
                   )}
 
@@ -2856,62 +3892,120 @@ export default function MyResumesPage() {
                       </div>
                       <div className="min-w-0">
                         <h2 className="font-semibold text-gray-900 text-base sm:text-lg">All Resumes</h2>
-                        <p className="text-xs sm:text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
+                        <p className="text-xs sm:text-sm text-gray-500">{visibleFolderResumes.length} resume{visibleFolderResumes.length !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
                   )}
 
-                  {/* Subfolders Grid (if any) */}
-                  {(foldersToDisplay.length > 0 || cardViewFolder === null) && (
+                  {/* Folder grids. At root level the three fixtures lead in
+                      their own titled row, then the user's own folders below —
+                      matching how the list view's tree is grouped. Inside a
+                      folder it stays a single "Subfolders" grid. */}
+                  {/* Rendered whenever there is folder context to show. At max
+                      depth, the create control is replaced by a status note. */}
+                  {(cardViewFolder !== 'all' || foldersToDisplay.length > 0) && (
                     <div className="mb-4 sm:mb-6">
-                      {cardViewFolder !== null && (
-                        <h3 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Subfolders</h3>
-                      )}
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
-                        {/* All Resumes card at root level */}
-                        {cardViewFolder === null && (
-                          <div
-                            className="bg-white border border-brand-blue/20 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all duration-150"
-                            onClick={() => {
-                              setCardViewFolder('all');
-                              setBreadcrumbPath([]);
-                            }}
-                          >
-                            <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4">
-                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                                <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
+                      {cardViewFolder === null ? (
+                        <>
+                          {(showAllResumesCard || visibleSystemFolders.length > 0) && (
+                            <>
+                              {/* Same treatment as the list view's folder panel:
+                                  inherited 16px / normal weight, gray-900. */}
+                              <h3 className="text-gray-900 mb-2 sm:mb-3">System Folders</h3>
+                              {/* Three across from sm up, so All Resumes, root and
+                                  Archived Resumes sit on one row. */}
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6 items-start">
+                                {showAllResumesCard && (
+                                  <div
+                                    className="bg-white border border-brand-blue/20 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all duration-150"
+                                    onClick={() => {
+                                      setCardViewFolder('all');
+                                      setBreadcrumbPath([]);
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4">
+                                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate">All Resumes</h3>
+                                        <p className="text-xs sm:text-sm text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
+                                      </div>
+                                      <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                                    </div>
+                                  </div>
+                                )}
+
+                                {visibleSystemFolders.map(renderFolderCard)}
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate">All Resumes</h3>
-                                <p className="text-xs sm:text-sm text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
-                              </div>
-                              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-                            </div>
+                            </>
+                          )}
+
+                          <div className="flex items-center justify-between mb-2 sm:mb-3">
+                            <h3 className="text-gray-900">My Folders</h3>
+                            {canUploadMyResumes && (
+                              <button
+                                type="button"
+                                onClick={() => openCardFolderInput(null)}
+                                className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1 cursor-pointer"
+                              >
+                                <Plus className="w-4 h-4" />
+                                New Folder
+                              </button>
+                            )}
                           </div>
-                        )}
 
-                        {foldersToDisplay.map((folder) => {
-                          // Use folder.count from backend API (total count) instead of recalculating from current page
-                          const resumeCount = folder.count || 0;
-                          const hasSubfolders = folder.children && folder.children.length > 0;
-                          const isArchived = folder.name === 'Archived Resumes' && !folder.parentId;
-                          const isRoot = folder.name.toLowerCase() === 'root' && !folder.parentId;
-
-                          return (
-                            <DroppableFolderCard
-                              key={folder.id}
-                              folder={folder}
-                              resumeCount={resumeCount}
-                              hasSubfolders={hasSubfolders || false}
-                              isArchived={isArchived}
-                              isRoot={isRoot}
-                              onNavigate={navigateToFolder}
-                              onMoveToFolder={handleMoveToFolder}
+                          {cardFolderParentId === null && (
+                            <CardFolderNameInput
+                              value={cardNewFolderName}
+                              onChange={setCardNewFolderName}
+                              onSubmit={submitCardFolder}
+                              onCancel={closeCardFolderInput}
+                              placeholder="Folder name..."
                             />
-                          );
-                        })}
+                          )}
 
-                      </div>
+                          {visibleMyFolders.length > 0 ? (
+                            // `items-start` so a card that expands its subfolder
+                            // list grows on its own instead of stretching every
+                            // other card in the row to match — grid items default
+                            // to filling the row height, which left the
+                            // neighbours padded with blank space.
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 items-start">
+                              {visibleMyFolders.map(renderFolderCard)}
+                            </div>
+                          ) : myFolders.length > 0 && folderControlsActive ? (
+                            <p className="text-xs sm:text-sm text-gray-500">No folders match the current search or filter.</p>
+                          ) : systemFolders.length > 0 ? (
+                            // Skipped when there are no folders at all — the
+                            // page-level empty state below covers that case.
+                            <p className="text-xs sm:text-sm text-gray-500">No folders yet. Create one to organize your resumes.</p>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          {hasCurrentSubfolders && (
+                            <div className="flex items-center mb-2 sm:mb-3">
+                              <h3 className="text-xs sm:text-sm font-medium text-gray-700">Subfolders</h3>
+                            </div>
+                          )}
+
+                          {cardViewFolder !== 'all' && currentFolderDepth >= MAX_FOLDER_DEPTH && (
+                            <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs sm:text-sm text-amber-800">
+                              This child subfolder is the deepest allowed level.
+                            </div>
+                          )}
+
+                          {visibleFoldersToDisplay.length > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 items-start">
+                              {visibleFoldersToDisplay.map(renderFolderCard)}
+                            </div>
+                          )}
+                          {foldersToDisplay.length > 0 && visibleFoldersToDisplay.length === 0 && folderControlsActive && (
+                            <p className="mt-3 text-xs sm:text-sm text-gray-500">No subfolders match the current search or filter.</p>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -2937,7 +4031,7 @@ export default function MyResumesPage() {
                   {/* Resumes Section (when inside a folder) */}
                   {cardViewFolder !== null && (
                     <>
-                      {folderResumes.length > 0 && (
+                      {visibleFolderResumes.length > 0 && (
                         <div>
                           {foldersToDisplay.length > 0 && (
                             <h3 className="text-sm font-medium text-gray-700 mb-3">Resumes in this folder</h3>
@@ -2952,12 +4046,12 @@ export default function MyResumesPage() {
                           <div className="flex items-center">
                             <input
                               type="checkbox"
-                              checked={folderResumes.length > 0 && folderResumes.every(r => selectedResumes.includes(r.id))}
+                              checked={visibleFolderResumes.length > 0 && visibleFolderResumes.every(r => selectedResumes.includes(r.id))}
                               onChange={(e) => {
                                 if (e.target.checked) {
-                                  setSelectedResumes(prev => [...new Set([...prev, ...folderResumes.map(r => r.id)])]);
+                                  setSelectedResumes(prev => [...new Set([...prev, ...visibleFolderResumes.map(r => r.id)])]);
                                 } else {
-                                  setSelectedResumes(prev => prev.filter(id => !folderResumes.find(r => r.id === id)));
+                                  setSelectedResumes(prev => prev.filter(id => !visibleFolderResumes.find(r => r.id === id)));
                                 }
                               }}
                               className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40"
@@ -2975,17 +4069,17 @@ export default function MyResumesPage() {
                           <div>Actions</div>
                         </div>
                         {/* Table Body */}
-                        {folderResumes.map((resume, index) => (
+                        {visibleFolderResumes.map((resume, index) => (
                           <DraggableCardResumeRow
                             key={resume.id}
                             resume={resume}
                             selectedResumes={selectedResumes}
-                            isLast={index === folderResumes.length - 1}
+                            isLast={index === visibleFolderResumes.length - 1}
                             onSelect={handleSelectResume}
                             onQuickView={(r) => setQuickViewResume(r)}
                             onDelete={canDeleteMyResumes ? handleDelete : undefined}
                             onViewDetails={(r) => {
-                              sessionStorage.setItem('resumeNavList', JSON.stringify(folderResumes.map((x) => x.id)));
+                              sessionStorage.setItem('resumeNavList', JSON.stringify(visibleFolderResumes.map((x) => x.id)));
                               sessionStorage.setItem('resumeNavSource', 'my-resumes');
                               router.push(`/recruitment/resume-view/${r.id}`);
                             }}
@@ -2995,14 +4089,14 @@ export default function MyResumesPage() {
 
                         {/* Mobile Card View */}
                         <div className="md:hidden space-y-3 p-3">
-                          {folderResumes.map((resume) => (
+                          {visibleFolderResumes.map((resume) => (
                             <div
                               key={resume.id}
                               className={`bg-white border rounded-lg p-4 cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/30 transition-all ${
                                 selectedResumes.includes(resume.id) ? 'border-brand-blue/50 bg-brand-blue/5 ring-1 ring-brand-blue/30' : 'border-gray-200'
                               }`}
                               onClick={() => {
-                                sessionStorage.setItem('resumeNavList', JSON.stringify(folderResumes.map((x) => x.id)));
+                                sessionStorage.setItem('resumeNavList', JSON.stringify(visibleFolderResumes.map((x) => x.id)));
                                 sessionStorage.setItem('resumeNavSource', 'my-resumes');
                                 router.push(`/recruitment/resume-view/${resume.id}`);
                               }}
@@ -3065,7 +4159,7 @@ export default function MyResumesPage() {
                       )}
 
                       {/* Loading state while the folder's resumes are being fetched */}
-                      {loading && folderResumes.length === 0 && foldersToDisplay.length === 0 && (
+                      {loading && visibleFolderResumes.length === 0 && visibleFoldersToDisplay.length === 0 && (
                         <div className="text-center py-12 bg-white border border-gray-200 rounded-xl">
                           <Loader2 className="w-8 h-8 text-blue-500 mx-auto mb-3 animate-spin" />
                           <p className="text-sm text-gray-500">Loading resumes…</p>
@@ -3073,7 +4167,7 @@ export default function MyResumesPage() {
                       )}
 
                       {/* Empty state when no resumes and no subfolders */}
-                      {!loading && folderResumes.length === 0 && foldersToDisplay.length === 0 && (
+                      {!loading && visibleFolderResumes.length === 0 && visibleFoldersToDisplay.length === 0 && !resumeControlsActive && !folderControlsActive && (
                         <div className="text-center py-12 bg-white border-2 border-dashed border-brand-blue/20 rounded-xl">
                           <div className="w-16 h-16 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
                             <FileText className="w-8 h-8 text-brand-blue" />
@@ -3084,6 +4178,16 @@ export default function MyResumesPage() {
                       )}
 
                       {/* Card view pagination */}
+                      {!loading && visibleFolderResumes.length === 0 && (folderResumes.length > 0 || resumeControlsActive) && (
+                        <div className="text-center py-12 bg-white border-2 border-dashed border-brand-blue/20 rounded-xl">
+                          <div className="w-16 h-16 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+                            <FileText className="w-8 h-8 text-brand-blue" />
+                          </div>
+                          <h3 className="text-lg font-medium text-gray-900 mb-2 tracking-tight">No resumes match</h3>
+                          <p className="text-gray-500">Clear search or filters to show more resumes.</p>
+                        </div>
+                      )}
+
                       {totalPages > 0 && folderResumes.length > 0 && (
                         <div className="mt-4">
                           <Pagination
@@ -3115,13 +4219,17 @@ export default function MyResumesPage() {
           // filter, not a real folder the API knows about. When no folder is
           // selected, the backend routes the upload to the user's root folder.
           targetFolder={(() => {
+            if (uploadTargetFolderId) return uploadTargetFolderId;
             const card = cardViewFolder && cardViewFolder !== 'all'
               ? cardViewFolder
               : null;
             const list = selectedFolder && selectedFolder !== 'all' ? selectedFolder : null;
             return card || list || undefined;
           })()}
-          onClose={() => setIsUploadModalOpen(false)}
+          onClose={() => {
+            setIsUploadModalOpen(false);
+            setUploadTargetFolderId(undefined);
+          }}
           onUpload={handleUploadResumes}
           onCreateFolder={handleCreateFolder}
           onViewResume={(resumeId) => {

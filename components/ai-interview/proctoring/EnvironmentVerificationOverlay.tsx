@@ -8,6 +8,8 @@ interface EnvironmentVerificationOverlayProps {
   qrCodeDataUri: string | null;
   verificationUrl: string | null;
   expiresAt: string | null;
+  challengeColor: string | null;
+  challengeId: string | null;
   onExpired: () => void;
 }
 
@@ -18,16 +20,23 @@ interface EnvironmentVerificationOverlayProps {
  * `environment_verification_triggered` / `environment_verification_submitted`
  * WS messages.
  *
- * The anti-replay challenge (color/ID) is intentionally NOT rendered here —
- * per the backend design, it's shown on this same laptop screen separately
- * (via the challenge_color/challenge_id fields passed to InterviewUI) so the
- * phone's camera can capture it; this overlay only shows the QR + countdown.
+ * Renders the anti-replay challenge (a solid color panel + short ID string)
+ * for the full duration this overlay is visible — per the
+ * "AI Interview-Proxy Integrity Verification" spec, the candidate's phone
+ * must film this panel during the first ~5s of their recording so the
+ * backend vision check can confirm the clip was captured live against THIS
+ * interview's session, not replayed/pre-recorded. Shown continuously (not
+ * timed to a precise phone-side step) since there's no real-time channel
+ * back from the phone to say exactly when its 5s "record the screen" phase
+ * starts.
  */
 export function EnvironmentVerificationOverlay({
   active,
   qrCodeDataUri,
   verificationUrl,
   expiresAt,
+  challengeColor,
+  challengeId,
   onExpired,
 }: EnvironmentVerificationOverlayProps) {
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
@@ -77,6 +86,22 @@ export function EnvironmentVerificationOverlay({
 
         {verificationUrl && (
           <p className="text-[11px] text-[#94a3b8] break-all text-center max-w-full">{verificationUrl}</p>
+        )}
+
+        {challengeColor && challengeId && (
+          <div className="w-full space-y-1.5">
+            <p className="text-[11px] text-[#94a3b8] text-center">
+              Point your phone at this box while recording:
+            </p>
+            <div
+              className="w-full rounded-xl flex items-center justify-center py-6 ring-2 ring-white/20"
+              style={{ backgroundColor: challengeColor }}
+            >
+              <span className="text-white text-2xl font-bold tracking-widest drop-shadow-[0_1px_3px_rgba(0,0,0,0.6)]">
+                {challengeId}
+              </span>
+            </div>
+          </div>
         )}
 
         <div className="w-full text-center text-sm font-mono text-brand-blue border border-brand-blue/20 rounded-lg bg-brand-blue/5 px-3 py-2">

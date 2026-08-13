@@ -664,8 +664,12 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
-                <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-500">
-                  Streamline your hiring and build the perfect team.
+                <p className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-500">
+                  <span>Streamline your entire recruitment journey with AI-powered talent solutions.</span>
+                  <Star
+                    className="h-4 w-4 shrink-0 fill-amber-400 text-amber-500 motion-safe:animate-[spin_2.8s_linear_infinite] motion-reduce:animate-none"
+                    aria-hidden="true"
+                  />
                 </p>
               </div>
             </div>

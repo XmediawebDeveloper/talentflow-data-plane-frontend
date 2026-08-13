@@ -10,10 +10,12 @@ type Phase =
   | 'loading'
   | 'expired'
   | 'error'
+  | 'instructions'
   | 'requesting_permission'
   | 'permission_denied'
   | 'recording_screen'
   | 'recording_pan'
+  | 'ready_to_submit'
   | 'uploading'
   | 'done';
 
@@ -25,8 +27,14 @@ interface MobileEnvironmentVerificationPortalProps {
 }
 
 /**
- * Mobile-browser page opened by scanning the laptop's QR code. Records a
- * ~10s landscape clip of the laptop screen + surroundings and uploads it.
+ * Mobile-browser page opened by scanning the laptop's QR code. Follows the
+ * "AI Interview-Proxy Integrity Verification" spec's Steps 2-6:
+ *   2. Camera/mic permission (no app install)
+ *   3. Guided instructions screen (candidate taps Next to proceed)
+ *   4. Recording phase 1 (5s) — capture the laptop's dynamic color+ID panel
+ *   5. Recording phase 2 (5s) — pan the surroundings
+ *   6. Explicit submit — candidate reviews and taps Upload rather than an
+ *      automatic upload, so they know their recording is going somewhere.
  *
  * Deliberately does NOT fetch or display the anti-replay challenge
  * (color/ID) — that's shown only on the laptop, so the phone's job is purely
@@ -45,7 +53,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     (async () => {
       try {
         await verifyApi.get(`/candidate/environment-verify/${token}`);
-        if (!cancelled) setPhase('requesting_permission');
+        if (!cancelled) setPhase('instructions');
       } catch (err: unknown) {
         if (cancelled) return;
         const status = axios.isAxiosError(err) ? err.response?.status : undefined;
@@ -75,14 +83,28 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           return;
         }
         streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
+        // The <video> element is always mounted (see render below) precisely
+        // so this ref is guaranteed non-null here — it used to only render
+        // during the recording_screen/recording_pan phases, which hadn't
+        // started yet at this point in the effect, leaving srcObject unset
+        // and the preview permanently black even though recording worked.
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => { /* autoplay may need a user gesture on some browsers; recording still proceeds */ });
+        }
 
         const mimeType = ['video/webm;codecs=vp8,opus', 'video/webm']
           .find(t => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t));
         const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
         chunksRef.current = [];
         recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-        recorder.onstop = () => { void uploadRecording(); };
+        // Recording stops after both timed phases complete — hand control to
+        // the candidate instead of auto-uploading, per spec Step 6 ("the
+        // candidate have to submit the recordings").
+        recorder.onstop = () => {
+          streamRef.current?.getTracks().forEach(t => t.stop());
+          if (!cancelled) setPhase('ready_to_submit');
+        };
         recorderRef.current = recorder;
         recorder.start();
 
@@ -111,8 +133,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     };
   }, []);
 
-  const uploadRecording = async () => {
-    streamRef.current?.getTracks().forEach(t => t.stop());
+  const handleSubmit = async () => {
     setPhase('uploading');
     try {
       const blob = new Blob(chunksRef.current, { type: recorderRef.current?.mimeType || 'video/webm' });
@@ -139,6 +160,32 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
         </div>
       )}
 
+      {phase === 'instructions' && (
+        <div className="max-w-sm space-y-5">
+          <h1 className="text-lg font-semibold">Environment Verification</h1>
+          <div className="text-sm text-[#cbd5e1] leading-relaxed text-left space-y-3 bg-white/5 rounded-xl p-4 border border-white/10">
+            <p>
+              Please record a <strong className="text-white">10-second video</strong> of your interview
+              setup in <strong className="text-white">landscape mode</strong>. Ensure your laptop screen
+              is visible throughout the recording.
+            </p>
+            <p>Slowly move your mobile phone:</p>
+            <ul className="list-disc list-inside space-y-1 text-[#94a3b8]">
+              <li>Left to Right</li>
+              <li>Right to Left</li>
+            </ul>
+            <p>Keep your recording steady until instructed.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPhase('requesting_permission')}
+            className="w-full py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
+          >
+            Next
+          </button>
+        </div>
+      )}
+
       {phase === 'requesting_permission' && (
         <p className="text-[#94a3b8]">Requesting camera access…</p>
       )}
@@ -152,24 +199,46 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
         </div>
       )}
 
-      {(phase === 'recording_screen' || phase === 'recording_pan') && (
-        <div className="w-full max-w-sm space-y-4">
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="w-full aspect-video rounded-xl bg-black object-cover"
-          />
-          <div className="flex items-center justify-center gap-2 text-red-400 text-xs font-medium">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-            Recording
+      {/* Always mounted (not conditional on phase) so videoRef.current is
+          already available the instant getUserMedia resolves, above —
+          otherwise the stream has nowhere to attach to and the preview
+          stays black even though recording is happening. Hidden outside
+          the recording phases via `hidden` rather than unmounted. */}
+      <div className={`w-full max-w-sm space-y-4 ${(phase === 'recording_screen' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+        <video
+          ref={videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="w-full aspect-video rounded-xl bg-black object-cover"
+        />
+        <div className="flex items-center justify-center gap-2 text-red-400 text-xs font-medium">
+          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          Recording
+        </div>
+        <p className="text-sm leading-relaxed">
+          {phase === 'recording_screen'
+            ? 'Recording your screen with this frame — point your camera at your laptop screen and keep it steady.'
+            : 'Now slowly turn your mobile from left to right, and right to left.'}
+        </p>
+      </div>
+
+      {phase === 'ready_to_submit' && (
+        <div className="max-w-sm space-y-4">
+          <div className="w-14 h-14 mx-auto rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center">
+            <span className="text-2xl">✓</span>
           </div>
-          <p className="text-sm leading-relaxed">
-            {phase === 'recording_screen'
-              ? 'Point your camera at your laptop screen and keep it steady.'
-              : 'Slowly turn your phone left, then right, to show your surroundings.'}
+          <h1 className="text-lg font-semibold">Recording complete</h1>
+          <p className="text-sm text-[#94a3b8]">
+            Your 10-second verification video is ready. Tap Upload to submit it and resume your interview.
           </p>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="w-full py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
+          >
+            Upload
+          </button>
         </div>
       )}
 

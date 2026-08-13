@@ -14,6 +14,7 @@ import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 
 // Utility function to format employment type for display
@@ -841,11 +842,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
         {pageView === 'list' && (
         <>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
-        <div className="mb-4 flex items-center justify-end gap-2">
-          <span className="text-xs text-gray-500 dark:text-slate-400">
-            {filteredJobs.length} {filteredJobs.length === 1 ? 'job' : 'jobs'}
-          </span>
-        </div>
 
         {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort */}
         <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
@@ -864,6 +860,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             activeFilterCount={activeFiltersCount}
             filtersApplied={filtersActive}
             onClearFilters={clearAllFilters}
+            countBadge={
+              <ListCountBadge
+                filtered={filteredJobs.length}
+                total={jobs.length}
+                noun="job"
+                selected={selectedJobs.size}
+              />
+            }
           />
 
           {/* Row 2: Status tabs + AI/Manual + Clear */}
@@ -1118,11 +1122,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     )}
                   </div>
                 )}
-
-                <span className="text-sm text-gray-500">
-                  Showing {filteredJobs.length} {filteredJobs.length === 1 ? 'job' : 'jobs'}
-                  {filteredJobs.length !== jobs.length && ` (of ${jobs.length})`}
-                </span>
               </div>
 
               <div className="flex items-center gap-2">

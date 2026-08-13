@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
+import TabEmptyState from '@/components/ui/tab-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useRouter } from 'next/navigation';
 import {
@@ -41,6 +42,13 @@ interface AIInterviewResultsProps {
    * put them in this toolbar instead of a separate strip above it.
    */
   toolbarActions?: React.ReactNode;
+  /**
+   * Action for the nobody-invited-yet empty state. Separate from
+   * `toolbarActions` because the two want different sets: the toolbar shows
+   * Send Invite always (disabled until it can be used), while the empty state
+   * only includes it once an interview exists to invite people to.
+   */
+  emptyStateAction?: React.ReactNode;
 }
 
 const STATUS_OPTIONS = [
@@ -123,7 +131,7 @@ export function formatDuration(session: AIInterviewResponse): string {
   return `${mins}m ${secs}s`;
 }
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate, breadcrumbItems, toolbarActions }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -218,6 +226,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   // The hook's `onChange` returns to page 1 whenever the query or a filter moves.
   const paginatedSessions = sessions;
 
+  // No candidate has been invited to this interview yet. The search box, status
+  // dropdown and More Filters would all be narrowing nothing, so the whole bar
+  // comes off and the empty state carries the actions instead. A search or
+  // filter that happens to match nothing is NOT this case — the bar has to stay
+  // put so it can be cleared, and `isNarrowed` is what tells the two apart.
+  const isUnstarted = !isLoading && sessions.length === 0 && !search.isNarrowed;
+
   const handleViewDetails = (session: AIInterviewResponse) => {
     // Embedded (Results tab inside the interview details page): open the
     // candidate inline so the breadcrumb stays anchored to that page instead
@@ -300,6 +315,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
       )}
 
       {/* Search + Filter bar */}
+      {!isUnstarted && (
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
         <ListToolbar
           searchValue={search.query}
@@ -388,17 +404,31 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           </div>
         )}
       </div>
+      )}
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+      {/* Table — the card is only drawn once there is something to invite the
+          user into. Unstarted, the empty state stands on its own like the AI
+          Talent Match tab's does. */}
+      <div className={isUnstarted ? '' : 'bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden'}>
         {isLoading ? (
           <div className="flex items-center justify-center py-16 tf-loader-center">
             <Loader2 className="w-7 h-7 animate-spin text-brand-blue" />
           </div>
+        ) : isUnstarted ? (
+          /* Nothing here yet — the shared tab empty state, carrying the actions
+             since the toolbar they normally sit in is gone. */
+          <TabEmptyState
+            icon={Users}
+            title="No AI Interview Results"
+            description="Invite candidates to this interview to see their sessions here."
+            action={emptyStateAction ?? undefined}
+          />
         ) : sessions.length === 0 ? (
+          /* Records exist, a search or filter just matched none of them. That
+             needs the "clear it" exit, not a create-something CTA. */
           <ListEmptyState
             icon={Users}
-            isNarrowed={search.isNarrowed}
+            isNarrowed
             query={search.appliedQuery}
             entityLabel="candidate"
             emptyTitle="No candidates invited yet"

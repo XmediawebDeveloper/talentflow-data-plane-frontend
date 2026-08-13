@@ -10,6 +10,8 @@ interface SearchFilterBarProps {
   onFiltersChange: (filters: any) => void;
   sortBy: string;
   onSortChange: (sort: string) => void;
+  hideSearch?: boolean;
+  inline?: boolean;
 }
 
 export default function SearchFilterBarCompact({
@@ -19,6 +21,8 @@ export default function SearchFilterBarCompact({
   onFiltersChange,
   sortBy,
   onSortChange,
+  hideSearch = false,
+  inline = false,
 }: SearchFilterBarProps) {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
@@ -224,43 +228,47 @@ export default function SearchFilterBarCompact({
   };
 
   return (
-    <div className="bg-white border-b border-gray-200">
+    <div className={inline ? "relative" : "bg-white border-b border-gray-200"}>
       {/* Main Search Bar */}
-      <div className="p-3 flex gap-2 items-center">
+      <div className={inline ? "flex gap-2 items-center" : "p-3 flex gap-2 items-center"}>
         {/* Global Search Bar */}
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by name, email, phone, skills, title, or company..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full h-9 pl-9 pr-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-400"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => {
-                onSearchChange('');
-              }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-200 rounded-full p-1 transition-colors"
-             aria-label="Close">
-              <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
-            </button>
-          )}
-        </div>
+        {!hideSearch ? (
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by name, email, phone, skills, title, or company..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full h-9 pl-9 pr-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-all bg-gray-50 hover:bg-white text-black placeholder:text-gray-400"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  onSearchChange('');
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 hover:bg-gray-200 rounded-full p-1 transition-colors"
+               aria-label="Close">
+                <X className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+              </button>
+            )}
+          </div>
+        ) : !inline ? (
+          <div className="hidden sm:block flex-1" />
+        ) : null}
 
         {/* Filter Button */}
         <div className="relative" ref={filterPanelRef}>
           <button
             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`flex items-center gap-1.5 h-9 px-3 rounded-lg font-medium text-sm transition-all ${
+            className={`flex items-center gap-1.5 ${inline ? 'h-10' : 'h-9'} px-3 rounded-lg font-medium text-sm transition-all ${
               activeFilterCount > 0
                 ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                 : 'bg-slate-100 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue border border-gray-200'
             }`}
           >
             <SlidersHorizontal className="w-4 h-4" />
-            <span className="hidden sm:inline">Filters</span>
+            <span className="hidden sm:inline">{inline ? 'Filter' : 'Filters'}</span>
             {activeFilterCount > 0 && (
               <span className="bg-white text-brand-blue text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                 {activeFilterCount}
@@ -521,9 +529,9 @@ export default function SearchFilterBarCompact({
         <div className="relative">
           <button
             onClick={() => setShowSort(!showSort)}
-            className="flex items-center gap-1.5 h-9 px-3 bg-slate-100 border border-gray-200 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+            className={`flex items-center gap-1.5 ${inline ? 'h-10' : 'h-9'} px-3 bg-slate-100 border border-gray-200 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors`}
           >
-            <span className="hidden sm:inline text-sm text-gray-700 font-medium">Sort</span>
+            <span className="hidden sm:inline text-sm text-gray-700 font-medium">{inline ? 'Sort by' : 'Sort'}</span>
             <ChevronDown className="w-4 h-4 text-gray-500" />
           </button>
 
@@ -560,7 +568,7 @@ export default function SearchFilterBarCompact({
 
       {/* Active Filter Chips */}
       {activeFilterCount > 0 && (
-        <div className="px-3 sm:px-4 pb-3 sm:pb-4 flex flex-wrap gap-1.5 sm:gap-2 items-center">
+        <div className={inline ? "mt-2 flex flex-wrap gap-1.5 sm:gap-2 items-center" : "px-3 sm:px-4 pb-3 sm:pb-4 flex flex-wrap gap-1.5 sm:gap-2 items-center"}>
           <span className="text-xs sm:text-sm text-gray-500 mr-1">Active filters:</span>
           {getActiveFilterChips().map((chip) => (
             <div

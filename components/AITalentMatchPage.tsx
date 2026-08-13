@@ -28,6 +28,7 @@ import { useQuota } from '@/contexts/QuotaContext';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 
 interface Job {
@@ -191,7 +192,15 @@ export default function AITalentMatchPage({
     return historyCandidatesById[item.id] ?? item.matchedCandidates ?? [];
   };
 
-  const loadHistoryCandidates = async (item: MatchHistory): Promise<MatchedCandidateWithVersions[]> => {
+  /**
+   * @param silent Suppresses the failure toast. Set by the background prefetch,
+   *   which the user never asked for — one toast per failed session would bury
+   *   the page in errors about work they can't see.
+   */
+  const loadHistoryCandidates = async (
+    item: MatchHistory,
+    { silent = false }: { silent?: boolean } = {},
+  ): Promise<MatchedCandidateWithVersions[]> => {
     if (historyCandidatesById[item.id]) {
       return historyCandidatesById[item.id];
     }
@@ -211,7 +220,7 @@ export default function AITalentMatchPage({
         return candidates;
       } catch (error) {
         console.error('[AITalentMatch] Failed to fetch session details:', error);
-        toast.error('Failed to load matched candidates');
+        if (!silent) toast.error('Failed to load matched candidates');
         return [] as MatchedCandidateWithVersions[];
       } finally {
         historyCandidateRequests.current.delete(item.id);
@@ -230,13 +239,17 @@ export default function AITalentMatchPage({
     setHistoryPageView('candidates');
     candidateSearch.setQuery('');
     setHistoryListScrollRequest((request) => request + 1);
+    // Rows already built, or the prefetch is still building them — either way
+    // there is nothing to do. This used to rebuild unconditionally, flashing
+    // the loader over a roll-up that would come out identical.
+    if (loadingCandidateRows || candidateRows.length > 0) return;
     await buildCandidateRows();
   };
 
   // The roll-up itself, split out from the click handler so a restored
   // 'candidates' view can rebuild its rows once match history has loaded —
   // otherwise returning from a resume landed on an empty candidates table.
-  const buildCandidateRows = async () => {
+  const buildCandidateRows = async ({ silent = false }: { silent?: boolean } = {}) => {
     if (matchHistory.length === 0) {
       setCandidateRows([]);
       return;
@@ -245,7 +258,7 @@ export default function AITalentMatchPage({
     setLoadingCandidateRows(true);
     try {
       const perJob = await Promise.all(
-        matchHistory.map(async (item) => ({ item, candidates: await loadHistoryCandidates(item) }))
+        matchHistory.map(async (item) => ({ item, candidates: await loadHistoryCandidates(item, { silent }) }))
       );
 
       const byKey = new Map<string, CandidateMatchRow>();
@@ -623,6 +636,57 @@ export default function AITalentMatchPage({
     buildCandidateRows();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyPageView, matchHistory.length, loadingCandidateRows, candidateRows.length]);
+
+  /**
+   * Warm the "Match by Candidate" roll-up in the background, so switching to
+   * that tab shows rows instead of a spinner.
+   *
+   * Building it costs one request per match session, and none of them started
+   * until the tab was clicked — the slowest part of the page sat entirely on
+   * that click. Doing it while the user reads the Matched Jobs list moves the
+   * wait off the interaction. Per-session results land in
+   * `historyCandidatesById`, so opening a single job's results afterwards is
+   * served from the same cache.
+   *
+   * Silent: a failed session here must not toast, since the user never asked
+   * for this and one toast per session would bury the page.
+   *
+   * `prefetchedRef` caps it at one run — without it a failed build leaves the
+   * rows empty, the effect re-satisfies its own conditions, and it retries
+   * forever.
+   */
+  const prefetchedCandidateRowsRef = useRef(false);
+  useEffect(() => {
+    if (prefetchedCandidateRowsRef.current) return;
+    // Only from the history screen — the tab lives there, and elsewhere this
+    // would compete with whatever the user actually opened.
+    if (viewMode !== 'history') return;
+    // Already on the tab: the effect above owns that case.
+    if (historyPageView === 'candidates') return;
+    if (matchHistory.length === 0) return;
+    if (loadingCandidateRows || candidateRows.length > 0) return;
+
+    prefetchedCandidateRowsRef.current = true;
+    void buildCandidateRows({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, historyPageView, matchHistory.length, loadingCandidateRows, candidateRows.length]);
+
+  /**
+   * A finished match run adds a session, which makes a roll-up built before it
+   * stale. Now that the tab reuses its rows instead of rebuilding on every
+   * open, that staleness would stick for the rest of the session — so drop the
+   * rows and release both build guards, and whichever path runs next (prefetch
+   * if the user is elsewhere, the restore effect if they're on the tab) builds
+   * again from the fuller history.
+   */
+  const candidateRowsHistoryCountRef = useRef(matchHistory.length);
+  useEffect(() => {
+    if (candidateRowsHistoryCountRef.current === matchHistory.length) return;
+    candidateRowsHistoryCountRef.current = matchHistory.length;
+    setCandidateRows([]);
+    prefetchedCandidateRowsRef.current = false;
+    rebuiltRestoredCandidatesRef.current = false;
+  }, [matchHistory.length]);
 
   useEffect(() => {
     if (historyListScrollRequest === 0) return;
@@ -1540,9 +1604,6 @@ export default function AITalentMatchPage({
                 <option value={70}>70%+ Match</option>
                 <option value={85}>85%+ Match</option>
               </select>
-              <div className="text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg font-medium">
-                <span className="text-brand-blue font-semibold">{filteredCandidates.length}</span> candidates
-              </div>
               {selectedCandidates.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   {availableUnits !== null && selectedCandidates.length > availableUnits && (
@@ -1580,6 +1641,14 @@ export default function AITalentMatchPage({
                 </>
                 </div>
               )}
+              {/* Count badge closes the row, as it does on every list. */}
+              <ListCountBadge
+                className="sm:ml-auto"
+                filtered={filteredCandidates.length}
+                total={detailCandidates.length}
+                noun="candidate"
+                selected={selectedCandidates.length}
+              />
             </div>
             {/* Additional Filters */}
             <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
@@ -2366,13 +2435,8 @@ export default function AITalentMatchPage({
           <>
             <div ref={historyListSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
-            {/* Count + toolbar, laid out like /recruitment/job-openings */}
-            <div className="mb-4 flex items-center justify-end gap-2">
-              <span className="text-xs text-gray-500 dark:text-slate-400">
-                {filteredCandidateRows.length} {filteredCandidateRows.length === 1 ? 'candidate' : 'candidates'}
-              </span>
-            </div>
-
+            {/* Toolbar, laid out like /recruitment/job-openings — the count
+                rides inside it as a pill rather than floating above. */}
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
               <ListToolbar
                 className={showCandidateFilters ? 'mb-3' : 'mb-0'}
@@ -2388,6 +2452,13 @@ export default function AITalentMatchPage({
                 activeFilterCount={candidateFiltersCount}
                 filtersApplied={candidateFiltersApplied}
                 onClearFilters={clearCandidateFilters}
+                countBadge={
+                  <ListCountBadge
+                    filtered={filteredCandidateRows.length}
+                    total={candidateRows.length}
+                    noun="candidate"
+                  />
+                }
               >
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-500 dark:text-slate-400 hidden sm:inline">Sort by</span>
@@ -2777,6 +2848,14 @@ export default function AITalentMatchPage({
             filtersApplied={historySearch.isNarrowed}
             onClearFilters={clearHistoryFilters}
             className="mb-0"
+            /* The history list is "Matched Jobs", so it counts in jobs too. */
+            countBadge={
+              <ListCountBadge
+                filtered={filteredHistory.length}
+                total={matchHistory.length}
+                noun="job"
+              />
+            }
           >
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-500 dark:text-slate-400 hidden sm:inline">Sort by</span>
@@ -2805,9 +2884,6 @@ export default function AITalentMatchPage({
               </div>
             </div>
 
-            <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium">
-              <span className="text-brand-blue font-semibold">{filteredHistory.length}</span> of {matchHistory.length}
-            </div>
           </ListToolbar>
 
           {showHistoryFilters && (
@@ -3198,9 +3274,6 @@ export default function AITalentMatchPage({
                 <option value={70}>70%+ Match</option>
                 <option value={85}>85%+ Match</option>
               </select>
-              <div className="text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg font-medium whitespace-nowrap">
-                <span className="text-brand-blue font-semibold">{filteredCandidates.length}</span> candidates
-              </div>
               {selectedCandidates.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   {availableUnits !== null && selectedCandidates.length > availableUnits && (
@@ -3238,6 +3311,14 @@ export default function AITalentMatchPage({
                 </>
                 </div>
               )}
+              {/* Count badge closes the row, as it does on every list. */}
+              <ListCountBadge
+                className="sm:ml-auto"
+                filtered={filteredCandidates.length}
+                total={matchedCandidates.length}
+                noun="candidate"
+                selected={selectedCandidates.length}
+              />
             </div>
             {/* Additional Filters */}
             <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">

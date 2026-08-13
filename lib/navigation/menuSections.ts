@@ -3,9 +3,10 @@
 
 import {
   LayoutDashboard,
-  Briefcase,
-  Target,
-  Sparkles,
+  BrainCircuit,
+  FileSearch,
+  FileSignature,
+  FolderOpen,
   Users,
   Database,
   ClipboardList,
@@ -60,9 +61,9 @@ export function buildMenuSections(isTenantAdmin: boolean): NavSection[] {
       id: 'recruitment',
       label: 'RECRUITMENT',
       items: [
-        { id: 'job-openings', label: 'Job Descriptions', icon: Briefcase, href: '/recruitment/job-openings', permissions: ['canReadJD', 'canCreateJD', 'canUpdateJD', 'canDeleteJD'] },
-        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permissions: ['canViewScoring'], planFeature: 'resume_scoring' },
-        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permissions: ['canViewAiMatch'], planFeature: 'ai_talent_match' },
+        { id: 'job-openings', label: 'Job Descriptions', icon: FileSignature, href: '/recruitment/job-openings', permissions: ['canReadJD', 'canCreateJD', 'canUpdateJD', 'canDeleteJD'] },
+        { id: 'resume-scoring', label: 'Resume Scoring', icon: FileSearch, href: '/recruitment/resume-scoring', permissions: ['canViewScoring'], planFeature: 'resume_scoring' },
+        { id: 'ai-talent-match', label: 'AI Talent Match', icon: BrainCircuit, href: '/recruitment/ai-talent-match', permissions: ['canViewAiMatch'], planFeature: 'ai_talent_match' },
       ],
     },
 
@@ -71,7 +72,7 @@ export function buildMenuSections(isTenantAdmin: boolean): NavSection[] {
       id: 'resume-management',
       label: 'RESUME MANAGEMENT',
       items: [
-        { id: 'my-resumes', label: 'My Resumes', icon: Users, href: '/recruitment/my-resumes', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes'], planFeature: 'resume_upload' },
+        { id: 'my-resumes', label: 'My Resumes', icon: FolderOpen, href: '/recruitment/my-resumes', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes'], planFeature: 'resume_upload' },
         { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permissions: ['canAccessInternalDB', 'canViewInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'], planFeature: 'resume_upload' },
       ],
     },
@@ -92,7 +93,7 @@ export function buildMenuSections(isTenantAdmin: boolean): NavSection[] {
       id: 'user-management-section',
       label: 'USER MANAGEMENT',
       items: [
-        { id: 'user-management', label: 'Users', icon: Users, href: '/organization/user-management', permission: 'canManageUsers' },
+        { id: 'user-management', label: 'User Management', icon: Users, href: '/organization/user-management', permission: 'canManageUsers' },
         // Usage History, Roles & Permissions, Teams and Chat are reached from the quick links on the Users (/organization/user-management) page.
       ],
     },

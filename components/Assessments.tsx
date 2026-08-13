@@ -17,6 +17,7 @@ import AssessmentEditModal from './AssessmentEditModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, type InviteFilterState } from './InviteFilterBar';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import type { AssessmentAttemptResponse } from '@/lib/services/assessmentService';
 
@@ -1638,7 +1639,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 availableUnits={availableUnits}
                 totalUnits={totalUnits}
                 isUnlimited={isUnlimited}
-                icon={Zap}
               />
             )}
             {/* Send Invite — same permission as the per-row Share action. */}
@@ -1973,19 +1973,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   Settings
                 </button>
               </div>
-              {/* Grid/List View Toggle - positioned absolute right so tabs get full scroll width */}
+              {/* List/Grid View Toggle - positioned absolute right so tabs get full scroll width */}
               <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1 border border-gray-200 dark:border-slate-700 rounded-lg p-1 bg-white dark:bg-slate-900">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded transition-colors ${
-                    viewMode === 'grid'
-                      ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
-                      : 'text-gray-400 hover:text-brand-blue'
-                  }`}
-                  aria-label="Grid View" title="Grid View"
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
                 <button
                   onClick={() => setViewMode('list')}
                   className={`p-1.5 rounded transition-colors ${
@@ -1996,6 +1985,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   aria-label="List View" title="List View"
                 >
                   <List className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
+                      : 'text-gray-400 hover:text-brand-blue'
+                  }`}
+                  aria-label="Grid View" title="Grid View"
+                >
+                  <LayoutGrid className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -2020,6 +2020,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   filtersApplied={assessmentFiltersActive}
                   onClearFilters={clearAssessmentFilters}
                   className="mb-0"
+                  countBadge={
+                    <ListCountBadge
+                      filtered={filteredAssessments.length}
+                      total={assessments.length}
+                      noun="assessment"
+                    />
+                  }
                 />
 
                 {showAssessmentFilters && (

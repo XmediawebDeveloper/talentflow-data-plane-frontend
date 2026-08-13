@@ -352,17 +352,6 @@ export default function JobOpeningsPage() {
             {/* View Toggle */}
             <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
               <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-md transition-colors ${
-                  viewMode === 'grid'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900'
-                }`}
-                aria-label="Grid View" title="Grid View"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-              <button
                 onClick={() => setViewMode('list')}
                 className={`p-2 rounded-md transition-colors ${
                   viewMode === 'list'
@@ -372,6 +361,17 @@ export default function JobOpeningsPage() {
                 aria-label="List View" title="List View"
               >
                 <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded-md transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+                aria-label="Grid View" title="Grid View"
+              >
+                <LayoutGrid className="w-4 h-4" />
               </button>
             </div>
           </div>

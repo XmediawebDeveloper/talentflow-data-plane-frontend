@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import {
@@ -357,6 +358,15 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             filtersApplied={search.filtersApplied}
             onClearFilters={search.reset}
             className="mb-0"
+            /* Counts what this page of results holds — the list is server
+               paginated, so `data.items` is the page, not the whole history. */
+            countBadge={
+              <ListCountBadge
+                filtered={filteredEntries.length}
+                total={data?.items.length ?? 0}
+                noun="record"
+              />
+            }
           />
 
           {showFilters && (
