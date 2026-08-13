@@ -292,30 +292,58 @@ function computeWeights(clusters: ClusterConfigDef[]): number[] {
   return out;
 }
 
+/** Lowercase + strip every non-alphanumeric char, so "CI/CD" ≡ "ci cd" ≡ "cicd"
+ *  and "Page Object Model (POM)" ≡ "pageobjectmodelpom". Used for skill-name
+ *  identity comparisons where punctuation/spacing drifted between the JD
+ *  config, the distribution plan and the evaluator's echo. */
+function compactSkillKey(s: string): string {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+/** True when a question_history row represents a slot that was NEVER delivered
+ *  to the candidate — padding written when the interview ended early
+ *  (`not_asked`), or a slot silently bypassed because its primary was already
+ *  covered (`auto_skipped_by_coverage`). Such rows carry `assigned_skills`, so
+ *  counting them as "asked" marks exactly the skills the candidate was never
+ *  questioned on as Covered (the inverse of the truth). */
+function isUndeliveredHistoryRow(q: any): boolean {
+  const rt = String(q?.response_type || '').trim().toLowerCase();
+  return rt === 'not_asked'
+    || rt === 'not_delivered'
+    || rt === 'unasked'
+    || rt === 'auto_skipped_by_coverage';
+}
+
 /** Build cluster data from config (authoritative) + scores from ai_evaluation. */
 function buildClustersFromConfig(
   configClusters: ClusterConfigDef[],
   eval_: any,
   startingNumber: number,
+  /** Skills the Question Distribution plan assigned to the slots that were
+   *  actually DELIVERED in this section (lowercased + compact variants). This is
+   *  the authoritative "was it asked" set — same source the Question Analysis tab
+   *  renders per question. Empty for legacy sessions with no plan snapshot. */
+  plannedAsked: { raw: Set<string>; compact: Set<string> } = { raw: new Set(), compact: new Set() },
 ): Cluster[] {
   const skillScoresMap = (eval_?.skill_scores_map || {}) as Record<string, number>;
   const evaluations = eval_?.evaluations || [];
   const clusterInsights = eval_?.cluster_insights || [];
   // ── Assessment Coverage: was each skill probed by a delivered question? ──
-  // Priority order:
-  //   1. ai_evaluation.skill_assessed_map (server-side authoritative map,
-  //      built from question_history.assigned_skills + question text).
-  //   2. question_history[i].assigned_skills — the at-ask-time planner
-  //      snapshot (primary + planned secondaries) for each delivered slot.
-  //      This is the "Question Distribution" source — every skill the slot
-  //      was meant to probe gets credit, even if the question text only
-  //      named one of them explicitly.
-  //   3. Question-text scan across evaluations[].question — fallback for
-  //      legacy interviews where assigned_skills wasn't persisted (the
-  //      transcript_evaluation_service used to drop it in _build_question_
-  //      history). Catches skill mentions inside multi-skill questions
-  //      ("How do you balance IDS/IPS, VLAN, STP, RSTP, MSTP, and Zero
-  //      Trust?") that the LLM only tagged with a single topic.
+  // Priority order (first hit wins; see lookupAsked for the full rationale):
+  //   1. The Question Distribution plan for the DELIVERED slots
+  //      (`plannedAsked`, from special_instructions.mth/nth_question_skill_map).
+  //      Authoritative and lossless: every skill a delivered slot was planned
+  //      to probe was asked. Same source the Question Analysis tab renders.
+  //   2. ai_evaluation.skill_assessed_map (server-side map built from
+  //      question_history.assigned_skills + question text).
+  //   3. question_history[i].assigned_skills on DELIVERED rows — the at-ask-time
+  //      planner snapshot (primary + planned secondaries) for each slot.
+  //   4. Question-text scan across evaluations[].question — LAST RESORT, used
+  //      only when none of 1-3 exist (legacy interviews). It is section-blind
+  //      and alias-driven, so it both over-credits (a "version control" mention
+  //      marking GitLab/GitHub Actions/Bitbucket) and under-credits (an "SDLC"
+  //      question never spelling out "SDLC"). Never allowed to supplement a
+  //      real record.
   const assessedMap = (eval_?.skill_assessed_map || {}) as Record<string, boolean>;
   const hasAssessedMap = Object.keys(assessedMap).length > 0;
   const questionHistory = (eval_?.question_history || []) as any[];
@@ -323,57 +351,102 @@ function buildClustersFromConfig(
   // Collect every skill named in any question_history[].assigned_skills.
   // Only counts as "available" when at least one entry actually has a
   // non-empty list (older interviews stored []/null).
+  //
+  // UNDELIVERED ROWS ARE SKIPPED (2026-08-12). The runtime pads question_history
+  // with `not_asked` placeholders when an interview ends early, and each
+  // placeholder carries `assigned_skills` built from the skills the candidate was
+  // NEVER tested on (message_handler._save_interview_results). Counting those
+  // marked precisely the un-asked skills as "Covered" — on a disconnected /
+  // terminated interview that inflated coverage toward 100% while almost nothing
+  // had been asked. The backend's _build_skill_assessed_map already filters these;
+  // this mirrors that guard.
   const assignedSkillSet = new Set<string>();
   for (const q of questionHistory) {
+    if (isUndeliveredHistoryRow(q)) continue;
     const a = q?.assigned_skills;
     if (Array.isArray(a)) {
       for (const s of a) {
-        if (typeof s === 'string' && s.trim()) assignedSkillSet.add(s.toLowerCase());
+        if (typeof s === 'string' && s.trim()) assignedSkillSet.add(s.toLowerCase().trim());
       }
     }
   }
   const hasAssignedSnapshot = assignedSkillSet.size > 0;
+  const hasPlannedAsked = plannedAsked.raw.size > 0;
+  // Is ANY authoritative record of what was asked available? When none is, the
+  // question-text keyword scan is the only remaining signal and we fall back to
+  // it (legacy sessions). When one IS available we must NOT run the scan — it
+  // both over- and under-credits (see lookupAsked).
+  const hasAuthoritativeAskedSource =
+    hasPlannedAsked || hasAssessedMap || hasAssignedSnapshot;
 
-  // Always build the question-text blob — it's now used as a fallback
-  // alongside the authoritative sources (not exclusively), so older
-  // sessions whose stored skill_assessed_map was built before the
-  // backend's _SKILL_ALIASES caught git/aws/azure/etc. can still surface
-  // those skills as Covered when the question text plainly probed them.
+  // Question-text blob for the LAST-RESORT scan (legacy sessions with no plan,
+  // no assessed map and no assigned-skills snapshot). Cheap to build, and only
+  // consulted when `hasAuthoritativeAskedSource` is false.
   const questionBlob = (evaluations as any[])
     .map(e => (e?.question || ''))
     .join(' ')
     .toLowerCase();
 
   const lookupAsked = (sname: string, score010: number): boolean => {
-    const sl = sname.toLowerCase();
+    const sl = sname.toLowerCase().trim();
+    const sc = compactSkillKey(sname);
 
-    // A skill is "asked" only when an AUTHORITATIVE source says a delivered
-    // question probed it: the backend skill_assessed_map, the at-ask-time
-    // assigned_skills snapshot, or the skill named in a question's text.
+    // ── Signal 1 (PRIMARY): the Question Distribution plan ────────────────
+    // `special_instructions.mth/nth_question_skill_map` — the same DB-backed
+    // plan the Question Distribution popover and the Question Analysis tab
+    // render, restricted to the slots this section actually DELIVERED. If the
+    // slot was asked, every skill the slot was planned to probe was asked, and
+    // that is exactly what "Covered" means here (independent of the score).
     //
-    // We deliberately do NOT treat "score > 0" as proof of being asked when an
-    // authoritative map exists. A score can leak ACROSS SECTIONS — e.g. the
-    // candidate names an NHS skill ("Kubernetes", "Azure DevOps") while
-    // answering an MHS question, so that NHS skill gets a score even though NO
-    // NHS question was ever asked. Trusting score>0 then marked it "covered"
-    // (BUG12). score>0 remains a fallback ONLY for legacy sessions that
-    // persisted neither the assessed map nor the assigned-skills snapshot.
+    // This is now first because every other signal is lossy. In particular the
+    // stored question_history often carries only the evaluator's single
+    // representative topic per question instead of the full [primary +
+    // secondaries] snapshot, which made coverage read "1 skill per question" —
+    // e.g. a 15-question / 35-skill interview where all 35 were assigned and
+    // scored reported 17/35 (49%). The plan cannot degrade that way.
+    if (hasPlannedAsked && (plannedAsked.raw.has(sl) || plannedAsked.compact.has(sc))) {
+      return true;
+    }
+
+    // ── Signal 2: the backend's skill_assessed_map ────────────────────────
     if (hasAssessedMap) {
       for (const k of Object.keys(assessedMap)) {
-        if (k.toLowerCase() === sl && assessedMap[k]) return true;
+        if (!assessedMap[k]) continue;
+        const kl = k.toLowerCase().trim();
+        if (kl === sl || compactSkillKey(k) === sc) return true;
       }
     }
+
+    // ── Signal 3: at-ask-time assigned_skills on DELIVERED history rows ───
     if (assignedSkillSet.has(sl)) return true;
 
-    if (questionBlob) {
+    // ── Signal 4 (LAST RESORT): skill named in a question's text ──────────
+    // Only when NO authoritative record of what was asked exists (legacy
+    // sessions). The scan is wrong in both directions and must never override
+    // or supplement a real record:
+    //   • False positives — the alias table maps git → [github, gitlab,
+    //     bitbucket, version control], so one question saying "version control"
+    //     marked GitLab / GitHub Actions / Bitbucket as Covered; and because the
+    //     alias key is matched as a SUBSTRING of the skill name, "JavaScript"
+    //     picks up the 'java' aliases and a Java question marks it Covered.
+    //   • False negatives — a skill genuinely probed but not literally named
+    //     ("software development lifecycle" never contains "SDLC", "project
+    //     management tools" never contains "Jira") reads as never asked.
+    //   • Section-blind — an NHS skill merely NAMED in an MHS question's text
+    //     is credited to NHS even when no NHS question ran (BUG12's leak, via
+    //     text instead of score).
+    if (!hasAuthoritativeAskedSource && questionBlob) {
       for (const kw of keywordsForSkill(sname)) {
         if (wordBoundaryTest(kw, questionBlob)) return true;
       }
     }
 
     // Legacy fallback: no authoritative signal at all → a positive score is the
-    // only evidence the skill was probed.
-    if (!hasAssessedMap && !hasAssignedSnapshot && score010 > 0) return true;
+    // only evidence the skill was probed. Never trusted when a record exists,
+    // because a score leaks ACROSS SECTIONS — the candidate names an NHS skill
+    // ("Kubernetes", "Azure DevOps") while answering an MHS question, so that
+    // NHS skill scores even though no NHS question was ever asked (BUG12).
+    if (!hasAuthoritativeAskedSource && score010 > 0) return true;
     return false;
   };
 
@@ -1947,11 +2020,113 @@ export function buildDashboardData(params: {
     return { mustHave: mh, niceToHave: nh };
   })();
 
-  const mustHaveClusters = buildClustersFromConfig(cluster_config?.mth || [], eval_, 1);
+  // ── Question Distribution plan (hoisted) ───────────────────────────────
+  // Parsed here rather than further down because Cluster Coverage needs it as
+  // its PRIMARY "was this skill asked" signal — see buildClustersFromConfig's
+  // lookupAsked. The Question Analysis alignment block below reuses these same
+  // two consts.
+  const parsedSpecialInstructions = (() => {
+    if (!special_instructions || typeof special_instructions !== 'string') return null;
+    try {
+      const p = JSON.parse(special_instructions);
+      return p && typeof p === 'object' ? p : null;
+    } catch {
+      return null;
+    }
+  })();
+  const planRowsBySection: Record<'mth' | 'nth', any[]> = { mth: [], nth: [] };
+  if (parsedSpecialInstructions) {
+    const mth = Array.isArray(parsedSpecialInstructions.mth_question_skill_map)
+      ? parsedSpecialInstructions.mth_question_skill_map
+      : [];
+    const nth = Array.isArray(parsedSpecialInstructions.nth_question_skill_map)
+      ? parsedSpecialInstructions.nth_question_skill_map
+      : [];
+    planRowsBySection.mth = [...mth].sort((a, b) =>
+      (Number(a?.question_number) || 0) - (Number(b?.question_number) || 0),
+    );
+    planRowsBySection.nth = [...nth].sort((a, b) =>
+      (Number(a?.question_number) || 0) - (Number(b?.question_number) || 0),
+    );
+  }
+
+  // ── How many MAIN questions each section actually DELIVERED ────────────
+  // Coverage must reflect the plan slots that were REACHED, not the whole plan —
+  // otherwise an interview that ended after 4 of 15 questions would report every
+  // configured skill as Covered. Counting rule mirrors the Question Analysis
+  // main-row filter: no follow-ups, no empty/meta text, no undelivered
+  // placeholders, and same-text duplicates within a round collapsed (the
+  // timeout/silence echo rows that inherit the previous question's text).
+  const deliveredMainCountBySection = (() => {
+    const out: Record<'mth' | 'nth', number> = { mth: 0, nth: 0 };
+    const seen = new Set<string>();
+    for (const h of ((eval_?.question_history || []) as any[])) {
+      if (!h || h.is_follow_up) continue;
+      if (isUndeliveredHistoryRow(h)) continue;
+      const qText = String(h?.question || '').trim();
+      if (!qText) continue;
+      if (isMetaAssistantTurn(qText)) continue;
+      const rt = String(h?.round_type || '').toLowerCase();
+      if (rt === 'hr') continue;                    // HR carries no skill plan
+      const sec: 'mth' | 'nth' = rt === 'nice_to_have_skills' ? 'nth' : 'mth';
+      const key = `${rt}::${qText.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out[sec] += 1;
+    }
+    // Fallback when question_history is absent/unusable: the runtime's own
+    // per-round counter.
+    for (const rt of ((eval_?.round_tracking || []) as any[])) {
+      const t = String(rt?.type || '').toLowerCase();
+      const sec: 'mth' | 'nth' | null =
+        t === 'must_have_skills' ? 'mth' : t === 'nice_to_have_skills' ? 'nth' : null;
+      if (!sec || out[sec] > 0) continue;
+      const actual = Number(rt?.actual_questions_asked);
+      if (Number.isFinite(actual) && actual > 0) out[sec] = actual;
+    }
+    return out;
+  })();
+
+  /** Union of [primary, ...secondaries] over the plan slots this section
+   *  delivered — the authoritative set of skills that were actually asked. */
+  const plannedAskedBySection = (() => {
+    const build = (sec: 'mth' | 'nth') => {
+      const raw = new Set<string>();
+      const compact = new Set<string>();
+      const rows = planRowsBySection[sec];
+      const delivered = deliveredMainCountBySection[sec];
+      if (rows.length === 0 || delivered <= 0) return { raw, compact };
+      // Slots are consumed in plan order — the runtime resolves a slot by its
+      // position within the round (get_slot_plan_for_q_num → slot_in_round), so
+      // the first `delivered` rows are the ones that were asked.
+      for (const r of rows.slice(0, Math.min(delivered, rows.length))) {
+        const names = [
+          String(r?.primary_skill || ''),
+          ...(Array.isArray(r?.secondary_skills) ? r.secondary_skills : []),
+        ];
+        for (const n of names) {
+          if (typeof n !== 'string' || !n.trim()) continue;
+          raw.add(n.toLowerCase().trim());
+          const c = compactSkillKey(n);
+          if (c) compact.add(c);
+        }
+      }
+      return { raw, compact };
+    };
+    return { mth: build('mth'), nth: build('nth') };
+  })();
+
+  const mustHaveClusters = buildClustersFromConfig(
+    cluster_config?.mth || [],
+    eval_,
+    1,
+    plannedAskedBySection.mth,
+  );
   const niceToHaveClusters = buildClustersFromConfig(
     cluster_config?.nth || [],
     eval_,
     mustHaveClusters.length + 1,
+    plannedAskedBySection.nth,
   );
 
   // Section scores: prefer backend `section_question_avg` (simple average of
@@ -2097,30 +2272,9 @@ export function buildDashboardData(params: {
   // When `special_instructions` is missing/malformed or no plan exists
   // for a slot, the row's existing `skills` is preserved as fallback —
   // older interviews predate this snapshot and shouldn't regress.
-  const parsedSpecialInstructions = (() => {
-    if (!special_instructions || typeof special_instructions !== 'string') return null;
-    try {
-      const p = JSON.parse(special_instructions);
-      return p && typeof p === 'object' ? p : null;
-    } catch {
-      return null;
-    }
-  })();
-  const planRowsBySection: Record<'mth' | 'nth', any[]> = { mth: [], nth: [] };
-  if (parsedSpecialInstructions) {
-    const mth = Array.isArray(parsedSpecialInstructions.mth_question_skill_map)
-      ? parsedSpecialInstructions.mth_question_skill_map
-      : [];
-    const nth = Array.isArray(parsedSpecialInstructions.nth_question_skill_map)
-      ? parsedSpecialInstructions.nth_question_skill_map
-      : [];
-    planRowsBySection.mth = [...mth].sort((a, b) =>
-      (Number(a?.question_number) || 0) - (Number(b?.question_number) || 0),
-    );
-    planRowsBySection.nth = [...nth].sort((a, b) =>
-      (Number(a?.question_number) || 0) - (Number(b?.question_number) || 0),
-    );
-  }
+  //
+  // `parsedSpecialInstructions` + `planRowsBySection` are hoisted above the
+  // cluster build (Cluster Coverage consumes the same plan) — reused here.
   const buildSkillsFromPlanRow = (row: any): PerQuestionSkill[] => {
     if (!row) return [];
     const primary = String(row?.primary_skill || '').trim();
