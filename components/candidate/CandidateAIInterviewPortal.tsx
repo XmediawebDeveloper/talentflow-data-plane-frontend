@@ -1428,6 +1428,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         setShareBarAttempts(nextAttempt);
         console.warn(`[ShareBar] PiP detected on screen (attempt ${nextAttempt}) — re-prompting, not proceeding`);
         setShareBarError('We detected a floating Picture-in-Picture / mini video window on your screen. Please close it, then press Continue again — the interview cannot start until it is closed.');
+      } else if (res.recorder_overlay_detected) {
+        // Vision check saw a third-party screen-recording app's own overlay
+        // (toolbar, recording-boundary border, REC/timer badge) somewhere on
+        // the entire-screen capture. This is the only way to catch that at
+        // all — no browser/OS API exposes "another app is recording" to a
+        // webpage — so it only works while the recorder's UI stays visible.
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        console.warn(`[ShareBar] recorder overlay detected (attempt ${nextAttempt}) — re-prompting, not proceeding`);
+        setShareBarError('We detected a screen-recording application running on your screen. Please close it completely, then press Continue again — the interview cannot start while screen-recording software is running.');
       } else if (res.hidden) {
         await startInterviewNow();
       } else {
@@ -1454,6 +1464,45 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       setShareBarChecking(false);
     }
   }, [shareBarChecking, startSubmitting, shareBarAttempts, token, captureScreenFrame, startInterviewNow]);
+
+  // Silent auto-recheck while the share-bar gate is showing a blocking error
+  // (bar visible / PiP detected / recorder overlay detected). Closing the
+  // recorder or the PiP window is something the candidate does OUTSIDE this
+  // page, so without this the on-screen warning would sit there stale until
+  // they noticed and clicked "Continue" again themselves. This clears the
+  // warning reactively the moment a clean frame comes back — it does NOT
+  // start the interview on its own; starting still requires the candidate's
+  // own click on Continue (that click is the required user gesture for
+  // fullscreen re-entry / audio-context resume, which can't be done from a
+  // timer callback).
+  useEffect(() => {
+    if (step !== 'hide_share_bar' || !shareBarError) return;
+    let cancelled = false;
+    let inFlight = false;
+    const iv = setInterval(async () => {
+      if (cancelled || inFlight || shareBarChecking || startSubmitting) return;
+      const track = screenStreamRef.current?.getVideoTracks?.()[0];
+      if (!screenStreamRef.current || !track || track.readyState !== 'live') return; // let the manual Continue path handle re-share
+      inFlight = true;
+      try {
+        const frame = await captureScreenFrame();
+        if (!frame || cancelled) return;
+        const res = await candidateAIInterviewService.verifyShareBarHidden(token, frame);
+        if (cancelled) return;
+        if (res.hidden && !res.pip_detected && !res.recorder_overlay_detected) {
+          console.log('[ShareBar] auto-recheck: now clean — clearing warning');
+          setShareBarError(null);
+          setShareBarAttempts(0);
+        }
+      } catch {
+        // Silent — this is a background poll, not a user-initiated action.
+        // The manual Continue button remains the authoritative retry path.
+      } finally {
+        inFlight = false;
+      }
+    }, 4000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [step, shareBarError, shareBarChecking, startSubmitting, token, captureScreenFrame]);
 
   // Final in-fullscreen consent gate → actually start the interview. Runs the
   // backend start (unit consumption) only after the candidate explicitly
@@ -2327,6 +2376,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             <b> Hide</b> button so it doesn&apos;t cover the interview. Screen
             sharing stays ON — this only collapses the bar. Then press
             <b> Continue</b> and we&apos;ll verify it before starting.
+          </p>
+          <p className="text-gray-500 mb-6 text-center text-xs leading-relaxed -mt-2">
+            Also close any screen-recording software (e.g. OBS, ScreenRec,
+            Bandicam, Camtasia, Game Bar) before continuing — the interview
+            cannot start while one is running.
           </p>
 
           {/* Visual guide — a mock of the Chrome sharing bar with Hide highlighted */}

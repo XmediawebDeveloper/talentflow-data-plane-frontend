@@ -21,7 +21,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2 } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -9218,6 +9218,33 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           The interview cannot resume from this state — the candidate must
           restore permissions AND restart the session from scratch, which
           matches the product rule "do not allow to start the interview again". */}
+      {/* ── Picture-in-Picture overlay — hard-blocks the interview while a video
+          is detached into a floating always-on-top window. Unlike the
+          fullscreen-exit overlay, there's no grace countdown: entering PiP is
+          a deliberate action, not an accidental blur, so the block is
+          immediate. It auto-clears the moment leavepictureinpicture fires
+          (proctoringState.isPiPActive flips back to false in the monitor
+          hook) — no separate "resume" flow needed. ── */}
+      {proctoringState.isPiPActive && isConnected && !isClosing && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 backdrop-blur-md">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/20 border border-red-400/40">
+              <PictureInPicture2 className="w-6 h-6 text-red-400" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-base mb-1">Picture-in-Picture Detected</h3>
+              <p className="text-[#cbd5e1] text-sm leading-relaxed">
+                A video was detached into a floating window. This has been logged
+                as a proctoring violation.
+              </p>
+              <p className="text-[#94A3B8] text-sm leading-relaxed mt-2">
+                Please exit Picture-in-Picture mode to continue the interview.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {mediaBlocked && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md">
           <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">

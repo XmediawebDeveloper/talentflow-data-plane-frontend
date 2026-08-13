@@ -2113,7 +2113,24 @@ export function buildDashboardData(params: {
       }
       return { raw, compact };
     };
-    return { mth: build('mth'), nth: build('nth') };
+    const built = { mth: build('mth'), nth: build('nth') };
+    // Diagnostic: the plan is the only lossless "was it asked" signal. When it is
+    // missing while clusters DO exist, coverage silently degrades to the stored
+    // history's representative topic (~1 skill per question) + the keyword scan.
+    // Legitimate causes: a section with 0 planned questions, a config saved
+    // before mth/nth_question_skill_map existed, or `special_instructions` not
+    // threaded into buildDashboardData by the calling tab.
+    for (const sec of ['mth', 'nth'] as const) {
+      const cfg = sec === 'mth' ? (cluster_config?.mth || []) : (cluster_config?.nth || []);
+      if (cfg.length > 0 && built[sec].raw.size === 0) {
+        console.warn(
+          `[Coverage] ${sec.toUpperCase()}: no Question-Distribution plan resolved ` +
+          `(planRows=${planRowsBySection[sec].length}, delivered=${deliveredMainCountBySection[sec]}) — ` +
+          `coverage falls back to skill_assessed_map / assigned_skills and may under-report.`,
+        );
+      }
+    }
+    return built;
   })();
 
   const mustHaveClusters = buildClustersFromConfig(

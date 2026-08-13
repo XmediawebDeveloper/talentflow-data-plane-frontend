@@ -377,6 +377,12 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
   const [weightError, setWeightError] = useState(false);
   const [newSkillName, setNewSkillName] = useState('');
   const [addSkillError, setAddSkillError] = useState('');
+  // Skill name the recruiter has been warned about once, on a MEDIUM-confidence
+  // duplicate match. Pressing Add again with the same text keeps both skills —
+  // the escape hatch for pairs only the recruiter can adjudicate (e.g. whether
+  // "Selenium" and "Selenium WebDriver" are one skill or two). Cleared on any
+  // successful add and whenever the input text changes.
+  const [pendingOverride, setPendingOverride] = useState<string | null>(null);
 
   const jdSet = new Set(jdSkillNames.map(s => s.toLowerCase()));
   const color = category === 'mth'
@@ -432,33 +438,148 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
   };
   // Punctuation/space-stripped form (keeps # and + so C#≠C++). Mirrors `_skill_squish`.
   const skillSquish = (s: string): string => (s || '').toLowerCase().replace(/[^a-z0-9#+]/g, '');
-  const skillContentTokens = (skill: string): Set<string> => {
-    const norm = (skill || '').toLowerCase().replace(/[._/\-]/g, ' ');
+  // Unordered canonical tokens — a thin wrapper over `skillTokenSequence` (defined
+  // just below) so BOTH forms share one tokenizer. They used to be separate, and
+  // the set form silently missed the brand-JS folding: "ReactJS" tokenized to
+  // {reactj} here while the sequence form gave [react], so React ≡ ReactJS was not
+  // detected. Mirrors backend `_skill_content_tokens`.
+  const skillContentTokens = (skill: string): Set<string> =>
+    new Set(skillTokenSequence(skill));
+  // Words that only DESCRIBE the skill beside them instead of naming a different
+  // product. Mirrors backend `_SKILL_GENERIC_QUALIFIERS` — stored with BOTH the
+  // raw word and its stem, because the comparison runs on stemmed tokens
+  // ("programming" → "programm", "coding" → "cod").
+  const GENERIC_QUALIFIER_WORDS = [
+    'programming', 'program', 'language', 'coding', 'code', 'scripting', 'script',
+    'development', 'develop', 'dev', 'engineering', 'framework', 'library',
+    'technology', 'stack', 'essential', 'overview', 'general', 'core', 'misc',
+    'various', 'usage', 'methodology', 'practice', 'process',
+  ];
+  const GENERIC_QUALIFIERS = new Set<string>([
+    ...GENERIC_QUALIFIER_WORDS,
+    ...GENERIC_QUALIFIER_WORDS.map(skillStem),
+  ]);
+  // Closed compounds also written as two words, so the initialism rule can see
+  // the boundary ("Software Development Lifecycle" → s-d-l-c).
+  const COMPOUND_SPLITS: Record<string, string> = {
+    lifecycle: 'life cycle', codebase: 'code base', workflow: 'work flow',
+    testcase: 'test case', testsuite: 'test suite', datastore: 'data store',
+    sourcecontrol: 'source control', versioncontrol: 'version control',
+  };
+  // Ordered canonical tokens. Mirrors backend `_skill_token_sequence`.
+  // BRAND-JS FOLDING: "ReactJS" used to stem to 'reactj' (plural-'s' rule mangling
+  // a brand name) while "React.js" expanded to {react, javascript} and "React" was
+  // {react} — three spellings, three identities, so the genuinely duplicate pair
+  // slipped through. A trailing 'js' is dropped from a longer token, and a
+  // standalone 'js' that FOLLOWS another token is dropped as a suffix; a
+  // leading/only 'js' still expands to javascript so the skill "JS" is unaffected.
+  const skillTokenSequence = (skill: string, expandAliases = true): string[] => {
+    if (!skill) return [];
+    const norm = skill.toLowerCase().replace(/[._/\-]/g, ' ');
     const raw = norm.match(/[a-z0-9#+]+/g) || [];
-    const out = new Set<string>();
-    for (const t of raw) {
-      for (const w of (SKILL_ALIASES[t] || t).split(' ')) {
+    const pieces: string[] = [];
+    raw.forEach((t, idx) => {
+      let tok = t;
+      if (tok === 'js') {
+        if (idx > 0) return;              // "React JS" → brand suffix, drop
+      } else if (tok.length > 3 && tok.endsWith('js')) {
+        tok = tok.slice(0, -2);           // reactjs → react
+      }
+      pieces.push(...(COMPOUND_SPLITS[tok] || tok).split(' '));
+    });
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const p of pieces) {
+      for (const w of (expandAliases ? (SKILL_ALIASES[p] || p) : p).split(' ')) {
         const st = skillStem(w);
-        if (st.length > 1 && !SKILL_STOPWORDS.has(st)) out.add(st);
+        if (st.length > 1 && !SKILL_STOPWORDS.has(st) && !seen.has(st)) {
+          seen.add(st);
+          out.push(st);
+        }
       }
     }
     return out;
   };
-  // True when two skill phrases denote the SAME skill despite different wording:
-  // exact, squished-equal (Front-end≡Frontend), or canonical-token equal/subset
-  // (SQL≡Structured Query Language, API Testing⊆Familiarity with API testing).
-  // Mirrors backend `_skills_semantically_equal`.
-  const skillsSemanticallyEqual = (a: string, b: string): boolean => {
-    if (!a || !b) return false;
-    if (normalizeSkillName(a) === normalizeSkillName(b)) return true;
+  // One side is the ACRONYM of the other ("SDLC" ≡ "Software Development Life
+  // Cycle"). Table-free: the curated alias map had ~23 entries, so every acronym
+  // outside it (SDLC, STLC, TDD, POM, ORM, CRUD…) passed the guard silently.
+  // Guards: short side must be a single 3-6 letter alphabetic token (2-letter
+  // acronyms collide too easily and stay table-only), long side needs ≥2 tokens.
+  // Mirrors backend `_skill_initialism_match`.
+  const skillInitialismMatch = (a: string, b: string): boolean => {
+    for (const [short, long] of [[a, b], [b, a]] as [string, string][]) {
+      const st = skillTokenSequence(short, false);
+      if (st.length !== 1) continue;
+      const acr = st[0];
+      if (acr.length < 3 || acr.length > 6 || !/^[a-z]+$/.test(acr)) continue;
+      const lt = skillTokenSequence(long, false);
+      if (lt.length < 2) continue;
+      if (lt.map(w => w[0]).join('') === acr) return true;
+    }
+    return false;
+  };
+  type DupTier = 'high' | 'medium' | '';
+  // Classify two skill names as duplicates. Mirrors backend
+  // `_skill_duplicate_verdict`; keep the two in sync.
+  //
+  // THE SUBSET RULE IS DELIBERATELY NARROW. It used to be "either token set is a
+  // subset of the other ⇒ same skill", which inverted reality for tech naming: it
+  // BLOCKED React vs React Native, SQL vs SQL Server, Azure vs Azure DevOps,
+  // Spring vs Spring Boot, Jenkins vs Jenkins Pipeline and Selenium vs Selenium
+  // WebDriver (all genuinely different skills — a longer name usually denotes a
+  // different PRODUCT), while ALLOWING React vs ReactJS (the same skill). Subset
+  // now counts only when every extra token is a generic qualifier, which keeps the
+  // two cases this guard exists for: "Java" vs "Java Programming" and "API
+  // Testing" vs "Familiarity with API testing".
+  const skillDuplicateVerdict = (
+    a: string, b: string,
+  ): { dup: boolean; tier: DupTier; reason: string } => {
+    const no = { dup: false, tier: '' as DupTier, reason: '' };
+    if (!a || !b) return no;
+    if (normalizeSkillName(a) === normalizeSkillName(b)) {
+      return { dup: true, tier: 'high', reason: 'identical' };
+    }
     const sa = skillSquish(a);
-    if (sa.length > 1 && sa === skillSquish(b)) return true;
+    if (sa.length > 1 && sa === skillSquish(b)) {
+      return { dup: true, tier: 'high', reason: 'same words, different punctuation' };
+    }
+    if (skillInitialismMatch(a, b)) {
+      return { dup: true, tier: 'high', reason: 'acronym of the same term' };
+    }
     const ta = skillContentTokens(a), tb = skillContentTokens(b);
-    if (ta.size === 0 || tb.size === 0) return false;
+    if (ta.size === 0 || tb.size === 0) return no;
     const [small, large] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
-    if (small.size === 0) return false;
-    for (const t of small) if (!large.has(t)) return false;
-    return true;
+    let contained = true;
+    for (const t of small) if (!large.has(t)) { contained = false; break; }
+    if (!contained) return no;
+    if (small.size === large.size) {
+      return { dup: true, tier: 'high', reason: 'same meaning, different wording' };
+    }
+    const extra = [...large].filter(t => !small.has(t));
+    if (extra.length > 0 && extra.every(t => GENERIC_QUALIFIERS.has(t))) {
+      return { dup: true, tier: 'medium', reason: 'one is a reworded form of the other' };
+    }
+    return no;
+  };
+  // Boolean form kept for the cross-bucket guard below.
+  const skillsSemanticallyEqual = (a: string, b: string): boolean =>
+    skillDuplicateVerdict(a, b).dup;
+  // Closest existing match — `find()` returned the FIRST hit, so adding "React"
+  // with both "React Native" and "ReactJS" present blamed React Native. Rank by
+  // tier (high beats medium) then by shared-token count.
+  const closestDuplicate = <T,>(
+    candidates: T[], nameOf: (c: T) => string, incoming: string,
+  ): { item: T; tier: DupTier; reason: string } | null => {
+    const incomingTokens = skillContentTokens(incoming);
+    let best: { item: T; tier: DupTier; reason: string; rank: number } | null = null;
+    for (const c of candidates) {
+      const v = skillDuplicateVerdict(nameOf(c), incoming);
+      if (!v.dup) continue;
+      const shared = [...skillContentTokens(nameOf(c))].filter(t => incomingTokens.has(t)).length;
+      const rank = (v.tier === 'high' ? 1000 : 0) + shared;
+      if (!best || rank > best.rank) best = { item: c, tier: v.tier, reason: v.reason, rank };
+    }
+    return best ? { item: best.item, tier: best.tier, reason: best.reason } : null;
   };
 
   const toggleCluster = (id: string) => {
@@ -509,13 +630,25 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
     // when "Java" is already present. Otherwise both would flow into cluster
     // generation as separate skills (duplicate skill mapping). Names the existing
     // skill so the recruiter knows why it was rejected.
-    const similar = config.skills.find(skill => skillsSemanticallyEqual(skill.name, trimmed));
-    if (similar) {
-      const msg = `"${trimmed}" is too similar to the existing skill "${similar.name}"`;
+    const similar = closestDuplicate(config.skills, s => s.name, trimmed);
+    if (similar && !(pendingOverride && normalizeSkillName(pendingOverride) === normalized)) {
+      const msg = `"${trimmed}" looks like the existing skill "${similar.item.name}" (${similar.reason})`;
       setAddSkillError(msg);
-      toast.error(msg);
+      // HIGH-confidence matches (identical / punctuation-only / acronym of the
+      // same term / same tokens) are rejected outright. MEDIUM is a judgement the
+      // recruiter can legitimately disagree with — only they know whether e.g.
+      // "Selenium" and "Selenium WebDriver" are meant as one skill — so it becomes
+      // a warning with an override instead of making the skill unaddable.
+      if (similar.tier === 'medium') {
+        setPendingOverride(trimmed);
+        toast.warning(`${msg}. Press Add again to keep both.`);
+      } else {
+        setPendingOverride(null);
+        toast.error(msg);
+      }
       return;
     }
+    setPendingOverride(null);
 
     // CROSS-BUCKET guard (2026-08-01): a skill must live in exactly ONE section.
     // Block adding here a skill that already exists (exactly or semantically) in
@@ -523,9 +656,9 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
     // Must-Have skill. Without this, both survive into cluster generation as a
     // cross-bucket duplicate.
     const otherLabel = category === 'mth' ? 'Nice-to-Have' : 'Must-Have';
-    const crossDup = (otherBucketSkills || []).find(
-      s => normalizeSkillName(s) === normalized || skillsSemanticallyEqual(s, trimmed),
-    );
+    const crossHit = closestDuplicate(otherBucketSkills || [], s => s, trimmed);
+    const crossDup = crossHit?.item
+      ?? (otherBucketSkills || []).find(s => normalizeSkillName(s) === normalized);
     if (crossDup) {
       const msg = `"${trimmed}" is already in the ${otherLabel} section (as "${crossDup}") — a skill can only be in one section`;
       setAddSkillError(msg);
@@ -705,6 +838,9 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
                 onChange={(e) => {
                   setNewSkillName(e.target.value);
                   if (addSkillError) setAddSkillError('');
+                  // Editing the text invalidates a pending "press Add again"
+                  // confirmation — it applied to the previous name only.
+                  if (pendingOverride) setPendingOverride(null);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -714,11 +850,22 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
                 }}
                 placeholder={category === 'mth' ? 'Add a must-have skill' : 'Add a nice-to-have skill'}
                 className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
-                  addSkillError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
+                  addSkillError
+                    ? (pendingOverride
+                        ? 'border-amber-300 focus:ring-amber-400'
+                        : 'border-red-300 focus:ring-red-400')
+                    : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               {addSkillError && (
-                <p className="mt-1 text-[11px] text-red-500">{addSkillError}</p>
+                // Amber + an explicit instruction while an override is pending —
+                // the toast vanishes, so the actionable hint has to live here.
+                <p className={`mt-1 text-[11px] ${pendingOverride ? 'text-amber-600' : 'text-red-500'}`}>
+                  {addSkillError}
+                  {pendingOverride && (
+                    <span className="font-medium"> — press Add again to keep both.</span>
+                  )}
+                </p>
               )}
             </div>
             <button
