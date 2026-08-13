@@ -559,6 +559,43 @@ const dedupeListsDeterministic = (
   return result;
 };
 
+// Deterministic (no-AI) de-duplication of a single list. Keeps the first
+// occurrence of each normalized item. Used to merge an extraction re-run with
+// the previous result without introducing duplicates (see mergeExtractedListField).
+const dedupeSingleList = (items: (string | undefined | null)[]): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of items || []) {
+    const value = (raw ?? '').trim();
+    if (!value) continue;
+    const norm = normalizeForDuplicate(value);
+    if (!norm || seen.has(norm)) continue;
+    seen.add(norm);
+    result.push(value);
+  }
+  return result;
+};
+
+// Merge a freshly-extracted requirement list with the previous one instead of
+// blindly overwriting it. Each extraction call is an independent run of a
+// multi-step LLM pipeline, so a later run can legitimately omit an item an
+// earlier run correctly found (a duplicate collapsed differently, a slightly
+// different phrasing chosen) - overwriting would silently drop it. Only
+// applies during re-extraction of an existing JD (isEditMode); a brand-new
+// extraction has nothing worth preserving, so it just takes the new result.
+const mergeExtractedListField = (
+  previous: string[] | undefined,
+  next: string[] | undefined,
+  isEditMode: boolean,
+): string[] => {
+  const newItems = next || [];
+  if (!isEditMode) return newItems;
+  const prevItems = previous || [];
+  if (newItems.length === 0) return prevItems;
+  if (prevItems.length === 0) return newItems;
+  return dedupeSingleList([...prevItems, ...newItems]);
+};
+
 const totalListItems = (lists: Record<DuplicateListKey, string[]>): number =>
   (lists.mustHaveSkills?.length || 0) +
   (lists.niceToHaveSkills?.length || 0) +
@@ -1814,10 +1851,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       && (payload.experienceMin !== undefined || payload.experienceMax !== undefined);
     const shouldPersistYears = yearsWereExplicit || customHasExplicitYears;
 
+    // Use `null` (never `undefined`) for "no value" here: this is the payload
+    // that gets JSON-serialized straight into the save request. A `null` key
+    // survives JSON.stringify and tells the backend's exclude_unset PATCH to
+    // clear the column; an `undefined` key gets dropped from the request body
+    // entirely, so the backend never sees the field and leaves whatever value
+    // was already persisted from an earlier save untouched. That mismatch is
+    // exactly what let a stale experience_max from a previous extraction
+    // survive a refresh after a later extraction correctly found no max.
     return {
       ...payload,
-      experienceMin: shouldPersistYears ? payload.experienceMin : undefined,
-      experienceMax: shouldPersistYears ? payload.experienceMax : undefined,
+      experienceMin: shouldPersistYears ? (payload.experienceMin ?? null) : null,
+      experienceMax: shouldPersistYears ? (payload.experienceMax ?? null) : null,
       yearsWereExplicit: shouldPersistYears,
     };
   };
@@ -2287,10 +2332,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       setExtractedData(prev => ({
         ...prev,
-        mustHaveSkills: params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? prev.mustHaveSkills : []),
-        mustHaveComments: params.must_have_comments?.length > 0 ? params.must_have_comments : prev.mustHaveComments,
-        niceToHaveSkills: params.nice_to_have_skills?.length > 0 ? params.nice_to_have_skills : (isEditMode ? prev.niceToHaveSkills : []),
-        niceToHaveComments: params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : prev.niceToHaveComments,
+        mustHaveSkills: mergeExtractedListField(prev.mustHaveSkills, params.must_have_skills, isEditMode),
+        mustHaveComments: mergeExtractedListField(prev.mustHaveComments, params.must_have_comments, isEditMode),
+        niceToHaveSkills: mergeExtractedListField(prev.niceToHaveSkills, params.nice_to_have_skills, isEditMode),
+        niceToHaveComments: mergeExtractedListField(prev.niceToHaveComments, params.nice_to_have_comments, isEditMode),
         education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || (isEditMode ? prev.education : ''),
         experience: expValue || prev.experience,
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
@@ -2951,10 +2996,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       setExperienceYearsExplicit(nextExperienceYearsExplicit);
 
       const extraction: ExtractedData = {
-        mustHaveSkills: preserveUserEdits ? extractedData.mustHaveSkills : (params.must_have_skills?.length > 0 ? params.must_have_skills : (isEditMode ? extractedData.mustHaveSkills || [] : [])),
-        mustHaveComments: preserveUserEdits ? extractedData.mustHaveComments : (params.must_have_comments?.length > 0 ? params.must_have_comments : (isEditMode ? extractedData.mustHaveComments || [] : [])),
-        niceToHaveSkills: preserveUserEdits ? extractedData.niceToHaveSkills : (params.nice_to_have_skills?.length > 0 ? params.nice_to_have_skills : (isEditMode ? extractedData.niceToHaveSkills || [] : [])),
-        niceToHaveComments: preserveUserEdits ? extractedData.niceToHaveComments : (params.nice_to_have_comments?.length > 0 ? params.nice_to_have_comments : (isEditMode ? extractedData.niceToHaveComments || [] : [])),
+        mustHaveSkills: preserveUserEdits ? extractedData.mustHaveSkills : mergeExtractedListField(extractedData.mustHaveSkills, params.must_have_skills, isEditMode),
+        mustHaveComments: preserveUserEdits ? extractedData.mustHaveComments : mergeExtractedListField(extractedData.mustHaveComments, params.must_have_comments, isEditMode),
+        niceToHaveSkills: preserveUserEdits ? extractedData.niceToHaveSkills : mergeExtractedListField(extractedData.niceToHaveSkills, params.nice_to_have_skills, isEditMode),
+        niceToHaveComments: preserveUserEdits ? extractedData.niceToHaveComments : mergeExtractedListField(extractedData.niceToHaveComments, params.nice_to_have_comments, isEditMode),
         education: educationValue || (isEditMode ? extractedData.education : ''),
         // Use API's mandatory flag for education
         educationRequired: params.education_mandatory || false,
