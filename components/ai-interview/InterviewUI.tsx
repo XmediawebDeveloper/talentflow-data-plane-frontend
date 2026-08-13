@@ -21,7 +21,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2 } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -816,7 +816,94 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // laptop's background dark/neutral until then instead of revealing the
     // challenge color the instant the QR itself appears.
     challengeRevealed: boolean;
+    // 5 sequential colors (1 per second) for the phone's first 5s recording
+    // phase — populated by "environment_verification_triggered", cycled
+    // starting from recordingStartedAt (below), NOT from when the QR/link
+    // was opened, so candidate-side delays can't desync the sequence from
+    // what their phone is actually filming.
+    challengeColors: string[] | null;
+    // Set only once "environment_verification_recording_started" arrives —
+    // the phone's confirmed t=0 for the RGB cycle.
+    recordingStartedAt: string | null;
+    // Extracted from verificationUrl (last path segment) — used ONLY to poll
+    // GET /candidate/environment-verify/{token}/status as a fallback when a
+    // WS push (opened/recording_started/submitted) is missed, e.g. because
+    // the candidate's phone request landed on a different backend worker
+    // than the one holding this laptop's socket.
+    verificationToken: string | null;
   }>(null);
+  // Mirrors envVerification for use inside the WS onopen/onmessage closures,
+  // which are created once by connect() and reused across reconnects — a
+  // stale closure over the state variable itself would never see updates.
+  const envVerificationRef = useRef<typeof envVerification>(null);
+  useEffect(() => { envVerificationRef.current = envVerification; }, [envVerification]);
+  // Guards environment-verification resume (session_resume send + clearing
+  // envVerification) so a WS "submitted" message and a poll tick that both
+  // observe the same submission can't each fire session_resume/duplicate the
+  // resume action.
+  const envVerificationResumedRef = useRef(false);
+
+  const resumeEnvVerification = useCallback(() => {
+    if (envVerificationResumedRef.current) return;
+    envVerificationResumedRef.current = true;
+    setEnvVerification(null);
+    try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+  }, []);
+
+  // Fallback reconciliation against the backend's authoritative status —
+  // covers a WS push (opened/recording_started/submitted) that never
+  // arrived, most commonly because the candidate's phone request landed on a
+  // different backend worker than the one holding THIS laptop socket. Used
+  // both by the polling interval below and once immediately after a WS
+  // reconnect, since a reconnect gap is exactly when a push could be lost.
+  const reconcileEnvVerificationFromStatus = useCallback(async () => {
+    const token = envVerificationRef.current?.verificationToken;
+    if (!token || envVerificationResumedRef.current) return;
+    try {
+      const data = await candidateAIInterviewService.getEnvironmentVerificationStatus(token);
+      if (data.status === 'submitted' || data.status === 'completed') {
+        resumeEnvVerification();
+        return;
+      }
+      if (data.status === 'expired') {
+        // Expired with no submission — resume ourselves rather than relying
+        // solely on the overlay's own countdown (that countdown's effect
+        // tears down the instant envVerification clears, so it can't be the
+        // sole trigger once THIS path is the one clearing it). Guarded by
+        // resumeEnvVerification so a near-simultaneous onExpired firing from
+        // the overlay's own timer never double-sends session_resume.
+        resumeEnvVerification();
+        return;
+      }
+      setEnvVerification(prev => {
+        if (!prev) return prev;
+        if (prev.challengeRevealed && (prev.recordingStartedAt || !data.recording_started_at)) return prev;
+        return {
+          ...prev,
+          challengeRevealed: prev.challengeRevealed || data.status === 'opened' || Boolean(data.recording_started_at),
+          recordingStartedAt: prev.recordingStartedAt || data.recording_started_at,
+        };
+      });
+    } catch {
+      /* best-effort — next poll tick or a subsequent WS push will retry */
+    }
+  }, [resumeEnvVerification]);
+
+  // Polling fallback (spec: "the frontend must NOT remain dependent on
+  // WebSocket delivery"). Only runs while a verification is actually active,
+  // and stops the instant it resolves (submitted/completed/expired) or the
+  // candidate-facing countdown clears it.
+  useEffect(() => {
+    if (!envVerification?.verificationToken) return;
+    const interval = setInterval(() => { void reconcileEnvVerificationFromStatus(); }, 2000);
+    return () => clearInterval(interval);
+  }, [envVerification?.verificationToken, reconcileEnvVerificationFromStatus]);
+
+  // Ref mirror so ws.onopen (defined once inside connect(), reused across
+  // reconnects — see "Stable callback refs" below) always calls the LATEST
+  // reconciliation function instead of closing over a stale one.
+  const reconcileEnvVerificationRef = useRef(reconcileEnvVerificationFromStatus);
+  useEffect(() => { reconcileEnvVerificationRef.current = reconcileEnvVerificationFromStatus; }, [reconcileEnvVerificationFromStatus]);
 
   // Session ID — populated from `connected` WS event, used for violation event logging
   const sessionIdRef = useRef<string | null>(null);
@@ -3526,13 +3613,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }
       case "environment_verification_triggered": {
         console.log(`[WS ${timestamp}] Environment verification triggered`);
+        const _verificationUrl = typeof data.verification_url === 'string' ? data.verification_url : null;
+        envVerificationResumedRef.current = false;
         setEnvVerification({
           qrCodeDataUri: typeof data.qr_code_data_uri === 'string' ? data.qr_code_data_uri : null,
-          verificationUrl: typeof data.verification_url === 'string' ? data.verification_url : null,
+          verificationUrl: _verificationUrl,
           expiresAt: typeof data.expires_at === 'string' ? data.expires_at : null,
           challengeColor: typeof data.challenge_color === 'string' ? data.challenge_color : null,
           challengeId: typeof data.challenge_id === 'string' ? data.challenge_id : null,
           challengeRevealed: false,
+          challengeColors: Array.isArray(data.challenge_colors) ? data.challenge_colors : null,
+          recordingStartedAt: null,
+          verificationToken: _verificationUrl ? _verificationUrl.split('/').filter(Boolean).pop() ?? null : null,
         });
         setStatus('Interview paused — verify your environment on your phone');
         break;
@@ -3545,10 +3637,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         setEnvVerification(prev => prev ? { ...prev, challengeRevealed: true } : prev);
         break;
       }
+      case "environment_verification_recording_started": {
+        // Phone confirmed MediaRecorder is actually recording — this is the
+        // authoritative t=0 the 1-color-per-second cycle is keyed against.
+        console.log(`[WS ${timestamp}] Environment verification recording started — beginning RGB cycle`);
+        setEnvVerification(prev => prev ? {
+          ...prev,
+          challengeRevealed: true,
+          recordingStartedAt: typeof data.recording_started_at === 'string' ? data.recording_started_at : null,
+          challengeColors: Array.isArray(data.challenge_colors) ? data.challenge_colors : prev.challengeColors,
+        } : prev);
+        break;
+      }
       case "environment_verification_submitted": {
         console.log(`[WS ${timestamp}] Environment verification submitted — resuming`);
-        setEnvVerification(null);
-        try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+        resumeEnvVerification();
         break;
       }
       case "greeting":
@@ -6853,6 +6956,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       setIsAiSpeaking(true);
       reconnectAttemptsRef.current = 0;
       preStartRetryRef.current = 0; // connected → reset the pre-start race counter
+      // A dropped/reconnected WS is exactly when an environment-verification
+      // push (opened/recording_started/submitted) could have been missed —
+      // reconcile against the backend's authoritative status immediately
+      // rather than waiting for the next 2s poll tick. No-ops if no
+      // verification is currently active.
+      void reconcileEnvVerificationRef.current();
       // Keepalive ping every 5 s — prevents proxy/nginx from closing idle connections
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
       pingIntervalRef.current = setInterval(() => {
@@ -9109,6 +9218,33 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           The interview cannot resume from this state — the candidate must
           restore permissions AND restart the session from scratch, which
           matches the product rule "do not allow to start the interview again". */}
+      {/* ── Picture-in-Picture overlay — hard-blocks the interview while a video
+          is detached into a floating always-on-top window. Unlike the
+          fullscreen-exit overlay, there's no grace countdown: entering PiP is
+          a deliberate action, not an accidental blur, so the block is
+          immediate. It auto-clears the moment leavepictureinpicture fires
+          (proctoringState.isPiPActive flips back to false in the monitor
+          hook) — no separate "resume" flow needed. ── */}
+      {proctoringState.isPiPActive && isConnected && !isClosing && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 backdrop-blur-md">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/20 border border-red-400/40">
+              <PictureInPicture2 className="w-6 h-6 text-red-400" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-base mb-1">Picture-in-Picture Detected</h3>
+              <p className="text-[#cbd5e1] text-sm leading-relaxed">
+                A video was detached into a floating window. This has been logged
+                as a proctoring violation.
+              </p>
+              <p className="text-[#94A3B8] text-sm leading-relaxed mt-2">
+                Please exit Picture-in-Picture mode to continue the interview.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {mediaBlocked && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md">
           <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
@@ -9152,12 +9288,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         challengeColor={envVerification?.challengeColor ?? null}
         challengeId={envVerification?.challengeId ?? null}
         challengeRevealed={envVerification?.challengeRevealed ?? false}
+        challengeColors={envVerification?.challengeColors ?? null}
+        recordingStartedAt={envVerification?.recordingStartedAt ?? null}
         onExpired={() => {
           // Candidate never completed verification in time — never hard-stall
           // the interview on it. Resume ourselves; the backend independently
-          // records an environment_verification_timed_out event.
-          setEnvVerification(null);
-          try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+          // records an environment_verification_timed_out event. Routed
+          // through the same guard as the WS "submitted" case and the status-
+          // poll fallback so a near-simultaneous submission/expiry can't
+          // double-send session_resume.
+          resumeEnvVerification();
         }}
       />
 

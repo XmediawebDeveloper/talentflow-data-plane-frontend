@@ -19,6 +19,7 @@ import {
   ShieldAlert, ShieldCheck, Users, Eye, Camera, Clipboard,
   Play, ChevronDown, ChevronRight, AudioLines, Smartphone, QrCode,
 } from 'lucide-react';
+import api from '@/lib/services/api';
 import {
   type ViolationRecord, type RecruiterSeverity, type CategoryKey,
   CATEGORIES, CATEGORY_ORDER,
@@ -119,23 +120,53 @@ function ConfidenceTag({ record }: { record: ViolationRecord }) {
 
 /* ── environment verification: video link + match badges ─────────────────── */
 function EnvironmentVerificationDetail({ record }: { record: ViolationRecord }) {
+  const [loadingVideo, setLoadingVideo] = useState(false);
   if (!record.event_type.startsWith('environment_verification_')) return null;
   const d = (record.details ?? {}) as Record<string, unknown>;
-  const videoUrl = typeof d.video_url === 'string' ? d.video_url : null;
+  // The backend never puts a raw storage path (s3://... or a bare disk path)
+  // here — only the verification's id. A fresh, browser-playable URL is
+  // minted on demand (see handleWatchVideo) exactly when the recruiter asks
+  // to watch it, never baked into this event's stored details.
+  const verificationId = typeof d.verification_id === 'string' ? d.verification_id : null;
   const colorMatch = typeof d.color_match === 'boolean' ? d.color_match : null;
   const idMatch = typeof d.id_match === 'boolean' ? d.id_match : null;
-  if (!videoUrl && colorMatch === null && idMatch === null) return null;
+  if (!verificationId && colorMatch === null && idMatch === null) return null;
+
+  const handleWatchVideo = async () => {
+    if (!verificationId || loadingVideo) return;
+    setLoadingVideo(true);
+    try {
+      const { data } = await api.get(`/ai-interview/environment-verification/${verificationId}/recording-url`);
+      if (data?.url) {
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+      } else {
+        // Local-filesystem storage — no presigned URL exists; fetch the
+        // stream through the authenticated API client and open it as a blob,
+        // same fallback CandidateResultsView uses for the screen recording.
+        const res = await api.get(
+          `/ai-interview/environment-verification/${verificationId}/recording`,
+          { responseType: 'blob' },
+        );
+        window.open(URL.createObjectURL(res.data), '_blank', 'noopener,noreferrer');
+      }
+    } catch {
+      // best-effort — recruiter can retry the click
+    } finally {
+      setLoadingVideo(false);
+    }
+  };
+
   return (
     <div className="flex items-center gap-2 flex-wrap mt-1.5">
-      {videoUrl && (
-        <a
-          href={videoUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-[11px] font-medium"
+      {verificationId && (
+        <button
+          type="button"
+          onClick={handleWatchVideo}
+          disabled={loadingVideo}
+          className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-[11px] font-medium disabled:opacity-50 disabled:no-underline"
         >
-          <Play className="w-3 h-3" />Watch verification video
-        </a>
+          <Play className="w-3 h-3" />{loadingVideo ? 'Loading…' : 'Watch verification video'}
+        </button>
       )}
       {colorMatch !== null && (
         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ring-1 ${colorMatch ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>

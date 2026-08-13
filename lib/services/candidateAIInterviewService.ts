@@ -156,6 +156,25 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
+  /** Fallback poll for the laptop side of mobile QR environment verification
+   *  (InterviewUI.tsx) — recovers state when a WS push (opened/
+   *  recording_started/submitted) never arrives, e.g. because the phone's
+   *  request landed on a different backend worker than the one holding this
+   *  laptop's socket. Never returns challenge_color/id/colors — those stay
+   *  laptop-only via the original WS trigger payload. */
+  async getEnvironmentVerificationStatus(verificationToken: string): Promise<{
+    status: string;
+    analysis_status: string | null;
+    expires_at: string | null;
+    recording_started_at: string | null;
+    verification_id: string | null;
+  }> {
+    const response = await candidateApi.get(
+      `/candidate/environment-verify/${verificationToken}/status`,
+    );
+    return response.data;
+  },
+
   async recordConsent(
     token: string,
     data: CandidateConsentRequest,
@@ -301,11 +320,13 @@ export const candidateAIInterviewService = {
   },
 
   /** Send a frame of the shared screen; the backend vision-LLM says whether
-   *  Chrome's "sharing your screen" bar is hidden/collapsed. */
+   *  Chrome's "sharing your screen" bar is hidden/collapsed, whether a floating
+   *  Picture-in-Picture window is visible, and whether a third-party screen
+   *  recorder's own overlay (toolbar/border/REC timer) is visible. */
   async verifyShareBarHidden(
     token: string,
     blob: Blob,
-  ): Promise<{ enabled: boolean; hidden: boolean; pip_detected?: boolean; reason?: string }> {
+  ): Promise<{ enabled: boolean; hidden: boolean; pip_detected?: boolean; recorder_overlay_detected?: boolean; reason?: string }> {
     const fd = new FormData();
     fd.append('file', blob, 'screen.jpg');
     const url = `${API_BASE_URL}/candidate/ai-interview/${token}/verify-share-bar`;

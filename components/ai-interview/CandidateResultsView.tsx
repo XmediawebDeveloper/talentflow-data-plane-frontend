@@ -2742,6 +2742,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                     const idMatch = typeof d.id_match === 'boolean' ? d.id_match : null;
                     const aiSummary = typeof d.ai_summary === 'string' ? d.ai_summary : null;
                     const flaggedItems = Array.isArray(d.flagged_items) ? d.flagged_items as Array<Record<string, unknown>> : [];
+                    const rgbSequenceResults = Array.isArray(d.rgb_sequence_results)
+                      ? d.rgb_sequence_results as Array<{ second: number; expected_rgb: string; detected_rgb: string | null; distance: number | null; match: boolean }>
+                      : [];
                     return (
                       <div key={idx} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
                         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
@@ -2772,6 +2775,31 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             </video>
                           ) : (
                             <p className="text-sm text-gray-400 italic">No video available for this attempt.</p>
+                          )}
+                          {rgbSequenceResults.length > 0 && (
+                            <div>
+                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">
+                                RGB Challenge Sequence — deterministic per-second check
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {rgbSequenceResults.map((r) => (
+                                  <div
+                                    key={r.second}
+                                    className={`flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-lg ring-1 text-xs font-medium ${r.match ? 'bg-green-50 ring-green-200 text-green-700' : 'bg-red-50 ring-red-200 text-red-600'}`}
+                                    title={r.detected_rgb ? `Expected ${r.expected_rgb}, detected ${r.detected_rgb} (distance ${r.distance ?? '—'})` : `Expected ${r.expected_rgb} — no frame detected`}
+                                  >
+                                    <span
+                                      className="w-4 h-4 rounded ring-1 ring-black/10 flex-shrink-0"
+                                      style={{ backgroundColor: r.expected_rgb }}
+                                    />
+                                    Sec {r.second}: {r.match ? 'MATCH' : 'MISMATCH'}
+                                  </div>
+                                ))}
+                              </div>
+                              <p className="text-[11px] text-gray-400 mt-1.5">
+                                Overall RGB_CHALLENGE = {rgbSequenceResults.every(r => r.match) ? 'PASS' : 'REVIEW_REQUIRED'}
+                              </p>
+                            </div>
                           )}
                           {aiSummary && (
                             <div>
