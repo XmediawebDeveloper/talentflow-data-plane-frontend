@@ -811,6 +811,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     expiresAt: string | null;
     challengeColor: string | null;
     challengeId: string | null;
+    // False until "environment_verification_opened" arrives — i.e. the
+    // moment the candidate's phone actually opens the verify link. Keeps the
+    // laptop's background dark/neutral until then instead of revealing the
+    // challenge color the instant the QR itself appears.
+    challengeRevealed: boolean;
   }>(null);
 
   // Session ID — populated from `connected` WS event, used for violation event logging
@@ -3527,8 +3532,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           expiresAt: typeof data.expires_at === 'string' ? data.expires_at : null,
           challengeColor: typeof data.challenge_color === 'string' ? data.challenge_color : null,
           challengeId: typeof data.challenge_id === 'string' ? data.challenge_id : null,
+          challengeRevealed: false,
         });
         setStatus('Interview paused — verify your environment on your phone');
+        break;
+      }
+      case "environment_verification_opened": {
+        // Candidate's phone actually opened the verify link — reveal the
+        // challenge color/ID on the laptop now, synced to this moment rather
+        // than showing it from when the QR first appeared.
+        console.log(`[WS ${timestamp}] Environment verification link opened on phone — revealing challenge`);
+        setEnvVerification(prev => prev ? { ...prev, challengeRevealed: true } : prev);
         break;
       }
       case "environment_verification_submitted": {
@@ -9137,6 +9151,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         expiresAt={envVerification?.expiresAt ?? null}
         challengeColor={envVerification?.challengeColor ?? null}
         challengeId={envVerification?.challengeId ?? null}
+        challengeRevealed={envVerification?.challengeRevealed ?? false}
         onExpired={() => {
           // Candidate never completed verification in time — never hard-stall
           // the interview on it. Resume ourselves; the backend independently
