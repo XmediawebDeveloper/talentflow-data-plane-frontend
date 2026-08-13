@@ -181,12 +181,6 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const [meetingBlockActive, setMeetingBlockActive] = useState(false);
   // true when candidate stopped screen sharing during the interview
   const [screenShareStopped, setScreenShareStopped] = useState(false);
-  // Live vision recheck (during the interview itself, not just the pre-start
-  // gate) for a visible third-party screen-recording overlay. Edge-triggered
-  // via the ref so a proctor event is reported once per detection episode,
-  // not once per poll while it stays visible.
-  const [screenRecorderDetected, setScreenRecorderDetected] = useState(false);
-  const screenRecorderDetectedRef = useRef(false);
   const [resharing, setResharing] = useState(false);
 
   // Language state
@@ -1510,64 +1504,6 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     return () => { cancelled = true; clearInterval(iv); };
   }, [step, shareBarError, shareBarChecking, startSubmitting, token, captureScreenFrame]);
 
-  // Live vision recheck DURING the interview itself. The pre-start gate above
-  // only checks once, before the candidate enters — nothing was watching for
-  // a recorder overlay that appears (or gets un-hidden) after that. Reuses
-  // the same entire-screen frame + vision endpoint; only acts on
-  // recorder_overlay_detected (PiP already has its own live JS-based
-  // detection in InterviewUI, and the Chrome share bar reappearing mid-
-  // interview isn't something this gate is responsible for). Polls slowly
-  // (20s) normally to keep vision-API cost bounded across a long interview,
-  // and switches to fast polling (4s) while actively blocked so the overlay
-  // clears quickly once the candidate closes the recorder.
-  useEffect(() => {
-    if (step !== 'interview') return;
-    let cancelled = false;
-    let inFlight = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const runCheck = async () => {
-      if (!cancelled && !inFlight) {
-        const track = screenStreamRef.current?.getVideoTracks?.()[0];
-        if (screenStreamRef.current && track && track.readyState === 'live') {
-          inFlight = true;
-          try {
-            const frame = await captureScreenFrame();
-            if (frame && !cancelled) {
-              const res = await candidateAIInterviewService.verifyShareBarHidden(token, frame);
-              if (!cancelled) {
-                const detected = !!res.recorder_overlay_detected;
-                if (detected !== screenRecorderDetectedRef.current) {
-                  screenRecorderDetectedRef.current = detected;
-                  setScreenRecorderDetected(detected);
-                  if (detected) {
-                    InterviewEventBus.emit('screen_recording_attempt', {});
-                    candidateAIInterviewService.reportProctorEvent(token, {
-                      event_type: 'screen_recording_attempt',
-                      severity: 'moderate',
-                      details: { source: 'live_vision_check', reason: (res.reason || '').slice(0, 200) },
-                    }).catch(() => {});
-                  }
-                }
-              }
-            }
-          } catch {
-            // Best-effort background check — never let a vision-API hiccup
-            // disrupt the interview itself.
-          } finally {
-            inFlight = false;
-          }
-        }
-      }
-      if (!cancelled) {
-        timer = setTimeout(runCheck, screenRecorderDetectedRef.current ? 4000 : 20000);
-      }
-    };
-
-    timer = setTimeout(runCheck, 8000); // let the interview UI settle first
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [step, token, captureScreenFrame]);
-
   // Final in-fullscreen consent gate → actually start the interview. Runs the
   // backend start (unit consumption) only after the candidate explicitly
   // accepts the "not allowed" rules one more time in fullscreen.
@@ -2570,29 +2506,6 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           deviceCapability={deviceCapability}
           candidatePhotoUrl={candidatePhotoUrl}
         />
-        {/* Screen-recording software detected live, mid-interview — blocking
-            overlay. No action button: closing the recorder happens outside
-            this page, so there's nothing here for the candidate to click.
-            Clears itself automatically (via the live recheck effect above)
-            the moment a clean frame comes back — no manual retry needed. */}
-        {screenRecorderDetected && !screenShareStopped && (
-          <div className="fixed inset-0 z-[9990] bg-black/95 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                <Monitor className="w-8 h-8 text-red-600" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Screen Recording Detected</h2>
-              <p className="text-gray-600 mb-2 text-sm">
-                We detected screen-recording software running on your screen. This
-                has been recorded as a violation.
-              </p>
-              <p className="text-sm text-red-600 font-medium">
-                Please close it completely. This screen will clear automatically
-                once it&apos;s gone — no need to click anything.
-              </p>
-            </div>
-          </div>
-        )}
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (
           <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm">
