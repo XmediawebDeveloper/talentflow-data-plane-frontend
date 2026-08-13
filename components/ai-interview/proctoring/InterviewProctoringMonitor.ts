@@ -54,6 +54,7 @@ interface ProctoringState {
   isMicrophoneActive: boolean;
   isCameraActive: boolean;
   isHighBackgroundNoise: boolean;
+  isPiPActive: boolean;
 }
 
 // ==================== CONSTANTS ====================
@@ -80,6 +81,9 @@ const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
   voice_mismatch: 10000,
   voice_identity_changed: 15000,
   screen_share_stopped: 10000,
+  // No cooldown headroom needed — enter/leave already gates repeats, and a
+  // hard-block violation shouldn't be throttled away.
+  picture_in_picture_detected: 0,
   background_noise: 30000,
   // Long windows: the object detector runs on a 2 s cadence and a phone left in
   // view stays in view. The per-CLASS re-arm gate in InterviewObjectDetection
@@ -324,6 +328,7 @@ export function useInterviewProctoringMonitor({
     isMicrophoneActive: true,
     isCameraActive: true,
     isHighBackgroundNoise: false,
+    isPiPActive: false,
   });
 
   // Refs for props (prevent re-render cascades)
@@ -831,6 +836,15 @@ export function useInterviewProctoringMonitor({
         // will have cancelled this timer before it runs.
         if (document.hidden || !document.hasFocus()) {
           emitEventRef.current('window_blur', {});
+        } else if (document.pictureInPictureElement) {
+          // The apparent "return to focus" coincides with an active PiP
+          // element — e.g. the candidate clicked the screen-share bar's Hide
+          // button while a video is floating in Picture-in-Picture. That's a
+          // real violation, not the benign transient blur this branch exists
+          // to swallow. setupPiPDetection's own enter/leave listeners are the
+          // primary signal; this is a synchronous belt-and-braces recheck at
+          // exactly the moment a candidate is most likely to trigger it.
+          emitEventRef.current('picture_in_picture_detected', { via: 'blur_recheck' });
         } else {
           console.log('[INTERVIEW_PROCTORING] Transient blur ignored (focus regained, page still visible) — likely the screen-share info bar / Hide button');
         }
@@ -956,6 +970,33 @@ export function useInterviewProctoringMonitor({
     };
   }, []);
 
+  // Picture-in-Picture — Webcam.tsx and Avatar.tsx already set
+  // disablePictureInPicture on every video element they render, so this only
+  // fires if that's bypassed (a page bug, or a browser-extension content
+  // script forcing requestPictureInPicture() on our video). Listened for at
+  // the document level with capture:true so it's caught regardless of which
+  // element it fires on and regardless of bubbling — enterpictureinpicture /
+  // leavepictureinpicture always pass through the capturing phase even when
+  // they don't bubble.
+  const setupPiPDetection = useCallback(() => {
+    const handleEnter = () => {
+      setState(prev => (prev.isPiPActive ? prev : { ...prev, isPiPActive: true }));
+      emitEventRef.current('picture_in_picture_detected', {});
+    };
+    const handleLeave = () => {
+      setState(prev => (!prev.isPiPActive ? prev : { ...prev, isPiPActive: false }));
+    };
+
+    document.addEventListener('enterpictureinpicture', handleEnter, true);
+    document.addEventListener('leavepictureinpicture', handleLeave, true);
+    console.log('[INTERVIEW_PROCTORING] Picture-in-Picture detection started');
+
+    return () => {
+      document.removeEventListener('enterpictureinpicture', handleEnter, true);
+      document.removeEventListener('leavepictureinpicture', handleLeave, true);
+    };
+  }, []);
+
   const setupFullscreenDetection = useCallback(() => {
     let eventName = 'fullscreenchange';
     if ('onwebkitfullscreenchange' in document) eventName = 'webkitfullscreenchange';
@@ -1023,6 +1064,7 @@ export function useInterviewProctoringMonitor({
       copyPasteBlockingRef.current ? setupCopyPasteDetection() : () => {},
       setupScreenshotDetection(),
       setupScreenRecordingDetection(),
+      setupPiPDetection(),
       setupFullscreenDetection(),
       setupMouseTracking(),
     ];
@@ -1118,6 +1160,7 @@ function getSeverity(type: ProctoringEventType): 'minor' | 'moderate' | 'severe'
     face_identity_changed:    'severe',
     voice_identity_changed:   'severe',
     screen_share_stopped:     'severe',
+    picture_in_picture_detected: 'severe',
     phone_detected:           'severe',
     unauthorized_object:      'moderate',
     // Advisory — not a proctoring violation (AIU-67)

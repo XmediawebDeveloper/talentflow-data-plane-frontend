@@ -30,6 +30,12 @@ export type ProctoringEventType =
   | 'voice_mismatch'
   | 'voice_identity_changed'
   | 'screen_share_stopped'
+  // The candidate detached a video into a floating always-on-top window
+  // (manual "Picture in Picture" or Chrome's auto-PiP on tab switch). Own
+  // video elements set disablePictureInPicture, so this only fires via a
+  // forced/extension-driven request — a genuine escape-the-monitored-view
+  // signal, not an accidental blur.
+  | 'picture_in_picture_detected'
   | 'background_noise'
   // Live object detection (see InterviewObjectDetection). Split into two types
   // rather than one "object_detected" so severity is carried by the type, the
@@ -77,6 +83,7 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   voice_mismatch: 'Voice verification warning. Voice pattern does not match the registered speaker.',
   voice_identity_changed: 'A different speaker has been detected. Voice verification failed.',
   screen_share_stopped: 'Screen sharing was stopped. Screen sharing is mandatory throughout this session.',
+  picture_in_picture_detected: 'Picture-in-Picture detected. Please exit Picture-in-Picture mode to continue.',
   background_noise: 'Excessive background noise detected. Please move to a quieter environment for a better experience.',
   phone_detected: 'A mobile phone was detected. Please put it away — phones are not allowed during this session.',
   unauthorized_object: 'An unauthorised item was detected in view. Please remove it from your workspace.',
@@ -109,6 +116,7 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'minor' | 'moderate' | 'severe
   face_identity_changed:    'severe',
   voice_identity_changed:   'severe',
   screen_share_stopped:     'severe',
+  picture_in_picture_detected: 'severe',
   // A phone in view is a direct, unambiguous integrity breach — the candidate
   // can read or be fed answers from it. Ranked alongside the identity signals.
   phone_detected:           'severe',
