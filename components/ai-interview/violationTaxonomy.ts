@@ -156,6 +156,7 @@ export const EVENT_META: Record<string, EventMeta> = {
   screenshot_attempt:       { category: 'capture', label: 'Took a screenshot' },
   screen_recording_attempt: { category: 'capture', label: 'Screen recording detected' },
   screen_share_stopped:     { category: 'capture', label: 'Stopped sharing their screen' },
+  picture_in_picture_detected: { category: 'capture', label: 'Used Picture-in-Picture' },
 
   // Attention
   gaze_away:       { category: 'attention', label: 'Looked away from the screen' },
@@ -428,6 +429,12 @@ export function describeViolation(v: ViolationRecord): string {
     }
     case 'screen_recording_attempt':
       return 'A screen-recording tool was detected.';
+    case 'picture_in_picture_detected': {
+      const via = typeof d.via === 'string' ? d.via : '';
+      return via === 'blur_recheck'
+        ? 'The interview video was detached into a floating Picture-in-Picture window while the window lost focus.'
+        : 'The interview video was detached into a floating Picture-in-Picture window.';
+    }
     case 'screen_share_stopped': {
       const key = typeof d.reason === 'string' ? d.reason : '';
       return SHARE_REASON[key] ?? 'Screen sharing was stopped (it is required throughout the interview).';
