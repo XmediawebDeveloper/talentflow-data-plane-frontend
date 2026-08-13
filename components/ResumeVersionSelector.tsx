@@ -1,9 +1,12 @@
 'use client'
 
 import { useState } from 'react';
-import { X, FileText, Calendar, User, Clock, CheckCircle2 } from 'lucide-react';
+import { X, FileText, Calendar, User, Clock, CheckCircle2, History, Loader2 } from 'lucide-react';
 import { Resume, ResumeVersion } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { resumeService } from '@/lib/services/resumeService';
+import { toast } from 'sonner';
+import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
 
 interface ResumeVersionSelectorProps {
   resume: Resume;
@@ -24,6 +27,73 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
   // Track selected version (default to latest)
   const [selectedVersionId, setSelectedVersionId] = useState<string>(latestVersionId || '');
 
+  /* Comparison, same as the version history popup: tick any two and compare,
+     or use "View Changes" on a row to diff it against the one before it.
+     The tick boxes are their own column, kept clear of the row's own click
+     target, so choosing what to compare never reads as choosing what to use. */
+  const [comparePair, setComparePair] = useState<{ older: CompareVersion; newer: CompareVersion } | null>(null);
+  const [compareChecked, setCompareChecked] = useState<string[]>([]);
+  const [loadingCompare, setLoadingCompare] = useState(false);
+
+  const toggleCompareCheck = (versionId: string) => {
+    setCompareChecked((prev) => {
+      if (prev.includes(versionId)) return prev.filter((id) => id !== versionId);
+      // A third tick replaces the older of the two already held.
+      return prev.length >= 2 ? [prev[1], versionId] : [...prev, versionId];
+    });
+  };
+
+  /** Extracted text comes from the version-detail endpoint, not this list. */
+  const textFor = async (version: ResumeVersion): Promise<string> => {
+    if (version.extractedText || version.extracted_text) {
+      return version.extractedText || version.extracted_text || '';
+    }
+    try {
+      const detail = await resumeService.get(version.id);
+      return detail?.extracted_text || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const openComparison = async (
+    older: ResumeVersion,
+    olderNumber: number,
+    newer: ResumeVersion,
+    newerNumber: number,
+  ) => {
+    setLoadingCompare(true);
+    try {
+      const [olderText, newerText] = await Promise.all([textFor(older), textFor(newer)]);
+      setComparePair({
+        older: { version: olderNumber, name: older.name, text: olderText },
+        newer: { version: newerNumber, name: newer.name, text: newerText },
+      });
+    } catch {
+      toast.error('Could not load those versions to compare');
+    } finally {
+      setLoadingCompare(false);
+    }
+  };
+
+  /** Version numbers here are positional (newest first), so derive them. */
+  const numberFor = (versionId: string) => {
+    const idx = sortedVersions.findIndex((v) => v.id === versionId);
+    return idx === -1 ? undefined : sortedVersions.length - idx;
+  };
+
+  const compareSelected = () => {
+    if (compareChecked.length !== 2) return;
+    const a = sortedVersions.find((v) => v.id === compareChecked[0]);
+    const b = sortedVersions.find((v) => v.id === compareChecked[1]);
+    if (!a || !b) return;
+    const aNum = numberFor(a.id) || 0;
+    const bNum = numberFor(b.id) || 0;
+    return aNum <= bNum
+      ? openComparison(a, aNum, b, bNum)
+      : openComparison(b, bNum, a, aNum);
+  };
+
   const handleConfirm = () => {
     if (selectedVersionId) {
       onSelect(selectedVersionId);
@@ -32,137 +102,237 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-gray-200">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-1">Select Resume Version</h2>
-            <p className="text-sm text-gray-600">
-              Choose which version of <span className="font-medium">{resume.name}</span>&apos;s resume to apply to the job
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-           aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Auto-select notice */}
-        <div className="px-6 pt-4 pb-2">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-3">
-            <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm">
-              <p className="text-blue-900 font-medium mb-1">Latest version auto-selected</p>
-              <p className="text-blue-700">
-                The most recent version is selected by default. You can choose a different version below.
+        <div className="flex-shrink-0 flex items-start justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+              <FileText className="w-5 h-5 text-brand-blue" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-50">
+                  Select Resume Version
+                </h2>
+                <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                  {sortedVersions.length} version{sortedVersions.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-0.5 truncate">
+                Which version of {resume.name}&apos;s resume to use
               </p>
             </div>
           </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Reads as the instruction until two are ticked, then as the action. */}
+            {sortedVersions.length > 1 && (
+              <button
+                type="button"
+                onClick={compareSelected}
+                disabled={compareChecked.length !== 2 || loadingCompare}
+                className={`hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  compareChecked.length === 2 && !loadingCompare
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2'
+                    : 'bg-slate-100 dark:bg-slate-800 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {loadingCompare && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {compareChecked.length === 2 ? 'Compare selected' : 'Select 2 versions to compare'}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Versions List */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-3">
+        {/* One line where a four-line notice used to sit — the default is
+            already visible in the list, so it only needs saying once. */}
+        <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 text-xs text-gray-600 dark:text-slate-400">
+          <CheckCircle2 className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
+          <span>
+            The latest version is selected by default
+            {sortedVersions.length > 1 ? ' — tick any two to compare them' : ''}.
+          </span>
+        </div>
+
+        {/* Versions */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2">
           {sortedVersions.map((version, index) => {
             const isLatest = version.id === latestVersionId;
             const isSelected = version.id === selectedVersionId;
             const versionNumber = sortedVersions.length - index;
+            const isTicked = compareChecked.includes(version.id);
 
+            /* A div rather than a button: the row holds its own checkbox and
+               buttons, and nesting interactive elements inside a button is
+               invalid markup. Role and key handling keep it operable. */
             return (
-              <button
+              <div
                 key={version.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
                 onClick={() => setSelectedVersionId(version.id)}
-                className={`w-full text-left p-4 rounded-lg border-2 transition-all hover:shadow-md ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedVersionId(version.id);
+                  }
+                }}
+                className={`w-full cursor-pointer rounded-xl border p-3 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
                   isSelected
-                    ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-600 ring-offset-2'
-                    : 'border-gray-200 bg-white hover:border-blue-300'
+                    ? 'border-brand-blue bg-brand-blue/[0.06] ring-1 ring-brand-blue/20 shadow-sm shadow-brand-blue/10'
+                    : 'border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:bg-brand-blue/[0.02]'
                 }`}
               >
-                <div className="flex items-start gap-4">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    isSelected ? 'bg-blue-100' : 'bg-gray-100'
+                <div className="flex items-center gap-3">
+                  {sortedVersions.length > 1 && (
+                    <input
+                      type="checkbox"
+                      checked={isTicked}
+                      onChange={() => toggleCompareCheck(version.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-4 w-4 flex-shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                      aria-label={`Select version ${versionNumber} to compare`}
+                    />
+                  )}
+
+                  {/* The version number carries the identity; a file icon was
+                      saying "this is a file" on a list of nothing but files. */}
+                  <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                    isSelected
+                      ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                      : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 ring-1 ring-gray-200/60'
                   }`}>
-                    <FileText className={`w-6 h-6 ${isSelected ? 'text-blue-600' : 'text-gray-600'}`} />
+                    v{versionNumber}
                   </div>
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-medium text-gray-900">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-sm font-semibold ${isSelected ? 'text-brand-blue' : 'text-gray-900 dark:text-slate-50'}`}>
                         Version {versionNumber}
-                      </h3>
+                      </span>
                       {isLatest && (
-                        <span className="px-2 py-0.5 bg-green-600 text-white text-xs rounded-full">
+                        <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-brand-blue text-white">
                           Latest
                         </span>
                       )}
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600">
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="w-4 h-4 text-gray-400" />
-                        <span>{formatISTDate(version.uploadDate)}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <User className="w-4 h-4 text-gray-400" />
-                        <span className="truncate">{version.uploadedBy}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <FileText className="w-4 h-4 text-gray-400" />
-                        <span className="truncate">{version.name}</span>
-                      </div>
-                    </div>
-
-                    {version.size && (
-                      <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500">
-                        <Clock className="w-3 h-3" />
-                        <span>Size: {version.size}</span>
-                      </div>
+                    {version.name && (
+                      <p className="text-xs text-gray-600 dark:text-slate-400 truncate mt-0.5">{version.name}</p>
                     )}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 dark:text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 flex-shrink-0" />
+                        {formatISTDate(version.uploadDate)}
+                      </span>
+                      {version.size && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 flex-shrink-0" />
+                          {version.size}
+                        </span>
+                      )}
+                      {version.uploadedBy && (
+                        <span className="flex items-center gap-1 min-w-0">
+                          <User className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{version.uploadedBy}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex-shrink-0">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
-                      isSelected ? 'bg-blue-600' : 'bg-gray-200'
+                  <div className="flex flex-shrink-0 items-center gap-2">
+                    {/* Diff against the next-oldest version. The last row has
+                        nothing behind it to compare against. */}
+                    {index < sortedVersions.length - 1 ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openComparison(
+                            sortedVersions[index + 1],
+                            versionNumber - 1,
+                            version,
+                            versionNumber,
+                          );
+                        }}
+                        disabled={loadingCompare}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-700 px-2.5 py-1.5 text-xs font-medium text-gray-700 dark:text-slate-200 transition-colors hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-50"
+                        title="Compare with the previous version"
+                      >
+                        {loadingCompare ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <History className="w-3.5 h-3.5" />}
+                        <span className="hidden sm:inline">View Changes</span>
+                      </button>
+                    ) : (
+                      <span className="hidden sm:inline text-[11px] italic text-gray-400 dark:text-slate-500">First version</span>
+                    )}
+                    {/* A radio, not a tick: exactly one version is applied, and
+                        the checkbox on the left already means something else. */}
+                    <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                      isSelected ? 'border-brand-blue bg-brand-blue' : 'border-gray-300 dark:border-slate-600'
                     }`}>
-                      <CheckCircle2 className={`w-5 h-5 ${
-                        isSelected ? 'text-white' : 'text-gray-400'
-                      }`} />
-                    </div>
+                      {isSelected && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                    </span>
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              {sortedVersions.length} version{sortedVersions.length !== 1 ? 's' : ''} available
-            </p>
-            <div className="flex items-center gap-3">
+        <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
+          <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+            {compareChecked.length > 0
+              ? `${compareChecked.length} of 2 selected to compare`
+              : `Version ${numberFor(selectedVersionId) ?? '-'} will be used`}
+          </p>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {sortedVersions.length > 1 && (
               <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+                type="button"
+                onClick={compareSelected}
+                disabled={compareChecked.length !== 2 || loadingCompare}
+                className="sm:hidden inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium bg-brand-blue text-white disabled:bg-slate-200 disabled:text-gray-400"
               >
-                Cancel
+                {loadingCompare && <Loader2 className="w-4 h-4 animate-spin" />}
+                Compare
               </button>
-              <button
-                onClick={handleConfirm}
-                disabled={!selectedVersionId}
-                className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Confirm & Continue
-              </button>
-            </div>
+            )}
+            <button
+              onClick={onClose}
+              className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-white dark:hover:bg-slate-800 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirm}
+              disabled={!selectedVersionId}
+              className="flex-1 sm:flex-none px-5 py-2 text-sm font-medium text-white bg-brand-blue rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Confirm &amp; Continue
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Same diff popup the version history uses. */}
+      {comparePair && (
+        <VersionCompareModal
+          older={comparePair.older}
+          newer={comparePair.newer}
+          onClose={() => {
+            setComparePair(null);
+            setCompareChecked([]);
+          }}
+        />
+      )}
     </div>
   );
 }

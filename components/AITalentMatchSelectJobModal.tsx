@@ -1,39 +1,7 @@
-import { X, Search, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, MapPin, User, Monitor, Laptop, Home, Sparkles, PenLine, Target, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+'use client';
+
 import { Resume, Job } from '@/lib/types/types';
-import { formatISTDate } from '@/lib/utils/dateUtils';
-
-// Work mode configuration
-const workModeConfig: Record<string, { label: string; icon: React.ElementType; bgColor: string; textColor: string }> = {
-  onsite: { label: 'On-site', icon: Monitor, bgColor: 'bg-blue-50', textColor: 'text-blue-700' },
-  hybrid: { label: 'Hybrid', icon: Laptop, bgColor: 'bg-purple-50', textColor: 'text-purple-700' },
-  remote: { label: 'Remote', icon: Home, bgColor: 'bg-green-50', textColor: 'text-green-700' },
-};
-
-// Format employment type
-const formatEmploymentType = (type: string | undefined): string => {
-  if (!type) return '';
-  return type
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-};
-
-// Format relative time
-const formatRelativeTime = (dateStr: string | undefined): string => {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 60) return `${diffMins} minutes ago`;
-  if (diffHours < 24) return `${diffHours} hours ago`;
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return formatISTDate(dateStr);
-};
+import ApplyToJobModal from './ApplyToJobModal';
 
 interface AITalentMatchSelectJobModalProps {
   resumes: Resume[];
@@ -44,6 +12,15 @@ interface AITalentMatchSelectJobModalProps {
   confirmLabel?: string;
 }
 
+/**
+ * AI Talent Match's job picker.
+ *
+ * This was a near-copy of the Apply to Job dialog that drifted from it — no
+ * candidate checkboxes, no resume versions, no preview, its own search that
+ * only matched titles, and ineligible jobs hidden rather than explained. It is
+ * now a thin adapter over that dialog, so the two stay identical by
+ * construction; only the wording and the callback shape differ.
+ */
 export default function AITalentMatchSelectJobModal({
   resumes,
   jobs,
@@ -52,329 +29,19 @@ export default function AITalentMatchSelectJobModal({
   stayOnCurrentPage = false,
   confirmLabel,
 }: AITalentMatchSelectJobModalProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedJob, setSelectedJob] = useState<string | null>(null);
-  const [isMatching, setIsMatching] = useState(false);
-
-  // Filter for published jobs only
-  const activeJobs = jobs.filter(job => job.status === 'Published');
-
-  const filteredJobs = activeJobs.filter(job =>
-    job.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleMatch = async () => {
-    if (selectedJob) {
-      setIsMatching(true);
-      const resumeIds = resumes.map(r => r.id);
-
-      // Small delay for UX
-      setTimeout(() => {
-        onMatch(resumeIds, selectedJob);
-        setIsMatching(false);
-      }, 300);
-    }
-  };
-
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-              <Sparkles className="w-4 h-4 text-brand-blue" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">AI Talent Match</h2>
-              <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Select a job to find matching candidates</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-          {/* Selected Candidates Summary */}
-          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
-            <div className="flex items-start gap-2 sm:gap-3">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 dark:text-slate-100 mt-0.5 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <h3 className="text-xs sm:text-sm text-gray-800 dark:text-slate-100 mb-2">
-                  {resumes.length} Candidate{resumes.length > 1 ? 's' : ''} Selected for AI Matching
-                </h3>
-                <div className="space-y-2">
-                  {resumes.slice(0, 3).map(resume => (
-                    <div key={resume.id} className="flex items-center gap-3 p-2 bg-white dark:bg-slate-900 rounded-lg">
-                      <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-900 dark:text-slate-50">
-                        {resume.name.split(' ').map(n => n[0]).join('')}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-900 dark:text-slate-50 truncate">{resume.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{resume.title}</div>
-                      </div>
-                    </div>
-                  ))}
-                  {resumes.length > 3 && (
-                    <div className="text-xs text-gray-900 dark:text-slate-50 pl-2">
-                      +{resumes.length - 3} more candidate{resumes.length - 3 > 1 ? 's' : ''}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Job Search */}
-          <div className="mb-4">
-            <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">Search Jobs for AI Matching</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-              <input
-                type="text"
-                placeholder="Search by job title..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-              />
-            </div>
-          </div>
-
-          {/* Job Selection */}
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <label className="text-sm text-gray-700 dark:text-slate-300">
-                Select Job Opening{selectedJob ? ' (1 selected)' : ''}
-              </label>
-              {selectedJob && (
-                <button
-                  onClick={() => setSelectedJob(null)}
-                  className="text-xs text-gray-800 dark:text-slate-100 hover:text-gray-900"
-                >
-                  Clear Selection
-                </button>
-              )}
-            </div>
-
-            {filteredJobs.length > 0 ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                {filteredJobs.map(job => {
-                  const isSelected = selectedJob === job.id;
-                  const workMode = workModeConfig[(job as any).workMode?.toLowerCase() || (job as any).remote_type?.toLowerCase()] || null;
-                  const WorkModeIcon = workMode?.icon;
-
-                  // Get status badge
-                  const getStatusBadge = (status: string) => {
-                    const configs: Record<string, { bg: string; text: string; dot: string }> = {
-                      draft: { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-500' },
-                      published: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
-                      Published: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
-                      archived: { bg: 'bg-gray-50 dark:bg-slate-800/50', text: 'text-gray-600 dark:text-slate-400', dot: 'bg-gray-400' },
-                      disabled: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-400' },
-                    };
-                    const config = configs[status] || configs.draft;
-                    return (
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`}></span>
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                      </span>
-                    );
-                  };
-
-                  // Get creation method badge
-                  const getCreationMethodBadge = (creationMethod: string) => {
-                    const isAI = creationMethod === 'ai_generated' || creationMethod === 'ai';
-                    return (
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                        isAI ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
-                      }`}>
-                        {isAI ? <Sparkles className="w-3 h-3" /> : <PenLine className="w-3 h-3" />}
-                        {isAI ? 'AI' : 'Manual'}
-                      </span>
-                    );
-                  };
-
-                  return (
-                    <label
-                      key={job.id}
-                      className={`block bg-white dark:bg-slate-900 rounded-lg border-2 p-3 sm:p-4 cursor-pointer transition-all ${
-                        isSelected
-                          ? 'border-brand-blue/40 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
-                          : 'border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
-                      }`}
-                    >
-                      <div className="flex items-start gap-2 sm:gap-4">
-                        {/* Checkbox */}
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => setSelectedJob(isSelected ? null : job.id)}
-                          className="w-4 h-4 mt-1 text-brand-blue border-gray-300 dark:border-slate-700 rounded focus:ring-brand-blue/40 flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          {/* Row 1: Job ID, Title, Status, Creation Method */}
-                          <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
-                            {/* Job ID Badge */}
-                            {(job as any).job_id && (
-                              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-blue-100 text-blue-700 rounded-md text-xs sm:text-sm font-medium border border-blue-200">
-                                {(job as any).job_id}
-                              </span>
-                            )}
-                            {/* Title */}
-                            <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 truncate">{job.title}</h3>
-                            {/* Status Badge */}
-                            {getStatusBadge(job.status)}
-                            {/* Creation Method Badge */}
-                            {(job as any).creation_method && getCreationMethodBadge((job as any).creation_method)}
-                            {/* Selected indicator */}
-                            {isSelected && (
-                              <CheckCircle className="w-5 h-5 text-gray-800 dark:text-slate-100 ml-auto flex-shrink-0" />
-                            )}
-                          </div>
-
-                          {/* Row 2: Industry, Location, Employment Type, Work Mode */}
-                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 dark:text-slate-500 mb-2 flex-wrap">
-                            {/* Industry/Department */}
-                            {((job as any).industry_type || (job as any).department) && (
-                              <span className="flex items-center gap-1">
-                                <Building2 className="w-4 h-4" />
-                                {(job as any).industry_type || (job as any).department}
-                              </span>
-                            )}
-                            {/* Location */}
-                            {job.location && (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-4 h-4" />
-                                {job.location}
-                              </span>
-                            )}
-                            {/* Employment Type */}
-                            {((job as any).employmentType || (job as any).employment_type) && (
-                              <span className="flex items-center gap-1">
-                                <Briefcase className="w-4 h-4" />
-                                {formatEmploymentType((job as any).employmentType || (job as any).employment_type)}
-                              </span>
-                            )}
-                            {/* Work Mode */}
-                            {workMode && WorkModeIcon && (
-                              <span className={`flex items-center gap-1 px-2 py-0.5 rounded ${workMode.bgColor} ${workMode.textColor}`}>
-                                <WorkModeIcon className="w-3 h-3" />
-                                {workMode.label}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Row 3: Posted Date, Posted By, Last Updated */}
-                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 dark:text-slate-500 mb-2 sm:mb-3 flex-wrap">
-                            {/* Posted Date */}
-                            {((job as any).postedDate || (job as any).published_at) && (
-                              <span className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                Posted {formatISTDate((job as any).postedDate || (job as any).published_at)}
-                              </span>
-                            )}
-                            {/* Posted By / Created By */}
-                            {((job as any).postedBy || (job as any).created_by_name) && (
-                              <span className="flex items-center gap-1">
-                                <User className="w-4 h-4" />
-                                By {(job as any).postedBy || (job as any).created_by_name}
-                              </span>
-                            )}
-                            {/* Last Updated */}
-                            {(job as any).updated_at && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-4 h-4" />
-                                Last Updated: {formatRelativeTime((job as any).updated_at)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Row 4: Applicants */}
-                          <div className="flex items-center gap-2 text-xs sm:text-sm">
-                            <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            <span className="text-gray-600 dark:text-slate-400">{job.applicants || (job as any).applicants_count || 0} applicants</span>
-                          </div>
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
-                <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
-                <p className="text-xs sm:text-sm">
-                  {searchQuery ? 'No jobs found matching your search' : 'No active jobs available'}
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Info Box */}
-          {selectedJob && (
-            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg">
-              <div className="flex items-start gap-2 sm:gap-3">
-                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="text-sm text-gray-900 dark:text-slate-50 mb-1">Next Steps</h4>
-                  <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
-                    <li>&bull; {stayOnCurrentPage ? 'AI Talent Match will run on this resume page' : "You'll be taken to the AI Talent Match page"}</li>
-                    <li>• AI will analyze selected resumes against the job requirements</li>
-                    <li>• Get detailed match scores and recommendations</li>
-                    <li>• Review and shortlist top matching candidates</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
-          <div className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-            {!selectedJob && 'Select a job to continue'}
-            {selectedJob && (
-              <span className="flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                Ready to run AI Talent Match
-              </span>
-            )}
-          </div>
-          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
-            <button
-              onClick={onClose}
-              disabled={isMatching}
-              className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleMatch}
-              disabled={!selectedJob || isMatching}
-              className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isMatching ? (
-                <>
-                  <Loader2 className="w-4 h-4 text-white animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  <span className="hidden sm:inline">{confirmLabel || 'Continue to AI Talent Match'}</span>
-                  <span className="sm:hidden">Continue</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <ApplyToJobModal
+      mode="match"
+      resumes={resumes}
+      jobs={jobs}
+      onClose={onClose}
+      stayOnCurrentPage={stayOnCurrentPage}
+      confirmLabel={confirmLabel}
+      // One job at a time here too, so the first id is the whole answer.
+      onApply={(resumeIds, jobIds) => {
+        if (resumeIds.length === 0 || !jobIds[0]) return;
+        onMatch(resumeIds, jobIds[0]);
+      }}
+    />
   );
 }
