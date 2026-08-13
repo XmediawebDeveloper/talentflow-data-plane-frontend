@@ -1119,6 +1119,9 @@ export default function ResumeDatabasePage() {
         candidates={resumes
           .filter((r) => selectedResumes.includes(r.id))
           .map((r) => ({ id: r.id, name: r.name, email: r.email }))}
+        /* The full rows too, so the dialog can show the shared Candidates
+           Selected panel rather than a bare count. */
+        resumes={resumes.filter((r) => selectedResumes.includes(r.id)) as any}
         onInvited={() => setSelectedResumes([])}
       />
 

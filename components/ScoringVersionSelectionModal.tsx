@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, FileText, Calendar, User, CheckCircle2, Target, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { X, FileText, Calendar, User, CheckCircle2, Target, ChevronDown, ChevronRight, Loader2, History } from 'lucide-react';
 import { Resume, ResumeVersion } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { resumeService } from '@/lib/services/resumeService';
+import { toast } from 'sonner';
+import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
 
 interface ResumeWithVersions extends Resume {
   loadedVersions?: ResumeVersion[];
@@ -27,6 +29,69 @@ export default function ScoringVersionSelectionModal({
   const [resumesWithVersions, setResumesWithVersions] = useState<ResumeWithVersions[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedResumes, setExpandedResumes] = useState<Set<string>>(new Set());
+
+  /* Same comparison as the version history popup — worth having here, since
+     picking which version to score is exactly when "what changed?" is asked.
+     Ticks are held per candidate: two versions of one person is the only
+     comparison that means anything, so a tick under another candidate starts
+     that candidate's own pair rather than joining this one. */
+  const [comparePair, setComparePair] = useState<{ older: CompareVersion; newer: CompareVersion } | null>(null);
+  const [compareChecked, setCompareChecked] = useState<Record<string, string[]>>({});
+  const [loadingCompare, setLoadingCompare] = useState(false);
+
+  const toggleCompareCheck = (resumeId: string, versionId: string) => {
+    setCompareChecked((prev) => {
+      const held = prev[resumeId] || [];
+      if (held.includes(versionId)) {
+        return { ...prev, [resumeId]: held.filter((id) => id !== versionId) };
+      }
+      return { ...prev, [resumeId]: held.length >= 2 ? [held[1], versionId] : [...held, versionId] };
+    });
+  };
+
+  /** Extracted text is only on the version-detail endpoint, so fetch on demand. */
+  const textFor = async (version: ResumeVersion): Promise<string> => {
+    if (version.extractedText || version.extracted_text) {
+      return version.extractedText || version.extracted_text || '';
+    }
+    try {
+      const detail = await resumeService.get(version.id);
+      return detail?.extracted_text || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const openComparison = async (
+    older: ResumeVersion,
+    olderNumber: number,
+    newer: ResumeVersion,
+    newerNumber: number,
+  ) => {
+    setLoadingCompare(true);
+    try {
+      const [olderText, newerText] = await Promise.all([textFor(older), textFor(newer)]);
+      setComparePair({
+        older: { version: olderNumber, name: older.name, text: olderText },
+        newer: { version: newerNumber, name: newer.name, text: newerText },
+      });
+    } catch {
+      toast.error('Could not load those versions to compare');
+    } finally {
+      setLoadingCompare(false);
+    }
+  };
+
+  const compareSelectedFor = (versions: ResumeVersion[], picked: string[]) => {
+    if (picked.length !== 2) return;
+    const a = versions.find((v) => v.id === picked[0]);
+    const b = versions.find((v) => v.id === picked[1]);
+    if (!a || !b) return;
+    // Versions arrive newest-first, so the later index is the older document.
+    const aNum = a.version || versions.length - versions.indexOf(a);
+    const bNum = b.version || versions.length - versions.indexOf(b);
+    return aNum <= bNum ? openComparison(a, aNum, b, bNum) : openComparison(b, bNum, a, aNum);
+  };
 
   // Load versions for ALL resumes from API (don't trust versionCount from initial data)
   useEffect(() => {
@@ -242,6 +307,35 @@ export default function ScoringVersionSelectionModal({
                           {/* Versions List */}
                           {isExpanded && (
                             <div className="p-3 sm:p-4 space-y-2 bg-white dark:bg-slate-900">
+                              {/* Compare control for THIS candidate's ticks. */}
+                              {versions.length > 1 && (() => {
+                                const picked = compareChecked[resume.id] || [];
+                                return (
+                                  <div className="flex items-center justify-between gap-2 pb-1">
+                                    <span className="text-[11px] sm:text-xs text-gray-500 dark:text-slate-400">
+                                      {picked.length > 0
+                                        ? `${picked.length} of 2 selected to compare`
+                                        : 'Tick any two versions to compare them'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        compareSelectedFor(versions, picked);
+                                      }}
+                                      disabled={picked.length !== 2 || loadingCompare}
+                                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] sm:text-xs font-medium transition-colors ${
+                                        picked.length === 2 && !loadingCompare
+                                          ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2'
+                                          : 'bg-slate-100 dark:bg-slate-800 text-gray-400 cursor-not-allowed'
+                                      }`}
+                                    >
+                                      {loadingCompare && <Loader2 className="w-3 h-3 animate-spin" />}
+                                      Compare selected
+                                    </button>
+                                  </div>
+                                );
+                              })()}
                               {versions.map((version, index) => {
                                 const isLatest = index === 0;
                                 const isSelected = version.id === resume.selectedVersionId;
@@ -249,10 +343,22 @@ export default function ScoringVersionSelectionModal({
                                 const versionNumber = version.version || (versions.length - index);
 
                                 return (
-                                  <button
+                                  /* A div, not a button: it now contains the
+                                     "View Changes" button, and nesting buttons
+                                     is invalid markup. */
+                                  <div
                                     key={version.id}
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-pressed={isSelected}
                                     onClick={() => selectVersion(resume.id, version.id)}
-                                    className={`w-full text-left p-2.5 sm:p-3 rounded-lg border-2 transition-all ${
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        selectVersion(resume.id, version.id);
+                                      }
+                                    }}
+                                    className={`w-full cursor-pointer text-left p-2.5 sm:p-3 rounded-lg border-2 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
                                       isSelected
                                         ? 'border-brand-blue/40 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
                                         : 'border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
@@ -260,6 +366,14 @@ export default function ScoringVersionSelectionModal({
                                   >
                                     <div className="flex items-center justify-between gap-2">
                                       <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                                        <input
+                                          type="checkbox"
+                                          checked={(compareChecked[resume.id] || []).includes(version.id)}
+                                          onChange={() => toggleCompareCheck(resume.id, version.id)}
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="h-4 w-4 flex-shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                                          aria-label={`Select version ${versionNumber} of ${resume.name} to compare`}
+                                        />
                                         <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                                           isSelected ? 'bg-brand-blue text-white shadow shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300'
                                         }`}>
@@ -288,15 +402,39 @@ export default function ScoringVersionSelectionModal({
                                           </div>
                                         </div>
                                       </div>
-                                      <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                        isSelected ? 'bg-brand-blue' : 'bg-gray-200 dark:bg-slate-800'
-                                      }`}>
-                                        <CheckCircle2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
-                                          isSelected ? 'text-white' : 'text-gray-400 dark:text-slate-500'
-                                        }`} />
+                                      <div className="flex items-center gap-2 flex-shrink-0">
+                                        {/* Diff against the next-oldest version. */}
+                                        {index < versions.length - 1 && (
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const older = versions[index + 1];
+                                              openComparison(
+                                                older,
+                                                older.version || versionNumber - 1,
+                                                version,
+                                                versionNumber,
+                                              );
+                                            }}
+                                            disabled={loadingCompare}
+                                            className="inline-flex items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 px-2 py-1 text-[10px] sm:text-xs font-medium text-gray-700 dark:text-slate-200 transition-colors hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-50"
+                                            title="Compare with the previous version"
+                                          >
+                                            {loadingCompare ? <Loader2 className="w-3 h-3 animate-spin" /> : <History className="w-3 h-3" />}
+                                            <span className="hidden sm:inline">View Changes</span>
+                                          </button>
+                                        )}
+                                        <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center ${
+                                          isSelected ? 'bg-brand-blue' : 'bg-gray-200 dark:bg-slate-800'
+                                        }`}>
+                                          <CheckCircle2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
+                                            isSelected ? 'text-white' : 'text-gray-400 dark:text-slate-500'
+                                          }`} />
+                                        </div>
                                       </div>
                                     </div>
-                                  </button>
+                                  </div>
                                 );
                               })}
                             </div>
@@ -354,6 +492,18 @@ export default function ScoringVersionSelectionModal({
           </div>
         </div>
       </div>
+
+      {/* Same diff popup as the version history and the single-candidate picker. */}
+      {comparePair && (
+        <VersionCompareModal
+          older={comparePair.older}
+          newer={comparePair.newer}
+          onClose={() => {
+            setComparePair(null);
+            setCompareChecked({});
+          }}
+        />
+      )}
     </div>
   );
 }

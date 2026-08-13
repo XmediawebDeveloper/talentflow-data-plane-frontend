@@ -5,6 +5,8 @@ import { Brain, CheckCircle, Loader2, Mail, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
+import SelectedCandidatesPanel from '@/components/SelectedCandidatesPanel';
+import type { Resume } from '@/lib/types/types';
 
 /** The minimum a resume row needs to become an interview invite. */
 export interface AIInterviewInviteCandidate {
@@ -20,6 +22,10 @@ interface InviteToAIInterviewFlowProps {
   candidates: AIInterviewInviteCandidate[];
   /** Fired once invitations are away — the caller clears its selection. */
   onInvited?: () => void;
+  /** The full resume rows behind those candidates. Given them, the dialog shows
+   *  the shared Candidates Selected panel — untick to drop someone, see the
+   *  resume version, read a resume — instead of a bare count. */
+  resumes?: Resume[];
 }
 
 /**
@@ -35,6 +41,7 @@ export default function InviteToAIInterviewFlow({
   onClose,
   candidates,
   onInvited,
+  resumes,
 }: InviteToAIInterviewFlowProps) {
   const [configs, setConfigs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -43,6 +50,10 @@ export default function InviteToAIInterviewFlow({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSharing, setIsSharing] = useState(false);
   const [prefilled, setPrefilled] = useState<{ name: string; email: string; resumeId?: string }[]>([]);
+  /** Candidates unticked in the panel — listed, but not invited. */
+  const [excludedIds, setExcludedIds] = useState<string[]>([]);
+
+  const invitees = candidates.filter((candidate) => !excludedIds.includes(candidate.id));
 
   // Only published configs can take invites, so drafts and archived ones never
   // reach the list. Fetched on first open, then reused.
@@ -63,21 +74,26 @@ export default function InviteToAIInterviewFlow({
   const closePicker = () => {
     setSearchQuery('');
     setSelectedConfig(null);
+    setExcludedIds([]);
     onClose();
   };
 
   const proceedToShare = () => {
     // Only candidates with an email can be invited — the rest would fail
     // server-side with nothing to send to.
-    const withEmail = candidates
+    const withEmail = invitees
       .filter((candidate) => candidate.email)
       .map((candidate) => ({ name: candidate.name, email: candidate.email as string, resumeId: candidate.id }));
 
+    if (invitees.length === 0) {
+      toast.error('Tick at least one candidate to invite');
+      return;
+    }
     if (withEmail.length === 0) {
       toast.error('Selected resumes must have email addresses');
       return;
     }
-    const skipped = candidates.length - withEmail.length;
+    const skipped = invitees.length - withEmail.length;
     if (skipped > 0) {
       toast.warning(`${skipped} resume${skipped > 1 ? 's' : ''} skipped — no email address on file`);
     }
@@ -91,6 +107,7 @@ export default function InviteToAIInterviewFlow({
     setSelectedConfig(null);
     setPrefilled([]);
     setSearchQuery('');
+    setExcludedIds([]);
     onClose();
   };
 
@@ -130,7 +147,7 @@ export default function InviteToAIInterviewFlow({
             <div className="flex-1 min-w-0">
               <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Invite to AI Interview</h3>
               <p className="text-sm text-gray-500">
-                {candidates.length} candidate{candidates.length !== 1 ? 's' : ''} selected
+                {invitees.length} candidate{invitees.length !== 1 ? 's' : ''} selected
               </p>
             </div>
             <button
@@ -141,6 +158,20 @@ export default function InviteToAIInterviewFlow({
               <X className="w-5 h-5 text-gray-500" />
             </button>
           </div>
+
+          {/* Same Candidates Selected panel as the Score Resume dialog. */}
+          {resumes && resumes.length > 0 && (
+            <div className="flex-shrink-0 px-6 pt-4">
+              <SelectedCandidatesPanel
+                resumes={resumes}
+                excludedIds={excludedIds}
+                onToggleCandidate={(id) =>
+                  setExcludedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+                }
+                tip="Invitations go to each candidate's email address — untick anyone you want to leave out."
+              />
+            </div>
+          )}
 
           <div className="flex-shrink-0 px-6 pt-4">
             <input

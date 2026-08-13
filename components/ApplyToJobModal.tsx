@@ -1,7 +1,8 @@
-import { X, Search, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, MapPin, User, Monitor, Laptop, Home, Sparkles, PenLine, Loader2 } from 'lucide-react';
+import { X, Search, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, MapPin, User, Monitor, Laptop, Home, Sparkles, PenLine, Loader2, Ban } from 'lucide-react';
 import { useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import SelectedCandidatesPanel, { versionInfo, type VersionChoice } from './SelectedCandidatesPanel';
 
 // Work mode configuration
 const workModeConfig: Record<string, { label: string; icon: React.ElementType; bgColor: string; textColor: string }> = {
@@ -35,15 +36,34 @@ const formatRelativeTime = (dateStr: string | undefined): string => {
   return formatISTDate(dateStr);
 };
 
+/**
+ * Only a published job can receive candidates. Everything else is still listed
+ * — a recruiter looking for a job they know exists shouldn't be told it isn't
+ * there — but greyed out, with the reason attached.
+ */
+const eligibilityFor = (job: Job): { eligible: boolean; reason?: string } => {
+  const status = String(job.status || '').toLowerCase();
+  if (status === 'published') return { eligible: true };
+  if (status === 'draft') return { eligible: false, reason: 'Draft job — publish it before applying candidates' };
+  if (status === 'archived') return { eligible: false, reason: 'Archived job — restore it to apply candidates' };
+  if (status === 'disabled') return { eligible: false, reason: 'This job is disabled and cannot take new applicants' };
+  if (status === 'closed' || status === 'filled') return { eligible: false, reason: 'This job is closed to new applicants' };
+  return { eligible: false, reason: `Only published jobs can receive candidates (currently ${job.status || 'unknown'})` };
+};
+
 interface ApplyToJobModalProps {
   resumes: Resume[];
   jobs: Job[];
   onClose: () => void;
   onApply: (resumeIds: string[], jobIds: string[]) => void;
-  mode?: 'apply' | 'assessment' | 'scoring'; // New: Support different modes
+  mode?: 'apply' | 'assessment' | 'scoring' | 'match';
   title?: string; // New: Custom title
   description?: string; // New: Custom description
   stayOnCurrentPage?: boolean;
+  /** Overrides the confirm button's label — "Run AI Talent Match" and friends. */
+  confirmLabel?: string;
+  /** Replaces the Next Steps list when a flow ends somewhere different. */
+  nextSteps?: string[];
 }
 
 export default function ApplyToJobModal({
@@ -54,43 +74,119 @@ export default function ApplyToJobModal({
   mode = 'apply',
   title,
   description,
-  stayOnCurrentPage = false
+  stayOnCurrentPage = false,
+  confirmLabel,
+  nextSteps,
 }: ApplyToJobModalProps) {
   // Default titles based on mode
-  const defaultTitle = mode === 'assessment' ? 'Create Assessment' : mode === 'scoring' ? 'Resume Scoring' : 'Apply to Job';
-  const defaultDescription = mode === 'assessment'
-    ? 'Select a job description for the assessment'
-    : mode === 'scoring'
-    ? 'Select job description to score resumes'
+  const defaultTitle =
+    mode === 'assessment' ? 'Create Assessment'
+    : mode === 'scoring' ? 'Resume Scoring'
+    : mode === 'match' ? 'AI Talent Match'
+    : 'Apply to Job';
+  const defaultDescription =
+    mode === 'assessment' ? 'Select a job description for the assessment'
+    : mode === 'scoring' ? 'Select job description to score resumes'
+    : mode === 'match' ? 'Select the job description to match these candidates against'
     : 'Select job openings to apply candidates';
 
   const modalTitle = title || defaultTitle;
   const modalDescription = description || defaultDescription;
   const isScoringMode = mode === 'scoring';
+  const isMatchMode = mode === 'match';
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [isApplying, setIsApplying] = useState(false);
 
-  // Filter for published jobs only
-  const activeJobs = jobs.filter(job => job.status === 'Published');
-  
-  const filteredJobs = activeJobs.filter(job =>
-    job.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  /* Candidate list state. Everything handed in starts ticked — the user
+     already chose these on the previous screen — and unticking here is how you
+     drop one without going back. */
+  const [excludedIds, setExcludedIds] = useState<string[]>([]);
 
-  const toggleJob = (jobId: string) => {
-    setSelectedJobs(prev =>
-      prev.includes(jobId)
-        ? prev.filter(id => id !== jobId)
-        : [...prev, jobId].slice(0, 5) // Max 5 jobs
-    );
+  const isIncluded = (id: string) => !excludedIds.includes(id);
+  const includedResumes = resumes.filter(r => isIncluded(r.id));
+
+  const toggleCandidate = (id: string) => {
+    setExcludedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
 
+  /* Version chosen per candidate, keyed by the candidate's own resume id.
+     Nothing here means "the latest", which is the default the tip promises.
+     A version is itself a resume record, so applying a chosen version means
+     sending ITS id — the substitution the resume table makes too. */
+  const [versionChoice, setVersionChoice] = useState<Record<string, { id: string; number: number; total: number }>>({});
+
+  const submittedIdFor = (resume: Resume) => versionChoice[resume.id]?.id || resume.id;
+  /** Single-resume candidate being read, without leaving this dialog. */
+  const [previewResume, setPreviewResume] = useState<{ id: string; title: string; subtitle?: string } | null>(null);
+
+  /* Every job is listed; the search narrows it. Matching only `job.title`
+     meant a JD number typed in full returned nothing — the number lives on
+     `job_id`, and departments and locations are searched for just as often.
+
+     Two passes per field. The plain one is a straight substring, so "77" finds
+     JD-77 and "develop" finds Developer. The second strips everything that
+     isn't a letter or a digit from BOTH sides first, so the separator a
+     recruiter types doesn't have to match the one the record was stored with:
+     "jd-77", "JD 77", "jd_77" and "jd77" all find the same job. */
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const jobSearch = searchQuery.trim().toLowerCase();
+  const jobSearchCompact = normalize(searchQuery);
+
+  const matchesSearch = (job: Job) => {
+    if (!jobSearch) return true;
+    const j = job as any;
+    return [
+      job.title,
+      j.job_id,
+      j.jobId,
+      j.jd_number,
+      j.jd_id,
+      j.reference_id,
+      j.industry_type,
+      j.department,
+      job.location,
+      j.employment_type,
+      j.employmentType,
+    ]
+      .filter(Boolean)
+      .some(field => {
+        const raw = String(field).toLowerCase();
+        if (raw.includes(jobSearch)) return true;
+        // Guard against a punctuation-only query matching everything.
+        return !!jobSearchCompact && normalize(String(field)).includes(jobSearchCompact);
+      });
+  };
+
+  const filteredJobs = jobs.filter(matchesSearch);
+
+  /* Eligible jobs lead. Without this the selectable ones can sit below a run of
+     greyed-out drafts, which reads as "nothing here can be picked". */
+  const sortedJobs = [...filteredJobs].sort((a, b) => {
+    const aOk = eligibilityFor(a).eligible ? 0 : 1;
+    const bOk = eligibilityFor(b).eligible ? 0 : 1;
+    return aOk - bOk;
+  });
+  const eligibleCount = filteredJobs.filter(j => eligibilityFor(j).eligible).length;
+
+  /* One role at a time. Candidates are applied to a single job, so picking a
+     second would be ambiguous rather than useful — the other rows go inert
+     until the current pick is cleared or swapped by clicking it again. */
+  const selectedJobId = selectedJobs[0] || null;
+
+  const toggleJob = (jobId: string) => {
+    setSelectedJobs(prev => (prev[0] === jobId ? [] : [jobId]));
+  };
+
+  const canSubmit = !!selectedJobId && includedResumes.length > 0;
+
   const handleApply = async () => {
-    if (selectedJobs.length > 0) {
+    if (canSubmit) {
       setIsApplying(true);
-      const resumeIds = resumes.map(r => r.id);
-      
+      // Only the candidates still ticked, each on its chosen version (the
+      // latest unless one was picked from the version list).
+      const resumeIds = includedResumes.map(submittedIdFor);
+
       // Simulate API call
       setTimeout(() => {
         onApply(resumeIds, selectedJobs);
@@ -124,44 +220,29 @@ export default function ApplyToJobModal({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-          {/* Selected Candidates Summary */}
-          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
-            <div className="flex items-start gap-2 sm:gap-3">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 dark:text-slate-100 mt-0.5 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <h3 className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-slate-100 mb-2">
-                  {resumes.length} Candidate{resumes.length > 1 ? 's' : ''} Selected
-                </h3>
-                <div className="space-y-2">
-                  {resumes.slice(0, 3).map(resume => (
-                    <div key={resume.id} className="flex items-center gap-3 p-2 bg-white dark:bg-slate-900 rounded-lg">
-                      <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-900 dark:text-slate-50">
-                        {resume.name.split(' ').map(n => n[0]).join('')}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-900 dark:text-slate-50 truncate">{resume.name}</div>
-                        <div className="text-xs text-gray-600 dark:text-slate-400 truncate">{resume.title}</div>
-                      </div>
-                    </div>
-                  ))}
-                  {resumes.length > 3 && (
-                    <div className="text-xs font-medium text-gray-900 dark:text-slate-50 pl-2">
-                      +{resumes.length - 3} more candidate{resumes.length - 3 > 1 ? 's' : ''}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Candidates Selected — shared with every other flow that acts
+              on a set of candidates, so they all read the same. */}
+          <SelectedCandidatesPanel
+            resumes={resumes}
+            excludedIds={excludedIds}
+            onToggleCandidate={toggleCandidate}
+            versionChoice={versionChoice}
+            onVersionChosen={(resumeId, choice) =>
+              setVersionChoice(prev => ({ ...prev, [resumeId]: choice }))
+            }
+            tip={isScoringMode
+              ? 'For multi-version resumes, the latest version will be selected by default for scoring.'
+              : undefined}
+          />
 
           {/* Job Search */}
           <div className="mb-4">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Active Jobs</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
               <input
                 type="text"
-                placeholder="Search by job title..."
+                placeholder="Search by JD number, role, department or location..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
@@ -171,24 +252,38 @@ export default function ApplyToJobModal({
 
           {/* Job Selection */}
           <div className="mb-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between gap-2 mb-3">
               <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
-                Select Job Opening{selectedJobs.length > 0 ? ` (${selectedJobs.length} selected)` : 's'}
+                Select a Job Opening
+                {filteredJobs.length > 0 && (
+                  <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
+                    {eligibleCount} of {filteredJobs.length} available
+                  </span>
+                )}
               </label>
-              {selectedJobs.length > 0 && (
+              {selectedJobId && (
                 <button
                   onClick={() => setSelectedJobs([])}
-                  className="text-xs text-gray-800 dark:text-slate-100 hover:text-gray-900 font-medium"
+                  className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
                 >
                   Clear Selection
                 </button>
               )}
             </div>
 
-            {filteredJobs.length > 0 ? (
+            {sortedJobs.length > 0 ? (
               <div className="space-y-2 sm:space-y-3 max-h-96 overflow-y-auto pr-1">
-                {filteredJobs.map(job => {
-                  const isSelected = selectedJobs.includes(job.id);
+                {sortedJobs.map(job => {
+                  const isSelected = selectedJobId === job.id;
+                  const { eligible, reason: eligibilityReason } = eligibilityFor(job);
+                  /* One role at a time: once a job is picked the others go
+                     inert, so "apply these candidates to that job" can't turn
+                     into two answers. Clicking the picked one lets go of it. */
+                  const blockedByOtherPick = eligible && !!selectedJobId && !isSelected;
+                  const selectable = eligible && !blockedByOtherPick;
+                  const reason = blockedByOtherPick
+                    ? 'Only one job can be applied at a time — clear the current selection to choose this one'
+                    : eligibilityReason;
                   const workMode = workModeConfig[(job as any).workMode?.toLowerCase() || (job as any).remote_type?.toLowerCase()] || null;
                   const WorkModeIcon = workMode?.icon;
 
@@ -226,19 +321,29 @@ export default function ApplyToJobModal({
                   return (
                     <label
                       key={job.id}
-                      className={`block bg-white dark:bg-slate-900 rounded-lg border-2 p-3 sm:p-4 cursor-pointer transition-all ${
-                        isSelected
-                          ? 'border-brand-blue/40 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
-                          : 'border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
+                      /* Rows the user can't pick — wrong status, or another
+                         job already chosen — stay visible but inert, with the
+                         reason on the row and in the title attribute. */
+                      title={selectable || isSelected ? undefined : reason}
+                      aria-disabled={!selectable && !isSelected}
+                      className={`block rounded-lg border-2 p-3 sm:p-4 transition-all ${
+                        !selectable && !isSelected
+                          ? 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 opacity-60 cursor-not-allowed'
+                          : isSelected
+                            ? 'bg-brand-blue/5 border-brand-blue/40 shadow-sm shadow-brand-blue/10 cursor-pointer'
+                            : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03] cursor-pointer'
                       }`}
                     >
                       <div className="flex items-start gap-2 sm:gap-4">
-                        {/* Checkbox */}
+                        {/* A radio, because exactly one job is applied to. */}
                         <input
-                          type="checkbox"
+                          type="radio"
+                          name="apply-to-job-selection"
                           checked={isSelected}
-                          onChange={() => toggleJob(job.id)}
-                          className="w-4 h-4 mt-1 text-brand-blue border-gray-300 dark:border-slate-700 rounded focus:ring-brand-blue/40 flex-shrink-0"
+                          disabled={!selectable && !isSelected}
+                          onChange={() => (selectable || isSelected) && toggleJob(job.id)}
+                          onClick={() => isSelected && toggleJob(job.id)}
+                          className="w-4 h-4 mt-1 text-brand-blue border-gray-300 dark:border-slate-700 focus:ring-brand-blue/40 flex-shrink-0 disabled:cursor-not-allowed"
                         />
                         <div className="flex-1 min-w-0">
                           {/* Row 1: Job ID, Title, Status, Creation Method */}
@@ -256,10 +361,18 @@ export default function ApplyToJobModal({
                             {/* Creation Method Badge */}
                             {(job as any).creation_method && getCreationMethodBadge((job as any).creation_method)}
                             {/* Selected indicator */}
-                            {isSelected && (
-                              <CheckCircle className="w-5 h-5 text-gray-800 dark:text-slate-100 ml-auto flex-shrink-0" />
+                            {isSelected && eligible && (
+                              <CheckCircle className="w-5 h-5 text-brand-blue ml-auto flex-shrink-0" />
                             )}
                           </div>
+
+                          {/* Why this one can't be picked */}
+                          {!selectable && !isSelected && reason && (
+                            <p className="flex items-center gap-1.5 mb-2 text-xs text-gray-600 dark:text-slate-400">
+                              <Ban className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+                              {reason}
+                            </p>
+                          )}
 
                           {/* Row 2: Industry, Location, Employment Type, Work Mode */}
                           <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-2 flex-wrap">
@@ -333,37 +446,41 @@ export default function ApplyToJobModal({
               <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
                 <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
                 <p className="text-xs sm:text-sm">
-                  {searchQuery ? 'No jobs found matching your search' : 'No active jobs available'}
+                  {searchQuery ? 'No jobs found matching your search' : 'No jobs available'}
                 </p>
               </div>
             )}
           </div>
 
           {/* Info Box */}
-          {selectedJobs.length > 0 && (
+          {selectedJobId && (
             <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gradient-to-r from-gray-50 to-gray-50 dark:from-slate-800/50 dark:to-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="flex items-start gap-2 sm:gap-3">
-                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 dark:text-slate-100 mt-0.5 flex-shrink-0" />
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div>
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">Next Steps</h4>
                   <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
-                    {isScoringMode ? (
+                    {nextSteps ? (
                       <>
-                        <li>&bull; Resume will be scored against {selectedJobs.length} selected job{selectedJobs.length > 1 ? 's' : ''}</li>
-                        <li>&bull; {stayOnCurrentPage ? 'Scoring progress will run on this resume page' : "You'll see the Resume Scoring page"}</li>
-                        <li>&bull; AI will analyze fit for each job</li>
+                        {nextSteps.map(step => <li key={step}>&bull; {step}</li>)}
                       </>
-                    ) : selectedJobs.length === 1 ? (
+                    ) : isMatchMode ? (
                       <>
-                        <li>• Candidates will be added to the selected job</li>
-                        <li>• You&apos;ll be navigated to the job&apos;s applicant list</li>
-                        <li>• You can review and manage applications there</li>
+                        <li>&bull; {includedResumes.length} candidate{includedResumes.length === 1 ? '' : 's'} will be matched against the selected job</li>
+                        <li>&bull; {stayOnCurrentPage ? 'AI Talent Match will run on this page' : "You'll be taken to the AI Talent Match page"}</li>
+                        <li>&bull; AI will rank the candidates for that role</li>
+                      </>
+                    ) : isScoringMode ? (
+                      <>
+                        <li>&bull; {includedResumes.length} resume{includedResumes.length === 1 ? '' : 's'} will be scored against the selected job</li>
+                        <li>&bull; {stayOnCurrentPage ? 'Scoring progress will run on this resume page' : "You'll see the Resume Scoring page"}</li>
+                        <li>&bull; AI will analyze the fit for that role</li>
                       </>
                     ) : (
                       <>
-                        <li>• Candidates will be applied to {selectedJobs.length} jobs</li>
-                        <li>• You&apos;ll see the Resume Scoring page</li>
-                        <li>• AI will analyze fit for each job</li>
+                        <li>• {includedResumes.length} candidate{includedResumes.length === 1 ? '' : 's'} will be added to the selected job</li>
+                        <li>• You&apos;ll be navigated to the job&apos;s applicant list</li>
+                        <li>• You can review and manage applications there</li>
                       </>
                     )}
                   </ul>
@@ -376,19 +493,20 @@ export default function ApplyToJobModal({
         {/* Footer */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
           <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-            {selectedJobs.length === 0 && 'Select at least one job to continue'}
-            {selectedJobs.length === 1 && (
-              <span className="flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-gray-800 dark:text-slate-100 flex-shrink-0" />
-                {isScoringMode ? 'Ready to score resume' : 'Ready to apply to job'}
-              </span>
-            )}
-            {selectedJobs.length > 1 && (
-              <span className="flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-gray-800 dark:text-slate-100 flex-shrink-0" />
-                {isScoringMode ? `Ready to score against ${selectedJobs.length} jobs` : `Ready to apply to ${selectedJobs.length} jobs`}
-              </span>
-            )}
+            {includedResumes.length === 0
+              ? 'Select at least one candidate to continue'
+              : !selectedJobId
+                ? 'Select one job to continue'
+                : (
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                    {isScoringMode
+                      ? `Ready to score ${includedResumes.length} resume${includedResumes.length === 1 ? '' : 's'} against 1 job`
+                      : isMatchMode
+                        ? `Ready to match ${includedResumes.length} candidate${includedResumes.length === 1 ? '' : 's'} against 1 job`
+                        : `Ready to apply ${includedResumes.length} candidate${includedResumes.length === 1 ? '' : 's'} to 1 job`}
+                  </span>
+                )}
           </div>
           <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
             <button
@@ -400,26 +518,29 @@ export default function ApplyToJobModal({
             </button>
             <button
               onClick={handleApply}
-              disabled={selectedJobs.length === 0 || isApplying}
+              disabled={!canSubmit || isApplying}
               className="flex-1 sm:flex-none px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isApplying ? (
                 <>
                   <Loader2 className="w-4 h-4 text-white animate-spin" />
-                  {isScoringMode ? 'Scoring...' : 'Applying...'}
+                  {isScoringMode ? 'Scoring...' : isMatchMode ? 'Matching...' : 'Applying...'}
                 </>
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4" />
-                  {isScoringMode
-                    ? 'Score Resume'
-                    : `Apply to ${selectedJobs.length > 0 ? `${selectedJobs.length} Job${selectedJobs.length > 1 ? 's' : ''}` : 'Job'}`}
+                  {confirmLabel
+                    ? confirmLabel
+                    : isScoringMode ? 'Score Resume'
+                    : isMatchMode ? 'Continue to AI Talent Match'
+                    : 'Apply to Job'}
                 </>
               )}
             </button>
           </div>
         </div>
       </div>
+
     </div>
   );
 }

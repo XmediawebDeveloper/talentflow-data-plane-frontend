@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
-import { X, FileText, Download, Calendar, GitBranch, Eye, Clock, Loader2, ArrowLeft, Plus, Minus, Equal, Briefcase, MapPin, GraduationCap, Award } from 'lucide-react';
+import { useState } from 'react';
+import { X, FileText, Download, Calendar, History, Eye, Loader2, Briefcase, CheckCircle2, Lightbulb } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
+import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 
 interface ResumeVersion {
   id: string;
@@ -12,6 +14,9 @@ interface ResumeVersion {
   file_size_kb?: number;
   created_at: string;
   uploaded_by_name?: string;
+  /** Full document text. Only the version-detail endpoint returns it, so the
+   *  diff fetches it on demand when the list didn't carry it. */
+  extracted_text?: string;
   // Parsed content for comparison
   skills?: string[];
   technical_skills?: string[];
@@ -37,61 +42,13 @@ interface ResumeVersionsModalProps {
   onClose: () => void;
   onSelectVersion?: (version: ResumeVersion) => void;
   selectionMode?: boolean;
-}
-
-// Helper function to compute array differences
-function computeArrayDiff<T>(oldArray: T[], newArray: T[]): {
-  added: T[];
-  removed: T[];
-  unchanged: T[];
-} {
-  const oldSet = new Set(oldArray.map(item => typeof item === 'string' ? item : JSON.stringify(item)));
-  const newSet = new Set(newArray.map(item => typeof item === 'string' ? item : JSON.stringify(item)));
-
-  const added: T[] = [];
-  const removed: T[] = [];
-  const unchanged: T[] = [];
-
-  newArray.forEach(item => {
-    const key = typeof item === 'string' ? item : JSON.stringify(item);
-    if (!oldSet.has(key)) {
-      added.push(item);
-    } else {
-      unchanged.push(item);
-    }
-  });
-
-  oldArray.forEach(item => {
-    const key = typeof item === 'string' ? item : JSON.stringify(item);
-    if (!newSet.has(key)) {
-      removed.push(item);
-    }
-  });
-
-  return { added, removed, unchanged };
-}
-
-// Helper function to compute text diff (simple line-based)
-function computeTextDiff(oldText: string, newText: string): { text: string; isNew: boolean; isRemoved: boolean }[] {
-  if (!oldText && !newText) return [];
-  if (!oldText) {
-    return newText.split('\n').map(line => ({ text: line, isNew: true, isRemoved: false }));
-  }
-  if (!newText) {
-    return oldText.split('\n').map(line => ({ text: line, isNew: false, isRemoved: true }));
-  }
-
-  const oldLines = oldText.split('\n');
-  const newLines = newText.split('\n');
-  const oldSet = new Set(oldLines.map(line => line.trim()).filter(line => line.length > 0));
-
-  return newLines.map(line => {
-    const trimmedLine = line.trim();
-    if (trimmedLine.length === 0 || oldSet.has(trimmedLine)) {
-      return { text: line, isNew: false, isRemoved: false };
-    }
-    return { text: line, isNew: true, isRemoved: false };
-  });
+  /** Scores a version against a job. Renders the briefcase action when given —
+   *  the My Resumes list offers it, AI Talent Match does not. */
+  onApplyToJob?: (version: ResumeVersion) => void;
+  /** The version currently in use. With `onSelectVersion` and without
+   *  `selectionMode`, each row gains a "Use this version" action and this one
+   *  is marked as in use — so the list both reads and chooses. */
+  selectedVersionId?: string;
 }
 
 export default function ResumeVersionsModal({
@@ -101,10 +58,23 @@ export default function ResumeVersionsModal({
   onClose,
   onSelectVersion,
   selectionMode = false,
+  onApplyToJob,
+  selectedVersionId,
 }: ResumeVersionsModalProps) {
-  const [selectedVersion, setSelectedVersion] = useState<ResumeVersion | null>(null);
-  const [previousVersion, setPreviousVersion] = useState<ResumeVersion | null>(null);
-  const [comparisonMode, setComparisonMode] = useState(false);
+  /* Choosing is offered whenever a handler exists and the whole dialog isn't
+     already a picker. Falls back to the newest version, so "in use" is marked
+     from the moment the list opens rather than only after a click. */
+  const canChoose = !selectionMode && !!onSelectVersion;
+  const effectiveSelectedId = selectedVersionId || versions[0]?.id;
+  /* Compare state. Two versions, either ticked by hand or implied by "View
+     Changes" (this one against the one before it). The diff runs on each
+     version's extracted text, which the versions list doesn't carry — it is
+     fetched per version when a comparison is actually asked for. */
+  const [compareChecked, setCompareChecked] = useState<string[]>([]);
+  const [comparePair, setComparePair] = useState<{ older: CompareVersion; newer: CompareVersion } | null>(null);
+  const [loadingCompare, setLoadingCompare] = useState(false);
+  /** Version being read in the preview popup. */
+  const [previewVersion, setPreviewVersion] = useState<ResumeVersion | null>(null);
 
   const formatFileSize = (version: ResumeVersion) => {
     // API returns file_size_kb (in KB)
@@ -142,78 +112,54 @@ export default function ResumeVersionsModal({
     }
   };
 
+  /* Opens in place rather than in a new tab: this dialog is usually stacked on
+     top of a flow (apply-to-job, scoring) whose state would be stranded. */
   const handlePreview = (version: ResumeVersion) => {
-    // Use version.id directly as the resume ID for that version
-    window.open(`/recruitment/resume-view/${version.id}`, '_blank');
+    setPreviewVersion(version);
   };
 
-  const handleCompare = (version: ResumeVersion, index: number) => {
-    setSelectedVersion(version);
-    // Find the previous version for comparison
-    if (index < versions.length - 1) {
-      setPreviousVersion(versions[index + 1]);
-    } else {
-      setPreviousVersion(null);
+  const toggleCompareCheck = (versionId: string) => {
+    setCompareChecked((prev) => {
+      if (prev.includes(versionId)) return prev.filter((id) => id !== versionId);
+      // A third tick replaces the older of the two already held.
+      return prev.length >= 2 ? [prev[1], versionId] : [...prev, versionId];
+    });
+  };
+
+  /** Extracted text lives on the version-detail endpoint, not the list one. */
+  const textFor = async (version: ResumeVersion): Promise<string> => {
+    if (version.extracted_text) return version.extracted_text;
+    try {
+      const detail = await resumeService.get(version.id);
+      return detail?.extracted_text || '';
+    } catch {
+      return '';
     }
-    setComparisonMode(true);
   };
 
-  const handleBackToList = () => {
-    setSelectedVersion(null);
-    setPreviousVersion(null);
-    setComparisonMode(false);
+  const openComparison = async (a: ResumeVersion, b: ResumeVersion) => {
+    // Lower version number is the older side, whichever order they were picked.
+    const [older, newer] = (a.version || 0) <= (b.version || 0) ? [a, b] : [b, a];
+    setLoadingCompare(true);
+    try {
+      const [olderText, newerText] = await Promise.all([textFor(older), textFor(newer)]);
+      setComparePair({
+        older: { version: older.version, name: older.file_name, text: olderText },
+        newer: { version: newer.version, name: newer.file_name, text: newerText },
+      });
+    } catch (error) {
+      toast.error('Could not load those versions to compare');
+    } finally {
+      setLoadingCompare(false);
+    }
   };
 
-  // Compute differences when in comparison mode
-  const changes = useMemo(() => {
-    if (!selectedVersion || !previousVersion) return null;
-
-    const skillsDiff = computeArrayDiff(
-      previousVersion.skills || [],
-      selectedVersion.skills || []
-    );
-
-    const technicalSkillsDiff = computeArrayDiff(
-      previousVersion.technical_skills || [],
-      selectedVersion.technical_skills || []
-    );
-
-    const certificationsDiff = computeArrayDiff(
-      previousVersion.certifications || [],
-      selectedVersion.certifications || []
-    );
-
-    const summaryDiff = computeTextDiff(
-      previousVersion.professional_summary || '',
-      selectedVersion.professional_summary || ''
-    );
-
-    return {
-      skills: skillsDiff,
-      technicalSkills: technicalSkillsDiff,
-      certifications: certificationsDiff,
-      summary: summaryDiff,
-      titleChanged: previousVersion.current_title !== selectedVersion.current_title,
-      companyChanged: previousVersion.current_company !== selectedVersion.current_company,
-      locationChanged: previousVersion.location !== selectedVersion.location,
-    };
-  }, [selectedVersion, previousVersion]);
-
-  const hasChanges = useMemo(() => {
-    if (!changes) return false;
-    return (
-      changes.skills.added.length > 0 ||
-      changes.skills.removed.length > 0 ||
-      changes.technicalSkills.added.length > 0 ||
-      changes.technicalSkills.removed.length > 0 ||
-      changes.certifications.added.length > 0 ||
-      changes.certifications.removed.length > 0 ||
-      changes.titleChanged ||
-      changes.companyChanged ||
-      changes.locationChanged ||
-      changes.summary.some(line => line.isNew)
-    );
-  }, [changes]);
+  const compareSelected = () => {
+    if (compareChecked.length !== 2) return;
+    const a = versions.find((v) => v.id === compareChecked[0]);
+    const b = versions.find((v) => v.id === compareChecked[1]);
+    if (a && b) openComparison(a, b);
+  };
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6" onClick={onClose}>
@@ -221,39 +167,47 @@ export default function ResumeVersionsModal({
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
           <div className="flex items-center gap-3 min-w-0">
-            {comparisonMode && (
-              <button
-                onClick={handleBackToList}
-                className="p-1.5 hover:bg-brand-blue/5 hover:text-brand-blue rounded-md transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-              </button>
-            )}
             <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-              <GitBranch className="w-4 h-4 text-brand-blue" />
+              <History className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
-                {comparisonMode && selectedVersion
-                  ? `Version ${selectedVersion.version} Comparison`
-                  : selectionMode
-                  ? 'Select Resume Version'
-                  : 'Resume Versions'}
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
-                {comparisonMode && selectedVersion && previousVersion
-                  ? `Comparing v${selectedVersion.version} with v${previousVersion.version}`
-                  : candidate.name}
-              </p>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                  {selectionMode ? 'Select Resume Version' : 'Version History'}
+                </h2>
+                {!selectionMode && versions.length > 0 && (
+                  <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                    {versions.length} version{versions.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-600 dark:text-slate-400 truncate">{candidate.name}</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Reads as an instruction until two are ticked, then as the action. */}
+            {!selectionMode && versions.length > 1 && (
+              <button
+                onClick={compareSelected}
+                disabled={compareChecked.length !== 2 || loadingCompare}
+                className={`hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  compareChecked.length === 2 && !loadingCompare
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2'
+                    : 'bg-slate-100 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {loadingCompare && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {compareChecked.length === 2 ? 'Compare selected' : 'Select 2 versions to compare'}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -263,298 +217,68 @@ export default function ResumeVersionsModal({
               <Loader2 className="w-8 h-8 text-gray-400 dark:text-slate-500 animate-spin mb-3" />
               <p className="text-gray-600 dark:text-slate-400">Loading versions...</p>
             </div>
-          ) : comparisonMode && selectedVersion ? (
-            /* Comparison View */
-            <div className="space-y-6">
-              {/* Version Info Bar */}
-              <div className="flex items-center justify-between p-4 bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1.5 bg-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-semibold">
-                      v{selectedVersion.version}
-                    </span>
-                    <span className="text-sm text-gray-600 dark:text-slate-400">
-                      {formatISTDate(selectedVersion.created_at)}
-                    </span>
-                  </div>
-                  {previousVersion && (
-                    <>
-                      <span className="text-gray-400 dark:text-slate-500">vs</span>
-                      <div className="flex items-center gap-2">
-                        <span className="px-3 py-1.5 bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg text-sm font-semibold">
-                          v{previousVersion.version}
-                        </span>
-                        <span className="text-sm text-gray-600 dark:text-slate-400">
-                          {formatISTDate(previousVersion.created_at)}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-                {hasChanges && (
-                  <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">
-                    Changes Detected
-                  </span>
-                )}
-              </div>
-
-              {previousVersion ? (
-                <div className="space-y-6">
-                  {/* Changes Summary */}
-                  {hasChanges && (
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <h3 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
-                        <GitBranch className="w-4 h-4" />
-                        What Changed
-                      </h3>
-                      <div className="space-y-2 text-sm">
-                        {changes?.titleChanged && (
-                          <div className="flex items-center gap-2">
-                            <Briefcase className="w-4 h-4 text-gray-500 dark:text-slate-500" />
-                            <span className="text-gray-700 dark:text-slate-300">
-                              Title: <span className="line-through text-gray-500 dark:text-slate-500">{previousVersion.current_title}</span>
-                              {' → '}
-                              <span className="font-medium text-blue-600">{selectedVersion.current_title}</span>
-                            </span>
-                          </div>
-                        )}
-                        {changes?.companyChanged && (
-                          <div className="flex items-center gap-2">
-                            <Briefcase className="w-4 h-4 text-gray-500 dark:text-slate-500" />
-                            <span className="text-gray-700 dark:text-slate-300">
-                              Company: <span className="line-through text-gray-500 dark:text-slate-500">{previousVersion.current_company}</span>
-                              {' → '}
-                              <span className="font-medium text-blue-600">{selectedVersion.current_company}</span>
-                            </span>
-                          </div>
-                        )}
-                        {changes?.locationChanged && (
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-gray-500 dark:text-slate-500" />
-                            <span className="text-gray-700 dark:text-slate-300">
-                              Location: <span className="line-through text-gray-500 dark:text-slate-500">{previousVersion.location}</span>
-                              {' → '}
-                              <span className="font-medium text-blue-600">{selectedVersion.location}</span>
-                            </span>
-                          </div>
-                        )}
-                        {changes && changes.skills.added.length > 0 && (
-                          <div className="flex items-start gap-2">
-                            <Plus className="w-4 h-4 text-green-600 mt-0.5" />
-                            <div>
-                              <span className="text-gray-700 dark:text-slate-300 font-medium">Skills Added:</span>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {changes.skills.added.map((skill, idx) => (
-                                  <span key={idx} className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
-                                    {skill}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {changes && changes.skills.removed.length > 0 && (
-                          <div className="flex items-start gap-2">
-                            <Minus className="w-4 h-4 text-red-600 mt-0.5" />
-                            <div>
-                              <span className="text-gray-700 dark:text-slate-300 font-medium">Skills Removed:</span>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {changes.skills.removed.map((skill, idx) => (
-                                  <span key={idx} className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium line-through">
-                                    {skill}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {changes && changes.technicalSkills.added.length > 0 && (
-                          <div className="flex items-start gap-2">
-                            <Plus className="w-4 h-4 text-green-600 mt-0.5" />
-                            <div>
-                              <span className="text-gray-700 dark:text-slate-300 font-medium">Technical Skills Added:</span>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {changes.technicalSkills.added.map((skill, idx) => (
-                                  <span key={idx} className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
-                                    {typeof skill === 'string' ? skill : skill.name || JSON.stringify(skill)}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        {changes && changes.certifications.added.length > 0 && (
-                          <div className="flex items-start gap-2">
-                            <Award className="w-4 h-4 text-green-600 mt-0.5" />
-                            <div>
-                              <span className="text-gray-700 dark:text-slate-300 font-medium">Certifications Added:</span>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {changes.certifications.added.map((cert, idx) => (
-                                  <span key={idx} className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
-                                    {typeof cert === 'string' ? cert : cert.name || cert.certification_name || JSON.stringify(cert)}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Skills Comparison */}
-                  {(changes?.skills.added.length || changes?.skills.removed.length || changes?.skills.unchanged.length) ? (
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">Skills</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {changes?.skills.unchanged.map((skill, idx) => (
-                          <span key={`unchanged-${idx}`} className="px-2 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs flex items-center gap-1">
-                            <Equal className="w-3 h-3 text-gray-400 dark:text-slate-500" />
-                            {skill}
-                          </span>
-                        ))}
-                        {changes?.skills.added.map((skill, idx) => (
-                          <span key={`added-${idx}`} className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium flex items-center gap-1">
-                            <Plus className="w-3 h-3" />
-                            {skill}
-                          </span>
-                        ))}
-                        {changes?.skills.removed.map((skill, idx) => (
-                          <span key={`removed-${idx}`} className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs line-through flex items-center gap-1">
-                            <Minus className="w-3 h-3" />
-                            {skill}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {/* Professional Summary Comparison */}
-                  {changes && changes.summary.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">Professional Summary</h4>
-                      <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4 space-y-1">
-                        {changes.summary.map((line, idx) => (
-                          <div
-                            key={idx}
-                            className={`text-sm ${
-                              line.isNew
-                                ? 'font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded'
-                                : line.isRemoved
-                                ? 'line-through text-red-600 bg-red-50 px-2 py-1 rounded'
-                                : 'text-gray-700 dark:text-slate-300'
-                            }`}
-                          >
-                            {line.text || '\u00A0'}
-                          </div>
-                        ))}
-                      </div>
-                      {changes.summary.some(line => line.isNew) && (
-                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">
-                          <span className="font-medium text-blue-600">New content</span> is highlighted in blue
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Current Information */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-                      <h4 className="text-xs font-medium text-gray-500 dark:text-slate-500 mb-3">Previous Version (v{previousVersion.version})</h4>
-                      <div className="space-y-2 text-sm">
-                        {previousVersion.current_title && (
-                          <div>
-                            <span className="text-gray-500 dark:text-slate-500">Title:</span>
-                            <p className="text-gray-900 dark:text-slate-50 font-medium">{previousVersion.current_title}</p>
-                          </div>
-                        )}
-                        {previousVersion.current_company && (
-                          <div>
-                            <span className="text-gray-500 dark:text-slate-500">Company:</span>
-                            <p className="text-gray-900 dark:text-slate-50">{previousVersion.current_company}</p>
-                          </div>
-                        )}
-                        {previousVersion.location && (
-                          <div>
-                            <span className="text-gray-500 dark:text-slate-500">Location:</span>
-                            <p className="text-gray-900 dark:text-slate-50">{previousVersion.location}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <h4 className="text-xs font-medium text-blue-700 mb-3">Current Version (v{selectedVersion.version})</h4>
-                      <div className="space-y-2 text-sm">
-                        {selectedVersion.current_title && (
-                          <div>
-                            <span className="text-blue-600">Title:</span>
-                            <p className="text-gray-900 dark:text-slate-50 font-medium">{selectedVersion.current_title}</p>
-                          </div>
-                        )}
-                        {selectedVersion.current_company && (
-                          <div>
-                            <span className="text-blue-600">Company:</span>
-                            <p className="text-gray-900 dark:text-slate-50">{selectedVersion.current_company}</p>
-                          </div>
-                        )}
-                        {selectedVersion.location && (
-                          <div>
-                            <span className="text-blue-600">Location:</span>
-                            <p className="text-gray-900 dark:text-slate-50">{selectedVersion.location}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {!hasChanges && (
-                    <div className="p-4 bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-center">
-                      <p className="text-sm text-gray-600 dark:text-slate-400">
-                        No significant changes detected between these versions
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="p-8 bg-gray-50 dark:bg-slate-800/50 rounded-lg text-center">
-                  <FileText className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-3" />
-                  <p className="text-gray-600 dark:text-slate-400">This is the first version - no comparison available</p>
-                </div>
-              )}
-            </div>
           ) : versions.length > 0 ? (
             /* Version List View */
             <div className="space-y-3">
+              {/* Says what the highlighted row means before anyone has to
+                  work it out from the "In use" pill. */}
+              {canChoose && (
+                <div className="flex items-start gap-2 rounded-lg bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2">
+                  <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
+                  <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <span className="font-semibold">Tip:</span> The latest version is selected by default. Choose
+                    another version if needed.
+                  </p>
+                </div>
+              )}
               {versions.map((version, index) => (
                 <div
                   key={version.id}
                   onClick={() => selectionMode && onSelectVersion?.(version)}
-                  className={`bg-white dark:bg-slate-900 border rounded-lg p-4 transition-all ${
+                  /* The row in use is the one that stands out — not simply the
+                     newest, since a recruiter may have chosen an older one. */
+                  className={`border rounded-lg p-4 transition-all ${
                     selectionMode
-                      ? 'cursor-pointer hover:border-gray-400 hover:shadow-md'
-                      : 'border-gray-200 dark:border-slate-700'
-                  } ${index === 0 ? 'border-green-300 bg-green-50' : ''}`}
+                      ? 'bg-white dark:bg-slate-900 cursor-pointer hover:border-gray-400 hover:shadow-md border-gray-200 dark:border-slate-700'
+                      : canChoose && version.id === effectiveSelectedId
+                        ? 'bg-brand-blue/[0.06] border-brand-blue/40 ring-1 ring-brand-blue/15'
+                        : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700'
+                  }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {/* Tick any two, compare from the header. */}
+                      {!selectionMode && versions.length > 1 && (
+                        <input
+                          type="checkbox"
+                          checked={compareChecked.includes(version.id)}
+                          onChange={() => toggleCompareCheck(version.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-4 w-4 shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                          aria-label={`Select version ${version.version} to compare`}
+                        />
+                      )}
+                      <div className={`w-10 h-10 shrink-0 rounded-lg flex items-center justify-center ${
                         index === 0
-                          ? 'bg-green-500'
-                          : 'bg-gray-600 dark:bg-slate-700'
+                          ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15'
+                          : 'bg-gray-100 dark:bg-slate-800 ring-1 ring-gray-200/60'
                       }`}>
-                        <FileText className="w-5 h-5 text-white" />
+                        <FileText className={`w-5 h-5 ${index === 0 ? 'text-brand-blue' : 'text-gray-500 dark:text-slate-400'}`} />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-gray-900 dark:text-slate-50">
-                            {version.file_name || `Version ${version.version}`}
+                          <span className="font-semibold text-brand-blue">
+                            Version {version.version}
                           </span>
                           {index === 0 && (
-                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
+                            <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs font-medium">
                               Latest
                             </span>
                           )}
                         </div>
+                        {version.file_name && (
+                          <p className="text-sm text-gray-600 dark:text-slate-400 truncate">{version.file_name}</p>
+                        )}
                         <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400 mt-1 flex-wrap">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5" />
@@ -580,18 +304,29 @@ export default function ResumeVersionsModal({
                         Select
                       </button>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        {index < versions.length - 1 && (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Straight to the diff against the version before it —
+                            the common case, without ticking anything. The first
+                            version has nothing behind it to compare against.
+                            Hidden while choosing: that list is about which
+                            version goes forward, and per-row diffing and
+                            downloading crowd the decision. Two ticks and the
+                            header's Compare still cover comparison there. */}
+                        {canChoose ? null : index < versions.length - 1 ? (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleCompare(version, index);
+                              openComparison(versions[index + 1], version);
                             }}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            aria-label="Compare with previous version" title="Compare with previous version"
+                            disabled={loadingCompare}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-slate-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors disabled:opacity-50"
+                            title="Compare with the previous version"
                           >
-                            <GitBranch className="w-4 h-4" />
+                            {loadingCompare ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <History className="w-3.5 h-3.5" />}
+                            View Changes
                           </button>
+                        ) : (
+                          <span className="hidden sm:inline text-xs italic text-gray-400 dark:text-slate-500">First version</span>
                         )}
                         <button
                           onClick={(e) => {
@@ -603,16 +338,55 @@ export default function ResumeVersionsModal({
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownload(version);
-                          }}
-                          className="p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                          aria-label="Download" title="Download"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
+                        {/* Read it, then act on it — the eye leads. */}
+                        {onApplyToJob && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onApplyToJob(version);
+                            }}
+                            className="p-2 text-gray-600 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue rounded-lg transition-colors"
+                            aria-label="Apply to Job" title="Apply to Job"
+                          >
+                            <Briefcase className="w-4 h-4" />
+                          </button>
+                        )}
+                        {/* Which version goes forward. The one in use says so;
+                            the others offer to take its place. */}
+                        {canChoose && (
+                          version.id === effectiveSelectedId ? (
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-brand-blue px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              In use
+                            </span>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectVersion?.(version);
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/40 px-3 py-1.5 text-xs font-medium text-brand-blue transition-colors hover:bg-brand-blue/10"
+                              title={`Use version ${version.version} instead`}
+                            >
+                              Use this version
+                            </button>
+                          )
+                        )}
+                        {/* Also hidden while choosing — the preview popup
+                            carries its own Download for anyone who wants the
+                            file. */}
+                        {!canChoose && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownload(version);
+                            }}
+                            className="p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                            aria-label="Download" title="Download"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -634,19 +408,23 @@ export default function ResumeVersionsModal({
 
         {/* Footer */}
         <div className="border-t border-gray-200 dark:border-slate-700 px-6 py-4 bg-gray-50 dark:bg-slate-800/50">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center gap-3">
             <p className="text-sm text-gray-600 dark:text-slate-400">
-              {comparisonMode && selectedVersion
-                ? `Viewing version ${selectedVersion.version} comparison`
+              {!selectionMode && versions.length > 1 && compareChecked.length > 0
+                ? `${compareChecked.length} of 2 selected to compare`
                 : `${versions.length} version${versions.length !== 1 ? 's' : ''}`}
             </p>
             <div className="flex items-center gap-2">
-              {comparisonMode && (
+              {/* The header's compare button is desktop-only, so the footer
+                  carries it where the header runs out of room. */}
+              {!selectionMode && versions.length > 1 && (
                 <button
-                  onClick={handleBackToList}
-                  className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors font-medium text-sm"
+                  onClick={compareSelected}
+                  disabled={compareChecked.length !== 2 || loadingCompare}
+                  className="sm:hidden inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white disabled:bg-slate-200 disabled:text-gray-400"
                 >
-                  Back to List
+                  {loadingCompare && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Compare
                 </button>
               )}
               <button
@@ -659,6 +437,33 @@ export default function ResumeVersionsModal({
           </div>
         </div>
       </div>
+
+      {/* Reading a single version, in place. */}
+      {previewVersion && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ResumeTextPreviewModal
+            resumeId={previewVersion.id}
+            title={`Version ${previewVersion.version}`}
+            subtitle={previewVersion.file_name}
+            text={previewVersion.extracted_text}
+            onClose={() => setPreviewVersion(null)}
+          />
+        </div>
+      )}
+
+      {/* The diff itself — same popup the resume detail page opens. */}
+      {comparePair && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <VersionCompareModal
+            older={comparePair.older}
+            newer={comparePair.newer}
+            onClose={() => {
+              setComparePair(null);
+              setCompareChecked([]);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

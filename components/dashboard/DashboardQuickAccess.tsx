@@ -27,121 +27,95 @@ const ITEM_SUBTITLE: Record<string, string> = {
   'help-desk': 'Internal desk',
 };
 
-interface SectionStyle {
-  shortLabel: string;
-  longLabel: string;
-  tabActive: string; // active pill background/text classes
-  iconChip: string; // icon-chip pastel classes
-  dot: string; // tiny dot color (for "All" view chip)
+/**
+ * Tile colour runs by POSITION, in pairs: the first two tiles are brand blue,
+ * the next two brand cyan, the next two brand orange, then it repeats. The
+ * tiles used to be tinted by which menu section they came from, which meant
+ * the run of colours changed shape as permissions and plan features hid
+ * sections — the grid could open with four identical blues or a lone orange.
+ *
+ * Every value is a literal class string: Tailwind only ships classes it can
+ * read in the source, so these can't be assembled from a token at runtime.
+ */
+interface TileTone {
+  /** Resting card fill — a wash, so the label stays the loudest thing on it. */
+  card: string;
+  /** Icon chip: the glass bead's tint, glyph colour, rim and cast shadow. */
+  iconChip: string;
+  /** Border picked up on hover, and the title/arrow colour that goes with it. */
+  hoverBorder: string;
+  hoverText: string;
 }
 
-const SECTION_STYLE: Record<string, SectionStyle> = {
-  administration: {
-    shortLabel: 'Admin',
-    longLabel: 'Administration',
-    tabActive: 'bg-slate-900 text-white shadow-sm shadow-slate-900/20',
-    iconChip: 'bg-slate-100 text-slate-700 ring-slate-200',
-    dot: 'bg-slate-500',
+/* The chips are "liquid glass": a diagonal tint that runs from saturated at the
+   top-left to almost clear at the bottom-right, a bright rim, and a coloured
+   shadow cast onto the tile — so the bead looks lit from above rather than
+   filled with flat colour. The highlight and the pooled light inside it are
+   drawn as overlays in TileCard; only the tint and rim vary per tone. */
+const TILE_TONES: TileTone[] = [
+  {
+    card: 'bg-brand-blue/[0.04]',
+    iconChip:
+      'bg-gradient-to-br from-brand-blue/35 via-brand-blue/15 to-brand-blue/[0.04] text-brand-blue ring-brand-blue/25 shadow-sm shadow-brand-blue/25',
+    hoverBorder: 'hover:border-brand-blue/60',
+    hoverText: 'group-hover:text-brand-blue',
   },
-  recruitment: {
-    shortLabel: 'Recruitment',
-    longLabel: 'Recruitment',
-    tabActive: 'bg-brand-blue text-white shadow-sm shadow-brand-blue/20',
-    iconChip: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15',
-    dot: 'bg-brand-blue',
+  {
+    card: 'bg-brand-cyan/[0.05]',
+    iconChip:
+      'bg-gradient-to-br from-brand-cyan/35 via-brand-cyan/15 to-brand-cyan/[0.04] text-brand-cyan ring-brand-cyan/25 shadow-sm shadow-brand-cyan/25',
+    hoverBorder: 'hover:border-brand-cyan/60',
+    hoverText: 'group-hover:text-brand-cyan',
   },
-  'resume-management': {
-    shortLabel: 'Resumes',
-    longLabel: 'Resume management',
-    tabActive: 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/20',
-    iconChip: 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/15',
-    dot: 'bg-brand-cyan',
+  {
+    card: 'bg-brand-orange/[0.06]',
+    iconChip:
+      'bg-gradient-to-br from-brand-orange/35 via-brand-orange/15 to-brand-orange/[0.04] text-brand-orange ring-brand-orange/25 shadow-sm shadow-brand-orange/25',
+    hoverBorder: 'hover:border-brand-orange/60',
+    hoverText: 'group-hover:text-brand-orange',
   },
-  evaluation: {
-    shortLabel: 'Evaluation',
-    longLabel: 'Evaluation',
-    tabActive: 'bg-brand-orange text-white shadow-sm shadow-brand-orange/20',
-    iconChip: 'bg-brand-orange/10 text-brand-orange ring-brand-orange/15',
-    dot: 'bg-brand-orange',
-  },
-  'user-management-section': {
-    shortLabel: 'Users',
-    longLabel: 'User management',
-    tabActive: 'bg-brand-blue text-white shadow-sm shadow-brand-blue/20',
-    iconChip: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15',
-    dot: 'bg-brand-blue',
-  },
-  subscription: {
-    shortLabel: 'Billing',
-    longLabel: 'Subscription & billing',
-    tabActive: 'bg-brand-orange text-white shadow-sm shadow-brand-orange/20',
-    iconChip: 'bg-brand-orange/10 text-brand-orange ring-brand-orange/15',
-    dot: 'bg-brand-orange',
-  },
-  organization: {
-    shortLabel: 'Organization',
-    longLabel: 'Organization',
-    tabActive: 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/20',
-    iconChip: 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/15',
-    dot: 'bg-brand-cyan',
-  },
-  settings: {
-    shortLabel: 'Settings',
-    longLabel: 'Settings',
-    tabActive: 'bg-slate-700 text-white shadow-sm shadow-slate-700/20',
-    iconChip: 'bg-slate-100 text-slate-700 ring-slate-200',
-    dot: 'bg-slate-500',
-  },
-  audits: {
-    shortLabel: 'Audits',
-    longLabel: 'Audits & trail',
-    tabActive: 'bg-brand-orange text-white shadow-sm shadow-brand-orange/20',
-    iconChip: 'bg-brand-orange/10 text-brand-orange ring-brand-orange/15',
-    dot: 'bg-brand-orange',
-  },
-  support: {
-    shortLabel: 'Support',
-    longLabel: 'Support',
-    tabActive: 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/20',
-    iconChip: 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/15',
-    dot: 'bg-brand-cyan',
-  },
-};
+];
 
-const FALLBACK_STYLE: SectionStyle = {
-  shortLabel: 'More',
-  longLabel: 'More',
-  tabActive: 'bg-slate-700 text-white shadow-sm shadow-slate-700/20',
-  iconChip: 'bg-slate-100 text-slate-700 ring-slate-200',
-  dot: 'bg-slate-400',
-};
+/** Two tiles per tone, cycling. */
+const toneFor = (index: number): TileTone => TILE_TONES[Math.floor(index / 2) % TILE_TONES.length];
 
-function styleFor(sectionId: string): SectionStyle {
-  return SECTION_STYLE[sectionId] ?? FALLBACK_STYLE;
-}
-
-function TileCard({ item, sectionId }: { item: NavItem; sectionId: string }) {
+function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
   const Icon = item.icon;
   const href = item.href || '#';
   const subtitle = ITEM_SUBTITLE[item.id];
-  const style = styleFor(sectionId);
 
   return (
     <Link
       href={href}
       prefetch={false}
-      className="group relative flex items-center gap-2.5 rounded-xl border border-slate-300 bg-white p-3 transition-[border-color,box-shadow,color] hover:border-brand-blue/60 hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)] sm:gap-3 sm:p-4"
+      className={`group relative flex items-center gap-2.5 rounded-xl border border-slate-200 p-3 transition-[border-color,box-shadow,color] hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)] sm:gap-3 sm:p-4 ${tone.card} ${tone.hoverBorder}`}
     >
       <span
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 transition-transform sm:h-11 sm:w-11 ${style.iconChip} group-hover:scale-105`}
+        className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[14px] ring-1 backdrop-blur-sm transition-transform sm:h-11 sm:w-11 ${tone.iconChip} group-hover:scale-105`}
       >
-        <Icon className="h-[18px] w-[18px]" />
+        {/* Specular highlight across the top-left — the "wet" edge of the bead. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/70 via-white/15 to-transparent"
+        />
+        {/* Light pooling under the glass, offset so it reads as depth rather
+            than a second gradient. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-3 -right-2 h-8 w-8 rounded-full bg-white/40 blur-lg"
+        />
+        {/* Inner rim: a hairline of white along the top edge, catching the light. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 rounded-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,0.75),inset_0_-6px_12px_-8px_rgba(15,23,42,0.25)]"
+        />
+        <Icon className="relative h-[18px] w-[18px]" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-slate-900 group-hover:text-brand-blue">{item.label}</p>
+        <p className={`truncate text-sm font-semibold text-slate-900 ${tone.hoverText}`}>{item.label}</p>
         {subtitle && <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{subtitle}</p>}
       </div>
-      <ArrowUpRight className="h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-brand-blue" />
+      <ArrowUpRight className={`h-4 w-4 shrink-0 text-slate-300 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 ${tone.hoverText}`} />
     </Link>
   );
 }
@@ -213,14 +187,14 @@ export default function DashboardQuickAccess() {
 
       {/* Tiles — single continuous grid across all categories */}
       <div className="px-3 pb-4 pt-0 sm:px-4 sm:pb-5 sm:pt-0 md:px-8 md:pb-6 md:pt-0">
+        {/* Flattened first so the colour run counts tiles as they appear on
+            screen, not as they are grouped by section. */}
         <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-          {sections.flatMap((section) =>
-            section.items.map((item) => (
-              <li key={item.id}>
-                <TileCard item={item} sectionId={section.id} />
-              </li>
-            )),
-          )}
+          {sections.flatMap((section) => section.items).map((item, index) => (
+            <li key={item.id}>
+              <TileCard item={item} tone={toneFor(index)} />
+            </li>
+          ))}
         </ul>
       </div>
     </section>
