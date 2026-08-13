@@ -852,6 +852,12 @@ export const aiInterviewService = {
      * skills in separate clusters. */
     mthSkillTypes?: Record<string, string>,
     nthSkillTypes?: Record<string, string>,
+    /** JD context so the backend can judge skills inside the right DOMAIN. This is
+     *  a multi-industry platform; without it the clustering + dedup prompts fall
+     *  back on their built-in examples, which were all software. Send `jdId` and
+     *  the backend resolves `job_descriptions.industry_type` itself; send
+     *  `industryType` directly if the caller already has it. */
+    jdContext?: { jdId?: string; industryType?: string },
   ): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
@@ -870,6 +876,8 @@ export const aiInterviewService = {
         nth_parent_groups: nthParentGroups,
         mth_skill_types: mthSkillTypes,
         nth_skill_types: nthSkillTypes,
+        jd_id: jdContext?.jdId,
+        industry_type: jdContext?.industryType,
       });
       return response.data;
     } catch (error) {
@@ -912,6 +920,10 @@ export const aiInterviewService = {
      * count. */
     mthTimeMin?: number;
     nthTimeMin?: number;
+    /** JD context so refine judges skills inside the right DOMAIN — same reason as
+     *  generateClusters. Send jdId and the backend resolves industry_type. */
+    jdId?: string;
+    industryType?: string;
   }): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
@@ -934,6 +946,8 @@ export const aiInterviewService = {
         per_question_seconds: args.perQuestionSeconds,
         mth_time_min: args.mthTimeMin,
         nth_time_min: args.nthTimeMin,
+        jd_id: args.jdId,
+        industry_type: args.industryType,
       });
       return response.data;
     } catch (error) {
