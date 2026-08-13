@@ -1814,6 +1814,15 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 },
                 rounds_config: (interview as any).rounds_config || (liveSession as any).rounds_config,
                 conversation_transcript: (liveSession as any).conversation_transcript || (interview as any).conversation_transcript,
+                // Pass special_instructions so Cluster Coverage can read the
+                // Question Distribution plan (mth/nth_question_skill_map) and
+                // credit EVERY skill each delivered slot was planned to probe —
+                // the same source the Question Analysis tab shows per question.
+                // Without it coverage fell back to the stored history's single
+                // representative topic per question (+ a keyword scan), so a
+                // 15-question / 35-skill interview in which all 35 skills were
+                // assigned and scored reported 17/35 = 49%.
+                special_instructions: (interview as any).special_instructions || (liveSession as any).special_instructions,
               });
               return <CoverageV2 data={data} />;
             })()}
