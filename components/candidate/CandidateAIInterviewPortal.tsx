@@ -2799,6 +2799,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           interviewType={interview.interview_type}
           interviewMode={interview.interview_mode}
           totalQuestions={interview.total_questions}
+          environmentVerificationEnabled={Boolean((interview as { environment_verification_enabled?: boolean }).environment_verification_enabled)}
         />
       </PreInterviewLayout>
     );
