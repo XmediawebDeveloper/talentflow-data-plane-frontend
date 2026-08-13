@@ -495,7 +495,7 @@ export function describeViolation(v: ViolationRecord): string {
     }
     case 'environment_verification_flagged':
     case 'environment_verification_clear': {
-      // details: { video_url, ai_summary, flagged_items, color_match, id_match }
+      // details: { verification_id, ai_summary, flagged_items, color_match, id_match }
       const summary = typeof d.ai_summary === 'string' && d.ai_summary ? d.ai_summary : '';
       if (summary) return summary;
       return v.event_type === 'environment_verification_clear'
