@@ -87,8 +87,8 @@ export default function ApplyToJobModal({
   const defaultDescription =
     mode === 'assessment' ? 'Select a job description for the assessment'
     : mode === 'scoring' ? 'Select job description to score resumes'
-    : mode === 'match' ? 'Select the job description to match these candidates against'
-    : 'Select job openings to apply candidates';
+    : mode === 'match' ? 'Select a job description to find the best-matched candidates'
+    : 'Select a job to apply candidates';
 
   const modalTitle = title || defaultTitle;
   const modalDescription = description || defaultDescription;
@@ -230,9 +230,6 @@ export default function ApplyToJobModal({
             onVersionChosen={(resumeId, choice) =>
               setVersionChoice(prev => ({ ...prev, [resumeId]: choice }))
             }
-            tip={isScoringMode
-              ? 'For multi-version resumes, the latest version will be selected by default for scoring.'
-              : undefined}
           />
 
           {/* Job Search */}

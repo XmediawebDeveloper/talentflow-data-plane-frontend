@@ -2,10 +2,10 @@
 
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
-import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
-import { useState, useRef, useEffect, useId } from 'react';
+import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useDrag } from 'react-dnd';
+import { useDrag, useDrop } from 'react-dnd';
 import { Resume, Folder } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
@@ -15,7 +15,7 @@ import { EmptyState } from './ui/empty-state';
 import Pagination from './Pagination';
 import { usePagination } from '@/lib/hooks/usePagination';
 import ResumeVersionsModal from './ResumeVersionsModal';
-import ResumeVersionSelector from './ResumeVersionSelector';
+import ShareResumeModal from './ShareResumeModal';
 import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
 
@@ -35,9 +35,11 @@ interface DraggableResumeRowProps {
   className?: string;
   onViewDetails?: (resume: Resume) => void;
   draggable?: boolean;
+  /** Given, the row accepts a dropped row and reports where it landed. */
+  onReorder?: (item: DragItem, targetId: string) => void;
 }
 
-function DraggableResumeRow({ resume, selectedResumes, children, className, onViewDetails, draggable = true }: DraggableResumeRowProps) {
+function DraggableResumeRow({ resume, selectedResumes, children, className, onViewDetails, draggable = true, onReorder }: DraggableResumeRowProps) {
   const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>({
     type: RESUME_DRAG_TYPE,
     item: () => ({
@@ -50,15 +52,41 @@ function DraggableResumeRow({ resume, selectedResumes, children, className, onVi
     }),
   });
 
+  /* The row is a drop target as well as a drag source, so the same grip both
+     moves a resume into a folder (the folder tree takes the drop) and reorders
+     it here (a row takes the drop). Dropping a row onto itself does nothing. */
+  const [{ isOver }, drop] = useDrop<DragItem, void, { isOver: boolean }>({
+    accept: RESUME_DRAG_TYPE,
+    canDrop: (item) => !!onReorder && !item.ids.includes(resume.id),
+    drop: (item) => onReorder?.(item, resume.id),
+    collect: (monitor) => ({
+      isOver: monitor.isOver() && monitor.canDrop(),
+    }),
+  });
+
+  const rowRef = (node: HTMLTableRowElement | null) => {
+    if (draggable) preview(node);
+    if (onReorder) drop(node);
+  };
+
   return (
     <tr
-      ref={draggable ? (preview as unknown as React.Ref<HTMLTableRowElement>) : undefined}
-      className={`${className} ${isDragging ? 'opacity-50' : ''} ${onViewDetails ? 'cursor-pointer' : ''}`}
+      ref={rowRef}
+      className={`${className} ${isDragging ? 'opacity-50' : ''} ${
+        isOver ? 'ring-2 ring-inset ring-brand-blue/60' : ''
+      } ${onViewDetails ? 'cursor-pointer' : ''}`}
       onClick={onViewDetails ? () => onViewDetails(resume) : undefined}
     >
-      {/* Drag handle */}
+      {/* Drag handle — pinned with the tick column, same solid background.
+          Its width is pinned to exactly 40px (and the tick column starts at
+          left-10 to match): the grip needs 40px to render, so a narrower
+          declared width let the ticks overlap the grip and eat the drag. */}
       {draggable && (
-        <td className="w-8 px-2 py-3">
+        <td
+          className={`sticky left-0 z-0 w-10 min-w-[40px] max-w-[40px] px-2 py-3 ${
+            selectedResumes.includes(resume.id) ? 'bg-[#e7ecf5]' : 'bg-white group-hover:bg-[#f3f5fa]'
+          }`}
+        >
           <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab hover:bg-gray-100 rounded p-1 flex items-center justify-center">
             <GripVertical className="w-4 h-4 text-gray-400" />
           </div>
@@ -94,6 +122,12 @@ interface ResumeTableProps {
   canTag?: boolean;
   canDownload?: boolean;
   draggable?: boolean;
+  /** Lets rows be dragged into a custom order. Needs `draggable`. */
+  enableRowReorder?: boolean;
+  /** What the custom order belongs to — a folder id, usually. The order is
+   *  remembered per scope in this browser; omit it and the order lasts only
+   *  as long as the list is mounted. */
+  reorderScopeKey?: string;
   /** Resolves a resume's folder id to the folder's display name. Passing it
    *  adds a "Folder" column badging each row with the folder the resume
    *  actually lives in — what an aggregated view (All Resumes) needs to stay
@@ -152,13 +186,15 @@ export default function ResumeTable({
   canTag = false,
   canDownload = true,
   draggable = true,
+  enableRowReorder = false,
+  reorderScopeKey,
   getFolderName,
 }: ResumeTableProps) {
   const router = useRouter();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number; openUp: boolean }>({ top: 0, right: 0, openUp: false });
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
-  const [versionSelectorResume, setVersionSelectorResume] = useState<Resume | null>(null);
+  /** Set while the version history is being fetched for the Files column. */
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
 
   // NEW: Modal states for complete workflows
@@ -169,6 +205,65 @@ export default function ResumeTable({
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showAddTagsModal, setShowAddTagsModal] = useState(false);
   const [selectedResumeForAction, setSelectedResumeForAction] = useState<Resume | null>(null);
+
+  /* Custom row order. Only ids are kept — the rows themselves come from the
+     parent on every fetch — and ids the saved order doesn't mention keep their
+     natural position at the end, so newly uploaded resumes still appear. */
+  const rowOrderEnabled = draggable && enableRowReorder;
+  const orderStorageKey = reorderScopeKey ? `resumeTableOrder:${reorderScopeKey}` : null;
+  const [customOrder, setCustomOrder] = useState<string[] | null>(null);
+
+  // A different folder is a different order; read its own on arrival.
+  useEffect(() => {
+    if (!rowOrderEnabled) return;
+    if (!orderStorageKey) {
+      setCustomOrder(null);
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(orderStorageKey);
+      setCustomOrder(saved ? JSON.parse(saved) : null);
+    } catch {
+      setCustomOrder(null);
+    }
+  }, [orderStorageKey, rowOrderEnabled]);
+
+  const orderedResumes = useMemo(() => {
+    if (!rowOrderEnabled || !customOrder?.length) return resumes;
+    const rank = new Map(customOrder.map((id, index) => [id, index]));
+    // Stable: anything unranked keeps the order the parent sent it in, after
+    // the ranked rows.
+    return [...resumes].sort((a, b) => {
+      const ra = rank.has(a.id) ? (rank.get(a.id) as number) : Number.MAX_SAFE_INTEGER;
+      const rb = rank.has(b.id) ? (rank.get(b.id) as number) : Number.MAX_SAFE_INTEGER;
+      return ra - rb;
+    });
+  }, [resumes, customOrder, rowOrderEnabled]);
+
+  /* A row was dropped on another row: the dragged rows move to where the
+     target sits — before it when they came from below, after it when they came
+     from above, which is what "drag it there" looks like either way. */
+  const handleRowReorder = (item: DragItem, targetId: string) => {
+    const base = orderedResumes.map(r => r.id);
+    const draggedIds = item.ids.filter(id => base.includes(id));
+    if (draggedIds.length === 0 || draggedIds.includes(targetId)) return;
+
+    const targetIndex = base.indexOf(targetId);
+    const firstDraggedIndex = Math.min(...draggedIds.map(id => base.indexOf(id)));
+    const rest = base.filter(id => !draggedIds.includes(id));
+    const restTargetIndex = rest.indexOf(targetId);
+    const insertAt = firstDraggedIndex > targetIndex ? restTargetIndex : restTargetIndex + 1;
+    const next = [...rest.slice(0, insertAt), ...draggedIds, ...rest.slice(insertAt)];
+
+    setCustomOrder(next);
+    if (orderStorageKey) {
+      try {
+        localStorage.setItem(orderStorageKey, JSON.stringify(next));
+      } catch {
+        // A full or blocked store just costs the order on the next visit.
+      }
+    }
+  };
 
   // Pagination (skipped when parent handles pagination server-side)
   const {
@@ -181,19 +276,17 @@ export default function ResumeTable({
     totalItems,
     startIndex,
     endIndex,
-  } = usePagination({ items: resumes, initialItemsPerPage: 25 });
+  } = usePagination({ items: orderedResumes, initialItemsPerPage: 25 });
 
   // When pagination is disabled (server-side pagination), render all passed items
-  const paginatedItems = disablePagination ? resumes : paginatedItemsFromHook;
+  const paginatedItems = disablePagination ? orderedResumes : paginatedItemsFromHook;
 
   // Header checkbox state must reflect the VISIBLE rows only — selections in
   // other folders/pages should not flip the header to "indeterminate" or
   // change its onSelectAll behaviour.
   const allSelected = resumes.length > 0 && resumes.every(r => selectedResumes.includes(r.id));
   const someSelected = !allSelected && resumes.some(r => selectedResumes.includes(r.id));
-  // Ties the header's "Select all" label to its checkbox. Generated rather
-  // than hard-coded so two tables on one page can't share an id.
-  const selectAllId = useId();
+
 
   // Handle showing version history - fetch versions from backend
   /* Always re-fetch, and keep the payload whole. The version comparison reads
@@ -214,11 +307,24 @@ export default function ResumeTable({
     }
   };
 
-  // Handle apply to job with version detection
-  // For SINGLE candidate: ALWAYS show version popup first, then job selection
-  const handleApplyToJob = async (resume: Resume) => {
-    console.log('[APPLY] handleApplyToJob called for:', resume.name);
+  /* The dialog writes its own subject and body from the resume it is given,
+     so opening it is just naming the resume. */
+  const openShareModal = (resume: Resume) => {
+    setSelectedResumeForAction(resume);
+    setShowShareModal(true);
+  };
 
+  const closeShareModal = () => {
+    setShowShareModal(false);
+    setSelectedResumeForAction(null);
+  };
+
+  /* Straight to the Apply to Job dialog, the way ticking one row and pressing
+     Score Resume behaves. The candidate goes in on its latest version and the
+     eye in that dialog's Candidates Selected panel is where another version is
+     read and picked — a version step of its own here made the same action look
+     like two different flows depending on where it was started. */
+  const handleApplyToJob = (resume: Resume) => {
     // Block archived resumes - check isArchived flag, folder prop, or resume's own folderId
     const isArchived = resume.isArchived === true
       || isArchivedFolder
@@ -229,72 +335,7 @@ export default function ResumeTable({
       return;
     }
 
-    // Always fetch versions and show selector for single candidate apply
-    setIsLoadingVersions(true);
-    try {
-      console.log('[APPLY] Fetching versions for resume:', resume.id);
-      const versions = await resumeService.getVersions(resume.id);
-      console.log('[APPLY] Got versions:', versions);
-      const resumeWithVersions = {
-        ...resume,
-        versions: versions && versions.length > 0
-          ? versions.map((v: any) => ({
-              id: v.id,
-              name: v.file_name || v.candidate_name || 'Resume',
-              uploadDate: v.created_at,
-              version: v.version || 1,
-              uploadedBy: v.uploaded_by_name || 'Unknown',
-            }))
-          : [{
-              id: resume.id,
-              name: resume.fileName || resume.name || 'Resume',
-              uploadDate: resume.uploadDate,
-              version: resume.version || 1,
-              uploadedBy: resume.uploadedBy || 'Unknown',
-            }],
-      };
-      console.log('[APPLY] Setting versionSelectorResume:', resumeWithVersions);
-      setVersionSelectorResume(resumeWithVersions);
-    } catch (error) {
-      console.error('[APPLY] Failed to fetch versions:', error);
-      // If can't fetch versions, create single version entry
-      const resumeWithVersions = {
-        ...resume,
-        versions: [{
-          id: resume.id,
-          name: resume.fileName || resume.name || 'Resume',
-          uploadDate: resume.uploadDate,
-          version: resume.version || 1,
-          uploadedBy: resume.uploadedBy || 'Unknown',
-        }],
-      };
-      console.log('[APPLY] Setting versionSelectorResume (fallback):', resumeWithVersions);
-      setVersionSelectorResume(resumeWithVersions);
-    } finally {
-      setIsLoadingVersions(false);
-    }
-  };
-
-  // Handle version selection
-  const handleVersionSelect = (versionId: string) => {
-    if (versionSelectorResume && versionSelectorResume.versions) {
-      // Find the selected version
-      const selectedVersion = versionSelectorResume.versions.find((v: any) => v.id === versionId);
-      if (selectedVersion) {
-        // Create a resume object with the selected version's ID
-        const resumeWithSelectedVersion = {
-          ...versionSelectorResume,
-          id: versionId, // Use the selected version's ID
-          version: selectedVersion.version,
-        };
-        toast.success(`Applying with ${versionSelectorResume.name}'s resume (v${selectedVersion.version})`);
-        onApplyToJob?.(resumeWithSelectedVersion);
-      } else {
-        // Fallback to current resume if version not found
-        onApplyToJob?.(versionSelectorResume);
-      }
-      setVersionSelectorResume(null);
-    }
+    onApplyToJob?.(resume);
   };
 
   if (resumes.length === 0) {
@@ -327,22 +368,30 @@ export default function ResumeTable({
         <table className="w-full min-w-[1200px] table-auto">
         {/* Background goes on the cells, not just <thead>: with separate cell
             backgrounds the rows would otherwise show through as they pass under. */}
-        <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 [&_th]:border-b [&_th]:border-gray-200">
+        {/* Above the pinned column, whose cells sit at z-0: a pinned cell only
+            has to beat the ordinary columns sliding under it sideways, and a
+            positioned cell already paints above those at the same z. Anything
+            higher there raced this header on the way past and won, hiding the
+            select-all box behind the first row's checkbox. */}
+        <thead className="sticky top-0 z-30 [&_th]:bg-slate-50 [&_th]:border-b [&_th]:border-gray-200">
           <tr>
-            {/* Drag handle column */}
+            {/* Drag handle column — pinned too, so it stays beside the ticks.
+                Same hard 40px as the body cell. */}
             {draggable && (
-              <th className="w-8 px-2 py-3 align-middle">
+              <th className="sticky left-0 z-20 w-10 min-w-[40px] max-w-[40px] px-2 py-3 align-middle">
                 <span className="sr-only">Drag</span>
               </th>
             )}
             {!hideCheckboxes && (
-              /* Auto width rather than a fixed 3rem: the cell has to grow for
-                 the count badge, which sits beside the box so the number is
-                 read where the selecting happens. */
-              <th className="w-px whitespace-nowrap px-4 py-3 align-middle">
+              /* The box, half-ticked when only some rows on the page are in,
+                 with the running count beside it — the number is read where
+                 the selecting happens. The count sits in a fixed-width slot
+                 and `tabular-nums`, so the column doesn't shift as it grows a
+                 digit. Pinned, so the ticks stay in view when the table is
+                 scrolled sideways. */
+              <th className={`sticky ${draggable ? 'left-10' : 'left-0'} z-20 w-px whitespace-nowrap px-4 py-3 align-middle border-r border-gray-200`}>
                 <div className="flex items-center gap-2">
                   <input
-                    id={selectAllId}
                     type="checkbox"
                     checked={allSelected}
                     ref={input => {
@@ -350,32 +399,15 @@ export default function ResumeTable({
                     }}
                     onChange={(e) => onSelectAll(e.target.checked)}
                     className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                    aria-label={allSelected ? 'Unselect all resumes on this page' : 'Select all resumes on this page'}
+                    title={allSelected ? 'Unselect all resumes on this page' : 'Select all resumes on this page'}
                   />
-                  {/* A real <label>, so clicking the text toggles the box the
-                      browser's own way — no click handler to keep in sync.
-                      Reads "Select all" until something is ticked, then the
-                      running count, the way the job-openings list does.
-
-                      Same metrics as every other column heading, and a fixed
-                      width: the two wordings are different lengths, so without
-                      it this column resized on each click and shunted the whole
-                      table sideways. `tabular-nums` holds it steady as the
-                      count grows a digit. */}
-                  <label
-                    htmlFor={selectAllId}
-                    className="cursor-pointer select-none"
-                    title={
-                      selectedResumes.length > 0
-                        ? `${selectedResumes.length} resume${selectedResumes.length !== 1 ? 's' : ''} selected`
-                        : 'Select all resumes on this page'
-                    }
+                  <span
+                    className="inline-block w-8 text-xs font-semibold text-gray-900 tabular-nums"
+                    title={`${selectedResumes.length} resume${selectedResumes.length !== 1 ? 's' : ''} selected`}
                   >
-                    <span className="inline-block w-[104px] text-xs text-gray-900 uppercase tracking-wider tabular-nums hover:text-brand-blue transition-colors">
-                      {selectedResumes.length > 0
-                        ? <>Selected <span className="font-semibold">({selectedResumes.length})</span></>
-                        : 'Select all'}
-                    </span>
-                  </label>
+                    {selectedResumes.length > 0 ? `(${selectedResumes.length})` : ''}
+                  </span>
                 </div>
               </th>
             )}
@@ -419,20 +451,36 @@ export default function ResumeTable({
             </th>
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        {/* `divide-y` rules between rows only, which left the last row's lower
+            edge open against the shell's reserved height. The last-child rule
+            closes the table off. */}
+        <tbody className="bg-white divide-y divide-gray-200 [&>tr:last-child>td]:border-b [&>tr:last-child>td]:border-gray-200">
           {paginatedItems.map((resume) => (
             <DraggableResumeRow
               key={resume.id}
               resume={resume}
               selectedResumes={selectedResumes}
               draggable={draggable}
-              className={`hover:bg-brand-blue/5 transition-colors ${
+              onReorder={rowOrderEnabled ? handleRowReorder : undefined}
+              /* `group` so the pinned cells can follow the row's hover. */
+              className={`group hover:bg-brand-blue/5 transition-colors ${
                 selectedResumes.includes(resume.id) ? 'bg-brand-blue/10 ring-1 ring-inset ring-brand-blue/20' : ''
               }`}
               onViewDetails={onViewDetails}
             >
               {!hideCheckboxes && (
-                <td className="px-4 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
+                /* Pinned, so it needs a solid background of its own: the row's
+                   translucent tint would let the columns underneath show
+                   through as they scroll past. The two hexes are that tint
+                   flattened onto white. */
+                <td
+                  className={`sticky ${draggable ? 'left-10' : 'left-0'} z-0 px-4 py-3 align-middle border-r border-gray-200 ${
+                    selectedResumes.includes(resume.id)
+                      ? 'bg-[#e7ecf5]'
+                      : 'bg-white group-hover:bg-[#f3f5fa]'
+                  }`}
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <input
                     type="checkbox"
                     checked={selectedResumes.includes(resume.id)}
@@ -668,8 +716,7 @@ export default function ResumeTable({
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSelectedResumeForAction(resume);
-                                    setShowShareModal(true);
+                                    openShareModal(resume);
                                     setActiveMenu(null);
                                   }}
                                   className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-3 transition-colors"
@@ -845,7 +892,7 @@ export default function ResumeTable({
         />
       )}
 
-      {/* Loading indicator for version fetch */}
+      {/* Loading indicator while the version history is fetched */}
       {isLoadingVersions && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 flex items-center gap-3 shadow-xl shadow-brand-blue/20 ring-1 ring-brand-blue/10">
@@ -853,15 +900,6 @@ export default function ResumeTable({
             <span className="text-gray-700">Loading versions...</span>
           </div>
         </div>
-      )}
-
-      {/* Version Selector Modal - shows for single candidate apply (even with 1 version) */}
-      {versionSelectorResume && versionSelectorResume.versions && versionSelectorResume.versions.length > 0 && (
-        <ResumeVersionSelector
-          resume={versionSelectorResume}
-          onSelect={handleVersionSelect}
-          onClose={() => setVersionSelectorResume(null)}
-        />
       )}
 
       {/* Edit Details Modal */}
@@ -976,75 +1014,10 @@ export default function ResumeTable({
         </div>
       )}
 
-      {/* Share Resume Modal */}
+      {/* Share Resume — the shared dialog, so the table, the cards and the
+          resume page all send a resume the same way. */}
       {showShareModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90vh] flex flex-col">
-            <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 h-10 bg-brand-cyan rounded-xl flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
-                    <Share2 className="w-5 h-5 text-white" />
-                  </div>
-                  <h2 className="text-gray-900">Share Resume</h2>
-                </div>
-                <p className="text-sm text-gray-600">
-                  Share {selectedResumeForAction.name}'s resume with team members
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowShareModal(false);
-                  setSelectedResumeForAction(null);
-                }}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 ml-2"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="mb-6">
-                <label className="block text-sm text-gray-700 mb-2">Email addresses (comma separated)</label>
-                <input
-                  type="text"
-                  placeholder="john@company.com, jane@company.com"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                />
-              </div>
-              <div className="mb-6">
-                <label className="block text-sm text-gray-700 mb-2">Message (optional)</label>
-                <textarea
-                  rows={3}
-                  placeholder="Add a message..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
-              <button
-                onClick={() => {
-                  setShowShareModal(false);
-                  setSelectedResumeForAction(null);
-                }}
-                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  toast.success('Resume shared successfully');
-                  setShowShareModal(false);
-                  setSelectedResumeForAction(null);
-                }}
-                className="flex-1 px-4 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-              >
-                <Mail className="w-4 h-4" />
-                Share
-              </button>
-            </div>
-          </div>
-        </div>
+        <ShareResumeModal resume={selectedResumeForAction} onClose={closeShareModal} />
       )}
 
       {/* Add Tags Modal */}

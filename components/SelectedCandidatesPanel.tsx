@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Users, Mail, Phone, Briefcase, Layers, Eye, Loader2, Lightbulb } from 'lucide-react';
 import { Resume } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
@@ -53,8 +53,8 @@ interface SelectedCandidatesPanelProps {
   versionChoice?: Record<string, VersionChoice>;
   /** Omit to make the version read-only — the list then only reads resumes. */
   onVersionChosen?: (resumeId: string, choice: VersionChoice) => void;
-  /** Closing line under the list. Defaults to the multi-version tip. */
-  tip?: string | null;
+  /** Closing line under the list. Defaults to the version tip; null hides it. */
+  tip?: ReactNode | null;
 }
 
 export default function SelectedCandidatesPanel({
@@ -71,8 +71,22 @@ export default function SelectedCandidatesPanel({
 
   const isIncluded = (id: string) => !excludedIds.includes(id);
   const includedCount = resumes.filter(r => isIncluded(r.id)).length;
-  const anyMultiVersion = resumes.some(r => versionInfo(r).hasMultiple);
   const submittedIdFor = (resume: Resume) => versionChoice[resume.id]?.id || resume.id;
+
+  const allIncluded = resumes.length > 0 && includedCount === resumes.length;
+  const someIncluded = includedCount > 0 && !allIncluded;
+
+  /**
+   * Tick or untick everyone at once. Only the rows that actually differ are
+   * toggled, so this leans on the same per-candidate callback the rows use —
+   * callers fold it into a functional state update, so the calls coalesce.
+   */
+  const toggleAll = () => {
+    const include = !allIncluded;
+    resumes.forEach(resume => {
+      if (isIncluded(resume.id) !== include) onToggleCandidate(resume.id);
+    });
+  };
 
   /**
    * The eye. One resume and there is nothing to choose between — open it.
@@ -106,12 +120,18 @@ export default function SelectedCandidatesPanel({
     }
   };
 
+  /* One candidate or fifty, the tip reads the same — the eye is drawn into the
+     sentence rather than described, so it points at the button beside each row. */
   const tipText =
     tip === null
       ? null
-      : tip ?? (anyMultiVersion
-        ? 'For multi-version resumes, the latest version will be selected by default.'
-        : null);
+      : tip ?? (
+        <>
+          For multi-version resumes, the latest version is selected by default. Click the{' '}
+          <Eye className="inline-block w-3.5 h-3.5 align-text-bottom text-brand-blue" aria-hidden="true" />{' '}
+          icon to switch versions.
+        </>
+      );
 
   return (
     <div className="mb-4 sm:mb-6 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4">
@@ -124,6 +144,24 @@ export default function SelectedCandidatesPanel({
             <span className="font-normal text-gray-500 dark:text-slate-400">of {resumes.length}</span>
           )}
         </h3>
+
+        {/* Ticks or unticks the whole list in one click — half-ticked while
+            only some are in, so the box reads the list's state at a glance. */}
+        {resumes.length > 1 && (
+          <label className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-slate-400 cursor-pointer select-none flex-shrink-0">
+            <input
+              type="checkbox"
+              checked={allIncluded}
+              ref={el => {
+                if (el) el.indeterminate = someIncluded;
+              }}
+              onChange={toggleAll}
+              className="w-4 h-4 text-brand-blue border-gray-300 dark:border-slate-700 rounded focus:ring-brand-blue/40 cursor-pointer"
+              aria-label={allIncluded ? 'Unselect all candidates' : 'Select all candidates'}
+            />
+            Select all
+          </label>
+        )}
       </div>
 
       {/* A fixed, scrolling column: an expander that reflowed the dialog on

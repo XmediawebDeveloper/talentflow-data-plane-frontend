@@ -1,9 +1,10 @@
 'use client';
 
-import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, FolderOpen, HardDrive, ChevronLeft, ChevronRight, Check, Ban, Loader2 } from 'lucide-react';
+import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, FolderOpen, HardDrive, ChevronLeft, ChevronRight, Check, Ban, Loader2, ShieldX, Info } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { resumeService } from '@/lib/services';
-import { formatISTDate } from '@/lib/utils/dateUtils';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { renderAsync } from 'docx-preview';
 
 // Maximum number of versions allowed per resume
@@ -63,6 +64,36 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
   const [previewTitle, setPreviewTitle] = useState<string>('');
   const [previewDocxBlob, setPreviewDocxBlob] = useState<Blob | null>(null);
   const docxContainerRef = useRef<HTMLDivElement>(null);
+
+  /* Who uploaded the resume already on file. The duplicate response doesn't
+     carry it, so it is read from the resume record once the dialog opens. */
+  const [existingUploaders, setExistingUploaders] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!hasOnlyExactDuplicates || exactDuplicates.length === 0) return;
+    let cancelled = false;
+
+    Promise.all(
+      exactDuplicates.map(async ({ file }) => {
+        const detail: any = await resumeService.get(file.existingResume.id).catch(() => null);
+        return [file.existingResume.id, detail?.uploaded_by_name || ''] as const;
+      }),
+    ).then(pairs => {
+      if (cancelled) return;
+      setExistingUploaders(Object.fromEntries(pairs.filter(([, name]) => name)));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasOnlyExactDuplicates, exactDuplicates]);
+
+  const { user } = useAuth();
+  const currentUserName =
+    (user as any)?.full_name || (user as any)?.name || (user as any)?.email || '-';
+  /* Stamped when the dialog opens: the upload happened moments ago, and the
+     file's own lastModified is when it was saved, not when it was sent. */
+  const [uploadAttemptedAt] = useState(() => formatIST(new Date().toISOString()));
 
   // Helper: check if a blob is actually a PDF by reading magic bytes
   const isPdfBlob = async (blob: Blob): Promise<boolean> => {
@@ -191,23 +222,9 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
     }
   }, [exactDuplicates]);
 
-  // If only exact duplicates, auto-close after showing message
-  useEffect(() => {
-    if (hasOnlyExactDuplicates && exactDuplicates.length > 0) {
-      // Auto-resolve all exact duplicates as discarded
-      const autoResolutions = exactDuplicates.map(({ originalIndex }) => ({
-        fileIndex: originalIndex,
-        action: 'discard' as const
-      }));
-
-      // Show blocked message briefly, then auto-resolve
-      const timer = setTimeout(() => {
-        onResolve(autoResolutions);
-      }, 3000); // 3 seconds to read the message
-
-      return () => clearTimeout(timer);
-    }
-  }, [hasOnlyExactDuplicates, exactDuplicates, onResolve]);
+  /* The blocked-upload message stays until it is dismissed. It used to close
+     itself after three seconds, which took the reason away mid-read — and this
+     is the only place the rejected file and the record it matched are named. */
 
   const currentVersion = versionsWithChanges[currentVersionIndex];
   const currentDuplicate = currentVersion?.file;
@@ -274,92 +291,147 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
     (currentVersion && originalIndex === currentVersion.originalIndex && selectedAction)
   );
 
+  /* One labelled row inside a resume panel: label, colon, value on a single
+     line, with the label at a fixed width so the colons and values line up
+     down the card. Flex and stock widths rather than an arbitrary grid
+     template — the arbitrary class wasn't generated, which left `grid` with no
+     columns and stacked the three parts one per line. */
+  const DetailRow = ({ label, value }: { label: string; value: string }) => (
+    <div className="flex items-start gap-2 py-2 text-sm">
+      <span className="w-28 flex-shrink-0 text-gray-500">{label}</span>
+      <span className="flex-shrink-0 text-gray-400">:</span>
+      <span className="min-w-0 flex-1 text-gray-900 break-words">{value || '-'}</span>
+    </div>
+  );
+
   // Show blocked message for exact duplicates only
   if (hasOnlyExactDuplicates) {
+    const closeAsDiscarded = () => {
+      const autoResolutions = exactDuplicates.map(({ originalIndex }) => ({
+        fileIndex: originalIndex,
+        action: 'discard' as const,
+      }));
+      onResolve(autoResolutions);
+    };
+
     return (
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-2rem)] flex flex-col">
           {/* Header */}
-          <div className="flex items-start justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-red-50 to-red-100">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-                <Ban className="w-6 h-6 text-red-600" />
+          <div className="flex items-start justify-between gap-4 p-6 flex-shrink-0">
+            <div className="flex items-start gap-4 min-w-0">
+              <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ShieldX className="w-7 h-7 text-red-600" />
               </div>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">
-                  Upload Blocked
+              <div className="min-w-0">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">
+                  Duplicate Resume{exactDuplicates.length > 1 ? 's' : ''} Detected
                 </h2>
-                <p className="text-sm text-gray-600 dark:text-slate-400">
+                <p className="text-base text-gray-600 dark:text-slate-400 mt-1">
                   {exactDuplicates.length === 1
-                    ? 'This resume is an exact duplicate and cannot be uploaded.'
-                    : `${exactDuplicates.length} resumes are exact duplicates and cannot be uploaded.`}
+                    ? 'This resume matches an existing candidate in the system and cannot be uploaded.'
+                    : 'These resumes match existing candidates in the system and cannot be uploaded.'}
                 </p>
               </div>
             </div>
             <button
-              onClick={() => {
-                const autoResolutions = exactDuplicates.map(({ originalIndex }) => ({
-                  fileIndex: originalIndex,
-                  action: 'discard' as const
-                }));
-                onResolve(autoResolutions);
-              }}
-              className="p-2 hover:bg-red-100 rounded-lg transition-colors flex-shrink-0"
+              onClick={closeAsDiscarded}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
               aria-label="Close"
             >
-              <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
+              <X className="w-6 h-6 text-gray-500 dark:text-slate-500" />
             </button>
           </div>
 
-          {/* Content */}
-          <div className="p-6">
-            <div className="p-4 bg-red-50 border border-red-200 rounded-xl mb-4">
-              <h4 className="font-medium text-red-900 mb-2 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                Duplicate Resume{exactDuplicates.length > 1 ? 's' : ''} Rejected
-              </h4>
-              <p className="text-sm text-red-700 mb-3">
-                The following file{exactDuplicates.length > 1 ? 's contain' : ' contains'} identical information to existing resume{exactDuplicates.length > 1 ? 's' : ''} in the system:
-              </p>
-              <ul className="space-y-2">
-                {exactDuplicates.map(({ file, originalIndex }) => (
-                  <li key={originalIndex} className="flex items-center gap-2 text-sm text-red-800">
-                    <FileText className="w-4 h-4 text-red-500" />
-                    <span className="font-medium">{file.file.name}</span>
-                    <span className="text-red-600">→ matches {file.existingResume.candidate_name}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {/* The two records side by side: what is on file, and what was refused. */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-2 space-y-6">
+            {exactDuplicates.map(({ file, originalIndex }) => {
+              const existing = file.existingResume;
+              const location = existing.folder_path || existing.folder_name || 'root';
 
-            <div className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-              <p className="text-xs text-gray-600 dark:text-slate-400">
-                <span className="font-medium">Note:</span> Exact duplicates are automatically blocked to prevent data redundancy.
-                The existing candidate records remain unchanged. This window will close automatically.
-              </p>
-            </div>
+              return (
+                <div key={originalIndex} className="space-y-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Existing */}
+                    <div className="rounded-xl border border-gray-200 overflow-hidden flex flex-col">
+                      <div className="px-5 py-3.5 bg-gray-50 border-b border-gray-200">
+                        <h3 className="text-base font-semibold text-gray-900">Existing Resume</h3>
+                      </div>
+                      <div className="px-5 py-2 flex-1">
+                        <DetailRow label="Candidate" value={existing.candidate_name} />
+                        <DetailRow label="Email" value={existing.email} />
+                        <DetailRow label="Location" value={location} />
+                        <div className="border-t border-gray-100 my-1" />
+                        <DetailRow label="Upload Date" value={existing.upload_date ? formatIST(existing.upload_date) : '-'} />
+                        <DetailRow label="Upload By" value={existingUploaders[existing.id] || '-'} />
+                        <div className="border-t border-gray-100 my-1" />
+                        <DetailRow
+                          label="File Name"
+                          value={`${existing.file_name}${existing.file_size ? ` (${formatFileSize(existing.file_size)})` : ''}`}
+                        />
+                      </div>
+                      <button
+                        onClick={() => handlePreviewExisting(existing.id)}
+                        disabled={previewLoading !== null}
+                        className="flex items-center justify-center gap-2 px-5 py-3 bg-gray-50 hover:bg-gray-100 text-brand-blue font-medium text-sm transition-colors disabled:opacity-50"
+                      >
+                        {previewLoading === 'existing'
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Eye className="w-4 h-4" />}
+                        View Resume
+                      </button>
+                    </div>
 
-            {/* Auto-close countdown */}
-            <div className="mt-4 flex items-center justify-center">
-              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
-                <Loader2 className="w-4 h-4 text-gray-600 dark:text-slate-400 animate-spin" />
-                <span>Closing automatically...</span>
-              </div>
+                    {/* The upload that was refused */}
+                    <div className="rounded-xl border border-brand-blue/30 overflow-hidden flex flex-col">
+                      <div className="px-5 py-3.5 bg-brand-blue/5 border-b border-brand-blue/20">
+                        <h3 className="text-base font-semibold text-brand-blue">New Resume (Uploading)</h3>
+                      </div>
+                      <div className="px-5 py-2 flex-1">
+                        {/* The refused file was never parsed on the server, so the
+                            record it matched is what names the candidate. */}
+                        <DetailRow label="Candidate" value={existing.candidate_name} />
+                        <DetailRow label="Email" value={existing.email} />
+                        <DetailRow label="Location" value={location} />
+                        <div className="border-t border-gray-100 my-1" />
+                        <DetailRow label="Upload Date" value={uploadAttemptedAt} />
+                        <DetailRow label="Upload By" value={currentUserName} />
+                        <div className="border-t border-gray-100 my-1" />
+                        <DetailRow label="File Name" value={`${file.file.name} (${formatFileSize(file.file.size)})`} />
+                      </div>
+                      <button
+                        onClick={() => handlePreviewNew(file.file)}
+                        disabled={previewLoading !== null}
+                        className="flex items-center justify-center gap-2 px-5 py-3 bg-brand-blue/5 hover:bg-brand-blue/10 text-brand-blue font-medium text-sm transition-colors disabled:opacity-50"
+                      >
+                        {previewLoading === 'new'
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Eye className="w-4 h-4" />}
+                        View Resume
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* The same treatment as the Tip on the upload dialog — the brand's
+                amber, so it reads as guidance rather than a second warning. The
+                wording is kept to one line at this dialog's width; the old
+                sentence spilled a few words onto a second row. */}
+            <div className="flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
+              <Info className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
+              <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                <span className="font-semibold">Note:</span> Exact duplicates are blocked automatically — existing records stay unchanged.
+              </p>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-end p-6 flex-shrink-0">
             <button
-              onClick={() => {
-                // Resolve all as discarded immediately
-                const autoResolutions = exactDuplicates.map(({ originalIndex }) => ({
-                  fileIndex: originalIndex,
-                  action: 'discard' as const
-                }));
-                onResolve(autoResolutions);
-              }}
-              className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium"
+              onClick={closeAsDiscarded}
+              className="px-6 py-2.5 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors font-medium shadow-sm shadow-brand-blue/25"
             >
               Close Now
             </button>

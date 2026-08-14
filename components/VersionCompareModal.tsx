@@ -11,12 +11,20 @@ export interface CompareVersion {
   name?: string;
   /** Extracted text of the document — what actually gets diffed. */
   text?: string;
+  /** Heading for this side. Defaults to "Version {version}" — set it where the
+   *  two sides aren't versions of one record, e.g. a resume on file against an
+   *  upload that was refused. */
+  label?: string;
 }
 
 interface VersionCompareModalProps {
   older: CompareVersion;
   newer: CompareVersion;
   onClose: () => void;
+  /** Dialog title. Defaults to "Version Comparison". */
+  title?: string;
+  /** Line under the title. Defaults to "Version X vs Version Y". */
+  subtitle?: string;
 }
 
 /** Lines we treat as résumé section headings, so the diff keeps the document's
@@ -49,7 +57,9 @@ const isSectionHeader = (trimmed: string) => {
  * that side's changes tinted; or unified, one column with additions and
  * removals inline.
  */
-export default function VersionCompareModal({ older, newer, onClose }: VersionCompareModalProps) {
+export default function VersionCompareModal({ older, newer, onClose, title, subtitle }: VersionCompareModalProps) {
+  const olderLabel = older.label || `Version ${older.version || '?'}`;
+  const newerLabel = newer.label || `Version ${newer.version || '?'}`;
   const [viewMode, setViewMode] = useState<'side-by-side' | 'unified'>('side-by-side');
 
   const olderText = older.text || '';
@@ -112,9 +122,9 @@ export default function VersionCompareModal({ older, newer, onClose }: VersionCo
               <History className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Version Comparison</h2>
+              <h2 className="text-lg font-semibold text-gray-900 tracking-tight">{title || 'Version Comparison'}</h2>
               <p className="text-sm text-gray-500">
-                Version {older.version || '?'} vs Version {newer.version || '?'}
+                {subtitle || `${olderLabel} vs ${newerLabel}`}
               </p>
             </div>
           </div>
@@ -181,7 +191,7 @@ export default function VersionCompareModal({ older, newer, onClose }: VersionCo
                 <div className="px-4 py-2.5 bg-red-50 border-b border-gray-200 flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 bg-red-400 rounded-full"></span>
-                    <span className="text-sm font-semibold text-red-800">Version {older.version || '?'}</span>
+                    <span className="text-sm font-semibold text-red-800">{olderLabel}</span>
                     <span className="text-xs text-red-600 ml-1">(older)</span>
                   </div>
                   <p className="text-xs text-red-600 mt-0.5 truncate">{older.name}</p>
@@ -197,7 +207,7 @@ export default function VersionCompareModal({ older, newer, onClose }: VersionCo
                 <div className="px-4 py-2.5 bg-green-50 border-b border-gray-200 flex-shrink-0">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-                    <span className="text-sm font-semibold text-green-800">Version {newer.version || '?'}</span>
+                    <span className="text-sm font-semibold text-green-800">{newerLabel}</span>
                     <span className="text-xs text-green-600 ml-1">(newer)</span>
                   </div>
                   <p className="text-xs text-green-600 mt-0.5 truncate">{newer.name}</p>
