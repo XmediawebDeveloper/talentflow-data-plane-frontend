@@ -581,7 +581,36 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // Heartbeat every 5s (well under the 90s stale window) so the block appears
     // fast for a 2nd opener and the holder's lease never lapses mid-flow.
     const iv = setInterval(beat, 5000);
-    return () => { cancelled = true; clearInterval(iv); };
+
+    // ── Release the lease when this page goes away ───────────────────────────
+    // Without this, closing the tab/browser leaves the lease looking ALIVE (its
+    // last heartbeat is only seconds old), so reopening the link in another
+    // browser hit "already open elsewhere" until the 90s stale window elapsed.
+    // Reported as: close, reopen elsewhere, blocked for a while, refresh, fine.
+    //
+    // `pagehide` is the reliable teardown signal — it fires on tab close, on
+    // navigation, and when mobile Safari/Chrome freeze the page into the back-
+    // forward cache, where `beforeunload` does not fire at all. `beforeunload`
+    // is kept as a belt for older desktop browsers. Both are idempotent: the
+    // release only clears the lease when THIS cid still owns it, so a duplicate
+    // call can never steal another browser's lease.
+    //
+    // `persisted === true` means the page went into the bf-cache and may be
+    // restored — the heartbeat resumes on restore, and if it does not, the
+    // stale window still backstops us. Releasing is the right call either way:
+    // a frozen page is not an active candidate.
+    const releaseNow = () => {
+      candidateAIInterviewService.releaseSessionLeaseBeacon(token, cid);
+    };
+    window.addEventListener('pagehide', releaseNow);
+    window.addEventListener('beforeunload', releaseNow);
+
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+      window.removeEventListener('pagehide', releaseNow);
+      window.removeEventListener('beforeunload', releaseNow);
+    };
   }, [step, token]);
 
   // Preload avatar assets when reaching system check

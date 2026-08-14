@@ -142,6 +142,36 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
+  /**
+   * Drop the lease during page teardown (tab close / navigate away / mobile
+   * background), so a candidate who reopens the link in another browser is NOT
+   * blocked for the full 90s stale window.
+   *
+   * A normal axios POST is useless here — the browser cancels in-flight XHR as
+   * the page unloads, so the release never reaches the server and the lease sits
+   * there looking alive until it goes stale.
+   *
+   * `keepalive: true` outlives the page. Deliberately NOT navigator.sendBeacon:
+   * the spec forces credentials mode "include", and this API answers
+   * `Access-Control-Allow-Origin: *`, which a credentialed request may never
+   * accept — every beacon dies at preflight. See flushClientLogBeacon() for the
+   * same trap and the same fix.
+   */
+  releaseSessionLeaseBeacon(token: string, clientId: string): void {
+    try {
+      if (typeof fetch !== 'function') return;
+      void fetch(`${API_BASE_URL}/candidate/ai-interview/${token}/session-lease`, {
+        method: 'POST',
+        keepalive: true,
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId, action: 'release' }),
+      }).catch(() => { /* stale-timeout backstops it */ });
+    } catch {
+      /* never let teardown throw */
+    }
+  },
+
   async checkAIHealth(token: string): Promise<AIHealthResponse> {
     const response = await candidateApi.get<AIHealthResponse>(
       `/candidate/ai-interview/${token}/ai-health`,
