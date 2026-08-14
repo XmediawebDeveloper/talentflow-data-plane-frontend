@@ -19,6 +19,7 @@ import { ResultsScreen } from './ResultsScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
 import { CompletedScreen } from './CompletedScreen';
+import InterviewFeedbackModal, { ASSESSMENT_RATING_PROMPTS } from './InterviewFeedbackModal';
 import { IdentityVerificationScreen } from './IdentityVerificationScreen';
 import CodingLanguagePickerStep from './CodingLanguagePickerStep';
 import { useAssessmentFaceBaseline } from '@/hooks/useAssessmentFaceBaseline';
@@ -405,6 +406,33 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       clearAssessmentFaceBaseline();
     }
   }, [clearAssessmentFaceBaseline, step]);
+
+  // ── Post-assessment candidate feedback ────────────────────────────────────
+  // Opens once the assessment is genuinely complete. Deliberately NOT on
+  // 'error' or any terminated path — asking someone to rate their experience
+  // right after their assessment was cut short would be tone-deaf.
+  // The per-token localStorage flag makes it once-only, so a refresh or a
+  // revisit of the finished link does not nag the candidate.
+  const [showFeedback, setShowFeedback] = useState(false);
+
+  useEffect(() => {
+    if (step !== 'completed' || !token) return;
+    try {
+      if (window.localStorage.getItem(`tf_assess_feedback_done_${token}`)) return;
+    } catch {
+      /* private mode / storage blocked — fall through and just show it */
+    }
+    setShowFeedback(true);
+  }, [step, token]);
+
+  const dismissFeedback = useCallback(() => {
+    setShowFeedback(false);
+    try {
+      window.localStorage.setItem(`tf_assess_feedback_done_${token}`, '1');
+    } catch {
+      /* non-blocking: worst case the popup reappears on a manual refresh */
+    }
+  }, [token]);
 
   // ============================================
   // LIFECYCLE EFFECTS
@@ -1838,10 +1866,25 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     case 'completed':
       // NEW: Show completion message - scoring runs in background
       return (
-        <CompletedScreen
-          assessmentTitle={assessmentInfo?.assessment_title}
-          candidateName={assessmentInfo?.candidate_name}
-        />
+        <>
+          <CompletedScreen
+            assessmentTitle={assessmentInfo?.assessment_title}
+            candidateName={assessmentInfo?.candidate_name}
+          />
+          {/* Post-assessment feedback, layered OVER the completion screen so
+              dismissing it leaves the candidate on the normal completion view.
+              Shown only on genuine completion — never after a termination.
+              Skipping cannot affect the candidate's result (the endpoint writes
+              only the feedback column). */}
+          {showFeedback && (
+            <InterviewFeedbackModal
+              token={token}
+              prompts={ASSESSMENT_RATING_PROMPTS}
+              onSubmit={(payload) => candidateService.submitFeedback(token, payload)}
+              onClose={dismissFeedback}
+            />
+          )}
+        </>
       );
 
     case 'results':
