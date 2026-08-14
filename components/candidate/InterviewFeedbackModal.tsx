@@ -30,6 +30,17 @@ const RATING_ROWS = [
 
 type RatingKey = (typeof RATING_ROWS)[number]["key"];
 
+/** The AI Assessment wording for the same three ratings. The stored KEYS are
+ *  identical on purpose — the Super Admin dashboard reads both modules through
+ *  one contract, so only the prompts differ, never the field names. */
+export const ASSESSMENT_RATING_PROMPTS: Record<RatingKey, string> = {
+  overall: "How was your assessment experience?",
+  question_quality: "How would you rate the assessment questions?",
+  ai_experience: "How was your experience using the assessment platform?",
+};
+
+export type FeedbackRatings = Record<RatingKey, number>;
+
 interface StarRatingProps {
   label: string;
   value: number;
@@ -93,9 +104,25 @@ interface InterviewFeedbackModalProps {
   /** Called when the dialog should disappear — after a successful submit, or
    *  on any dismissal. The caller decides whether to remember that. */
   onClose: () => void;
+  /** Override the three rating prompts. Defaults to the AI Interview wording;
+   *  pass ASSESSMENT_RATING_PROMPTS for the assessment flow. Only the wording
+   *  changes — the submitted field names stay identical across both modules. */
+  prompts?: Record<RatingKey, string>;
+  /** Override the submit call. Defaults to the AI Interview endpoint. */
+  onSubmit?: (payload: {
+    overall: number | null;
+    question_quality: number | null;
+    ai_experience: number | null;
+    comment: string;
+  }) => Promise<{ success: boolean; message: string }>;
 }
 
-export default function InterviewFeedbackModal({ token, onClose }: InterviewFeedbackModalProps) {
+export default function InterviewFeedbackModal({
+  token,
+  onClose,
+  prompts,
+  onSubmit,
+}: InterviewFeedbackModalProps) {
   const [ratings, setRatings] = useState<Record<RatingKey, number>>({
     overall: 0,
     question_quality: 0,
@@ -135,7 +162,10 @@ export default function InterviewFeedbackModal({ token, onClose }: InterviewFeed
     setSubmitting(true);
     setError(null);
     try {
-      const result = await candidateAIInterviewService.submitFeedback(token, {
+      const submit = onSubmit
+        ?? ((payload: Parameters<NonNullable<typeof onSubmit>>[0]) =>
+              candidateAIInterviewService.submitFeedback(token, payload));
+      const result = await submit({
         overall: ratings.overall || null,
         question_quality: ratings.question_quality || null,
         ai_experience: ratings.ai_experience || null,
@@ -209,7 +239,7 @@ export default function InterviewFeedbackModal({ token, onClose }: InterviewFeed
               {RATING_ROWS.map((row) => (
                 <StarRating
                   key={row.key}
-                  label={row.label}
+                  label={prompts?.[row.key] ?? row.label}
                   value={ratings[row.key]}
                   disabled={submitting}
                   onChange={(value) => setRatings((prev) => ({ ...prev, [row.key]: value }))}

@@ -68,78 +68,70 @@ const getDisplayJDMarkdown = (text: string, mode: CreationMode): string => {
   return stripEmptyCertificationSections(normalized);
 };
 
+// Detects SOURCE CODE pasted into a JD field.
+//
+// Deliberately narrow. Every pattern here must be something that CANNOT occur in
+// ordinary job-description prose in ANY industry. TalentFlow serves all industries,
+// and this guard sits on the very first screen (AI prompt + manual JD paste) where a
+// false positive hard-blocks the recruiter with no workaround - so it errs toward
+// letting text through. A stray line of code that slips past is cosmetic; a wrongly
+// rejected job description is a dead end.
+//
+// The previous version leaned on broad heuristics plus an IT-term whitelist to
+// compensate for them, and false-blocked real non-IT job descriptions:
+//
+//   "tolerance <= 0.05 mm and temperature >= 200 C"       (manufacturing) - [=!<>]{2,3}
+//   "Ensure delivery TAT <= 24 hrs"                       (logistics)     - [=!<>]{2,3}
+//   "food cost <= 30%"                                    (hospitality)   - [=!<>]{2,3}
+//   "Maintain pH >= 7.0; operate autoclave (121 C)"       (lab)           - [=!<>]{2,3}
+//   "Prepare P.L (profit and loss) statements"            (finance)       - \w+\.\w+\s*\(
+//   "Shifts: (6:00-14:00); (14:00-22:00); rotational"     (shift work)    - specialCharRatio
+//   "property listings, to let and lease agreements"      (real estate)   - \blet\b
+//   "product return and exchange; process refunds"        (retail)        - \breturn\s+[^;]+;
+//   "Key function includes (but is not limited to) ..."   (any JD)        - \bfunction\s+\w+\s*\(
+//
+// Two more (`^\s*package\s+\w+` vs "Package handling", `^\s*import ...$` vs an
+// "Import Documentation" heading) only escaped because those regexes happen to lack
+// the `i` flag - too fragile to rely on, so both are tightened below to require the
+// dotted-path + semicolon syntax that makes them unambiguous.
+//
+// The whitelist is gone too. It was not merely redundant: it replaced bare substrings
+// ('go', 'net', 'c ', 'asp', 'api') case-insensitively, so "Manage cargo goods across
+// the network" became "Manage ar   ods across the  work" - mangling ordinary words and
+// shortening the text, which nudged up the very special-character ratio it was meant to
+// protect against. With the ambiguous patterns removed there is nothing left for it to
+// protect: no remaining pattern can fire on a technology name.
 const containsCodePatterns = (text: string): boolean => {
   if (!text || !text.trim()) return false;
 
   const lowerText = text.toLowerCase();
 
-  // Programming language names that are ALLOWED in job descriptions
-  // These should NOT trigger the code validation
-  const allowedProgrammingTerms = [
-    'c#', 'c++', 'c ', ' c', // C family languages (with spaces to avoid false matches)
-    'java', 'javascript', 'typescript',
-    'python', 'ruby', 'php',
-    'go', 'golang', 'rust', 'swift', 'kotlin',
-    'scala', 'perl', 'r programming',
-    '.net', 'dotnet', 'net', 'asp.net', 'asp', 'vb.net', // .NET variations
-    'node.js', 'nodejs', 'node',
-    'react', 'reactjs', 'angular', 'angularjs', 'vue', 'vuejs', 'svelte',
-    'sql', 'nosql', 'mongodb', 'postgresql', 'mysql', 'sqlite', 'oracle',
-    'html', 'css', 'sass', 'scss', 'less',
-    'spring boot', 'spring', 'django', 'flask', 'express', 'fastapi',
-    'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'jenkins', 'gitlab', 'github',
-    'redux', 'graphql', 'rest api', 'api', 'webpack', 'babel',
-  ];
-
-  // Create a sanitized version of text with allowed terms removed
-  // This prevents programming language names from triggering false positives
-  let sanitizedText = text;
-  allowedProgrammingTerms.forEach(term => {
-    const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-    sanitizedText = sanitizedText.replace(regex, ' ');
-  });
-
-  const sanitizedLowerText = sanitizedText.toLowerCase();
-
-  // Only truly unique code tokens that never appear in plain English job descriptions
+  // Literal tokens that only ever appear in source code.
   const codeKeywords = [
-    'printf', 'cout', 'println', 'console.log', 'print(',
-    '__init__', '<?php', '#!/bin',
-    'function(', '=>{', '=>{', '};', '});',
+    'console.log', 'printf(', 'println(', 'cout <<', 'system.out.print',
+    '<?php', '#!/bin', '__init__', 'public static void', 'std::',
+    '});', '};',
   ];
+  if (codeKeywords.some(keyword => lowerText.includes(keyword))) return true;
 
-  // Check for programming keywords in sanitized text
-  const hasCodeKeywords = codeKeywords.some(keyword => sanitizedLowerText.includes(keyword));
-
-  // Code-like patterns
+  // Structural patterns. Each requires enough surrounding syntax to be unambiguous -
+  // a bare keyword is never enough, because "function", "return", "import", "package"
+  // and "class" are all ordinary job-description words.
   const codePatterns = [
-    /\bdef\s+\w+\s*\(/,           // Python function: def foo(
-    /\bfunction\s+\w+\s*\(/,      // JS function: function foo(
-    /\(\s*\w+\s*\)\s*[:=]>/,      // Arrow function: (param) => or (param) ->
-    /\w+\s*\(\s*\w*\s*\)\s*\{/,   // Function with braces: foo() {
-    /\breturn\s+[^;]+;/,          // Return statement with semicolon
-    /^\s*import\s+[\w.*]+(?:\s*,\s*[\w.*]+)*(?:\s+as\s+\w+)?\s*;?\s*$/m, // Python import line
-    /^\s*from\s+[\w.]+\s+import\s+[\w.*]+(?:\s*,\s*[\w.*]+)*\s*;?\s*$/m, // Python from-import line
-    /^\s*import\s+.*?\s+from\s+['"][^'"]+['"]\s*;?\s*$/m, // ES module import line
-    /[{}\[\]]\s*[{}\[\]]/,        // Multiple consecutive brackets
-    /[=!<>]{2,3}/,                // Comparison operators: ==, ===, !==, etc.
-    /\w+\.\w+\s*\(/,              // Method calls: obj.method(
-    /\bvar\b|\blet\b|\bconst\b/,  // Variable declarations
-    /^\s*#include/m,              // C/C++ include
-    /^\s*package\s+\w+/m,         // Java/Go package
-    /\$\w+\s*=/,                  // PHP variables
-    /f["'].*\{.*\}["']/,          // f-strings: f"text {var}"
+    /\bdef\s+\w+\s*\(/,                          // Python:  def foo(
+    /\bfunction\s+\w+\s*\([^)]*\)\s*\{/,         // JS:      function foo(a) {
+    /\(\s*\w*\s*\)\s*=>/,                        // JS:      (a) =>
+    /\w+\s*\(\s*\w*\s*\)\s*\{/,                  //          foo() {
+    /\bclass\s+\w+\s*\{/,                        //          class Foo {
+    /^\s*from\s+[\w.]+\s+import\s+/m,            // Python:  from x import y
+    /^\s*import\s+.+\s+from\s+['"][^'"]+['"]/m,  // ES:      import x from 'y'
+    /^\s*import\s+\w+(?:\.[\w*]+)+\s*;/m,        // Java:    import a.b.C;
+    /^\s*package\s+\w+(?:\.\w+)+\s*;/m,          // Java:    package a.b.c;
+    /^\s*#include\s*[<"]/m,                      // C/C++:   #include <x>
+    /\$[a-zA-Z_]\w*\s*=[^=]/,                    // PHP:     $var =
   ];
 
-  // Check for code patterns in sanitized text
-  const hasCodePattern = codePatterns.some(pattern => pattern.test(sanitizedText));
-
-  // Detect excessive use of special characters typical in code
-  const specialChars = sanitizedText.match(/[(){}\[\];:<>]/g);
-  const specialCharRatio = specialChars ? specialChars.length / sanitizedText.length : 0;
-  const hasExcessiveSpecialChars = specialCharRatio > 0.15; // More than 15% special chars
-
-  return hasCodeKeywords || hasCodePattern || hasExcessiveSpecialChars;
+  return codePatterns.some(pattern => pattern.test(text));
 };
 
 const nonLatinPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u4E00-\u9FFF\u3400-\u4DBF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF\u0900-\u097F\u0400-\u04FF\u0E00-\u0E7F\u0B80-\u0BFF\u0C00-\u0C7F\u0D00-\u0D7F]/u;

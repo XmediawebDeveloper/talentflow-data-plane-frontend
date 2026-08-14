@@ -1327,6 +1327,36 @@ export const candidateService = {
       };
     }
   },
+
+  /**
+   * Post-assessment candidate feedback (whole-star 1-5 ratings + optional
+   * comment). Mirrors candidateAIInterviewService.submitFeedback.
+   *
+   * NOT swallowed like the fire-and-forget calls: the candidate is watching the
+   * dialog, so a failure has to reach the UI as a retry rather than a fake
+   * "thank you". The endpoint answers HTTP 200 even when it could not save, so
+   * success lives in the BODY — a 200 alone does not mean it was stored.
+   */
+  async submitFeedback(
+    token: string,
+    feedback: {
+      overall?: number | null;
+      question_quality?: number | null;
+      ai_experience?: number | null;
+      comment?: string;
+    },
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await candidateApi.post<{ success: boolean; message: string }>(
+      `/candidate/assessment/${token}/feedback`,
+      {
+        overall: feedback.overall ?? null,
+        question_quality: feedback.question_quality ?? null,
+        ai_experience: feedback.ai_experience ?? null,
+        comment: (feedback.comment || '').slice(0, 500),
+      },
+    );
+    return response.data;
+  },
 };
 
 export default candidateService;
