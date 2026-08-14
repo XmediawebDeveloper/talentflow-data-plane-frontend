@@ -2882,6 +2882,26 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               </p>
                             </div>
                           )}
+                          {/* AI Analysis status banner — the explicit "did the LLM find anything"
+                              verdict (result_severity), separate from the color/ID anti-replay
+                              check above. Matches the spec's "LLM compares frames... records a
+                              violation with a summary... added to the interview report." */}
+                          {v.analysis_status === 'pending' || v.analysis_status === 'running' ? (
+                            <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse flex-shrink-0" />
+                              <p className="text-xs text-gray-600">AI analysis in progress — frames are being extracted and reviewed. This updates automatically once complete.</p>
+                            </div>
+                          ) : v.analysis_status === 'error' ? (
+                            <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2">
+                              <p className="text-xs text-gray-600">AI analysis could not be completed for this recording — the video itself is still available above.</p>
+                            </div>
+                          ) : v.analysis_status === 'done' ? (
+                            <div className={`rounded-lg px-3 py-2 ring-1 ${v.result_severity === 'flagged' ? 'bg-red-50 ring-red-200' : 'bg-green-50 ring-green-200'}`}>
+                              <p className={`text-xs font-semibold ${v.result_severity === 'flagged' ? 'text-red-700' : 'text-green-700'}`}>
+                                {v.result_severity === 'flagged' ? '⚠ Suspicious activity detected' : '✓ No suspicious activity detected'}
+                              </p>
+                            </div>
+                          ) : null}
                           {v.ai_summary && (
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">AI Summary</p>
