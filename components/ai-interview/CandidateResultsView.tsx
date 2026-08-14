@@ -609,6 +609,10 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const [screenDownloadUrl, setScreenDownloadUrl] = useState<string | null>(null);
   const [screenLoading, setScreenLoading] = useState(false);
   const [screenError, setScreenError] = useState(false);
+  // Per-verification-id state for the QR Verification tab's mobile clip —
+  // keyed by verification_id since an interview can have more than one
+  // environment-verification attempt/record in the same list.
+  const [envVideoState, setEnvVideoState] = useState<Record<string, { url: string | null; downloadUrl: string | null; loading: boolean; error: boolean }>>({});
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
   const [violationPage, setViolationPage] = useState(1);
@@ -1245,6 +1249,71 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     () => violations.filter(v => v.event_type.startsWith('environment_verification_')),
     [violations],
   );
+
+  // Fetch each QR Verification record's mobile clip on demand — mirrors the
+  // STREAM-FIRST presigned-URL pattern used for the candidate/screen
+  // recording above, but per verification_id since this tab can list
+  // multiple attempts. Does NOT touch recording_file_path/
+  // screen_recording_file_path or their endpoints — separate storage,
+  // separate route, separate state.
+  //
+  // "Already requested" is tracked in a ref, NOT envVideoState itself —
+  // envVideoState can't be a dependency here. If it were, the synchronous
+  // setEnvVideoState(...loading:true...) below would change the dependency
+  // and re-run this effect immediately, whose cleanup sets THIS run's
+  // `cancelled` to true while its own in-flight api.get(...) calls are still
+  // pending — so every fetch's result gets silently discarded by `if
+  // (cancelled) return`, and the re-run's own idsToFetch filter sees those
+  // same ids already present (loading:true) and skips them too. Net effect:
+  // permanently stuck on "Loading video…". envVideoState here is a pure
+  // render-output store, written only by fetch completions, never read by
+  // this effect.
+  const envVideoRequestedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (activeTab !== 'verification' || envVerificationRecords.length === 0) return;
+    const idsToFetch = envVerificationRecords
+      .map(r => (r.details ?? {}) as Record<string, unknown>)
+      .map(d => (typeof d.verification_id === 'string' ? d.verification_id : null))
+      .filter((id): id is string => !!id && !envVideoRequestedRef.current.has(id));
+    if (idsToFetch.length === 0) return;
+    idsToFetch.forEach(id => envVideoRequestedRef.current.add(id));
+    let cancelled = false;
+    setEnvVideoState(prev => {
+      const next = { ...prev };
+      idsToFetch.forEach(id => { next[id] = { url: null, downloadUrl: null, loading: true, error: false }; });
+      return next;
+    });
+    idsToFetch.forEach(async (verificationId) => {
+      try {
+        const meta = await api.get(`/ai-interview/environment-verification/${verificationId}/recording-url`);
+        const streamUrl = meta?.data?.url;
+        if (cancelled) return;
+        if (streamUrl) {
+          setEnvVideoState(prev => ({
+            ...prev,
+            [verificationId]: { url: streamUrl, downloadUrl: meta?.data?.download_url ?? null, loading: false, error: false },
+          }));
+          return;
+        }
+        // No presigned URL (local-disk storage) — fall back to an
+        // authenticated blob fetch, same fallback shape as the recording tab
+        // (a plain <video src> can't carry the Authorization header this
+        // endpoint requires).
+        const res = await api.get(`/ai-interview/environment-verification/${verificationId}/recording`, { responseType: 'blob' });
+        if (cancelled) return;
+        setEnvVideoState(prev => ({
+          ...prev,
+          [verificationId]: { url: URL.createObjectURL(res.data), downloadUrl: null, loading: false, error: false },
+        }));
+      } catch {
+        if (!cancelled) {
+          setEnvVideoState(prev => ({ ...prev, [verificationId]: { url: null, downloadUrl: null, loading: false, error: true } }));
+        }
+      }
+    });
+    return () => { cancelled = true; };
+  }, [activeTab, envVerificationRecords]);
+
   // Legacy inline violations UI retained (disabled) for quick rollback; superseded by IntegrityCheckTab.
   const showLegacyViolations = false;
 
@@ -2737,7 +2806,8 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 <div className="space-y-4">
                   {envVerificationRecords.map((record, idx) => {
                     const d = (record.details ?? {}) as Record<string, unknown>;
-                    const videoUrl = typeof d.video_url === 'string' ? d.video_url : null;
+                    const verificationId = typeof d.verification_id === 'string' ? d.verification_id : null;
+                    const videoState = verificationId ? envVideoState[verificationId] : undefined;
                     const colorMatch = typeof d.color_match === 'boolean' ? d.color_match : null;
                     const idMatch = typeof d.id_match === 'boolean' ? d.id_match : null;
                     const aiSummary = typeof d.ai_summary === 'string' ? d.ai_summary : null;
@@ -2769,13 +2839,23 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           </div>
                         </div>
                         <div className="p-4 sm:p-5 space-y-4">
-                          {videoUrl ? (
-                            <video controls preload="metadata" className="w-full max-w-lg rounded-lg bg-black">
-                              <source src={videoUrl} />
-                            </video>
-                          ) : (
-                            <p className="text-sm text-gray-400 italic">No video available for this attempt.</p>
-                          )}
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Candidate Verification Video</p>
+                            {!verificationId ? (
+                              <p className="text-sm text-red-600 italic">Video upload failed.</p>
+                            ) : videoState?.loading || !videoState ? (
+                              <p className="text-sm text-gray-400 italic">Loading video…</p>
+                            ) : videoState.error || !videoState.url ? (
+                              <p className="text-sm text-red-600 italic">Video unavailable.</p>
+                            ) : (
+                              <>
+                                <video controls preload="metadata" className="w-full max-w-lg rounded-lg bg-black">
+                                  <source src={videoState.url} />
+                                </video>
+                                <p className="text-xs text-green-700 font-medium mt-1.5">Status: Uploaded</p>
+                              </>
+                            )}
+                          </div>
                           {rgbSequenceResults.length > 0 && (
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">
