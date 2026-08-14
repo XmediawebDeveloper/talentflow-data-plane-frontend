@@ -1635,6 +1635,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         audioBitsPerSecond: 64_000,   // 64 Kbps — clearer voice (was 32 Kbps)
       };
       const startRecorder = (opts: MediaRecorderOptions) => {
+        // Device-recovery (camera/mic reacquire after a drop) calls this again
+        // on the SAME component instance, with recordingSegmentIndexRef still
+        // holding whatever segment was in flight. A prior segment that failed
+        // upload sits queued in recordedChunksRef for the next checkpoint
+        // retry — but the recorder restart runs first and used to blow that
+        // buffer away with recordedChunksRef.current = [] before the retry
+        // ever got a chance, permanently losing that footage. Ship it now,
+        // best-effort, under the segment index it was already queued at,
+        // before resetting.
+        if (recordedChunksRef.current.length > 0) {
+          const staleChunks = recordedChunksRef.current;
+          const staleIndex = recordingSegmentIndexRef.current;
+          const staleMime = (mediaRecorderRef.current?.mimeType || opts.mimeType || 'video/webm').split(';')[0];
+          const staleBlob = new Blob(staleChunks, { type: staleMime });
+          candidateAIInterviewService
+            .uploadRecording(token, staleBlob, staleIndex, false)
+            .then(() => { recordingSegmentIndexRef.current = staleIndex + 1; })
+            .catch((err) => console.warn(`[Recording] Pre-restart flush of segment ${staleIndex} failed — footage lost: ${getErrorMessage(err)}`));
+        }
         const recorder = new MediaRecorder(recordStream, opts);
         recordedChunksRef.current = [];
         recorder.ondataavailable = (e) => {

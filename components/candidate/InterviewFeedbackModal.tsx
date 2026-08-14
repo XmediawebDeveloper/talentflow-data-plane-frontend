@@ -4,11 +4,14 @@
  * AII17 — Post-Interview Candidate Feedback.
  *
  * A concise modal shown OVER the completion screen once the interview is done.
- * Three whole-star 1-5 ratings + an optional short comment.
+ * Three ratings + an optional short comment. Also used for the AI Assessment
+ * flow — pass `prompts` and `onSubmit` to retarget it.
  *
- * Whole stars only: the story allows half-stars "only if supported by the
- * product design", and nothing in this product has a half-star control (they
- * are also a poor touch target and awkward for keyboard/screen-reader users).
+ * HALF-STARS SUPPORTED: 0.5 … 5.0 in 0.5 steps. Each star is two hit areas
+ * (left = X.5, right = X.0), so every value is reachable by pointer, and each
+ * one is a real radio so it is reachable and announced by keyboard/screen
+ * readers too. The backend accepts and stores the same 0.5 steps, so a rating
+ * never gets silently rounded on its way to the database.
  *
  * Dismissal is always available (×, Esc, backdrop) and costs the candidate
  * nothing — the backend endpoint writes only the feedback column, so skipping
@@ -30,6 +33,17 @@ const RATING_ROWS = [
 
 type RatingKey = (typeof RATING_ROWS)[number]["key"];
 
+/** The AI Assessment wording for the same three ratings. The stored KEYS are
+ *  identical on purpose — the Super Admin dashboard reads both modules through
+ *  one contract, so only the prompts differ, never the field names. */
+export const ASSESSMENT_RATING_PROMPTS: Record<RatingKey, string> = {
+  overall: "How was your assessment experience?",
+  question_quality: "How would you rate the assessment questions?",
+  ai_experience: "How was your experience using the assessment platform?",
+};
+
+export type FeedbackRatings = Record<RatingKey, number>;
+
 interface StarRatingProps {
   label: string;
   value: number;
@@ -37,11 +51,15 @@ interface StarRatingProps {
   disabled?: boolean;
 }
 
-/** One labelled 1-5 whole-star row.
+/** One labelled HALF-STAR rating row: 0.5 … 5.0 in 0.5 steps.
  *
- *  Built as a real radiogroup rather than clickable divs so it is keyboard
- *  reachable and announced correctly. Hover preview is visual only — the
- *  committed value is what `value` says. */
+ *  Each of the five stars is split into two hit areas — the left half commits
+ *  X.5, the right half commits X.0 — so all ten values are reachable. Every hit
+ *  area is a real `role="radio"` button inside one radiogroup, which keeps the
+ *  control keyboard reachable and correctly announced ("2.5 stars"); a pair of
+ *  clickable divs would be neither.
+ *
+ *  Hover preview is visual only — the committed value is what `value` says. */
 function StarRating({ label, value, onChange, disabled }: StarRatingProps) {
   const [hovered, setHovered] = useState(0);
   const shown = hovered || value;
@@ -55,32 +73,49 @@ function StarRating({ label, value, onChange, disabled }: StarRatingProps) {
         className="flex items-center gap-1"
         onMouseLeave={() => setHovered(0)}
       >
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button
-            key={star}
-            type="button"
-            role="radio"
-            aria-checked={value === star}
-            aria-label={`${star} star${star === 1 ? "" : "s"}`}
-            disabled={disabled}
-            onMouseEnter={() => setHovered(star)}
-            onFocus={() => setHovered(star)}
-            onBlur={() => setHovered(0)}
-            onClick={() => onChange(star)}
-            className="p-1 rounded-md transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:hover:scale-100"
-          >
-            <Star
-              className={`w-7 h-7 transition-colors ${
-                star <= shown
-                  ? "fill-amber-400 text-amber-400"
-                  : "fill-transparent text-gray-300"
-              }`}
-            />
-          </button>
-        ))}
+        {[1, 2, 3, 4, 5].map((star) => {
+          const full = shown >= star;
+          const half = !full && shown >= star - 0.5;
+          return (
+            <span key={star} className="relative inline-block w-7 h-7">
+              {/* Empty outline underneath. */}
+              <Star className="absolute inset-0 w-7 h-7 fill-transparent text-gray-300" />
+              {/* Filled star clipped to 50% for a half, 100% for a full one.
+                  Clipping a real star keeps the shape identical to the outline
+                  — a separate "half star" glyph never lines up exactly. */}
+              {(full || half) && (
+                <span
+                  className="absolute inset-y-0 left-0 overflow-hidden"
+                  style={{ width: full ? "100%" : "50%" }}
+                  aria-hidden="true"
+                >
+                  <Star className="w-7 h-7 fill-amber-400 text-amber-400 transition-colors" />
+                </span>
+              )}
+              {/* Two invisible hit areas stacked over the glyph. */}
+              {[star - 0.5, star].map((v, idx) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="radio"
+                  aria-checked={value === v}
+                  aria-label={`${v} star${v === 1 ? "" : "s"}`}
+                  disabled={disabled}
+                  onMouseEnter={() => setHovered(v)}
+                  onFocus={() => setHovered(v)}
+                  onBlur={() => setHovered(0)}
+                  onClick={() => onChange(v)}
+                  className={`absolute inset-y-0 w-1/2 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed ${
+                    idx === 0 ? "left-0" : "left-1/2"
+                  }`}
+                />
+              ))}
+            </span>
+          );
+        })}
         {value > 0 && (
           <span className="ml-2 text-xs font-medium text-gray-500 tabular-nums">
-            {value}/5
+            {value.toFixed(1)}/5
           </span>
         )}
       </div>
@@ -93,9 +128,25 @@ interface InterviewFeedbackModalProps {
   /** Called when the dialog should disappear — after a successful submit, or
    *  on any dismissal. The caller decides whether to remember that. */
   onClose: () => void;
+  /** Override the three rating prompts. Defaults to the AI Interview wording;
+   *  pass ASSESSMENT_RATING_PROMPTS for the assessment flow. Only the wording
+   *  changes — the submitted field names stay identical across both modules. */
+  prompts?: Record<RatingKey, string>;
+  /** Override the submit call. Defaults to the AI Interview endpoint. */
+  onSubmit?: (payload: {
+    overall: number | null;
+    question_quality: number | null;
+    ai_experience: number | null;
+    comment: string;
+  }) => Promise<{ success: boolean; message: string }>;
 }
 
-export default function InterviewFeedbackModal({ token, onClose }: InterviewFeedbackModalProps) {
+export default function InterviewFeedbackModal({
+  token,
+  onClose,
+  prompts,
+  onSubmit,
+}: InterviewFeedbackModalProps) {
   const [ratings, setRatings] = useState<Record<RatingKey, number>>({
     overall: 0,
     question_quality: 0,
@@ -135,7 +186,10 @@ export default function InterviewFeedbackModal({ token, onClose }: InterviewFeed
     setSubmitting(true);
     setError(null);
     try {
-      const result = await candidateAIInterviewService.submitFeedback(token, {
+      const submit = onSubmit
+        ?? ((payload: Parameters<NonNullable<typeof onSubmit>>[0]) =>
+              candidateAIInterviewService.submitFeedback(token, payload));
+      const result = await submit({
         overall: ratings.overall || null,
         question_quality: ratings.question_quality || null,
         ai_experience: ratings.ai_experience || null,
@@ -209,7 +263,7 @@ export default function InterviewFeedbackModal({ token, onClose }: InterviewFeed
               {RATING_ROWS.map((row) => (
                 <StarRating
                   key={row.key}
-                  label={row.label}
+                  label={prompts?.[row.key] ?? row.label}
                   value={ratings[row.key]}
                   disabled={submitting}
                   onChange={(value) => setRatings((prev) => ({ ...prev, [row.key]: value }))}

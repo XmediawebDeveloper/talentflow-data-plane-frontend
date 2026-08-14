@@ -1,7 +1,8 @@
 'use client'
 
 import { ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Upload, Edit2, Trash2, LayoutGrid, Archive, FolderRoot } from 'lucide-react';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useDrop } from 'react-dnd';
 import { Folder as FolderType, Resume } from '@/lib/types/types';
 import { toast } from 'sonner';
@@ -56,11 +57,15 @@ const TREE_TRUNK_COLOR = 'bg-gray-300';
 const MIN_PANEL_WIDTH = 200;
 const MAX_PANEL_WIDTH = 400;
 const DEFAULT_PANEL_WIDTH = 240;
-/** Height of the scrolling folder list. Fixed rather than viewport-relative so
- *  the panel looks the same on every screen. Applied as an inline style —
- *  Tailwind only ships classes it can find spelled out in the source, so a
- *  `max-h-[${...}]` built from this constant would never be generated. */
-const FOLDER_LIST_MAX_HEIGHT = 420;
+/* The folder list's height is CSS-driven now: it flexes to whatever the row
+   leaves it on md+, and falls back to `max-h-[420px]` on the stacked mobile
+   layout. Spelled out as a class rather than built from a constant — Tailwind
+   only ships classes it can find literally in the source. */
+/** Folder-actions menu geometry. The menu is portalled to the body and placed
+ *  against the viewport, so these drive the flip/clamp maths below. */
+const FOLDER_MENU_WIDTH = 192; // w-48
+const FOLDER_MENU_GAP = 6; // breathing room between the trigger and the menu
+const FOLDER_MENU_EDGE = 8; // smallest gap we leave to any viewport edge
 /** One keyboard nudge of the resize handle. */
 const RESIZE_STEP = 16;
 
@@ -83,7 +88,7 @@ interface DroppableFolderItemProps {
   hasMenu: boolean;
   onSelectFolder: (id: string) => void;
   onToggleFolder: (id: string) => void;
-  onShowMenu: (id: string | null) => void;
+  onShowMenu: (id: string | null, anchor?: DOMRect) => void;
   onMoveToFolder?: (resumeIds: string[], folderId: string) => void;
   children?: React.ReactNode;
 }
@@ -102,9 +107,9 @@ function DroppableFolderItem({
   onMoveToFolder,
   children,
 }: DroppableFolderItemProps) {
-  // Block dropping on "All Resumes" and "Root" folder
-  const isBlockedFolder = folder.id === 'all' ||
-    (folder.name.toLowerCase() === 'root' && !folder.parentId);
+  // "All Resumes" is a view, not a destination — there is nothing to move a
+  // resume *into*. Every real folder accepts a drop, root included.
+  const isBlockedFolder = folder.id === 'all';
 
   const [{ isOver, canDrop }, drop] = useDrop<DragItem, void, { isOver: boolean; canDrop: boolean }>({
     accept: RESUME_DRAG_TYPE,
@@ -114,7 +119,6 @@ function DroppableFolderItem({
         onMoveToFolder(resumeIds, folder.id);
       }
     },
-    // Cannot drop on "All Resumes" or "Root" folder
     canDrop: () => !isBlockedFolder,
     collect: (monitor) => ({
       isOver: monitor.isOver(),
@@ -161,8 +165,8 @@ function DroppableFolderItem({
       ) : folder.name === 'Archived Resumes' && !folder.parentId ? (
         <Archive className="w-4 h-4 text-amber-600" />
       ) : folder.name.toLowerCase() === 'root' && !folder.parentId ? (
-        // The default landing folder for uploads — its own icon, so it doesn't
-        // read as just another user folder in the system section.
+        // The default landing folder for uploads — its own icon, so it reads
+        // apart from the user's folders in the fixtures section.
         <FolderRoot className="w-4 h-4 text-brand-cyan" />
       ) : isExpanded && hasChildren ? (
         <FolderOpen className="w-4 h-4" />
@@ -174,13 +178,22 @@ function DroppableFolderItem({
           column and run out over the table beside it. */}
       <span className="flex-1 min-w-0 text-left truncate" title={folder.name}>{folder.name}</span>
       <span className="flex-shrink-0 text-xs text-gray-500">({count})</span>
-      {folder.id !== 'all' && !(folder.name.toLowerCase() === 'root' && !folder.parentId) && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
+      {/* No actions on the fixtures: All Resumes is a view, and root and
+          Archived Resumes can't be renamed or deleted, which is most of what
+          the menu is for. Uploading into root happens through the page's
+          Upload button, which already defaults there. */}
+      {folder.id !== 'all'
+        && !(folder.name.toLowerCase() === 'root' && !folder.parentId)
+        && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
         <button
           type="button"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            onShowMenu(hasMenu ? null : folder.id);
+            onShowMenu(
+              hasMenu ? null : folder.id,
+              e.currentTarget.getBoundingClientRect(),
+            );
           }}
           className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-blue-100 text-blue-600 transition-opacity ${
             hasMenu ? 'opacity-100 bg-blue-100' : ''
@@ -229,6 +242,11 @@ export default function FolderTree({
   const [creatingSubFolderFor, setCreatingSubFolderFor] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [showFolderMenu, setShowFolderMenu] = useState<string | null>(null);
+  // Where the open menu sits on screen, plus the trigger it belongs to. The
+  // menu is portalled out of the scrolling list, so it carries its own
+  // viewport coordinates instead of inheriting the row's.
+  const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
@@ -304,6 +322,18 @@ export default function FolderTree({
     };
   }, [isResizing]);
 
+  const openFolderMenu = useCallback((id: string | null, anchor?: DOMRect) => {
+    setShowFolderMenu(id);
+    setMenuAnchor(id && anchor ? anchor : null);
+    setMenuPosition(null);
+  }, []);
+
+  const closeFolderMenu = useCallback(() => {
+    setShowFolderMenu(null);
+    setMenuAnchor(null);
+    setMenuPosition(null);
+  }, []);
+
   useEffect(() => {
     if (!isCreatingFolder && !creatingSubFolderFor && !showFolderMenu) return;
     const handleClickOutside = (e: MouseEvent) => {
@@ -318,25 +348,64 @@ export default function FolderTree({
         setNewFolderName('');
       }
       if (showFolderMenu) {
-        setShowFolderMenu(null);
+        closeFolderMenu();
       }
     };
     // Use `mousedown` so the close fires before any other onClick handlers —
     // prevents the dropdown from re-opening when clicking the trigger again.
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isCreatingFolder, creatingSubFolderFor, showFolderMenu]);
+  }, [isCreatingFolder, creatingSubFolderFor, showFolderMenu, closeFolderMenu]);
 
-  // The actions menu is absolutely positioned inside the scrolling folder list,
-  // so a row near the bottom would open its menu below the visible edge and get
-  // clipped. `block: 'nearest'` nudges the list just far enough to show it.
+  /* The actions menu used to be absolutely positioned inside the folder list,
+     which scrolls (`overflow-y-auto` clips on both axes) — a row near the
+     bottom or a menu wider than the panel got its options and borders sliced
+     off. It is portalled to the body now and placed against the viewport:
+     right-aligned to the trigger, dropping below it when there's room and
+     flipping above when there isn't, clamped away from every edge. Measured in
+     a layout effect so the corrected position lands before paint. */
+  useLayoutEffect(() => {
+    if (!showFolderMenu || !menuAnchor) return;
+    const menu = menuRef.current;
+    if (!menu) return;
+
+    const viewportH = window.innerHeight;
+    const viewportW = window.innerWidth;
+    const height = menu.offsetHeight;
+    const spaceBelow = viewportH - menuAnchor.bottom - FOLDER_MENU_GAP - FOLDER_MENU_EDGE;
+    const spaceAbove = menuAnchor.top - FOLDER_MENU_GAP - FOLDER_MENU_EDGE;
+    // Below unless it doesn't fit and there is genuinely more room above.
+    const flipUp = height > spaceBelow && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(120, flipUp ? spaceAbove : spaceBelow);
+    const clampedHeight = Math.min(height, maxHeight);
+
+    const top = flipUp
+      ? Math.max(FOLDER_MENU_EDGE, menuAnchor.top - FOLDER_MENU_GAP - clampedHeight)
+      : Math.min(menuAnchor.bottom + FOLDER_MENU_GAP, viewportH - FOLDER_MENU_EDGE - clampedHeight);
+    const left = Math.min(
+      Math.max(FOLDER_MENU_EDGE, menuAnchor.right - FOLDER_MENU_WIDTH),
+      viewportW - FOLDER_MENU_EDGE - FOLDER_MENU_WIDTH,
+    );
+
+    setMenuPosition(prev =>
+      prev && prev.top === top && prev.left === left && prev.maxHeight === maxHeight
+        ? prev
+        : { top, left, maxHeight },
+    );
+  }, [showFolderMenu, menuAnchor]);
+
+  // Fixed coordinates go stale the moment anything moves under them, so close
+  // on scroll (capture, to catch the folder list's own scrolling) and resize.
   useEffect(() => {
     if (!showFolderMenu) return;
-    const frame = requestAnimationFrame(() => {
-      menuRef.current?.scrollIntoView({ block: 'nearest' });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [showFolderMenu]);
+    const dismiss = () => closeFolderMenu();
+    window.addEventListener('scroll', dismiss, true);
+    window.addEventListener('resize', dismiss);
+    return () => {
+      window.removeEventListener('scroll', dismiss, true);
+      window.removeEventListener('resize', dismiss);
+    };
+  }, [showFolderMenu, closeFolderMenu]);
 
   // Helper function to flatten folder tree for depth calculation
   const flattenFolders = useCallback((folderList: FolderType[]): FolderType[] => {
@@ -414,9 +483,14 @@ export default function FolderTree({
 
   /**
    * The three fixtures — All Resumes, root and Archived Resumes — are pinned
-   * above the "Folders" heading. They aren't user folders (none can be renamed
-   * or deleted), and keeping them out of the scrolling list means they stay
-   * reachable no matter how far down the user has scrolled.
+   * above the "My Folders" heading. None can be renamed or deleted, and
+   * keeping them out of the scrolling list means they stay reachable no
+   * matter how far down the user has scrolled.
+   *
+   * Root sits here by placement only: it is drawn and handled like any other
+   * folder (plain icon, actions menu, accepts drops) because it holds resumes
+   * like one. Only rename and delete are withheld — the app finds it by name
+   * to default uploads into it.
    */
   const pinnedRank = (folder: FolderType): number => {
     if (folder.id === 'all') return 0;
@@ -525,17 +599,27 @@ export default function FolderTree({
             hasMenu={hasMenu}
             onSelectFolder={onSelectFolder}
             onToggleFolder={toggleFolder}
-            onShowMenu={setShowFolderMenu}
+            onShowMenu={openFolderMenu}
             onMoveToFolder={onMoveToFolder}
           />
         )}
         </div>
 
-        {hasMenu && folder.id !== 'all' && (
+        {hasMenu && folder.id !== 'all' && menuAnchor && typeof document !== 'undefined' && createPortal(
           <div
             ref={menuRef}
-            className="absolute right-2 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50"
-            style={{ marginRight: `${8}px` }}
+            /* `fixed` + portal: outside the folder list's scroll box, so the
+               full option list and its border/shadow always render. It scrolls
+               internally only when the viewport itself is too short. */
+            className="fixed w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[60] overflow-y-auto overscroll-contain"
+            style={{
+              top: menuPosition?.top ?? menuAnchor.bottom + FOLDER_MENU_GAP,
+              left: menuPosition?.left ?? Math.max(FOLDER_MENU_EDGE, menuAnchor.right - FOLDER_MENU_WIDTH),
+              maxHeight: menuPosition?.maxHeight,
+              // Hidden for the one frame before the layout effect measures it,
+              // so it never flashes at the unclamped position.
+              visibility: menuPosition ? 'visible' : 'hidden',
+            }}
           >
             <button
               type="button"
@@ -545,7 +629,7 @@ export default function FolderTree({
                 if (onUploadToFolder) {
                   onUploadToFolder(folder.id);
                 }
-                setShowFolderMenu(null);
+                closeFolderMenu();
               }}
               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
             >
@@ -559,12 +643,12 @@ export default function FolderTree({
                 e.stopPropagation();
                 if (!canCreateSubfolder) {
                   toast.error(`Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)`);
-                  setShowFolderMenu(null);
+                  closeFolderMenu();
                   return;
                 }
                 setCreatingSubFolderFor(folder.id);
                 setIsCreatingFolder(false);
-                setShowFolderMenu(null);
+                closeFolderMenu();
               }}
               disabled={!canCreateSubfolder}
               className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
@@ -587,7 +671,7 @@ export default function FolderTree({
                   e.stopPropagation();
                   setRenameValue(folder.name);
                   setRenamingFolderId(folder.id);
-                  setShowFolderMenu(null);
+                  closeFolderMenu();
                 }}
                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
               >
@@ -605,7 +689,7 @@ export default function FolderTree({
                     e.preventDefault();
                     e.stopPropagation();
                     onDeleteFolder(folder.id);
-                    setShowFolderMenu(null);
+                    closeFolderMenu();
                   }}
                   className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
                 >
@@ -614,7 +698,8 @@ export default function FolderTree({
                 </button>
               </>
             )}
-          </div>
+          </div>,
+          document.body,
         )}
 
         {isCreatingSubFolder && (
@@ -676,9 +761,19 @@ export default function FolderTree({
   };
 
   return (
+    /* The panel is a flex item of the page's `md:flex-row` list row, so it is
+       stretched to the row's height for free — but only as long as it doesn't
+       set that height itself. Its own content (fixtures + a long folder list)
+       used to be taller than the table beside it, so the panel won: the table
+       column got padded out with dead space and the tree ran far past the last
+       table row (and its scrollbar with it). On md+ the content is therefore
+       lifted out of flow — `md:absolute md:inset-0` below — leaving the panel
+       with no intrinsic height, so the table decides the row height and the
+       tree scrolls inside exactly that. `md:min-h-[360px]` keeps it usable
+       when the table is short (a page of two rows, or an empty state). */
     <div
       ref={panelRef}
-      className="relative border-b md:border-b-0 md:border-r border-gray-200 bg-white p-3 sm:p-4 max-md:!w-full max-md:!max-w-full max-md:!min-w-0"
+      className="relative border-b md:border-b-0 md:border-r border-gray-200 bg-white max-md:!w-full max-md:!max-w-full max-md:!min-w-0 md:min-h-[360px]"
       style={{ width: `${width}px`, minWidth: `${MIN_PANEL_WIDTH}px`, maxWidth: `${MAX_PANEL_WIDTH}px` }}
     >
       {/* Resize handle — sits on the panel's right edge, over the divider.
@@ -709,11 +804,17 @@ export default function FolderTree({
         />
       </div>
 
+      {/* Content column. Static (and self-sized) below md where the panel is a
+          full-width band above the table; pinned to the panel's box from md up
+          so the tree fills the row rather than defining it. */}
+      <div className="flex flex-col p-3 sm:p-4 md:absolute md:inset-0 md:overflow-hidden">
       {/* Pinned fixtures — All Resumes, root, Archived Resumes. Named as their
           own section so it's clear why they can't be renamed or deleted. */}
       {pinnedFolders.length > 0 && (
         <>
-          <h3 className="text-gray-900 mb-2 flex items-center gap-2">
+          {/* `shrink-0` throughout the fixed part of the column: only the
+              folder list may give up height when the row is short. */}
+          <h3 className="text-gray-900 mb-2 flex shrink-0 items-center gap-2">
             System Folders
             <span className="h-1.5 w-1.5 rounded-full bg-brand-cyan" aria-hidden="true" />
           </h3>
@@ -721,13 +822,13 @@ export default function FolderTree({
               selection tints, and a section fill sat underneath them. The cyan
               border reads apart from the blue the tree uses for selection, so
               the section never looks like it is the selected one. */}
-          <div className="space-y-1 rounded-lg border border-brand-cyan/30 p-1.5">
+          <div className="shrink-0 space-y-1 rounded-lg border border-brand-cyan/30 p-1.5">
             {pinnedFolders.map(folder => renderFolder(folder))}
           </div>
         </>
       )}
 
-      <div className="flex items-center justify-between mt-4 mb-3">
+      <div className="flex shrink-0 items-center justify-between mt-4 mb-3">
         <h3 className="text-gray-900">My Folders</h3>
         <button
           type="button"
@@ -740,7 +841,7 @@ export default function FolderTree({
       </div>
 
       {isCreatingFolder && (
-        <div className="mb-3" ref={newFolderInputRef}>
+        <div className="mb-3 shrink-0" ref={newFolderInputRef}>
           <input
             type="text"
             value={newFolderName}
@@ -779,21 +880,24 @@ export default function FolderTree({
         </div>
       )}
 
-      {/* The user's own folders scroll on their own. A fixed cap rather than a
-          flex one: the page lays this column out in a plain `flex md:flex-row`
-          with no height of its own, so `flex-1 min-h-0` would have nothing to
-          measure against and a long list would stretch the whole row instead of
-          scrolling. `pr-1 -mr-1` keeps the scrollbar off the folder rows
-          without shifting them. */}
+      {/* The user's own folders take the height the fixtures above them leave
+          and scroll inside it (`min-h-0` — a flex child won't shrink below its
+          content without it). Below md there is no row height to divide up, so
+          it falls back to a fixed cap. `scrollbar-visible` overrides the app's
+          5px near-transparent default: at that size the track was easy to miss
+          entirely, which is why the tree looked like it simply ran off the
+          bottom. `scrollbar-gutter: stable` reserves the track so rows don't
+          shift when it appears. */}
       <div
-        className="space-y-1 overflow-y-auto overscroll-contain pr-1 -mr-1"
-        style={{ maxHeight: `${FOLDER_LIST_MAX_HEIGHT}px` }}
+        className="space-y-1 overflow-y-auto overscroll-contain pr-1 -mr-1 max-h-[420px] md:max-h-none md:min-h-0 md:flex-1 scrollbar-visible"
+        style={{ scrollbarGutter: 'stable' }}
       >
         {regularFolders.length > 0 ? (
           regularFolders.map(folder => renderFolder(folder))
         ) : (
           <p className="px-3 py-2 text-xs text-gray-500">No folders yet.</p>
         )}
+      </div>
       </div>
     </div>
   );

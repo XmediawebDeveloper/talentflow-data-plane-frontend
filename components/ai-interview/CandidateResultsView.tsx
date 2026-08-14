@@ -1236,15 +1236,85 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const totalViolations = violations.length;
   // Recruiter-facing summary (serious/moderate/minor, advisory excluded) — see violationTaxonomy.
   const violationSummary = useMemo(() => summarizeViolations(violations), [violations]);
-  // Mobile QR environment-verification attempts — same source as Integrity
-  // Check's grouped violations, filtered down to just this event family so
-  // the dedicated "QR Verification" tab can show them front-and-center
-  // (video + color/ID match + AI summary) without digging through the
-  // broader Integrity Check list.
-  const envVerificationRecords: ViolationRecord[] = useMemo(
-    () => violations.filter(v => v.event_type.startsWith('environment_verification_')),
-    [violations],
-  );
+  // Mobile QR environment-verification attempts for the "QR Verification"
+  // tab. Sourced DIRECTLY from the database via GET
+  // /ai-interview/{id}/environment-verifications — NOT from
+  // proctoring_violations/environment_verification_* events, which only
+  // exist once the background Celery analysis task finishes. That made the
+  // tab show a false "No QR verification was triggered" for an interview
+  // where the candidate HAD already uploaded successfully but analysis
+  // hadn't run yet (e.g. Celery worker down) — the DB row (status=
+  // "submitted", video_url set) is the actual source of truth and exists
+  // immediately on upload, independent of analysis. See STRICT
+  // IMPLEMENTATION PROMPT, 2026-08-14.
+  type EnvVerificationRecord = {
+    verification_id: string;
+    status: string;
+    analysis_status: string | null;
+    triggered_at: string | null;
+    submitted_at: string | null;
+    video_uploaded: boolean;
+    video_url: string | null;
+    download_url: string | null;
+    video_mime_type: string | null;
+    video_size_bytes: number | null;
+    ai_summary: string | null;
+    flagged_items: Array<Record<string, unknown>> | null;
+    color_match: boolean | null;
+    id_match: boolean | null;
+    rgb_sequence_results: Array<{ second: number; expected_rgb: string; detected_rgb: string | null; distance: number | null; match: boolean }> | null;
+    result_severity: string | null;
+  };
+  const [envVerifications, setEnvVerifications] = useState<EnvVerificationRecord[] | null>(null);
+  const [envVerificationsLoading, setEnvVerificationsLoading] = useState(false);
+  const [envVerificationsError, setEnvVerificationsError] = useState(false);
+  // Per-record local video state — only used for the local-disk storage
+  // fallback (the list endpoint's video_url is null there, same as the
+  // existing recording tab's convention); populated via an authenticated
+  // blob fetch since a plain <video src> can't carry the Authorization
+  // header that endpoint requires.
+  const [envVideoBlobUrls, setEnvVideoBlobUrls] = useState<Record<string, string>>({});
+  const envVideoBlobRequestedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (activeTab !== 'verification' || envVerifications !== null) return;
+    let cancelled = false;
+    setEnvVerificationsLoading(true);
+    console.info(`[ENV-VERIFY] Fetching verification for interview=${liveSession.id}`);
+    api.get(`/ai-interview/${liveSession.id}/environment-verifications`)
+      .then(res => {
+        if (cancelled) return;
+        const list: EnvVerificationRecord[] = Array.isArray(res?.data?.verifications) ? res.data.verifications : [];
+        console.info(`[ENV-VERIFY] Verification found=${list.length > 0} count=${list.length}`);
+        setEnvVerifications(list);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEnvVerificationsError(true);
+        setEnvVerifications([]);
+      })
+      .finally(() => { if (!cancelled) setEnvVerificationsLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, liveSession.id, envVerifications]);
+
+  useEffect(() => {
+    if (!envVerifications || envVerifications.length === 0) return;
+    const toFetch = envVerifications.filter(
+      v => v.video_uploaded && !v.video_url && !envVideoBlobRequestedRef.current.has(v.verification_id)
+    );
+    if (toFetch.length === 0) return;
+    toFetch.forEach(v => envVideoBlobRequestedRef.current.add(v.verification_id));
+    let cancelled = false;
+    toFetch.forEach(async (v) => {
+      try {
+        const res = await api.get(`/ai-interview/environment-verification/${v.verification_id}/recording`, { responseType: 'blob' });
+        if (cancelled) return;
+        setEnvVideoBlobUrls(prev => ({ ...prev, [v.verification_id]: URL.createObjectURL(res.data) }));
+      } catch { /* leave unset — rendered as "Video unavailable" */ }
+    });
+    return () => { cancelled = true; };
+  }, [envVerifications]);
+
   // Legacy inline violations UI retained (disabled) for quick rollback; superseded by IntegrityCheckTab.
   const showLegacyViolations = false;
 
@@ -1324,7 +1394,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     // visible tab nav.
     // { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
-    { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: envVerificationRecords.length || undefined, badgeTone: 'neutral' },
+    { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Integrity Check',  icon: <ShieldAlert className="w-4 h-4" />, badge: violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
   ];
@@ -2724,65 +2794,76 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
             )}
 
             {/* QR Verification Tab — mobile environment-verification attempts for
-                this interview (video + color/ID match + AI summary), pulled from
-                the same proctoring_violations source as Integrity Check. */}
+                this interview, sourced from the environment_verifications DB
+                table directly (GET /ai-interview/{id}/environment-verifications),
+                not from proctoring_violations. See the fetch effect above for why. */}
             {!evaluationPending && activeTab === 'verification' && (
-              envVerificationRecords.length === 0 ? (
+              envVerificationsLoading && envVerifications === null ? (
+                renderPlaceholder('Loading QR verification…')
+              ) : !envVerifications || envVerifications.length === 0 ? (
                 renderPlaceholder(
-                  liveSession.environment_verification_enabled
+                  envVerificationsError
+                    ? 'Could not load QR verification data — please refresh and try again.'
+                    : liveSession.environment_verification_enabled
                     ? 'No QR verification was triggered during this interview.'
                     : 'Mobile Environment Verification was not enabled for this interview.'
                 )
               ) : (
                 <div className="space-y-4">
-                  {envVerificationRecords.map((record, idx) => {
-                    const d = (record.details ?? {}) as Record<string, unknown>;
-                    const videoUrl = typeof d.video_url === 'string' ? d.video_url : null;
-                    const colorMatch = typeof d.color_match === 'boolean' ? d.color_match : null;
-                    const idMatch = typeof d.id_match === 'boolean' ? d.id_match : null;
-                    const aiSummary = typeof d.ai_summary === 'string' ? d.ai_summary : null;
-                    const flaggedItems = Array.isArray(d.flagged_items) ? d.flagged_items as Array<Record<string, unknown>> : [];
-                    const rgbSequenceResults = Array.isArray(d.rgb_sequence_results)
-                      ? d.rgb_sequence_results as Array<{ second: number; expected_rgb: string; detected_rgb: string | null; distance: number | null; match: boolean }>
-                      : [];
+                  {envVerifications.map((v) => {
+                    const videoSrc = v.video_url || envVideoBlobUrls[v.verification_id] || null;
+                    const videoStillLoading = v.video_uploaded && !videoSrc && !envVideoBlobUrls[v.verification_id] && !v.video_url;
                     return (
-                      <div key={idx} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
+                      <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
                         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
                             <ShieldAlert className="w-4 h-4 text-brand-blue" />
                             <span className="text-sm font-semibold text-gray-900">Environment Verification</span>
-                            {record.timestamp && (
-                              <span className="text-xs text-gray-500">{formatTs(record.timestamp)}</span>
+                            {(v.submitted_at || v.triggered_at) && (
+                              <span className="text-xs text-gray-500">{formatTs(v.submitted_at || v.triggered_at || '')}</span>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
-                            {colorMatch !== null && (
-                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ring-1 ${colorMatch ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
-                                Color {colorMatch ? 'matched' : 'mismatch'}
+                            {v.color_match !== null && (
+                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ring-1 ${v.color_match ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                Color {v.color_match ? 'matched' : 'mismatch'}
                               </span>
                             )}
-                            {idMatch !== null && (
-                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ring-1 ${idMatch ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
-                                ID {idMatch ? 'matched' : 'mismatch'}
+                            {v.id_match !== null && (
+                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ring-1 ${v.id_match ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                ID {v.id_match ? 'matched' : 'mismatch'}
                               </span>
                             )}
                           </div>
                         </div>
                         <div className="p-4 sm:p-5 space-y-4">
-                          {videoUrl ? (
-                            <video controls preload="metadata" className="w-full max-w-lg rounded-lg bg-black">
-                              <source src={videoUrl} />
-                            </video>
-                          ) : (
-                            <p className="text-sm text-gray-400 italic">No video available for this attempt.</p>
-                          )}
-                          {rgbSequenceResults.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Candidate Verification Video</p>
+                            {!v.video_uploaded ? (
+                              <p className="text-sm text-red-600 italic">Video upload failed.</p>
+                            ) : videoStillLoading ? (
+                              <p className="text-sm text-gray-400 italic">Loading video…</p>
+                            ) : !videoSrc ? (
+                              <p className="text-sm text-red-600 italic">Video unavailable.</p>
+                            ) : (
+                              <>
+                                <video controls preload="metadata" className="w-full max-w-lg rounded-lg bg-black">
+                                  <source src={videoSrc} type={v.video_mime_type || 'video/webm'} />
+                                </video>
+                                <p className="text-xs text-green-700 font-medium mt-1.5">
+                                  Status: {v.status === 'completed' ? 'Uploaded' : v.status === 'submitted' ? 'Uploaded' : v.status}
+                                  {v.analysis_status === 'pending' || v.analysis_status === 'running' ? ' · Analysis pending' : ''}
+                                </p>
+                              </>
+                            )}
+                          </div>
+                          {v.rgb_sequence_results && v.rgb_sequence_results.length > 0 && (
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">
                                 RGB Challenge Sequence — deterministic per-second check
                               </p>
                               <div className="flex flex-wrap gap-2">
-                                {rgbSequenceResults.map((r) => (
+                                {v.rgb_sequence_results.map((r) => (
                                   <div
                                     key={r.second}
                                     className={`flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-lg ring-1 text-xs font-medium ${r.match ? 'bg-green-50 ring-green-200 text-green-700' : 'bg-red-50 ring-red-200 text-red-600'}`}
@@ -2797,21 +2878,21 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                 ))}
                               </div>
                               <p className="text-[11px] text-gray-400 mt-1.5">
-                                Overall RGB_CHALLENGE = {rgbSequenceResults.every(r => r.match) ? 'PASS' : 'REVIEW_REQUIRED'}
+                                Overall RGB_CHALLENGE = {v.rgb_sequence_results.every(r => r.match) ? 'PASS' : 'REVIEW_REQUIRED'}
                               </p>
                             </div>
                           )}
-                          {aiSummary && (
+                          {v.ai_summary && (
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">AI Summary</p>
-                              <p className="text-sm text-gray-700 leading-relaxed">{aiSummary}</p>
+                              <p className="text-sm text-gray-700 leading-relaxed">{v.ai_summary}</p>
                             </div>
                           )}
-                          {flaggedItems.length > 0 && (
+                          {v.flagged_items && v.flagged_items.length > 0 && (
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Flagged Items</p>
                               <div className="flex flex-wrap gap-1.5">
-                                {flaggedItems.map((item, i) => (
+                                {v.flagged_items.map((item, i) => (
                                   <span key={i} className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 ring-1 ring-red-200">
                                     {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
                                   </span>

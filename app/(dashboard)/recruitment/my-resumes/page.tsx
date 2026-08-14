@@ -25,6 +25,7 @@ const DuplicateResumeModal = dynamic(() => import('@/components/DuplicateResumeM
 import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
 import UploadHistoryDetailModal, { UploadHistoryItem } from '@/components/UploadHistoryDetailModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
+import SelectedCandidatesPanel from '@/components/SelectedCandidatesPanel';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import ResumeVersionSelector from '@/components/ResumeVersionSelector';
 import BulkVersionResolutionModal from '@/components/BulkVersionResolutionModal';
@@ -356,6 +357,13 @@ interface DroppableFolderCardProps {
   hasSubfolders: boolean;
   isArchived: boolean;
   isRoot: boolean;
+  /** Fixtures (root, Archived Resumes) have nothing the menu can offer — they
+   *  can't be renamed or deleted — so their cards drop the hover "+" entirely
+   *  rather than opening a menu of disabled items. */
+  hideActions?: boolean;
+  /** Fill the grid row's height. Only the fixtures row asks for this — see
+   *  renderFolderCard. */
+  stretch?: boolean;
   canUpload?: boolean;
   canCreateSubfolder?: boolean;
   canRename?: boolean;
@@ -374,6 +382,8 @@ function DroppableFolderCard({
   hasSubfolders,
   isArchived,
   isRoot,
+  hideActions = false,
+  stretch = false,
   canUpload = false,
   canCreateSubfolder = false,
   canRename = false,
@@ -393,8 +403,8 @@ function DroppableFolderCard({
         onMoveToFolder(resumeIds, folder.id);
       }
     },
-    // Cannot drop on Root folder
-    canDrop: () => !(folder.name.toLowerCase() === 'root' && !folder.parentId),
+    // Every folder card is a destination — root is an ordinary folder here.
+    canDrop: () => true,
     collect: (monitor) => ({
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
@@ -532,6 +542,8 @@ function DroppableFolderCard({
     <div
       ref={attachRefs}
       className={`group relative bg-white border rounded-xl shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 transition-all ${
+        stretch ? 'h-full' : ''
+      } ${
         // High enough to clear the sections that follow the grid (the resumes
         // table and its own layers), not just the neighbouring cards.
         showActions ? 'z-50' : showSubfolders ? 'z-40' : ''
@@ -542,7 +554,11 @@ function DroppableFolderCard({
             ? 'border-brand-orange/20 hover:border-brand-orange/40'
             : isRoot
               ? 'border-green-200 hover:border-green-400'
-              : 'border-gray-100 hover:border-brand-blue/30 hover:-translate-y-0.5 duration-150'
+              : showSubfolders
+                // Open card reads as the anchor of the list hanging off it.
+                // No lift while open — the panel is pinned to the card's edge.
+                ? 'border-brand-blue/40'
+                : 'border-gray-100 hover:border-brand-blue/30 hover:-translate-y-0.5 duration-150'
       }`}
       onClick={() => onNavigate(folder.id)}
       // The flyout is a descendant, so this doesn't fire while the pointer is
@@ -575,6 +591,7 @@ function DroppableFolderCard({
         {/* Peek toggle. `stopPropagation` so it never triggers the card's own
             navigate — the whole point is to look without leaving. */}
         <div className="relative flex-shrink-0">
+          {!hideActions && (
           <button
             type="button"
             onClick={(e) => {
@@ -594,8 +611,9 @@ function DroppableFolderCard({
           >
             <Plus className="w-4 h-4" />
           </button>
+          )}
 
-          {showActions && (
+          {!hideActions && showActions && (
             <div
               role="menu"
               className={`absolute right-0 w-52 rounded-lg border border-gray-200 bg-white py-1 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] z-50 ${
@@ -660,7 +678,11 @@ function DroppableFolderCard({
             aria-expanded={showSubfolders}
             aria-label={showSubfolders ? `Hide subfolders of ${folder.name}` : `Show subfolders of ${folder.name}`}
             title={showSubfolders ? 'Hide subfolders' : 'Show subfolders'}
-            className="p-1 rounded-md text-gray-500 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors flex-shrink-0 cursor-pointer"
+            className={`p-1 rounded-md transition-colors flex-shrink-0 cursor-pointer ${
+              showSubfolders
+                ? 'bg-brand-blue/10 text-brand-blue'
+                : 'text-gray-500 hover:bg-brand-blue/10 hover:text-brand-blue'
+            }`}
           >
             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ease-in-out ${showSubfolders ? 'rotate-180' : ''}`} />
           </button>
@@ -696,13 +718,24 @@ function DroppableFolderCard({
                 onMouseEnter={() => setPeekChild(childSubfolders > 0 ? child : null)}
                 onFocus={() => setPeekChild(childSubfolders > 0 ? child : null)}
                 title={`Open ${child.name}`}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left border-b border-gray-100 last:border-b-0 transition-colors cursor-pointer ${
-                  peekChild?.id === child.id ? 'bg-brand-blue/5' : 'hover:bg-brand-blue/5'
+                /* The row the pointer is on is the one the third-level flyout
+                   belongs to, so it carries a real highlight — tint, brand
+                   text and a left accent bar — rather than the barely-there
+                   5% wash it had. The transparent accent on idle rows keeps
+                   the labels from shifting as the highlight moves. */
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left border-b border-gray-100 last:border-b-0 border-l-2 transition-colors cursor-pointer ${
+                  peekChild?.id === child.id
+                    ? 'bg-brand-blue/10 border-l-brand-blue'
+                    : 'border-l-transparent hover:bg-brand-blue/10 hover:border-l-brand-blue/40'
                 }`}
               >
                 <span aria-hidden="true" className="text-gray-300 text-xs leading-none">└</span>
-                <Folder className="w-3.5 h-3.5 text-brand-blue/70 flex-shrink-0" />
-                <span className="flex-1 min-w-0 truncate text-xs text-gray-700">{child.name}</span>
+                <Folder className={`w-3.5 h-3.5 flex-shrink-0 ${
+                  peekChild?.id === child.id ? 'text-brand-blue' : 'text-brand-blue/70'
+                }`} />
+                <span className={`flex-1 min-w-0 truncate text-xs ${
+                  peekChild?.id === child.id ? 'font-medium text-brand-blue' : 'text-gray-700'
+                }`}>{child.name}</span>
                 <span className="text-[11px] text-gray-500 flex-shrink-0">
                   {childSubfolders > 0 && `${childSubfolders} sub • `}
                   {child.count || 0}
@@ -740,7 +773,9 @@ function DroppableFolderCard({
                 onNavigate(grandChild.id);
               }}
               title={`Open ${grandChild.name}`}
-              className="w-full flex items-center gap-2 px-3 py-2 text-left border-b border-gray-100 last:border-b-0 hover:bg-brand-blue/5 transition-colors cursor-pointer"
+              // Same highlight as the level above it, so the two panels read
+              // as one list.
+              className="w-full flex items-center gap-2 px-3 py-2 text-left border-b border-gray-100 last:border-b-0 border-l-2 border-l-transparent hover:bg-brand-blue/10 hover:border-l-brand-blue/40 transition-colors cursor-pointer"
             >
               <Folder className="w-3.5 h-3.5 text-brand-blue/70 flex-shrink-0" />
               <span className="flex-1 min-w-0 truncate text-xs text-gray-700">{grandChild.name}</span>
@@ -889,7 +924,12 @@ function DraggableCardResumeRow({
   return (
     <div
       ref={preview as unknown as React.Ref<HTMLDivElement>}
-      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-3 hover:bg-brand-blue/[0.03] cursor-pointer group transition-colors items-center min-w-[1200px] ${
+      /* The select column is a fixed 140px, not `auto`. The header row is its
+         own grid container, so an `auto` column sized to that row's content —
+         once the header carried a "Select all" label it grew and every body
+         row fell out of alignment with it. A shared fixed width keeps the two
+         locked together and stops the column resizing as the label changes. */
+      className={`grid grid-cols-[32px_140px_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-3 hover:bg-brand-blue/[0.03] cursor-pointer group transition-colors items-center min-w-[1200px] ${
         !isLast ? 'border-b border-gray-100' : ''
       } ${selectedResumes.includes(resume.id) ? 'bg-brand-blue/5' : ''} ${isDragging ? 'opacity-50' : ''}`}
       onClick={() => onViewDetails(resume)}
@@ -1069,6 +1109,13 @@ export default function MyResumesPage() {
   const [isUploadHistoryMinimized, setIsUploadHistoryMinimized] = useState(false);
   const [uploadHistoryTab, setUploadHistoryTab] = useState<'current' | 'completed'>('current');
   const [allResumesTotal, setAllResumesTotal] = useState(0);
+  // Mirror of the above that overlapping fetches can read without going through
+  // a stale render closure — see the `isUnfiltered` block in fetchData.
+  const allResumesTotalRef = useRef(0);
+  // Flipped the moment an upload starts here, so the Upload History button goes
+  // live for a first-time user immediately instead of waiting for the resume
+  // list to come back.
+  const [uploadStartedThisSession, setUploadStartedThisSession] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
   const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | 'cancelled' | null>(null);
   const [retryingBatches, setRetryingBatches] = useState<Set<string>>(new Set());
@@ -1123,6 +1170,10 @@ export default function MyResumesPage() {
   // Share Assessment Modal state
   const [isShareAssessmentModalOpen, setIsShareAssessmentModalOpen] = useState(false);
   const [prefilledCandidates, setPrefilledCandidates] = useState<any[]>([]);
+  /* Candidates unticked inside an invite dialog. Kept out here so both the
+     assessment and AI-interview flows can drop someone without disturbing the
+     page's own selection. */
+  const [excludedInviteIds, setExcludedInviteIds] = useState<string[]>([]);
   const [assessmentSearchQuery, setAssessmentSearchQuery] = useState('');
 
   // AI Talent Match modal state
@@ -1159,7 +1210,24 @@ export default function MyResumesPage() {
   // Refs to prevent infinite loop and duplicate API calls
   const hasMountedRef = useRef(false);
   const lastFetchParamsRef = useRef<string>('');
+  // Last search text a fetch went out with — lets the refetch effect tell a
+  // keystroke (worth debouncing) from a folder/sort/page click (not).
+  const lastFetchedQueryRef = useRef<string>('');
   const isFetchingRef = useRef(false);
+  // A fetch that arrived while another was in flight, replayed once it ends.
+  const pendingFetchRef = useRef<{
+    searchTerm?: string;
+    currentFilters?: any;
+    folderId?: string;
+    silent?: boolean;
+    resolve?: () => void;
+  } | null>(null);
+  // Always the newest fetchData. The replay has to go through this rather than
+  // calling itself: page/sort live in the closure, not the arguments, so a
+  // self-call would refetch with the page the *outgoing* render had.
+  const fetchDataRef = useRef<
+    ((searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean) => Promise<void>) | null
+  >(null);
 
   // Persist + restore this list's scroll position and view state so returning
   // from a resume detail page (router.push -> remount) lands the user exactly
@@ -1216,6 +1284,15 @@ export default function MyResumesPage() {
     };
   }, []);
 
+  // The mount fetch can land before AuthProvider has resolved the user, and the
+  // ownership filter below needs an identity to match against — so refetch once
+  // the user arrives, otherwise a real history would stay filtered out.
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchUploadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   // Refetch when filters or folder selection changes
   useEffect(() => {
     // Skip the very first render (fetchData is already called in mount effect above)
@@ -1233,7 +1310,21 @@ export default function MyResumesPage() {
       return;
     }
 
-    console.log('[MyResumes] useEffect - Will fetch in 300ms', {
+    /* Typing is the only thing worth debouncing. A folder click, a sort or a
+       page change is a single deliberate action, and waiting 300ms on it just
+       leaves the previous folder's rows sitting under the new folder's
+       heading. */
+    const isQueryChange = appliedSearchQuery !== lastFetchedQueryRef.current;
+    lastFetchedQueryRef.current = appliedSearchQuery;
+    const delay = isQueryChange ? 300 : 0;
+
+    /* And cover the gap with the same overlay pagination uses — the fetch is
+       silent (rows stay put so the table doesn't collapse), so without this
+       the old rows read as the new folder's contents until the response
+       lands. That is the flicker when clicking between folders. */
+    setIsPaginating(true);
+
+    console.log('[MyResumes] useEffect - Will fetch in', delay, 'ms', {
       appliedSearchQuery,
       filtersKeys: Object.keys(filters),
       selectedFolder,
@@ -1242,7 +1333,6 @@ export default function MyResumesPage() {
       sortBy,
     });
 
-    // Debounce: Wait 300ms before fetching
     const debounceTimer = setTimeout(() => {
       console.log('[MyResumes] useEffect - Fetching data now...');
       lastFetchParamsRef.current = currentParams;
@@ -1253,7 +1343,7 @@ export default function MyResumesPage() {
         setIsPaginating(false);
         console.log('[MyResumes] useEffect - Fetch complete');
       });
-    }, 300);
+    }, delay);
 
     return () => {
       console.log('[MyResumes] useEffect - Cleanup (timer cleared)');
@@ -1320,11 +1410,152 @@ export default function MyResumesPage() {
     })) || [],
   });
 
+  /* `/resumes/upload/batches` is tenant-scoped — it takes no owner filter and
+     its payload doesn't say who created a batch — so a second account in the
+     same tenant was shown everybody else's uploads. Ownership is therefore
+     established two ways, in order:
+
+       1. An owner field on the payload, if the API ever sends one. Authoritative.
+       2. A local ledger of the batch ids THIS account created, kept per user in
+          localStorage and written the moment an upload starts here.
+
+     A batch that matches neither is another account's and is dropped. That
+     means uploads made before this ledger existed, or from another browser,
+     won't be listed — the endpoint gives the client nothing to recognise them
+     by. Scoping the endpoint server-side is the real fix. */
+  const BATCH_OWNER_FIELDS = [
+    'user_id', 'uploaded_by', 'uploaded_by_id', 'uploaded_by_name',
+    'created_by', 'created_by_id', 'owner_id',
+  ];
+
+  const batchLedgerKey = user?.id ? `tf:upload-batches:${user.id}` : null;
+
+  const readBatchLedger = useCallback((): string[] => {
+    if (!batchLedgerKey || typeof window === 'undefined') return [];
+    try {
+      const stored = JSON.parse(localStorage.getItem(batchLedgerKey) || '[]');
+      return Array.isArray(stored) ? stored.map(String) : [];
+    } catch {
+      return [];
+    }
+  }, [batchLedgerKey]);
+
+  const rememberBatchIds = useCallback((ids: string[]) => {
+    if (!batchLedgerKey || typeof window === 'undefined') return;
+    const fresh = ids.filter(Boolean).map(String);
+    if (fresh.length === 0) return;
+    try {
+      // Newest first, capped — a ledger is only useful for recent history.
+      const next = Array.from(new Set([...fresh, ...readBatchLedger()])).slice(0, 200);
+      localStorage.setItem(batchLedgerKey, JSON.stringify(next));
+    } catch {
+      // Private mode / quota — ownership just falls back to the payload check.
+    }
+  }, [batchLedgerKey, readBatchLedger]);
+
+  const batchOwnerValue = (batch: any) =>
+    BATCH_OWNER_FIELDS
+      .map(field => batch?.[field])
+      .find(value => value !== undefined && value !== null && value !== '');
+
+  const isOwnBatch = (batch: any, ledger: string[]) => {
+    const owner = batchOwnerValue(batch);
+    if (owner !== undefined) {
+      const identities = [user?.id, user?.email, user?.name]
+        .filter(Boolean)
+        .map(v => String(v).toLowerCase());
+      return identities.includes(String(owner).toLowerCase());
+    }
+    return ledger.includes(String(batch?.id));
+  };
+
+  const hasBatchFiles = (batch: any) =>
+    (batch?.total_files ?? 0) > 0 || (batch?.items?.length ?? 0) > 0;
+
+  const ownBatchRecords = (batches: any[]) => {
+    const ledger = readBatchLedger();
+    return batches.filter(b => isOwnBatch(b, ledger) && hasBatchFiles(b)).map(mapBatchRecord);
+  };
+
+  /* Single-file uploads go through `/resumes/upload`, which returns a resume
+     and never tells us the batch it landed in. So we snapshot the batch ids
+     before the upload and claim whatever is new afterwards. */
+  const snapshotBatchIds = async (): Promise<string[]> => {
+    try {
+      const response = await resumeService.listUploadBatches(50);
+      return (response?.batches ?? []).map((b: any) => String(b.id));
+    } catch {
+      return [];
+    }
+  };
+
+  /* The batch row for a single upload isn't always written by the time the
+     upload call returns, so one look is not enough — retry with a widening gap
+     before giving up. */
+  const adoptNewBatchIds = async (priorIds: string[], attempts = 4): Promise<string[]> => {
+    const prior = new Set(priorIds);
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        const response = await resumeService.listUploadBatches(50);
+        const fresh = (response?.batches ?? [])
+          .map((b: any) => String(b.id))
+          .filter((id: string) => !prior.has(id));
+        if (fresh.length > 0) {
+          rememberBatchIds(fresh);
+          return fresh;
+        }
+      } catch {
+        // Ignore and retry — a transient failure shouldn't lose the batch.
+      }
+      await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
+    }
+    return [];
+  };
+
+  /* Fallback record for an upload the server never gave us a batch for (single
+     uploads may not create one at all). Kept per user in localStorage so the
+     upload still appears in history after a reload, and dropped as soon as a
+     real batch turns up carrying the same resume. */
+  const localUploadsKey = user?.id ? `tf:upload-local:${user.id}` : null;
+
+  const readLocalUploads = useCallback((): any[] => {
+    if (!localUploadsKey || typeof window === 'undefined') return [];
+    try {
+      const stored = JSON.parse(localStorage.getItem(localUploadsKey) || '[]');
+      return Array.isArray(stored) ? stored : [];
+    } catch {
+      return [];
+    }
+  }, [localUploadsKey]);
+
+  const rememberLocalUpload = useCallback((record: any) => {
+    if (!localUploadsKey || typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(localUploadsKey, JSON.stringify([record, ...readLocalUploads()].slice(0, 50)));
+    } catch {
+      // Private mode / quota — the record just won't survive a reload.
+    }
+  }, [localUploadsKey, readLocalUploads]);
+
+  // Server records win: a local stand-in is hidden once a real batch reports
+  // the same resume, so an upload is never listed twice.
+  const withLocalUploads = (records: any[]) => {
+    const claimed = new Set(
+      records.flatMap(r => (r.statuses ?? []).map((s: any) => s.resumeId).filter(Boolean)),
+    );
+    const locals = readLocalUploads().filter(
+      local => !(local.statuses ?? []).some((s: any) => s.resumeId && claimed.has(s.resumeId)),
+    );
+    return [...locals, ...records].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+  };
+
   // Refresh from the server and replace only the my-resumes records.
   const refreshMyResumesBatches = async () => {
     const response = await resumeService.listUploadBatches(50);
     if (!response?.batches) return;
-    const updated = response.batches.map(mapBatchRecord);
+    const updated = withLocalUploads(ownBatchRecords(response.batches));
     setUploadHistory(prev => [...prev.filter(r => r.source !== 'my-resumes'), ...updated]);
   };
 
@@ -1332,7 +1563,7 @@ export default function MyResumesPage() {
     try {
       const response = await resumeService.listUploadBatches(50);
       if (response?.batches) {
-        setUploadHistory(response.batches.map(mapBatchRecord));
+        setUploadHistory(withLocalUploads(ownBatchRecords(response.batches)));
       }
     } catch (error) {
       console.error('Failed to fetch upload history:', error);
@@ -1490,7 +1721,11 @@ export default function MyResumesPage() {
           clearInterval(pollInterval);
           pollingIntervalsRef.current.delete(pollInterval);
           fetchUploadHistory();
-          fetchData();
+          // Stay in whatever folder/search the user is looking at — an
+          // unfiltered refresh here swapped the table and the header count for
+          // the whole library mid-view.
+          fetchData(appliedSearchQuery, filters, selectedFolder, true);
+          refreshAllResumesTotal();
         }
       } catch {
         clearInterval(pollInterval);
@@ -1505,6 +1740,126 @@ export default function MyResumesPage() {
     }, 600000);
   };
 
+  /* The "All Resumes" badge is the only count not served by the folders API,
+     so a refresh that stays inside a folder can't update it. One page_size=1
+     request gets the exact number without disturbing the current view — used
+     after uploads, which is when the badge would otherwise lag or flicker
+     between the folder total and the global one. */
+  const refreshAllResumesTotal = async () => {
+    try {
+      // Same rule as the All Resumes listing: active resumes only, so the badge
+      // and the table can never disagree about archived ones.
+      const res = await resumeService.list({
+        source: 'my-resumes',
+        page: 1,
+        page_size: 1,
+        include_archived: false,
+      });
+      allResumesTotalRef.current = res.total;
+      setAllResumesTotal(res.total);
+      setFolders(prev => prev.map(f => (f.id === 'all' ? { ...f, count: res.total } : f)));
+    } catch {
+      // Keep the last known figure rather than flashing a wrong one.
+    }
+  };
+
+  /* Bring every folder badge in line with what opening that folder lists, by
+     asking the same endpoint the table uses for each folder's total. The
+     folders API counts stored rows — versions included — so its numbers can
+     read higher than the list ever shows.
+
+     Bounded on purpose: one small request per folder, only from the plain
+     unfiltered view (page load and post-upload refreshes), and skipped
+     entirely for large trees where the fan-out would cost more than the
+     inconsistency. Those keep the server's own count. */
+  const MAX_FOLDERS_TO_RECONCILE = 30;
+  const reconcilingFoldersRef = useRef(false);
+  const lastReconciledRef = useRef('');
+
+  /* Corrections have to outlive the fetch that produced them. Every fetch
+     rebuilds the tree from the API, which reinstalls the raw count — so a
+     folder corrected to 1 rendered as 2 again on the next refresh, and the
+     reconcile pass skipped (it had already seen that identical server
+     snapshot) leaving it there. That is the 1 → 2 flicker.
+
+     Each entry records the server count it was derived from, so the
+     correction is reused only while the server still says the same thing.
+     The moment the real count moves — an upload, a move, a delete — the entry
+     stops matching, the raw number shows, and the reconcile re-runs against
+     the new snapshot. */
+  const correctedCountsRef = useRef<Map<string, { server: number; corrected: number }>>(new Map());
+
+  const rememberCorrection = (id: string, server: number, corrected: number) => {
+    if (corrected === server) correctedCountsRef.current.delete(id);
+    else correctedCountsRef.current.set(id, { server, corrected });
+  };
+
+  const applyCachedCorrections = (list: FolderType[]): FolderType[] =>
+    list.map(f => {
+      const cached = correctedCountsRef.current.get(f.id);
+      return {
+        ...f,
+        count: cached && cached.server === f.count ? cached.corrected : f.count,
+        children: f.children ? applyCachedCorrections(f.children) : f.children,
+      };
+    });
+
+  const reconcileFolderCounts = async (folderList: FolderType[]) => {
+    if (reconcilingFoldersRef.current) return;
+    const flat = flattenAllFolders(folderList).filter(f => f.id !== 'all');
+    if (flat.length === 0 || flat.length > MAX_FOLDERS_TO_RECONCILE) return;
+
+    // The server's numbers are the input to this correction, so re-running it
+    // on an identical snapshot can only produce the same answer. Without this,
+    // every page change on the unfiltered view refired the whole fan-out.
+    const signature = JSON.stringify(flat.map(f => [f.id, f.count]));
+    if (signature === lastReconciledRef.current) return;
+    lastReconciledRef.current = signature;
+
+    reconcilingFoldersRef.current = true;
+    try {
+      const totals = await Promise.all(
+        flat.map(async (folder) => {
+          try {
+            const res = await resumeService.list({
+              source: 'my-resumes',
+              folder_id: folder.id,
+              page: 1,
+              page_size: 1,
+              // Folder badges count what the folder lists — and Archived
+              // Resumes lists archived rows, so this mirrors the table's rule.
+              include_archived: true,
+            });
+            return [folder.id, res.total] as const;
+          } catch {
+            return [folder.id, null] as const;
+          }
+        }),
+      );
+
+      const byId = new Map(
+        totals.filter((entry): entry is readonly [string, number] => entry[1] !== null),
+      );
+      if (byId.size === 0) return;
+
+      /* Downward only. A folder's listing coming back larger than its stored
+         count means the query reached past this folder, and a badge must never
+         claim more than the folder holds. Recorded against the server count
+         these were measured from, so later fetches can reuse them. */
+      flat.forEach(f => {
+        const listTotal = byId.get(f.id);
+        if (listTotal === undefined) return;
+        rememberCorrection(f.id, f.count, Math.min(f.count, listTotal));
+      });
+
+      // Functional update: a fetch may have replaced `folders` while these
+      // requests were in flight.
+      setFolders(prev => applyCachedCorrections(prev));
+    } finally {
+      reconcilingFoldersRef.current = false;
+    }
+  };
+
   const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean) => {
     console.log('[FETCH] fetchData called', {
       searchTerm,
@@ -1514,10 +1869,22 @@ export default function MyResumesPage() {
       silent,
     });
 
-    // Prevent concurrent fetches - stops flickering from rapid calls
+    /* Prevent concurrent fetches — but queue the losing call instead of
+       dropping it. On a browser refresh the mount fetch (defaults) and the
+       restored-state fetch (saved folder/page/filters) land within ~300ms of
+       each other; dropping the second left the table showing something the
+       restored controls didn't describe, and `lastFetchParamsRef` had already
+       recorded it as done, so nothing ever re-ran it. */
     if (isFetchingRef.current) {
-      console.log('[FETCH] Already fetching, skipping duplicate call');
-      return;
+      console.log('[FETCH] Already fetching, queueing this call');
+      // Resolve as a displaced entry rather than hanging: whoever awaited it
+      // (the refetch effect, to drop its overlay) must not wait forever.
+      pendingFetchRef.current?.resolve?.();
+      /* Returns a promise that settles when the REPLAY finishes, not now —
+         callers use it to decide when the table has really caught up. */
+      return new Promise<void>(resolve => {
+        pendingFetchRef.current = { searchTerm, currentFilters, folderId, silent, resolve };
+      });
     }
 
     isFetchingRef.current = true;
@@ -1533,11 +1900,24 @@ export default function MyResumesPage() {
         'name-desc': 'name-desc',
       };
 
+      // Everything a plain "show me my resumes" request carries. Any key beyond
+      // these means the response total describes a narrowed view, not the
+      // user's whole library.
+      const BASE_SEARCH_PARAM_KEYS = ['source', 'page', 'page_size', 'sort_by', 'include_archived'];
+
       const searchParams: any = {
         source: 'my-resumes',
         page: currentPage,
         page_size: itemsPerPage,
         sort_by: sortByMap[sortBy] || 'date-desc',
+        /* All Resumes means every ACTIVE resume the user has — whatever folder
+           it sits in, root included — and never an archived one. Archiving
+           moves the resume into the Archived Resumes folder as well as setting
+           the flag, so asking for archived rows only makes sense once a folder
+           is named; that is how the Archived Resumes folder still lists its
+           contents. Sent explicitly rather than left to the server's default,
+           which was returning archived rows in the unfiltered view. */
+        include_archived: !!(folderId && folderId !== 'all'),
       };
 
       // Add folder filter if not viewing all.
@@ -1697,17 +2077,26 @@ export default function MyResumesPage() {
         }
       }
 
-      // The current API call may be filtered by folder/search/skills — its
-      // total reflects the filtered view, not the user's whole library. Only
-      // refresh the pinned global count when no such filters are applied.
-      const isUnfiltered =
-        (!folderId || folderId === 'all') &&
-        !searchTerm?.trim() &&
-        !currentFilters;
-      const nextAllTotal = isUnfiltered ? resumeResponse.total : allResumesTotal;
+      /* The current API call may be filtered by folder/search/skills — its
+         total reflects the filtered view, not the user's whole library, so the
+         pinned "All Resumes" count only takes it when nothing narrowed the
+         request. Read that off the params actually sent rather than the
+         arguments: the refetch effect always passes a `filters` object, empty
+         or not, and the old `!currentFilters` test read every one of those as
+         filtered — so the global total went stale the moment the page did
+         anything but its very first fetch.
+
+         The carry-over value comes from a ref, not state. Two fetches overlap
+         on a browser refresh (mount + restored view) and the second one's
+         closure predates the first one's `setAllResumesTotal`, so reading
+         state here wrote the badge back to 0 — that's the count going missing
+         after a refresh. */
+      const isUnfiltered = Object.keys(searchParams).every(key => BASE_SEARCH_PARAM_KEYS.includes(key));
       if (isUnfiltered) {
+        allResumesTotalRef.current = resumeResponse.total;
         setAllResumesTotal(resumeResponse.total);
       }
+      const nextAllTotal = allResumesTotalRef.current;
 
       // Add "All Resumes" virtual folder at the top
       const allResumesFolder: FolderType = {
@@ -1716,23 +2105,93 @@ export default function MyResumesPage() {
         count: nextAllTotal,
       };
 
-      const convertedFolders: FolderType[] = [
-        allResumesFolder,
-        ...apiFolders,
-      ];
+      /* The folders API's `resume_count` counts rows the resume list doesn't
+         show — extra version rows above all — so a folder holding a single
+         resume uploaded twice advertised "(2)" while opening it listed one.
+         When this request was scoped to exactly one folder and nothing else,
+         its total IS that folder's listing, so take it over the API's count. */
+      const isFolderOnly =
+        !!searchParams.folder_id &&
+        Object.keys(searchParams).every(
+          key => BASE_SEARCH_PARAM_KEYS.includes(key) || key === 'folder_id',
+        );
+
+      /* Only ever downward. This correction exists to drop rows the list hides
+         (extra versions and the like), so a listing that comes back BIGGER
+         than the folder's stored count is measuring something else — a filter
+         the server widened, not this folder's contents — and taking it would
+         blow a folder holding one resume up to the whole library.
+
+         Recorded rather than applied inline: `applyCachedCorrections` below is
+         the single place a correction reaches the screen, so the badge reads
+         the same on this fetch and every later one. */
+      if (isFolderOnly) {
+        const target = flattenAllFolders(apiFolders).find(f => f.id === searchParams.folder_id);
+        if (target) {
+          rememberCorrection(target.id, target.count, Math.min(target.count, resumeResponse.total));
+        }
+      }
+
+      // Raw server counts, kept aside — the reconcile pass has to compare
+      // against these, not against numbers it corrected itself.
+      const rawFolders: FolderType[] = [allResumesFolder, ...apiFolders];
 
       setResumes(convertedResumes);
       setTotalItems(resumeResponse.total);
       setTotalPages(resumeResponse.total_pages);
-      setFolders(convertedFolders);
+      setFolders(applyCachedCorrections(rawFolders));
+
+      // Same correction for every other folder, so the badges are right before
+      // the user opens them. Only off the unfiltered view — see the helper.
+      if (isUnfiltered) reconcileFolderCounts(rawFolders);
+
+      /* A page number restored from the last visit can point past the end of
+         the list — fewer resumes than before, a different account, a narrower
+         filter. The API then answers with an empty page and the table reads
+         "No resumes found" even though the user has resumes. Step back to the
+         last page that holds data; the params effect refetches. */
+      if (resumeResponse.items.length === 0 && resumeResponse.total > 0) {
+        const lastPage = Math.max(1, resumeResponse.total_pages || 1);
+        if (currentPage > lastPage) {
+          console.log('[FETCH] Page', currentPage, 'is past the end — falling back to', lastPage);
+          setCurrentPage(lastPage);
+        }
+      }
+
+      /* Same story for the restored folder. The view snapshot is stored per
+         tab, not per user, so signing in as someone else keeps the previous
+         account's folder id — and filtering by a folder this user doesn't have
+         returns nothing at all. Fall back to All Resumes. */
+      if (selectedFolder && selectedFolder !== 'all') {
+        const folderExists = (list: FolderType[]): boolean =>
+          list.some(f => f.id === selectedFolder || (f.children ? folderExists(f.children) : false));
+        if (!folderExists(rawFolders)) {
+          console.log('[FETCH] Folder', selectedFolder, 'is not in this account — showing All Resumes');
+          setSelectedFolder('all');
+        }
+      }
     } catch (error) {
       console.error('Failed to fetch data:', error);
       toast.error('Failed to load resumes');
     } finally {
       setLoading(false);
       isFetchingRef.current = false; // Reset flag to allow next fetch
+
+      // Replay whatever arrived while this one was running (see the guard),
+      // then settle the promise that call handed back.
+      const queued = pendingFetchRef.current;
+      if (queued) {
+        pendingFetchRef.current = null;
+        Promise.resolve(
+          (fetchDataRef.current ?? fetchData)(
+            queued.searchTerm, queued.currentFilters, queued.folderId, queued.silent,
+          ),
+        ).finally(() => queued.resolve?.());
+      }
     }
   };
+
+  fetchDataRef.current = fetchData;
 
   // Helper function to flatten all folders (including nested children)
   const flattenAllFolders = useCallback((folderList: FolderType[]): FolderType[] => {
@@ -1754,6 +2213,15 @@ export default function MyResumesPage() {
     const allFolders = flattenAllFolders(folders);
     return allFolders.find(f => f.id === folderId);
   }, [folders, flattenAllFolders]);
+
+  /* Name of the folder a resume actually lives in, for the Folder badge in the
+     aggregated All Resumes table. A resume has exactly one folder at any depth,
+     so this is a plain lookup — All Resumes is a view over those folders, never
+     a folder a resume can be "in". */
+  const getResumeFolderName = useCallback((folderId?: string): string | undefined => {
+    if (!folderId) return undefined;
+    return getFolderById(folderId)?.name;
+  }, [getFolderById]);
 
   // Get direct children folders of a parent folder
   const getChildrenFolders = useCallback((parentId: string | null): FolderType[] => {
@@ -1870,10 +2338,39 @@ export default function MyResumesPage() {
   const confirmDeleteResumes = async () => {
     const { ids } = deleteResumeConfirm;
     setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] });
+    // Where they were, so their folders can be decremented. Read before the
+    // rows leave state.
+    const deletedFrom = ids
+      .map(id => resumes.find(r => r.id === id))
+      .filter((r): r is Resume => !!r);
     try {
       await Promise.all(ids.map(id => resumeService.delete(id)));
       setResumes(prev => prev.filter(r => !ids.includes(r.id)));
       setSelectedResumes(prev => prev.filter(id => !ids.includes(id)));
+
+      /* A deleted resume leaves its folder AND the aggregate. Archived ones
+         were never in the All Resumes total, so only the active ones come off
+         it — otherwise emptying the Archived folder would drive it negative. */
+      const removedPerFolder = new Map<string, number>();
+      let activeRemoved = 0;
+      deletedFrom.forEach(r => {
+        if (r.folderId) removedPerFolder.set(r.folderId, (removedPerFolder.get(r.folderId) || 0) + 1);
+        if (!r.isArchived) activeRemoved += 1;
+      });
+      allResumesTotalRef.current = Math.max(0, allResumesTotalRef.current - activeRemoved);
+      setAllResumesTotal(allResumesTotalRef.current);
+      setFolders(prev => {
+        const patch = (list: FolderType[]): FolderType[] =>
+          list.map(f => ({
+            ...f,
+            count: f.id === 'all'
+              ? allResumesTotalRef.current
+              : Math.max(0, f.count - (removedPerFolder.get(f.id) || 0)),
+            children: f.children ? patch(f.children) : f.children,
+          }));
+        return patch(prev);
+      });
+
       toast.success(ids.length === 1 ? 'Resume deleted' : `${ids.length} resume(s) deleted`);
     } catch (error) {
       toast.error('Failed to delete resume(s)');
@@ -1881,11 +2378,41 @@ export default function MyResumesPage() {
   };
 
   const handleMoveToFolder = async (resumeIds: string[], folderId: string) => {
+    // Source folders, captured before the rows are re-pointed.
+    const movedFrom = resumeIds
+      .map(id => resumes.find(r => r.id === id)?.folderId)
+      .filter((id): id is string => !!id);
     try {
       await Promise.all(resumeIds.map(id => resumeService.move(id, folderId)));
       setResumes(prev => prev.map(r =>
         resumeIds.includes(r.id) ? { ...r, folderId } : r
       ));
+
+      /* A move changes which folder owns the resume, never how many resumes
+         exist — so the two folder counts trade and the All Resumes total is
+         left alone. The Folder badge follows `folderId`, updated above. */
+      const leaving = new Map<string, number>();
+      movedFrom.forEach(id => {
+        if (id !== folderId) leaving.set(id, (leaving.get(id) || 0) + 1);
+      });
+      const arriving = movedFrom.filter(id => id !== folderId).length;
+      if (leaving.size > 0 || arriving > 0) {
+        setFolders(prev => {
+          const patch = (list: FolderType[]): FolderType[] =>
+            list.map(f => {
+              if (f.id === 'all') return { ...f, children: f.children ? patch(f.children) : f.children };
+              const gained = f.id === folderId ? arriving : 0;
+              const lost = leaving.get(f.id) || 0;
+              return {
+                ...f,
+                count: Math.max(0, f.count + gained - lost),
+                children: f.children ? patch(f.children) : f.children,
+              };
+            });
+          return patch(prev);
+        });
+      }
+
       setSelectedResumes([]);
       toast.success(`${resumeIds.length} resume(s) moved`);
     } catch (error) {
@@ -1932,15 +2459,32 @@ export default function MyResumesPage() {
         await resumeService.move(id, archivedFolder.id);
       }));
 
-      // Update local state - set archived flag AND move to archived folder
-      setResumes(prev => prev.map(r =>
-        resumeIds.includes(r.id)
-          ? { ...r, isArchived: true, archivedAt: new Date().toISOString(), folderId: archivedFolder.id }
-          : r
-      ));
+      /* Archiving moves the resume into Archived Resumes, so it has left
+         whatever the user is looking at — unless they are looking AT Archived
+         Resumes. The old code only flipped the flag on the row, which left it
+         sitting in its original folder wearing an "Archived" badge until a
+         refresh re-queried the server and it finally disappeared. Drop it from
+         the list here instead, and keep it (updated) only in the archived view. */
+      const viewingArchived =
+        selectedFolder === archivedFolder.id || cardViewFolder === archivedFolder.id;
+      setResumes(prev =>
+        viewingArchived
+          ? prev.map(r =>
+              resumeIds.includes(r.id)
+                ? { ...r, isArchived: true, archivedAt: new Date().toISOString(), folderId: archivedFolder.id }
+                : r
+            )
+          : prev.filter(r => !resumeIds.includes(r.id))
+      );
 
-      // Update folder counts
+      // Update folder counts. All Resumes counts active resumes only, so
+      // archiving takes them out of it as well as out of their old folder.
+      allResumesTotalRef.current = Math.max(0, allResumesTotalRef.current - resumeIds.length);
+      setAllResumesTotal(allResumesTotalRef.current);
       setFolders(prev => prev.map(f => {
+        if (f.id === 'all') {
+          return { ...f, count: allResumesTotalRef.current };
+        }
         if (f.id === archivedFolder.id) {
           return { ...f, count: f.count + resumeIds.length };
         }
@@ -1953,6 +2497,11 @@ export default function MyResumesPage() {
       }));
 
       setSelectedResumes([]);
+      /* Re-query the view the same way unarchive does: removing the rows above
+         keeps the page correct, but the server owns the page's totals and what
+         backfills from the next page. */
+      isFetchingRef.current = false;
+      fetchData(appliedSearchQuery, filters, selectedFolder, true);
       toast.success(`${resumeIds.length} resume(s) archived`);
     } catch (error) {
       toast.error('Failed to archive resumes');
@@ -2012,7 +2561,13 @@ export default function MyResumesPage() {
       restorations.forEach(({ target }) => {
         restoredCounts.set(target, (restoredCounts.get(target) || 0) + 1);
       });
+      // …and back into All Resumes, which counts active resumes only.
+      allResumesTotalRef.current += resumeIds.length;
+      setAllResumesTotal(allResumesTotalRef.current);
       setFolders(prev => prev.map(f => {
+        if (f.id === 'all') {
+          return { ...f, count: allResumesTotalRef.current };
+        }
         if (restoredCounts.has(f.id)) {
           return { ...f, count: f.count + (restoredCounts.get(f.id) || 0) };
         }
@@ -2458,19 +3013,30 @@ export default function MyResumesPage() {
     toast.success(`Scoring ${newResumeIds.length} new candidate(s), skipped ${alreadyScoredIds.length} duplicate(s)`);
   };
 
-  const handleCreateFolder = async (name: string, parentId?: string) => {
+  const handleCreateFolder = async (name: string, rawParentId?: string) => {
+    /* Trim before anything else. The tree passes its input straight through,
+       so "Mani " reached the duplicate check as a different string from
+       "Mani" and slipped past it — that is how two same-named folders ended
+       up side by side inside a subfolder. Everything below, including the
+       create call, uses the trimmed name. */
+    const folderName = (name ?? '').trim();
+    const parentId = rawParentId;
+    if (!folderName) {
+      toast.error('Folder name cannot be empty');
+      return;
+    }
     try {
       if (!canCreateNestedFolder(parentId)) {
         toast.error(`Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)`);
         return;
       }
-      if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
+      if (/<[^>]+>/.test(folderName) || /javascript:|data:|vbscript:/i.test(folderName)) {
         toast.error('Folder name must not contain HTML or script content');
         return;
       }
       // The inputs cap this with maxLength; the check is here as well because
       // this handler is the single point every entry path funnels through.
-      if (name.trim().length > FOLDER_NAME_MAX_LENGTH) {
+      if (folderName.length > FOLDER_NAME_MAX_LENGTH) {
         toast.error(`Folder name must be ${FOLDER_NAME_MAX_LENGTH} characters or fewer`);
         return;
       }
@@ -2487,20 +3053,39 @@ export default function MyResumesPage() {
         return result;
       };
 
-      // Check if folder with same name already exists ANYWHERE (globally unique)
+      /* Names are compared trimmed and case-insensitively. Siblings are
+         checked first so the message can say where the clash is — a subfolder
+         called "Mani" next to another "Mani" is the case this guard exists
+         for — then the global rule (names are unique across the whole tree)
+         catches everything else. */
       const allFolders = getAllFolders(folders);
-      const existingFolder = allFolders.find(f =>
-        f.name.toLowerCase() === name.toLowerCase() &&
-        f.id !== 'all'
-      );
+      const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
-      if (existingFolder) {
-        toast.error(`Folder "${name}" already exists`);
+      const duplicateSibling = allFolders.find(f =>
+        f.id !== 'all' &&
+        (f.parentId || undefined) === (parentId || undefined) &&
+        sameName(f.name, folderName)
+      );
+      if (duplicateSibling) {
+        const parentName = parentId ? getFolderById(parentId)?.name : undefined;
+        toast.error(
+          parentName
+            ? `"${folderName}" already exists inside "${parentName}"`
+            : `Folder "${folderName}" already exists`
+        );
         return;
       }
 
-      console.log('[DEBUG] Creating folder:', { name, parentId });
-      const newFolder = await folderService.create(name, parentId);
+      const existingFolder = allFolders.find(f =>
+        f.id !== 'all' && sameName(f.name, folderName)
+      );
+      if (existingFolder) {
+        toast.error(`Folder "${folderName}" already exists`);
+        return;
+      }
+
+      console.log('[DEBUG] Creating folder:', { name: folderName, parentId });
+      const newFolder = await folderService.create(folderName, parentId);
       console.log('[DEBUG] Folder created:', newFolder);
 
       // Reload folders from backend to get proper tree structure
@@ -2614,24 +3199,26 @@ export default function MyResumesPage() {
         return result;
       };
 
-      // Check if folder with same name already exists ANYWHERE (globally unique)
+      /* Compared trimmed, like creation — otherwise a rename is a second way
+         to land two same-named folders side by side. */
+      const trimmedName = name.trim();
       const allFolders = getAllFolders(folders);
       const existingFolder = allFolders.find(f =>
-        f.name.toLowerCase() === name.toLowerCase() &&
+        f.name.trim().toLowerCase() === trimmedName.toLowerCase() &&
         f.id !== id &&
         f.id !== 'all'
       );
 
       if (existingFolder) {
-        toast.error(`Folder "${name}" already exists`);
+        toast.error(`Folder "${trimmedName}" already exists`);
         return;
       }
 
-      await folderService.update(id, { name });
+      await folderService.update(id, { name: trimmedName });
       const renameInTree = (folderList: FolderType[]): FolderType[] =>
         folderList.map((folder) => ({
           ...folder,
-          name: folder.id === id ? name : folder.name,
+          name: folder.id === id ? trimmedName : folder.name,
           children: folder.children ? renameInTree(folder.children) : folder.children,
         }));
       setFolders(prev => renameInTree(prev));
@@ -2764,7 +3351,7 @@ export default function MyResumesPage() {
         const allResumesFolder: FolderType = {
           id: 'all',
           name: 'All Resumes',
-          count: allResumesTotal,
+          count: allResumesTotalRef.current,
           children: [],
         };
         setFolders([allResumesFolder, ...apiFolders]);
@@ -2776,6 +3363,15 @@ export default function MyResumesPage() {
       // If we deleted resumes, remove them from local state
       if (deleteResumes && result.deleted_resumes > 0) {
         setResumes(prev => prev.filter(r => r.folderId !== folderId));
+      }
+
+      /* Deleting a folder can take active resumes with it, and moving its
+         contents changes which folders own them — so re-read the aggregate
+         rather than trying to guess the delta from the server's summary. */
+      refreshAllResumesTotal();
+      if (deleteResumes && result.deleted_resumes > 0) {
+        isFetchingRef.current = false;
+        fetchData(appliedSearchQuery, filters, selectedFolder, true);
       }
 
       // If viewing a deleted folder, redirect to root
@@ -2853,6 +3449,12 @@ export default function MyResumesPage() {
     error?: string;
     existingResume?: { id: string; candidateName: string; uploadedAt?: string };
   }> => {
+    setUploadStartedThisSession(true);
+
+    // Which batches existed before this upload — anything new afterwards is
+    // ours, which is the only way to claim a single-file upload's batch.
+    const priorBatchIds = await snapshotBatchIds();
+
     // If no folder is selected or "All Resumes" is selected, use or create "root" folder
     let targetFolderId = folderId;
     if (!targetFolderId || targetFolderId === 'all') {
@@ -2905,10 +3507,49 @@ export default function MyResumesPage() {
         const converted = convertApiResume(r);
         setResumes(prev => [converted, ...prev]);
         toast.success('Resume uploaded successfully');
+
+        /* Record it in history right away. The single-upload endpoint returns
+           a resume, not a batch, and the server may not create a batch row for
+           it at all — without this the upload would never appear in the
+           history. If a real batch does turn up carrying this resume id, the
+           merge in `withLocalUploads` hides this stand-in. */
+        const localRecord = {
+          id: `local-${r.id}`,
+          date: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          fileName: files[0].name,
+          totalFiles: 1,
+          completed: 1,
+          pending: 0,
+          duplicated: 0,
+          versioned: 0,
+          errors: 0,
+          cancelled: 0,
+          status: 'completed',
+          source: 'my-resumes' as const,
+          statuses: [{
+            id: `local-item-${r.id}`,
+            fileName: files[0].name,
+            status: 'completed',
+            errorMessage: null,
+            candidateName: r.candidate_name || null,
+            resumeId: r.id,
+          }],
+        };
+        rememberLocalUpload(localRecord);
+        setUploadHistory(prev => [localRecord, ...prev]);
+
         // Background refresh to get correct uploaded_by_name, version counts, etc.
-        setTimeout(() => {
+        setTimeout(async () => {
           isFetchingRef.current = false; // Reset guard so fetchData can run
-          fetchData(undefined, undefined, undefined, true);
+          // Refresh the view the user is actually on, and update the pinned
+          // All Resumes count separately — an unfiltered refresh here made the
+          // folder view and its badge jump to the whole library for a moment.
+          fetchData(appliedSearchQuery, filters, selectedFolder, true);
+          refreshAllResumesTotal();
+          // Claim the batch this upload created before reading history back,
+          // otherwise the ownership filter would treat it as somebody else's.
+          await adoptNewBatchIds(priorBatchIds);
           fetchUploadHistory();
         }, 500);
         return {
@@ -3027,6 +3668,8 @@ export default function MyResumesPage() {
 
       // Start bulk upload - returns immediately with batch info
       const batch = await resumeService.uploadBulk(files, targetFolderId);
+      // Claim it straight away — every later refresh filters on this ledger.
+      rememberBatchIds([batch.id]);
 
       // Fetch full status with items immediately
       let initialStatuses: any[] = [];
@@ -3110,9 +3753,11 @@ export default function MyResumesPage() {
             clearInterval(pollInterval);
             pollingIntervalsRef.current.delete(pollInterval); // Remove from tracking
 
-            // Refresh upload history and resume list
+            // Refresh upload history and resume list — keeping the user's
+            // folder/search in place, with the global count refreshed on its own.
             fetchUploadHistory();
-            fetchData();
+            fetchData(appliedSearchQuery, filters, selectedFolder, true);
+            refreshAllResumesTotal();
           }
         } catch (pollError) {
           console.error('Error polling batch status:', pollError);
@@ -3243,6 +3888,9 @@ export default function MyResumesPage() {
   // Handle duplicate resolution
   const handleResolveDuplicates = async (resolutions: { fileIndex: number; action: 'discard' | 'overwrite' | 'version' }[]) => {
     const toastId = toast.loading('Processing duplicate resolution...');
+    // Same as a plain upload: whatever batch this creates has to be claimed,
+    // or the ownership filter will read it as another account's.
+    const priorBatchIds = await snapshotBatchIds();
 
     try {
       for (const resolution of resolutions) {
@@ -3269,9 +3917,11 @@ export default function MyResumesPage() {
         }
       }
       // Refresh full list from server to get correct data
-      setTimeout(() => {
+      setTimeout(async () => {
         isFetchingRef.current = false;
-        fetchData(undefined, undefined, undefined, true);
+        fetchData(appliedSearchQuery, filters, selectedFolder, true);
+        refreshAllResumesTotal();
+        await adoptNewBatchIds(priorBatchIds);
         fetchUploadHistory();
       }, 500);
     } catch (error: any) {
@@ -3292,6 +3942,15 @@ export default function MyResumesPage() {
       </div>
     );
   }
+
+  /* Upload History is only actionable once THIS user has uploaded something.
+     The signal is their own unfiltered resume total (`allResumesTotal` comes
+     from the user-scoped `source: 'my-resumes'` list, refreshed only when no
+     folder/search/filter narrows it) plus any upload started in this session.
+     Deliberately NOT the batches endpoint: `/resumes/upload/batches` takes no
+     owner filter, so in a shared tenant it hands a brand-new user everyone
+     else's batches — which is exactly what kept this button enabled. */
+  const hasUploadHistory = allResumesTotal > 0 || uploadStartedThisSession;
 
   return (
     <FeatureGate feature="resume_upload">
@@ -3319,7 +3978,13 @@ export default function MyResumesPage() {
           {canViewMyResumes && (
             <button
               onClick={openUploadHistoryModal}
-              className="relative flex items-center justify-center gap-1.5 bg-white text-gray-700 px-3 py-2 rounded-md border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm flex-1 sm:flex-initial"
+              disabled={!hasUploadHistory}
+              title={hasUploadHistory ? 'View upload history' : 'No uploads yet'}
+              className={`relative flex items-center justify-center gap-1.5 bg-white px-3 py-2 rounded-md border transition-colors text-sm flex-1 sm:flex-initial ${
+                hasUploadHistory
+                  ? 'text-gray-700 border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue cursor-pointer'
+                  : 'text-gray-400 border-gray-200 opacity-60 cursor-not-allowed'
+              }`}
             >
               <History className="w-4 h-4" />
               <span className="hidden sm:inline">Upload History</span>
@@ -3604,6 +4269,10 @@ export default function MyResumesPage() {
                     folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
                   }
                   archivedFolderId={folders.find(f => f.name === 'Archived Resumes' && !f.parentId)?.id}
+                  /* All Resumes aggregates every folder, so each row names the
+                     one folder it actually lives in. Inside a folder the column
+                     would repeat that folder on every row, so it is dropped. */
+                  getFolderName={selectedFolder === 'all' ? getResumeFolderName : undefined}
                 />
               </div>
               {totalPages > 0 && (
@@ -3658,6 +4327,8 @@ export default function MyResumesPage() {
 
               // The fixtures, split out of the folder list so the root view can
               // lead with them — same grouping the list view's folder tree uses.
+              // Root belongs to this group by placement only: its card is drawn
+              // like any other folder's (see renderFolderCard).
               const isSystemFolder = (f: FolderType) =>
                 !f.parentId && (f.name.toLowerCase() === 'root' || f.name === 'Archived Resumes');
               const systemRank = (f: FolderType) => (f.name.toLowerCase() === 'root' ? 0 : 1);
@@ -3720,13 +4391,18 @@ export default function MyResumesPage() {
               };
               const visibleFolderResumes = folderResumes.filter(resumeMatchesGridFilter);
               const resumeControlsActive = !!searchQuery.trim() || cardResumeFilter !== 'all' || activeServerResumeFilterCount > 0;
-              const renderFolderCard = (folder: FolderType) => {
+              /* `stretch` is for the fixtures row only, where the three cards
+                 must match height. The user's own folder grids must NOT use it:
+                 those cells grow when a card expands its subfolder list or
+                 opens the inline name input, and a stretched row would drag
+                 every neighbour to that height. */
+              const renderFolderCard = (folder: FolderType, stretch = false) => {
                 const isArchivedFolder = folder.name === 'Archived Resumes' && !folder.parentId;
                 const isRootFolder = folder.name.toLowerCase() === 'root' && !folder.parentId;
                 const isSystemCard = isArchivedFolder || isRootFolder;
 
                 return (
-                  <div key={folder.id} className="space-y-2">
+                  <div key={folder.id} className={`space-y-2 ${stretch ? 'h-full' : ''}`}>
                     <DroppableFolderCard
                       folder={folder}
                       // Use folder.count from the API (total) rather than recounting
@@ -3734,7 +4410,14 @@ export default function MyResumesPage() {
                       resumeCount={folder.count || 0}
                       hasSubfolders={(folder.children && folder.children.length > 0) || false}
                       isArchived={isArchivedFolder}
-                      isRoot={isRootFolder}
+                      // Rendered as an ordinary folder card — same icon, same
+                      // colours, its real name. Only the rename/delete guards
+                      // below still treat it as special.
+                      isRoot={false}
+                      // Root and Archived Resumes offer nothing renameable or
+                      // deletable, so their cards drop the hover "+".
+                      hideActions={isSystemCard}
+                      stretch={stretch}
                       canUpload={canUploadMyResumes}
                       canCreateSubfolder={canUploadMyResumes && canCreateNestedFolder(folder.id)}
                       canRename={canUpdateMyResumes && !isSystemCard}
@@ -3913,30 +4596,36 @@ export default function MyResumesPage() {
                                   inherited 16px / normal weight, gray-900. */}
                               <h3 className="text-gray-900 mb-2 sm:mb-3">System Folders</h3>
                               {/* Three across from sm up, so All Resumes, root and
-                                  Archived Resumes sit on one row. */}
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6 items-start">
+                                  Archived Resumes sit on one row. `items-stretch`
+                                  + `h-full` gives the three the same height; the
+                                  All Resumes card mirrors the folder cards' own
+                                  markup (p-3, 36px icon tile, text-sm title) so
+                                  they match to the pixel rather than roughly. */}
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6 items-stretch">
                                 {showAllResumesCard && (
                                   <div
-                                    className="bg-white border border-brand-blue/20 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all duration-150"
+                                    className="h-full bg-white border border-brand-blue/20 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all duration-150"
                                     onClick={() => {
                                       setCardViewFolder('all');
                                       setBreadcrumbPath([]);
                                     }}
                                   >
-                                    <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4">
-                                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
+                                    <div className="flex h-full items-center gap-3 p-3">
+                                      <div className="w-9 h-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <LayoutGrid className="w-4 h-4 text-brand-blue" />
                                       </div>
                                       <div className="flex-1 min-w-0">
-                                        <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate">All Resumes</h3>
-                                        <p className="text-xs sm:text-sm text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
+                                        <h3 className="font-semibold text-sm text-gray-900 truncate">All Resumes</h3>
+                                        <p className="text-xs text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
                                       </div>
-                                      <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                                      <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                     </div>
                                   </div>
                                 )}
 
-                                {visibleSystemFolders.map(renderFolderCard)}
+                                {/* Wrapped, not passed by reference: `.map`
+                                    would hand the array index in as `stretch`. */}
+                                {visibleSystemFolders.map(folder => renderFolderCard(folder, true))}
                               </div>
                             </>
                           )}
@@ -3972,7 +4661,7 @@ export default function MyResumesPage() {
                             // to filling the row height, which left the
                             // neighbours padded with blank space.
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 items-start">
-                              {visibleMyFolders.map(renderFolderCard)}
+                              {visibleMyFolders.map(folder => renderFolderCard(folder))}
                             </div>
                           ) : myFolders.length > 0 && folderControlsActive ? (
                             <p className="text-xs sm:text-sm text-gray-500">No folders match the current search or filter.</p>
@@ -3998,7 +4687,7 @@ export default function MyResumesPage() {
 
                           {visibleFoldersToDisplay.length > 0 && (
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 items-start">
-                              {visibleFoldersToDisplay.map(renderFolderCard)}
+                              {visibleFoldersToDisplay.map(folder => renderFolderCard(folder))}
                             </div>
                           )}
                           {foldersToDisplay.length > 0 && visibleFoldersToDisplay.length === 0 && folderControlsActive && (
@@ -4041,10 +4730,13 @@ export default function MyResumesPage() {
                         {/* Desktop Table View */}
                         <div className="hidden md:block overflow-x-auto">
                         {/* Table Header */}
-                        <div className="grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[1200px]">
+                        {/* Same template as the rows below — see the note there
+                            on why the select column is fixed rather than auto. */}
+                        <div className="grid grid-cols-[32px_140px_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[1200px]">
                           <div></div>
-                          <div className="flex items-center">
+                          <div className="flex items-center gap-2">
                             <input
+                              id="grid-select-all-resumes"
                               type="checkbox"
                               checked={visibleFolderResumes.length > 0 && visibleFolderResumes.every(r => selectedResumes.includes(r.id))}
                               onChange={(e) => {
@@ -4056,6 +4748,26 @@ export default function MyResumesPage() {
                               }}
                               className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40"
                             />
+                            {/* Same control as the list view's table: "Select
+                                all" until something is ticked, then the count.
+                                A <label>, so the text toggles the box itself,
+                                at a fixed width so swapping the wording can't
+                                resize this column and shift the header. */}
+                            <label
+                              htmlFor="grid-select-all-resumes"
+                              className="cursor-pointer select-none"
+                              title={
+                                selectedResumes.length > 0
+                                  ? `${selectedResumes.length} resume${selectedResumes.length !== 1 ? 's' : ''} selected`
+                                  : 'Select all resumes in this folder'
+                              }
+                            >
+                              <span className="inline-block w-[104px] tabular-nums hover:text-brand-blue transition-colors">
+                                {selectedResumes.length > 0
+                                  ? <>Selected <span className="font-semibold">({selectedResumes.length})</span></>
+                                  : 'Select all'}
+                              </span>
+                            </label>
                           </div>
                           <div>Candidate Name</div>
                           <div>Email</div>
@@ -4877,7 +5589,9 @@ export default function MyResumesPage() {
                               // Optimistic pre-API record: its id and item ids are `temp-*`
                               // placeholders, not UUIDs. Every retry/cancel endpoint takes UUID
                               // path params, so any action fired against it 422s on uuid_parsing.
-                              const isTempRecord = record.id.startsWith('temp-');
+                              // `local-*` records are the client-side stand-ins for single
+                              // uploads the server gave us no batch for — same story, no UUID.
+                              const isTempRecord = record.id.startsWith('temp-') || record.id.startsWith('local-');
                               const hasErrors = record.errors > 0;
                               const hasIssues = record.duplicated > 0 || (record.versioned || 0) > 0 || record.errors > 0 || cancelledCount > 0;
 
@@ -5426,10 +6140,11 @@ export default function MyResumesPage() {
           onResolved={() => {
             setIsBulkResolveModalOpen(false);
             setSelectedVersionedItems(new Map());
-            // Refresh batch data
+            // Refresh batch data, without pulling the view out of its folder
             fetchUploadHistory();
             isFetchingRef.current = false;
-            fetchData();
+            fetchData(appliedSearchQuery, filters, selectedFolder, true);
+            refreshAllResumesTotal();
           }}
         />
       )}
@@ -5443,6 +6158,7 @@ export default function MyResumesPage() {
               setIsAssessmentModalOpen(false);
               setAssessmentSearchQuery('');
               setSelectedAssessments([]);
+              setExcludedInviteIds([]);
             }}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -5472,22 +6188,19 @@ export default function MyResumesPage() {
 
               {/* Content */}
               <div className="flex-1 min-h-0 overflow-y-auto p-6">
-                {/* Selected Candidates Preview */}
-                <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">Selected Candidates</h4>
-                  <div className="space-y-1">
-                    {resumes.filter(r => selectedResumes.includes(r.id)).slice(0, 5).map(resume => (
-                      <div key={resume.id} className="flex items-center gap-2 text-sm text-gray-600">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                        <span>{resume.name}</span>
-                        <span className="text-gray-400">- {resume.email || 'No email'}</span>
-                      </div>
-                    ))}
-                    {selectedResumes.length > 5 && (
-                      <p className="text-sm text-gray-500 italic">+{selectedResumes.length - 5} more</p>
-                    )}
-                  </div>
-                </div>
+                {/* The same Candidates Selected panel the Score Resume and
+                    Apply to Job dialogs use — full list, untick to drop
+                    someone, resume version, and the eye to read a resume. */}
+                <SelectedCandidatesPanel
+                  resumes={resumes.filter(r => selectedResumes.includes(r.id))}
+                  excludedIds={excludedInviteIds}
+                  onToggleCandidate={(id) =>
+                    setExcludedInviteIds(prev =>
+                      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
+                    )
+                  }
+                  tip="Invitations go to each candidate's email address — untick anyone you want to leave out."
+                />
 
                 {/* Assessment Selection */}
                 <div>
@@ -5682,7 +6395,9 @@ export default function MyResumesPage() {
               {/* Footer */}
               <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200">
                 <div className="text-sm text-gray-600">
-                  {selectedAssessments.length} assessment{selectedAssessments.length !== 1 ? 's' : ''} selected
+                  {selectedResumes.filter(id => !excludedInviteIds.includes(id)).length} candidate
+                  {selectedResumes.filter(id => !excludedInviteIds.includes(id)).length === 1 ? '' : 's'}
+                  {' '}&middot; {selectedAssessments.length} assessment{selectedAssessments.length !== 1 ? 's' : ''} selected
                 </div>
                 <div className="flex items-center gap-3">
                   <button
@@ -5702,9 +6417,10 @@ export default function MyResumesPage() {
                         return;
                       }
 
-                      // Prepare candidate data from selected resumes
+                      // Prepare candidate data from the candidates still ticked
+                      // in the panel above — unticking has to mean something.
                       const candidateData = resumes
-                        .filter(r => selectedResumes.includes(r.id))
+                        .filter(r => selectedResumes.includes(r.id) && !excludedInviteIds.includes(r.id))
                         .map((r, index) => ({
                           id: `${Date.now()}-${index}`,
                           name: r.name,
@@ -5745,6 +6461,9 @@ export default function MyResumesPage() {
         candidates={resumes
           .filter((r) => selectedResumes.includes(r.id))
           .map((r) => ({ id: r.id, name: r.name, email: r.email }))}
+        /* The full rows too, so the dialog can show the shared Candidates
+           Selected panel rather than a bare count. */
+        resumes={resumes.filter((r) => selectedResumes.includes(r.id)) as any}
         onInvited={() => setSelectedResumes([])}
       />
 

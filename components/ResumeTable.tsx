@@ -1,7 +1,9 @@
 'use client'
 
-import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+// `Folder` is already taken by the type imported below, so the icon comes in
+// under an alias.
+import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
+import { useState, useRef, useEffect, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag } from 'react-dnd';
 import { Resume, Folder } from '@/lib/types/types';
@@ -12,7 +14,7 @@ import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import { EmptyState } from './ui/empty-state';
 import Pagination from './Pagination';
 import { usePagination } from '@/lib/hooks/usePagination';
-import VersionHistoryModal from './VersionHistoryModal';
+import ResumeVersionsModal from './ResumeVersionsModal';
 import ResumeVersionSelector from './ResumeVersionSelector';
 import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
@@ -92,6 +94,11 @@ interface ResumeTableProps {
   canTag?: boolean;
   canDownload?: boolean;
   draggable?: boolean;
+  /** Resolves a resume's folder id to the folder's display name. Passing it
+   *  adds a "Folder" column badging each row with the folder the resume
+   *  actually lives in — what an aggregated view (All Resumes) needs to stay
+   *  readable, and noise in a view that is already one folder. */
+  getFolderName?: (folderId?: string) => string | undefined;
 }
 
 // Helper function to highlight matching text
@@ -145,6 +152,7 @@ export default function ResumeTable({
   canTag = false,
   canDownload = true,
   draggable = true,
+  getFolderName,
 }: ResumeTableProps) {
   const router = useRouter();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -183,30 +191,21 @@ export default function ResumeTable({
   // change its onSelectAll behaviour.
   const allSelected = resumes.length > 0 && resumes.every(r => selectedResumes.includes(r.id));
   const someSelected = !allSelected && resumes.some(r => selectedResumes.includes(r.id));
+  // Ties the header's "Select all" label to its checkbox. Generated rather
+  // than hard-coded so two tables on one page can't share an id.
+  const selectAllId = useId();
 
   // Handle showing version history - fetch versions from backend
+  /* Always re-fetch, and keep the payload whole. The version comparison reads
+     the parsed content of each version — skills, certifications, summary,
+     title/company/location — and the row's own `versions` (plus the flattened
+     shape this used to build) carry only file metadata, which left the compare
+     view with nothing to diff. */
   const handleShowVersionHistory = async (resume: Resume) => {
-    if (resume.versions && resume.versions.length > 0) {
-      // Already have versions loaded
-      setVersionHistoryResume(resume);
-      return;
-    }
-
-    // Fetch versions from backend
     setIsLoadingVersions(true);
     try {
       const versions = await resumeService.getVersions(resume.id);
-      const resumeWithVersions = {
-        ...resume,
-        versions: versions.map((v: any) => ({
-          id: v.id,
-          name: v.file_name || v.candidate_name || 'Resume',
-          uploadDate: v.created_at,
-          size: v.file_size_kb ? `${v.file_size_kb} KB` : (v.file_size ? `${Math.round(v.file_size / 1024)} KB` : 'N/A'),
-          uploadedBy: v.uploaded_by_name || 'Unknown',
-        })),
-      };
-      setVersionHistoryResume(resumeWithVersions);
+      setVersionHistoryResume({ ...resume, versions });
     } catch (error) {
       console.error('Failed to fetch versions:', error);
       toast.error('Failed to load version history');
@@ -337,16 +336,47 @@ export default function ResumeTable({
               </th>
             )}
             {!hideCheckboxes && (
-              <th className="w-12 px-4 py-3 align-middle">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  ref={input => {
-                    if (input) input.indeterminate = someSelected;
-                  }}
-                  onChange={(e) => onSelectAll(e.target.checked)}
-                  className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
-                />
+              /* Auto width rather than a fixed 3rem: the cell has to grow for
+                 the count badge, which sits beside the box so the number is
+                 read where the selecting happens. */
+              <th className="w-px whitespace-nowrap px-4 py-3 align-middle">
+                <div className="flex items-center gap-2">
+                  <input
+                    id={selectAllId}
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={input => {
+                      if (input) input.indeterminate = someSelected;
+                    }}
+                    onChange={(e) => onSelectAll(e.target.checked)}
+                    className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                  />
+                  {/* A real <label>, so clicking the text toggles the box the
+                      browser's own way — no click handler to keep in sync.
+                      Reads "Select all" until something is ticked, then the
+                      running count, the way the job-openings list does.
+
+                      Same metrics as every other column heading, and a fixed
+                      width: the two wordings are different lengths, so without
+                      it this column resized on each click and shunted the whole
+                      table sideways. `tabular-nums` holds it steady as the
+                      count grows a digit. */}
+                  <label
+                    htmlFor={selectAllId}
+                    className="cursor-pointer select-none"
+                    title={
+                      selectedResumes.length > 0
+                        ? `${selectedResumes.length} resume${selectedResumes.length !== 1 ? 's' : ''} selected`
+                        : 'Select all resumes on this page'
+                    }
+                  >
+                    <span className="inline-block w-[104px] text-xs text-gray-900 uppercase tracking-wider tabular-nums hover:text-brand-blue transition-colors">
+                      {selectedResumes.length > 0
+                        ? <>Selected <span className="font-semibold">({selectedResumes.length})</span></>
+                        : 'Select all'}
+                    </span>
+                  </label>
+                </div>
               </th>
             )}
             <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
@@ -367,6 +397,11 @@ export default function ResumeTable({
             <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Experience
             </th>
+            {getFolderName && (
+              <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+                Folder
+              </th>
+            )}
             <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Source
             </th>
@@ -473,6 +508,26 @@ export default function ResumeTable({
                 </div>
               </td>
               <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">{resume.experience}</td>
+              {getFolderName && (
+                <td className="px-4 py-3 align-middle whitespace-nowrap">
+                  {(() => {
+                    // The folder the resume actually belongs to — one folder per
+                    // resume, so the badge names its single home rather than the
+                    // aggregated view it is being listed in.
+                    const name = getFolderName(resume.folderId);
+                    if (!name) return <span className="text-gray-400 text-sm">-</span>;
+                    return (
+                      <span
+                        className="inline-flex max-w-[160px] items-center gap-1 px-2.5 py-1 rounded text-xs bg-slate-100 text-slate-700 ring-1 ring-slate-200"
+                        title={name}
+                      >
+                        <FolderIcon className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{name}</span>
+                      </span>
+                    );
+                  })()}
+                </td>
+              )}
               <td className="px-4 py-3 align-middle whitespace-nowrap">
                 <span
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs ring-1 ${
@@ -771,13 +826,19 @@ export default function ResumeTable({
         />
       )}
       
-      {/* Version History Modal */}
-      {versionHistoryResume && versionHistoryResume.versions && Array.isArray(versionHistoryResume.versions) && versionHistoryResume.versions.length > 0 && (
-        <VersionHistoryModal
-          candidateName={versionHistoryResume.name}
-          versions={versionHistoryResume.versions}
+      {/* Version history — the same modal AI Talent Match uses, so a candidate's
+          versions compare identically wherever they are opened from: per-version
+          preview, download, and a diff of one version against the one before it. */}
+      {versionHistoryResume && (
+        <ResumeVersionsModal
+          candidate={{
+            id: versionHistoryResume.id,
+            name: versionHistoryResume.name,
+            resumeId: versionHistoryResume.id,
+          }}
+          versions={(versionHistoryResume.versions as any[]) || []}
           onClose={() => setVersionHistoryResume(null)}
-          onApplyToJob={onApplyToJob ? (versionId) => {
+          onApplyToJob={onApplyToJob ? () => {
             setVersionHistoryResume(null);
             onApplyToJob(versionHistoryResume);
           } : undefined}
