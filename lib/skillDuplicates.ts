@@ -1,0 +1,262 @@
+// Shared duplicate-skill matcher for the AI-interview skill lists.
+//
+// MIRRORS the backend helpers in `app/routers/ai_interview.py`
+// (`_skill_token_sequence`, `_skill_initialism_match`, `_skill_duplicate_verdict`).
+// Keep the two in sync — `tests/test_skill_duplicate_guard.py` pins the expected
+// verdicts and a node harness runs this file against the same table.
+//
+// This lives in `lib/` rather than inside a component because BOTH skill-entry
+// screens need it and they used to disagree: the Configure page had a semantic
+// guard while the Clusters page (`/ai-interview-config/clusters`) compared exact
+// strings only — so "Software development life cycle" was accepted there even
+// though "SDLC and STLC Knowledge" was already in the list.
+
+/** Framing / filler words that carry no skill identity. */
+const SKILL_STOPWORDS = new Set([
+  'a', 'an', 'the', 'of', 'in', 'on', 'to', 'and', 'or', 'for', 'with', 'using',
+  'your', 'their', 'this', 'that', 'these', 'those', 'is', 'are', 'be',
+  'knowledge', 'understanding', 'familiarity', 'experience', 'ability',
+  'skill', 'skills', 'proficiency', 'expertise', 'awareness', 'exposure',
+  'hands', 'on', 'handson', 'working', 'work', 'basic', 'strong', 'good',
+  'solid', 'excellent', 'demonstrated', 'proven', 'practical', 'deep',
+  'advanced', 'fundamental', 'fundamentals', 'concepts', 'concept', 'principles',
+  'tools', 'tool', 'such', 'as', 'like', 'e.g', 'eg', 'clear', 'concise',
+  'writing', 'write',
+]);
+
+/** Curated acronym / variant expansions — mirrors backend `_SKILL_ALIASES`. */
+const SKILL_ALIASES: Record<string, string> = {
+  api: 'application programming interface', apis: 'application programming interface',
+  ui: 'user interface', ux: 'user experience',
+  sql: 'structured query language', db: 'database', dbs: 'database',
+  qa: 'quality assurance', qc: 'quality control',
+  ci: 'continuous integration', cd: 'continuous deployment',
+  cicd: 'continuous integration continuous deployment',
+  ms: 'microsoft', js: 'javascript', ts: 'typescript', k8s: 'kubernetes',
+  oop: 'object oriented programming', ml: 'machine learning', ai: 'artificial intelligence',
+  csharp: 'c sharp', 'c#': 'c sharp', 'c++': 'c plus plus', dotnet: 'dot net',
+  aws: 'amazon web services', gcp: 'google cloud platform',
+};
+
+/** Words that only DESCRIBE the skill beside them instead of naming a different
+ *  product. Stored with raw AND stemmed forms because comparison runs on stems
+ *  ("programming" → "programm"). Mirrors backend `_SKILL_GENERIC_QUALIFIERS`. */
+const GENERIC_QUALIFIER_WORDS = [
+  // "the doing of" words — these can only ever describe the noun beside them
+  'usage', 'use', 'handling',
+  'methodology', 'methodologies', 'method', 'methods', 'technique', 'techniques',
+  'practice', 'practices', 'process', 'processes', 'procedure', 'procedures',
+  'activity', 'activities', 'task', 'tasks', 'duty', 'duties',
+  'essential', 'essentials', 'overview', 'general', 'core', 'misc', 'various',
+  'language',
+  // software-flavoured descriptors (still descriptors, not subjects)
+  'programming', 'program', 'coding', 'code', 'scripting', 'script',
+  'development', 'develop', 'dev', 'engineering', 'framework', 'library', 'stack',
+];
+// DELIBERATELY EXCLUDED, keep them out: 'standard(s)', 'policy', 'protocol',
+// 'guideline', 'system(s)', 'technology', 'operation(s)', 'administration',
+// 'workflow', 'theory', 'discipline'. Each NAMES a body of knowledge in some
+// industry, so treating it as filler deletes a real skill — "Audit" vs "Auditing
+// Standards" and "Retail" vs "Retail Operations" are different skills, and an
+// earlier draft merged them. A word that is filler in one industry is the subject
+// in another; structural rules generalise, vocabulary does not.
+
+/** Closed compounds also written as two words, so the initialism rule can see the
+ *  boundary. "RDBMS" expands as Relational DataBase Management System — the B is
+ *  inside "Database", so without the split the initials read 'rdms'. */
+const COMPOUND_SPLITS: Record<string, string> = {
+  // cross-industry — "CPR" = Cardio-Pulmonary Resuscitation has the same shape as
+  // "RDBMS" = Relational Data-Base Management System.
+  lifecycle: 'life cycle', workflow: 'work flow', healthcare: 'health care',
+  cardiopulmonary: 'cardio pulmonary', supplychain: 'supply chain',
+  cashflow: 'cash flow', bookkeeping: 'book keeping', stakeholder: 'stake holder',
+  timesheet: 'time sheet', caseload: 'case load', onboarding: 'on boarding',
+  // software
+  database: 'data base', databases: 'data base', codebase: 'code base',
+  testcase: 'test case', testsuite: 'test suite', datastore: 'data store',
+  sourcecontrol: 'source control', versioncontrol: 'version control',
+};
+
+/** Light stemmer — plurals and gerunds only. Mirrors backend `_skill_stem`. */
+function skillStem(t: string): string {
+  if (t.length <= 3) return t;
+  if (t.endsWith('ies') && t.length > 4) return `${t.slice(0, -3)}y`;
+  if (t.endsWith('ing') && t.length > 5) return t.slice(0, -3);
+  if (t.endsWith('s') && !t.endsWith('ss') && t.length > 3) return t.slice(0, -1);
+  return t;
+}
+
+const GENERIC_QUALIFIERS = new Set<string>([
+  ...GENERIC_QUALIFIER_WORDS,
+  ...GENERIC_QUALIFIER_WORDS.map(skillStem),
+]);
+
+export function normalizeSkillName(s: string): string {
+  return (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** Punctuation/space-stripped form (keeps # and + so C# ≠ C++). */
+function skillSquish(s: string): string {
+  return (s || '').toLowerCase().replace(/[^a-z0-9#+]/g, '');
+}
+
+/** Ordered canonical tokens. Mirrors backend `_skill_token_sequence`.
+ *
+ *  BRAND-JS FOLDING: "ReactJS" used to stem to 'reactj' while "React.js" expanded
+ *  to {react, javascript} and "React" was {react} — three spellings, three
+ *  identities. A trailing 'js' is dropped from a longer token, and a standalone
+ *  'js' that FOLLOWS another token is dropped as a suffix; a leading/only 'js'
+ *  still expands to javascript so the skill "JS" itself is unaffected.
+ *
+ *  ALL-CAPS tokens are opaque identifiers and are NOT stemmed — the plural-'s'
+ *  rule turned "RDBMS" into 'rdbm', so the acronym could never match its own
+ *  expansion. Mixed-case plurals like "APIs" still stem normally. */
+export function skillTokenSequence(skill: string, expandAliases = true): string[] {
+  if (!skill) return [];
+  const caps = new Set(
+    (skill.match(/\b[A-Z][A-Z0-9#+]+\b/g) || []).map(t => t.toLowerCase()),
+  );
+  const norm = skill.toLowerCase().replace(/[._/\-]/g, ' ');
+  const raw = norm.match(/[a-z0-9#+]+/g) || [];
+  const pieces: string[] = [];
+  raw.forEach((t, idx) => {
+    let tok = t;
+    if (tok === 'js') {
+      if (idx > 0) return;
+    } else if (tok.length > 3 && tok.endsWith('js')) {
+      tok = tok.slice(0, -2);
+    }
+    pieces.push(...(COMPOUND_SPLITS[tok] || tok).split(' '));
+  });
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const p of pieces) {
+    for (const w of (expandAliases ? (SKILL_ALIASES[p] || p) : p).split(' ')) {
+      const st = caps.has(w) ? w : skillStem(w);
+      if (st.length > 1 && !SKILL_STOPWORDS.has(st) && !seen.has(st)) {
+        seen.add(st);
+        out.push(st);
+      }
+    }
+  }
+  return out;
+}
+
+export function skillContentTokens(skill: string): Set<string> {
+  return new Set(skillTokenSequence(skill));
+}
+
+/** Acronym ↔ expansion detection. Mirrors backend `_skill_initialism_match`.
+ *
+ *  `exact` is true when the acronym is the WHOLE of its side ("SDLC" vs "Software
+ *  Development Life Cycle") — same skill. It is false when the acronym is one
+ *  token among several ("SDLC and STLC Knowledge"): that bundle CONTAINS the other
+ *  skill plus more, so the addition is redundant rather than identical.
+ *
+ *  A bundled acronym must appear in CAPITALS in the original text, otherwise an
+ *  ordinary word could act as an accidental acronym — "Test Case Design and
+ *  Execution" contains 'test', which is exactly the initials of "Testing
+ *  Environment Setup Tools". */
+export function skillInitialismMatch(a: string, b: string): { hit: boolean; exact: boolean } {
+  for (const [short, long] of [[a, b], [b, a]] as [string, string][]) {
+    const lt = skillTokenSequence(long, false);
+    if (lt.length < 2) continue;
+    // TWO candidate initialisms, because an acronym is built from EVERY word while
+    // the token pipeline drops framing words: content-word initials give
+    // 'sdlc' for "Knowledge of Software Development Life Cycle", and all-word
+    // initials give 'bom' for "Bill of Materials", 'kyc' for "Know Your
+    // Customer", 'bls' for "Basic Life Support" — stripping 'of'/'your'/'basic'
+    // as filler destroyed a letter of the acronym. That assumption came from
+    // software-style JD phrasing and fails in healthcare/finance/manufacturing.
+    const candidates = new Set([lt.map(w => w[0]).join('')]);
+    const allWords = ((long || '').toLowerCase().replace(/[._/\-]/g, ' ')
+      .match(/[a-z0-9#+]+/g) || [])
+      .flatMap(w => (COMPOUND_SPLITS[w] || w).split(' '));
+    if (allWords.length >= 2) candidates.add(allWords.map(w => w[0]).join(''));
+    const st = skillTokenSequence(short, false);
+    for (const tok of st) {
+      if (tok.length < 3 || tok.length > 6 || !/^[a-z]+$/.test(tok)) continue;
+      if (!candidates.has(tok)) continue;
+      if (st.length === 1) return { hit: true, exact: true };
+      if (new RegExp(`\\b${tok.toUpperCase()}\\b`).test(short || '')) {
+        return { hit: true, exact: false };
+      }
+    }
+  }
+  return { hit: false, exact: false };
+}
+
+export type DupTier = 'high' | 'medium' | '';
+export interface DupVerdict { dup: boolean; tier: DupTier; reason: string }
+
+/** Classify two skill names as duplicates. Mirrors backend
+ *  `_skill_duplicate_verdict`.
+ *
+ *  THE SUBSET RULE IS DELIBERATELY NARROW. It used to be "either token set is a
+ *  subset of the other ⇒ same skill", which inverted reality for tech naming: it
+ *  BLOCKED React vs React Native, SQL vs SQL Server, Azure vs Azure DevOps,
+ *  Spring vs Spring Boot and Selenium vs Selenium WebDriver (all genuinely
+ *  different skills — a longer name usually denotes a different PRODUCT), while
+ *  ALLOWING React vs ReactJS (the same skill). Subset now counts only when every
+ *  extra token is a generic qualifier, which keeps the cases the guard exists for:
+ *  "Java" vs "Java Programming" and "API Testing" vs "Familiarity with API
+ *  testing". */
+export function skillDuplicateVerdict(a: string, b: string): DupVerdict {
+  const no: DupVerdict = { dup: false, tier: '', reason: '' };
+  if (!a || !b) return no;
+  if (normalizeSkillName(a) === normalizeSkillName(b)) {
+    return { dup: true, tier: 'high', reason: 'identical' };
+  }
+  const sa = skillSquish(a);
+  if (sa.length > 1 && sa === skillSquish(b)) {
+    return { dup: true, tier: 'high', reason: 'same words, different punctuation' };
+  }
+  const ini = skillInitialismMatch(a, b);
+  if (ini.hit) {
+    return ini.exact
+      ? { dup: true, tier: 'high', reason: 'acronym of the same term' }
+      : { dup: true, tier: 'medium', reason: "already covered by the other skill's acronym" };
+  }
+  const ta = skillContentTokens(a);
+  const tb = skillContentTokens(b);
+  if (ta.size === 0 || tb.size === 0) return no;
+  const [small, large] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+  for (const t of small) if (!large.has(t)) return no;
+  if (small.size === large.size) {
+    return { dup: true, tier: 'high', reason: 'same meaning, different wording' };
+  }
+  const extra = [...large].filter(t => !small.has(t));
+  if (extra.length > 0 && extra.every(t => GENERIC_QUALIFIERS.has(t))) {
+    return { dup: true, tier: 'medium', reason: 'one is a reworded form of the other' };
+  }
+  return no;
+}
+
+/** Boolean form for call sites that only need yes/no. */
+export function skillsSemanticallyEqual(a: string, b: string): boolean {
+  return skillDuplicateVerdict(a, b).dup;
+}
+
+/** The CLOSEST existing duplicate, not merely the first.
+ *
+ *  `find()` returned whichever entry came first, so adding "React" with both
+ *  "React Native" and "ReactJS" present blamed React Native. Ranks high tier over
+ *  medium, then by shared-token count. */
+export function closestDuplicate<T>(
+  candidates: T[],
+  nameOf: (c: T) => string,
+  incoming: string,
+): { item: T; tier: DupTier; reason: string } | null {
+  const incomingTokens = skillContentTokens(incoming);
+  let best: { item: T; tier: DupTier; reason: string; rank: number } | null = null;
+  for (const c of candidates) {
+    const v = skillDuplicateVerdict(nameOf(c), incoming);
+    if (!v.dup) continue;
+    const shared = [...skillContentTokens(nameOf(c))].filter(t => incomingTokens.has(t)).length;
+    const rank = (v.tier === 'high' ? 1000 : 0) + shared;
+    if (!best || rank > best.rank) {
+      best = { item: c, tier: v.tier, reason: v.reason, rank };
+    }
+  }
+  return best ? { item: best.item, tier: best.tier, reason: best.reason } : null;
+}

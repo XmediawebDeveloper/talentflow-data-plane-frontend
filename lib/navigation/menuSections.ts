@@ -3,8 +3,6 @@
 
 import {
   LayoutDashboard,
-  BrainCircuit,
-  FileSearch,
   FileSignature,
   FolderOpen,
   Users,
@@ -19,6 +17,9 @@ import {
   Headphones,
   type LucideIcon,
 } from 'lucide-react';
+// Drawn in-house because no lucide glyph carries these two meanings — see the
+// file for the reasoning. Both are lucide-shaped, so they slot in unchanged.
+import { ResumeScoringIcon, TalentMatchIcon } from '@/components/icons/nav-icons';
 import type { PlanFeatureKey } from '@/lib/types/planFeatures';
 
 export interface NavItem {
@@ -62,8 +63,8 @@ export function buildMenuSections(isTenantAdmin: boolean): NavSection[] {
       label: 'RECRUITMENT',
       items: [
         { id: 'job-openings', label: 'Job Descriptions', icon: FileSignature, href: '/recruitment/job-openings', permissions: ['canReadJD', 'canCreateJD', 'canUpdateJD', 'canDeleteJD'] },
-        { id: 'resume-scoring', label: 'Resume Scoring', icon: FileSearch, href: '/recruitment/resume-scoring', permissions: ['canViewScoring'], planFeature: 'resume_scoring' },
-        { id: 'ai-talent-match', label: 'AI Talent Match', icon: BrainCircuit, href: '/recruitment/ai-talent-match', permissions: ['canViewAiMatch'], planFeature: 'ai_talent_match' },
+        { id: 'resume-scoring', label: 'Resume Scoring', icon: ResumeScoringIcon, href: '/recruitment/resume-scoring', permissions: ['canViewScoring'], planFeature: 'resume_scoring' },
+        { id: 'ai-talent-match', label: 'AI Talent Match', icon: TalentMatchIcon, href: '/recruitment/ai-talent-match', permissions: ['canViewAiMatch'], planFeature: 'ai_talent_match' },
       ],
     },
 

@@ -23,8 +23,11 @@ export interface JDCreate {
   nice_to_have_skills?: string[];
   education_requirements?: Record<string, any>;
   certifications?: string[];
-  experience_min?: number;
-  experience_max?: number;
+  // `null` is a deliberate "clear this field" signal (distinct from `undefined`,
+  // which the backend's exclude_unset PATCH treats as "leave whatever was
+  // already persisted") - see resolvePersistedExperiencePayload in JDCreation.tsx.
+  experience_min?: number | null;
+  experience_max?: number | null;
   domain_keywords?: string[];
   job_level?: string;
   industry_type?: string;

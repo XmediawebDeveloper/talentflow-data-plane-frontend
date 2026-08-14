@@ -20,6 +20,7 @@ import {
 } from '@/lib/constants/aiInterviewPriority';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
+import { closestDuplicate } from '@/lib/skillDuplicates';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -522,6 +523,9 @@ function CategorySection({
 }) {
   const [newSkillInput, setNewSkillInput] = useState('');
   const [skillInputError, setSkillInputError] = useState('');
+  // Skill name already warned about once on a MEDIUM-confidence duplicate match;
+  // pressing Add again with the same text keeps both. Cleared on a successful add.
+  const [skillOverride, setSkillOverride] = useState<string | null>(null);
 
   // Lowercased skill name → type, derived from the recruiter's per-skill
   // dropdown choice. Used by each ClusterRow to render Skill / Command
@@ -539,6 +543,22 @@ function CategorySection({
     if (!trimmed) { setSkillInputError('Skill name cannot be empty'); return; }
     const duplicate = skills.some(s => s.name.toLowerCase() === trimmed.toLowerCase());
     if (duplicate) { setSkillInputError(`"${trimmed}" already exists`); return; }
+    // Semantic duplicate guard (2026-08-13). This screen used to compare EXACT
+    // strings only, while the Configure page ran the semantic matcher — so
+    // "Software development life cycle" was accepted here even though "SDLC and
+    // STLC Knowledge" was already in the list, and both flowed into cluster
+    // generation as separate skills. Same shared matcher as the Configure page.
+    const similar = closestDuplicate(skills, s => s.name, trimmed);
+    if (similar && skillOverride?.toLowerCase() !== trimmed.toLowerCase()) {
+      const msg = `"${trimmed}" looks like the existing skill "${similar.item.name}" (${similar.reason})`;
+      setSkillInputError(msg);
+      // MEDIUM is a judgement only the recruiter can settle (e.g. whether a
+      // bundled "SDLC and STLC Knowledge" should also carry a standalone entry),
+      // so it warns and lets a second press through. HIGH is refused outright.
+      setSkillOverride(similar.tier === 'medium' ? trimmed : null);
+      return;
+    }
+    setSkillOverride(null);
     onAddSkill?.(trimmed);
     setNewSkillInput('');
     setSkillInputError('');
@@ -1526,6 +1546,10 @@ export default function AIInterviewClusters() {
         nthSkillNames.length > 0 ? nthParentGroups : undefined,
         mthTypesMap,
         nthTypesMap,
+        // Domain context: the backend resolves job_descriptions.industry_type from
+        // this id so the clustering + dedup prompts judge skills inside the right
+        // industry instead of defaulting to a software rubric.
+        { jdId: config?.jd_id || undefined },
       );
       console.log('[CLUSTER-DEBUG] /generate-clusters response:', {
         mthClusterCount: result.mth_clusters?.length ?? 0,
@@ -1608,6 +1632,8 @@ export default function AIInterviewClusters() {
             perQuestionSeconds: _perQSeconds,
             mthTimeMin: fixedMthMin,
             nthTimeMin: nthEnabled ? fixedNthMin : 0,
+            // Same domain context as generate-clusters.
+            jdId: config?.jd_id || undefined,
           });
           console.log('[CLUSTER-DEBUG] /refine-clusters response:', {
             mthClusterCount: refineResult.mth_clusters?.length ?? 0,
