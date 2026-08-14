@@ -108,6 +108,9 @@ const TERMINATION_MESSAGES: Record<string, string> = {
   left_screen_focus_lost: 'Moved focus away from the interview window',
   left_screen: 'Left the interview screen',
   picture_in_picture: 'Opened a video in Picture-in-Picture',
+  microphone_disconnected_timeout: 'Microphone stayed disconnected for over 3 minutes',
+  camera_disconnected_timeout: 'Camera stayed disconnected for over 3 minutes',
+  camera_and_microphone_disconnected_timeout: 'Camera and microphone stayed disconnected for over 3 minutes',
 };
 const terminationMessage = (reason: string): string =>
   TERMINATION_MESSAGES[reason] || 'Left the interview screen';
@@ -670,6 +673,37 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       try { recorder.stop(); } catch { void doUpload(); }
     }
   }, [token]);
+
+  // Shared termination side-effects, extracted from the leave-the-screen
+  // effect below so a SECOND, independent trigger (InterviewUI's mic-
+  // disconnect 3-minute grace timeout) can terminate the interview the exact
+  // same way — persisted reason, proctor event, screen-recording tail
+  // capture, fullscreen exit, and the sticky 'terminated' page — without
+  // duplicating any of it. Guards only on the natural-end race (interview
+  // already reached completion); the leave-the-screen effect keeps its own
+  // additional guards (armed/sawFullscreen/screenShareStopped) local to
+  // itself since those are specific to THAT detection surface.
+  const performTermination = useCallback((reason: string) => {
+    if (interviewClosingRef.current) {
+      console.log('[Proctor] Ignoring termination reason', reason, '— interview already reached its natural end.');
+      return;
+    }
+    const message = terminationMessage(reason);
+    setInterviewTerminatedReason(reason);
+    try { localStorage.setItem(terminatedStorageKey(token), reason); } catch { /* ignore */ }
+    try {
+      void candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: 'interview_terminated',
+        severity: 'high',
+        details: { reason, message, action: 'interview_terminated' },
+      });
+    } catch { /* non-blocking */ }
+    // Keep the entire-screen recorder running briefly so the footage captures
+    // whatever was on screen when the violation happened, then upload.
+    window.setTimeout(() => { stopAndUploadScreenRecording(); }, POST_VIOLATION_RECORD_MS);
+    if (isFullscreen()) exitFullscreen().catch(() => {});
+    setStep('terminated');
+  }, [token, stopAndUploadScreenRecording]);
 
   // ========== RECORDING AUDIO HELPERS ==========
 
@@ -1649,44 +1683,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     let sawFullscreen = false;
 
     const terminateNow = (reason: string) => {
+      // Guards specific to THIS detection surface (leaving the screen) — the
+      // natural-end guard and the actual termination side-effects now live in
+      // the shared performTermination, also used by InterviewUI's mic-
+      // disconnect 3-minute grace timeout.
       if (done || !armed || screenShareStoppedRef.current) return;
-      // Natural-end guard: once the interview has ended (all questions done,
-      // completion popup showing, evaluation running in the background), a
-      // fullscreen exit / Esc / F11 must NOT terminate — the candidate already
-      // finished. Terminating here would flip the row to TERMINATED and block
-      // the evaluation. Ignore (the interview is effectively complete).
-      if (interviewClosingRef.current) {
-        console.log('[Proctor] Ignoring', reason, '— interview already reached its natural end (completion popup); not terminating.');
-        return;
-      }
       done = true;
-      const message = terminationMessage(reason);
-      setInterviewTerminatedReason(reason);
-      // Persist so reopening the link stays on the terminated page (can't restart).
-      try { localStorage.setItem(terminatedStorageKey(token), reason); } catch { /* ignore */ }
-      // Report the termination so the recruiter side flips out of "In Progress".
-      // `message` carries the clear human description of what the candidate did
-      // (Alt+Tab, Esc, F11, Windows key, tab switch, …) so the recruiter view and
-      // the audit log can show exactly what happened. The component stays mounted
-      // (setStep only swaps the rendered screen — no navigation), so this request
-      // completes normally after fullscreen exit.
-      try {
-        void candidateAIInterviewService.reportProctorEvent(token, {
-          event_type: 'interview_terminated',
-          severity: 'high',
-          details: { reason, message, action: 'interview_terminated' },
-        });
-      } catch { /* non-blocking */ }
-      // Keep the entire-screen recorder RUNNING for a few more seconds so the
-      // footage captures what the candidate switched to (the violating action
-      // just happened; the recorder is still capturing their screen). Screen
-      // capture is independent of fullscreen, so exiting fullscreen / showing
-      // the terminated page below does NOT stop it. Then stop + upload the
-      // final segment (which now includes those extra seconds).
-      window.setTimeout(() => { stopAndUploadScreenRecording(); }, POST_VIOLATION_RECORD_MS);
-      if (isFullscreen()) exitFullscreen().catch(() => {});
-      // Navigate to the full terminated page (mirrors the completed-page flow).
-      setStep('terminated');
+      performTermination(reason);
     };
     // Keydown-based malpractice detection. These fire BEFORE the resulting
     // blur/fullscreenchange, so they attribute the exact key the candidate
@@ -2499,6 +2502,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             setStep('completed');
           }}
           onInterviewClosing={() => { interviewClosingRef.current = true; }}
+          onTerminate={performTermination}
           faceVerification={faceVerification.baselineReady ? faceVerification : undefined}
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
           copyPasteBlocking={IS_PRODUCTION_ENV ? true : (interview?.copy_paste_blocking ?? true)}

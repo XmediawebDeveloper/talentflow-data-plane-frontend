@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
+import { checkVirtualCamera, virtualCameraMessage } from '@/lib/proctoring/virtualCameraDetection';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -508,6 +509,21 @@ export default function StepSystemCheck({
     try {
       streamRef.current?.getVideoTracks().forEach((t) => t.stop()); // release stale track on retry
       const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+
+      // Reject mobile-camera-relay virtual drivers (Motorola Smart Connect,
+      // DroidCam, Iriun, EpocCam, Camo, OBS Virtual Camera, etc.) before this
+      // check can pass — they register as a normal video input device with
+      // no API-level flag distinguishing them from real hardware, so the
+      // driver's advertised name is the signal used here. Checked again in
+      // Webcam.tsx at interview start (and every reacquire), since that's a
+      // separate getUserMedia call from this system-check stream.
+      const camCheck = checkVirtualCamera(videoStream.getVideoTracks()[0]);
+      if (camCheck.flagged) {
+        videoStream.getTracks().forEach((t) => t.stop());
+        updateSystemCheck('webcam', { status: 'fail', detail: virtualCameraMessage(camCheck.label) });
+        return;
+      }
+
       streamRef.current = videoStream;
       if (videoRef.current) videoRef.current.srcObject = videoStream;
       updateSystemCheck('webcam', { status: 'checking', detail: 'Verifying video signal...' });
