@@ -609,10 +609,6 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const [screenDownloadUrl, setScreenDownloadUrl] = useState<string | null>(null);
   const [screenLoading, setScreenLoading] = useState(false);
   const [screenError, setScreenError] = useState(false);
-  // Per-verification-id state for the QR Verification tab's mobile clip —
-  // keyed by verification_id since an interview can have more than one
-  // environment-verification attempt/record in the same list.
-  const [envVideoState, setEnvVideoState] = useState<Record<string, { url: string | null; downloadUrl: string | null; loading: boolean; error: boolean }>>({});
   const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
   const [violationPage, setViolationPage] = useState(1);
@@ -1240,79 +1236,84 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const totalViolations = violations.length;
   // Recruiter-facing summary (serious/moderate/minor, advisory excluded) — see violationTaxonomy.
   const violationSummary = useMemo(() => summarizeViolations(violations), [violations]);
-  // Mobile QR environment-verification attempts — same source as Integrity
-  // Check's grouped violations, filtered down to just this event family so
-  // the dedicated "QR Verification" tab can show them front-and-center
-  // (video + color/ID match + AI summary) without digging through the
-  // broader Integrity Check list.
-  const envVerificationRecords: ViolationRecord[] = useMemo(
-    () => violations.filter(v => v.event_type.startsWith('environment_verification_')),
-    [violations],
-  );
+  // Mobile QR environment-verification attempts for the "QR Verification"
+  // tab. Sourced DIRECTLY from the database via GET
+  // /ai-interview/{id}/environment-verifications — NOT from
+  // proctoring_violations/environment_verification_* events, which only
+  // exist once the background Celery analysis task finishes. That made the
+  // tab show a false "No QR verification was triggered" for an interview
+  // where the candidate HAD already uploaded successfully but analysis
+  // hadn't run yet (e.g. Celery worker down) — the DB row (status=
+  // "submitted", video_url set) is the actual source of truth and exists
+  // immediately on upload, independent of analysis. See STRICT
+  // IMPLEMENTATION PROMPT, 2026-08-14.
+  type EnvVerificationRecord = {
+    verification_id: string;
+    status: string;
+    analysis_status: string | null;
+    triggered_at: string | null;
+    submitted_at: string | null;
+    video_uploaded: boolean;
+    video_url: string | null;
+    download_url: string | null;
+    video_mime_type: string | null;
+    video_size_bytes: number | null;
+    ai_summary: string | null;
+    flagged_items: Array<Record<string, unknown>> | null;
+    color_match: boolean | null;
+    id_match: boolean | null;
+    rgb_sequence_results: Array<{ second: number; expected_rgb: string; detected_rgb: string | null; distance: number | null; match: boolean }> | null;
+    result_severity: string | null;
+  };
+  const [envVerifications, setEnvVerifications] = useState<EnvVerificationRecord[] | null>(null);
+  const [envVerificationsLoading, setEnvVerificationsLoading] = useState(false);
+  const [envVerificationsError, setEnvVerificationsError] = useState(false);
+  // Per-record local video state — only used for the local-disk storage
+  // fallback (the list endpoint's video_url is null there, same as the
+  // existing recording tab's convention); populated via an authenticated
+  // blob fetch since a plain <video src> can't carry the Authorization
+  // header that endpoint requires.
+  const [envVideoBlobUrls, setEnvVideoBlobUrls] = useState<Record<string, string>>({});
+  const envVideoBlobRequestedRef = useRef<Set<string>>(new Set());
 
-  // Fetch each QR Verification record's mobile clip on demand — mirrors the
-  // STREAM-FIRST presigned-URL pattern used for the candidate/screen
-  // recording above, but per verification_id since this tab can list
-  // multiple attempts. Does NOT touch recording_file_path/
-  // screen_recording_file_path or their endpoints — separate storage,
-  // separate route, separate state.
-  //
-  // "Already requested" is tracked in a ref, NOT envVideoState itself —
-  // envVideoState can't be a dependency here. If it were, the synchronous
-  // setEnvVideoState(...loading:true...) below would change the dependency
-  // and re-run this effect immediately, whose cleanup sets THIS run's
-  // `cancelled` to true while its own in-flight api.get(...) calls are still
-  // pending — so every fetch's result gets silently discarded by `if
-  // (cancelled) return`, and the re-run's own idsToFetch filter sees those
-  // same ids already present (loading:true) and skips them too. Net effect:
-  // permanently stuck on "Loading video…". envVideoState here is a pure
-  // render-output store, written only by fetch completions, never read by
-  // this effect.
-  const envVideoRequestedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (activeTab !== 'verification' || envVerificationRecords.length === 0) return;
-    const idsToFetch = envVerificationRecords
-      .map(r => (r.details ?? {}) as Record<string, unknown>)
-      .map(d => (typeof d.verification_id === 'string' ? d.verification_id : null))
-      .filter((id): id is string => !!id && !envVideoRequestedRef.current.has(id));
-    if (idsToFetch.length === 0) return;
-    idsToFetch.forEach(id => envVideoRequestedRef.current.add(id));
+    if (activeTab !== 'verification' || envVerifications !== null) return;
     let cancelled = false;
-    setEnvVideoState(prev => {
-      const next = { ...prev };
-      idsToFetch.forEach(id => { next[id] = { url: null, downloadUrl: null, loading: true, error: false }; });
-      return next;
-    });
-    idsToFetch.forEach(async (verificationId) => {
+    setEnvVerificationsLoading(true);
+    console.info(`[ENV-VERIFY] Fetching verification for interview=${liveSession.id}`);
+    api.get(`/ai-interview/${liveSession.id}/environment-verifications`)
+      .then(res => {
+        if (cancelled) return;
+        const list: EnvVerificationRecord[] = Array.isArray(res?.data?.verifications) ? res.data.verifications : [];
+        console.info(`[ENV-VERIFY] Verification found=${list.length > 0} count=${list.length}`);
+        setEnvVerifications(list);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEnvVerificationsError(true);
+        setEnvVerifications([]);
+      })
+      .finally(() => { if (!cancelled) setEnvVerificationsLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, liveSession.id, envVerifications]);
+
+  useEffect(() => {
+    if (!envVerifications || envVerifications.length === 0) return;
+    const toFetch = envVerifications.filter(
+      v => v.video_uploaded && !v.video_url && !envVideoBlobRequestedRef.current.has(v.verification_id)
+    );
+    if (toFetch.length === 0) return;
+    toFetch.forEach(v => envVideoBlobRequestedRef.current.add(v.verification_id));
+    let cancelled = false;
+    toFetch.forEach(async (v) => {
       try {
-        const meta = await api.get(`/ai-interview/environment-verification/${verificationId}/recording-url`);
-        const streamUrl = meta?.data?.url;
+        const res = await api.get(`/ai-interview/environment-verification/${v.verification_id}/recording`, { responseType: 'blob' });
         if (cancelled) return;
-        if (streamUrl) {
-          setEnvVideoState(prev => ({
-            ...prev,
-            [verificationId]: { url: streamUrl, downloadUrl: meta?.data?.download_url ?? null, loading: false, error: false },
-          }));
-          return;
-        }
-        // No presigned URL (local-disk storage) — fall back to an
-        // authenticated blob fetch, same fallback shape as the recording tab
-        // (a plain <video src> can't carry the Authorization header this
-        // endpoint requires).
-        const res = await api.get(`/ai-interview/environment-verification/${verificationId}/recording`, { responseType: 'blob' });
-        if (cancelled) return;
-        setEnvVideoState(prev => ({
-          ...prev,
-          [verificationId]: { url: URL.createObjectURL(res.data), downloadUrl: null, loading: false, error: false },
-        }));
-      } catch {
-        if (!cancelled) {
-          setEnvVideoState(prev => ({ ...prev, [verificationId]: { url: null, downloadUrl: null, loading: false, error: true } }));
-        }
-      }
+        setEnvVideoBlobUrls(prev => ({ ...prev, [v.verification_id]: URL.createObjectURL(res.data) }));
+      } catch { /* leave unset — rendered as "Video unavailable" */ }
     });
     return () => { cancelled = true; };
-  }, [activeTab, envVerificationRecords]);
+  }, [envVerifications]);
 
   // Legacy inline violations UI retained (disabled) for quick rollback; superseded by IntegrityCheckTab.
   const showLegacyViolations = false;
@@ -1393,7 +1394,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     // visible tab nav.
     // { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
-    { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: envVerificationRecords.length || undefined, badgeTone: 'neutral' },
+    { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Integrity Check',  icon: <ShieldAlert className="w-4 h-4" />, badge: violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
   ];
@@ -1608,6 +1609,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
             left_screen_focus_lost: 'Moved focus away from the interview window',
             left_screen: 'Left the interview screen',
             picture_in_picture: 'Opened a video in Picture-in-Picture',
+            microphone_disconnected_timeout: 'Microphone stayed disconnected for over 3 minutes',
+            camera_disconnected_timeout: 'Camera stayed disconnected for over 3 minutes',
+            camera_and_microphone_disconnected_timeout: 'Camera and microphone stayed disconnected for over 3 minutes',
           };
           const reason = typeof d.reason === 'string' ? d.reason : '';
           const what = (typeof d.message === 'string' && d.message)
@@ -2793,47 +2797,44 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
             )}
 
             {/* QR Verification Tab — mobile environment-verification attempts for
-                this interview (video + color/ID match + AI summary), pulled from
-                the same proctoring_violations source as Integrity Check. */}
+                this interview, sourced from the environment_verifications DB
+                table directly (GET /ai-interview/{id}/environment-verifications),
+                not from proctoring_violations. See the fetch effect above for why. */}
             {!evaluationPending && activeTab === 'verification' && (
-              envVerificationRecords.length === 0 ? (
+              envVerificationsLoading && envVerifications === null ? (
+                renderPlaceholder('Loading QR verification…')
+              ) : !envVerifications || envVerifications.length === 0 ? (
                 renderPlaceholder(
-                  liveSession.environment_verification_enabled
+                  envVerificationsError
+                    ? 'Could not load QR verification data — please refresh and try again.'
+                    : liveSession.environment_verification_enabled
                     ? 'No QR verification was triggered during this interview.'
                     : 'Mobile Environment Verification was not enabled for this interview.'
                 )
               ) : (
                 <div className="space-y-4">
-                  {envVerificationRecords.map((record, idx) => {
-                    const d = (record.details ?? {}) as Record<string, unknown>;
-                    const verificationId = typeof d.verification_id === 'string' ? d.verification_id : null;
-                    const videoState = verificationId ? envVideoState[verificationId] : undefined;
-                    const colorMatch = typeof d.color_match === 'boolean' ? d.color_match : null;
-                    const idMatch = typeof d.id_match === 'boolean' ? d.id_match : null;
-                    const aiSummary = typeof d.ai_summary === 'string' ? d.ai_summary : null;
-                    const flaggedItems = Array.isArray(d.flagged_items) ? d.flagged_items as Array<Record<string, unknown>> : [];
-                    const rgbSequenceResults = Array.isArray(d.rgb_sequence_results)
-                      ? d.rgb_sequence_results as Array<{ second: number; expected_rgb: string; detected_rgb: string | null; distance: number | null; match: boolean }>
-                      : [];
+                  {envVerifications.map((v) => {
+                    const videoSrc = v.video_url || envVideoBlobUrls[v.verification_id] || null;
+                    const videoStillLoading = v.video_uploaded && !videoSrc && !envVideoBlobUrls[v.verification_id] && !v.video_url;
                     return (
-                      <div key={idx} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
+                      <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
                         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
                             <ShieldAlert className="w-4 h-4 text-brand-blue" />
                             <span className="text-sm font-semibold text-gray-900">Environment Verification</span>
-                            {record.timestamp && (
-                              <span className="text-xs text-gray-500">{formatTs(record.timestamp)}</span>
+                            {(v.submitted_at || v.triggered_at) && (
+                              <span className="text-xs text-gray-500">{formatTs(v.submitted_at || v.triggered_at || '')}</span>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
-                            {colorMatch !== null && (
-                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ring-1 ${colorMatch ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
-                                Color {colorMatch ? 'matched' : 'mismatch'}
+                            {v.color_match !== null && (
+                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ring-1 ${v.color_match ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                Color {v.color_match ? 'matched' : 'mismatch'}
                               </span>
                             )}
-                            {idMatch !== null && (
-                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ring-1 ${idMatch ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
-                                ID {idMatch ? 'matched' : 'mismatch'}
+                            {v.id_match !== null && (
+                              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ring-1 ${v.id_match ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                ID {v.id_match ? 'matched' : 'mismatch'}
                               </span>
                             )}
                           </div>
@@ -2841,28 +2842,31 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                         <div className="p-4 sm:p-5 space-y-4">
                           <div>
                             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Candidate Verification Video</p>
-                            {!verificationId ? (
+                            {!v.video_uploaded ? (
                               <p className="text-sm text-red-600 italic">Video upload failed.</p>
-                            ) : videoState?.loading || !videoState ? (
+                            ) : videoStillLoading ? (
                               <p className="text-sm text-gray-400 italic">Loading video…</p>
-                            ) : videoState.error || !videoState.url ? (
+                            ) : !videoSrc ? (
                               <p className="text-sm text-red-600 italic">Video unavailable.</p>
                             ) : (
                               <>
                                 <video controls preload="metadata" className="w-full max-w-lg rounded-lg bg-black">
-                                  <source src={videoState.url} />
+                                  <source src={videoSrc} type={v.video_mime_type || 'video/webm'} />
                                 </video>
-                                <p className="text-xs text-green-700 font-medium mt-1.5">Status: Uploaded</p>
+                                <p className="text-xs text-green-700 font-medium mt-1.5">
+                                  Status: {v.status === 'completed' ? 'Uploaded' : v.status === 'submitted' ? 'Uploaded' : v.status}
+                                  {v.analysis_status === 'pending' || v.analysis_status === 'running' ? ' · Analysis pending' : ''}
+                                </p>
                               </>
                             )}
                           </div>
-                          {rgbSequenceResults.length > 0 && (
+                          {v.rgb_sequence_results && v.rgb_sequence_results.length > 0 && (
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">
                                 RGB Challenge Sequence — deterministic per-second check
                               </p>
                               <div className="flex flex-wrap gap-2">
-                                {rgbSequenceResults.map((r) => (
+                                {v.rgb_sequence_results.map((r) => (
                                   <div
                                     key={r.second}
                                     className={`flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-lg ring-1 text-xs font-medium ${r.match ? 'bg-green-50 ring-green-200 text-green-700' : 'bg-red-50 ring-red-200 text-red-600'}`}
@@ -2877,21 +2881,41 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                 ))}
                               </div>
                               <p className="text-[11px] text-gray-400 mt-1.5">
-                                Overall RGB_CHALLENGE = {rgbSequenceResults.every(r => r.match) ? 'PASS' : 'REVIEW_REQUIRED'}
+                                Overall RGB_CHALLENGE = {v.rgb_sequence_results.every(r => r.match) ? 'PASS' : 'REVIEW_REQUIRED'}
                               </p>
                             </div>
                           )}
-                          {aiSummary && (
+                          {/* AI Analysis status banner — the explicit "did the LLM find anything"
+                              verdict (result_severity), separate from the color/ID anti-replay
+                              check above. Matches the spec's "LLM compares frames... records a
+                              violation with a summary... added to the interview report." */}
+                          {v.analysis_status === 'pending' || v.analysis_status === 'running' ? (
+                            <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse flex-shrink-0" />
+                              <p className="text-xs text-gray-600">AI analysis in progress — frames are being extracted and reviewed. This updates automatically once complete.</p>
+                            </div>
+                          ) : v.analysis_status === 'error' ? (
+                            <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2">
+                              <p className="text-xs text-gray-600">AI analysis could not be completed for this recording — the video itself is still available above.</p>
+                            </div>
+                          ) : v.analysis_status === 'done' ? (
+                            <div className={`rounded-lg px-3 py-2 ring-1 ${v.result_severity === 'flagged' ? 'bg-red-50 ring-red-200' : 'bg-green-50 ring-green-200'}`}>
+                              <p className={`text-xs font-semibold ${v.result_severity === 'flagged' ? 'text-red-700' : 'text-green-700'}`}>
+                                {v.result_severity === 'flagged' ? '⚠ Suspicious activity detected' : '✓ No suspicious activity detected'}
+                              </p>
+                            </div>
+                          ) : null}
+                          {v.ai_summary && (
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">AI Summary</p>
-                              <p className="text-sm text-gray-700 leading-relaxed">{aiSummary}</p>
+                              <p className="text-sm text-gray-700 leading-relaxed">{v.ai_summary}</p>
                             </div>
                           )}
-                          {flaggedItems.length > 0 && (
+                          {v.flagged_items && v.flagged_items.length > 0 && (
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Flagged Items</p>
                               <div className="flex flex-wrap gap-1.5">
-                                {flaggedItems.map((item, i) => (
+                                {v.flagged_items.map((item, i) => (
                                   <span key={i} className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 ring-1 ring-red-200">
                                     {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
                                   </span>

@@ -144,11 +144,16 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     chunksRef.current = [];
     recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = () => {
+      console.info('[ENV-VERIFY] Recording stopped');
       streamRef.current?.getTracks().forEach(t => t.stop());
       // Blob validation (spec #17) before ever offering Upload — never show
       // a fake success state on an empty/invalid recording.
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'video/webm' });
+      console.info('[ENV-VERIFY] Video blob created');
+      console.info(`[ENV-VERIFY] Video size: ${blob.size}`);
+      console.info(`[ENV-VERIFY] Video type: ${blob.type}`);
       if (!blob || blob.size === 0) {
+        console.warn('[ENV-VERIFY] Empty blob — recording failed, refusing to advance to submit');
         setErrorMessage('Recording failed. Please close this page and rescan the QR code to try again.');
         setPhase('error');
         return;
@@ -185,10 +190,12 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       recorderRef.current.start();
       const stateAfterStart: string = recorderRef.current.state;
       if (stateAfterStart !== 'recording') {
+        console.warn(`[ENV-VERIFY] Recording could not be started — recorder.state=${stateAfterStart}`);
         setErrorMessage('Recording could not be started. Please try again.');
         setPhase('error');
         return;
       }
+      console.info('[ENV-VERIFY] Recording started');
       // Tell the backend the INSTANT recording is confirmed live — this is
       // what the laptop's 1-color-per-second RGB cycle syncs to, not link-
       // open time, so candidate-side delays (reading instructions, granting
@@ -227,16 +234,38 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   }, []);
 
   const handleSubmit = async () => {
+    const blob = new Blob(chunksRef.current, { type: recorderRef.current?.mimeType || 'video/webm' });
+    // Re-validate at submit time too (spec #15: never call submit as if the
+    // video was uploaded on an empty/invalid Blob) — the onstop check above
+    // already guards the ready_to_submit transition, but this is the actual
+    // upload call site and must not trust that state alone.
+    if (!blob || blob.size === 0) {
+      console.warn('[ENV-VERIFY] Empty blob at submit time — refusing to upload');
+      setErrorMessage('Recording is empty or unavailable. Please close this page and rescan the QR code to try again.');
+      setPhase('error');
+      return;
+    }
     setPhase('uploading');
+    console.info('[ENV-VERIFY] Upload started');
     try {
-      const blob = new Blob(chunksRef.current, { type: recorderRef.current?.mimeType || 'video/webm' });
       const formData = new FormData();
       formData.append('file', blob, 'env_verify.webm');
-      await verifyApi.post(`/candidate/environment-verify/${token}/submit`, formData, {
+      const res = await verifyApi.post(`/candidate/environment-verify/${token}/submit`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      // Trust the backend's explicit confirmation, not just a 2xx status —
+      // video_uploaded=true is only ever returned after storage AND the DB
+      // commit both succeeded (spec #15/#6).
+      if (!res?.data?.video_uploaded) {
+        console.warn('[ENV-VERIFY] Upload response did not confirm persistence — treating as failure');
+        setErrorMessage('Upload could not be confirmed. Please close this page and rescan the QR code to try again.');
+        setPhase('error');
+        return;
+      }
+      console.info('[ENV-VERIFY] Upload completed');
       setPhase('done');
-    } catch {
+    } catch (err) {
+      console.warn('[ENV-VERIFY] Upload failed', err);
       setErrorMessage('Upload failed. Please close this page and rescan the QR code to try again.');
       setPhase('error');
     }

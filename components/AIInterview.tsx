@@ -2347,10 +2347,11 @@ export default function AIInterview() {
         };
 
         // Same eligibility rule as the per-row Revoke button below: hidden once the
-        // candidate has engaged with the interview (in_progress/completed/terminated),
+        // candidate has accepted Consent & Terms and entered the interview process
+        // (system_check/in_progress), engaged with the interview (completed/terminated),
         // the invite was abandoned pre-send (cancelled), or it's already revoked.
         const isRevocableInvite = (inv: any): boolean =>
-          !['in_progress', 'completed', 'terminated', 'cancelled', 'revoked'].includes(inv.status);
+          !['system_check', 'in_progress', 'completed', 'terminated', 'cancelled', 'revoked'].includes(inv.status);
 
         const invTotal = invitationOverview.total;
         const invInProgress = invitationOverview.inProgress;
@@ -2688,10 +2689,11 @@ export default function AIInterview() {
                               invitation has been revoked; Revoke is enabled for
                               any invitation that hasn't already reached a
                               terminal/interview-in-progress state. Hidden together
-                              once the candidate has actually engaged with the
-                              interview (in_progress/completed/terminated) or the
-                              invite was abandoned pre-send (cancelled). */}
-                          {!['in_progress', 'completed', 'terminated', 'cancelled'].includes(inv.status) && (
+                              once the candidate has accepted Consent & Terms and
+                              entered the interview process (system_check/in_progress),
+                              actually engaged with the interview (completed/terminated),
+                              or the invite was abandoned pre-send (cancelled). */}
+                          {!['system_check', 'in_progress', 'completed', 'terminated', 'cancelled'].includes(inv.status) && (
                             <>
                               <button
                                 onClick={(e) => {
