@@ -476,7 +476,15 @@ const DUPLICATE_STOPWORDS = new Set<string>([
 
 const normalizeForDuplicate = (value: string): string => {
   if (!value) return '';
-  const withoutParens = value.toLowerCase().replace(/\(.*?\)/g, ' ');
+  // Drop ILLUSTRATIVE parentheticals only ("frameworks (e.g., Django)" == "frameworks").
+  // A SUBSTANTIVE parenthetical is part of the requirement's identity and is KEPT:
+  // stripping every parenthetical made "Genesys Cloud (Core Contact Center Platform)"
+  // and "Genesys Cloud" compare equal, so the descriptive half the JD actually wrote
+  // was discarded as a duplicate. Mirrors the backend's _normalize_for_dedup - keep
+  // the two in sync.
+  const withoutParens = value
+    .toLowerCase()
+    .replace(/\((?:\s*(?:e\.?g\.?|i\.?e\.?|for example|such as|including)\b).*?\)/g, ' ');
   const tokens = withoutParens
     .replace(/[^a-z0-9]+/g, ' ')
     .split(' ')
@@ -1034,14 +1042,20 @@ const FALLBACK_EXPERIENCE_LEVELS: ExperienceLevel[] = [
   { id: 6, code: 'management', label: 'Management Level (10+ Years)', min_years: 10, max_years: null, sort_order: 6, is_active: true },
 ];
 
+// Mirrors master_education_levels (see MASTER_EDUCATION_LEVELS_SEED in the backend's
+// migrations.py). Used only until master data loads. 'high_school' was added 2026-08-14:
+// extraction could already emit it but no master row existed, so it fell through to
+// "Other" - which broke every non-degree role (retail, hospitality, security, drivers,
+// warehouse, field staff). Keep this list in sync with the backend seed.
 const FALLBACK_EDUCATION_LEVELS: EducationLevel[] = [
-  { id: 1, code: 'diploma', label: 'Diploma', level: 1, sort_order: 1, is_active: true },
-  { id: 2, code: 'associate', label: 'Associate Degree', level: 2, sort_order: 2, is_active: true },
-  { id: 3, code: 'bachelors', label: "Bachelor's Degree", level: 3, sort_order: 3, is_active: true },
-  { id: 4, code: 'masters', label: "Master's Degree", level: 4, sort_order: 4, is_active: true },
-  { id: 5, code: 'doctorate', label: 'Doctorate / PhD', level: 5, sort_order: 5, is_active: true },
-  { id: 6, code: 'none', label: 'No Formal Education', level: 0, sort_order: 6, is_active: true },
-  { id: 7, code: 'others', label: 'Other', level: 0, sort_order: 7, is_active: true },
+  { id: 1, code: 'high_school', label: 'High School', level: 1, sort_order: 1, is_active: true },
+  { id: 2, code: 'diploma', label: 'Diploma', level: 2, sort_order: 2, is_active: true },
+  { id: 3, code: 'associate', label: 'Associate Degree', level: 3, sort_order: 3, is_active: true },
+  { id: 4, code: 'bachelors', label: "Bachelor's Degree", level: 4, sort_order: 4, is_active: true },
+  { id: 5, code: 'masters', label: "Master's Degree", level: 5, sort_order: 5, is_active: true },
+  { id: 6, code: 'doctorate', label: 'Doctorate / PhD', level: 6, sort_order: 6, is_active: true },
+  { id: 7, code: 'none', label: 'No Formal Education', level: 0, sort_order: 7, is_active: true },
+  { id: 8, code: 'others', label: 'Other', level: 0, sort_order: 8, is_active: true },
 ];
 
 const FALLBACK_INDUSTRY_TYPES: IndustryType[] = [
@@ -2322,12 +2336,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       setShowCustomExperienceInput(Boolean(nextExperienceValue && !getExperienceLevelByCode(nextExperienceValue)));
       setExperienceYearsExplicit(hasExplicitExperienceYears);
 
-      setExtractedData(prev => ({
+      setExtractedData(prev => {
+        // Same deterministic first-render dedupe as the extraction path below - the
+        // AI-generation path merges the four lists too, so it can surface the same
+        // duplicate rows. No network call, so the no-edit -> no-LLM invariant holds.
+        const dedupedLists = dedupeListsDeterministic({
+          mustHaveSkills: mergeExtractedListField(prev.mustHaveSkills, params.must_have_skills, isEditMode),
+          niceToHaveSkills: mergeExtractedListField(prev.niceToHaveSkills, params.nice_to_have_skills, isEditMode),
+          mustHaveComments: mergeExtractedListField(prev.mustHaveComments, params.must_have_comments, isEditMode),
+          niceToHaveComments: mergeExtractedListField(prev.niceToHaveComments, params.nice_to_have_comments, isEditMode),
+        });
+        return {
         ...prev,
-        mustHaveSkills: mergeExtractedListField(prev.mustHaveSkills, params.must_have_skills, isEditMode),
-        mustHaveComments: mergeExtractedListField(prev.mustHaveComments, params.must_have_comments, isEditMode),
-        niceToHaveSkills: mergeExtractedListField(prev.niceToHaveSkills, params.nice_to_have_skills, isEditMode),
-        niceToHaveComments: mergeExtractedListField(prev.niceToHaveComments, params.nice_to_have_comments, isEditMode),
+        mustHaveSkills: dedupedLists.mustHaveSkills,
+        mustHaveComments: dedupedLists.mustHaveComments,
+        niceToHaveSkills: dedupedLists.niceToHaveSkills,
+        niceToHaveComments: dedupedLists.niceToHaveComments,
         education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || (isEditMode ? prev.education : ''),
         experience: expValue || prev.experience,
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
@@ -2347,7 +2371,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         suggestedLanguages: params.suggested_languages?.length > 0 ? params.suggested_languages : (isEditMode ? prev.suggestedLanguages : []),
         certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? prev.certifications : []),
         domainKeywords: params.domain_keywords?.length > 0 ? params.domain_keywords : (isEditMode ? prev.domainKeywords : []),
-      }));
+        };
+      });
 
       // Log what was pre-filled and trigger validation
       if (params.salary_min || params.salary_max) {
@@ -2856,7 +2881,33 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           return lbl === normalized || lbl.includes(normalized) || normalized.includes(l.code.toLowerCase().replace(/[^a-z]/g, ''));
         });
         if (partialMaster) return partialMaster.code;
+        // NOTE: keys must be in NORMALIZED form - `normalized` above has every
+        // non-letter stripped, so 'high_school' arrives as 'highschool' and any
+        // digit-bearing spelling ('12th') is already unrecognisable. Letter-only keys only.
         const educationMap: Record<string, string> = {
+          // Secondary schooling. Previously unmapped, so extraction's 'high_school'
+          // fell through to 'others' and displayed as "Other" - the single biggest
+          // gap for non-degree roles (retail, hospitality, security, drivers,
+          // warehouse, field staff), which are a large share of non-IT hiring.
+          'highschool': 'high_school',
+          'high': 'high_school',
+          'secondary': 'high_school',
+          'secondaryschool': 'high_school',
+          'seniorsecondary': 'high_school',
+          'highersecondary': 'high_school',
+          'sslc': 'high_school',
+          'ssc': 'high_school',
+          'hsc': 'high_school',
+          'ged': 'high_school',
+          'matriculation': 'high_school',
+          'matric': 'high_school',
+          // Vocational / trade routes map to Diploma, which extraction previously
+          // could not emit at all.
+          'iti': 'diploma',
+          'polytechnic': 'diploma',
+          'vocational': 'diploma',
+          'vocationaldiploma': 'diploma',
+          'tradecertificate': 'diploma',
           'diploma': 'diploma',
           'associate': 'associate',
           'associatedegree': 'associate',
@@ -2880,6 +2931,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           'none': 'none',
           'noformal': 'none',
           'noformaleducation': 'none',
+          // Legacy extraction spelling ('no_education') - previously unmapped, so a
+          // JD that explicitly required NO formal education displayed as "Other".
+          'noeducation': 'none',
+          'noformaleducationrequired': 'none',
+          'notrequired': 'none',
           'others': 'others',
           'other': 'others',
           'any': 'others',
@@ -3024,6 +3080,36 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         codingRequired: params.coding_required === true || (isEditMode ? extractedData.codingRequired : false),
         suggestedLanguages: params.suggested_languages?.length > 0 ? params.suggested_languages : (isEditMode ? extractedData.suggestedLanguages : []),
       };
+
+      // FIRST-RENDER DE-DUPLICATION.
+      // The cross-list dedupe used to run only on the Step 2 -> Step 3 transition, and
+      // only when the recruiter had actually edited something (the reformat pass is
+      // deliberately gated on "no edits -> no AI call"). So a FRESH extraction with no
+      // edits - which is the exact reproduction path in the BUG3 report - rendered
+      // whatever the backend returned, duplicates included.
+      //
+      // This is the DETERMINISTIC pass only (same normalization as the backend's
+      // _dedupe_exact_across_lists). It fires no network request, so the
+      // "editing a JD with no changes triggers no LLM call" invariant is preserved.
+      const dedupedLists = dedupeListsDeterministic({
+        mustHaveSkills: extraction.mustHaveSkills || [],
+        niceToHaveSkills: extraction.niceToHaveSkills || [],
+        mustHaveComments: extraction.mustHaveComments || [],
+        niceToHaveComments: extraction.niceToHaveComments || [],
+      });
+      const removedByFirstRenderDedupe =
+        (extraction.mustHaveSkills?.length || 0) + (extraction.niceToHaveSkills?.length || 0) +
+        (extraction.mustHaveComments?.length || 0) + (extraction.niceToHaveComments?.length || 0) -
+        (dedupedLists.mustHaveSkills.length + dedupedLists.niceToHaveSkills.length +
+         dedupedLists.mustHaveComments.length + dedupedLists.niceToHaveComments.length);
+      if (removedByFirstRenderDedupe > 0) {
+        console.log(`[TalentFlow] First-render dedupe removed ${removedByFirstRenderDedupe} duplicate entr${removedByFirstRenderDedupe === 1 ? 'y' : 'ies'}`);
+      }
+      extraction.mustHaveSkills = dedupedLists.mustHaveSkills;
+      extraction.niceToHaveSkills = dedupedLists.niceToHaveSkills;
+      extraction.mustHaveComments = dedupedLists.mustHaveComments;
+      extraction.niceToHaveComments = dedupedLists.niceToHaveComments;
+
       const extractionExperiencePayload = resolvePersistedExperiencePayload(extraction.experience, nextExperienceYearsExplicit);
       setShowCustomExperienceInput(Boolean(extraction.experience && extractionExperiencePayload.isCustom));
 

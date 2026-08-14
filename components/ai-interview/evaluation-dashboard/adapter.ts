@@ -2601,28 +2601,30 @@ export function buildDashboardData(params: {
   const mthQARows = perQuestionDetails.filter(q => q.section === 'mth' && !q.isUnscored);
   const nthQARows = perQuestionDetails.filter(q => q.section === 'nth' && !q.isUnscored);
 
-  // Round to 1 decimal — matches QuestionsView (mhScore/nhScore) so the
-  // headline numbers in Overview / Skill Breakdown / Eval Report agree with
-  // the per-section badge inside Question Analysis. Keeping 2-decimal here
-  // was producing rendered mismatches like 6.95 (Overview) vs 7.00 (Q Analysis).
-  // PERMANENT FIX (2026-06-02): prefer the BACKEND authoritative section
-  // averages (`section_question_avg.mth/nth`) — the SAME values the Results-list
-  // score (capability_score = mth×10 in timed mode) and Pass/Fail derive from.
-  // Recomputing the Must-Have average independently from the QA rows here is
-  // what made the report headline (e.g. 10%) disagree with the Results list
-  // (e.g. 36%) for the same candidate. Fall back to the QA recompute only for
-  // legacy sessions that never stored section_question_avg.
-  const mustHaveAvgQA = (typeof mthQAvg === 'number')
-    ? mthQAvg
-    : (mthQARows.length > 0
-        ? Math.round(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthQARows.length * 10) / 10
-        : mustHaveAvg); // keep original if QA produced no scored rows (old sessions)
+  // Section average = Σ(scored question scores) ÷ PLANNED question count — the
+  // EXACT denominator QuestionsView uses (Math.max(plannedCounts, scoredRows)),
+  // the backend `capability_score` (= section avg ÷ planned × 10, the score the
+  // Results list shows), and backend `_compute_section_scores`. It must match
+  // ALL of those or the headline numbers diverge across views.
+  //
+  // WHY THIS CHANGED (2026-08-14): this used to prefer the backend
+  // `section_question_avg` / divide by the ANSWERED count. That put the Eval
+  // Report headline on a ÷ANSWERED basis (e.g. 4.33 → Match 43%) while the
+  // Question Analysis section score and the Results-list score were already on
+  // ÷PLANNED (e.g. 17.5 → 18%). Same candidate, two different scores. Everything
+  // is now ÷PLANNED: un-reached / unanswered questions count as 0 and do NOT
+  // shrink the denominator (product decision — ending early or skipping cannot
+  // inflate the section score by hiding the gaps). `section_question_avg` is no
+  // longer preferred because it carries the old ÷ANSWERED denominator.
+  const mthPlannedDenom = Math.max(plannedCounts?.mustHave || 0, mthQARows.length);
+  const mustHaveAvgQA = mthPlannedDenom > 0
+    ? Math.round(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthPlannedDenom * 10) / 10
+    : mustHaveAvg; // keep original if QA produced no scored rows (old sessions)
 
-  const niceToHaveAvgQA = (typeof nthQAvg === 'number')
-    ? nthQAvg
-    : (nthQARows.length > 0
-        ? Math.round(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthQARows.length * 10) / 10
-        : niceToHaveAvg);
+  const nthPlannedDenom = Math.max(plannedCounts?.niceToHave || 0, nthQARows.length);
+  const niceToHaveAvgQA = nthPlannedDenom > 0
+    ? Math.round(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthPlannedDenom * 10) / 10
+    : niceToHaveAvg;
 
   // 4. Final score from QA-derived section averages.
   //    TIMED mode: the headline "Match Score" is Must-Have Section Score ×10
