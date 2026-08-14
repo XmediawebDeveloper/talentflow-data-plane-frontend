@@ -1172,24 +1172,22 @@ function buildPerQuestionDetailsFromHistory(
     if (isSkipped) {
       return { score: 0, note: '', is_fallback: false, is_skipped: true, is_unscored: false };
     }
-    // Fallback: question-level score (so a real answer doesn't show 0
-    // just because the evaluator graded a different topic name). Only
-    // fires when qLevelFallback is positive; an entry.score of 0 means
-    // the candidate genuinely scored 0 and we surface that honestly.
-    if (typeof qLevelFallback === 'number' && qLevelFallback > 0) {
-      return {
-        score: Math.max(0, Math.min(10, qLevelFallback)),
-        note: '',
-        is_fallback: true,
-        is_skipped: false,
-        is_unscored: false,
-      };
-    }
-    // No evaluator row, not skipped, no positive question-level score: this
-    // skill was simply NOT evaluated. Per the scoring spec the backend never
-    // fabricates a 0.0 here (transcript_evaluation_service.py:3209-3214) — we
-    // mustn't either. Flag is_unscored so the weighted average EXCLUDES it and
-    // the UI renders "Not evaluated" instead of a candidate-tanking 0.0.
+    // (Q-level fallback REMOVED 2026-08-14.) This used to substitute the
+    // question's OVERALL score when a planned skill had no matching per-skill
+    // row, badged "Q" — a legacy crutch for "slot drift" in OLDER sessions.
+    // It is no longer needed: the backend now emits a question_skill_map row
+    // for EVERY assigned skill (a real score, or 0 with a "No evidence" note),
+    // so a planned skill is ALWAYS matched by the lookups above. When the
+    // fallback did fire it only MASKED an incomplete map by fabricating a
+    // plausible number (e.g. React showing the question's 4.6 instead of its
+    // real 1.0), which made the Skills-assessed table disagree with the Score
+    // Rationale and produced impossible footers like "36.2 ÷ 11 = 4.60".
+    //
+    // Now: a genuinely unmatched skill falls through to is_unscored → the UI
+    // renders an honest "Not evaluated" (EXCLUDED from the weighted average)
+    // instead of a made-up score, so any real gap stays visible rather than
+    // being papered over. (`qLevelFallback` is retained in the signature but no
+    // longer consulted.)
     return { score: 0, note: '', is_fallback: false, is_skipped: false, is_unscored: true };
   };
 

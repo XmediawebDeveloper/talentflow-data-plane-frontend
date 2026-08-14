@@ -75,6 +75,36 @@ export interface PerQuestionSkill {
   is_unscored?: boolean;
 }
 
+/**
+ * Build the per-question "Score Rationale" as an array of display lines,
+ * derived ENTIRELY from the same `PerQuestionSkill[]` that the "Skills
+ * assessed" card renders. This guarantees the Score Rationale and the
+ * Skills-assessed table can NEVER show a different score for the same skill
+ * (the recruiter's core requirement) — they are the same source.
+ *
+ * Each skill → `<name>: <score>/10 — <note>` (or `<name>: Not evaluated` when
+ * unscored). Only the qualitative summary sentences of the backend rationale
+ * (lines WITHOUT a `/10` score, e.g. "Overall: …") are appended; its per-skill
+ * score lines are dropped and regenerated here so every number is single-
+ * sourced. Used by EvaluationDashboardV2, EvaluationReportV2, and
+ * EvalReportCombined (HTML + PDF) so all four surfaces are identical.
+ */
+export function buildRationaleLines(
+  skills: PerQuestionSkill[],
+  backendRationale?: string | null,
+): string[] {
+  const perSkill = (skills || []).map(s =>
+    s.is_unscored
+      ? `${s.name}: Not evaluated`
+      : `${s.name}: ${Number(s.score).toFixed(1)}/10${s.note ? ` — ${s.note}` : ''}`
+  );
+  const summary = String(backendRationale || '')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !/:\s*-?\d+(?:\.\d+)?\s*\/\s*10/.test(l));
+  return [...perSkill, ...summary];
+}
+
 export interface PerQuestionClarification {
   /** 1-based CL index within the parent question (CL1, CL2, ...). */
   number: number;

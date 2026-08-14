@@ -496,6 +496,7 @@ function CategorySection({
   onRemoveSkillFromPool,
   mainSkillSet,
   parentGroups,
+  jdId,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -520,9 +521,15 @@ function CategorySection({
   onRemoveSkillFromPool?: (skillName: string) => void;
   mainSkillSet?: Set<string>;
   parentGroups?: { parent: string; sub_skills: string[] }[];
+  /** JD id, so the duplicate check can resolve the industry server-side and judge
+   *  skills inside the right domain (multi-industry platform). */
+  jdId?: string;
 }) {
   const [newSkillInput, setNewSkillInput] = useState('');
   const [skillInputError, setSkillInputError] = useState('');
+  // True while the semantic (LLM) duplicate check is in flight, so the Add
+  // button can show progress instead of appearing frozen.
+  const [checkingSkill, setCheckingSkill] = useState(false);
   // Skill name already warned about once on a MEDIUM-confidence duplicate match;
   // pressing Add again with the same text keeps both. Cleared on a successful add.
   const [skillOverride, setSkillOverride] = useState<string | null>(null);
@@ -538,7 +545,7 @@ function CategorySection({
     return m;
   }, [skills]);
 
-  const handleAddSkill = () => {
+  const handleAddSkill = async () => {
     const trimmed = newSkillInput.trim();
     if (!trimmed) { setSkillInputError('Skill name cannot be empty'); return; }
     const duplicate = skills.some(s => s.name.toLowerCase() === trimmed.toLowerCase());
@@ -557,6 +564,31 @@ function CategorySection({
       // so it warns and lets a second press through. HIGH is refused outright.
       setSkillOverride(similar.tier === 'medium' ? trimmed : null);
       return;
+    }
+    // ── Semantic layer: only reached when the deterministic matcher found nothing.
+    // Structural rules cannot see a true synonym ("Data Analytics" vs "Data
+    // Analysis", "Goods Inward" vs "Receiving") — those share no root, and every
+    // industry has its own set, so this asks the backend (which is industry-aware)
+    // rather than growing a word list. Advisory + overridable; fails open, so a
+    // slow or unavailable check never stops the add.
+    if (skillOverride?.toLowerCase() !== trimmed.toLowerCase()) {
+      setCheckingSkill(true);
+      let findings: Awaited<ReturnType<typeof aiInterviewService.checkSkillDuplicates>> = [];
+      try {
+        findings = await aiInterviewService.checkSkillDuplicates({
+          candidates: [trimmed],
+          existing: skills.map(s => s.name),
+          jdId,
+        });
+      } finally {
+        setCheckingSkill(false);
+      }
+      const hit = findings.find(f => f.duplicate && f.match);
+      if (hit) {
+        setSkillInputError(`"${trimmed}" looks like the existing skill "${hit.match}" (${hit.reason})`);
+        setSkillOverride(trimmed);   // always overridable — an LLM opinion is not a veto
+        return;
+      }
     }
     setSkillOverride(null);
     onAddSkill?.(trimmed);

@@ -133,6 +133,12 @@ export function skillTokenSequence(skill: string, expandAliases = true): string[
   for (const p of pieces) {
     for (const w of (expandAliases ? (SKILL_ALIASES[p] || p) : p).split(' ')) {
       const st = caps.has(w) ? w : skillStem(w);
+      // Test the stopword list against BOTH the raw word and its stem. Stemming
+      // runs first, so any -ing / -s entry was unreachable: 'writing' became
+      // 'writ', which is not in the list, so "Test Case Writing" kept a 'writ'
+      // token while "Write Test Cases" dropped 'write' as filler — and the two
+      // phrasings of one skill never matched.
+      if (SKILL_STOPWORDS.has(w)) continue;
       if (st.length > 1 && !SKILL_STOPWORDS.has(st) && !seen.has(st)) {
         seen.add(st);
         out.push(st);
@@ -140,6 +146,43 @@ export function skillTokenSequence(skill: string, expandAliases = true): string[
     }
   }
   return out;
+}
+
+/** Derivational suffixes, longest-first. Mirrors backend
+ *  `_SKILL_DERIVATIONAL_SUFFIXES`. DELIBERATELY EXCLUDES the endings that collide
+ *  across industries: 'er' (engineering → engineer → 'engine'), 'al', 'ent'
+ *  ('patient' → 'pati'), 'ive', 'ory', 'ure', 'ous'. */
+const DERIVATIONAL_SUFFIXES = [
+  'ational', 'ization', 'isation', 'ation', 'ition', 'ution',
+  'ement', 'ment', 'ness', 'ility', 'ity',
+  'ance', 'ence', 'ancy', 'ency', 'ion',
+  'ate', 'ise', 'ize', 'ify', 'e',
+];
+
+/** Reduce a token to a root shared by its noun and verb forms — configuration /
+ *  configure / configuring → 'configur'. Mirrors backend `_skill_deep_stem`.
+ *  Never strips below 4 characters. */
+function skillDeepStem(token: string): string {
+  let root = token;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const suf of DERIVATIONAL_SUFFIXES) {
+      if (root.endsWith(suf) && root.length - suf.length >= 4) {
+        root = root.slice(0, -suf.length);
+        changed = true;
+        break;
+      }
+    }
+  }
+  return root;
+}
+
+/** Deep-stemmed token set. Used ONLY for whole-set equality, never subset logic,
+ *  so it can add detections but can never make a bundle look like one of its
+ *  parts. Mirrors backend `_skill_root_tokens`. */
+export function skillRootTokens(skill: string): Set<string> {
+  return new Set(skillTokenSequence(skill).map(skillDeepStem));
 }
 
 export function skillContentTokens(skill: string): Set<string> {
@@ -220,11 +263,22 @@ export function skillDuplicateVerdict(a: string, b: string): DupVerdict {
   const ta = skillContentTokens(a);
   const tb = skillContentTokens(b);
   if (ta.size === 0 || tb.size === 0) return no;
-  const [small, large] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
-  for (const t of small) if (!large.has(t)) return no;
-  if (small.size === large.size) {
+  if (ta.size === tb.size && [...ta].every(t => tb.has(t))) {
     return { dup: true, tier: 'high', reason: 'same meaning, different wording' };
   }
+  // Same words in a different grammatical form and/or order — "Configure Servers"
+  // vs "Server Configuration", "Validate Data" vs "Data Validation", "Administer
+  // Medication" vs "Medication Administration". Must run BEFORE the containment
+  // check below, which returns early when the raw token sets don't nest (they
+  // don't here: 'configure' is not in {server, configuration}). Whole-SET equality
+  // only, so it can never make a bundle look like one of its parts.
+  const ra = skillRootTokens(a);
+  const rb = skillRootTokens(b);
+  if (ra.size > 0 && ra.size === rb.size && [...ra].every(t => rb.has(t))) {
+    return { dup: true, tier: 'high', reason: 'same words in a different form or order' };
+  }
+  const [small, large] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+  for (const t of small) if (!large.has(t)) return no;
   const extra = [...large].filter(t => !small.has(t));
   if (extra.length > 0 && extra.every(t => GENERIC_QUALIFIERS.has(t))) {
     return { dup: true, tier: 'medium', reason: 'one is a reworded form of the other' };

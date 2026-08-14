@@ -1705,7 +1705,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const normalized = value?.toLowerCase().trim() || '';
     if (!normalized) return {};
 
-    const rangeMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*(?:-|to|–)\s*(\d{1,2}(?:\.\d+)?)/);
+    // Mirrors the backend's _EXP_RANGE_RE. The optional `\+?` and unit word after the
+    // FIRST number let "5+ years to 8 years" / "5 years to 8 years" / "5+ to 8 years"
+    // match as ONE range. Without them the match died at the first number, fell through
+    // to the `plusMatch` branch below, and returned min=5 with NO max - dropping the
+    // upper bound the recruiter typed. Keep in sync with the backend regex.
+    const rangeMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)?\s*(?:-|to|–)\s*(\d{1,2}(?:\.\d+)?)\s*\+?/);
     if (rangeMatch) {
       const first = Number(rangeMatch[1]);
       const second = Number(rangeMatch[2]);
@@ -5389,7 +5394,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
-                        placeholder="e.g., Senior Java Developer – Banking Domain"
+                        placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
                         disabled={isJDInUse}
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
@@ -5424,7 +5429,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={aiPrompt}
                         onChange={(e) => setAiPrompt(e.target.value)}
                         maxLength={VALIDATION.AI_PROMPT.max}
-                        placeholder="Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"
+                        placeholder="Describe the role - responsibilities, must-have skills, experience, location, work mode, salary. e.g., 'Shift supervisor for a 200-bed hospital ward, 5+ years, night rotation, Chennai' or 'Senior full-stack developer with React and Node.js, 5+ years, remote, leading a team of 3'"
                         rows={12}
                         disabled={isJDInUse}
                         className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-500 ${
@@ -5547,7 +5552,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
-                        placeholder="e.g., Senior Java Developer"
+                        placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
                         disabled={isJDInUse}
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
@@ -7578,7 +7583,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={newCertification}
                         onChange={(e) => setNewCertification(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddCertification()}
-                        placeholder="e.g., AWS Certified Solutions Architect"
+                        placeholder="e.g., ISO 9001 Lead Auditor, PMP, AWS Solutions Architect"
                         className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                         autoFocus
                       />
@@ -7635,7 +7640,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={newDomainKeyword}
                         onChange={(e) => setNewDomainKeyword(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddDomainKeyword()}
-                        placeholder="e.g., Banking, Fintech, Cloud"
+                        placeholder="e.g., Cold Chain, Retail Ops, Banking, Cloud"
                         className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                         autoFocus
                       />
@@ -7694,7 +7699,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         markExtractedDataModified();
                       });
                     }}
-                    placeholder="e.g., Focus on system design, coding best practices, problem-solving approach..."
+                    placeholder="e.g., Focus on safety compliance, hands-on judgement, problem-solving approach..."
                     className={`w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
                     disabled={isRegenerating}

@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X, MessageSquare, SkipForward,
 } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
+import { buildRationaleLines } from './types';
 import { IS_PRODUCTION_ENV } from '../../../lib/utils/env';
 
 interface Props {
@@ -592,31 +593,43 @@ export function QuestionsView({ data }: { data: DashboardData }) {
             dropdown below is hidden — this is the reviewer's one explanation of
             the score. HR turns carry no rationale (never scored), so this hides
             for them automatically. */}
-        {q.scoreRationale && q.scoreRationale.trim() && (
-          <div className="border-l-2 border-amber-200 pl-3">
-            <div className="text-xs font-medium text-gray-500 mb-1">
-              Score Rationale
-            </div>
-            <div className="flex items-start gap-1.5 text-sm text-gray-700 bg-amber-50/60 border border-amber-100 rounded px-2.5 py-2 break-words leading-relaxed">
-              <Brain className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
-              <div className="space-y-1 flex-1">
-                {q.scoreRationale.split('\n').map((line, li) => {
-                  const t = line.trim();
-                  if (!t) return null;
-                  const ci = t.indexOf(':');
-                  const labeled = ci > 0 && ci <= 120;
-                  return (
-                    <div key={li}>
-                      {labeled
-                        ? <><span className="font-semibold text-gray-900">{t.slice(0, ci)}</span>{t.slice(ci)}</>
-                        : t}
-                    </div>
-                  );
-                })}
+        {/* Score Rationale — derived from the SAME `q.skills[]` array that the
+            "Skills assessed" table below renders from, so the two can NEVER
+            disagree on a score (the recruiter's core requirement). Each line is
+            `<Skill>: <score>/10 — <note>` using the skill's own map-sourced
+            score+note; only the qualitative "Overall:" summary (and any non
+            per-skill sentence) is carried over from the backend rationale
+            string. Previously this rendered the backend `q.scoreRationale`
+            string independently, which could drift from the table. */}
+        {!isHr && q.skills.length > 0 && (() => {
+          // buildRationaleLines regenerates the per-skill lines from q.skills[]
+          // (same source as the "Skills assessed" table) + carries the backend
+          // summary sentences. Shared by the PDF/report so all surfaces match.
+          const lines = buildRationaleLines(q.skills, q.scoreRationale);
+          return (
+            <div className="border-l-2 border-amber-200 pl-3">
+              <div className="text-xs font-medium text-gray-500 mb-1">
+                Score Rationale
+              </div>
+              <div className="flex items-start gap-1.5 text-sm text-gray-700 bg-amber-50/60 border border-amber-100 rounded px-2.5 py-2 break-words leading-relaxed">
+                <Brain className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+                <div className="space-y-1 flex-1">
+                  {lines.map((line, li) => {
+                    const ci = line.indexOf(':');
+                    const labeled = ci > 0 && ci <= 120;
+                    return (
+                      <div key={li}>
+                        {labeled
+                          ? <><span className="font-semibold text-gray-900">{line.slice(0, ci)}</span>{line.slice(ci)}</>
+                          : line}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* 3. Per-skill rows — collapsible dropdown. For HR, skipped entirely
             (HR isn't scored). Multi-skill questions list 2-3 skills, so the
