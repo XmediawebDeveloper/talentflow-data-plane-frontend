@@ -2915,11 +2915,21 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Flagged Items</p>
                               <div className="flex flex-wrap gap-1.5">
-                                {v.flagged_items.map((item, i) => (
-                                  <span key={i} className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 ring-1 ring-red-200">
-                                    {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
-                                  </span>
-                                ))}
+                                {v.flagged_items.map((item, i) => {
+                                  const location = typeof item.location === 'string' ? item.location : null;
+                                  const approxTimestamp = typeof item.approx_timestamp === 'string' ? item.approx_timestamp : null;
+                                  const evidence = [location, approxTimestamp].filter(Boolean).join(' · ');
+                                  return (
+                                    <span
+                                      key={i}
+                                      className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 ring-1 ring-red-200"
+                                      title={evidence || undefined}
+                                    >
+                                      {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
+                                      {evidence && <span className="text-red-500/70"> — {evidence}</span>}
+                                    </span>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
