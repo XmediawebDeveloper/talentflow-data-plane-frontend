@@ -1,4 +1,4 @@
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, Target } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, Target, Share2, Paperclip, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
@@ -10,6 +10,8 @@ import InviteShareModal from './InviteShareModal';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
+import { resumeService } from '@/lib/services/resumeService';
+import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
@@ -119,9 +121,107 @@ export default function ScoredResumesTable({
   bulkActions,
   onScoreResumes
 }: ScoredResumesTableProps) {
-  const { tenant, isTenantAdmin, user } = useAuth();  // Get tenant info from auth context
+  const { tenant, isTenantAdmin, user, hasPermissionCode } = useAuth();  // Get tenant info from auth context
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
+  const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
+
+  /* Share Resume — the dialog the resume table and the resume page open, so a
+     scored candidate is shared exactly as one from any other list. A scored row
+     carries the score id, so the resume id (and the file behind it) comes from
+     `resumeId`; rows without one can't be shared. */
+  const [shareCandidate, setShareCandidate] = useState<ScoredResume | null>(null);
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareSubject, setShareSubject] = useState('');
+  const [shareMessage, setShareMessage] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  /* The scored row knows nothing about the file itself, so the attachment's
+     name, type and size are read from the resume record when the dialog opens. */
+  const [shareFile, setShareFile] = useState<{ name: string; type: string; sizeKb?: number } | null>(null);
+  const [isSharePreviewOpen, setIsSharePreviewOpen] = useState(false);
+
+  const openShareModal = async (resume: ScoredResume) => {
+    const resumeId = resume.resumeId;
+    if (!resumeId) {
+      toast.error('This score has no resume attached to share');
+      return;
+    }
+
+    const resumeLink =
+      typeof window !== 'undefined' ? `${window.location.origin}/recruitment/resume-view/${resumeId}` : '';
+
+    setShareCandidate(resume);
+    setShareEmail('');
+    setShareFile(null);
+    setIsSharePreviewOpen(false);
+    setShareSubject(`Resume: ${resume.candidateName} - ${resume.title || 'Candidate'}`);
+    setShareMessage(`Hi,
+
+I'm sharing the resume of ${resume.candidateName} for your review.
+
+Candidate Details:
+- Name: ${resume.candidateName}
+- Title: ${resume.title || 'N/A'}
+- Experience: ${resume.experience || 'N/A'}
+- Location: ${resume.location || 'N/A'}
+- Match: ${resume.matchStatus || 'N/A'}${resume.scorePercentage != null ? ` (${resume.scorePercentage}%)` : ''}
+
+You can view the full resume at: ${resumeLink}
+
+Best regards`);
+
+    try {
+      const detail: any = await resumeService.get(resumeId);
+      setShareFile({
+        name: detail?.file_name || `${resume.candidateName}.pdf`,
+        type: (detail?.file_type || detail?.file_name?.split('.').pop() || 'pdf').toUpperCase(),
+        sizeKb: detail?.file_size_kb,
+      });
+    } catch {
+      // The dialog still works without the file's details.
+      setShareFile({ name: `${resume.candidateName}.pdf`, type: 'PDF' });
+    }
+  };
+
+  const closeShareModal = () => {
+    setShareCandidate(null);
+    setShareEmail('');
+    setShareSubject('');
+    setShareMessage('');
+    setShareFile(null);
+    setIsSharePreviewOpen(false);
+  };
+
+  const handleSendShareEmail = async () => {
+    const resumeId = shareCandidate?.resumeId;
+    if (!resumeId) return;
+
+    if (!shareEmail.trim()) {
+      toast.error('Please enter an email address');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(shareEmail.trim())) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const result = await resumeService.share(resumeId, shareEmail.trim(), shareMessage);
+      if (result.success) {
+        toast.success('Resume shared successfully');
+        closeShareModal();
+      } else {
+        toast.error(result.message || 'Failed to send email');
+      }
+    } catch (error: any) {
+      console.error('Failed to share resume:', error);
+      toast.error(error?.message || 'Failed to send email');
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
   const [showColumnModal, setShowColumnModal] = useState(false);
   const [internalSelectedResumes, setInternalSelectedResumes] = useState<string[]>([]);
 
@@ -1043,18 +1143,34 @@ export default function ScoredResumesTable({
 
                 {/* Actions Column */}
                 <td className="py-3 px-4 align-middle whitespace-nowrap">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onViewCandidate) {
-                        onViewCandidate(resume);
-                      }
-                    }}
-                    className="px-3 py-1.5 text-xs text-white bg-gray-800 hover:bg-gray-900 rounded-md transition-colors flex items-center gap-1.5"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    View
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onViewCandidate) {
+                          onViewCandidate(resume);
+                        }
+                      }}
+                      className="px-3 py-1.5 text-xs text-white bg-gray-800 hover:bg-gray-900 rounded-md transition-colors flex items-center gap-1.5"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      View
+                    </button>
+                    {/* Only scores that still point at a resume can be shared. */}
+                    {canShareResume && resume.resumeId && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openShareModal(resume);
+                        }}
+                        className="px-3 py-1.5 text-xs text-gray-700 border border-gray-300 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors flex items-center gap-1.5"
+                        title="Share resume"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        Share
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1244,6 +1360,19 @@ export default function ScoredResumesTable({
                 )}
               </button>
               )}
+
+              {canShareResume && resume.resumeId && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openShareModal(resume);
+                  }}
+                  className="w-full px-4 py-2 text-sm text-gray-800 border border-gray-300 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors flex items-center justify-center gap-2"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Share Resume
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -1278,6 +1407,141 @@ export default function ScoredResumesTable({
           jobId={jobId}
           jobTitle={jobTitle}
           onClose={() => setShowInviteModal(false)}
+        />
+      )}
+
+      {/* Share Resume — the same dialog the resume table and the resume page
+          open: the attachment with an eye to read it, then recipient, subject
+          and message. */}
+      {shareCandidate && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                    <Mail className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
+                    <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeShareModal}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Attachment</label>
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 bg-gray-50">
+                    <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-4 h-4 text-brand-blue" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {/* Until the resume record answers, the file's name is
+                          not known — the candidate is, so lead with that. */}
+                      <div className="text-sm font-medium text-gray-900 truncate" title={shareFile?.name}>
+                        {shareFile ? shareFile.name : 'Loading resume file…'}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {shareCandidate.candidateName}
+                        {shareFile?.type && <> &middot; {shareFile.type}</>}
+                        {shareFile?.sizeKb ? <> &middot; {Math.round(shareFile.sizeKb)} KB</> : null}
+                      </div>
+                    </div>
+                    <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <button
+                      type="button"
+                      onClick={() => setIsSharePreviewOpen(true)}
+                      className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors"
+                      aria-label={`View ${shareCandidate.candidateName}'s resume`}
+                      title="View resume"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Recipient Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={shareEmail}
+                    onChange={(e) => setShareEmail(e.target.value)}
+                    placeholder="Enter email address"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                  <input
+                    type="text"
+                    value={shareSubject}
+                    onChange={(e) => setShareSubject(e.target.value)}
+                    placeholder="Email subject"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                  <textarea
+                    value={shareMessage}
+                    onChange={(e) => setShareMessage(e.target.value)}
+                    placeholder="Enter your message"
+                    rows={8}
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+                <button
+                  onClick={closeShareModal}
+                  className="px-4 py-2 text-gray-700 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendShareEmail}
+                  disabled={isSendingEmail || !shareEmail.trim()}
+                  className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                >
+                  {isSendingEmail ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Send Email
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* The attachment, read in place. Rendered after the share dialog so it
+          sits above it — both are z-50. */}
+      {isSharePreviewOpen && shareCandidate?.resumeId && (
+        <ResumeTextPreviewModal
+          resumeId={shareCandidate.resumeId}
+          title={shareCandidate.candidateName}
+          subtitle={shareFile?.name}
+          onClose={() => setIsSharePreviewOpen(false)}
         />
       )}
 

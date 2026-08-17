@@ -2543,12 +2543,25 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </button>
           )}
           {hasPlanFeature('assessment') && (
+            /* Disabled until an assessment is published — the tab would open on
+               an empty table otherwise, which reads as a fault rather than as
+               "there is nothing to report yet". */
             <button
-              onClick={() => setActiveTab('assessment-results')}
+              onClick={() => hasPublishedAssessment && setActiveTab('assessment-results')}
+              disabled={!hasPublishedAssessment}
+              title={
+                hasPublishedAssessment
+                  ? undefined
+                  : !hasAnyAssessment
+                    ? 'Create an assessment first'
+                    : 'Publish the assessment to see results'
+              }
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                activeTab === 'assessment-results'
-                  ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
+                !hasPublishedAssessment
+                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
+                  : activeTab === 'assessment-results'
+                    ? 'text-blue-600 bg-blue-50'
+                    : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
               Assessments Results
@@ -2565,12 +2578,23 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </button>
           )}
           {hasPlanFeature('ai_interview') && features.ai_interview && permissions.canViewAIInterviews && (
+            /* Same rule as the assessment results tab. */
             <button
-              onClick={handleShowAIInterviewResults}
+              onClick={() => hasLiveAIInterview && handleShowAIInterviewResults()}
+              disabled={!hasLiveAIInterview}
+              title={
+                hasLiveAIInterview
+                  ? undefined
+                  : !hasAnyAIInterview
+                    ? 'Create an AI interview first'
+                    : 'Publish the AI interview to see results'
+              }
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                activeTab === 'ai-interview-results'
-                  ? 'text-blue-600 bg-blue-50'
-                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
+                !hasLiveAIInterview
+                  ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
+                  : activeTab === 'ai-interview-results'
+                    ? 'text-blue-600 bg-blue-50'
+                    : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
               AI Interview Result
@@ -2986,13 +3010,23 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                         }
                       />
 
+                      {/* Results exist only once an assessment is published and
+                          candidates can actually sit it — a draft has nothing
+                          to report, so the tile stays disabled and says why,
+                          matching the Invite tile's own rule. */}
                       <QuickActionTile
                         icon={<BarChart className="w-4 h-4" />}
                         label="Result"
                         accent="cyan"
                         onClick={handleAssessmentStatus}
-                        disabled={!features.assessment}
-                        disabledTooltip="Assessments not enabled"
+                        disabled={!features.assessment || !hasPublishedAssessment}
+                        disabledTooltip={
+                          !features.assessment
+                            ? 'Assessments not enabled'
+                            : !hasAnyAssessment
+                              ? 'Create an assessment first'
+                              : 'Publish the assessment to see results'
+                        }
                       />
                     </>
                   )}
@@ -3067,13 +3101,21 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                         }
                       />
 
+                      {/* Same rule as the assessment Result tile: a draft or
+                          unpublished interview has no sittings to report on. */}
                       <QuickActionTile
                         icon={<BarChart className="w-4 h-4" />}
                         label="Result"
                         accent="orange"
                         onClick={handleAIInterviewStatus}
-                        disabled={!features.ai_interview}
-                        disabledTooltip="AI Interviews not enabled"
+                        disabled={!features.ai_interview || !hasLiveAIInterview}
+                        disabledTooltip={
+                          !features.ai_interview
+                            ? 'AI Interviews not enabled'
+                            : !hasAnyAIInterview
+                              ? 'Create an AI interview first'
+                              : 'Publish the AI interview to see results'
+                        }
                       />
                     </>
                   )}
