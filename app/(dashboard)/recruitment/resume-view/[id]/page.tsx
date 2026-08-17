@@ -10,7 +10,7 @@ import {
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Linkedin, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
-  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database
+  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database, Paperclip
 } from 'lucide-react';
 
 // Full Resume Content Component with better UI
@@ -204,6 +204,7 @@ import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModa
 import AITalentMatchProgressPanel from '@/components/AITalentMatchProgressPanel';
 import ScoringJobProgressModal, { JobScoringProgress } from '@/components/ScoringJobProgressModal';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
+import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -308,6 +309,8 @@ export default function ResumeViewPage() {
   const [shareSubject, setShareSubject] = useState('');
   const [shareMessage, setShareMessage] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  /** Reading the attachment from inside the share dialog. */
+  const [isSharePreviewOpen, setIsSharePreviewOpen] = useState(false);
 
   // Version comparison state
   const [compareLeftId, setCompareLeftId] = useState<string | null>(null);
@@ -2440,7 +2443,7 @@ Best regards`);
                   </div>
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
-                    <p className="text-sm text-gray-500">Send resume via email</p>
+                    <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                   </div>
                 </div>
                 <button
@@ -2455,6 +2458,45 @@ Best regards`);
               </div>
 
               <div className="space-y-4">
+                {/* What actually goes out with the email — the candidate's
+                    resume file, with the eye to read it before sending. */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Attachment</label>
+                  {(() => {
+                    const row = resume as any;
+                    const fileName = row?.fileName || `${resume?.name || 'resume'}.${row?.fileType || 'pdf'}`;
+                    const fileType = (row?.fileType || fileName.split('.').pop() || '').toUpperCase();
+                    const sizeKb = row?.fileSizeKb ?? row?.file_size_kb;
+                    return (
+                      <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 bg-gray-50">
+                        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-4 h-4 text-brand-blue" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium text-gray-900 truncate" title={fileName}>
+                            {fileName}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {resume?.name}
+                            {fileType && <> &middot; {fileType}</>}
+                            {sizeKb ? <> &middot; {Math.round(sizeKb)} KB</> : null}
+                          </div>
+                        </div>
+                        <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        <button
+                          type="button"
+                          onClick={() => setIsSharePreviewOpen(true)}
+                          className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors"
+                          aria-label={`View ${resume?.name || 'the'} resume`}
+                          title="View resume"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+
                 {/* Email Input */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2517,7 +2559,7 @@ Best regards`);
                   {isSendingEmail ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Opening...
+                      Sending...
                     </>
                   ) : (
                     <>
@@ -2530,6 +2572,17 @@ Best regards`);
             </div>
           </div>
         </div>
+      )}
+
+      {/* The attachment, read in place. Rendered after the share dialog so it
+          sits above it — both are z-50. */}
+      {isSharePreviewOpen && resume && (
+        <ResumeTextPreviewModal
+          resumeId={resumeId}
+          title={resume.name}
+          subtitle={(resume as any).fileName}
+          onClose={() => setIsSharePreviewOpen(false)}
+        />
       )}
         </div>
       </div>
