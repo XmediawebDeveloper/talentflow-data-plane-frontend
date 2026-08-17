@@ -1274,6 +1274,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [newCertification, setNewCertification] = useState('');
   const [newDomainKeyword, setNewDomainKeyword] = useState('');
   const [newLocation, setNewLocation] = useState({ city: '', radius: '50' });
+  const [newCodingLanguage, setNewCodingLanguage] = useState('');
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [showLocationMenu, setShowLocationMenu] = useState(false);
   const [locationStateFilter, setLocationStateFilter] = useState<string>('all');
@@ -7678,6 +7679,124 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
               */}
+
+              {/* Practical / Coding Assessment.
+                  Issue #7: `codingRequired` and `suggestedLanguages` were set ONLY by the
+                  extraction LLM and rendered nowhere, yet jd_analyzer.validate_for_assessment()
+                  hard-blocks assessment creation with "JD requires coding but no programming
+                  languages are specified". A misfire on a non-software role (a finance JD
+                  mentioning SQL, a Data Entry Operator, an analytics role) was therefore an
+                  unrecoverable dead end - the recruiter saw an error about programming
+                  languages for a role that has none, with no control to correct it.
+                  The languages list is shown only when the toggle is on. */}
+              <div className="mt-4 sm:mt-6 border border-gray-200 dark:border-slate-700 rounded-lg p-4">
+                <label className={`flex items-start gap-3 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(extractedData.codingRequired)}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setExtractedData(prev => ({
+                        ...prev,
+                        codingRequired: next,
+                        // Turning it off clears the languages too, so a stale list can never
+                        // be persisted against a role that no longer needs a coding round.
+                        suggestedLanguages: next ? prev.suggestedLanguages : [],
+                      }));
+                      markExtractedDataModified();
+                    }}
+                    className="w-4 h-4 mt-0.5 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                    disabled={isRegenerating}
+                  />
+                  <span>
+                    <span className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">
+                      Requires a hands-on coding assessment
+                    </span>
+                    <span className="block text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+                      Detected from the job description. Turn this off for roles assessed by
+                      knowledge or scenario questions rather than by writing code.
+                    </span>
+                  </span>
+                </label>
+
+                {extractedData.codingRequired && (
+                  <div className="mt-4 pl-7">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">
+                      Programming Languages <span className="text-red-500">*</span>
+                    </h4>
+                    <p className="text-xs text-gray-600 dark:text-slate-400 mb-3">
+                      At least one language is required while a coding assessment is enabled.
+                    </p>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {extractedData.suggestedLanguages.map((lang, index) => (
+                        <span
+                          key={`${lang}-${index}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-blue/10 text-brand-blue rounded-lg text-sm"
+                        >
+                          {lang}
+                          {!isRegenerating && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExtractedData(prev => ({
+                                  ...prev,
+                                  suggestedLanguages: prev.suggestedLanguages.filter((_, i) => i !== index),
+                                }));
+                                markExtractedDataModified();
+                              }}
+                              className="hover:text-red-500 transition-colors"
+                              aria-label={`Remove ${lang}`}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                      {extractedData.suggestedLanguages.length === 0 && (
+                        <span className="text-sm text-gray-500 italic">No languages added yet</span>
+                      )}
+                    </div>
+                    {!isRegenerating && (
+                      <input
+                        type="text"
+                        value={newCodingLanguage}
+                        onChange={(e) => setNewCodingLanguage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          const value = newCodingLanguage.trim();
+                          if (!value) return;
+                          if (!validateEnglishOnlyExtractedValue(value, 'Programming languages')) return;
+                          const exists = extractedData.suggestedLanguages
+                            .some(l => l.toLowerCase() === value.toLowerCase());
+                          if (exists) {
+                            toast.error({
+                              title: 'Already added',
+                              description: `"${value}" is already in the list.`,
+                            });
+                            return;
+                          }
+                          setExtractedData(prev => ({
+                            ...prev,
+                            suggestedLanguages: [...prev.suggestedLanguages, value],
+                          }));
+                          markExtractedDataModified();
+                          setNewCodingLanguage('');
+                        }}
+                        placeholder="Type a language and press Enter (e.g., Java, Python, SQL)"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black"
+                      />
+                    )}
+                    {extractedData.suggestedLanguages.length === 0 && (
+                      <p className="text-amber-700 text-xs mt-2 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        Assessment creation will be blocked until a language is added, or the
+                        coding assessment is turned off.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Assessment Guidance & Internal Recruiter Notes - Side by Side */}
               <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
