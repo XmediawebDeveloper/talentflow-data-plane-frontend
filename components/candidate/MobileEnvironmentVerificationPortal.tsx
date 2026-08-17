@@ -50,6 +50,10 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   // continuous 10s countdown — matches the spec's own wording ("start 5 secs
   // timer" for phase 1, "another 5 secs timer" for phase 2).
   const [recordingCountdown, setRecordingCountdown] = useState(5);
+  // Brief instructional overlay shown right as phase 2 (pan) begins — purely
+  // cosmetic, layered on top of the still-running recording. Does NOT pause
+  // or extend the 5s pan timer below; it just auto-hides after a moment.
+  const [showPanIntro, setShowPanIntro] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -210,6 +214,13 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       const phaseStart = Date.now();
       setPhase(nextPhase);
       setRecordingCountdown(Math.round(durationMs / 1000));
+      // Small instructional cue right as the pan phase begins — auto-hides on
+      // its own timer, independent of (and shorter than) the 5s pan window
+      // above, so it never delays or shortens the actual recording.
+      if (nextPhase === 'recording_pan') {
+        setShowPanIntro(true);
+        setTimeout(() => setShowPanIntro(false), 1500);
+      }
       const tick = setInterval(() => {
         const elapsedMs = Date.now() - phaseStart;
         const remaining = Math.max(0, Math.ceil((durationMs - elapsedMs) / 1000));
@@ -338,6 +349,20 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           {phase === 'get_ready' && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-xl">
               <span className="text-6xl font-bold text-white drop-shadow-lg">{getReadyCount}</span>
+            </div>
+          )}
+          {phase === 'recording_pan' && showPanIntro && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 rounded-xl">
+              <span className="text-5xl inline-block animate-[tf-phone-tilt_1.2s_ease-in-out_infinite]">📱</span>
+              <p className="text-sm font-medium text-white px-4 text-center">
+                Now turn your phone slowly — left to right, then right to left
+              </p>
+              <style>{`
+                @keyframes tf-phone-tilt {
+                  0%, 100% { transform: rotate(-25deg); }
+                  50% { transform: rotate(25deg); }
+                }
+              `}</style>
             </div>
           )}
         </div>
