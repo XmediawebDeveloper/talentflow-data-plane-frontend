@@ -12,6 +12,7 @@ interface SearchFilterBarProps {
   onSortChange: (sort: string) => void;
   hideSearch?: boolean;
   inline?: boolean;
+  showClearAllFilters?: boolean;
 }
 
 export default function SearchFilterBarCompact({
@@ -23,6 +24,7 @@ export default function SearchFilterBarCompact({
   onSortChange,
   hideSearch = false,
   inline = false,
+  showClearAllFilters = true,
 }: SearchFilterBarProps) {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
@@ -584,13 +586,15 @@ export default function SearchFilterBarCompact({
               </button>
             </div>
           ))}
-          <button
-            onClick={handleClearFilters}
-            className="inline-flex items-center gap-1 px-2 py-0.5 text-red-600 hover:bg-red-50 rounded-full text-xs transition-colors ml-1 sm:ml-2"
-          >
-            <X className="w-3 h-3" />
-            Clear all
-          </button>
+          {showClearAllFilters && (
+            <button
+              onClick={handleClearFilters}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-red-600 hover:bg-red-50 rounded-full text-xs transition-colors ml-1 sm:ml-2"
+            >
+              <X className="w-3 h-3" />
+              Clear all
+            </button>
+          )}
         </div>
       )}
     </div>
