@@ -108,6 +108,9 @@ const TERMINATION_MESSAGES: Record<string, string> = {
   left_screen_focus_lost: 'Moved focus away from the interview window',
   left_screen: 'Left the interview screen',
   picture_in_picture: 'Opened a video in Picture-in-Picture',
+  microphone_disconnected_timeout: 'Microphone stayed disconnected for over 3 minutes',
+  camera_disconnected_timeout: 'Camera stayed disconnected for over 3 minutes',
+  camera_and_microphone_disconnected_timeout: 'Camera and microphone stayed disconnected for over 3 minutes',
 };
 const terminationMessage = (reason: string): string =>
   TERMINATION_MESSAGES[reason] || 'Left the interview screen';
@@ -170,6 +173,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // already holds this interview link (blocks the second person from system
   // check onward). See the lease heartbeat effect.
   const [preInterviewBlocked, setPreInterviewBlocked] = useState(false);
+  // Seconds until the other browser's lease goes stale and this one can take
+  // over. Server-computed (only it knows the holder's last heartbeat); ticked
+  // down locally between heartbeats so the countdown reads smoothly.
+  const [blockedRetrySeconds, setBlockedRetrySeconds] = useState<number | null>(null);
   // AII17 — post-interview feedback popup, shown once over the completion
   // screen. Dismissed (submitted OR skipped) is remembered per interview token
   // so a refresh or a revisit of the finished link doesn't nag the candidate.
@@ -568,8 +575,19 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       try {
         const r = await candidateAIInterviewService.sessionLease(token, cid, 'acquire');
         if (cancelled) return;
-        if (r?.blocked) setPreInterviewBlocked(true);
-        else if (r?.held) setPreInterviewBlocked(false);
+        if (r?.blocked) {
+          setPreInterviewBlocked(true);
+          // Re-sync the countdown from the server on every beat, so it stays
+          // honest even if the other browser is still alive and refreshing its
+          // own lease (in which case this number stops falling — correctly, the
+          // link genuinely is not free yet).
+          setBlockedRetrySeconds(
+            typeof r.retry_after_seconds === 'number' ? r.retry_after_seconds : null,
+          );
+        } else if (r?.held) {
+          setPreInterviewBlocked(false);
+          setBlockedRetrySeconds(null);
+        }
       } catch {
         // Network error — don't block a genuine candidate on a transient failure.
       }
@@ -578,8 +596,53 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // Heartbeat every 5s (well under the 90s stale window) so the block appears
     // fast for a 2nd opener and the holder's lease never lapses mid-flow.
     const iv = setInterval(beat, 5000);
-    return () => { cancelled = true; clearInterval(iv); };
+
+    // ── Release the lease when this page goes away ───────────────────────────
+    // Without this, closing the tab/browser leaves the lease looking ALIVE (its
+    // last heartbeat is only seconds old), so reopening the link in another
+    // browser hit "already open elsewhere" until the 90s stale window elapsed.
+    // Reported as: close, reopen elsewhere, blocked for a while, refresh, fine.
+    //
+    // `pagehide` is the reliable teardown signal — it fires on tab close, on
+    // navigation, and when mobile Safari/Chrome freeze the page into the back-
+    // forward cache, where `beforeunload` does not fire at all. `beforeunload`
+    // is kept as a belt for older desktop browsers. Both are idempotent: the
+    // release only clears the lease when THIS cid still owns it, so a duplicate
+    // call can never steal another browser's lease.
+    //
+    // `persisted === true` means the page went into the bf-cache and may be
+    // restored — the heartbeat resumes on restore, and if it does not, the
+    // stale window still backstops us. Releasing is the right call either way:
+    // a frozen page is not an active candidate.
+    const releaseNow = () => {
+      candidateAIInterviewService.releaseSessionLeaseBeacon(token, cid);
+    };
+    window.addEventListener('pagehide', releaseNow);
+    window.addEventListener('beforeunload', releaseNow);
+
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+      window.removeEventListener('pagehide', releaseNow);
+      window.removeEventListener('beforeunload', releaseNow);
+    };
   }, [step, token]);
+
+  // Tick the "available in …" countdown down locally, once per second. The
+  // heartbeat only re-syncs it every 5s, which would make the number visibly
+  // jump; this keeps it smooth. It never drives the unblock decision — that is
+  // always the server's answer on the next beat — so a drifting local clock
+  // can't let a candidate in early.
+  const countdownActive = preInterviewBlocked && blockedRetrySeconds !== null;
+  useEffect(() => {
+    if (!countdownActive) return;
+    // Functional update, so the interval does NOT need to restart every second
+    // (and does not need blockedRetrySeconds in its deps).
+    const iv = setInterval(() => {
+      setBlockedRetrySeconds((s) => (s === null ? null : Math.max(0, s - 1)));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [countdownActive]);
 
   // Preload avatar assets when reaching system check
   useEffect(() => {
@@ -670,6 +733,37 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       try { recorder.stop(); } catch { void doUpload(); }
     }
   }, [token]);
+
+  // Shared termination side-effects, extracted from the leave-the-screen
+  // effect below so a SECOND, independent trigger (InterviewUI's mic-
+  // disconnect 3-minute grace timeout) can terminate the interview the exact
+  // same way — persisted reason, proctor event, screen-recording tail
+  // capture, fullscreen exit, and the sticky 'terminated' page — without
+  // duplicating any of it. Guards only on the natural-end race (interview
+  // already reached completion); the leave-the-screen effect keeps its own
+  // additional guards (armed/sawFullscreen/screenShareStopped) local to
+  // itself since those are specific to THAT detection surface.
+  const performTermination = useCallback((reason: string) => {
+    if (interviewClosingRef.current) {
+      console.log('[Proctor] Ignoring termination reason', reason, '— interview already reached its natural end.');
+      return;
+    }
+    const message = terminationMessage(reason);
+    setInterviewTerminatedReason(reason);
+    try { localStorage.setItem(terminatedStorageKey(token), reason); } catch { /* ignore */ }
+    try {
+      void candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: 'interview_terminated',
+        severity: 'high',
+        details: { reason, message, action: 'interview_terminated' },
+      });
+    } catch { /* non-blocking */ }
+    // Keep the entire-screen recorder running briefly so the footage captures
+    // whatever was on screen when the violation happened, then upload.
+    window.setTimeout(() => { stopAndUploadScreenRecording(); }, POST_VIOLATION_RECORD_MS);
+    if (isFullscreen()) exitFullscreen().catch(() => {});
+    setStep('terminated');
+  }, [token, stopAndUploadScreenRecording]);
 
   // ========== RECORDING AUDIO HELPERS ==========
 
@@ -1649,44 +1743,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     let sawFullscreen = false;
 
     const terminateNow = (reason: string) => {
+      // Guards specific to THIS detection surface (leaving the screen) — the
+      // natural-end guard and the actual termination side-effects now live in
+      // the shared performTermination, also used by InterviewUI's mic-
+      // disconnect 3-minute grace timeout.
       if (done || !armed || screenShareStoppedRef.current) return;
-      // Natural-end guard: once the interview has ended (all questions done,
-      // completion popup showing, evaluation running in the background), a
-      // fullscreen exit / Esc / F11 must NOT terminate — the candidate already
-      // finished. Terminating here would flip the row to TERMINATED and block
-      // the evaluation. Ignore (the interview is effectively complete).
-      if (interviewClosingRef.current) {
-        console.log('[Proctor] Ignoring', reason, '— interview already reached its natural end (completion popup); not terminating.');
-        return;
-      }
       done = true;
-      const message = terminationMessage(reason);
-      setInterviewTerminatedReason(reason);
-      // Persist so reopening the link stays on the terminated page (can't restart).
-      try { localStorage.setItem(terminatedStorageKey(token), reason); } catch { /* ignore */ }
-      // Report the termination so the recruiter side flips out of "In Progress".
-      // `message` carries the clear human description of what the candidate did
-      // (Alt+Tab, Esc, F11, Windows key, tab switch, …) so the recruiter view and
-      // the audit log can show exactly what happened. The component stays mounted
-      // (setStep only swaps the rendered screen — no navigation), so this request
-      // completes normally after fullscreen exit.
-      try {
-        void candidateAIInterviewService.reportProctorEvent(token, {
-          event_type: 'interview_terminated',
-          severity: 'high',
-          details: { reason, message, action: 'interview_terminated' },
-        });
-      } catch { /* non-blocking */ }
-      // Keep the entire-screen recorder RUNNING for a few more seconds so the
-      // footage captures what the candidate switched to (the violating action
-      // just happened; the recorder is still capturing their screen). Screen
-      // capture is independent of fullscreen, so exiting fullscreen / showing
-      // the terminated page below does NOT stop it. Then stop + upload the
-      // final segment (which now includes those extra seconds).
-      window.setTimeout(() => { stopAndUploadScreenRecording(); }, POST_VIOLATION_RECORD_MS);
-      if (isFullscreen()) exitFullscreen().catch(() => {});
-      // Navigate to the full terminated page (mirrors the completed-page flow).
-      setStep('terminated');
+      performTermination(reason);
     };
     // Keydown-based malpractice detection. These fire BEFORE the resulting
     // blur/fullscreenchange, so they attribute the exact key the candidate
@@ -1857,16 +1920,39 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
           <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5 text-3xl">🔒</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Already open on another device</h1>
-          <p className="text-gray-600 text-sm leading-relaxed mb-6">
+          <p className="text-gray-600 text-sm leading-relaxed mb-5">
             This interview link is already in use in another window or device.
-            Only one device can take the interview at a time. Please continue
-            there. If you just closed it, wait a few seconds and reload this page.
+            Only one device can take the interview at a time — please continue there.
           </p>
+
+          {/* If they just closed the other window, the lease still looks alive
+              until it goes stale. Show the REAL remaining time (server-computed)
+              rather than "wait a few seconds", and make clear this page unblocks
+              itself — the 5s heartbeat clears it, so no reload is needed. */}
+          {blockedRetrySeconds !== null && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-5 text-left">
+              <p className="text-sm font-semibold text-amber-900 mb-1">
+                {blockedRetrySeconds > 0
+                  ? <>Closed it already? This page unlocks in{' '}
+                      <span className="tabular-nums">
+                        {Math.floor(blockedRetrySeconds / 60)}:{String(blockedRetrySeconds % 60).padStart(2, '0')}
+                      </span>
+                    </>
+                  : 'Checking again now…'}
+              </p>
+              <p className="text-xs text-amber-800/90 leading-snug">
+                You don&apos;t need to do anything — this happens automatically.
+                If the other window is still open, the timer keeps resetting until
+                you close it.
+              </p>
+            </div>
+          )}
+
           <button
             onClick={() => window.location.reload()}
             className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3 rounded-xl transition-all"
           >
-            Reload &amp; try again
+            Check again now
           </button>
         </div>
       </div>
@@ -2499,6 +2585,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             setStep('completed');
           }}
           onInterviewClosing={() => { interviewClosingRef.current = true; }}
+          onTerminate={performTermination}
           faceVerification={faceVerification.baselineReady ? faceVerification : undefined}
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
           copyPasteBlocking={IS_PRODUCTION_ENV ? true : (interview?.copy_paste_blocking ?? true)}

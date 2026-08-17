@@ -1609,6 +1609,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
             left_screen_focus_lost: 'Moved focus away from the interview window',
             left_screen: 'Left the interview screen',
             picture_in_picture: 'Opened a video in Picture-in-Picture',
+            microphone_disconnected_timeout: 'Microphone stayed disconnected for over 3 minutes',
+            camera_disconnected_timeout: 'Camera stayed disconnected for over 3 minutes',
+            camera_and_microphone_disconnected_timeout: 'Camera and microphone stayed disconnected for over 3 minutes',
           };
           const reason = typeof d.reason === 'string' ? d.reason : '';
           const what = (typeof d.message === 'string' && d.message)
@@ -2882,6 +2885,26 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               </p>
                             </div>
                           )}
+                          {/* AI Analysis status banner — the explicit "did the LLM find anything"
+                              verdict (result_severity), separate from the color/ID anti-replay
+                              check above. Matches the spec's "LLM compares frames... records a
+                              violation with a summary... added to the interview report." */}
+                          {v.analysis_status === 'pending' || v.analysis_status === 'running' ? (
+                            <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse flex-shrink-0" />
+                              <p className="text-xs text-gray-600">AI analysis in progress — frames are being extracted and reviewed. This updates automatically once complete.</p>
+                            </div>
+                          ) : v.analysis_status === 'error' ? (
+                            <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2">
+                              <p className="text-xs text-gray-600">AI analysis could not be completed for this recording — the video itself is still available above.</p>
+                            </div>
+                          ) : v.analysis_status === 'done' ? (
+                            <div className={`rounded-lg px-3 py-2 ring-1 ${v.result_severity === 'flagged' ? 'bg-red-50 ring-red-200' : 'bg-green-50 ring-green-200'}`}>
+                              <p className={`text-xs font-semibold ${v.result_severity === 'flagged' ? 'text-red-700' : 'text-green-700'}`}>
+                                {v.result_severity === 'flagged' ? '⚠ Suspicious activity detected' : '✓ No suspicious activity detected'}
+                              </p>
+                            </div>
+                          ) : null}
                           {v.ai_summary && (
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">AI Summary</p>
@@ -2892,11 +2915,21 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             <div>
                               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Flagged Items</p>
                               <div className="flex flex-wrap gap-1.5">
-                                {v.flagged_items.map((item, i) => (
-                                  <span key={i} className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 ring-1 ring-red-200">
-                                    {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
-                                  </span>
-                                ))}
+                                {v.flagged_items.map((item, i) => {
+                                  const location = typeof item.location === 'string' ? item.location : null;
+                                  const approxTimestamp = typeof item.approx_timestamp === 'string' ? item.approx_timestamp : null;
+                                  const evidence = [location, approxTimestamp].filter(Boolean).join(' · ');
+                                  return (
+                                    <span
+                                      key={i}
+                                      className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 ring-1 ring-red-200"
+                                      title={evidence || undefined}
+                                    >
+                                      {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
+                                      {evidence && <span className="text-red-500/70"> — {evidence}</span>}
+                                    </span>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}

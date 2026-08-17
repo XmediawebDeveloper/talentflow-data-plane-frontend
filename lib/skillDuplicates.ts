@@ -35,6 +35,12 @@ const SKILL_ALIASES: Record<string, string> = {
   ms: 'microsoft', js: 'javascript', ts: 'typescript', k8s: 'kubernetes',
   oop: 'object oriented programming', ml: 'machine learning', ai: 'artificial intelligence',
   csharp: 'c sharp', 'c#': 'c sharp', 'c++': 'c plus plus', dotnet: 'dot net',
+  // NOTE 'cpp' is deliberately NOT listed — it is recovered by RULE: the initialism
+  // check also builds initials from the alias-EXPANDED words, so 'c++' → "c plus
+  // plus" → 'cpp' matches the letters-only spelling on its own (and CICD ≡ CI/CD
+  // likewise). Only 'cplusplus' stays: a spelled-out compound is not an initialism
+  // of anything, so no rule can reach it.
+  cplusplus: 'c plus plus',
   aws: 'amazon web services', gcp: 'google cloud platform',
 };
 
@@ -133,13 +139,65 @@ export function skillTokenSequence(skill: string, expandAliases = true): string[
   for (const p of pieces) {
     for (const w of (expandAliases ? (SKILL_ALIASES[p] || p) : p).split(' ')) {
       const st = caps.has(w) ? w : skillStem(w);
-      if (st.length > 1 && !SKILL_STOPWORDS.has(st) && !seen.has(st)) {
+      // Test the stopword list against BOTH the raw word and its stem. Stemming
+      // runs first, so any -ing / -s entry was unreachable: 'writing' became
+      // 'writ', which is not in the list, so "Test Case Writing" kept a 'writ'
+      // token while "Write Test Cases" dropped 'write' as filler — and the two
+      // phrasings of one skill never matched.
+      if (SKILL_STOPWORDS.has(w)) continue;
+      // A SINGLE character is kept when alphanumeric — it is often the whole
+      // identity of the skill. Dropping it merged genuinely different
+      // qualifications in every industry: "Hepatitis B" ≡ "Hepatitis C", "Class B
+      // Licence" ≡ "Class C Licence", "Vitamin D" ≡ "Vitamin K", "Type 1" ≡
+      // "Type 2 Diabetes", "Grade A" ≡ "Grade B" welding — each deleted a real
+      // skill. It also left "C" with no tokens at all, so the language could not
+      // be compared with anything. Punctuation leftovers ('#', '+') are still
+      // dropped, since they are not alphanumeric.
+      const keep = st.length > 1 || /^[a-z0-9]$/.test(st);
+      if (keep && !SKILL_STOPWORDS.has(st) && !seen.has(st)) {
         seen.add(st);
         out.push(st);
       }
     }
   }
   return out;
+}
+
+/** Derivational suffixes, longest-first. Mirrors backend
+ *  `_SKILL_DERIVATIONAL_SUFFIXES`. DELIBERATELY EXCLUDES the endings that collide
+ *  across industries: 'er' (engineering → engineer → 'engine'), 'al', 'ent'
+ *  ('patient' → 'pati'), 'ive', 'ory', 'ure', 'ous'. */
+const DERIVATIONAL_SUFFIXES = [
+  'ational', 'ization', 'isation', 'ation', 'ition', 'ution',
+  'ement', 'ment', 'ness', 'ility', 'ity',
+  'ance', 'ence', 'ancy', 'ency', 'ion',
+  'ate', 'ise', 'ize', 'ify', 'e',
+];
+
+/** Reduce a token to a root shared by its noun and verb forms — configuration /
+ *  configure / configuring → 'configur'. Mirrors backend `_skill_deep_stem`.
+ *  Never strips below 4 characters. */
+function skillDeepStem(token: string): string {
+  let root = token;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const suf of DERIVATIONAL_SUFFIXES) {
+      if (root.endsWith(suf) && root.length - suf.length >= 4) {
+        root = root.slice(0, -suf.length);
+        changed = true;
+        break;
+      }
+    }
+  }
+  return root;
+}
+
+/** Deep-stemmed token set. Used ONLY for whole-set equality, never subset logic,
+ *  so it can add detections but can never make a bundle look like one of its
+ *  parts. Mirrors backend `_skill_root_tokens`. */
+export function skillRootTokens(skill: string): Set<string> {
+  return new Set(skillTokenSequence(skill).map(skillDeepStem));
 }
 
 export function skillContentTokens(skill: string): Set<string> {
@@ -160,24 +218,47 @@ export function skillContentTokens(skill: string): Set<string> {
 export function skillInitialismMatch(a: string, b: string): { hit: boolean; exact: boolean } {
   for (const [short, long] of [[a, b], [b, a]] as [string, string][]) {
     const lt = skillTokenSequence(long, false);
-    if (lt.length < 2) continue;
-    // TWO candidate initialisms, because an acronym is built from EVERY word while
+    // NOTE: no early `lt.length < 2` bail. "C++" is a SINGLE token yet still has an
+    // initialism via its alias expansion ("c plus plus" → 'cpp'), so the candidate
+    // set is built first and only an empty set skips this direction. The backend
+    // (`_initialism_candidates`) is structured the same way; an early bail here
+    // silently broke CPP ≡ C++ on the client only.
+    // Candidate initialisms, because an acronym is built from EVERY word while
     // the token pipeline drops framing words: content-word initials give
     // 'sdlc' for "Knowledge of Software Development Life Cycle", and all-word
     // initials give 'bom' for "Bill of Materials", 'kyc' for "Know Your
     // Customer", 'bls' for "Basic Life Support" — stripping 'of'/'your'/'basic'
     // as filler destroyed a letter of the acronym. That assumption came from
     // software-style JD phrasing and fails in healthcare/finance/manufacturing.
-    const candidates = new Set([lt.map(w => w[0]).join('')]);
-    const allWords = ((long || '').toLowerCase().replace(/[._/\-]/g, ' ')
-      .match(/[a-z0-9#+]+/g) || [])
-      .flatMap(w => (COMPOUND_SPLITS[w] || w).split(' '));
+    const candidates = new Set<string>();
+    if (lt.length >= 2) candidates.add(lt.map(w => w[0]).join(''));
+    const rawWords = (long || '').toLowerCase().replace(/[._/\-]/g, ' ')
+      .match(/[a-z0-9#+]+/g) || [];
+    const allWords = rawWords.flatMap(w => (COMPOUND_SPLITS[w] || w).split(' '));
     if (allWords.length >= 2) candidates.add(allWords.map(w => w[0]).join(''));
+    // Initials of the alias-EXPANDED words, duplicates KEPT — kept in a SEPARATE
+    // set because an expansion's initials often spell the acronym itself ("SQL" →
+    // structured query language → 'sql'), making it an initialism of itself. Fed
+    // into the bundled branch that made every phrase containing the token look like
+    // a covering bundle ("SQL Server" flagged as covering "SQL"), so it is consulted
+    // ONLY when the acronym is the whole side — which is what gives CPP ≡ C++ with
+    // no table entry. De-duplicating would yield 'cp' and break it.
+    const expandedWords = rawWords.flatMap(w => (SKILL_ALIASES[w] || w).split(' '));
+    const expandedOnly = new Set<string>();
+    if (expandedWords.length >= 2) {
+      expandedOnly.add(expandedWords.map(w => w[0]).join(''));
+    }
+    if (candidates.size === 0 && expandedOnly.size === 0) continue;
     const st = skillTokenSequence(short, false);
     for (const tok of st) {
       if (tok.length < 3 || tok.length > 6 || !/^[a-z]+$/.test(tok)) continue;
+      if (st.length === 1) {
+        if (candidates.has(tok) || expandedOnly.has(tok)) {
+          return { hit: true, exact: true };
+        }
+        continue;
+      }
       if (!candidates.has(tok)) continue;
-      if (st.length === 1) return { hit: true, exact: true };
       if (new RegExp(`\\b${tok.toUpperCase()}\\b`).test(short || '')) {
         return { hit: true, exact: false };
       }
@@ -220,11 +301,22 @@ export function skillDuplicateVerdict(a: string, b: string): DupVerdict {
   const ta = skillContentTokens(a);
   const tb = skillContentTokens(b);
   if (ta.size === 0 || tb.size === 0) return no;
-  const [small, large] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
-  for (const t of small) if (!large.has(t)) return no;
-  if (small.size === large.size) {
+  if (ta.size === tb.size && [...ta].every(t => tb.has(t))) {
     return { dup: true, tier: 'high', reason: 'same meaning, different wording' };
   }
+  // Same words in a different grammatical form and/or order — "Configure Servers"
+  // vs "Server Configuration", "Validate Data" vs "Data Validation", "Administer
+  // Medication" vs "Medication Administration". Must run BEFORE the containment
+  // check below, which returns early when the raw token sets don't nest (they
+  // don't here: 'configure' is not in {server, configuration}). Whole-SET equality
+  // only, so it can never make a bundle look like one of its parts.
+  const ra = skillRootTokens(a);
+  const rb = skillRootTokens(b);
+  if (ra.size > 0 && ra.size === rb.size && [...ra].every(t => rb.has(t))) {
+    return { dup: true, tier: 'high', reason: 'same words in a different form or order' };
+  }
+  const [small, large] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+  for (const t of small) if (!large.has(t)) return no;
   const extra = [...large].filter(t => !small.has(t));
   if (extra.length > 0 && extra.every(t => GENERIC_QUALIFIERS.has(t))) {
     return { dup: true, tier: 'medium', reason: 'one is a reworded form of the other' };

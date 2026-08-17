@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical, RefreshCw, Ban, Brain, Edit2 } from 'lucide-react';
-import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2 } from 'lucide-react';
+import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
 import ResumeTable from '@/components/ResumeTable';
@@ -22,15 +22,15 @@ const DuplicateResumeModal = dynamic(() => import('@/components/DuplicateResumeM
   ssr: false,
   loading: () => <div>Loading...</div>
 });
-import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
+import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import UploadHistoryDetailModal, { UploadHistoryItem } from '@/components/UploadHistoryDetailModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import SelectedCandidatesPanel from '@/components/SelectedCandidatesPanel';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
-import ResumeVersionSelector from '@/components/ResumeVersionSelector';
 import BulkVersionResolutionModal from '@/components/BulkVersionResolutionModal';
 import type { VersionedBatchItem } from '@/components/BulkVersionResolutionModal';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
+import VersionBadge from '@/components/VersionBadge';
 import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
@@ -75,24 +75,13 @@ const SUBFOLDER_PEEK_PANEL_WIDTH = 224;
 /** Approximate folder action menu height; used to decide whether to open upward. */
 const FOLDER_ACTION_MENU_HEIGHT = 188;
 
-type CardFolderFilter = 'all' | 'with-resumes' | 'empty' | 'with-subfolders' | 'max-depth';
-type CardResumeFilter = 'all' | 'active' | 'archived' | 'with-skills' | 'with-email' | 'with-phone';
+type CardFolderFilter = 'all' | 'with-resumes' | 'empty' | 'with-subfolders';
 
 const CARD_FOLDER_FILTER_OPTIONS: { value: CardFolderFilter; label: string }[] = [
   { value: 'all', label: 'All folders' },
   { value: 'with-resumes', label: 'Has resumes' },
   { value: 'empty', label: 'Empty' },
   { value: 'with-subfolders', label: 'Has subfolders' },
-  { value: 'max-depth', label: 'Max depth' },
-];
-
-const CARD_RESUME_FILTER_OPTIONS: { value: CardResumeFilter; label: string }[] = [
-  { value: 'all', label: 'All resumes' },
-  { value: 'active', label: 'Active' },
-  { value: 'archived', label: 'Archived' },
-  { value: 'with-skills', label: 'Has skills' },
-  { value: 'with-email', label: 'Has email' },
-  { value: 'with-phone', label: 'Has phone' },
 ];
 
 interface DragItem {
@@ -890,160 +879,6 @@ function CardFolderNameInput({
   );
 }
 
-// Draggable resume row for card view
-interface DraggableCardResumeRowProps {
-  resume: Resume;
-  selectedResumes: string[];
-  isLast: boolean;
-  onSelect: (id: string) => void;
-  onQuickView: (resume: Resume) => void;
-  onDelete: (id: string) => void;
-  onViewDetails: (resume: Resume) => void;
-}
-
-function DraggableCardResumeRow({
-  resume,
-  selectedResumes,
-  isLast,
-  onSelect,
-  onQuickView,
-  onDelete,
-  onViewDetails,
-}: DraggableCardResumeRowProps) {
-  const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>({
-    type: RESUME_DRAG_TYPE,
-    item: () => ({
-      id: resume.id,
-      ids: selectedResumes.includes(resume.id) ? selectedResumes : [resume.id],
-    }),
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  });
-
-  return (
-    <div
-      ref={preview as unknown as React.Ref<HTMLDivElement>}
-      /* The select column is a fixed 140px, not `auto`. The header row is its
-         own grid container, so an `auto` column sized to that row's content —
-         once the header carried a "Select all" label it grew and every body
-         row fell out of alignment with it. A shared fixed width keeps the two
-         locked together and stops the column resizing as the label changes. */
-      className={`grid grid-cols-[32px_140px_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-3 hover:bg-brand-blue/[0.03] cursor-pointer group transition-colors items-center min-w-[1200px] ${
-        !isLast ? 'border-b border-gray-100' : ''
-      } ${selectedResumes.includes(resume.id) ? 'bg-brand-blue/5' : ''} ${isDragging ? 'opacity-50' : ''}`}
-      onClick={() => onViewDetails(resume)}
-    >
-      {/* Drag Handle */}
-      <div
-        ref={drag as unknown as React.Ref<HTMLDivElement>}
-        className="cursor-grab hover:bg-gray-100 rounded p-1 flex items-center justify-center"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <GripVertical className="w-4 h-4 text-gray-400" />
-      </div>
-      {/* Checkbox */}
-      <div className="flex items-center">
-        <input
-          type="checkbox"
-          checked={selectedResumes.includes(resume.id)}
-          onChange={(e) => {
-            e.stopPropagation();
-            onSelect(resume.id);
-          }}
-          onClick={(e) => e.stopPropagation()}
-          className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40"
-        />
-      </div>
-      {/* Candidate Name */}
-      <div className="flex items-center min-w-0">
-        <span className="font-medium text-brand-blue hover:text-brand-blue-2 hover:underline text-sm truncate cursor-pointer">{resume.name}</span>
-      </div>
-      {/* Email */}
-      <div className="text-sm text-gray-600 truncate">{resume.email || '-'}</div>
-      {/* Phone */}
-      <div className="text-sm text-gray-600 truncate">{resume.phone || '-'}</div>
-      {/* Skills — same set the Resume Details "Skills" section shows */}
-      <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-        {getDisplaySkills(resume).length > 0 ? (
-          <SkillsList
-            skills={getDisplaySkills(resume)}
-            chipClassName="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-brand-blue/10 text-brand-blue border border-brand-blue/20 truncate max-w-[90px]"
-            moreClassName="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors"
-          />
-        ) : (
-          <span className="text-xs text-gray-400 italic">No skills</span>
-        )}
-      </div>
-      {/* Experience */}
-      <div className="text-sm text-gray-600">{resume.experience || '-'}</div>
-      {/* Source */}
-      <div>
-        <span className={`px-2 py-1 rounded text-xs font-medium ${
-          resume.source === 'TalentFlow'
-            ? 'bg-brand-blue-2/10 text-brand-blue-2 border border-brand-blue-2/20'
-            : 'bg-gray-100 text-gray-700'
-        }`}>
-          {resume.source || 'Manual'}
-        </span>
-      </div>
-      {/* Upload Date */}
-      <div className="text-sm text-gray-600">
-        {formatDateIST(resume.uploadDate)}
-      </div>
-      {/* Uploaded By */}
-      <div className="text-sm text-gray-600 truncate">{resume.uploadedBy || '-'}</div>
-      {/* Files */}
-      <div className="flex items-center gap-1 text-sm text-gray-600">
-        <FileText className="w-4 h-4" />
-        <span>{resume.attachments}</span>
-      </div>
-      {/* Actions */}
-      <div className="flex items-center gap-1">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onQuickView(resume);
-          }}
-          className="p-1.5 text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 rounded"
-          aria-label="Quick View" title="Quick View"
-        >
-          <Eye className="w-4 h-4" />
-        </button>
-        <button
-          onClick={async (e) => {
-            e.stopPropagation();
-            try {
-              const blob = await resumeService.download(resume.id);
-              const url = window.URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = resume.fileName || `${resume.name}.${resume.fileType || 'pdf'}`;
-              a.click();
-              window.URL.revokeObjectURL(url);
-            } catch (err) {
-              toast.error('Failed to download');
-            }
-          }}
-          className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
-          title="Download"
-        >
-          <Download className="w-4 h-4" />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(resume.id);
-          }}
-          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-          aria-label="Delete" title="Delete"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default function MyResumesPage() {
   const router = useRouter();
@@ -1091,7 +926,6 @@ export default function MyResumesPage() {
   const [cardRenamingFolderId, setCardRenamingFolderId] = useState<string | null>(null);
   const [cardRenameValue, setCardRenameValue] = useState('');
   const [cardFolderFilter, setCardFolderFilter] = useState<CardFolderFilter>('all');
-  const [cardResumeFilter, setCardResumeFilter] = useState<CardResumeFilter>('all');
   const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string | undefined>();
 
   // Modal states
@@ -1151,10 +985,6 @@ export default function MyResumesPage() {
     }>;
     newCount: number;
   }>({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 });
-
-  // Version selector state (for single candidate apply)
-  const [versionSelectorResume, setVersionSelectorResume] = useState<Resume | null>(null);
-  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
 
   // ZIP download confirmation modal state
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
@@ -2718,16 +2548,11 @@ export default function MyResumesPage() {
     }
   };
 
-  // Toggle assessment selection (for multi-select)
+  /* One assessment at a time, the rule the Score Resume dialog applies to jobs:
+     candidates are invited to a single assessment, so picking a second would be
+     two answers to one question. Clicking the picked one lets go of it. */
   const toggleAssessmentSelection = (assessment: any) => {
-    setSelectedAssessments(prev => {
-      const isSelected = prev.some(a => a.id === assessment.id);
-      if (isSelected) {
-        return prev.filter(a => a.id !== assessment.id);
-      } else {
-        return [...prev, assessment];
-      }
-    });
+    setSelectedAssessments(prev => (prev[0]?.id === assessment.id ? [] : [assessment]));
   };
 
   // Handle AI Talent Match button click
@@ -2803,9 +2628,11 @@ export default function MyResumesPage() {
     return false;
   };
 
-  // Handle apply to job
-  // Single candidate: show version selector first
-  // Multiple candidates: use latest version directly
+  // Handle apply to job. One ticked candidate or fifty, the same dialog opens:
+  // the Candidates Selected panel lists them on their latest version, and the
+  // eye beside a row is where another version is read and picked. A separate
+  // version-selector step for the single-candidate case meant the two flows
+  // looked nothing alike for no reason.
   const handleApplyToJob = async () => {
     if (selectedResumes.length === 0) return;
 
@@ -2818,89 +2645,15 @@ export default function MyResumesPage() {
       return;
     }
 
-    if (selectedResumes.length === 1) {
-      // Single candidate - show version selector first
-      const resume = resumes.find(r => r.id === selectedResumes[0]);
-      if (resume) {
-        await showVersionSelector(resume);
-        return;
-      }
-    }
-
-    // Multiple candidates - use latest versions directly (resumes in list are already latest)
+    // Every ticked candidate goes in on its latest version; the dialog is where
+    // a different one is chosen.
     await fetchPublishedJobs();
     setIsApplyToJobModalOpen(true);
   };
 
-  // Show version selector for a single resume
-  const showVersionSelector = async (resume: Resume) => {
-    setIsLoadingVersions(true);
-    try {
-      const versions = await resumeService.getVersions(resume.id);
-      const resumeWithVersions = {
-        ...resume,
-        versions: versions && versions.length > 0
-          ? versions.map((v: any) => ({
-              id: v.id,
-              name: v.file_name || v.candidate_name || 'Resume',
-              uploadDate: v.created_at,
-              version: v.version || 1,
-              uploadedBy: v.uploaded_by_name || 'Unknown',
-            }))
-          : [{
-              id: resume.id,
-              name: resume.fileName || resume.name || 'Resume',
-              uploadDate: resume.uploadDate,
-              version: resume.version || 1,
-              uploadedBy: resume.uploadedBy || 'Unknown',
-            }],
-      };
-      setVersionSelectorResume(resumeWithVersions);
-    } catch (error) {
-      console.error('Failed to fetch versions:', error);
-      // On error, create single version entry
-      const resumeWithVersions = {
-        ...resume,
-        versions: [{
-          id: resume.id,
-          name: resume.fileName || resume.name || 'Resume',
-          uploadDate: resume.uploadDate,
-          version: resume.version || 1,
-          uploadedBy: resume.uploadedBy || 'Unknown',
-        }],
-      };
-      setVersionSelectorResume(resumeWithVersions);
-    } finally {
-      setIsLoadingVersions(false);
-    }
-  };
-
-  // Handle version selection - proceed to job modal with selected version
-  const handleVersionSelect = async (versionId: string) => {
-    // Capture resume data immediately (before component's onClose runs)
-    const currentResume = versionSelectorResume;
-    if (!currentResume || !currentResume.versions) return;
-
-    const selectedVersion = currentResume.versions.find((v: any) => v.id === versionId);
-    if (!selectedVersion) return;
-
-    // Create resume with selected version ID
-    const resumeWithSelectedVersion = {
-      ...currentResume,
-      id: versionId,
-      version: selectedVersion.version,
-    };
-
-    // Set the resume to apply and fetch jobs
-    setSingleResumeToApply(resumeWithSelectedVersion);
-
-    // Fetch published jobs then open modal
-    await fetchPublishedJobs();
-    setIsApplyToJobModalOpen(true);
-  };
-
-  // Handle apply to job for a single resume (from table action button)
-  // This is called from ResumeTable after version is selected there
+  // Apply to Job from a row's action button. Same dialog as the toolbar action,
+  // with that one candidate on its latest version — the version is chosen in the
+  // dialog, not before it.
   const handleSingleResumeApplyToJob = async (resume: Resume) => {
     // Check if resume is archived (by flag OR by folder)
     if (isResumeArchived(resume)) {
@@ -2908,7 +2661,6 @@ export default function MyResumesPage() {
       return;
     }
 
-    // Resume already has selected version ID from ResumeTable's version selector
     setSingleResumeToApply(resume);
     await fetchPublishedJobs();
     setIsApplyToJobModalOpen(true);
@@ -3875,15 +3627,10 @@ export default function MyResumesPage() {
   const appliedResumes = 0; // Would need job applications data
   const availableResumes = totalResumes - appliedResumes;
   const selectedCardFolderFilterLabel = CARD_FOLDER_FILTER_OPTIONS.find(option => option.value === cardFolderFilter)?.label;
-  const selectedCardResumeFilterLabel = CARD_RESUME_FILTER_OPTIONS.find(option => option.value === cardResumeFilter)?.label;
-  const gridToolbarFilterChips = [
-    ...(cardFolderFilter !== 'all' && selectedCardFolderFilterLabel
+  const gridToolbarFilterChips =
+    cardFolderFilter !== 'all' && selectedCardFolderFilterLabel
       ? [{ key: 'folder-filter', label: `Folder: ${selectedCardFolderFilterLabel}`, onClear: () => setCardFolderFilter('all') }]
-      : []),
-    ...(cardResumeFilter !== 'all' && selectedCardResumeFilterLabel
-      ? [{ key: 'resume-filter', label: `Resume: ${selectedCardResumeFilterLabel}`, onClear: () => setCardResumeFilter('all') }]
-      : []),
-  ];
+      : [];
 
   // Handle duplicate resolution
   const handleResolveDuplicates = async (resolutions: { fileIndex: number; action: 'discard' | 'overwrite' | 'version' }[]) => {
@@ -4071,21 +3818,16 @@ export default function MyResumesPage() {
                 />
               </div>
 
+              {/* Folders only. The resume filter that sat beside it is gone —
+                  the search box and the Filter panel already narrow resumes. */}
               {viewMode === 'card' && (
-                <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:w-auto xl:min-w-[380px]">
+                <div className="grid w-full grid-cols-1 gap-2 xl:w-auto xl:min-w-[190px]">
                   <ToolbarFilterSelect<CardFolderFilter>
                     label="Folder Filters"
                     value={cardFolderFilter}
                     options={CARD_FOLDER_FILTER_OPTIONS}
                     onChange={setCardFolderFilter}
                     icon={<Folder className="h-4 w-4" />}
-                  />
-                  <ToolbarFilterSelect<CardResumeFilter>
-                    label="Resume Filters"
-                    value={cardResumeFilter}
-                    options={CARD_RESUME_FILTER_OPTIONS}
-                    onChange={setCardResumeFilter}
-                    icon={<FileText className="h-4 w-4" />}
                   />
                 </div>
               )}
@@ -4102,8 +3844,9 @@ export default function MyResumesPage() {
                   inline
                 />
 
-                <div className="flex h-10 items-center justify-center gap-1 rounded-lg bg-brand-blue/5 px-2 ring-1 ring-brand-blue/10">
-                  <span className="mr-1 text-xs text-gray-500">View</span>
+                {/* No "View" label: the two icons carry their own tooltips and
+                    the picked one is already lit. */}
+                <div className="flex h-10 items-center justify-center gap-1 rounded-lg bg-brand-blue/5 px-1.5 ring-1 ring-brand-blue/10">
                   <button
                     type="button"
                     onClick={() => setViewMode('list')}
@@ -4150,10 +3893,7 @@ export default function MyResumesPage() {
                 ))}
                 <button
                   type="button"
-                  onClick={() => {
-                    setCardFolderFilter('all');
-                    setCardResumeFilter('all');
-                  }}
+                  onClick={() => setCardFolderFilter('all')}
                   className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-red-600 transition-colors hover:bg-red-50"
                 >
                   <X className="h-3 w-3" />
@@ -4261,6 +4001,11 @@ export default function MyResumesPage() {
                     router.push(`/recruitment/resume-view/${resume.id}`);
                   }}
                   highlightQuery={appliedSearchQuery}
+                  /* Rows can be dragged into an order of your own, kept per
+                     folder — the grip still drops onto a folder to move a
+                     resume, and now drops onto a row to place it. */
+                  enableRowReorder
+                  reorderScopeKey={selectedFolder || 'all'}
                   onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
                   canShare={canShareMyResumes}
                   canTag={canUpdateMyResumes}
@@ -4352,8 +4097,6 @@ export default function MyResumesPage() {
                     return folderResumeCount === 0 && folderSubfolderCount === 0;
                   case 'with-subfolders':
                     return folderSubfolderCount > 0;
-                  case 'max-depth':
-                    return folder.id !== 'all' && getFolderDepth(folder.id) >= MAX_FOLDER_DEPTH;
                   default:
                     return true;
                 }
@@ -4373,24 +4116,8 @@ export default function MyResumesPage() {
                 return value !== null && value !== undefined && value !== '';
               }).length;
 
-              const resumeMatchesGridFilter = (resume: Resume) => {
-                switch (cardResumeFilter) {
-                  case 'active':
-                    return !isResumeArchived(resume);
-                  case 'archived':
-                    return isResumeArchived(resume);
-                  case 'with-skills':
-                    return getDisplaySkills(resume).length > 0;
-                  case 'with-email':
-                    return !!resume.email;
-                  case 'with-phone':
-                    return !!resume.phone && resume.phone !== 'No phone';
-                  default:
-                    return true;
-                }
-              };
-              const visibleFolderResumes = folderResumes.filter(resumeMatchesGridFilter);
-              const resumeControlsActive = !!searchQuery.trim() || cardResumeFilter !== 'all' || activeServerResumeFilterCount > 0;
+              const visibleFolderResumes = folderResumes;
+              const resumeControlsActive = !!searchQuery.trim() || activeServerResumeFilterCount > 0;
               /* `stretch` is for the fixtures row only, where the three cards
                  must match height. The user's own folder grids must NOT use it:
                  those cells grow when a card expands its subfolder list or
@@ -4725,148 +4452,59 @@ export default function MyResumesPage() {
                           {foldersToDisplay.length > 0 && (
                             <h3 className="text-sm font-medium text-gray-700 mb-3">Resumes in this folder</h3>
                           )}
-                          {/* Resumes Table - Desktop */}
-                      <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl overflow-hidden">
-                        {/* Desktop Table View */}
-                        <div className="hidden md:block overflow-x-auto">
-                        {/* Table Header */}
-                        {/* Same template as the rows below — see the note there
-                            on why the select column is fixed rather than auto. */}
-                        <div className="grid grid-cols-[32px_140px_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[1200px]">
-                          <div></div>
-                          <div className="flex items-center gap-2">
-                            <input
-                              id="grid-select-all-resumes"
-                              type="checkbox"
-                              checked={visibleFolderResumes.length > 0 && visibleFolderResumes.every(r => selectedResumes.includes(r.id))}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setSelectedResumes(prev => [...new Set([...prev, ...visibleFolderResumes.map(r => r.id)])]);
-                                } else {
-                                  setSelectedResumes(prev => prev.filter(id => !visibleFolderResumes.find(r => r.id === id)));
-                                }
-                              }}
-                              className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40"
-                            />
-                            {/* Same control as the list view's table: "Select
-                                all" until something is ticked, then the count.
-                                A <label>, so the text toggles the box itself,
-                                at a fixed width so swapping the wording can't
-                                resize this column and shift the header. */}
-                            <label
-                              htmlFor="grid-select-all-resumes"
-                              className="cursor-pointer select-none"
-                              title={
-                                selectedResumes.length > 0
-                                  ? `${selectedResumes.length} resume${selectedResumes.length !== 1 ? 's' : ''} selected`
-                                  : 'Select all resumes in this folder'
-                              }
-                            >
-                              <span className="inline-block w-[104px] tabular-nums hover:text-brand-blue transition-colors">
-                                {selectedResumes.length > 0
-                                  ? <>Selected <span className="font-semibold">({selectedResumes.length})</span></>
-                                  : 'Select all'}
-                              </span>
-                            </label>
-                          </div>
-                          <div>Candidate Name</div>
-                          <div>Email</div>
-                          <div>Phone</div>
-                          <div>Skills</div>
-                          <div>Experience</div>
-                          <div>Source</div>
-                          <div>Upload Date</div>
-                          <div>Uploaded By</div>
-                          <div>Files</div>
-                          <div>Actions</div>
-                        </div>
-                        {/* Table Body */}
-                        {visibleFolderResumes.map((resume, index) => (
-                          <DraggableCardResumeRow
-                            key={resume.id}
-                            resume={resume}
+                          {/* The list view's table, not a copy of it: one
+                              component means the two views cannot drift, and a
+                              folder, a subfolder and a child subfolder all get
+                              the same rows, pinned columns, sticky header,
+                              actions and reordering.
+
+                              The card that frames it is this view's own — the
+                              list view sits inside the folder-tree panel and
+                              borrows its border, but here the table stands on
+                              the page beside the folder cards and needs one. */}
+                          {/* gray-200, not gray-100: the table's own rules are
+                              gray-200, so a lighter frame read as three sides
+                              and a missing bottom — the top and flanks were the
+                              table's separators showing through, not the card. */}
+                          <div className="bg-white border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl overflow-hidden">
+                          <ResumeTable
+                            resumes={visibleFolderResumes}
                             selectedResumes={selectedResumes}
-                            isLast={index === visibleFolderResumes.length - 1}
-                            onSelect={handleSelectResume}
-                            onQuickView={(r) => setQuickViewResume(r)}
-                            onDelete={canDeleteMyResumes ? handleDelete : undefined}
-                            onViewDetails={(r) => {
+                            onSelectResume={handleSelectResume}
+                            onSelectAll={(selected) => {
+                              // Scoped to this folder's rows, not the whole list.
+                              if (selected) {
+                                setSelectedResumes(prev => [...new Set([...prev, ...visibleFolderResumes.map(r => r.id)])]);
+                              } else {
+                                setSelectedResumes(prev => prev.filter(id => !visibleFolderResumes.some(r => r.id === id)));
+                              }
+                            }}
+                            onQuickView={(resume) => setQuickViewResume(resume)}
+                            onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
+                            onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}
+                            onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
+                            folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
+                            onViewDetails={(resume) => {
                               sessionStorage.setItem('resumeNavList', JSON.stringify(visibleFolderResumes.map((x) => x.id)));
                               sessionStorage.setItem('resumeNavSource', 'my-resumes');
-                              router.push(`/recruitment/resume-view/${r.id}`);
+                              router.push(`/recruitment/resume-view/${resume.id}`);
                             }}
+                            highlightQuery={appliedSearchQuery}
+                            enableRowReorder
+                            reorderScopeKey={cardViewFolder || 'all'}
+                            onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
+                            canShare={canShareMyResumes}
+                            canTag={canUpdateMyResumes}
+                            disablePagination={true}
+                            isArchivedFolder={
+                              folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === cardViewFolder)
+                            }
+                            archivedFolderId={folders.find(f => f.name === 'Archived Resumes' && !f.parentId)?.id}
+                            /* All Resumes aggregates every folder, so each row
+                               names the one it lives in. */
+                            getFolderName={cardViewFolder === 'all' ? getResumeFolderName : undefined}
                           />
-                        ))}
-                        </div>
-
-                        {/* Mobile Card View */}
-                        <div className="md:hidden space-y-3 p-3">
-                          {visibleFolderResumes.map((resume) => (
-                            <div
-                              key={resume.id}
-                              className={`bg-white border rounded-lg p-4 cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/30 transition-all ${
-                                selectedResumes.includes(resume.id) ? 'border-brand-blue/50 bg-brand-blue/5 ring-1 ring-brand-blue/30' : 'border-gray-200'
-                              }`}
-                              onClick={() => {
-                                sessionStorage.setItem('resumeNavList', JSON.stringify(visibleFolderResumes.map((x) => x.id)));
-                                sessionStorage.setItem('resumeNavSource', 'my-resumes');
-                                router.push(`/recruitment/resume-view/${resume.id}`);
-                              }}
-                            >
-                              <div className="flex items-start gap-3 mb-3">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedResumes.includes(resume.id)}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    handleSelectResume(resume.id);
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 mt-1"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-gray-900 truncate">{resume.name}</div>
-                                  <div className="text-sm text-gray-500 truncate">{resume.email || '-'}</div>
-                                </div>
-                              </div>
-                              <div className="space-y-2 text-sm mb-3">
-                                {resume.phone && resume.phone !== 'No phone' && (
-                                  <div className="text-gray-600 truncate">{resume.phone}</div>
-                                )}
-                                {resume.experience && (
-                                  <div className="text-gray-600">{resume.experience} exp.</div>
-                                )}
-                                {getDisplaySkills(resume).length > 0 && (
-                                  <div className="flex flex-wrap gap-1">
-                                    <SkillsList
-                                      skills={getDisplaySkills(resume)}
-                                      chipClassName="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs border border-brand-blue/20"
-                                      moreClassName="px-2 py-0.5 text-brand-blue text-xs font-medium rounded hover:bg-brand-blue/10 transition-colors cursor-pointer"
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setQuickViewResume(resume); }}
-                                  className="flex-1 px-3 py-2 text-sm text-gray-700 bg-brand-blue/5 hover:bg-brand-blue/10 hover:text-brand-blue ring-1 ring-brand-blue/10 rounded-lg flex items-center justify-center gap-1 transition-colors"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  View
-                                </button>
-                                {canDeleteMyResumes && (
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); handleDelete(resume.id); }}
-                                    className="px-3 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center gap-1"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                          </div>
                         </div>
                       )}
 
@@ -4964,9 +4602,15 @@ export default function MyResumesPage() {
         />
       )}
 
+      {/* The eye in the Actions column reads the resume in the same document
+          preview the version lists use, so viewing a resume looks the same
+          wherever it is opened from. */}
+
       {quickViewResume && (
-        <ResumeQuickViewModal
-          resume={quickViewResume}
+        <ResumeTextPreviewModal
+          resumeId={quickViewResume.id}
+          title={quickViewResume.name}
+          subtitle={quickViewResume.fileName}
           onClose={() => setQuickViewResume(null)}
         />
       )}
@@ -4981,25 +4625,6 @@ export default function MyResumesPage() {
             setPendingUploadFolderId(undefined);
           }}
           onResolve={handleResolveDuplicates}
-        />
-      )}
-
-      {/* Loading overlay for version fetch */}
-      {isLoadingVersions && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 flex items-center gap-3 shadow-2xl shadow-brand-blue/10">
-            <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
-            <span className="text-gray-700">Loading versions...</span>
-          </div>
-        </div>
-      )}
-
-      {/* Version Selector Modal (for single candidate apply) */}
-      {versionSelectorResume && versionSelectorResume.versions && versionSelectorResume.versions.length > 0 && (
-        <ResumeVersionSelector
-          resume={versionSelectorResume}
-          onSelect={handleVersionSelect}
-          onClose={() => setVersionSelectorResume(null)}
         />
       )}
 
@@ -6153,7 +5778,7 @@ export default function MyResumesPage() {
       {isAssessmentModalOpen && (
         <>
           <div
-            className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
+            className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
             onClick={() => {
               setIsAssessmentModalOpen(false);
               setAssessmentSearchQuery('');
@@ -6161,18 +5786,22 @@ export default function MyResumesPage() {
               setExcludedInviteIds([]);
             }}
           />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          {/* Shell, header, body and footer are the Apply to Job / Score Resume
+              dialog's, so the candidate actions all read as one dialog. */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               {/* Header */}
-              <div className="flex-shrink-0 flex items-center gap-4 p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white">
-                <div className="w-12 h-12 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
-                  <ClipboardCheck className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Invite to Assessment</h3>
-                  <p className="text-sm text-gray-500">
-                    {selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected
-                  </p>
+              <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+                    <ClipboardCheck className="w-4 h-4 text-brand-blue" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Invite to Assessment</h2>
+                    {/* What the dialog is for. The count lives on the Candidates
+                        Selected panel below, which tracks unticking. */}
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Select candidates to invite for an assessment</p>
+                  </div>
                 </div>
                 <button
                   onClick={() => {
@@ -6180,14 +5809,14 @@ export default function MyResumesPage() {
                     setAssessmentSearchQuery('');
                     setSelectedAssessments([]);
                   }}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
                  aria-label="Close">
-                  <X className="w-5 h-5 text-gray-500" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Content */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-6">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
                 {/* The same Candidates Selected panel the Score Resume and
                     Apply to Job dialogs use — full list, untick to drop
                     someone, resume version, and the eye to read a resume. */}
@@ -6202,60 +5831,42 @@ export default function MyResumesPage() {
                   tip="Invitations go to each candidate's email address — untick anyone you want to leave out."
                 />
 
-                {/* Assessment Selection */}
+                {/* Assessment Selection. Search first, then the list, in the
+                    order and wording the job dialog uses. */}
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-medium text-gray-700">Select Active Assessments</h4>
-                    {activeAssessments.length > 0 && (
-                      <button
-                        onClick={() => {
-                          const filteredAssessments = activeAssessments.filter(assessment => {
-                            if (!assessmentSearchQuery.trim()) return true;
-                            const query = assessmentSearchQuery.toLowerCase();
-                            return (
-                              assessment.short_id?.toLowerCase().includes(query) ||
-                              assessment.title?.toLowerCase().includes(query) ||
-                              assessment.jd_short_id?.toLowerCase().includes(query) ||
-                              assessment.jd_title?.toLowerCase().includes(query)
-                            );
-                          });
-
-                          if (selectedAssessments.length === filteredAssessments.length) {
-                            // Clear all
-                            setSelectedAssessments([]);
-                          } else {
-                            // Select all filtered
-                            setSelectedAssessments(filteredAssessments);
-                          }
-                        }}
-                        className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
-                      >
-                        {selectedAssessments.length === activeAssessments.filter(assessment => {
-                          if (!assessmentSearchQuery.trim()) return true;
-                          const query = assessmentSearchQuery.toLowerCase();
-                          return (
-                            assessment.short_id?.toLowerCase().includes(query) ||
-                            assessment.title?.toLowerCase().includes(query) ||
-                            assessment.jd_short_id?.toLowerCase().includes(query) ||
-                            assessment.jd_title?.toLowerCase().includes(query)
-                          );
-                        }).length && selectedAssessments.length > 0 ? 'Clear All' : 'Select All'}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Search Bar */}
                   <div className="mb-4">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Assessments</label>
                     <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
                       <input
                         type="text"
                         value={assessmentSearchQuery}
                         onChange={(e) => setAssessmentSearchQuery(e.target.value)}
-                        placeholder="Search by Assessment ID, Name, JD ID, or JD Name..."
-                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                        placeholder="Search by assessment ID, name, JD ID or JD name..."
+                        className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                       />
                     </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
+                      Select an Active Assessment
+                      {activeAssessments.length > 0 && (
+                        <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
+                          {activeAssessments.length} available
+                        </span>
+                      )}
+                    </label>
+                    {/* Same escape hatch the job list offers: the only way back
+                        to "nothing picked" once the others have gone inert. */}
+                    {selectedAssessments.length > 0 && (
+                      <button
+                        onClick={() => setSelectedAssessments([])}
+                        className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
+                      >
+                        Clear Selection
+                      </button>
+                    )}
                   </div>
 
                   {loadingAssessments ? (
@@ -6285,71 +5896,78 @@ export default function MyResumesPage() {
                       <div className="space-y-2 max-h-64 overflow-y-auto">
                         {filteredAssessments.map(assessment => {
                           const isSelected = selectedAssessments.some(a => a.id === assessment.id);
+                          /* Once one is picked the rest go inert, with the
+                             reason on the row — the same treatment the job list
+                             gives the roles you didn't choose. */
+                          const blockedByOtherPick = selectedAssessments.length > 0 && !isSelected;
                           return (
-                            <button
+                            <label
                               key={assessment.id}
-                              onClick={() => toggleAssessmentSelection(assessment)}
-                              className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                                isSelected
-                                  ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
-                                  : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/5'
+                              title={blockedByOtherPick
+                                ? 'Only one assessment can be sent at a time — clear the current selection to choose this one'
+                                : undefined}
+                              aria-disabled={blockedByOtherPick}
+                              className={`block w-full text-left p-4 rounded-lg border-2 transition-all ${
+                                blockedByOtherPick
+                                  ? 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
+                                  : isSelected
+                                    ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10 cursor-pointer'
+                                    : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/5 cursor-pointer'
                               }`}
                             >
                               <div className="flex items-start gap-3">
-                                {/* Checkbox */}
-                                <div className="flex-shrink-0 mt-1">
-                                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                    isSelected
-                                      ? 'bg-brand-blue border-brand-blue'
-                                      : 'bg-white border-gray-300'
-                                  }`}>
-                                    {isSelected && (
-                                      <CheckCircle className="w-4 h-4 text-white" />
-                                    )}
-                                  </div>
-                                </div>
+                                {/* A radio, because exactly one assessment is sent. */}
+                                <input
+                                  type="radio"
+                                  name="invite-to-assessment-selection"
+                                  checked={isSelected}
+                                  disabled={blockedByOtherPick}
+                                  onChange={() => !blockedByOtherPick && toggleAssessmentSelection(assessment)}
+                                  onClick={() => isSelected && toggleAssessmentSelection(assessment)}
+                                  className="w-4 h-4 mt-1 flex-shrink-0 text-brand-blue border-gray-300 focus:ring-brand-blue/40 disabled:cursor-not-allowed"
+                                />
 
                                 <div className="flex-1">
                                   {/* Assessment ID, Title, Version */}
                                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                    {/* Same ID chip the Assessments page uses. */}
                                     {assessment.short_id && (
-                                      <span className="text-xs px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
+                                      <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue text-white rounded text-xs font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                                         {assessment.short_id}
                                       </span>
                                     )}
-                                    {(() => {
-                                      // Show the assessment's title with its real version
-                                      // (derived from `version` field, falling back to a
-                                      // version baked into the title). Strips the inline
-                                      // "- Version N" suffix so we don't double-render.
-                                      const parsed = parseAssessmentTitle(assessment.title || '');
-                                      const displayVersion = typeof assessment.version === 'number'
-                                        ? assessment.version
-                                        : parsed.version;
-                                      const base = parsed.cleanTitle || 'Untitled assessment';
-                                      return (
-                                        <>
-                                          <h5 className="font-medium text-gray-900">{base}</h5>
-                                          {displayVersion && (
-                                            <span className="text-xs px-2 py-0.5 bg-brand-cyan/15 text-brand-cyan ring-1 ring-brand-cyan/30 rounded font-semibold">
-                                              V{displayVersion}
-                                            </span>
-                                          )}
-                                        </>
-                                      );
-                                    })()}
-                                    <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full">
-                                      {assessment.status}
+                                    {/* Title with the inline "- Version N" suffix stripped,
+                                        so the version isn't rendered twice. */}
+                                    <h5 className="font-medium text-gray-900">
+                                      {parseAssessmentTitle(assessment.title || '').cleanTitle || 'Untitled assessment'}
+                                    </h5>
+                                    {/* The shared badge, rather than a chip of this
+                                        screen's own — it falls back to the version in
+                                        the title when the API omits the field. */}
+                                    <VersionBadge
+                                      version={typeof assessment.version === 'number' ? assessment.version : undefined}
+                                      title={assessment.title}
+                                      size="sm"
+                                      variant="secondary"
+                                    />
+                                    {/* Status, worded and coloured as on the
+                                        Assessments page: the API's "published"
+                                        is shown there as a green "Active". */}
+                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 bg-green-100 text-green-700 ring-green-200">
+                                      {assessment.status === 'published' ? 'Active' : assessment.status}
                                     </span>
+                                    {/* Selected indicator, as on a picked job row */}
+                                    {isSelected && (
+                                      <CheckCircle className="w-5 h-5 text-brand-blue ml-auto flex-shrink-0" />
+                                    )}
                                   </div>
 
-                                  {/* Linked JD Information */}
+                                  {/* Linked JD, written as the Assessments page writes it. */}
                                   {assessment.jd_short_id && (
-                                    <div className="text-xs text-gray-600 mb-1.5">
-                                      <span className="font-medium">Linked to: </span>
-                                      <span className="text-gray-800">{assessment.jd_short_id}</span>
+                                    <div className="text-xs text-gray-700 font-medium mb-1.5">
+                                      <span>{assessment.jd_short_id}</span>
                                       {assessment.jd_title && (
-                                        <span className="ml-1">- {assessment.jd_title}</span>
+                                        <span className="ml-2">{assessment.jd_title}</span>
                                       )}
                                       {assessment.jd_version && (
                                         <span className="ml-1 text-gray-500">v{assessment.jd_version}</span>
@@ -6383,7 +6001,7 @@ export default function MyResumesPage() {
                                   </div>
                                 </div>
                               </div>
-                            </button>
+                            </label>
                           );
                         })}
                       </div>
@@ -6393,27 +6011,43 @@ export default function MyResumesPage() {
               </div>
 
               {/* Footer */}
-              <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 bg-gray-50 border-t border-gray-200">
-                <div className="text-sm text-gray-600">
-                  {selectedResumes.filter(id => !excludedInviteIds.includes(id)).length} candidate
-                  {selectedResumes.filter(id => !excludedInviteIds.includes(id)).length === 1 ? '' : 's'}
-                  {' '}&middot; {selectedAssessments.length} assessment{selectedAssessments.length !== 1 ? 's' : ''} selected
-                </div>
-                <div className="flex items-center gap-3">
+              <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700">
+                {/* Reads like the Score Resume footer: what is still missing,
+                    and once nothing is, what is about to happen. */}
+                {(() => {
+                  const inviteeCount = selectedResumes.filter(id => !excludedInviteIds.includes(id)).length;
+                  // One line, always: it sits beside the buttons, and a second
+                  // line would push the footer taller.
+                  return (
+                    <div className="min-w-0 truncate whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                      {inviteeCount === 0
+                        ? 'Select at least one candidate to continue'
+                        : selectedAssessments.length === 0
+                          ? 'Select one assessment to continue'
+                          : (
+                            <span className="inline-flex items-center gap-1.5 align-middle">
+                              <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                              Ready to invite {inviteeCount} candidate{inviteeCount === 1 ? '' : 's'} to 1 assessment
+                            </span>
+                          )}
+                    </div>
+                  );
+                })()}
+                <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
                     onClick={() => {
                       setIsAssessmentModalOpen(false);
                       setAssessmentSearchQuery('');
                       setSelectedAssessments([]);
                     }}
-                    className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                    className="flex-1 sm:flex-none px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => {
                       if (selectedAssessments.length === 0) {
-                        toast.error('Please select at least one assessment');
+                        toast.error('Please select an assessment');
                         return;
                       }
 
@@ -6440,11 +6074,15 @@ export default function MyResumesPage() {
                       setIsAssessmentModalOpen(false);
                       setIsShareAssessmentModalOpen(true);
                     }}
-                    disabled={selectedAssessments.length === 0}
-                    className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    /* Both halves have to be answered, as in the job dialog. */
+                    disabled={
+                      selectedAssessments.length === 0 ||
+                      selectedResumes.filter(id => !excludedInviteIds.includes(id)).length === 0
+                    }
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Mail className="w-4 h-4" />
-                    Proceed to Send Invitations
+                    Send Invitations
                   </button>
                 </div>
               </div>
@@ -6467,7 +6105,8 @@ export default function MyResumesPage() {
         onInvited={() => setSelectedResumes([])}
       />
 
-      {/* Share Assessment Modal with Pre-filled Candidates (supports multiple assessments) */}
+      {/* Share Assessment Modal with Pre-filled Candidates — one assessment,
+          the one picked in the invite dialog. */}
       {isShareAssessmentModalOpen && selectedAssessments.length > 0 && (
         <ShareAssessmentModal
           isOpen={isShareAssessmentModalOpen}
@@ -6492,20 +6131,6 @@ export default function MyResumesPage() {
             jd_title: selectedAssessments[0].jd_title,
             jd_version: selectedAssessments[0].jd_version
           }}
-          additionalAssessments={selectedAssessments.slice(1).map(a => ({
-            id: a.id,
-            title: a.title,
-            duration: `${a.duration_minutes || 0} min`,
-            questions: a.sections?.reduce((total: number, section: any) =>
-              total + (section.questions?.length || 0), 0) || 0,
-            type: a.sections?.length > 0 && a.sections[0]?.section_type === 'ai_generated'
-              ? 'AI-Generated'
-              : 'Manual',
-            short_id: a.short_id,
-            jd_short_id: a.jd_short_id,
-            jd_title: a.jd_title,
-            jd_version: a.jd_version
-          }))}
           prefilledCandidates={prefilledCandidates}
           inviteSource="My Resumes"
         />

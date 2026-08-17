@@ -14,7 +14,7 @@ import UploadHistoryPanel from '@/components/UploadHistoryPanel';
 import UploadModal from '@/components/UploadModal';
 import { FOLDER_NAME_MAX_LENGTH } from '@/components/FolderTree';
 import ResumeDetailView from '@/components/ResumeDetailView';
-import ResumeQuickViewModal from '@/components/ResumeQuickViewModal';
+import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModal';
 import VersionHistoryModal from '@/components/VersionHistoryModal';
@@ -1150,9 +1150,13 @@ export default function ResumeDatabasePage() {
         />
       )}
 
+      {/* Same document preview the version lists open, so viewing a resume
+          looks the same wherever it is opened from. */}
       {quickViewResume && (
-        <ResumeQuickViewModal
-          resume={quickViewResume}
+        <ResumeTextPreviewModal
+          resumeId={quickViewResume.id}
+          title={quickViewResume.name}
+          subtitle={quickViewResume.fileName}
           onClose={() => setQuickViewResume(null)}
         />
       )}

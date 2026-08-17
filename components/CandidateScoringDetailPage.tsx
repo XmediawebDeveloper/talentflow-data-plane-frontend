@@ -1,6 +1,6 @@
 'use client';
 
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye } from 'lucide-react';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import ShareAssessmentModal from './ShareAssessmentModal';
@@ -128,9 +128,20 @@ function byNewestVersion(a: any, b: any): number {
 }
 
 export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems }: CandidateScoringDetailPageProps) {
-  const { isTenantAdmin, user } = useAuth();
+  const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
+  const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
+
+  // Share Resume dialog state.
+  const [showShareResumeModal, setShowShareResumeModal] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareSubject, setShareSubject] = useState('');
+  const [shareMessage, setShareMessage] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  /** Blob URL of the scorecard PDF while it is being read in the dialog. */
+  const [scorecardPreviewUrl, setScorecardPreviewUrl] = useState<string | null>(null);
+  const [loadingScorecardPreview, setLoadingScorecardPreview] = useState(false);
 
   // Same permission shape the JD page uses for its invite actions.
   const hasPermission = (permission: string): boolean => {
@@ -707,6 +718,78 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     }
   };
 
+  /* Share Resume — the dialog the resume table and the resume page open, so a
+     scored candidate's resume goes out the same way it does anywhere else. The
+     file's details are already on `fullResumeData`, and the eye reuses View
+     Resume, which resolves the latest version. */
+  const openShareModal = () => {
+    if (!viewResumeId) {
+      toast.error('Resume is not available for this candidate');
+      return;
+    }
+
+    const resumeLink =
+      typeof window !== 'undefined' ? `${window.location.origin}/recruitment/resume-view/${viewResumeId}` : '';
+
+    setShareEmail('');
+    setShareSubject(`Resume: ${fullResumeData.candidateName} - ${fullResumeData.title || 'Candidate'}`);
+    setShareMessage(`Hi,
+
+I'm sharing the resume of ${fullResumeData.candidateName} for your review.
+
+Candidate Details:
+- Name: ${fullResumeData.candidateName}
+- Title: ${fullResumeData.title || 'N/A'}
+- Experience: ${fullResumeData.experience || 'N/A'}
+- Location: ${fullResumeData.location || 'N/A'}
+- Match: ${fullResumeData.matchStatus || resume.matchStatus || 'N/A'}${
+      fullResumeData.scorePercentage != null ? ` (${fullResumeData.scorePercentage}%)` : ''
+    }
+
+You can view the full resume at: ${resumeLink}
+
+Best regards`);
+    setShowShareResumeModal(true);
+  };
+
+  const closeShareModal = () => {
+    setShowShareResumeModal(false);
+    setShareEmail('');
+    setShareSubject('');
+    setShareMessage('');
+  };
+
+  const handleSendShareEmail = async () => {
+    if (!viewResumeId) return;
+
+    if (!shareEmail.trim()) {
+      toast.error('Please enter an email address');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(shareEmail.trim())) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const { resumeService } = await import('@/lib/services/resumeService');
+      const result = await resumeService.share(viewResumeId, shareEmail.trim(), shareMessage);
+      if (result.success) {
+        toast.success('Resume shared successfully');
+        closeShareModal();
+      } else {
+        toast.error(result.message || 'Failed to send email');
+      }
+    } catch (error: any) {
+      console.error('[CandidateScoringDetailPage] Failed to share resume:', error);
+      toast.error(error?.message || 'Failed to send email');
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   // Invite for assessment — same selection rules the JD page uses: only
   // published, non-revoked assessments for this JD are invitable.
   const handleInviteForAssessment = async () => {
@@ -791,55 +874,87 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     }
   };
 
+  /* The scorecard PDF, fetched once and used by both the download and the
+     preview. Returns null when it has already reported the failure. */
+  const fetchScorecardBlob = async (toastId: string | number): Promise<Blob | null> => {
+    console.log('[Scorecard] Requesting PDF for score_id:', fullResumeData.id);
+
+    // Get token from localStorage
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      toast.error('Please login to download scorecard', { id: toastId });
+      return null;
+    }
+
+    // Call the backend API to get PDF
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const response = await fetch(`${API_URL}/scoring/scores/${fullResumeData.id}/download-pdf`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    // Handle 401 - logout and redirect
+    if (response.status === 401) {
+      handleUnauthorized();
+      return null;
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      console.error('[Scorecard] Failed:', response.status, errorData);
+
+      // Provide user-friendly error message
+      let errorMessage = 'Failed to download scorecard. Please try again later.';
+
+      if (response.status === 404) {
+        errorMessage = 'Scorecard not found. The score may have been deleted.';
+      } else if (response.status === 500) {
+        errorMessage = 'Server error while generating scorecard. Our team has been notified.';
+      } else if (response.status === 403) {
+        errorMessage = 'You do not have permission to download this scorecard.';
+      }
+
+      toast.error(errorMessage, { id: toastId, duration: 5000 });
+      return null;
+    }
+
+    return response.blob();
+  };
+
+  /* Read the scorecard without leaving the dialog — the eye beside the resume
+     does the same for the resume, so both attachments open in place. */
+  const handlePreviewScorecard = async () => {
+    if (loadingScorecardPreview) return;
+    const toastId = toast.loading('Generating scorecard PDF...');
+    setLoadingScorecardPreview(true);
+    try {
+      const blob = await fetchScorecardBlob(toastId);
+      if (!blob) return;
+      // A blob URL rather than the API URL: the endpoint needs the bearer
+      // token, which an <iframe> src cannot carry.
+      setScorecardPreviewUrl(window.URL.createObjectURL(blob));
+      toast.dismiss(toastId);
+    } catch (error) {
+      console.error('[Scorecard] Preview error:', error);
+      toast.error('Failed to open the scorecard. Please try again.', { id: toastId });
+    } finally {
+      setLoadingScorecardPreview(false);
+    }
+  };
+
+  const closeScorecardPreview = () => {
+    if (scorecardPreviewUrl) window.URL.revokeObjectURL(scorecardPreviewUrl);
+    setScorecardPreviewUrl(null);
+  };
+
   const handleDownloadScorecard = async () => {
     const toastId = toast.loading('Generating scorecard PDF...');
 
     try {
-      console.log('[Download] Starting PDF download for score_id:', fullResumeData.id);
-
-      // Get token from localStorage
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        toast.error('Please login to download scorecard', { id: toastId });
-        return;
-      }
-
-      // Call the backend API to get PDF
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-      const response = await fetch(`${API_URL}/scoring/scores/${fullResumeData.id}/download-pdf`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      // Handle 401 - logout and redirect
-      if (response.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        console.error('[Download] Failed:', response.status, errorData);
-
-        // Provide user-friendly error message
-        let errorMessage = 'Failed to download scorecard. Please try again later.';
-
-        if (response.status === 404) {
-          errorMessage = 'Scorecard not found. The score may have been deleted.';
-        } else if (response.status === 500) {
-          errorMessage = 'Server error while generating scorecard. Our team has been notified.';
-        } else if (response.status === 403) {
-          errorMessage = 'You do not have permission to download this scorecard.';
-        }
-
-        toast.error(errorMessage, { id: toastId, duration: 5000 });
-        return;
-      }
-
-      // Get the PDF blob
-      const blob = await response.blob();
+      const blob = await fetchScorecardBlob(toastId);
+      if (!blob) return;
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -943,6 +1058,19 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
             {/* ml-auto keeps the actions right-aligned on one line, and simply
                 wraps to the next line when the badges run out of room. */}
             <div className="flex flex-wrap items-center gap-2 ml-auto">
+              {/* Share leads the group: sending the resume on is a step that
+                  usually comes before inviting anyone to anything. */}
+              {canShareResume && viewResumeId && (
+                <button
+                  onClick={openShareModal}
+                  title="Share resume"
+                  className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm text-gray-700 border border-gray-300 bg-white rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <Share2 className="w-4 h-4" />
+                  Share
+                </button>
+              )}
+
               {canInvite && (
                 <div className="relative" ref={inviteMenuRef}>
                   <button
@@ -2352,6 +2480,217 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                     >
                       Continue
                     </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Share Resume — the same dialog the resume table and the resume
+              page open. The eye reuses View Resume, whose preview sits at
+              z-[60], so it opens above this. */}
+          {showShareResumeModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                        <Mail className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
+                        <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={closeShareModal}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      aria-label="Close"
+                    >
+                      <X className="w-5 h-5 text-gray-500" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Both files this page can send on, side by side: the
+                        resume itself and the scorecard for this JD. */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
+                      <div className="flex flex-col sm:flex-row items-stretch gap-3">
+                        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 min-w-0 flex-1">
+                          <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                            <FileText className="w-4 h-4 text-brand-blue" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className="text-sm font-medium text-gray-900 truncate"
+                              title={fullResumeData.fileName || `${fullResumeData.candidateName}.pdf`}
+                            >
+                              {fullResumeData.fileName || `${fullResumeData.candidateName}.pdf`}
+                            </div>
+                            <div className="text-xs text-gray-500 truncate">
+                              Resume
+                              {fullResumeData.fileType && <> &middot; {fullResumeData.fileType.toUpperCase()}</>}
+                              {fullResumeData.fileSizeKb ? <> &middot; {Math.round(fullResumeData.fileSizeKb)} KB</> : null}
+                            </div>
+                          </div>
+                          <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <button
+                            type="button"
+                            onClick={handleViewResume}
+                            disabled={loadingResumeDetail}
+                            className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
+                            aria-label={`View ${fullResumeData.candidateName}'s resume`}
+                            title="View resume"
+                          >
+                            {loadingResumeDetail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+
+                        {/* The scorecard PDF, built on demand — the download
+                            button is the same one in the header bar. */}
+                        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 min-w-0 flex-1">
+                          <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+                            <Award className="w-4 h-4 text-brand-cyan" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className="text-sm font-medium text-gray-900 truncate"
+                              title={`Scorecard - ${fullResumeData.candidateName}.pdf`}
+                            >
+                              Scorecard - {fullResumeData.candidateName}.pdf
+                            </div>
+                            <div className="text-xs text-gray-500 truncate">
+                              Scorecard &middot; PDF
+                              {fullResumeData.scorePercentage != null && <> &middot; {fullResumeData.scorePercentage}%</>}
+                            </div>
+                          </div>
+                          <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <button
+                            type="button"
+                            onClick={handlePreviewScorecard}
+                            disabled={loadingScorecardPreview}
+                            className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
+                            aria-label={`View ${fullResumeData.candidateName}'s scorecard`}
+                            title="View scorecard"
+                          >
+                            {loadingScorecardPreview ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Recipient Email <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={shareEmail}
+                        onChange={(e) => setShareEmail(e.target.value)}
+                        placeholder="Enter email address"
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                      <input
+                        type="text"
+                        value={shareSubject}
+                        onChange={(e) => setShareSubject(e.target.value)}
+                        placeholder="Email subject"
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                      <textarea
+                        value={shareMessage}
+                        onChange={(e) => setShareMessage(e.target.value)}
+                        placeholder="Enter your message"
+                        rows={8}
+                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all resize-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+                    <button
+                      onClick={closeShareModal}
+                      className="px-4 py-2 text-gray-700 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSendShareEmail}
+                      disabled={isSendingEmail || !shareEmail.trim()}
+                      className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                    >
+                      {isSendingEmail ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          Send Email
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* The scorecard, read in place. z-[60] puts it over the share
+              dialog, the same level the resume preview uses. */}
+          {scorecardPreviewUrl && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90vh] flex flex-col overflow-hidden">
+                {/* Header — the resume preview's, with the scorecard's own
+                    subtitle. */}
+                <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                      <Eye className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">Scorecard</h2>
+                      <p className="text-sm text-gray-500 truncate">
+                        {fullResumeData.candidateName}
+                        {fullResumeData.scorePercentage != null && <> &middot; {fullResumeData.scorePercentage}%</>}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={handleDownloadScorecard}
+                      className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="hidden sm:inline">Download</span>
+                    </button>
+                    <button
+                      onClick={closeScorecardPreview}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                      aria-label="Close"
+                    >
+                      <X className="w-5 h-5 text-gray-500" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* The PDF on the same grey ground, in the same white page the
+                    resume text is rendered on. The document scrolls inside the
+                    viewer, so the ground itself doesn't. */}
+                <div className="flex-1 overflow-hidden bg-gray-100 p-4 sm:p-6">
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 max-w-2xl mx-auto h-full overflow-hidden">
+                    <iframe src={scorecardPreviewUrl} title="Scorecard preview" className="w-full h-full" />
                   </div>
                 </div>
               </div>

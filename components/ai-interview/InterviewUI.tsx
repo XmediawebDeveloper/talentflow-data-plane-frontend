@@ -21,7 +21,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2 } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -62,6 +62,15 @@ interface InterviewUIProps {
   // up — otherwise exiting fullscreen at the "Done" popup would terminate an
   // already-finished interview and block its evaluation.
   onInterviewClosing?: () => void;
+  /**
+   * Requests the parent portal terminate the interview for a proctoring
+   * violation the parent owns the full termination flow for (persisted
+   * reason, proctor event, screen-recording tail capture, sticky terminated
+   * page) — mirrors the leave-the-screen termination already implemented
+   * there. Currently fired only when the microphone stays disconnected
+   * through the full 3-minute pause grace window.
+   */
+  onTerminate?: (reason: string) => void;
   faceVerification?: FaceVerificationHandle;
   voiceVerification?: VoiceVerificationHandle;
   copyPasteBlocking?: boolean;
@@ -497,7 +506,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
 });
 const LiveAIBubbleMemo = memo(LiveAIBubble);
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl }: InterviewUIProps) {
   // ── Effective device capability ──────────────────────────────────────────
   // The portal detects this at the system-check step, but a RESUMED session (or
   // any entry path that skips system check) arrives with deviceCapability=undefined
@@ -1315,6 +1324,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     try { recordingAudioCtxRef.current?.close(); } catch { /* already closed */ }
     recordingAudioCtxRef.current = null;
   }, []);
+  // Live handles into the recording graph built once in handleVideoReady, kept
+  // reachable so a later device reacquire (mic unplug/replug) can swap in the
+  // NEW tracks instead of leaving mediaRecorderRef silently recording from
+  // tracks Webcam.tsx is about to .stop(). See handleTracksReplaced below.
+  const recordStreamRef = useRef<MediaStream | null>(null);
+  const recordingDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const recordingBoostRef = useRef<GainNode | null>(null);
+  const recordingMicSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   // Checkpoint upload refs — periodic flushes protect against tab-throttle/abrupt close
   const checkpointTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const checkpointInProgressRef = useRef(false);
@@ -1443,12 +1460,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (!isConnected) return;
     const disabled = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive;
     if (!disabled) return;
+    // Mic-only failure (camera still fine) uses the audio-only reacquire path
+    // — it never requests or touches the video track, so a headset dropping
+    // can't disturb an otherwise-healthy camera (see reacquireAudio's own
+    // comment in Webcam.tsx for why the combined reacquire() could).
+    // Anything involving the camera keeps using the combined reacquire().
+    const micOnly = !proctoringState.isMicrophoneActive && proctoringState.isCameraActive;
     let cancelled = false;
     const id = setInterval(async () => {
       if (cancelled) return;
       let ok = false;
       try {
-        ok = (await webcamRef.current?.reacquire()) ?? false;
+        ok = (micOnly
+          ? await webcamRef.current?.reacquireAudio()
+          : await webcamRef.current?.reacquire()) ?? false;
       } catch {
         /* device still unavailable — keep polling */
       }
@@ -1460,6 +1485,120 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }, 2500);
     return () => { cancelled = true; clearInterval(id); };
   }, [isConnected, proctoringState.isCameraActive, proctoringState.isMicrophoneActive]);
+
+  // ── Camera/mic disconnect: pause + 3-minute grace, then terminate ──────────
+  // ANY device loss — camera, mic (headset included, via
+  // InterviewProctoringMonitor's deviceId-swap poll for the "OS silently
+  // fell back to the built-in mic" case), or both together — pauses the
+  // backend's question timer and gives the candidate 3 minutes to reconnect
+  // before the interview is terminated. Camera and mic get IDENTICAL
+  // handling here; which one is actually down only changes the overlay's
+  // wording/icon (computed straight from proctoringState at render time,
+  // not tracked separately) and which specific proctor event(s) get logged.
+  //
+  // Recovery needs no extra polling of its own: the existing device-recovery
+  // effect above already drives reacquire()/reacquireAudio() attempts (mic-
+  // only uses the audio-only path so it never disturbs a healthy camera —
+  // see Webcam.tsx), and InterviewProctoringMonitor's own health-check flips
+  // isCameraActive/isMicrophoneActive back to true automatically once the
+  // device is live again — this effect just reacts to that transition.
+  const MEDIA_PAUSE_GRACE_MS = 180000; // 3 minutes
+  const [isMediaPaused, setIsMediaPaused] = useState(false);
+  const [mediaPauseSecondsRemaining, setMediaPauseSecondsRemaining] = useState<number | null>(null);
+  const isMediaPausedRef = useRef(false);
+  const mediaPauseStartMsRef = useRef<number | null>(null);
+  const mediaPauseCountdownIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const mediaPauseTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors proctoringState so the setTimeout fired at ARM time can read
+  // whatever is ACTUALLY down 3 minutes later (not what was down when the
+  // timer started) when building the termination reason.
+  const proctoringStateRef = useRef(proctoringState);
+  useEffect(() => { proctoringStateRef.current = proctoringState; }, [proctoringState]);
+
+  const clearMediaPauseTimers = useCallback(() => {
+    if (mediaPauseCountdownIdRef.current) { clearInterval(mediaPauseCountdownIdRef.current); mediaPauseCountdownIdRef.current = null; }
+    if (mediaPauseTimeoutIdRef.current) { clearTimeout(mediaPauseTimeoutIdRef.current); mediaPauseTimeoutIdRef.current = null; }
+  }, []);
+
+  // 'camera_disconnected' | 'microphone_disconnected' | 'camera_and_microphone_disconnected'
+  const mediaDownReason = useCallback((camOk: boolean, micOk: boolean): string => {
+    if (!camOk && !micOk) return 'camera_and_microphone_disconnected';
+    return !camOk ? 'camera_disconnected' : 'microphone_disconnected';
+  }, []);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    const anyDown = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive;
+
+    if (anyDown && !isMediaPausedRef.current) {
+      // ARM: a device just went down — start the pause+grace window.
+      if (isClosingRef.current) return; // interview already wrapping up — don't arm
+      isMediaPausedRef.current = true;
+      setIsMediaPaused(true);
+      mediaPauseStartMsRef.current = Date.now();
+      setMediaPauseSecondsRemaining(Math.ceil(MEDIA_PAUSE_GRACE_MS / 1000));
+
+      const reason = mediaDownReason(proctoringState.isCameraActive, proctoringState.isMicrophoneActive);
+      try { wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason })); } catch { /* best-effort */ }
+      if (!proctoringState.isCameraActive) {
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'camera_disabled',
+          severity: 'severe',
+          details: { phase: 'in_interview', grace_period_ms: MEDIA_PAUSE_GRACE_MS },
+        }).catch(() => { /* best-effort */ });
+      }
+      if (!proctoringState.isMicrophoneActive) {
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'microphone_disabled',
+          severity: 'severe',
+          details: { phase: 'in_interview', reason: 'headset_disconnected', grace_period_ms: MEDIA_PAUSE_GRACE_MS },
+        }).catch(() => { /* best-effort */ });
+      }
+
+      clearMediaPauseTimers();
+      mediaPauseCountdownIdRef.current = setInterval(() => {
+        const startedAt = mediaPauseStartMsRef.current;
+        if (startedAt === null) return;
+        const left = Math.max(0, Math.ceil((MEDIA_PAUSE_GRACE_MS - (Date.now() - startedAt)) / 1000));
+        setMediaPauseSecondsRemaining(left);
+      }, 200);
+      mediaPauseTimeoutIdRef.current = setTimeout(() => {
+        clearMediaPauseTimers();
+        // Still down after the full grace window — terminate, mirroring the
+        // "left the interview screen" termination path in the parent portal.
+        // Reads CURRENT state (not the state at arm time) since the set of
+        // down devices may have changed during the 3 minutes.
+        const cur = proctoringStateRef.current;
+        onTerminate?.(`${mediaDownReason(cur.isCameraActive, cur.isMicrophoneActive)}_timeout`);
+      }, MEDIA_PAUSE_GRACE_MS);
+    } else if (!anyDown && isMediaPausedRef.current) {
+      // RECOVERED within the window (both camera and mic — the ORIGINAL mic
+      // device by deviceId — are live again) — tear down the pause and
+      // resume the backend's question timer.
+      clearMediaPauseTimers();
+      const startedAt = mediaPauseStartMsRef.current;
+      const pauseDurationMs = startedAt !== null ? Math.max(0, Date.now() - startedAt) : null;
+      mediaPauseStartMsRef.current = null;
+      isMediaPausedRef.current = false;
+      setIsMediaPaused(false);
+      setMediaPauseSecondsRemaining(null);
+
+      try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+      candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: 'session_resumed',
+        severity: 'low',
+        details: {
+          reason: 'media_reconnected',
+          pause_duration_ms: pauseDurationMs,
+          pause_duration_seconds: pauseDurationMs !== null ? Math.round(pauseDurationMs / 1000) : null,
+        },
+      }).catch(() => { /* best-effort */ });
+    }
+  }, [isConnected, proctoringState.isMicrophoneActive, proctoringState.isCameraActive, token, onTerminate, clearMediaPauseTimers, mediaDownReason]);
+
+  // Belt-and-braces cleanup on unmount so a stray timer can never fire into
+  // an unmounted tree (mirrors the pattern used for other proctoring timers).
+  useEffect(() => () => clearMediaPauseTimers(), [clearMediaPauseTimers]);
 
   // Fullscreen — disabled (no popup/overlay)
   // Face detection & gaze tracking (Phase 2 & 3)
@@ -1621,6 +1760,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             ...stream.getVideoTracks(),
             ...dest.stream.getAudioTracks(),
           ]);
+          // Keep the mix graph reachable so handleTracksReplaced can rewire a
+          // fresh mic source into `boost` on reacquire, instead of the
+          // recording silently going dead when the old track is stopped.
+          recordingDestRef.current = dest;
+          recordingBoostRef.current = boost;
+          recordingMicSourceRef.current = srcNode;
           console.log(
             `[Recording] audio mix active (mic gain 3× + limiter${binaMixed ? ', Bina tap @0.75' : ', Bina tap unavailable — mic only'})`,
           );
@@ -1629,6 +1774,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         console.warn('[Recording] audio mix setup failed — recording raw audio:', e);
         recordStream = stream;
       }
+      // Reachable by handleTracksReplaced regardless of which path above ran —
+      // in the fallback case this IS `stream` itself (same object Webcam.tsx
+      // will reacquire against), so swapping tracks on it in place is safe.
+      recordStreamRef.current = recordStream;
 
       const RECORDER_OPTIONS: MediaRecorderOptions = {
         videoBitsPerSecond: 200_000,  // 200 Kbps — clear face video at talking-head scale
@@ -1704,6 +1853,60 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       console.log(`[INTERVIEW-DEBUG] Continuous face verification started (${lowTier ? '30s low-tier' : '10s'} cadence)`);
     }
   }, [handDetection, faceDetection, objectDetection, faceVerification, effectiveDeviceCapability]);
+
+  // Called by Webcam.tsx SYNCHRONOUSLY right after it acquires a fresh
+  // getUserMedia stream on reacquire (device unplug/replug) — BEFORE it stops
+  // the old stream's tracks. Without this, the still-running mediaRecorderRef
+  // keeps its recordStream wired to tracks that are about to be permanently
+  // .stop()-ed, silently killing the stored recording's video+audio for the
+  // remainder of the interview while the live preview/transcript recover fine
+  // (they're fed by different streams/paths).
+  //
+  // No-ops before the recorder exists (recordStreamRef is only set once
+  // handleVideoReady's setup above has run) — nothing to swap onto yet.
+  const handleTracksReplaced = useCallback((newStream: MediaStream) => {
+    const rs = recordStreamRef.current;
+    if (!rs) return;
+
+    // Video always passes through recordStream directly (both the mixed-audio
+    // path and the raw fallback wrap the raw video track unchanged) — swap it
+    // there regardless of which audio path is active.
+    const newVideoTrack = newStream.getVideoTracks()[0];
+    if (newVideoTrack) {
+      rs.getVideoTracks().forEach((t) => { if (t !== newVideoTrack) rs.removeTrack(t); });
+      if (!rs.getVideoTracks().includes(newVideoTrack)) rs.addTrack(newVideoTrack);
+    }
+
+    const newAudioTrack = newStream.getAudioTracks()[0];
+    if (!newAudioTrack) return;
+
+    const dest = recordingDestRef.current;
+    const boost = recordingBoostRef.current;
+    if (dest && boost) {
+      // Web-Audio mix path: recordStream's audio track comes from `dest`,
+      // which doesn't die on its own — it just goes silent once its only
+      // live input (the old, now-ending mic track) ends. Rewire a fresh
+      // source into the existing boost→limiter→dest chain; no change needed
+      // to recordStream's own track list.
+      try { recordingMicSourceRef.current?.disconnect(); } catch { /* already dead */ }
+      const actx = recordingAudioCtxRef.current;
+      if (actx) {
+        try {
+          const freshSource = actx.createMediaStreamSource(new MediaStream([newAudioTrack]));
+          freshSource.connect(boost);
+          recordingMicSourceRef.current = freshSource;
+          console.log('[Recording] Mic reconnected into recording graph after device reacquire');
+        } catch (e) {
+          console.warn('[Recording] Failed to rewire mic into recording graph on reacquire:', e);
+        }
+      }
+    } else {
+      // No Web Audio mix (setup failed at record-start) — recordStream carries
+      // the raw audio track directly, so swap it there instead.
+      rs.getAudioTracks().forEach((t) => { if (t !== newAudioTrack) rs.removeTrack(t); });
+      if (!rs.getAudioTracks().includes(newAudioTrack)) rs.addTrack(newAudioTrack);
+    }
+  }, []);
 
   // TalkingHead avatar ref — visual lip-sync (audio played by Web Audio API separately)
   const talkingHeadRef   = useRef<TalkingHeadHandle>(null);
@@ -8022,32 +8225,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         </div>
       )}
 
-      {/* ── Proctoring: Camera/Mic disabled overlay ── */}
-      {isConnected && (!proctoringState.isCameraActive || !proctoringState.isMicrophoneActive) && (
-        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-gray-900 border border-red-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md text-center shadow-2xl">
-            <div className="text-red-500 text-5xl mb-4">
-              {!proctoringState.isCameraActive ? "📷" : "🎤"}
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2">
-              {!proctoringState.isCameraActive && !proctoringState.isMicrophoneActive
-                ? "Camera & Microphone Disabled"
-                : !proctoringState.isCameraActive
-                ? "Camera Disabled"
-                : "Microphone Disabled"}
-            </h2>
-            <p className="text-gray-400 mb-4">
-              {!proctoringState.isCameraActive && !proctoringState.isMicrophoneActive
-                ? "Your camera and microphone have been disabled. Please re-enable them to continue the interview."
-                : !proctoringState.isCameraActive
-                ? "Your camera has been disabled. Please re-enable it to continue the interview."
-                : "Your microphone has been disabled. Please re-enable it to continue the interview."}
-            </p>
-            <div className="text-sm text-red-400 font-medium animate-pulse">This event has been recorded</div>
-          </div>
-        </div>
-      )}
-
       {/* ── Proctoring: Face not in frame overlay ── */}
       {isConnected && isFaceBlocked && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
@@ -8389,6 +8566,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 className="w-full h-full object-cover"
                 onVideoReady={handleVideoReady}
                 onStream={handleStream}
+                onTracksReplaced={handleTracksReplaced}
                 showHandIndicator={false}
                 isHandRaised={handDetection.isHandRaised}
               />
@@ -9227,6 +9405,65 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <Maximize className="w-4 h-4" />
               Return to Fullscreen
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Camera/mic disconnected overlay — 3-minute pause+grace ──
+          Covers camera, mic (headset included), or both — wording/icon are
+          computed straight from proctoringState so they always reflect
+          what's CURRENTLY down, independent of what originally armed the
+          pause. Auto-resumes the moment every affected device is back (no
+          button — nothing here for the candidate to click, since
+          InterviewProctoringMonitor's health-check clears isCameraActive/
+          isMicrophoneActive on its own). If the countdown reaches zero while
+          still disconnected, the parent portal terminates the interview. */}
+      {isMediaPaused && isConnected && !isClosing && (
+        // Transparent, no blur — camera and mic issues are independent of
+        // each other, so whichever one is still healthy must stay exactly as
+        // clear as normal behind this card. pointer-events-none on the
+        // wrapper (nothing to click here anyway) keeps the underlying page
+        // fully interactive; the card re-enables events for itself since it
+        // needs to be readable/selectable.
+        <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/30 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5 pointer-events-auto">
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/15 border border-red-400/30">
+              {!proctoringState.isCameraActive
+                ? <Camera className="w-6 h-6 text-red-400" />
+                : <MicOff className="w-6 h-6 text-red-400" />}
+            </div>
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-base mb-1">
+                {!proctoringState.isCameraActive && !proctoringState.isMicrophoneActive
+                  ? "Camera & Microphone Disconnected"
+                  : !proctoringState.isCameraActive
+                  ? "Camera Disconnected"
+                  : "Headset Disconnected"}
+              </h3>
+              <p className="text-[#94A3B8] text-sm leading-relaxed">
+                {!proctoringState.isCameraActive && !proctoringState.isMicrophoneActive
+                  ? "Your interview is paused. Please reconnect your camera and headset — it will resume automatically."
+                  : !proctoringState.isCameraActive
+                  ? "Your interview is paused. Please reconnect your camera — it will resume automatically."
+                  : "Your interview is paused. Please reconnect your headset — it will resume automatically."}
+              </p>
+            </div>
+            {mediaPauseSecondsRemaining !== null && (
+              <div className="w-full rounded-xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-center">
+                <span className="block text-[11px] font-semibold text-red-200 uppercase tracking-wider mb-1">
+                  Interview will end in
+                </span>
+                <span className={`font-mono font-bold text-3xl tabular-nums ${
+                  mediaPauseSecondsRemaining <= 30 ? 'text-red-300' : 'text-red-200'
+                }`}>
+                  {formatTime(mediaPauseSecondsRemaining)}
+                </span>
+                <span className="block text-[10px] text-red-300/80 mt-1">
+                  Reconnect it now to continue without interruption
+                </span>
+              </div>
+            )}
+            <div className="text-xs text-[#64748B]">This event has been recorded</div>
           </div>
         </div>
       )}

@@ -362,6 +362,14 @@ export function useInterviewProctoringMonitor({
   const trackHealthIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cameraDisabledRef = useRef<boolean>(false);
   const micDisabledRef = useRef<boolean>(false);
+  // The audio deviceId recorded the first time monitoring starts for this
+  // session — deliberately set ONCE and never overwritten by a later
+  // reacquire, so a headset-disconnect episode isn't falsely cleared just
+  // because the OS/reacquire falls back to a different working mic (e.g. the
+  // laptop's built-in one). Recovery requires THIS specific device's id to
+  // reappear as the active track's id, matching "reconnect the headset" —
+  // not merely "some mic works again".
+  const initialMicDeviceIdRef = useRef<string | null>(null);
   const permissionCleanupRef = useRef<(() => void) | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -706,6 +714,14 @@ export function useInterviewProctoringMonitor({
     const currentStream = streamRef.current;
     if (!currentStream) return;
 
+    // Record the baseline mic device ONCE per session (see the ref's own
+    // comment) — never on a later reacquire, even though this function runs
+    // again each time a fresh stream comes in.
+    if (initialMicDeviceIdRef.current === null) {
+      const firstAudioTrack = currentStream.getAudioTracks()[0];
+      initialMicDeviceIdRef.current = firstAudioTrack?.getSettings?.().deviceId || null;
+    }
+
     currentStream.getVideoTracks().forEach(track => {
       // onended = permanent track death (permission revoked, device unplugged).
       // Fire immediately — no recovery possible.
@@ -773,6 +789,20 @@ export function useInterviewProctoringMonitor({
             : at.muted ? 'track_muted_poll'
             : 'track_disabled'
           );
+        } else if (
+          initialMicDeviceIdRef.current
+          && at.getSettings?.().deviceId
+          && at.getSettings().deviceId !== initialMicDeviceIdRef.current
+        ) {
+          // The track itself stays live/unmuted/enabled, but the OS silently
+          // rerouted it to a DIFFERENT physical device — e.g. unplugging a
+          // headset falls back to the laptop's built-in mic without ever
+          // ending or muting the track. No onended/onmute fires for this at
+          // all; comparing deviceId against the session's recorded baseline
+          // is the only way to catch it. Recovery (see reportMicRestored
+          // below) requires THIS SAME comparison to pass again — i.e. the
+          // specific original device must come back, not just any mic.
+          reportMicDisabled('device_swapped');
         } else {
           reportMicRestored();
         }

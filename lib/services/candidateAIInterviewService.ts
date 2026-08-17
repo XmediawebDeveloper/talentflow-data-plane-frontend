@@ -134,12 +134,56 @@ export const candidateAIInterviewService = {
     token: string,
     clientId: string,
     action: 'acquire' | 'release' = 'acquire',
-  ): Promise<{ held: boolean; blocked: boolean }> {
-    const response = await candidateApi.post<{ held: boolean; blocked: boolean }>(
+  ): Promise<{
+    held: boolean;
+    blocked: boolean;
+    /** Seconds until the current holder's lease goes stale and this browser can
+     *  take over. Only meaningful when blocked=true. Server-computed — the
+     *  client cannot know the other holder's last heartbeat. */
+    retry_after_seconds?: number;
+    /** The full stale window, for rendering progress. */
+    stale_window_seconds?: number;
+  }> {
+    const response = await candidateApi.post<{
+      held: boolean;
+      blocked: boolean;
+      retry_after_seconds?: number;
+      stale_window_seconds?: number;
+    }>(
       `/candidate/ai-interview/${token}/session-lease`,
       { client_id: clientId, action },
     );
     return response.data;
+  },
+
+  /**
+   * Drop the lease during page teardown (tab close / navigate away / mobile
+   * background), so a candidate who reopens the link in another browser is NOT
+   * blocked for the full 90s stale window.
+   *
+   * A normal axios POST is useless here — the browser cancels in-flight XHR as
+   * the page unloads, so the release never reaches the server and the lease sits
+   * there looking alive until it goes stale.
+   *
+   * `keepalive: true` outlives the page. Deliberately NOT navigator.sendBeacon:
+   * the spec forces credentials mode "include", and this API answers
+   * `Access-Control-Allow-Origin: *`, which a credentialed request may never
+   * accept — every beacon dies at preflight. See flushClientLogBeacon() for the
+   * same trap and the same fix.
+   */
+  releaseSessionLeaseBeacon(token: string, clientId: string): void {
+    try {
+      if (typeof fetch !== 'function') return;
+      void fetch(`${API_BASE_URL}/candidate/ai-interview/${token}/session-lease`, {
+        method: 'POST',
+        keepalive: true,
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_id: clientId, action: 'release' }),
+      }).catch(() => { /* stale-timeout backstops it */ });
+    } catch {
+      /* never let teardown throw */
+    }
   },
 
   async checkAIHealth(token: string): Promise<AIHealthResponse> {

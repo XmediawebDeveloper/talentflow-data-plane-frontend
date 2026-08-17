@@ -362,6 +362,9 @@ interface SkillSectionProps {
    *  here that already exists (exactly or semantically) in the other section —
    *  a skill must live in exactly one bucket. */
   otherBucketSkills?: string[];
+  /** JD id, so the duplicate check resolves the industry server-side and
+   *  judges skills inside the right domain (multi-industry platform). */
+  jdId?: string;
   /** Flexible mode only: callback to transfer a skill to the opposite category */
   onMoveSkill?: (skillName: string) => void;
   /** Flexible mode only: true when clusters have been generated — locks add/remove */
@@ -374,12 +377,15 @@ interface SkillSectionProps {
   hideClustersView?: boolean;
 }
 
-function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, flexibleMinutes, onChange, otherBucketSkills = [], onMoveSkill, isLocked = false, onResetClusters, hideClustersView = false }: SkillSectionProps) {
+function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, flexibleMinutes, onChange, otherBucketSkills = [], onMoveSkill, isLocked = false, onResetClusters, hideClustersView = false, jdId }: SkillSectionProps) {
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
   const [skillToDelete, setSkillToDelete] = useState<string | null>(null);
   const [weightError, setWeightError] = useState(false);
   const [newSkillName, setNewSkillName] = useState('');
+  // True while the semantic (LLM) duplicate check is in flight, so Add shows
+  // progress instead of appearing frozen.
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [addSkillError, setAddSkillError] = useState('');
   // Skill name the recruiter has been warned about once, on a MEDIUM-confidence
   // duplicate match. Pressing Add again with the same text keeps both skills —
@@ -433,7 +439,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
     onChange({ skills: config.skills.map(s => s.name === name ? { ...s, type } : s) });
   };
 
-  const addSkill = () => {
+  const addSkill = async () => {
     const trimmed = newSkillName.trim().replace(/\s+/g, ' ');
     if (!trimmed) {
       setAddSkillError('Enter a skill name');
@@ -488,6 +494,38 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
       toast.error(msg);
       return;
     }
+
+    // ── SEMANTIC layer (LLM), reached only when every deterministic rule above
+    // cleared the skill. Structural rules cannot see a true synonym — "Data
+    // Analytics" vs "Data Analysis", "Goods Inward" vs "Receiving", "ECG" vs "EKG"
+    // share no root — and each industry has its own set, so this asks the backend
+    // (which resolves the JD's industry) instead of growing a vocabulary list in
+    // the client. Always overridable: an LLM opinion warns, it never vetoes. Fails
+    // open, so a slow or unavailable check never blocks the add.
+    if (!(pendingOverride && normalizeSkillName(pendingOverride) === normalized)) {
+      setCheckingDuplicate(true);
+      let findings: Awaited<ReturnType<typeof aiInterviewService.checkSkillDuplicates>> = [];
+      try {
+        findings = await aiInterviewService.checkSkillDuplicates({
+          candidates: [trimmed],
+          existing: config.skills.map(s => s.name),
+          otherBucket: otherBucketSkills || [],
+          otherBucketLabel: otherLabel,
+          jdId,
+        });
+      } finally {
+        setCheckingDuplicate(false);
+      }
+      const hit = findings.find(f => f.duplicate && f.match);
+      if (hit) {
+        const msg = `"${trimmed}" looks like the existing skill "${hit.match}" (${hit.reason})`;
+        setAddSkillError(msg);
+        setPendingOverride(trimmed);
+        toast.warning(`${msg}. Press Add again to keep both.`);
+        return;
+      }
+    }
+    setPendingOverride(null);
 
     onChange({
       skills: [...config.skills, { name: trimmed, comment: '', type: 'Skill' }],
@@ -694,10 +732,11 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             <button
               type="button"
               onClick={addSkill}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+              disabled={checkingDuplicate}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-60 disabled:cursor-wait"
             >
               <Plus className="w-4 h-4" />
-              Add
+              {checkingDuplicate ? 'Checking…' : 'Add'}
             </button>
           </div>
         </div>
@@ -2656,6 +2695,7 @@ export default function AIInterviewConfig() {
               flexibleMinutes={flexMthMin}
               onChange={patch => setMth(prev => ({ ...prev, ...patch }))}
               otherBucketSkills={nth.enabled ? nth.skills.map(s => s.name) : []}
+              jdId={jdId || undefined}
               onMoveSkill={mode === 'flexible' ? moveMthToNth : undefined}
               isLocked={flexSkillsLocked}
               onResetClusters={handleResetClusters}
@@ -2707,6 +2747,7 @@ export default function AIInterviewConfig() {
                     flexibleMinutes={flexNthMin}
                     onChange={patch => setNth(prev => ({ ...prev, ...patch }))}
                     otherBucketSkills={mth.skills.map(s => s.name)}
+                    jdId={jdId || undefined}
                     onMoveSkill={mode === 'flexible' ? moveNthToMth : undefined}
                     isLocked={flexSkillsLocked}
                     onResetClusters={handleResetClusters}
