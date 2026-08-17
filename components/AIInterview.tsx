@@ -2346,12 +2346,26 @@ export default function AIInterview() {
           return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
         };
 
+        // Single source of truth for "should this row be treated as expired for
+        // action-button purposes". Covers both ways an invite can be expired:
+        // resolveStatus(inv) === 'expired' catches the backend literally flipping
+        // status to 'expired', as well as a still-'invited'/'scheduled'/'draft' row
+        // whose expires_at has lapsed; isInvExpired(inv) additionally catches a row
+        // that has moved past invitation (e.g. 'system_check') but was abandoned
+        // before starting and is now past its expiry — resolveStatus doesn't relabel
+        // those statuses, so without this half they'd fall through every condition
+        // below and render with no action buttons at all.
+        const isExpiredForActions = (inv: any): boolean =>
+          resolveStatus(inv) === 'expired' || isInvExpired(inv);
+
         // Same eligibility rule as the per-row Revoke button below: hidden once the
         // candidate has accepted Consent & Terms and entered the interview process
         // (system_check/in_progress), engaged with the interview (completed/terminated),
-        // the invite was abandoned pre-send (cancelled), or it's already revoked.
+        // the invite was abandoned pre-send (cancelled), it's already revoked, or the
+        // link has expired (only Resend is offered at that point).
         const isRevocableInvite = (inv: any): boolean =>
-          !['system_check', 'in_progress', 'completed', 'terminated', 'cancelled', 'revoked'].includes(inv.status);
+          !['system_check', 'in_progress', 'completed', 'terminated', 'cancelled', 'revoked'].includes(inv.status) &&
+          !isExpiredForActions(inv);
 
         const invTotal = invitationOverview.total;
         const invInProgress = invitationOverview.inProgress;
@@ -2664,10 +2678,14 @@ export default function AIInterview() {
                             </button>
                           )}
 
-                          {/* Resend Email — for invited (regenerates token) or revoked
-                              (reactivates + issues a fresh token), as long as the
-                              candidate hasn't already started/completed. */}
-                          {(resolveStatus(inv) === 'invited' || inv.status === 'revoked') && !inv.started_at && !inv.completed_at && (
+                          {/* Resend Email — for invited (regenerates token), revoked
+                              (reactivates + issues a fresh token), or expired invites —
+                              whether the backend already flipped status to 'expired',
+                              it's stale-but-still-'invited' client-side, or it's a
+                              system_check/in_progress invite abandoned before its
+                              expiry lapsed — as long as the candidate hasn't already
+                              started/completed. */}
+                          {(resolveStatus(inv) === 'invited' || inv.status === 'revoked' || isExpiredForActions(inv)) && !inv.started_at && !inv.completed_at && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2692,8 +2710,9 @@ export default function AIInterview() {
                               once the candidate has accepted Consent & Terms and
                               entered the interview process (system_check/in_progress),
                               actually engaged with the interview (completed/terminated),
-                              or the invite was abandoned pre-send (cancelled). */}
-                          {!['system_check', 'in_progress', 'completed', 'terminated', 'cancelled'].includes(inv.status) && (
+                              the invite was abandoned pre-send (cancelled), or the link
+                              has expired — only Resend is offered at that point. */}
+                          {!['system_check', 'in_progress', 'completed', 'terminated', 'cancelled'].includes(inv.status) && !isExpiredForActions(inv) && (
                             <>
                               <button
                                 onClick={(e) => {
