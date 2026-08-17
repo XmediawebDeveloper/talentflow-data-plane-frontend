@@ -134,8 +134,22 @@ export const candidateAIInterviewService = {
     token: string,
     clientId: string,
     action: 'acquire' | 'release' = 'acquire',
-  ): Promise<{ held: boolean; blocked: boolean }> {
-    const response = await candidateApi.post<{ held: boolean; blocked: boolean }>(
+  ): Promise<{
+    held: boolean;
+    blocked: boolean;
+    /** Seconds until the current holder's lease goes stale and this browser can
+     *  take over. Only meaningful when blocked=true. Server-computed — the
+     *  client cannot know the other holder's last heartbeat. */
+    retry_after_seconds?: number;
+    /** The full stale window, for rendering progress. */
+    stale_window_seconds?: number;
+  }> {
+    const response = await candidateApi.post<{
+      held: boolean;
+      blocked: boolean;
+      retry_after_seconds?: number;
+      stale_window_seconds?: number;
+    }>(
       `/candidate/ai-interview/${token}/session-lease`,
       { client_id: clientId, action },
     );

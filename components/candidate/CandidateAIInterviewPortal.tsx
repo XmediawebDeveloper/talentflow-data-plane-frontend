@@ -173,6 +173,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // already holds this interview link (blocks the second person from system
   // check onward). See the lease heartbeat effect.
   const [preInterviewBlocked, setPreInterviewBlocked] = useState(false);
+  // Seconds until the other browser's lease goes stale and this one can take
+  // over. Server-computed (only it knows the holder's last heartbeat); ticked
+  // down locally between heartbeats so the countdown reads smoothly.
+  const [blockedRetrySeconds, setBlockedRetrySeconds] = useState<number | null>(null);
   // AII17 — post-interview feedback popup, shown once over the completion
   // screen. Dismissed (submitted OR skipped) is remembered per interview token
   // so a refresh or a revisit of the finished link doesn't nag the candidate.
@@ -571,8 +575,19 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       try {
         const r = await candidateAIInterviewService.sessionLease(token, cid, 'acquire');
         if (cancelled) return;
-        if (r?.blocked) setPreInterviewBlocked(true);
-        else if (r?.held) setPreInterviewBlocked(false);
+        if (r?.blocked) {
+          setPreInterviewBlocked(true);
+          // Re-sync the countdown from the server on every beat, so it stays
+          // honest even if the other browser is still alive and refreshing its
+          // own lease (in which case this number stops falling — correctly, the
+          // link genuinely is not free yet).
+          setBlockedRetrySeconds(
+            typeof r.retry_after_seconds === 'number' ? r.retry_after_seconds : null,
+          );
+        } else if (r?.held) {
+          setPreInterviewBlocked(false);
+          setBlockedRetrySeconds(null);
+        }
       } catch {
         // Network error — don't block a genuine candidate on a transient failure.
       }
@@ -612,6 +627,22 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       window.removeEventListener('beforeunload', releaseNow);
     };
   }, [step, token]);
+
+  // Tick the "available in …" countdown down locally, once per second. The
+  // heartbeat only re-syncs it every 5s, which would make the number visibly
+  // jump; this keeps it smooth. It never drives the unblock decision — that is
+  // always the server's answer on the next beat — so a drifting local clock
+  // can't let a candidate in early.
+  const countdownActive = preInterviewBlocked && blockedRetrySeconds !== null;
+  useEffect(() => {
+    if (!countdownActive) return;
+    // Functional update, so the interval does NOT need to restart every second
+    // (and does not need blockedRetrySeconds in its deps).
+    const iv = setInterval(() => {
+      setBlockedRetrySeconds((s) => (s === null ? null : Math.max(0, s - 1)));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [countdownActive]);
 
   // Preload avatar assets when reaching system check
   useEffect(() => {
@@ -1889,16 +1920,39 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
           <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5 text-3xl">🔒</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Already open on another device</h1>
-          <p className="text-gray-600 text-sm leading-relaxed mb-6">
+          <p className="text-gray-600 text-sm leading-relaxed mb-5">
             This interview link is already in use in another window or device.
-            Only one device can take the interview at a time. Please continue
-            there. If you just closed it, wait a few seconds and reload this page.
+            Only one device can take the interview at a time — please continue there.
           </p>
+
+          {/* If they just closed the other window, the lease still looks alive
+              until it goes stale. Show the REAL remaining time (server-computed)
+              rather than "wait a few seconds", and make clear this page unblocks
+              itself — the 5s heartbeat clears it, so no reload is needed. */}
+          {blockedRetrySeconds !== null && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-5 text-left">
+              <p className="text-sm font-semibold text-amber-900 mb-1">
+                {blockedRetrySeconds > 0
+                  ? <>Closed it already? This page unlocks in{' '}
+                      <span className="tabular-nums">
+                        {Math.floor(blockedRetrySeconds / 60)}:{String(blockedRetrySeconds % 60).padStart(2, '0')}
+                      </span>
+                    </>
+                  : 'Checking again now…'}
+              </p>
+              <p className="text-xs text-amber-800/90 leading-snug">
+                You don&apos;t need to do anything — this happens automatically.
+                If the other window is still open, the timer keeps resetting until
+                you close it.
+              </p>
+            </div>
+          )}
+
           <button
             onClick={() => window.location.reload()}
             className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3 rounded-xl transition-all"
           >
-            Reload &amp; try again
+            Check again now
           </button>
         </div>
       </div>
