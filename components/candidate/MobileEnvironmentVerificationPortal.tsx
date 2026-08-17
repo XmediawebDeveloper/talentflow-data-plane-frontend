@@ -15,6 +15,7 @@ type Phase =
   | 'get_ready'
   | 'permission_denied'
   | 'recording_screen'
+  | 'pan_instructions'
   | 'recording_pan'
   | 'ready_to_submit'
   | 'uploading'
@@ -50,14 +51,18 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   // continuous 10s countdown — matches the spec's own wording ("start 5 secs
   // timer" for phase 1, "another 5 secs timer" for phase 2).
   const [recordingCountdown, setRecordingCountdown] = useState(5);
-  // Brief instructional overlay shown right as phase 2 (pan) begins — purely
-  // cosmetic, layered on top of the still-running recording. Does NOT pause
-  // or extend the 5s pan timer below; it just auto-hides after a moment.
-  const [showPanIntro, setShowPanIntro] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  // Resolver for the "waiting on the candidate to tap Next" promise during
+  // the pan-instructions pause (below) — set while that phase is showing,
+  // called by the Next button's onClick, then cleared.
+  const panNextResolveRef = useRef<(() => void) | null>(null);
+  const handlePanNext = () => {
+    panNextResolveRef.current?.();
+    panNextResolveRef.current = null;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -214,13 +219,6 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       const phaseStart = Date.now();
       setPhase(nextPhase);
       setRecordingCountdown(Math.round(durationMs / 1000));
-      // Small instructional cue right as the pan phase begins — auto-hides on
-      // its own timer, independent of (and shorter than) the 5s pan window
-      // above, so it never delays or shortens the actual recording.
-      if (nextPhase === 'recording_pan') {
-        setShowPanIntro(true);
-        setTimeout(() => setShowPanIntro(false), 1500);
-      }
       const tick = setInterval(() => {
         const elapsedMs = Date.now() - phaseStart;
         const remaining = Math.max(0, Math.ceil((durationMs - elapsedMs) / 1000));
@@ -234,6 +232,34 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     });
 
     await runElapsedPhase('recording_screen', RECORD_SCREEN_MS);
+
+    // Pause the ACTUAL recorder (not just a countdown/overlay) while showing
+    // the transition instructions, and resume only on an explicit Next tap.
+    // MediaRecorder excludes paused wall-clock time from the output stream
+    // entirely — recorded content picks up again exactly where it left off —
+    // so however long the candidate takes to read the instructions, the
+    // final video is still exactly 5s (screen) + 5s (pan) = 10s, never more.
+    if (recorderRef.current && recorderRef.current.state === 'recording') {
+      recorderRef.current.pause();
+      const stateAfterPause: string = recorderRef.current.state;
+      if (stateAfterPause !== 'paused') {
+        console.warn(`[ENV-VERIFY] Recorder did not pause — state=${stateAfterPause}, continuing without pause`);
+      } else {
+        console.info('[ENV-VERIFY] Recording paused for pan instructions');
+        setPhase('pan_instructions');
+        await new Promise<void>(resolve => { panNextResolveRef.current = resolve; });
+        recorderRef.current?.resume();
+        const stateAfterResume: string = recorderRef.current?.state || '';
+        if (stateAfterResume !== 'recording') {
+          console.warn(`[ENV-VERIFY] Recording could not resume — state=${stateAfterResume}`);
+          setErrorMessage('Recording could not resume. Please close this page and rescan the QR code to try again.');
+          setPhase('error');
+          return;
+        }
+        console.info('[ENV-VERIFY] Recording resumed');
+      }
+    }
+
     await runElapsedPhase('recording_pan', RECORD_PAN_MS);
     recorderRef.current?.stop(); // triggers onstop → Blob validation → ready_to_submit
   };
@@ -337,7 +363,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           otherwise the stream has nowhere to attach to and the preview
           stays black even though recording is happening. Hidden outside
           the get-ready/recording phases via `hidden` rather than unmounted. */}
-      <div className={`w-full max-w-sm space-y-4 ${(phase === 'get_ready' || phase === 'recording_screen' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+      <div className={`w-full max-w-sm space-y-4 ${(phase === 'get_ready' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
         <div className="relative">
           <video
             ref={videoRef}
@@ -351,16 +377,19 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               <span className="text-6xl font-bold text-white drop-shadow-lg">{getReadyCount}</span>
             </div>
           )}
-          {phase === 'recording_pan' && showPanIntro && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 rounded-xl">
-              <span className="text-5xl inline-block animate-[tf-phone-tilt_1.2s_ease-in-out_infinite]">📱</span>
-              <p className="text-sm font-medium text-white px-4 text-center">
+          {phase === 'pan_instructions' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 rounded-xl px-4 overflow-hidden">
+              <span className="text-5xl inline-block animate-[tf-phone-pan_2s_ease-in-out_infinite]">📱</span>
+              <p className="text-sm font-medium text-white text-center">
                 Now turn your phone slowly — left to right, then right to left
               </p>
               <style>{`
-                @keyframes tf-phone-tilt {
-                  0%, 100% { transform: rotate(-25deg); }
-                  50% { transform: rotate(25deg); }
+                @keyframes tf-phone-pan {
+                  0%   { transform: translateX(-36px) rotate(-12deg); }
+                  25%  { transform: translateX(0px) rotate(0deg); }
+                  50%  { transform: translateX(36px) rotate(12deg); }
+                  75%  { transform: translateX(0px) rotate(0deg); }
+                  100% { transform: translateX(-36px) rotate(-12deg); }
                 }
               `}</style>
             </div>
@@ -368,6 +397,20 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
         </div>
         {phase === 'get_ready' ? (
           <p className="text-sm leading-relaxed font-medium">Get ready — recording starts now…</p>
+        ) : phase === 'pan_instructions' ? (
+          <>
+            <div className="flex items-center justify-center gap-2 text-amber-400 text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              Recording paused
+            </div>
+            <button
+              type="button"
+              onClick={handlePanNext}
+              className="w-full py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
+            >
+              Next
+            </button>
+          </>
         ) : (
           <>
             <div className="flex items-center justify-center gap-2 text-red-400 text-xs font-medium">
