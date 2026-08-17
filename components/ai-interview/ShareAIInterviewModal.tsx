@@ -141,6 +141,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   // Duplicate invitation popup
   const [showDuplicateError, setShowDuplicateError] = useState(false);
   const [duplicateEmail, setDuplicateEmail] = useState('');
+  // Backend's own wording for the rejection, when it has something more
+  // specific to say than "already sent" — e.g. a revoked invitation the
+  // recruiter should resend rather than recreate.
+  const [duplicateReason, setDuplicateReason] = useState('');
 
   // Fetch quota stats when modal opens
   useEffect(() => {
@@ -352,6 +356,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
     let successCount = 0;
     const alreadyInvited: string[] = [];
+    const duplicateReasons: string[] = [];
     const tenantUserEmails: string[] = [];
     const failed: { email: string; reason: string }[] = [];
 
@@ -371,6 +376,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         const errCode = errData?.error || errData?.detail?.error || '';
         if (err?.response?.status === 409 || errCode === 'DUPLICATE_INVITATION') {
           alreadyInvited.push(resume.email);
+          duplicateReasons.push(errData?.detail?.message || errData?.message || '');
         } else if (err?.response?.status === 400 && errCode === 'TENANT_USER_EMAIL') {
           tenantUserEmails.push(resume.email);
         } else {
@@ -390,6 +396,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       setTimeout(() => { setShowSuccess(false); onInviteSent(); onClose(); }, 2000);
     } else if (alreadyInvited.length > 0 && failed.length === 0) {
       setDuplicateEmail(alreadyInvited.join(', '));
+      setDuplicateReason(duplicateReasons.filter(Boolean)[0] || '');
       setShowDuplicateError(true);
     } else if (tenantUserEmails.length > 0) {
       toast.error(`Cannot invite team member email${tenantUserEmails.length > 1 ? 's' : ''}: ${tenantUserEmails.join(', ')}`);
@@ -677,6 +684,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
       let successCount = 0;
       const alreadyInvited: string[] = [];
+      const duplicateReasons: string[] = [];
       const tenantUserEmails: string[] = [];
       const failed: { email: string; reason: string }[] = [];
 
@@ -720,6 +728,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
           if (is409) {
             alreadyInvited.push(candidate.email.trim());
+            duplicateReasons.push(errData?.detail?.message || errData?.message || '');
           } else if (isTenantUser) {
             tenantUserEmails.push(candidate.email.trim());
           } else {
@@ -755,6 +764,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         toast.error(`Cannot invite team member email${tenantUserEmails.length > 1 ? 's' : ''}: ${tenantUserEmails.join(', ')}. AI Interview invitations are for external candidates only.`);
       } else if (alreadyInvited.length > 0 && failed.length === 0 && tenantUserEmails.length === 0) {
         setDuplicateEmail(alreadyInvited.join(', '));
+        setDuplicateReason(duplicateReasons.filter(Boolean)[0] || '');
         setShowDuplicateError(true);
       } else if (failed.length > 0) {
         // All failed — show the actual error reason
@@ -814,6 +824,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   // Duplicate invitation error popup
   if (showDuplicateError) {
+    // A revoked prior invitation has its own remedy (Send Again on the existing
+    // row), so it gets different copy than a still-active duplicate.
+    const isRevokedDuplicate = duplicateReason.toLowerCase().includes('revoked');
     return (
       <div
         className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6"
@@ -821,6 +834,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           if (e.target === e.currentTarget) {
             setShowDuplicateError(false);
             setDuplicateEmail('');
+            setDuplicateReason('');
           }
         }}
         role="dialog"
@@ -831,16 +845,33 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-10 h-10 text-amber-600" />
             </div>
-            <h3 className="text-gray-900 dark:text-slate-50 text-lg font-semibold tracking-tight mb-2">Invitation Already Sent</h3>
+            <h3 className="text-gray-900 dark:text-slate-50 text-lg font-semibold tracking-tight mb-2">
+              {isRevokedDuplicate ? 'Invitation Already Exists' : 'Invitation Already Sent'}
+            </h3>
             <p className="text-gray-600 dark:text-slate-400 text-sm">
-              An invitation has already been sent to{' '}
-              <span className="font-medium text-gray-800 dark:text-slate-100">{duplicateEmail}</span> for this AI interview.
+              {isRevokedDuplicate ? (
+                <>
+                  A revoked invitation for{' '}
+                  <span className="font-medium text-gray-800 dark:text-slate-100">{duplicateEmail}</span> already
+                  exists on this AI interview.
+                </>
+              ) : (
+                <>
+                  An invitation has already been sent to{' '}
+                  <span className="font-medium text-gray-800 dark:text-slate-100">{duplicateEmail}</span> for this AI interview.
+                </>
+              )}
             </p>
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4 mb-6">
             <p className="text-sm text-gray-700 dark:text-slate-300 mb-2">You can:</p>
             <ul className="text-sm text-gray-600 dark:text-slate-400 space-y-1">
+              {isRevokedDuplicate && (
+                <li>
+                  • Use <span className="font-medium">Send Again</span> on the existing invitation to issue a fresh link
+                </li>
+              )}
               <li>
                 • Try a <span className="font-medium">different email address</span>
               </li>
@@ -856,6 +887,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               onClick={() => {
                 setShowDuplicateError(false);
                 setDuplicateEmail('');
+                setDuplicateReason('');
                 onClose();
               }}
               className="flex-1 px-4 py-2.5 min-h-[44px] text-sm font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -866,6 +898,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               onClick={() => {
                 setShowDuplicateError(false);
                 setDuplicateEmail('');
+                setDuplicateReason('');
               }}
               className="flex-1 px-4 py-2.5 min-h-[44px] text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
             >
