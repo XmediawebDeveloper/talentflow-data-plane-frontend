@@ -717,6 +717,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
   // Assessment results state
   const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
+  const [assessmentInviteCount, setAssessmentInviteCount] = useState(0);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
   const [viewingAssessmentResult, setViewingAssessmentResult] = useState<any | null>(null);
 
@@ -1377,13 +1378,19 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       setHasPublishedAssessment(
         assessments.some((a: any) => ['published', 'active'].includes(String(a?.status || '').toLowerCase()))
       );
+      const listedInviteCount = assessments.reduce(
+        (sum: number, assessment: any) => sum + (Number(assessment?.invitations_count) || 0),
+        0
+      );
 
       // For each assessment, get the completed results
       const allResults: any[] = [];
+      let resultInviteCount = 0;
       for (const assessment of assessments) {
         try {
           const resultsResponse = await assessmentService.listResults(assessment.id, { page_size: 100 });
           const results = resultsResponse.items || [];
+          resultInviteCount += Number(resultsResponse.total ?? results.length) || 0;
 
           // Add assessment context to each result and map to expected format
           results.forEach((result: any) => {
@@ -1480,9 +1487,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         }
       }
 
+      setAssessmentInviteCount(Math.max(listedInviteCount, resultInviteCount));
       setAssessmentResults(allResults);
     } catch (error) {
       console.error('Failed to fetch assessment results:', error);
+      setAssessmentInviteCount(0);
       setAssessmentResults([]);
     } finally {
       setLoadingAssessmentResults(false);
@@ -1990,6 +1999,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // candidates to". A draft leaves it null, which is what we want: the AI
   // Interview Send Invite gate mirrors the assessment one exactly.
   const hasLiveAIInterview = !!aiInterviewConfig;
+  const hasAssessmentInviteSent = assessmentInviteCount > 0;
+  const hasAIInterviewInviteSent = aiInterviewCount > 0;
 
   // Split into single buttons so the toolbar and the empty state can each take
   // the set that suits them, without the markup existing twice.
@@ -2547,17 +2558,19 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                an empty table otherwise, which reads as a fault rather than as
                "there is nothing to report yet". */
             <button
-              onClick={() => hasPublishedAssessment && setActiveTab('assessment-results')}
-              disabled={!hasPublishedAssessment}
+              onClick={() => hasAssessmentInviteSent && setActiveTab('assessment-results')}
+              disabled={!hasAssessmentInviteSent}
               title={
-                hasPublishedAssessment
+                hasAssessmentInviteSent
                   ? undefined
                   : !hasAnyAssessment
                     ? 'Create an assessment first'
-                    : 'Publish the assessment to see results'
+                    : !hasPublishedAssessment
+                      ? 'Publish the assessment to see results'
+                      : 'Send at least one invite first'
               }
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                !hasPublishedAssessment
+                !hasAssessmentInviteSent
                   ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
                   : activeTab === 'assessment-results'
                     ? 'text-blue-600 bg-blue-50'
@@ -2580,17 +2593,19 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           {hasPlanFeature('ai_interview') && features.ai_interview && permissions.canViewAIInterviews && (
             /* Same rule as the assessment results tab. */
             <button
-              onClick={() => hasLiveAIInterview && handleShowAIInterviewResults()}
-              disabled={!hasLiveAIInterview}
+              onClick={() => hasAIInterviewInviteSent && handleShowAIInterviewResults()}
+              disabled={!hasAIInterviewInviteSent}
               title={
-                hasLiveAIInterview
+                hasAIInterviewInviteSent
                   ? undefined
                   : !hasAnyAIInterview
                     ? 'Create an AI interview first'
-                    : 'Publish the AI interview to see results'
+                    : !hasLiveAIInterview
+                      ? 'Publish the AI interview to see results'
+                      : 'Send at least one invite first'
               }
               className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap ${
-                !hasLiveAIInterview
+                !hasAIInterviewInviteSent
                   ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
                   : activeTab === 'ai-interview-results'
                     ? 'text-blue-600 bg-blue-50'
@@ -3002,11 +3017,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                         label="Track"
                         accent="cyan"
                         onClick={handleTrackAssessmentInvites}
-                        disabled={!features.assessment || !hasAnyAssessment}
+                        disabled={!features.assessment || !hasAssessmentInviteSent}
                         disabledTooltip={
                           !features.assessment
                             ? 'Assessments not enabled'
-                            : 'Create an assessment first'
+                            : !hasAnyAssessment
+                              ? 'Create an assessment first'
+                              : !hasPublishedAssessment
+                                ? 'Publish the assessment first'
+                                : 'Send at least one invite first'
                         }
                       />
 
@@ -3019,13 +3038,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                         label="Result"
                         accent="cyan"
                         onClick={handleAssessmentStatus}
-                        disabled={!features.assessment || !hasPublishedAssessment}
+                        disabled={!features.assessment || !hasAssessmentInviteSent}
                         disabledTooltip={
                           !features.assessment
                             ? 'Assessments not enabled'
                             : !hasAnyAssessment
                               ? 'Create an assessment first'
-                              : 'Publish the assessment to see results'
+                              : !hasPublishedAssessment
+                                ? 'Publish the assessment to see results'
+                                : 'Send at least one invite first'
                         }
                       />
                     </>
@@ -3093,11 +3114,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                         accent="orange"
                         onClick={handleTrackAIInterviewInvites}
                         loading={resolvingTrackInvitesConfig}
-                        disabled={!features.ai_interview || !hasAnyAIInterview}
+                        disabled={!features.ai_interview || !hasAIInterviewInviteSent}
                         disabledTooltip={
                           !features.ai_interview
                             ? 'AI Interviews not enabled'
-                            : 'Create an AI interview first'
+                            : !hasAnyAIInterview
+                              ? 'Create an AI interview first'
+                              : !hasLiveAIInterview
+                                ? 'Publish the AI interview first'
+                                : 'Send at least one invite first'
                         }
                       />
 
@@ -3108,13 +3133,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                         label="Result"
                         accent="orange"
                         onClick={handleAIInterviewStatus}
-                        disabled={!features.ai_interview || !hasLiveAIInterview}
+                        disabled={!features.ai_interview || !hasAIInterviewInviteSent}
                         disabledTooltip={
                           !features.ai_interview
                             ? 'AI Interviews not enabled'
                             : !hasAnyAIInterview
                               ? 'Create an AI interview first'
-                              : 'Publish the AI interview to see results'
+                              : !hasLiveAIInterview
+                                ? 'Publish the AI interview to see results'
+                                : 'Send at least one invite first'
                         }
                       />
                     </>
@@ -3719,6 +3746,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             jd_version: a.jd_version,
           }))}
           inviteSource="JD"
+          onInviteSent={(count) => {
+            const sentCount = Math.max(count, 1);
+            setAssessmentInviteCount((prev) => prev + sentCount);
+            void fetchAssessmentResults();
+          }}
         />
       )}
 
@@ -4452,6 +4484,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           onClose={() => setShareAIInterviewConfig(null)}
           config={shareAIInterviewConfig}
           onInviteSent={() => {
+            setAiInterviewCount((prev) => Math.max(prev + 1, 1));
             toast.success('AI interview invitation sent');
           }}
         />
