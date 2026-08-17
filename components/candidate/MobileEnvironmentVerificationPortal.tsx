@@ -378,15 +378,18 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             </div>
           )}
           {phase === 'pan_instructions' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 rounded-xl px-4">
-              <span className="text-5xl inline-block animate-[tf-phone-tilt_1.2s_ease-in-out_infinite]">📱</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 rounded-xl px-4 overflow-hidden">
+              <span className="text-5xl inline-block animate-[tf-phone-pan_2s_ease-in-out_infinite]">📱</span>
               <p className="text-sm font-medium text-white text-center">
                 Now turn your phone slowly — left to right, then right to left
               </p>
               <style>{`
-                @keyframes tf-phone-tilt {
-                  0%, 100% { transform: rotate(-25deg); }
-                  50% { transform: rotate(25deg); }
+                @keyframes tf-phone-pan {
+                  0%   { transform: translateX(-36px) rotate(-12deg); }
+                  25%  { transform: translateX(0px) rotate(0deg); }
+                  50%  { transform: translateX(36px) rotate(12deg); }
+                  75%  { transform: translateX(0px) rotate(0deg); }
+                  100% { transform: translateX(-36px) rotate(-12deg); }
                 }
               `}</style>
             </div>
