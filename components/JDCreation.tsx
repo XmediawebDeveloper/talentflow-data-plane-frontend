@@ -3116,6 +3116,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       extraction.mustHaveComments = dedupedLists.mustHaveComments;
       extraction.niceToHaveComments = dedupedLists.niceToHaveComments;
 
+      // COUNTRY DEFAULT FROM THE JD, not from a hardcoded home market.
+      // `locationCountry` starts at 'IN', so a US job description - "Remote positions
+      // are U.S.-based only", salary quoted in USD - still opened the Locations picker
+      // on India, and every city list under it was Indian. The recruiter had to notice
+      // and switch it manually on every US JD.
+      //
+      // Extraction deliberately returns no locations (the recruiter picks the city), so
+      // the currency the JD quotes its salary in is the signal that IS available, and it
+      // is already extracted reliably. Only applied when the user has not picked
+      // locations yet, so it can never override a deliberate choice.
+      if (extraction.salaryCurrency === 'USD' && (extraction.locations || []).length === 0) {
+        setLocationCountry(prev => (prev === 'IN' ? 'US' : prev));
+      }
+
       const extractionExperiencePayload = resolvePersistedExperiencePayload(extraction.experience, nextExperienceYearsExplicit);
       setShowCustomExperienceInput(Boolean(extraction.experience && extractionExperiencePayload.isCustom));
 
