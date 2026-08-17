@@ -22,19 +22,17 @@ type Phase =
   | 'done';
 
 const RECORD_SCREEN_MS = 5000;
-// +300ms padding (not a bare 5000): a nominal 5s+5s recording measures as
-// ~9.98s in the actual WebM container (confirmed via ffprobe on a real
-// upload) — a few tens of ms lost to encoder/container overhead, and the
-// browser's native <video> controls FLOOR the duration for display, so
-// 9.98s renders as "0:09" even though virtually nothing is missing. The
-// pause/resume around the pan-instructions screen (recorder.pause/resume)
-// adds its own small, browser-dependent segment-boundary overhead on top of
-// that. This buffer only pads the LAST phase — it's not read by the backend
-// RGB check (which only ever samples timestamps 0.5s-4.5s, entirely within
-// phase 1) — so total real content is safely >=10.28s, comfortably clearing
-// the 10.0s floor with margin regardless of encoder/pause overhead, and the
-// extra ~0.3s is imperceptible against the "5 seconds" instruction text.
-const RECORD_PAN_MS = 5300;
+// Exactly 5000 (not padded) — per spec, "a 10-second video": 5s screen + 5s
+// pan = 10.000s of real recorded content by construction. A prior version
+// of this padded RECORD_PAN_MS to 5300 to make the browser's native <video>
+// controls display "0:10" instead of "0:09" (they FLOOR the duration, and a
+// genuine 10.000s recording can measure ~9.98s in the WebM container due to
+// a few tens of ms of ordinary encoder/container overhead — not missing
+// footage). Reverted: the spec asks for a true 10-second recording, not a
+// duration inflated to satisfy a display rounding quirk. The player showing
+// "0:09" on a ~9.98s-measured file is a cosmetic display-only artifact of
+// the browser's own floor(), not a content defect.
+const RECORD_PAN_MS = 5000;
 const GET_READY_SECONDS = 3;
 
 interface MobileEnvironmentVerificationPortalProps {

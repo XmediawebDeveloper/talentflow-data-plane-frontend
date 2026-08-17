@@ -1274,6 +1274,13 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   // blob fetch since a plain <video src> can't carry the Authorization
   // header that endpoint requires.
   const [envVideoBlobUrls, setEnvVideoBlobUrls] = useState<Record<string, string>>({});
+  // Rounded playback duration per verification_id, read directly from the
+  // browser's own <video>.duration once metadata loads. The native <video
+  // controls> time display FLOORS duration (a genuine ~10.0s recording can
+  // measure ~9.98s in its WebM container from ordinary encoder overhead,
+  // showing "0:09") — this shows the correctly ROUNDED whole-second value
+  // alongside it instead, without touching the actual recording/upload.
+  const [envVideoDurations, setEnvVideoDurations] = useState<Record<string, number>>({});
   const envVideoBlobRequestedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -2850,11 +2857,22 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <p className="text-sm text-red-600 italic">Video unavailable.</p>
                             ) : (
                               <>
-                                <video controls preload="metadata" className="w-full max-w-lg rounded-lg bg-black">
+                                <video
+                                  controls
+                                  preload="metadata"
+                                  className="w-full max-w-lg rounded-lg bg-black"
+                                  onLoadedMetadata={(e) => {
+                                    const d = e.currentTarget.duration;
+                                    if (Number.isFinite(d) && d > 0) {
+                                      setEnvVideoDurations(prev => ({ ...prev, [v.verification_id]: Math.round(d) }));
+                                    }
+                                  }}
+                                >
                                   <source src={videoSrc} type={v.video_mime_type || 'video/webm'} />
                                 </video>
                                 <p className="text-xs text-green-700 font-medium mt-1.5">
                                   Status: {v.status === 'completed' ? 'Uploaded' : v.status === 'submitted' ? 'Uploaded' : v.status}
+                                  {envVideoDurations[v.verification_id] ? ` · ${envVideoDurations[v.verification_id]}s` : ''}
                                   {v.analysis_status === 'pending' || v.analysis_status === 'running' ? ' · Analysis pending' : ''}
                                 </p>
                               </>
