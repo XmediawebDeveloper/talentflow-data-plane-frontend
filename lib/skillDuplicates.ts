@@ -24,6 +24,25 @@ const SKILL_STOPWORDS = new Set([
   'writing', 'write',
 ]);
 
+/** Level / tier words that are IDENTITY-BEARING when they qualify the skill itself
+ *  but framing when they qualify a framing noun. Mirrors backend
+ *  `_SKILL_LEVEL_WORDS`. "Basic knowledge of SDLC" is just SDLC, but "Basic Life
+ *  Support" is a DIFFERENT certification from "Advanced Life Support" — stripping
+ *  these unconditionally merged BLS with ALS, "ISTQB Advanced" with "ISTQB" and
+ *  "Basic Excel" with "Advanced Excel", each deleting a real qualification.
+ *  Quality adjectives ('strong', 'good', 'solid', 'excellent', 'proven') are NOT
+ *  here — "Good Communication" vs "Communication" is wording, not a level. */
+const SKILL_LEVEL_WORDS = new Set([
+  'basic', 'advanced', 'intermediate', 'fundamental', 'fundamentals', 'deep',
+]);
+
+/** Nouns that mark a phrase as JD FRAMING rather than a skill name. Mirrors backend
+ *  `_SKILL_FRAMING_NOUNS`. */
+const SKILL_FRAMING_NOUNS = new Set([
+  'knowledge', 'understanding', 'familiarity', 'experience', 'ability',
+  'proficiency', 'expertise', 'awareness', 'exposure', 'skill', 'skills',
+]);
+
 /** Curated acronym / variant expansions — mirrors backend `_SKILL_ALIASES`. */
 const SKILL_ALIASES: Record<string, string> = {
   api: 'application programming interface', apis: 'application programming interface',
@@ -122,6 +141,8 @@ export function skillTokenSequence(skill: string, expandAliases = true): string[
   const caps = new Set(
     (skill.match(/\b[A-Z][A-Z0-9#+]+\b/g) || []).map(t => t.toLowerCase()),
   );
+  const hasFramingNoun = ((skill || '').toLowerCase().match(/[a-z]+/g) || [])
+    .some(w => SKILL_FRAMING_NOUNS.has(w));
   const norm = skill.toLowerCase().replace(/[._/\-]/g, ' ');
   const raw = norm.match(/[a-z0-9#+]+/g) || [];
   const pieces: string[] = [];
@@ -144,7 +165,12 @@ export function skillTokenSequence(skill: string, expandAliases = true): string[
       // 'writ', which is not in the list, so "Test Case Writing" kept a 'writ'
       // token while "Write Test Cases" dropped 'write' as filler — and the two
       // phrasings of one skill never matched.
-      if (SKILL_STOPWORDS.has(w)) continue;
+      // A level word survives unless the phrase also has a framing noun. The
+      // stopword test happens TWICE (raw word and stem), so the exemption must be
+      // threaded through BOTH — guarding only the raw form leaves the stem check
+      // below to drop it anyway.
+      const isLevelKeeper = SKILL_LEVEL_WORDS.has(w) && !hasFramingNoun;
+      if (SKILL_STOPWORDS.has(w) && !isLevelKeeper) continue;
       // A SINGLE character is kept when alphanumeric — it is often the whole
       // identity of the skill. Dropping it merged genuinely different
       // qualifications in every industry: "Hepatitis B" ≡ "Hepatitis C", "Class B
@@ -154,7 +180,8 @@ export function skillTokenSequence(skill: string, expandAliases = true): string[
       // be compared with anything. Punctuation leftovers ('#', '+') are still
       // dropped, since they are not alphanumeric.
       const keep = st.length > 1 || /^[a-z0-9]$/.test(st);
-      if (keep && !SKILL_STOPWORDS.has(st) && !seen.has(st)) {
+      const isStop = SKILL_STOPWORDS.has(st) && !isLevelKeeper;
+      if (keep && !isStop && !seen.has(st)) {
         seen.add(st);
         out.push(st);
       }

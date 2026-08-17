@@ -3116,6 +3116,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       extraction.mustHaveComments = dedupedLists.mustHaveComments;
       extraction.niceToHaveComments = dedupedLists.niceToHaveComments;
 
+      // COUNTRY DEFAULT FROM THE JD, not from a hardcoded home market.
+      // `locationCountry` starts at 'IN', so a US job description - "Remote positions
+      // are U.S.-based only", salary quoted in USD - still opened the Locations picker
+      // on India, and every city list under it was Indian. The recruiter had to notice
+      // and switch it manually on every US JD.
+      //
+      // Extraction deliberately returns no locations (the recruiter picks the city), so
+      // the currency the JD quotes its salary in is the signal that IS available, and it
+      // is already extracted reliably. Only applied when the user has not picked
+      // locations yet, so it can never override a deliberate choice.
+      if (extraction.salaryCurrency === 'USD' && (extraction.locations || []).length === 0) {
+        setLocationCountry(prev => (prev === 'IN' ? 'US' : prev));
+      }
+
       const extractionExperiencePayload = resolvePersistedExperiencePayload(extraction.experience, nextExperienceYearsExplicit);
       setShowCustomExperienceInput(Boolean(extraction.experience && extractionExperiencePayload.isCustom));
 
@@ -4546,7 +4560,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // For manual JD mode: detect if the description lacks markdown formatting
       // (e.g., user resumed an existing draft and went straight to step 3 publish).
       // Reformat with AI so the published JD isn't a single run-on paragraph.
-      let publishDescription = generatedJD || manualJD;
+      // MODE-AWARE. This used to be `generatedJD || manualJD`, which silently
+      // published stale text for every MANUAL JD that was edited after publishing.
+      //
+      // The load effect hydrates `generatedJD` from the stored description for EVERY JD
+      // regardless of creation_method, so on a manual JD it holds the PREVIOUS version's
+      // body. Meanwhile the Step 2 -> Step 3 reformat is mode-aware and writes the
+      // regenerated text to `manualJD`. So `generatedJD || manualJD` preferred the stale
+      // copy over the fresh one.
+      //
+      // Reported 2026-08-14: a manual JD published at "4 to 7 years" was edited to
+      // "8 to 12 years", a new version was created, Step 3 previewed the regenerated body
+      // correctly (the preview reads mode-aware state) - and then Publish wrote the OLD
+      // v1 body. The badge showed "Senior (8-12 years)" because the structured fields come
+      // from extractedData, so the record and the text a candidate reads disagreed.
+      let publishDescription = (mode === 'ai' ? generatedJD : manualJD) || generatedJD || manualJD;
       const lacksMarkdownFormatting = mode === 'manual' && publishDescription && !(
         /^#{1,6}\s/m.test(publishDescription) ||      // markdown headers
         /\n\n/.test(publishDescription) ||            // paragraph breaks
@@ -4693,7 +4721,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           // type uses the capitalized "Published" form. Cast preserves the
           // literal at runtime while satisfying the union.
           status: 'active' as unknown as Job['status'],
-          description: generatedJD || manualJD,
+          description: (mode === 'ai' ? generatedJD : manualJD) || generatedJD || manualJD,
           mustHaveSkills: extractedData.mustHaveSkills,
           niceToHaveSkills: extractedData.niceToHaveSkills,
           education: extractedData.education,
@@ -5065,7 +5093,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       // Use functional updates to preserve user edits if they exist
       setJobTitle(prev => prev || effectiveEditingJD.title);
-      setGeneratedJD(prev => prev || effectiveEditingJD.description);
+      // Only hydrate the AI-mode buffer for an AI-generated JD. Populating it for a
+      // MANUAL JD left a stale copy of the stored description sitting in `generatedJD`,
+      // which any `generatedJD || manualJD` expression would then prefer over the live
+      // manual text. Manual JDs hydrate `manualJD` a few lines below.
+      if (effectiveEditingJD.creation_method !== 'manual') {
+        setGeneratedJD(prev => prev || effectiveEditingJD.description);
+      }
 
       // Populate AI prompt field with saved ai_prompt (not description)
       // Only set if current value is empty to avoid overwriting user edits
