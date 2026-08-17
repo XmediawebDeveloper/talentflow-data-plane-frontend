@@ -1609,6 +1609,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
             left_screen_focus_lost: 'Moved focus away from the interview window',
             left_screen: 'Left the interview screen',
             picture_in_picture: 'Opened a video in Picture-in-Picture',
+            microphone_disconnected_timeout: 'Microphone stayed disconnected for over 3 minutes',
+            camera_disconnected_timeout: 'Camera stayed disconnected for over 3 minutes',
+            camera_and_microphone_disconnected_timeout: 'Camera and microphone stayed disconnected for over 3 minutes',
           };
           const reason = typeof d.reason === 'string' ? d.reason : '';
           const what = (typeof d.message === 'string' && d.message)

@@ -833,6 +833,57 @@ export const aiInterviewService = {
   /**
    * Generate AI-powered skill clusters
    */
+  /** Ask the backend whether each candidate skill duplicates one already present.
+   *
+   *  Two layers server-side: the same deterministic matcher the UI runs locally
+   *  (instant, free) and — only for what that clears — an industry-aware LLM call.
+   *  The LLM layer is what generalises: true synonyms share no root and cannot be
+   *  derived structurally ("Data Analytics"/"Data Analysis", "Goods
+   *  Inward"/"Receiving", "ECG"/"EKG"), and every industry has its own set, so no
+   *  vocabulary list in the code could ever keep up.
+   *
+   *  Advisory only — findings are shown as warnings the recruiter can override, and
+   *  nothing is ever deleted. Resolves to [] on ANY failure so a duplicate check
+   *  can never stop someone adding a skill.
+   */
+  async checkSkillDuplicates(args: {
+    candidates: string[];
+    existing: string[];
+    otherBucket?: string[];
+    otherBucketLabel?: string;
+    jdId?: string;
+    industryType?: string;
+    /** Give up and allow the add after this long (ms). */
+    timeoutMs?: number;
+  }): Promise<{
+    skill: string;
+    duplicate: boolean;
+    tier: 'high' | 'medium' | '';
+    match: string | null;
+    reason: string;
+    source: 'deterministic' | 'llm';
+  }[]> {
+    if (!args.candidates?.length) return [];
+    try {
+      const response = await api.post(
+        '/ai-interview/check-skill-duplicates',
+        {
+          candidates: args.candidates,
+          existing: args.existing || [],
+          other_bucket: args.otherBucket || [],
+          other_bucket_label: args.otherBucketLabel,
+          jd_id: args.jdId,
+          industry_type: args.industryType,
+        },
+        { timeout: args.timeoutMs ?? 6000 },
+      );
+      const findings = response.data?.findings;
+      return Array.isArray(findings) ? findings : [];
+    } catch {
+      return [];   // fail open — never block the recruiter
+    }
+  },
+
   async generateClusters(
     mthSkills: string[],
     nthSkills: string[],

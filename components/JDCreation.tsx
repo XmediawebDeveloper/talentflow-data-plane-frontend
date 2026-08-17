@@ -476,7 +476,15 @@ const DUPLICATE_STOPWORDS = new Set<string>([
 
 const normalizeForDuplicate = (value: string): string => {
   if (!value) return '';
-  const withoutParens = value.toLowerCase().replace(/\(.*?\)/g, ' ');
+  // Drop ILLUSTRATIVE parentheticals only ("frameworks (e.g., Django)" == "frameworks").
+  // A SUBSTANTIVE parenthetical is part of the requirement's identity and is KEPT:
+  // stripping every parenthetical made "Genesys Cloud (Core Contact Center Platform)"
+  // and "Genesys Cloud" compare equal, so the descriptive half the JD actually wrote
+  // was discarded as a duplicate. Mirrors the backend's _normalize_for_dedup - keep
+  // the two in sync.
+  const withoutParens = value
+    .toLowerCase()
+    .replace(/\((?:\s*(?:e\.?g\.?|i\.?e\.?|for example|such as|including)\b).*?\)/g, ' ');
   const tokens = withoutParens
     .replace(/[^a-z0-9]+/g, ' ')
     .split(' ')
@@ -1034,14 +1042,20 @@ const FALLBACK_EXPERIENCE_LEVELS: ExperienceLevel[] = [
   { id: 6, code: 'management', label: 'Management Level (10+ Years)', min_years: 10, max_years: null, sort_order: 6, is_active: true },
 ];
 
+// Mirrors master_education_levels (see MASTER_EDUCATION_LEVELS_SEED in the backend's
+// migrations.py). Used only until master data loads. 'high_school' was added 2026-08-14:
+// extraction could already emit it but no master row existed, so it fell through to
+// "Other" - which broke every non-degree role (retail, hospitality, security, drivers,
+// warehouse, field staff). Keep this list in sync with the backend seed.
 const FALLBACK_EDUCATION_LEVELS: EducationLevel[] = [
-  { id: 1, code: 'diploma', label: 'Diploma', level: 1, sort_order: 1, is_active: true },
-  { id: 2, code: 'associate', label: 'Associate Degree', level: 2, sort_order: 2, is_active: true },
-  { id: 3, code: 'bachelors', label: "Bachelor's Degree", level: 3, sort_order: 3, is_active: true },
-  { id: 4, code: 'masters', label: "Master's Degree", level: 4, sort_order: 4, is_active: true },
-  { id: 5, code: 'doctorate', label: 'Doctorate / PhD', level: 5, sort_order: 5, is_active: true },
-  { id: 6, code: 'none', label: 'No Formal Education', level: 0, sort_order: 6, is_active: true },
-  { id: 7, code: 'others', label: 'Other', level: 0, sort_order: 7, is_active: true },
+  { id: 1, code: 'high_school', label: 'High School', level: 1, sort_order: 1, is_active: true },
+  { id: 2, code: 'diploma', label: 'Diploma', level: 2, sort_order: 2, is_active: true },
+  { id: 3, code: 'associate', label: 'Associate Degree', level: 3, sort_order: 3, is_active: true },
+  { id: 4, code: 'bachelors', label: "Bachelor's Degree", level: 4, sort_order: 4, is_active: true },
+  { id: 5, code: 'masters', label: "Master's Degree", level: 5, sort_order: 5, is_active: true },
+  { id: 6, code: 'doctorate', label: 'Doctorate / PhD', level: 6, sort_order: 6, is_active: true },
+  { id: 7, code: 'none', label: 'No Formal Education', level: 0, sort_order: 7, is_active: true },
+  { id: 8, code: 'others', label: 'Other', level: 0, sort_order: 8, is_active: true },
 ];
 
 const FALLBACK_INDUSTRY_TYPES: IndustryType[] = [
@@ -1691,7 +1705,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const normalized = value?.toLowerCase().trim() || '';
     if (!normalized) return {};
 
-    const rangeMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*(?:-|to|–)\s*(\d{1,2}(?:\.\d+)?)/);
+    // Mirrors the backend's _EXP_RANGE_RE. The optional `\+?` and unit word after the
+    // FIRST number let "5+ years to 8 years" / "5 years to 8 years" / "5+ to 8 years"
+    // match as ONE range. Without them the match died at the first number, fell through
+    // to the `plusMatch` branch below, and returned min=5 with NO max - dropping the
+    // upper bound the recruiter typed. Keep in sync with the backend regex.
+    const rangeMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)?\s*(?:-|to|–)\s*(\d{1,2}(?:\.\d+)?)\s*\+?/);
     if (rangeMatch) {
       const first = Number(rangeMatch[1]);
       const second = Number(rangeMatch[2]);
@@ -2322,12 +2341,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       setShowCustomExperienceInput(Boolean(nextExperienceValue && !getExperienceLevelByCode(nextExperienceValue)));
       setExperienceYearsExplicit(hasExplicitExperienceYears);
 
-      setExtractedData(prev => ({
+      setExtractedData(prev => {
+        // Same deterministic first-render dedupe as the extraction path below - the
+        // AI-generation path merges the four lists too, so it can surface the same
+        // duplicate rows. No network call, so the no-edit -> no-LLM invariant holds.
+        const dedupedLists = dedupeListsDeterministic({
+          mustHaveSkills: mergeExtractedListField(prev.mustHaveSkills, params.must_have_skills, isEditMode),
+          niceToHaveSkills: mergeExtractedListField(prev.niceToHaveSkills, params.nice_to_have_skills, isEditMode),
+          mustHaveComments: mergeExtractedListField(prev.mustHaveComments, params.must_have_comments, isEditMode),
+          niceToHaveComments: mergeExtractedListField(prev.niceToHaveComments, params.nice_to_have_comments, isEditMode),
+        });
+        return {
         ...prev,
-        mustHaveSkills: mergeExtractedListField(prev.mustHaveSkills, params.must_have_skills, isEditMode),
-        mustHaveComments: mergeExtractedListField(prev.mustHaveComments, params.must_have_comments, isEditMode),
-        niceToHaveSkills: mergeExtractedListField(prev.niceToHaveSkills, params.nice_to_have_skills, isEditMode),
-        niceToHaveComments: mergeExtractedListField(prev.niceToHaveComments, params.nice_to_have_comments, isEditMode),
+        mustHaveSkills: dedupedLists.mustHaveSkills,
+        mustHaveComments: dedupedLists.mustHaveComments,
+        niceToHaveSkills: dedupedLists.niceToHaveSkills,
+        niceToHaveComments: dedupedLists.niceToHaveComments,
         education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || (isEditMode ? prev.education : ''),
         experience: expValue || prev.experience,
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
@@ -2347,7 +2376,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         suggestedLanguages: params.suggested_languages?.length > 0 ? params.suggested_languages : (isEditMode ? prev.suggestedLanguages : []),
         certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? prev.certifications : []),
         domainKeywords: params.domain_keywords?.length > 0 ? params.domain_keywords : (isEditMode ? prev.domainKeywords : []),
-      }));
+        };
+      });
 
       // Log what was pre-filled and trigger validation
       if (params.salary_min || params.salary_max) {
@@ -2856,7 +2886,33 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           return lbl === normalized || lbl.includes(normalized) || normalized.includes(l.code.toLowerCase().replace(/[^a-z]/g, ''));
         });
         if (partialMaster) return partialMaster.code;
+        // NOTE: keys must be in NORMALIZED form - `normalized` above has every
+        // non-letter stripped, so 'high_school' arrives as 'highschool' and any
+        // digit-bearing spelling ('12th') is already unrecognisable. Letter-only keys only.
         const educationMap: Record<string, string> = {
+          // Secondary schooling. Previously unmapped, so extraction's 'high_school'
+          // fell through to 'others' and displayed as "Other" - the single biggest
+          // gap for non-degree roles (retail, hospitality, security, drivers,
+          // warehouse, field staff), which are a large share of non-IT hiring.
+          'highschool': 'high_school',
+          'high': 'high_school',
+          'secondary': 'high_school',
+          'secondaryschool': 'high_school',
+          'seniorsecondary': 'high_school',
+          'highersecondary': 'high_school',
+          'sslc': 'high_school',
+          'ssc': 'high_school',
+          'hsc': 'high_school',
+          'ged': 'high_school',
+          'matriculation': 'high_school',
+          'matric': 'high_school',
+          // Vocational / trade routes map to Diploma, which extraction previously
+          // could not emit at all.
+          'iti': 'diploma',
+          'polytechnic': 'diploma',
+          'vocational': 'diploma',
+          'vocationaldiploma': 'diploma',
+          'tradecertificate': 'diploma',
           'diploma': 'diploma',
           'associate': 'associate',
           'associatedegree': 'associate',
@@ -2880,6 +2936,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           'none': 'none',
           'noformal': 'none',
           'noformaleducation': 'none',
+          // Legacy extraction spelling ('no_education') - previously unmapped, so a
+          // JD that explicitly required NO formal education displayed as "Other".
+          'noeducation': 'none',
+          'noformaleducationrequired': 'none',
+          'notrequired': 'none',
           'others': 'others',
           'other': 'others',
           'any': 'others',
@@ -3024,6 +3085,36 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         codingRequired: params.coding_required === true || (isEditMode ? extractedData.codingRequired : false),
         suggestedLanguages: params.suggested_languages?.length > 0 ? params.suggested_languages : (isEditMode ? extractedData.suggestedLanguages : []),
       };
+
+      // FIRST-RENDER DE-DUPLICATION.
+      // The cross-list dedupe used to run only on the Step 2 -> Step 3 transition, and
+      // only when the recruiter had actually edited something (the reformat pass is
+      // deliberately gated on "no edits -> no AI call"). So a FRESH extraction with no
+      // edits - which is the exact reproduction path in the BUG3 report - rendered
+      // whatever the backend returned, duplicates included.
+      //
+      // This is the DETERMINISTIC pass only (same normalization as the backend's
+      // _dedupe_exact_across_lists). It fires no network request, so the
+      // "editing a JD with no changes triggers no LLM call" invariant is preserved.
+      const dedupedLists = dedupeListsDeterministic({
+        mustHaveSkills: extraction.mustHaveSkills || [],
+        niceToHaveSkills: extraction.niceToHaveSkills || [],
+        mustHaveComments: extraction.mustHaveComments || [],
+        niceToHaveComments: extraction.niceToHaveComments || [],
+      });
+      const removedByFirstRenderDedupe =
+        (extraction.mustHaveSkills?.length || 0) + (extraction.niceToHaveSkills?.length || 0) +
+        (extraction.mustHaveComments?.length || 0) + (extraction.niceToHaveComments?.length || 0) -
+        (dedupedLists.mustHaveSkills.length + dedupedLists.niceToHaveSkills.length +
+         dedupedLists.mustHaveComments.length + dedupedLists.niceToHaveComments.length);
+      if (removedByFirstRenderDedupe > 0) {
+        console.log(`[TalentFlow] First-render dedupe removed ${removedByFirstRenderDedupe} duplicate entr${removedByFirstRenderDedupe === 1 ? 'y' : 'ies'}`);
+      }
+      extraction.mustHaveSkills = dedupedLists.mustHaveSkills;
+      extraction.niceToHaveSkills = dedupedLists.niceToHaveSkills;
+      extraction.mustHaveComments = dedupedLists.mustHaveComments;
+      extraction.niceToHaveComments = dedupedLists.niceToHaveComments;
+
       const extractionExperiencePayload = resolvePersistedExperiencePayload(extraction.experience, nextExperienceYearsExplicit);
       setShowCustomExperienceInput(Boolean(extraction.experience && extractionExperiencePayload.isCustom));
 
@@ -5303,7 +5394,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
-                        placeholder="e.g., Senior Java Developer – Banking Domain"
+                        placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
                         disabled={isJDInUse}
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
@@ -5338,7 +5429,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={aiPrompt}
                         onChange={(e) => setAiPrompt(e.target.value)}
                         maxLength={VALIDATION.AI_PROMPT.max}
-                        placeholder="Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"
+                        placeholder="Describe the role - responsibilities, must-have skills, experience, location, work mode, salary. e.g., 'Shift supervisor for a 200-bed hospital ward, 5+ years, night rotation, Chennai' or 'Senior full-stack developer with React and Node.js, 5+ years, remote, leading a team of 3'"
                         rows={12}
                         disabled={isJDInUse}
                         className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black placeholder-gray-500 ${
@@ -5461,7 +5552,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
                         maxLength={VALIDATION.JOB_TITLE.max}
-                        placeholder="e.g., Senior Java Developer"
+                        placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
                         disabled={isJDInUse}
                         className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black ${
                           isJDInUse
@@ -7492,7 +7583,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={newCertification}
                         onChange={(e) => setNewCertification(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddCertification()}
-                        placeholder="e.g., AWS Certified Solutions Architect"
+                        placeholder="e.g., ISO 9001 Lead Auditor, PMP, AWS Solutions Architect"
                         className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                         autoFocus
                       />
@@ -7549,7 +7640,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={newDomainKeyword}
                         onChange={(e) => setNewDomainKeyword(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddDomainKeyword()}
-                        placeholder="e.g., Banking, Fintech, Cloud"
+                        placeholder="e.g., Cold Chain, Retail Ops, Banking, Cloud"
                         className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
                         autoFocus
                       />
@@ -7608,7 +7699,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         markExtractedDataModified();
                       });
                     }}
-                    placeholder="e.g., Focus on system design, coding best practices, problem-solving approach..."
+                    placeholder="e.g., Focus on safety compliance, hands-on judgement, problem-solving approach..."
                     className={`w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
                     disabled={isRegenerating}

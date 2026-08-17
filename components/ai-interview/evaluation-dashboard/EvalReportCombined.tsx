@@ -16,6 +16,7 @@ import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer,
 } from 'recharts';
 import type { DashboardData } from './types';
+import { buildRationaleLines } from './types';
 
 interface Props {
   data: DashboardData;
@@ -249,9 +250,11 @@ export function EvalReportCombined({
               rowHeight: lines.length * SKILL_LINE_H + SKILL_ROW_GAP,
             };
           });
-          // "Why this score" rationale (skill-wise, newline-separated). HR: none.
-          const rationale = key !== 'hr' ? String(q.scoreRationale || '').trim() : '';
-          const ratRaw = rationale ? rationale.split('\n').map(l => l.trim()).filter(Boolean) : [];
+          // "Why this score" rationale — regenerated from the SAME qSkills the
+          // score bars above render, so the PDF's per-skill scores and its
+          // rationale are single-sourced (identical to the on-screen dashboard).
+          // HR: none.
+          const ratRaw = key !== 'hr' ? buildRationaleLines(qSkills, q.scoreRationale) : [];
           const rationaleBlocks = ratRaw.map((rl) => splitLines(rl, CW - 8, 7.5));
           const ratContentH = rationaleBlocks.reduce((sum, lines, idx) => (
             sum
@@ -789,7 +792,10 @@ export function EvalReportCombined({
                 // Header middle column shows the mapped skills (HR has none);
                 // the actual question text is rendered full-width just below.
                 const skillsText = isHR ? '' : (q.skills.map(s => s.name).join(', ') || '');
-                const hasRationale = !isHR && !!q.scoreRationale && q.scoreRationale.trim().length > 0;
+                // Rationale regenerated from q.skills (single-sourced with the
+                // Skills-assessed scores everywhere); HR has none.
+                const rationaleLines = isHR ? [] : buildRationaleLines(q.skills, q.scoreRationale);
+                const hasRationale = rationaleLines.length > 0;
                 return (
                   <div key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} style={{ pageBreakInside: 'avoid' }}>
                     <div className="grid grid-cols-[15%_20%_minmax(0,1fr)_15%] items-center px-5 py-3 gap-3">
@@ -814,7 +820,7 @@ export function EvalReportCombined({
                         <div className="text-[11px] leading-relaxed text-amber-900 bg-amber-50 border border-amber-100 rounded-md px-3 py-2" style={{ pageBreakInside: 'avoid' }}>
                           <div className="font-semibold mb-0.5">Why this score</div>
                           <div className="space-y-0.5">
-                            {q.scoreRationale!.split('\n').map((line, li) => {
+                            {rationaleLines.map((line, li) => {
                               const t = line.trim();
                               if (!t) return null;
                               const ci = t.indexOf(':');

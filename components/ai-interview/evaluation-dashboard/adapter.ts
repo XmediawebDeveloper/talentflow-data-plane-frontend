@@ -1172,24 +1172,22 @@ function buildPerQuestionDetailsFromHistory(
     if (isSkipped) {
       return { score: 0, note: '', is_fallback: false, is_skipped: true, is_unscored: false };
     }
-    // Fallback: question-level score (so a real answer doesn't show 0
-    // just because the evaluator graded a different topic name). Only
-    // fires when qLevelFallback is positive; an entry.score of 0 means
-    // the candidate genuinely scored 0 and we surface that honestly.
-    if (typeof qLevelFallback === 'number' && qLevelFallback > 0) {
-      return {
-        score: Math.max(0, Math.min(10, qLevelFallback)),
-        note: '',
-        is_fallback: true,
-        is_skipped: false,
-        is_unscored: false,
-      };
-    }
-    // No evaluator row, not skipped, no positive question-level score: this
-    // skill was simply NOT evaluated. Per the scoring spec the backend never
-    // fabricates a 0.0 here (transcript_evaluation_service.py:3209-3214) — we
-    // mustn't either. Flag is_unscored so the weighted average EXCLUDES it and
-    // the UI renders "Not evaluated" instead of a candidate-tanking 0.0.
+    // (Q-level fallback REMOVED 2026-08-14.) This used to substitute the
+    // question's OVERALL score when a planned skill had no matching per-skill
+    // row, badged "Q" — a legacy crutch for "slot drift" in OLDER sessions.
+    // It is no longer needed: the backend now emits a question_skill_map row
+    // for EVERY assigned skill (a real score, or 0 with a "No evidence" note),
+    // so a planned skill is ALWAYS matched by the lookups above. When the
+    // fallback did fire it only MASKED an incomplete map by fabricating a
+    // plausible number (e.g. React showing the question's 4.6 instead of its
+    // real 1.0), which made the Skills-assessed table disagree with the Score
+    // Rationale and produced impossible footers like "36.2 ÷ 11 = 4.60".
+    //
+    // Now: a genuinely unmatched skill falls through to is_unscored → the UI
+    // renders an honest "Not evaluated" (EXCLUDED from the weighted average)
+    // instead of a made-up score, so any real gap stays visible rather than
+    // being papered over. (`qLevelFallback` is retained in the signature but no
+    // longer consulted.)
     return { score: 0, note: '', is_fallback: false, is_skipped: false, is_unscored: true };
   };
 
@@ -2601,28 +2599,30 @@ export function buildDashboardData(params: {
   const mthQARows = perQuestionDetails.filter(q => q.section === 'mth' && !q.isUnscored);
   const nthQARows = perQuestionDetails.filter(q => q.section === 'nth' && !q.isUnscored);
 
-  // Round to 1 decimal — matches QuestionsView (mhScore/nhScore) so the
-  // headline numbers in Overview / Skill Breakdown / Eval Report agree with
-  // the per-section badge inside Question Analysis. Keeping 2-decimal here
-  // was producing rendered mismatches like 6.95 (Overview) vs 7.00 (Q Analysis).
-  // PERMANENT FIX (2026-06-02): prefer the BACKEND authoritative section
-  // averages (`section_question_avg.mth/nth`) — the SAME values the Results-list
-  // score (capability_score = mth×10 in timed mode) and Pass/Fail derive from.
-  // Recomputing the Must-Have average independently from the QA rows here is
-  // what made the report headline (e.g. 10%) disagree with the Results list
-  // (e.g. 36%) for the same candidate. Fall back to the QA recompute only for
-  // legacy sessions that never stored section_question_avg.
-  const mustHaveAvgQA = (typeof mthQAvg === 'number')
-    ? mthQAvg
-    : (mthQARows.length > 0
-        ? Math.round(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthQARows.length * 10) / 10
-        : mustHaveAvg); // keep original if QA produced no scored rows (old sessions)
+  // Section average = Σ(scored question scores) ÷ PLANNED question count — the
+  // EXACT denominator QuestionsView uses (Math.max(plannedCounts, scoredRows)),
+  // the backend `capability_score` (= section avg ÷ planned × 10, the score the
+  // Results list shows), and backend `_compute_section_scores`. It must match
+  // ALL of those or the headline numbers diverge across views.
+  //
+  // WHY THIS CHANGED (2026-08-14): this used to prefer the backend
+  // `section_question_avg` / divide by the ANSWERED count. That put the Eval
+  // Report headline on a ÷ANSWERED basis (e.g. 4.33 → Match 43%) while the
+  // Question Analysis section score and the Results-list score were already on
+  // ÷PLANNED (e.g. 17.5 → 18%). Same candidate, two different scores. Everything
+  // is now ÷PLANNED: un-reached / unanswered questions count as 0 and do NOT
+  // shrink the denominator (product decision — ending early or skipping cannot
+  // inflate the section score by hiding the gaps). `section_question_avg` is no
+  // longer preferred because it carries the old ÷ANSWERED denominator.
+  const mthPlannedDenom = Math.max(plannedCounts?.mustHave || 0, mthQARows.length);
+  const mustHaveAvgQA = mthPlannedDenom > 0
+    ? Math.round(mthQARows.reduce((s, q) => s + q.questionScore, 0) / mthPlannedDenom * 10) / 10
+    : mustHaveAvg; // keep original if QA produced no scored rows (old sessions)
 
-  const niceToHaveAvgQA = (typeof nthQAvg === 'number')
-    ? nthQAvg
-    : (nthQARows.length > 0
-        ? Math.round(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthQARows.length * 10) / 10
-        : niceToHaveAvg);
+  const nthPlannedDenom = Math.max(plannedCounts?.niceToHave || 0, nthQARows.length);
+  const niceToHaveAvgQA = nthPlannedDenom > 0
+    ? Math.round(nthQARows.reduce((s, q) => s + q.questionScore, 0) / nthPlannedDenom * 10) / 10
+    : niceToHaveAvg;
 
   // 4. Final score from QA-derived section averages.
   //    TIMED mode: the headline "Match Score" is Must-Have Section Score ×10
