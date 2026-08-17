@@ -22,7 +22,19 @@ type Phase =
   | 'done';
 
 const RECORD_SCREEN_MS = 5000;
-const RECORD_PAN_MS = 5000;
+// +300ms padding (not a bare 5000): a nominal 5s+5s recording measures as
+// ~9.98s in the actual WebM container (confirmed via ffprobe on a real
+// upload) — a few tens of ms lost to encoder/container overhead, and the
+// browser's native <video> controls FLOOR the duration for display, so
+// 9.98s renders as "0:09" even though virtually nothing is missing. The
+// pause/resume around the pan-instructions screen (recorder.pause/resume)
+// adds its own small, browser-dependent segment-boundary overhead on top of
+// that. This buffer only pads the LAST phase — it's not read by the backend
+// RGB check (which only ever samples timestamps 0.5s-4.5s, entirely within
+// phase 1) — so total real content is safely >=10.28s, comfortably clearing
+// the 10.0s floor with margin regardless of encoder/pause overhead, and the
+// extra ~0.3s is imperceptible against the "5 seconds" instruction text.
+const RECORD_PAN_MS = 5300;
 const GET_READY_SECONDS = 3;
 
 interface MobileEnvironmentVerificationPortalProps {
@@ -378,18 +390,24 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             </div>
           )}
           {phase === 'pan_instructions' && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 rounded-xl px-4 overflow-hidden">
-              <span className="text-5xl inline-block animate-[tf-phone-pan_2s_ease-in-out_infinite]">📱</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 rounded-xl px-4 overflow-hidden">
+              <div className="flex items-center gap-2 animate-[tf-pan-sweep_2.4s_ease-in-out_infinite]">
+                <span className="text-3xl inline-block leading-none animate-[tf-arrow-flip_2.4s_ease-in-out_infinite]">➜</span>
+                <span className="text-5xl inline-block leading-none">📱</span>
+              </div>
               <p className="text-sm font-medium text-white text-center">
                 Now turn your phone slowly — left to right, then right to left
               </p>
               <style>{`
-                @keyframes tf-phone-pan {
-                  0%   { transform: translateX(-36px) rotate(-12deg); }
-                  25%  { transform: translateX(0px) rotate(0deg); }
-                  50%  { transform: translateX(36px) rotate(12deg); }
-                  75%  { transform: translateX(0px) rotate(0deg); }
-                  100% { transform: translateX(-36px) rotate(-12deg); }
+                @keyframes tf-pan-sweep {
+                  0%   { transform: translateX(-120px); }
+                  50%  { transform: translateX(120px); }
+                  100% { transform: translateX(-120px); }
+                }
+                @keyframes tf-arrow-flip {
+                  0%, 49.9%  { transform: scaleX(1); }
+                  50%, 99.9% { transform: scaleX(-1); }
+                  100%       { transform: scaleX(1); }
                 }
               `}</style>
             </div>
