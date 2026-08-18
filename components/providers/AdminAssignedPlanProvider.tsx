@@ -5,6 +5,7 @@ import {
   adminAssignedPlanService,
   type AdminAssignedPlan,
 } from '@/lib/services/adminAssignedPlanService';
+import { isOnline, isTransientNetworkError, withNetworkRetry } from '@/lib/utils/networkRetry';
 
 const DISMISS_KEY = 'tf_admin_assigned_plan_banner_dismissed';
 
@@ -51,13 +52,26 @@ export function AdminAssignedPlanProvider({ children }: { children: React.ReactN
   }, []);
 
   const fetchPending = useCallback(async () => {
+    // Offline (sleep/wake, VPN drop, dead WiFi) — skip the request entirely.
+    // The `online` listener below re-runs this as soon as the browser reconnects.
+    if (!isOnline()) {
+      setLoading(false);
+      return;
+    }
+
     try {
-      const plan = await adminAssignedPlanService.getPendingPlan();
+      const plan = await withNetworkRetry(() => adminAssignedPlanService.getPendingPlan());
       setPendingPlan(plan);
     } catch (err) {
-      // Detection is non-critical — never block the app on CP being unreachable.
-      console.error('[AdminAssignedPlan] Failed to fetch pending plan:', err);
-      setPendingPlan(null);
+      if (isTransientNetworkError(err)) {
+        // Never reached the server. Keep the previously-loaded plan instead of
+        // clearing it, so a connection blip can't hide a real payment banner.
+        console.warn('[AdminAssignedPlan] Pending-plan check skipped (network unavailable), will retry');
+      } else {
+        // Detection is non-critical — never block the app on CP being unreachable.
+        console.error('[AdminAssignedPlan] Failed to fetch pending plan:', err);
+        setPendingPlan(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -81,6 +95,14 @@ export function AdminAssignedPlanProvider({ children }: { children: React.ReactN
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [fetchPending]);
+
+  // Re-fetch as soon as connectivity returns — covers the fetches that were
+  // skipped or failed transiently while the browser was offline.
+  useEffect(() => {
+    const handleOnline = () => fetchPending();
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
   }, [fetchPending]);
 
   const openPaymentModal = useCallback(() => setShowPaymentModal(true), []);
