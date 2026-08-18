@@ -2448,6 +2448,21 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               </div>
             )}
 
+            {/* Edit — published JDs only. Deliberately NOT disabled when the JD
+                is in use: the point of the click is to explain *why* it cannot
+                be edited, naming the modules holding it. The page owns that
+                check (it re-reads usage status live) and this only asks. */}
+            {job.status === 'Published' && onEdit && (
+              <button
+                onClick={handleEdit}
+                className="px-4 py-2 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all flex items-center gap-2"
+                aria-label="Edit this JD" title="Edit this JD"
+              >
+                <Edit className="w-4 h-4" />
+                <span className="font-medium">Edit</span>
+              </button>
+            )}
+
             {/* JD15: Action Buttons - For Disabled jobs */}
             {job.status === 'Disabled' && (
               <div className="flex items-center gap-2">

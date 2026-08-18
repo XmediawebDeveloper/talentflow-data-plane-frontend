@@ -176,9 +176,18 @@
   --secondary-hover: #6b7280;
   --secondary-foreground: #374151;
 
+  /* `accent` is the hover/focus surface that `accent-foreground` is drawn on —
+     every shadcn primitive pairs them as
+     `focus:bg-accent focus:text-accent-foreground` (dropdown, select, command,
+     context-menu, menubar, navigation-menu, calendar, toggle).
+
+     A dark highlight bar is the intended look here, so the foreground has to be
+     white to match. The pair used to be gray-600 on gray-900 — 2.35:1, which is
+     why a hovered menu item read as unreadable dark-on-dark. White gives
+     7.56:1. Change one of these two and you must change the other. */
   --accent: #4b5563;
   --accent-light: #e5e7eb;
-  --accent-foreground: #111827;
+  --accent-foreground: #ffffff;
 
   --surface: #f9fafb;
   --surface-hover: #f3f4f6;
@@ -506,7 +515,11 @@
   --secondary-hover: #9ca3af;
   --secondary-foreground: #f9fafb;
 
-  --accent: #9ca3af;
+  /* Dark theme keeps the same dark-bar-with-light-text shape. This was
+     gray-400 under gray-50 text — 2.43:1, the identical bug mirrored. Now
+     9.9:1. (Also feeds the .dark peer-checked rule further down, which wants
+     a dark fill and was getting a light one.) */
+  --accent: #374151;
   --accent-light: #374151;
   --accent-foreground: #f9fafb;
 
@@ -1673,6 +1686,43 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
   white-space: normal;
 }
 
+/* Right-pinned column, for the Actions cell. These tables are auto-layout and
+   wider than the dialog, so the row scrolls sideways and the actions were the
+   first thing to slide out of reach.
+
+   Same caveat as the sticky thead above: a sticky cell paints no background of
+   its own, so it needs an opaque one or the row scrolls visibly through it.
+   Unlayered, like the rules above, so it beats the Tailwind utilities already
+   on these cells. */
+.tf-table-shell .tf-sticky-col {
+  position: sticky;
+  right: 0;
+  z-index: 5;
+  background-color: #ffffff;
+  /* Hairline on the leading edge so the pinned column reads as floating over
+     the content sliding under it, rather than as an ordinary last column. */
+  box-shadow: -1px 0 0 0 var(--border);
+}
+.dark .tf-table-shell .tf-sticky-col {
+  background-color: oklch(0.208 0.042 265.755); /* slate-900, matches thead */
+}
+
+/* The header's own pinned cell has to clear the body's pinned cells, which
+   already sit above the normal ones. thead is z-10, body sticky cells z-5. */
+.tf-table-shell thead th.tf-sticky-col {
+  z-index: 11;
+}
+
+/* The opaque background above would otherwise swallow the row hover tint, so
+   the pinned cell repaints it — an opaque version of the `hover:bg-brand-blue/5`
+   the rows carry, since a translucent one would let content show through. */
+.tf-table-shell tbody tr:hover .tf-sticky-col {
+  background-color: color-mix(in srgb, var(--brand-blue) 5%, #ffffff);
+}
+.dark .tf-table-shell tbody tr:hover .tf-sticky-col {
+  background-color: color-mix(in srgb, var(--brand-blue) 5%, oklch(0.208 0.042 265.755));
+}
+
 /* Compact shell — for tables inside a dialog. Keeps the sticky header and the
    single-line cells, drops the two height rules that only make sense on a full
    page. Must come after the base rule: both are single-class selectors, so the
@@ -1690,6 +1740,20 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
 .tf-table-shell--compact {
   min-height: 0;
   max-height: 55vh;
+}
+
+/* Fill-the-parent variant. The dialog already hands the table its own flex row,
+   so the shell should take exactly that height and scroll inside it.
+
+   A fixed cap can't do that: 55vh is usually TALLER than the space left after
+   the dialog's header, stats, filter bar and footer, so the cap never engages
+   and the dialog body scrolls instead — carrying the sticky header and the
+   pinned Actions column out of view, which is the whole point of them. Pair
+   with flex-1/min-h-0 on the element and overflow-hidden on its parent so this
+   shell is the only vertical scroller. */
+.tf-table-shell--fill {
+  min-height: 0;
+  max-height: none;
 }
 
 /* ── Custom scrollbars for the shell ───────────────────────────────────

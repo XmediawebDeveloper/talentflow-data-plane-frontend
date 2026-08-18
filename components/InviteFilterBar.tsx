@@ -23,6 +23,48 @@ interface InviteFilterBarProps {
   searchPlaceholder?: string;
 }
 
+/**
+ * Status dropdowns for the two invite trackers.
+ *
+ * Held here, beside the filter bar itself, because each tracker is reachable
+ * from two places — its own module page and the JD detail page's Track tile —
+ * and those used to carry separate copies that drifted.
+ */
+/* Deliberately the same five buckets as the tracker's stat cards, in the same
+   order and with the same wording — "All Statuses" is the Total Invited card.
+   The dropdown used to carry ten values (pending, sent, opened, bounced,
+   abandoned…) that no card counted, so picking one returned a list the cards
+   above it could not explain. */
+export const ASSESSMENT_INVITE_STATUS_OPTIONS: InviteStatusOption[] = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'expired', label: 'Invite Expired' },
+  { value: 'failed', label: 'Invite Failed' },
+  { value: 'started', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+];
+
+/* Same rule as the assessment list above: one option per stat card, in card
+   order. Total is the "All Statuses" reset. The dropped values
+   (consent_pending, system_check, scheduled, expired, revoked) had no card
+   counting them, so picking one returned a list the stat row could not explain;
+   rows in those states still render their own badge in the table. */
+export const AI_INTERVIEW_INVITE_STATUS_OPTIONS: InviteStatusOption[] = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'invited', label: 'Invited' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'terminated', label: 'Terminated' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+/** True when anything is narrowing the list — drives the "N matching" label
+ *  and the "no matches" wording the trackers show instead of "none found". */
+export const hasActiveInviteFilters = (filters: InviteFilterState): boolean =>
+  filters.search.trim() !== '' ||
+  filters.status !== 'all' ||
+  filters.dateFrom !== '' ||
+  filters.dateTo !== '';
+
 export const EMPTY_INVITE_FILTERS: InviteFilterState = {
   search: '',
   status: 'all',
@@ -57,8 +99,12 @@ export default function InviteFilterBar({
 
   return (
     <div className="px-2.5 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900/40">
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_180px_170px_170px_auto] gap-2 sm:gap-3">
-        <div className="relative">
+      {/* Two columns on phones, one row of four from md, the sized single row
+          from lg. The old grid-cols-1 fallback held until xl, so a 1100px
+          laptop got four stacked filter rows inside the dialog and ate the
+          height the invite table needs. */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-[minmax(0,1fr)_170px_160px_160px_auto] gap-2 sm:gap-3">
+        <div className="relative col-span-2 md:col-span-4 lg:col-span-1">
           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
@@ -85,7 +131,7 @@ export default function InviteFilterBar({
         <select
           value={filters.status}
           onChange={(e) => onChange({ ...filters, status: e.target.value })}
-          className="h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+          className="col-span-2 md:col-span-1 min-w-0 h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
         >
           {statusOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -98,7 +144,7 @@ export default function InviteFilterBar({
           type="date"
           value={filters.dateFrom}
           onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
-          className="h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+          className="min-w-0 h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
           aria-label="Invite date from"
         />
 
@@ -107,7 +153,7 @@ export default function InviteFilterBar({
           value={filters.dateTo}
           min={filters.dateFrom || undefined}
           onChange={(e) => onChange({ ...filters, dateTo: e.target.value })}
-          className="h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+          className="min-w-0 h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
           aria-label="Invite date to"
         />
 
@@ -115,7 +161,7 @@ export default function InviteFilterBar({
           type="button"
           onClick={handleClear}
           disabled={!hasActiveFilters}
-          className="h-10 px-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="col-span-2 md:col-span-1 h-10 px-4 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
         >
           Clear Filters
         </button>

@@ -15,7 +15,16 @@ const nextConfig: NextConfig = {
     'three', '@react-three/fiber', '@react-three/drei',
   ],
   reactStrictMode: false,
-  turbopack: {},
+  turbopack: {
+    /* Pin the workspace root. A stray package-lock.json sits in the user's HOME
+       directory, so Next inferred HOME as the workspace root and watched that
+       tree rather than this one. The practical symptom: edits to
+       app/globals.css stopped invalidating Turbopack's cache, and the dev
+       server kept serving a stale compile of it even across full restarts.
+       process.cwd() is the project directory because `next dev` is launched
+       from this package's own script. */
+    root: process.cwd(),
+  },
 
   experimental: {
     // Optimize barrel file imports — avoids bundling entire libraries when only a few exports are used.
