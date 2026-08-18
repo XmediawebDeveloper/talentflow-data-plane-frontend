@@ -1,11 +1,11 @@
 'use client';
 
-import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, FolderOpen, HardDrive, ChevronLeft, ChevronRight, Check, Ban, Loader2, ShieldX, Info } from 'lucide-react';
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, FolderOpen, HardDrive, ChevronLeft, ChevronRight, Check, Ban, ShieldX, Info } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 import { resumeService } from '@/lib/services';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import { renderAsync } from 'docx-preview';
+import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 
 // Maximum number of versions allowed per resume
 const MAX_VERSIONS_PER_RESUME = 5;
@@ -34,9 +34,14 @@ interface DuplicateResumeModalProps {
   duplicates: DuplicateFile[];
   onClose: () => void;
   onResolve: (resolutions: { fileIndex: number; action: 'discard' | 'overwrite' | 'version' }[]) => void;
+  /** Where the refused upload was actually headed — the folder the user picked,
+   *  as a display path ("My Resumes / Engineering / 2026"). Without it the
+   *  "New Resume (Uploading)" card can only fall back to the existing resume's
+   *  location, which is a different folder whenever the two disagree. */
+  targetFolderPath?: string;
 }
 
-export default function DuplicateResumeModal({ duplicates, onClose, onResolve }: DuplicateResumeModalProps) {
+export default function DuplicateResumeModal({ duplicates, onClose, onResolve, targetFolderPath }: DuplicateResumeModalProps) {
   // Separate exact duplicates from versions (content changes)
   const { exactDuplicates, versionsWithChanges } = useMemo(() => {
     const exact: { file: DuplicateFile; originalIndex: number }[] = [];
@@ -59,11 +64,14 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
   const [currentVersionIndex, setCurrentVersionIndex] = useState(0);
   const [resolutions, setResolutions] = useState<Map<number, 'discard' | 'overwrite' | 'version'>>(new Map());
   const [selectedAction, setSelectedAction] = useState<'discard' | 'overwrite' | 'version' | null>(null);
-  const [previewLoading, setPreviewLoading] = useState<'existing' | 'new' | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewTitle, setPreviewTitle] = useState<string>('');
-  const [previewDocxBlob, setPreviewDocxBlob] = useState<Blob | null>(null);
-  const docxContainerRef = useRef<HTMLDivElement>(null);
+  /* What the preview popup is currently showing. A stored resume is addressed
+     by id and the popup fetches its extracted text; a file that was refused has
+     no record yet, so its own bytes go across instead. */
+  const [preview, setPreview] = useState<
+    | { kind: 'existing'; resumeId: string; title: string; subtitle?: string }
+    | { kind: 'new'; file: File; title: string; subtitle?: string; url?: string }
+    | null
+  >(null);
 
   /* Who uploaded the resume already on file. The duplicate response doesn't
      carry it, so it is read from the resume record once the dialog opens. */
@@ -95,121 +103,76 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
      file's own lastModified is when it was saved, not when it was sent. */
   const [uploadAttemptedAt] = useState(() => formatIST(new Date().toISOString()));
 
-  // Helper: check if a blob is actually a PDF by reading magic bytes
-  const isPdfBlob = async (blob: Blob): Promise<boolean> => {
-    try {
-      const header = await blob.slice(0, 5).text();
-      return header.startsWith('%PDF');
-    } catch {
-      return false;
-    }
+  /* Opens the same reader the rest of the app uses — the stored resume is
+     addressed by id and the popup pulls its extracted text, so it reads as a
+     document rather than as a printed page in a frame. */
+  const handlePreviewExisting = (resumeId: string, candidateName: string, fileName?: string) => {
+    setPreview({ kind: 'existing', resumeId, title: candidateName || 'Existing Resume', subtitle: fileName });
   };
 
-  // Render DOCX blob into container using docx-preview
-  const renderDocx = useCallback(async (blob: Blob) => {
-    if (docxContainerRef.current) {
-      docxContainerRef.current.innerHTML = '';
-      try {
-        await renderAsync(blob, docxContainerRef.current, undefined, {
-          className: 'docx-preview-wrapper',
-          inWrapper: true,
-          ignoreWidth: false,
-          ignoreHeight: false,
-          ignoreFonts: false,
-          breakPages: true,
-          renderHeaders: true,
-          renderFooters: true,
-          renderFootnotes: true,
-        });
-      } catch (err) {
-        console.error('DOCX render error:', err);
-        docxContainerRef.current.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;">Failed to render document</div>';
-      }
-    }
-  }, []);
-
-  // When docxBlob is set, render it
-  useEffect(() => {
-    if (previewDocxBlob && docxContainerRef.current) {
-      renderDocx(previewDocxBlob);
-    }
-  }, [previewDocxBlob, renderDocx]);
-
-  const handlePreviewExisting = async (resumeId: string) => {
-    setPreviewLoading('existing');
-    try {
-      const blob = await resumeService.preview(resumeId);
-      const isPdf = await isPdfBlob(blob);
-
-      if (isPdf) {
-        const pdfBlob = new Blob([blob], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(pdfBlob);
-        setPreviewUrl(url);
-        setPreviewDocxBlob(null);
-        setPreviewTitle('Existing Resume');
-      } else {
-        // Backend returned DOCX/DOC - render using docx-preview
-        setPreviewUrl(null);
-        setPreviewDocxBlob(blob);
-        setPreviewTitle('Existing Resume');
-      }
-    } catch {
-      // Fallback: try download endpoint
-      try {
-        const blob = await resumeService.download(resumeId);
-        const isPdf = await isPdfBlob(blob);
-        if (isPdf) {
-          const pdfBlob = new Blob([blob], { type: 'application/pdf' });
-          const url = window.URL.createObjectURL(pdfBlob);
-          setPreviewUrl(url);
-          setPreviewDocxBlob(null);
-          setPreviewTitle('Existing Resume');
-        } else {
-          setPreviewUrl(null);
-          setPreviewDocxBlob(blob);
-          setPreviewTitle('Existing Resume');
-        }
-      } catch {
-        setPreviewUrl(null);
-        setPreviewDocxBlob(null);
-        setPreviewTitle('');
-      }
-    } finally {
-      setPreviewLoading(null);
-    }
-  };
-
-  const handlePreviewNew = async (file: File) => {
-    setPreviewLoading('new');
-    try {
-      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-
-      if (isPdf) {
-        const url = window.URL.createObjectURL(file);
-        setPreviewUrl(url);
-        setPreviewDocxBlob(null);
-        setPreviewTitle('New Resume');
-      } else {
-        // DOCX/DOC - render using docx-preview
-        setPreviewUrl(null);
-        setPreviewDocxBlob(file);
-        setPreviewTitle('New Resume');
-      }
-    } finally {
-      setPreviewLoading(null);
-    }
+  /* The refused file has no record to read text from, so the file itself goes
+     to the popup, which reads its text in the browser and renders the same
+     formatted page a stored resume gets. The object URL is only a fallback,
+     for a scanned PDF that has no text layer to extract. */
+  const handlePreviewNew = (file: File, candidateName: string) => {
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    setPreview({
+      kind: 'new',
+      file,
+      title: candidateName || 'New Resume',
+      subtitle: file.name,
+      url: isPdf ? window.URL.createObjectURL(file) : undefined,
+    });
   };
 
   const closePreview = () => {
-    if (previewUrl) {
-      window.URL.revokeObjectURL(previewUrl);
+    if (preview?.kind === 'new' && preview.url) {
+      window.URL.revokeObjectURL(preview.url);
     }
-    setPreviewUrl(null);
-    setPreviewDocxBlob(null);
-    setPreviewTitle('');
+    setPreview(null);
   };
 
-  const showPreviewModal = previewUrl || previewDocxBlob;
+  /* Held as a value rather than written inline: this component has two separate
+     returns — the blocked exact-duplicate dialog and the version-resolution
+     dialog — and both carry a View Resume button. The overlay used to live
+     inside the second return only, so in the blocked dialog the button set its
+     state and rendered nothing at all. Declared once here, rendered by both. */
+  /* z-[80]: the preview is a SIBLING of this component's own overlay, which
+     sits at z-[60] (higher than the z-50 most dialogs use). The preview's
+     default z-50 therefore lost to it and the resume opened *behind* the
+     Duplicate Resume Detected dialog. 80 clears z-[60] and also the z-[70]
+     BulkVersionResolutionModal that shares the my-resumes page, while staying
+     under the dashboard's blocking overlays (terms z-[95], suspension z-[100]). */
+  const previewOverlay = preview ? (
+    preview.kind === 'existing' ? (
+      <ResumeTextPreviewModal
+        resumeId={preview.resumeId}
+        title={preview.title}
+        subtitle={preview.subtitle}
+        zIndexClassName="z-[80]"
+        onClose={closePreview}
+      />
+    ) : (
+      <ResumeTextPreviewModal
+        title={preview.title}
+        subtitle={preview.subtitle}
+        localFile={preview.file}
+        documentUrl={preview.url}
+        zIndexClassName="z-[80]"
+        onDownload={() => {
+          const url = window.URL.createObjectURL(preview.file);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = preview.file.name;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }}
+        onClose={closePreview}
+      />
+    )
+  ) : null;
 
   // Auto-resolve exact duplicates as 'discard' on mount
   useEffect(() => {
@@ -315,6 +278,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
     };
 
     return (
+      <>
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] p-4 sm:p-6">
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-2rem)] flex flex-col">
           {/* Header */}
@@ -347,7 +311,13 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
           <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-2 space-y-6">
             {exactDuplicates.map(({ file, originalIndex }) => {
               const existing = file.existingResume;
-              const location = existing.folder_path || existing.folder_name || 'root';
+              /* Two different folders, and they were showing the same one. The
+                 left card is where the resume already sits; the right card is
+                 where this upload was aimed, which is only the same place by
+                 coincidence. Falling back to the existing location keeps the
+                 row populated for callers that upload with no folder choice. */
+              const existingLocation = existing.folder_path || existing.folder_name || 'root';
+              const uploadLocation = targetFolderPath || existingLocation;
 
               return (
                 <div key={originalIndex} className="space-y-4">
@@ -360,7 +330,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                       <div className="px-5 py-2 flex-1">
                         <DetailRow label="Candidate" value={existing.candidate_name} />
                         <DetailRow label="Email" value={existing.email} />
-                        <DetailRow label="Location" value={location} />
+                        <DetailRow label="Location" value={existingLocation} />
                         <div className="border-t border-gray-100 my-1" />
                         <DetailRow label="Upload Date" value={existing.upload_date ? formatIST(existing.upload_date) : '-'} />
                         <DetailRow label="Upload By" value={existingUploaders[existing.id] || '-'} />
@@ -371,13 +341,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                         />
                       </div>
                       <button
-                        onClick={() => handlePreviewExisting(existing.id)}
-                        disabled={previewLoading !== null}
-                        className="flex items-center justify-center gap-2 px-5 py-3 bg-gray-50 hover:bg-gray-100 text-brand-blue font-medium text-sm transition-colors disabled:opacity-50"
+                        onClick={() => handlePreviewExisting(existing.id, existing.candidate_name, existing.file_name)}
+                        className="flex items-center justify-center gap-2 px-5 py-3 bg-gray-50 hover:bg-gray-100 text-brand-blue font-medium text-sm transition-colors cursor-pointer"
                       >
-                        {previewLoading === 'existing'
-                          ? <Loader2 className="w-4 h-4 animate-spin" />
-                          : <Eye className="w-4 h-4" />}
+                        <Eye className="w-4 h-4" />
                         View Resume
                       </button>
                     </div>
@@ -392,7 +359,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                             record it matched is what names the candidate. */}
                         <DetailRow label="Candidate" value={existing.candidate_name} />
                         <DetailRow label="Email" value={existing.email} />
-                        <DetailRow label="Location" value={location} />
+                        <DetailRow label="Location" value={uploadLocation} />
                         <div className="border-t border-gray-100 my-1" />
                         <DetailRow label="Upload Date" value={uploadAttemptedAt} />
                         <DetailRow label="Upload By" value={currentUserName} />
@@ -400,13 +367,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                         <DetailRow label="File Name" value={`${file.file.name} (${formatFileSize(file.file.size)})`} />
                       </div>
                       <button
-                        onClick={() => handlePreviewNew(file.file)}
-                        disabled={previewLoading !== null}
-                        className="flex items-center justify-center gap-2 px-5 py-3 bg-brand-blue/5 hover:bg-brand-blue/10 text-brand-blue font-medium text-sm transition-colors disabled:opacity-50"
+                        onClick={() => handlePreviewNew(file.file, existing.candidate_name)}
+                        className="flex items-center justify-center gap-2 px-5 py-3 bg-brand-blue/5 hover:bg-brand-blue/10 text-brand-blue font-medium text-sm transition-colors cursor-pointer"
                       >
-                        {previewLoading === 'new'
-                          ? <Loader2 className="w-4 h-4 animate-spin" />
-                          : <Eye className="w-4 h-4" />}
+                        <Eye className="w-4 h-4" />
                         View Resume
                       </button>
                     </div>
@@ -438,6 +402,8 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
           </div>
         </div>
       </div>
+      {previewOverlay}
+      </>
     );
   }
 
@@ -538,12 +504,15 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                   </div>
                 )}
                 <button
-                  onClick={() => handlePreviewExisting(currentDuplicate.existingResume.id)}
-                  disabled={previewLoading === 'existing'}
-                  className="mt-2 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  onClick={() => handlePreviewExisting(
+                    currentDuplicate.existingResume.id,
+                    currentDuplicate.existingResume.candidate_name,
+                    currentDuplicate.existingResume.file_name,
+                  )}
+                  className="mt-2 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  {previewLoading === 'existing' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                  {previewLoading === 'existing' ? 'Loading...' : 'Preview Existing'}
+                  <Eye className="w-4 h-4" />
+                  Preview Existing
                 </button>
               </div>
             </div>
@@ -573,12 +542,11 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                   <span className="text-gray-900 dark:text-slate-50">{formatFileSize(currentDuplicate.file.size)}</span>
                 </div>
                 <button
-                  onClick={() => handlePreviewNew(currentDuplicate.file)}
-                  disabled={previewLoading === 'new'}
-                  className="mt-2 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  onClick={() => handlePreviewNew(currentDuplicate.file, currentDuplicate.existingResume.candidate_name)}
+                  className="mt-2 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  {previewLoading === 'new' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                  {previewLoading === 'new' ? 'Loading...' : 'Preview New'}
+                  <Eye className="w-4 h-4" />
+                  Preview New
                 </button>
               </div>
             </div>
@@ -810,32 +778,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
     </div>
 
     {/* Inline Preview Modal */}
-    {showPreviewModal && (
-      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[110]" onClick={closePreview}>
-        <div className="bg-white rounded-xl w-[90vw] h-[85vh] max-w-[95vw] sm:max-w-4xl flex flex-col" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-            <div className="flex items-center gap-2">
-              <Eye className="w-5 h-5 text-blue-600" />
-              <h3 className="font-semibold text-gray-900 dark:text-slate-50">{previewTitle}</h3>
-            </div>
-            <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
-              <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-            </button>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            {previewUrl ? (
-              <iframe
-                src={previewUrl}
-                className="w-full h-full border-0"
-                title={previewTitle}
-              />
-            ) : (
-              <div ref={docxContainerRef} className="w-full h-full overflow-auto bg-white dark:bg-slate-900 p-4" />
-            )}
-          </div>
-        </div>
-      </div>
-    )}
+    {previewOverlay}
     </>
   );
 }

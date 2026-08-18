@@ -9164,11 +9164,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       || isAiSpeaking
                       || questionTimerSeconds === null
                       || nextSkipInFlight
+                      || isMediaPaused
                     }
                     onClick={() => {
                       if (questionTimerExpired) return;
                       // Disable on last question — candidate must answer Q15/15, not skip it
                       if (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) return;
+                      // Camera/mic disconnected (headset pulled, etc.) — the interview
+                      // is paused and nothing can advance it until the device is back.
+                      if (isMediaPausedRef.current) return;
                       // Re-entry guard: if another skip is still in flight (no new
                       // question_timer_started has arrived yet), ignore the click
                       // completely. This mirrors the disabled prop but covers the
@@ -9316,7 +9320,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       questionTimerExpiredRef.current = false;
                     }}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 ${
-                      questionTimerExpired || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions)
+                      questionTimerExpired || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) || isMediaPaused
                         ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400'
                         : 'bg-white hover:bg-violet-50 border-violet-200 text-violet-700 hover:border-violet-400'
                     }`}
@@ -9476,18 +9480,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           computed straight from proctoringState so they always reflect
           what's CURRENTLY down, independent of what originally armed the
           pause. Auto-resumes the moment every affected device is back (no
-          button — nothing here for the candidate to click, since
-          InterviewProctoringMonitor's health-check clears isCameraActive/
-          isMicrophoneActive on its own). If the countdown reaches zero while
-          still disconnected, the parent portal terminates the interview. */}
+          button to click — InterviewProctoringMonitor's health-check clears
+          isCameraActive/isMicrophoneActive on its own the instant the device
+          is live again). If the countdown reaches zero while still
+          disconnected, the parent portal terminates the interview.
+          When the MICROPHONE (headset) is down, the candidate cannot answer
+          anyway, so this hard-blocks the page — a real backdrop plus
+          pointer-events-auto on the wrapper — so Next/Skip and everything
+          else behind it is unreachable until the headset is reconnected.
+          When only the camera is down and the mic is still fine, the overlay
+          stays the original non-blocking heads-up (transparent,
+          pointer-events-none on the wrapper) so the candidate can keep
+          answering by voice while the camera recovers. */}
       {isMediaPaused && isConnected && !isClosing && (
-        // Transparent, no blur — camera and mic issues are independent of
-        // each other, so whichever one is still healthy must stay exactly as
-        // clear as normal behind this card. pointer-events-none on the
-        // wrapper (nothing to click here anyway) keeps the underlying page
-        // fully interactive; the card re-enables events for itself since it
-        // needs to be readable/selectable.
-        <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
+        <div className={`fixed inset-0 z-[200] flex items-center justify-center ${
+          proctoringState.isMicrophoneActive
+            ? 'pointer-events-none'
+            : 'pointer-events-auto bg-black/70 backdrop-blur-sm'
+        }`}>
           <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/30 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5 pointer-events-auto">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/15 border border-red-400/30">
               {!proctoringState.isCameraActive

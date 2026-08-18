@@ -8,6 +8,7 @@ import { ScoringProgressProvider } from "@/contexts/ScoringProgressContext";
 import { Toaster } from "sonner";
 import SubscriptionInactiveModal from "@/components/SubscriptionInactiveModal";
 import SessionExpiredModal from "@/components/SessionExpiredModal";
+import AccessRestrictedModal from "@/components/AccessRestrictedModal";
 import GlobalScoringProgressIndicator from "@/components/GlobalScoringProgressIndicator";
 import { GlobalDialogProvider } from "@/components/providers/GlobalDialogProvider";
 import TableScrollbars from "@/components/TableScrollbars";
@@ -152,6 +153,10 @@ export default function RootLayout({
                   {/* Global session-expired modal - shown on 401 from any API call.
                       Mounted at the root so it persists across loading-state transitions. */}
                   <SessionExpiredModal />
+                  {/* Global access-restricted modal - shown when a logged-in user is
+                      deactivated by an admin (reactive: rejected API request;
+                      proactive: /auth/me reports is_active=false). Blocks the app. */}
+                  <AccessRestrictedModal />
                   {/* Global scoring progress indicator - floating bottom-right widget */}
                   <GlobalScoringProgressIndicator />
                   {/* Draws every data table's vertical scrollbar below its sticky

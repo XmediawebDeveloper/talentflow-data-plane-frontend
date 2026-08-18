@@ -144,7 +144,7 @@ export function skillTokenSequence(skill: string, expandAliases = true): string[
   const hasFramingNoun = ((skill || '').toLowerCase().match(/[a-z]+/g) || [])
     .some(w => SKILL_FRAMING_NOUNS.has(w));
   const norm = skill.toLowerCase().replace(/[._/\-]/g, ' ');
-  const raw = norm.match(/[a-z0-9#+]+/g) || [];
+  const raw: string[] = norm.match(/[a-z0-9#+]+/g) || [];
   const pieces: string[] = [];
   raw.forEach((t, idx) => {
     let tok = t;
@@ -259,7 +259,7 @@ export function skillInitialismMatch(a: string, b: string): { hit: boolean; exac
     // software-style JD phrasing and fails in healthcare/finance/manufacturing.
     const candidates = new Set<string>();
     if (lt.length >= 2) candidates.add(lt.map(w => w[0]).join(''));
-    const rawWords = (long || '').toLowerCase().replace(/[._/\-]/g, ' ')
+    const rawWords: string[] = (long || '').toLowerCase().replace(/[._/\-]/g, ' ')
       .match(/[a-z0-9#+]+/g) || [];
     const allWords = rawWords.flatMap(w => (COMPOUND_SPLITS[w] || w).split(' '));
     if (allWords.length >= 2) candidates.add(allWords.map(w => w[0]).join(''));

@@ -326,6 +326,89 @@ const dispatchPaymentPendingEvent = (detail: PaymentPendingDetail) => {
   }
 };
 
+// Custom event for a user account deactivated/restricted WHILE logged in.
+// Fired when a protected request is rejected because the account is now inactive,
+// or when a background /auth/me refresh reports is_active=false. The global
+// AccessRestrictedModal listens for this and blocks the app until sign-out.
+export const ACCESS_RESTRICTED_EVENT = 'access-restricted';
+
+export interface AccessRestrictedDetail {
+  name?: string;
+  email?: string;
+  message?: string;
+}
+
+export const dispatchAccessRestrictedEvent = (detail: AccessRestrictedDetail = {}) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(ACCESS_RESTRICTED_EVENT, { detail }));
+  }
+};
+
+// Backend signals for an inactive USER ACCOUNT — distinct from (a) a normal
+// expired/invalid session, (b) a generic permission-denied 403, and (c) a
+// tenant subscription/plan suspension. Enforcement lives in the data-plane API
+// at app/services/auth.py (login) + the protected-route dependency; a
+// deactivated user is set is_active=false via app/routers/users.py.
+//
+// The exact backend error_code is owned by that service (not in this repo), so
+// we match a generous set of known codes AND an account-scoped phrase. The
+// phrase tokens mirror the ones the QA smoke suite already treats as proof of a
+// deactivated account (see e2e/smoke-tier3-signin.spec.ts:
+//   /deactivat|suspend|disabled|not active|contact your/i) but are anchored to
+// account/user/access wording so they can't match "subscription is inactive"
+// or "Permission denied: jd:create".
+const ACCOUNT_INACTIVE_ERROR_CODES = [
+  'USER_INACTIVE', 'ACCOUNT_INACTIVE', 'INACTIVE_USER', 'INACTIVE_ACCOUNT',
+  'USER_DEACTIVATED', 'ACCOUNT_DEACTIVATED', 'USER_DISABLED', 'ACCOUNT_DISABLED',
+  'ACCESS_RESTRICTED', 'ACCOUNT_RESTRICTED', 'USER_RESTRICTED',
+];
+
+// Codes that must NEVER be treated as an account restriction — they own their
+// own handling/modals further down this interceptor.
+const NON_ACCOUNT_ERROR_CODES = ['SUBSCRIPTION_INACTIVE', 'PAYMENT_PENDING', 'QUOTA_EXCEEDED'];
+
+// Account-scoped phrases. Each requires account/user/access context so a bare
+// "inactive" (subscription) or "disabled" (feature) can't false-match.
+const ACCOUNT_INACTIVE_KEYWORDS = [
+  'account is inactive', 'account is deactivated', 'account is disabled', 'account is restricted',
+  'account is not active', 'account is no longer active',
+  'account has been deactivated', 'account has been restricted', 'account has been disabled',
+  'account has been suspended', 'account deactivated', 'account restricted', 'account disabled',
+  'user is inactive', 'user is deactivated', 'user is disabled', 'user is not active',
+  'user account is inactive', 'user account is deactivated', 'user has been deactivated',
+  'inactive user', 'deactivated user', 'access has been restricted', 'access is restricted',
+];
+
+// Returns true only when a 401/403 error body specifically indicates the
+// logged-in user's OWN account was deactivated/restricted.
+export const isAccountRestrictedResponse = (error: AxiosError): boolean => {
+  const status = error.response?.status;
+  if (status !== 401 && status !== 403) return false;
+
+  const data: any = error.response?.data;
+  const d: any = data?.detail;
+
+  // error_code / error_type can appear under detail (FastAPI convention) or at
+  // the top level depending on the endpoint — check both.
+  const code = String(
+    (d && typeof d === 'object' && (d.error_code || d.code)) || data?.error_code || data?.code || ''
+  ).toUpperCase();
+  const type = String(
+    (d && typeof d === 'object' && d.error_type) || data?.error_type || ''
+  ).toUpperCase();
+
+  // Explicitly yield to subscription/plan/payment flows regardless of message text.
+  if (NON_ACCOUNT_ERROR_CODES.includes(code) || type === 'SUSPENDED') return false;
+
+  if (code && ACCOUNT_INACTIVE_ERROR_CODES.includes(code)) return true;
+
+  const rawMsg =
+    (typeof d === 'string' ? d : (d?.message || d?.error)) ||
+    data?.message || data?.error || '';
+  const msg = String(rawMsg).toLowerCase();
+  return ACCOUNT_INACTIVE_KEYWORDS.some((k) => msg.includes(k));
+};
+
 // Custom event for units consumed - triggers header quota refresh
 export const UNITS_CONSUMED_EVENT = 'unitsConsumed';
 
@@ -472,6 +555,23 @@ api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    // Account deactivated/restricted WHILE logged in — a protected request now
+    // rejects this user's session (401/403 with an account-inactive signal).
+    // Show the global Access Restricted modal and stop here so we don't attempt a
+    // token refresh (the account is gone, not the token). The /login endpoint
+    // handles its own restriction UI, so skip it here.
+    if (
+      (error.response?.status === 403 || error.response?.status === 401) &&
+      isAccountRestrictedResponse(error)
+    ) {
+      const url = originalRequest?.url || '';
+      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/verify-2fa-login');
+      if (!isAuthEndpoint) {
+        dispatchAccessRestrictedEvent();
+        return Promise.reject(error);
+      }
+    }
 
     // Handle PAYMENT_PENDING error (402 Payment Required)
     if (error.response?.status === 402) {

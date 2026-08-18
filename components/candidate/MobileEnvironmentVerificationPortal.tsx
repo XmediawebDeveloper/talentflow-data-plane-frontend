@@ -22,19 +22,24 @@ type Phase =
   | 'done';
 
 const RECORD_SCREEN_MS = 5000;
-// +300ms padding (not a bare 5000): a nominal 5s+5s recording measures as
-// ~9.98s in the actual WebM container (confirmed via ffprobe on a real
-// upload) — a few tens of ms lost to encoder/container overhead, and the
-// browser's native <video> controls FLOOR the duration for display, so
-// 9.98s renders as "0:09" even though virtually nothing is missing. The
-// pause/resume around the pan-instructions screen (recorder.pause/resume)
-// adds its own small, browser-dependent segment-boundary overhead on top of
-// that. This buffer only pads the LAST phase — it's not read by the backend
-// RGB check (which only ever samples timestamps 0.5s-4.5s, entirely within
-// phase 1) — so total real content is safely >=10.28s, comfortably clearing
-// the 10.0s floor with margin regardless of encoder/pause overhead, and the
-// extra ~0.3s is imperceptible against the "5 seconds" instruction text.
-const RECORD_PAN_MS = 5300;
+// Not padded — the display/color+ID phase must stay exactly the real 5s
+// the backend's per-second RGB check expects (it samples timestamps
+// 0.5s-4.5s of the file).
+//
+// RECORD_PAN_MS below carries a small +50ms buffer instead of the bare
+// 5000 — the ONLY phase touched, per instruction. Real uploads measured via
+// ffprobe on a genuine 5000+5000ms recording came in at ~9.9827s and
+// ~9.9846s (both ~15-18ms short of 10.0s) from ordinary WebM encoder/
+// container overhead — a universal browser-recording artifact, not missing
+// footage, and not something JS timing precision alone can eliminate. A
+// prior version padded this phase by +300ms to fix the native <video>
+// player's floor()'d time display, which was reverted for adding too much
+// real recording time beyond 10s. This smaller +50ms is sized only to
+// comfortably clear that ~15-18ms shortfall with margin, not to visibly
+// extend the recording — total real content is ~10.03-10.05s, effectively
+// indistinguishable from 10s to the candidate, while reliably pushing the
+// file's measured duration past the 10.0s floor threshold.
+const RECORD_PAN_MS = 5050;
 const GET_READY_SECONDS = 3;
 
 interface MobileEnvironmentVerificationPortalProps {
@@ -75,6 +80,22 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     panNextResolveRef.current?.();
     panNextResolveRef.current = null;
   };
+
+  // Landscape enforcement — spec explicitly requires "a 10-second video ...
+  // in Landscape mode" (Step 3); previously this was only stated as text on
+  // the instructions screen with nothing actually checking it. Blocks
+  // permission/recording/upload with a rotate-prompt overlay whenever the
+  // device is in portrait, so a candidate can't proceed holding the phone
+  // the wrong way. Does not touch recording/timer/upload logic — purely a
+  // gate rendered on top.
+  const [isLandscape, setIsLandscape] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: landscape)');
+    const update = () => setIsLandscape(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -320,8 +341,27 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     }
   };
 
+  const orientationGateActive =
+    !isLandscape &&
+    phase !== 'loading' && phase !== 'expired' && phase !== 'error' && phase !== 'done';
+
   return (
     <div className="min-h-screen bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center">
+      {orientationGateActive && (
+        <div className="fixed inset-0 z-50 bg-[#0F1929] flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <span className="text-6xl inline-block animate-[tf-rotate-hint_1.6s_ease-in-out_infinite]">📱</span>
+          <h1 className="text-lg font-semibold">Rotate your phone</h1>
+          <p className="text-sm text-[#94a3b8] max-w-xs">
+            This verification must be recorded in landscape (horizontal) mode. Please turn your phone sideways to continue.
+          </p>
+          <style>{`
+            @keyframes tf-rotate-hint {
+              0%, 100% { transform: rotate(0deg); }
+              50% { transform: rotate(90deg); }
+            }
+          `}</style>
+        </div>
+      )}
       {phase === 'loading' && <p className="text-[#94a3b8]">Loading verification…</p>}
 
       {(phase === 'expired' || phase === 'error') && (
@@ -334,18 +374,33 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       {phase === 'instructions' && (
         <div className="max-w-sm space-y-5">
           <h1 className="text-lg font-semibold">Environment Verification</h1>
-          <div className="text-sm text-[#cbd5e1] leading-relaxed text-left space-y-3 bg-white/5 rounded-xl p-4 border border-white/10">
+          <div className="text-sm text-[#cbd5e1] leading-relaxed text-left space-y-4 bg-white/5 rounded-xl p-4 border border-white/10">
             <p>
-              Please record a <strong className="text-white">10-second video</strong> of your interview
-              setup in <strong className="text-white">landscape mode</strong>. Ensure your laptop screen
-              is visible throughout the recording.
+              You'll record a <strong className="text-white">10-second video</strong> in{' '}
+              <strong className="text-white">landscape mode</strong>, in two steps:
             </p>
-            <p>Slowly move your mobile phone:</p>
-            <ul className="list-disc list-inside space-y-1 text-[#94a3b8]">
-              <li>Left to Right</li>
-              <li>Right to Left</li>
-            </ul>
-            <p>Keep your recording steady until instructed.</p>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue/20 text-brand-blue text-xs font-bold flex items-center justify-center mt-0.5">1</span>
+              <p>
+                <strong className="text-white">First 5 seconds</strong> — focus your camera on your
+                laptop screen/display. It will show a changing color and a unique ID; keep it
+                centered and hold steady.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue/20 text-brand-blue text-xs font-bold flex items-center justify-center mt-0.5">2</span>
+              <div className="flex-1">
+                <p>
+                  <strong className="text-white">Next 5 seconds</strong> — slowly move your phone from
+                  left to right and back again, capturing your workspace, surrounding area, and any
+                  nearby devices.
+                </p>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="text-xl inline-block animate-[tf-instr-pan_2.4s_ease-in-out_infinite]">📱</span>
+                  <span className="text-[11px] text-[#94a3b8]">left ↔ right</span>
+                </div>
+              </div>
+            </div>
           </div>
           <button
             type="button"
@@ -354,6 +409,13 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           >
             Next
           </button>
+          <style>{`
+            @keyframes tf-instr-pan {
+              0%   { transform: translateX(-10px); }
+              50%  { transform: translateX(10px); }
+              100% { transform: translateX(-10px); }
+            }
+          `}</style>
         </div>
       )}
 
@@ -375,7 +437,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           otherwise the stream has nowhere to attach to and the preview
           stays black even though recording is happening. Hidden outside
           the get-ready/recording phases via `hidden` rather than unmounted. */}
-      <div className={`w-full max-w-sm space-y-4 ${(phase === 'get_ready' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+      <div className={`w-full max-w-2xl space-y-4 ${(phase === 'get_ready' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
         <div className="relative">
           <video
             ref={videoRef}
@@ -396,7 +458,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
                 <span className="text-5xl inline-block leading-none">📱</span>
               </div>
               <p className="text-sm font-medium text-white text-center">
-                Now turn your phone slowly — left to right, then right to left
+                Now slowly move your phone from left to right and back again — capture your workspace, surrounding area, and any nearby devices.
               </p>
               <style>{`
                 @keyframes tf-pan-sweep {
@@ -438,8 +500,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             </div>
             <p className="text-sm leading-relaxed">
               {phase === 'recording_screen'
-                ? 'Recording your screen with this frame — point your camera at your laptop screen and keep it steady.'
-                : 'Now slowly turn your mobile from left to right, and right to left.'}
+                ? 'Focus your camera on your laptop screen/display. Keep it centered and hold steady — do not move yet.'
+                : 'Now slowly move your phone from left to right and back again, capturing your workspace, surrounding area, and any nearby devices.'}
             </p>
           </>
         )}

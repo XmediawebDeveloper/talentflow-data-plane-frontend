@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2 } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb } from 'lucide-react';
+import Link from 'next/link';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
 import ResumeTable from '@/components/ResumeTable';
+import NoResumesEmptyState from '@/components/resumes/NoResumesEmptyState';
+import UploadHistoryEmptyState from '@/components/resumes/UploadHistoryEmptyState';
 import SkillsList from '@/components/ui/SkillsList';
 import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import Pagination from '@/components/Pagination';
@@ -936,6 +939,11 @@ export default function MyResumesPage() {
   // Duplicate detection state
   const [duplicateFiles, setDuplicateFiles] = useState<DuplicateFile[]>([]);
   const [pendingUploadFolderId, setPendingUploadFolderId] = useState<string | undefined>();
+  /* Destination of the refused upload, as the upload dialog itself named it.
+     Authoritative — it is the label the user picked. Only when it is missing
+     (an upload started somewhere with no folder picker) does the id below get
+     resolved against the folder tree instead. */
+  const [pendingUploadFolderLabel, setPendingUploadFolderLabel] = useState<string | undefined>();
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
 
   // Upload history modal state
@@ -3626,6 +3634,48 @@ export default function MyResumesPage() {
   const totalResumes = resumes.length;
   const appliedResumes = 0; // Would need job applications data
   const availableResumes = totalResumes - appliedResumes;
+
+  /* How many server-side resume filters are narrowing the list. Skills are
+     excluded because the chip row owns them, and the two range filters count
+     only when a bound was actually set. Hoisted here so the list view and the
+     card view agree on what "the user filtered something" means. */
+  const activeResumeFilterCount = Object.entries(filters).filter(([key, value]) => {
+    if (key === 'skills') return false;
+    if (key === 'experienceRange') return value && ((value as any).min !== undefined || (value as any).max !== undefined);
+    if (key === 'uploadDateRange') return value && ((value as any).start || (value as any).end);
+    return value !== null && value !== undefined && value !== '';
+  }).length;
+
+  /* Which empty state an empty list earns. Nothing narrowing the view means the
+     user genuinely has no resumes here, so they get the illustrated first-run
+     state — and its Add Resume button, which on a page with no rows is the only
+     upload entry point in the body. A query or filter in play makes "no matches"
+     the honest answer, so the table keeps its own copy. */
+  const listControlsActive = !!appliedSearchQuery.trim() || activeResumeFilterCount > 0;
+
+  const renderNoResumesEmptyState = (folderId?: string) => (
+    <NoResumesEmptyState
+      description={
+        canUploadMyResumes
+          ? 'No resumes are available in this folder yet. Add a resume to get started.'
+          : 'No resumes are available in this folder yet.'
+      }
+      onAction={canUploadMyResumes ? () => openUploadToFolder(folderId) : undefined}
+    />
+  );
+
+  /* Display path of the folder the refused upload was aimed at, for the
+     "New Resume (Uploading)" card in the duplicate dialog. `pendingUploadFolderId`
+     is the id the upload actually used, which `handleUploadResumes` has already
+     resolved to the root folder when the user picked "All Resumes" or nothing —
+     so an empty breadcrumb means root, not "unknown". The "My Resumes /" prefix
+     matches the shape the backend returns in `folder_path` for the other card. */
+  const pendingUploadFolderPath = useMemo(() => {
+    if (pendingUploadFolderLabel) return `My Resumes / ${pendingUploadFolderLabel}`;
+    const segments = buildBreadcrumbPath(pendingUploadFolderId ?? null).map(f => f.name);
+    return ['My Resumes', ...(segments.length > 0 ? segments : ['root'])].join(' / ');
+  }, [pendingUploadFolderLabel, pendingUploadFolderId, buildBreadcrumbPath]);
+
   const selectedCardFolderFilterLabel = CARD_FOLDER_FILTER_OPTIONS.find(option => option.value === cardFolderFilter)?.label;
   const gridToolbarFilterChips =
     cardFolderFilter !== 'all' && selectedCardFolderFilterLabel
@@ -3677,6 +3727,7 @@ export default function MyResumesPage() {
     } finally {
       setDuplicateFiles([]);
       setPendingUploadFolderId(undefined);
+      setPendingUploadFolderLabel(undefined);
       setIsDuplicateModalOpen(false);
     }
   };
@@ -3842,6 +3893,7 @@ export default function MyResumesPage() {
                   onSortChange={(newSort: string) => { setSortBy(newSort); setCurrentPage(1); }}
                   hideSearch
                   inline
+                  showClearAllFilters={false}
                 />
 
                 {/* No "View" label: the two icons carry their own tooltips and
@@ -3891,14 +3943,6 @@ export default function MyResumesPage() {
                     </button>
                   </span>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => setCardFolderFilter('all')}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-red-600 transition-colors hover:bg-red-50"
-                >
-                  <X className="h-3 w-3" />
-                  Clear grid filters
-                </button>
               </div>
             )}
           </div>
@@ -4018,6 +4062,12 @@ export default function MyResumesPage() {
                      one folder it actually lives in. Inside a folder the column
                      would repeat that folder on every row, so it is dropped. */
                   getFolderName={selectedFolder === 'all' ? getResumeFolderName : undefined}
+                  showEmptyAction={false}
+                  emptyState={
+                    listControlsActive
+                      ? undefined
+                      : renderNoResumesEmptyState(selectedFolder === 'all' ? undefined : selectedFolder)
+                  }
                 />
               </div>
               {totalPages > 0 && (
@@ -4108,16 +4158,15 @@ export default function MyResumesPage() {
               const visibleMyFolders = myFolders.filter(folderMatchesGridControls);
               const visibleFoldersToDisplay = foldersToDisplay.filter(folderMatchesGridControls);
               const hasCurrentSubfolders = foldersToDisplay.length > 0;
-
-              const activeServerResumeFilterCount = Object.entries(filters).filter(([key, value]) => {
-                if (key === 'skills') return false;
-                if (key === 'experienceRange') return value && ((value as any).min !== undefined || (value as any).max !== undefined);
-                if (key === 'uploadDateRange') return value && ((value as any).start || (value as any).end);
-                return value !== null && value !== undefined && value !== '';
-              }).length;
+              const hasVisibleRootFolders = showAllResumesCard || visibleSystemFolders.length > 0 || visibleMyFolders.length > 0;
+              const showRootFolderNoMatches =
+                cardViewFolder === null &&
+                foldersToDisplay.length > 0 &&
+                folderControlsActive &&
+                !hasVisibleRootFolders;
 
               const visibleFolderResumes = folderResumes;
-              const resumeControlsActive = !!searchQuery.trim() || activeServerResumeFilterCount > 0;
+              const resumeControlsActive = !!searchQuery.trim() || activeResumeFilterCount > 0;
               /* `stretch` is for the fixtures row only, where the three cards
                  must match height. The user's own folder grids must NOT use it:
                  those cells grow when a card expands its subfolder list or
@@ -4316,7 +4365,16 @@ export default function MyResumesPage() {
                   {(cardViewFolder !== 'all' || foldersToDisplay.length > 0) && (
                     <div className="mb-4 sm:mb-6">
                       {cardViewFolder === null ? (
-                        <>
+                        showRootFolderNoMatches ? (
+                          <div className="text-center py-12 bg-white border-2 border-dashed border-brand-blue/20 rounded-xl">
+                            <div className="w-16 h-16 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
+                              <Folder className="w-8 h-8 text-brand-blue" />
+                            </div>
+                            <h3 className="text-lg font-medium text-gray-900 mb-2 tracking-tight">No folders match</h3>
+                            <p className="text-gray-500">No folders match the current search or filter.</p>
+                          </div>
+                        ) : (
+                          <>
                           {(showAllResumesCard || visibleSystemFolders.length > 0) && (
                             <>
                               {/* Same treatment as the list view's folder panel:
@@ -4397,7 +4455,8 @@ export default function MyResumesPage() {
                             // page-level empty state below covers that case.
                             <p className="text-xs sm:text-sm text-gray-500">No folders yet. Create one to organize your resumes.</p>
                           ) : null}
-                        </>
+                          </>
+                        )
                       ) : (
                         <>
                           {hasCurrentSubfolders && (
@@ -4503,6 +4562,7 @@ export default function MyResumesPage() {
                             /* All Resumes aggregates every folder, so each row
                                names the one it lives in. */
                             getFolderName={cardViewFolder === 'all' ? getResumeFolderName : undefined}
+                            showEmptyAction={false}
                           />
                           </div>
                         </div>
@@ -4516,14 +4576,13 @@ export default function MyResumesPage() {
                         </div>
                       )}
 
-                      {/* Empty state when no resumes and no subfolders */}
+                      {/* Empty state when no resumes and no subfolders. Same
+                          illustrated state the list view shows, so the two views
+                          of an empty folder read identically — and its button
+                          uploads straight into the folder being viewed. */}
                       {!loading && visibleFolderResumes.length === 0 && visibleFoldersToDisplay.length === 0 && !resumeControlsActive && !folderControlsActive && (
-                        <div className="text-center py-12 bg-white border-2 border-dashed border-brand-blue/20 rounded-xl">
-                          <div className="w-16 h-16 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                            <FileText className="w-8 h-8 text-brand-blue" />
-                          </div>
-                          <h3 className="text-lg font-medium text-gray-900 mb-2 tracking-tight">No resumes in this folder</h3>
-                          <p className="text-gray-500">Upload resumes to this folder to get started</p>
+                        <div className="bg-white border-2 border-dashed border-brand-blue/20 rounded-xl">
+                          {renderNoResumesEmptyState(cardViewFolder === 'all' ? undefined : cardViewFolder ?? undefined)}
                         </div>
                       )}
 
@@ -4596,6 +4655,7 @@ export default function MyResumesPage() {
               isDuplicate: duplicateData.isDuplicate,
             }]);
             setPendingUploadFolderId(duplicateData.targetFolderId);
+            setPendingUploadFolderLabel(duplicateData.targetFolderPath);
             setIsUploadModalOpen(false);
             setIsDuplicateModalOpen(true);
           }}
@@ -4623,8 +4683,10 @@ export default function MyResumesPage() {
             setIsDuplicateModalOpen(false);
             setDuplicateFiles([]);
             setPendingUploadFolderId(undefined);
+            setPendingUploadFolderLabel(undefined);
           }}
           onResolve={handleResolveDuplicates}
+          targetFolderPath={pendingUploadFolderPath}
         />
       )}
 
@@ -4905,6 +4967,12 @@ export default function MyResumesPage() {
                   const attemptedFiles = Math.max(0, totalFiles - cancelledTotal);
                   const successRate = attemptedFiles > 0 ? Math.round((completedCount / attemptedFiles) * 100) : 0;
 
+                  /* A tab holding no batches at all gets one illustrated empty
+                     state and nothing else. Previously it stacked three blocks
+                     that each said the same thing — the all-zero stats card, the
+                     "0 batches" list header, and the list's own placeholder. */
+                  const showFullEmptyState = displayRecords.length === 0;
+
                   return (
                     <>
                       {/* Tabs */}
@@ -4951,8 +5019,10 @@ export default function MyResumesPage() {
                           the tab's records. Brand palette throughout, except the
                           neutral Cancelled card. When
                           every number is zero the grid is replaced by a single
-                          "nothing here" card, so a wall of zeros never shows. */}
-                      {(() => {
+                          "nothing here" card, so a wall of zeros never shows.
+                          Skipped entirely when the tab has no batches — the
+                          illustrated empty state below speaks for it. */}
+                      {!showFullEmptyState && (() => {
                         const statCards = [
                           { key: 'completed', label: 'Completed', value: completedCount, icon: CheckCircle, tone: 'brand-blue' },
                           { key: 'duplicated', label: 'Duplicates', value: duplicatedCount, icon: Copy, tone: 'brand-orange' },
@@ -5158,37 +5228,58 @@ export default function MyResumesPage() {
                       })()}
 
                       {/* Upload History List */}
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-semibold text-gray-900">
-                          {uploadHistoryTab === 'current' ? 'Active Uploads' : 'Recent Uploads'}
-                        </h3>
-                        <span className="text-xs text-gray-500">{displayRecords.length} batch{displayRecords.length !== 1 ? 'es' : ''}</span>
-                      </div>
-
-                      {displayRecords.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center text-center py-8 sm:py-12">
-                          <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mb-3 sm:mb-4 ring-1 ${
-                            uploadHistoryTab === 'current' ? 'bg-brand-cyan/10 ring-brand-cyan/20' : 'bg-brand-blue/10 ring-brand-blue/15'
-                          }`}>
-                            {uploadHistoryTab === 'current' ? (
-                              <CheckCircle className="w-7 h-7 sm:w-10 sm:h-10 text-brand-cyan" />
-                            ) : (
-                              <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-brand-blue" />
-                            )}
-                          </div>
-                          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-1.5 sm:mb-2">
-                            {uploadHistoryTab === 'current'
-                              ? 'No uploads in progress'
-                              : myResumesHistory.length === 0 ? 'No upload history' : 'Nothing here yet'}
+                      {!showFullEmptyState && (
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-sm font-semibold text-gray-900">
+                            {uploadHistoryTab === 'current' ? 'Active Uploads' : 'Recent Uploads'}
                           </h3>
-                          <p className="text-xs sm:text-sm text-gray-500 max-w-sm px-4">
-                            {uploadHistoryTab === 'current'
-                              ? 'All your uploads are processed. Start a new bulk upload to see live progress here.'
-                              : myResumesHistory.length === 0
-                                ? 'Bulk upload reports will appear here. Upload multiple resumes to see detailed status reports.'
-                                : 'Active uploads will appear in the Currently Processing tab until they finish.'}
-                          </p>
+                          <span className="text-xs text-gray-500">{displayRecords.length} batch{displayRecords.length !== 1 ? 'es' : ''}</span>
                         </div>
+                      )}
+
+                      {showFullEmptyState ? (
+                        <>
+                          <UploadHistoryEmptyState
+                            title={
+                              uploadHistoryTab === 'current'
+                                ? 'No uploads in progress'
+                                : myResumesHistory.length === 0 ? 'No upload history yet' : 'Nothing here yet'
+                            }
+                            lines={
+                              uploadHistoryTab === 'current'
+                                ? ['All your uploads are processed.', 'Start a new bulk upload to see live progress here.']
+                                : myResumesHistory.length === 0
+                                  ? ['Bulk upload reports will appear here.', 'Upload multiple resumes to see detailed status reports.']
+                                  : ['Your uploads are still running.', 'Their reports will appear here once they finish.']
+                            }
+                            /* Straight from history into the upload dialog — the
+                               modal has to close first or the two would stack. */
+                            onAction={
+                              canUploadMyResumes
+                                ? () => {
+                                    handleCloseUploadHistory();
+                                    openUploadToFolder(undefined);
+                                  }
+                                : undefined
+                            }
+                          />
+
+                          <div className="mt-4 flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5 sm:px-4 sm:py-3">
+                            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                              <Lightbulb className="h-4 w-4 text-brand-blue" />
+                            </span>
+                            <span className="min-w-0 text-xs text-gray-700 sm:text-sm">
+                              Tip: You can upload a single resume or bulk upload multiple resumes at once.
+                            </span>
+                            <Link
+                              href="/help"
+                              onClick={handleCloseUploadHistory}
+                              className="ml-auto flex-shrink-0 text-xs font-medium text-brand-blue transition-colors hover:text-brand-blue-2 hover:underline sm:text-sm"
+                            >
+                              Learn more
+                            </Link>
+                          </div>
+                        </>
                       ) : (
                         <div className="space-y-4">
                           {displayRecords
@@ -5735,11 +5826,13 @@ export default function MyResumesPage() {
                 </div>
               )}
 
-              {/* Footer */}
-              <div className="border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 bg-white rounded-b-2xl">
+              {/* Footer. Close is secondary: dismissing a report is not the
+                  thing to push, and a second full-width blue button would
+                  outshout the Upload Resumes CTA in the empty state. */}
+              <div className="border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 bg-white rounded-b-2xl flex justify-center">
                 <button
                   onClick={handleCloseUploadHistory}
-                  className="w-full px-4 py-2 sm:py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm sm:text-base"
+                  className="w-full sm:w-auto sm:min-w-[240px] px-4 py-2 sm:py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg transition-all font-medium text-sm sm:text-base cursor-pointer"
                 >
                   Close
                 </button>

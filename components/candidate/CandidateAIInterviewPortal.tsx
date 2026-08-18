@@ -799,6 +799,20 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     }
   }, [step]);
 
+  // Start the SCREEN recorder exactly when the interview begins — the same moment
+  // the webcam recorder (InterviewUI.handleVideoReady) starts — so both recordings
+  // span the same time and their durations match (fixes the "candidate view 8-12s
+  // shorter" gap). It was armed (created but not started) at screen-share grant.
+  // Only starts an INACTIVE recorder → the mid-interview re-share recorder, which
+  // starts itself immediately, is never double-started here.
+  useEffect(() => {
+    if (step !== 'interview') return;
+    const sr = screenRecorderRef.current;
+    if (sr && sr.state === 'inactive') {
+      try { sr.start(5000); } catch { /* already started / not startable */ }
+    }
+  }, [step]);
+
   // Stop screen recording and upload (fire-and-forget)
   // Must be declared here (before any early returns) to satisfy Rules of Hooks
   const stopAndUploadScreenRecording = useCallback(() => {
@@ -1565,7 +1579,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       screenChunksRef.current = [];
       screenSegmentIndexRef.current = 0;
       sr.ondataavailable = (e) => { if (e.data.size > 0) screenChunksRef.current.push(e.data); };
-      sr.start(5000);
+      // Do NOT start recording yet. The webcam recorder (InterviewUI) only starts
+      // once the interview screen mounts, AFTER the pre-interview gates (consent /
+      // hide-share-bar). Starting the screen recorder here (at screen-share grant)
+      // made it ~8-12s LONGER than the candidate view. We arm it below and START
+      // it when step === 'interview' (see the effect), so both recorders cover
+      // the SAME span → their durations match. Checkpoints/ended-handlers below
+      // all no-op until state === 'recording'.
       screenRecorderRef.current = sr;
 
       // ── Periodic checkpoint upload (every 30s) ──────────────────────────

@@ -1,19 +1,37 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Eye, Download, FileText, Loader2 } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
+import { extractLocalResumeText } from '@/lib/utils/localResumeText';
 import { toast } from 'sonner';
 
 interface ResumeTextPreviewModalProps {
-  /** Resume (or version) id — a version is a resume record in its own right. */
-  resumeId: string;
+  /** Resume (or version) id — a version is a resume record in its own right.
+   *  Optional: a file that isn't saved yet has no id, and passes its own
+   *  content through `localFile` instead. */
+  resumeId?: string;
   /** Heading, e.g. "Arvind Nair" or "Version 2". */
   title: string;
   /** Sub-heading, usually the file name. */
   subtitle?: string;
   /** Text already to hand; skips the fetch when provided. */
   text?: string;
+  /** Fallback rendering for a local file whose text cannot be read — a PDF
+   *  object URL. Only reached once extraction of `localFile` has failed. */
+  documentUrl?: string;
+  /** A file with no server record yet (a refused upload). Its text is read in
+   *  the browser so it renders as a formatted page, exactly like a stored
+   *  resume's `extracted_text`. */
+  localFile?: Blob;
+  /** Replaces the id-based download — a local file downloads from memory. */
+  onDownload?: () => void;
+  /** Stacking level for the overlay. Defaults to `z-50`, which sits above the
+   *  page and ties with the z-50 dialogs this preview is usually opened from —
+   *  a tie the preview wins because it renders after them. Callers whose own
+   *  overlay sits higher than z-50 (e.g. DuplicateResumeModal at z-[60]) must
+   *  pass a class above theirs, or the preview opens behind them. */
+  zIndexClassName?: string;
   onClose: () => void;
 }
 
@@ -42,14 +60,33 @@ export default function ResumeTextPreviewModal({
   title,
   subtitle,
   text,
+  documentUrl,
+  localFile,
+  onDownload,
+  zIndexClassName = 'z-50',
   onClose,
 }: ResumeTextPreviewModalProps) {
+  /* A stored résumé is previewed from the `extracted_text` the server holds,
+     which is what produces the formatted page — name, section headings,
+     bullets. A file the server has never seen has no such record, so its text
+     is pulled out of the file here in the browser and rendered through the
+     very same branch, giving "New Resume (Uploading)" the identical format to
+     "Existing Resume" beside it.
+
+     `extractFailed` is the escape hatch: an old binary .doc, or a scanned PDF
+     with no text layer, renders as the document itself instead. */
+  const [extractFailed, setExtractFailed] = useState(false);
+  const hasLocalFile = !!localFile;
+  const documentMode = !text && (hasLocalFile ? extractFailed : !!documentUrl);
   const [content, setContent] = useState(text || '');
-  const [loading, setLoading] = useState(!text);
+  const [loading, setLoading] = useState(
+    !text && (hasLocalFile || (!documentUrl && !!resumeId))
+  );
+  const docxContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (text) {
-      setContent(text);
+    if (text || documentMode || !resumeId) {
+      if (text) setContent(text);
       return;
     }
     let cancelled = false;
@@ -68,9 +105,86 @@ export default function ResumeTextPreviewModal({
     return () => {
       cancelled = true;
     };
-  }, [resumeId, text]);
+  }, [resumeId, text, documentMode]);
+
+  /* docx-preview is imported inside this handler, not at the top of the file.
+     It reaches for the DOM as it loads, which is why every other component that
+     renders Word documents pulls it in through `dynamic(..., { ssr: false })`.
+     This modal, by contrast, is a plain static import in a dozen places — so a
+     top-level import here dragged the dependency into all of their server
+     bundles. Loading it on demand keeps it out of the module graph until a Word
+     file is actually opened, in the browser, where it works. */
+  const renderDocx = useCallback(async (blob: Blob) => {
+    if (!docxContainerRef.current) return;
+    docxContainerRef.current.innerHTML = '';
+    try {
+      const { renderAsync } = await import('docx-preview');
+      if (!docxContainerRef.current) return;
+      await renderAsync(blob, docxContainerRef.current, undefined, {
+        className: 'docx-preview-wrapper',
+        // Kept true even though the wrapper's grey mat and page shadow are
+        // then styled away in globals.css: with inWrapper false, docx-preview
+        // switches its style root from `.docx-preview-wrapper-wrapper` to
+        // `:root`, emitting the document's counter-reset and image custom
+        // properties globally. Scoped styles are worth one neutralised div.
+        inWrapper: true,
+        // Without these, every section carries the Word file's print geometry
+        // as inline styles — `width: 8.5in` (wider than this 672px card, so
+        // the text was clipped mid-word behind a horizontal scrollbar) and
+        // `min-height: 11in` (which padded the card far below the last line).
+        // The page's inch-wide margins arrive as inline padding and have no
+        // option to suppress; `.tf-docx-preview` in globals.css handles those.
+        ignoreWidth: true,
+        ignoreHeight: true,
+        // Page breaks split the document into separate section boxes, which
+        // only read as pages when the print geometry above is intact. Without
+        // it they are arbitrary gaps, so the résumé flows continuously —
+        // matching the extracted-text preview it sits beside.
+        breakPages: false,
+      });
+    } catch {
+      if (!docxContainerRef.current) return;
+      docxContainerRef.current.innerHTML =
+        '<p style="color:#6b7280;font-size:14px;text-align:center;padding:24px">Could not render this document. Download it to view the original file.</p>';
+    }
+  }, []);
+
+  /* Read the upload's own text so it can render as a formatted page. Only if
+     that is impossible does the raw document render below take over. */
+  useEffect(() => {
+    if (!localFile || text) return;
+    // No setLoading(true) here — `loading` already initialises to true for a
+    // localFile, and this effect never re-runs for a given preview (the modal
+    // is unmounted and remounted per file), so setting it would only add a
+    // cascading render.
+    let cancelled = false;
+    extractLocalResumeText(localFile)
+      .then(extracted => {
+        if (!cancelled) setContent(extracted);
+      })
+      .catch(() => {
+        if (!cancelled) setExtractFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [localFile, text]);
+
+  /* Only a file that has no PDF fallback URL — an unreadable Word document —
+     goes through docx-preview. A PDF falls back to its own object URL below. */
+  useEffect(() => {
+    if (localFile && extractFailed && !documentUrl) renderDocx(localFile);
+  }, [localFile, extractFailed, documentUrl, renderDocx]);
 
   const handleDownload = async () => {
+    if (onDownload) {
+      onDownload();
+      return;
+    }
+    if (!resumeId) return;
     try {
       toast.loading('Downloading...', { id: 'resume-preview-download' });
       const blob = await resumeService.download(resumeId);
@@ -92,7 +206,7 @@ export default function ResumeTextPreviewModal({
   const firstNonEmpty = lines.findIndex(l => l.trim().length > 0);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 ${zIndexClassName}`}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
@@ -106,13 +220,17 @@ export default function ResumeTextPreviewModal({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={handleDownload}
-              className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
-            >
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Download</span>
-            </button>
+            {/* Nothing to download when there is neither a stored record nor a
+                caller-supplied handler — an inert button would just lie. */}
+            {(resumeId || onDownload) && (
+              <button
+                onClick={handleDownload}
+                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Download</span>
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -125,7 +243,36 @@ export default function ResumeTextPreviewModal({
 
         {/* Document */}
         <div className="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6">
-          {loading ? (
+          {documentMode ? (
+            documentUrl ? (
+              /* Two things made this read as a raw file viewer rather than the
+                 clean page the existing-resume preview shows:
+                 - h-[70vh] iframe inside a min-h-full card left a band of empty
+                   white below the document and gave the preview two competing
+                   scrollbars. An iframe cannot report its content height, so
+                   the card fills the mat exactly and the PDF scrolls inside it.
+                 - the browser's own PDF chrome (grey bar, page thumbnails, zoom
+                   controls), hidden with #toolbar=0&navpanes=0. */
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 max-w-2xl mx-auto h-full overflow-hidden">
+                <iframe
+                  src={`${documentUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                  className="w-full h-full border-0"
+                  title={title}
+                />
+              </div>
+            ) : (
+              /* A Word file renders as real DOM, so it gets the identical page
+                 card the extracted-text branch below uses — same padding, same
+                 max width, body does the scrolling. `tf-docx-preview` strips
+                 the Word page geometry and docx-preview's own grey mat, so the
+                 document reflows into this card instead of overflowing it at
+                 its 8.5in print width. See app/globals.css. */
+              <div
+                ref={docxContainerRef}
+                className="tf-docx-preview bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full"
+              />
+            )
+          ) : loading ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center gap-3">
               <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
               <p className="text-sm text-gray-500">Loading resume...</p>
