@@ -81,6 +81,22 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     panNextResolveRef.current = null;
   };
 
+  // Landscape enforcement — spec explicitly requires "a 10-second video ...
+  // in Landscape mode" (Step 3); previously this was only stated as text on
+  // the instructions screen with nothing actually checking it. Blocks
+  // permission/recording/upload with a rotate-prompt overlay whenever the
+  // device is in portrait, so a candidate can't proceed holding the phone
+  // the wrong way. Does not touch recording/timer/upload logic — purely a
+  // gate rendered on top.
+  const [isLandscape, setIsLandscape] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia('(orientation: landscape)');
+    const update = () => setIsLandscape(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -325,8 +341,27 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     }
   };
 
+  const orientationGateActive =
+    !isLandscape &&
+    phase !== 'loading' && phase !== 'expired' && phase !== 'error' && phase !== 'done';
+
   return (
     <div className="min-h-screen bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center">
+      {orientationGateActive && (
+        <div className="fixed inset-0 z-50 bg-[#0F1929] flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <span className="text-6xl inline-block animate-[tf-rotate-hint_1.6s_ease-in-out_infinite]">📱</span>
+          <h1 className="text-lg font-semibold">Rotate your phone</h1>
+          <p className="text-sm text-[#94a3b8] max-w-xs">
+            This verification must be recorded in landscape (horizontal) mode. Please turn your phone sideways to continue.
+          </p>
+          <style>{`
+            @keyframes tf-rotate-hint {
+              0%, 100% { transform: rotate(0deg); }
+              50% { transform: rotate(90deg); }
+            }
+          `}</style>
+        </div>
+      )}
       {phase === 'loading' && <p className="text-[#94a3b8]">Loading verification…</p>}
 
       {(phase === 'expired' || phase === 'error') && (
