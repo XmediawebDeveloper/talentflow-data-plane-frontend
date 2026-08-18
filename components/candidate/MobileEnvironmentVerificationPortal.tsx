@@ -374,18 +374,33 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       {phase === 'instructions' && (
         <div className="max-w-sm space-y-5">
           <h1 className="text-lg font-semibold">Environment Verification</h1>
-          <div className="text-sm text-[#cbd5e1] leading-relaxed text-left space-y-3 bg-white/5 rounded-xl p-4 border border-white/10">
+          <div className="text-sm text-[#cbd5e1] leading-relaxed text-left space-y-4 bg-white/5 rounded-xl p-4 border border-white/10">
             <p>
-              Please record a <strong className="text-white">10-second video</strong> of your interview
-              setup in <strong className="text-white">landscape mode</strong>. Ensure your laptop screen
-              is visible throughout the recording.
+              You'll record a <strong className="text-white">10-second video</strong> in{' '}
+              <strong className="text-white">landscape mode</strong>, in two steps:
             </p>
-            <p>Slowly move your mobile phone:</p>
-            <ul className="list-disc list-inside space-y-1 text-[#94a3b8]">
-              <li>Left to Right</li>
-              <li>Right to Left</li>
-            </ul>
-            <p>Keep your recording steady until instructed.</p>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue/20 text-brand-blue text-xs font-bold flex items-center justify-center mt-0.5">1</span>
+              <p>
+                <strong className="text-white">First 5 seconds</strong> — focus your camera on your
+                laptop screen/display. It will show a changing color and a unique ID; keep it
+                centered and hold steady.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue/20 text-brand-blue text-xs font-bold flex items-center justify-center mt-0.5">2</span>
+              <div className="flex-1">
+                <p>
+                  <strong className="text-white">Next 5 seconds</strong> — slowly move your phone from
+                  left to right and back again, capturing your workspace, surrounding area, and any
+                  nearby devices.
+                </p>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="text-xl inline-block animate-[tf-instr-pan_2.4s_ease-in-out_infinite]">📱</span>
+                  <span className="text-[11px] text-[#94a3b8]">left ↔ right</span>
+                </div>
+              </div>
+            </div>
           </div>
           <button
             type="button"
@@ -394,6 +409,13 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           >
             Next
           </button>
+          <style>{`
+            @keyframes tf-instr-pan {
+              0%   { transform: translateX(-10px); }
+              50%  { transform: translateX(10px); }
+              100% { transform: translateX(-10px); }
+            }
+          `}</style>
         </div>
       )}
 
@@ -415,7 +437,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           otherwise the stream has nowhere to attach to and the preview
           stays black even though recording is happening. Hidden outside
           the get-ready/recording phases via `hidden` rather than unmounted. */}
-      <div className={`w-full max-w-sm space-y-4 ${(phase === 'get_ready' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+      <div className={`w-full max-w-2xl space-y-4 ${(phase === 'get_ready' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
         <div className="relative">
           <video
             ref={videoRef}

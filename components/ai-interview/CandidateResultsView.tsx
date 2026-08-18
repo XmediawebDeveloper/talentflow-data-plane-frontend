@@ -6,7 +6,7 @@ import {
   AlertTriangle, VideoOff, ChevronDown, ChevronUp, Video,
   BarChart3, Brain, FileText, Layers, Bot,
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
-  Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
+  Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
   Download, Loader2, Sparkles, SkipForward, Play,
 } from 'lucide-react';
@@ -2981,78 +2981,112 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                 el.play().catch(() => { /* autoplay may be blocked; seek still applies */ });
                               }
                             };
-                            const renderItem = (item: Record<string, unknown>, i: number) => {
-                              const location = typeof item.location === 'string' ? item.location : null;
-                              const approxTimestamp = typeof item.approx_timestamp === 'string' ? item.approx_timestamp : null;
-                              const seekSeconds = parseApproxSeconds(approxTimestamp);
-                              return (
-                                <span
-                                  key={i}
-                                  className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-700 ring-1 ring-red-200 block"
-                                >
-                                  {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
-                                  {(location || approxTimestamp) && (
-                                    <span className="block text-[11px] mt-0.5">
-                                      {location && <span className="text-red-500/70">{location}</span>}
-                                      {location && approxTimestamp && <span className="text-red-500/70"> · </span>}
-                                      {approxTimestamp && (
-                                        seekSeconds != null ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => seekEnvVideo(seekSeconds)}
-                                            title="Jump to this moment in the verification video"
-                                            className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 font-mono"
-                                          >
-                                            <Play className="w-3 h-3" />{approxTimestamp}
-                                          </button>
-                                        ) : (
-                                          <span className="text-red-500/70">{approxTimestamp}</span>
-                                        )
-                                      )}
-                                    </span>
-                                  )}
-                                </span>
-                              );
-                            };
                             // Legacy rows analyzed before the 2-column merge may still carry
-                            // "pan_left_to_right"/"pan_right_to_left" — both fold into "Pan" here
-                            // so old records display correctly under the new layout too.
+                            // "pan_left_to_right"/"pan_right_to_left" — both fold into "pan" here.
                             const normalizedPhase = (item: Record<string, unknown>): string => {
                               const p = String(item.phase ?? '');
                               return p === 'pan_left_to_right' || p === 'pan_right_to_left' ? 'pan' : p;
                             };
-                            const renderColumn = (title: string, phase: string) => {
-                              const groupItems = items.filter(item => normalizedPhase(item) === phase);
-                              return (
-                                <div>
-                                  <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1.5">{title}</p>
-                                  {groupItems.length === 0 ? (
-                                    <p className="text-xs text-gray-400 italic">No violations</p>
-                                  ) : (
-                                    <div className="flex flex-col gap-1.5">
-                                      {groupItems.map(renderItem)}
-                                    </div>
-                                  )}
-                                </div>
-                              );
+                            const segmentLabel = (phase: string) =>
+                              phase === 'display' ? 'Display' : phase === 'pan' ? 'Pan' : '—';
+                            const iconForLabel = (label: string) => {
+                              const l = label.toLowerCase();
+                              if (l.includes('person')) return <Users className="w-3.5 h-3.5" />;
+                              if (l.includes('phone') || l.includes('tablet')) return <Smartphone className="w-3.5 h-3.5" />;
+                              if (l.includes('laptop') || l.includes('monitor') || l.includes('screen') || l.includes('display')) return <Monitor className="w-3.5 h-3.5" />;
+                              return <AlertTriangle className="w-3.5 h-3.5" />;
                             };
-                            const known = new Set(['display', 'pan']);
-                            const other = items.filter(item => !known.has(normalizedPhase(item)));
+                            const severityForConfidence = (confidence: string) => {
+                              if (confidence === 'high') return { label: 'Serious', cls: 'bg-red-100 text-red-700 ring-1 ring-red-200' };
+                              if (confidence === 'medium') return { label: 'Moderate', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' };
+                              return { label: 'Minor', cls: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' };
+                            };
+                            const rows = items.map((item, i) => {
+                              const label = String(item.label ?? 'Unknown');
+                              const confidence = typeof item.confidence === 'string' ? item.confidence : 'low';
+                              const location = typeof item.location === 'string' ? item.location : null;
+                              const approxTimestamp = typeof item.approx_timestamp === 'string' ? item.approx_timestamp : null;
+                              const phase = normalizedPhase(item);
+                              const seekSeconds = parseApproxSeconds(approxTimestamp);
+                              // Best-effort absolute wall-clock moment: this verification's own
+                              // trigger/submit time + the parsed offset into the 10s clip — same
+                              // "offset + absolute clock underneath" convention used everywhere
+                              // else in this file (Integrity Check, Question Analysis, the card
+                              // header above).
+                              const baseTs = v.submitted_at || v.triggered_at || '';
+                              const absoluteTs = baseTs && seekSeconds != null
+                                ? new Date(new Date(baseTs).getTime() + seekSeconds * 1000).toISOString()
+                                : null;
+                              const phaseDescription = phase === 'display'
+                                ? 'during the display phase (first 5s)'
+                                : phase === 'pan'
+                                ? 'during the panning phase (5s-10s)'
+                                : '';
+                              const description = `Detected${location ? ` in the ${location}` : ''}${phaseDescription ? ` ${phaseDescription}` : ''}.`;
+                              const severity = severityForConfidence(confidence);
+                              return { item, i, label, confidence, location, approxTimestamp, phase, seekSeconds, absoluteTs, description, severity };
+                            });
                             return (
                               <div>
-                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Flagged Items — by recording segment</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  {renderColumn('Display (first 5s)', 'display')}
-                                  {renderColumn('Pan (5s-10s)', 'pan')}
+                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Flagged Items</p>
+                                <div className="overflow-x-auto rounded-lg ring-1 ring-gray-100">
+                                  <table className="min-w-full text-left">
+                                    <thead>
+                                      <tr className="bg-gray-50 border-b border-gray-100">
+                                        <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">What happened</th>
+                                        <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">What we saw</th>
+                                        <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Segment</th>
+                                        <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">When</th>
+                                        <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Severity</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                      {rows.map((r) => (
+                                        <tr key={r.i} className="align-top">
+                                          <td className="px-3 py-2.5">
+                                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200/60">
+                                              {iconForLabel(r.label)}
+                                              {r.label}
+                                            </div>
+                                            <div className="mt-1">
+                                              {r.confidence === 'high' ? (
+                                                <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 ring-1 ring-red-200">HIGH CONFIDENCE</span>
+                                              ) : (
+                                                <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full text-brand-orange-deep ring-1 ring-brand-orange/40">POSSIBLE</span>
+                                              )}
+                                            </div>
+                                          </td>
+                                          <td className="px-3 py-2.5 text-xs text-gray-500 max-w-[34ch] whitespace-normal break-words">
+                                            {r.description}
+                                          </td>
+                                          <td className="px-3 py-2.5 text-xs text-gray-600">{segmentLabel(r.phase)}</td>
+                                          <td className="px-3 py-2.5">
+                                            {r.seekSeconds != null ? (
+                                              <button
+                                                type="button"
+                                                onClick={() => seekEnvVideo(r.seekSeconds as number)}
+                                                title="Jump to this moment in the verification video"
+                                                className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono"
+                                              >
+                                                <Play className="w-3 h-3" />{r.approxTimestamp}
+                                              </button>
+                                            ) : (
+                                              <span className="text-xs font-mono text-gray-400">{r.approxTimestamp ?? '—'}</span>
+                                            )}
+                                            {r.absoluteTs && (
+                                              <div className="text-[11px] text-gray-400 font-mono mt-0.5">{formatTs(r.absoluteTs)}</div>
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2.5">
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.severity.cls}`}>
+                                              {r.severity.label}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
                                 </div>
-                                {other.length > 0 && (
-                                  <div className="mt-3">
-                                    <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Other (segment not recorded)</p>
-                                    <div className="flex flex-col gap-1.5">
-                                      {other.map(renderItem)}
-                                    </div>
-                                  </div>
-                                )}
                               </div>
                             );
                           })()}
