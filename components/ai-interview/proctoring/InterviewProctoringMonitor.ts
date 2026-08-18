@@ -19,6 +19,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { InterviewEventBus, ProctoringEventType } from './InterviewEventBus';
+import { installScreenCaptureGuard } from './screenCaptureGuard';
 
 // Re-export for consumers that import from here
 export type { ProctoringEventType } from './InterviewEventBus';
@@ -979,25 +980,23 @@ export function useInterviewProctoringMonitor({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, []);
 
+  // In-page screen capture (getDisplayMedia) — blocked + reported. The patch
+  // itself lives in the shared, refcounted screenCaptureGuard because the
+  // candidate portal already armed the SAME guard at interview initialization
+  // (BUG09: capture started before the interview must not go unseen). Joining
+  // that guard instead of patching again keeps one patch and one report per
+  // attempt; the portal's own handler stands down while the interview is
+  // running so this hook stays the single reporter then.
+  //
+  // This can only ever see capture requested from inside this page. An external
+  // native recorder (OBS/Game Bar/…) never calls it and is not observable here
+  // — see the module docs on screenCaptureGuard.
   const setupScreenRecordingDetection = useCallback(() => {
-    const originalGetDisplayMedia = navigator.mediaDevices?.getDisplayMedia;
-    if (originalGetDisplayMedia) {
-      navigator.mediaDevices.getDisplayMedia = async function (constraints?: DisplayMediaStreamOptions) {
-        // Allow the app's OWN mandatory (re)share — the candidate portal sets
-        // this flag right before it (re)requests the screen share. Without it
-        // the block also killed the "Re-share Entire Screen" flow (picker never
-        // opened; logged as a false screen_recording_attempt).
-        if ((window as any).__tfAllowLegitimateShare) {
-          return originalGetDisplayMedia.call(navigator.mediaDevices, constraints as any);
-        }
-        emitEventRef.current('screen_recording_attempt', {});
-        throw new Error('Screen recording is not allowed during the interview');
-      };
-    }
+    const release = installScreenCaptureGuard((details) => {
+      emitEventRef.current('screen_recording_attempt', details);
+    });
     console.log('[INTERVIEW_PROCTORING] Screen recording detection started');
-    return () => {
-      if (originalGetDisplayMedia) navigator.mediaDevices.getDisplayMedia = originalGetDisplayMedia;
-    };
+    return release;
   }, []);
 
   // Picture-in-Picture — Webcam.tsx and Avatar.tsx already set
