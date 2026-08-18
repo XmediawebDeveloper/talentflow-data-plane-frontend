@@ -2946,8 +2946,15 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                 </span>
                               );
                             };
+                            // Legacy rows analyzed before the 2-column merge may still carry
+                            // "pan_left_to_right"/"pan_right_to_left" — both fold into "Pan" here
+                            // so old records display correctly under the new layout too.
+                            const normalizedPhase = (item: Record<string, unknown>): string => {
+                              const p = String(item.phase ?? '');
+                              return p === 'pan_left_to_right' || p === 'pan_right_to_left' ? 'pan' : p;
+                            };
                             const renderColumn = (title: string, phase: string) => {
-                              const groupItems = items.filter(item => item.phase === phase);
+                              const groupItems = items.filter(item => normalizedPhase(item) === phase);
                               return (
                                 <div>
                                   <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1.5">{title}</p>
@@ -2961,15 +2968,14 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                 </div>
                               );
                             };
-                            const known = new Set(['display', 'pan_left_to_right', 'pan_right_to_left']);
-                            const other = items.filter(item => !known.has(String(item.phase ?? '')));
+                            const known = new Set(['display', 'pan']);
+                            const other = items.filter(item => !known.has(normalizedPhase(item)));
                             return (
                               <div>
                                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Flagged Items — by recording segment</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   {renderColumn('Display (first 5s)', 'display')}
-                                  {renderColumn('Left to Right', 'pan_left_to_right')}
-                                  {renderColumn('Right to Left', 'pan_right_to_left')}
+                                  {renderColumn('Pan (5s-10s)', 'pan')}
                                 </div>
                                 {other.length > 0 && (
                                   <div className="mt-3">
