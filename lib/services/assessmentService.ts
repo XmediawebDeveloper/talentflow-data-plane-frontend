@@ -117,16 +117,28 @@ export interface InvitationResponse {
   invitation_link?: string;
   /** @deprecated use invitation_token. Legacy alias kept for older invitee UI. */
   token?: string;
-  status: 'pending' | 'sent' | 'opened' | 'started' | 'completed' | 'expired' | 'abandoned';
+  // Wire values are unchanged; the UI labels them with the AI Interview
+  // vocabulary — sent -> Invited, opened -> System Check, started -> In
+  // Progress, abandoned -> Terminated.
+  status: 'pending' | 'sent' | 'opened' | 'started' | 'completed' | 'expired' | 'abandoned' | 'failed' | 'bounced';
   // Latest attempt's UUID — populated by the listing endpoint and used by
   // Track Invites' "View Results" deep-link. Null until the candidate has
   // started the assessment.
   attempt_id?: string;
   sent_at?: string;
+  /** Tracking pixel fired — the candidate opened the invitation email. */
+  email_read_at?: string;
+  /** NDR bounce detected for the invitation email. */
+  bounced_at?: string;
   opened_at?: string;
   started_at?: string;
   completed_at?: string;
+  /** attempt.exited_at — set only when the candidate left mid-assessment. */
+  terminated_at?: string;
   expires_at?: string;
+  /** An AS unit was consumed (candidate actually started) — blocks expiry. */
+  unit_consumed?: boolean;
+  progress_percent?: number;
   consent_accepted: boolean;
   created_at: string;
 }
@@ -176,6 +188,8 @@ export interface AssessmentInvitationListResponse {
   started: number;
   expired: number;
   failed: number;
+  /** Candidate-side exit mid-assessment ('abandoned'), shown as "Terminated". */
+  terminated: number;
 }
 
 // Detailed result response (for recruiter view)

@@ -5,9 +5,14 @@
  * Falls back to polling if WebSocket connection fails.
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { dispatchAccessRestrictedEvent } from '@/lib/services/api';
+
+// Server close code for "this account was deactivated" (app/routers/websocket.py).
+// Distinct from the generic auth failure so we can stop reconnecting.
+const WS_CLOSE_ACCOUNT_INACTIVE = 4403;
 
 interface WebSocketMessage {
-  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated' | 'plan_change_pending' | 'company_profile_updated';
+  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated' | 'plan_change_pending' | 'company_profile_updated' | 'access_restricted';
   data?: any;
 }
 
@@ -203,6 +208,12 @@ export function useNotificationWebSocket({
                 }
                 break;
 
+              case 'access_restricted':
+                // Admin deactivated this account — block the app immediately.
+                console.log('[WebSocket] Access restricted - account deactivated');
+                dispatchAccessRestrictedEvent(message.data || {});
+                break;
+
               case 'plan_change_pending':
                 console.log('[WebSocket] Plan change pending - dispatching event');
                 window.dispatchEvent(new CustomEvent('plan-change-pending', { detail: message.data }));
@@ -241,6 +252,15 @@ export function useNotificationWebSocket({
 
           // Don't reconnect if we're cleaning up
           if (isCleaningUpRef.current) {
+            return;
+          }
+
+          // Account deactivated — the socket can never be reopened, so raise the
+          // Access Restricted modal and stop retrying instead of hammering the
+          // endpoint every few seconds.
+          if (event.code === WS_CLOSE_ACCOUNT_INACTIVE) {
+            console.log('[WebSocket] Closed: account deactivated — not reconnecting');
+            dispatchAccessRestrictedEvent();
             return;
           }
 
