@@ -2929,28 +2929,59 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <p className="text-sm text-gray-700 leading-relaxed">{v.ai_summary}</p>
                             </div>
                           )}
-                          {v.flagged_items && v.flagged_items.length > 0 && (
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Flagged Items</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {v.flagged_items.map((item, i) => {
-                                  const location = typeof item.location === 'string' ? item.location : null;
-                                  const approxTimestamp = typeof item.approx_timestamp === 'string' ? item.approx_timestamp : null;
-                                  const evidence = [location, approxTimestamp].filter(Boolean).join(' · ');
-                                  return (
-                                    <span
-                                      key={i}
-                                      className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 ring-1 ring-red-200"
-                                      title={evidence || undefined}
-                                    >
-                                      {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
-                                      {evidence && <span className="text-red-500/70"> — {evidence}</span>}
-                                    </span>
-                                  );
-                                })}
+                          {v.flagged_items && v.flagged_items.length > 0 && (() => {
+                            const items = v.flagged_items;
+                            const renderItem = (item: Record<string, unknown>, i: number) => {
+                              const location = typeof item.location === 'string' ? item.location : null;
+                              const approxTimestamp = typeof item.approx_timestamp === 'string' ? item.approx_timestamp : null;
+                              const evidence = [location, approxTimestamp].filter(Boolean).join(' · ');
+                              return (
+                                <span
+                                  key={i}
+                                  className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-700 ring-1 ring-red-200 block"
+                                  title={evidence || undefined}
+                                >
+                                  {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
+                                  {evidence && <span className="text-red-500/70 block text-[11px]">{evidence}</span>}
+                                </span>
+                              );
+                            };
+                            const renderColumn = (title: string, phase: string) => {
+                              const groupItems = items.filter(item => item.phase === phase);
+                              return (
+                                <div>
+                                  <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1.5">{title}</p>
+                                  {groupItems.length === 0 ? (
+                                    <p className="text-xs text-gray-400 italic">No violations</p>
+                                  ) : (
+                                    <div className="flex flex-col gap-1.5">
+                                      {groupItems.map(renderItem)}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            };
+                            const known = new Set(['display', 'pan_left_to_right', 'pan_right_to_left']);
+                            const other = items.filter(item => !known.has(String(item.phase ?? '')));
+                            return (
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Flagged Items — by recording segment</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                  {renderColumn('Display (first 5s)', 'display')}
+                                  {renderColumn('Left to Right', 'pan_left_to_right')}
+                                  {renderColumn('Right to Left', 'pan_right_to_left')}
+                                </div>
+                                {other.length > 0 && (
+                                  <div className="mt-3">
+                                    <p className="text-[11px] font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Other (segment not recorded)</p>
+                                    <div className="flex flex-col gap-1.5">
+                                      {other.map(renderItem)}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          )}
+                            );
+                          })()}
                         </div>
                       </div>
                     );
