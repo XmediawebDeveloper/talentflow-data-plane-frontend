@@ -519,14 +519,30 @@ export default function StepSystemCheck({
     }
   }, []);
 
+  // Chrome/Edge expose two synthetic aliases per physical audio device
+  // ("default" and "communications", deviceId literally 'default'/'communications')
+  // that just point at whichever real device is already listed — without this
+  // filter the dropdown shows the same physical mic three times. Drop the
+  // aliases and keep only the actual connected hardware; also de-dupe by
+  // groupId in case a device is otherwise listed twice.
+  const dedupeRealDevices = (devices: MediaDeviceInfo[]): MediaDeviceInfo[] => {
+    const seenGroups = new Set<string>();
+    return devices.filter((d) => {
+      if (d.deviceId === 'default' || d.deviceId === 'communications') return false;
+      if (d.groupId && seenGroups.has(d.groupId)) return false;
+      if (d.groupId) seenGroups.add(d.groupId);
+      return true;
+    });
+  };
+
   // Populate the dropdown option lists. Labels are only populated by the
   // browser once camera/mic permission has been granted, so this is called
   // again after each successful webcam/microphone check.
   const refreshDeviceLists = useCallback(async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      setCameraDevices(devices.filter((d) => d.kind === 'videoinput'));
-      setMicDevices(devices.filter((d) => d.kind === 'audioinput'));
+      setCameraDevices(dedupeRealDevices(devices.filter((d) => d.kind === 'videoinput')));
+      setMicDevices(dedupeRealDevices(devices.filter((d) => d.kind === 'audioinput')));
     } catch {
       /* enumeration unsupported or blocked — dropdowns just stay empty */
     }
@@ -604,6 +620,7 @@ export default function StepSystemCheck({
     if (micIntervalRef.current) { clearInterval(micIntervalRef.current); micIntervalRef.current = null; }
     updateSystemCheck('microphone', { status: 'checking', detail: 'Requesting microphone access...' });
     const analyser = await ensureAudioAnalyser();
+    void refreshDeviceLists();
     if (!analyser) {
       updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
       return;
@@ -612,8 +629,22 @@ export default function StepSystemCheck({
     // candidate proves their voice in the dedicated, manual Voice Verification
     // sub-step below (which does server-side speech/silence detection and gates
     // Continue). Here we only confirm the microphone is accessible.
+    //
+    // This check is gated on an EXPLICIT device selection: mic access being
+    // granted is not enough to pass — the candidate must pick their mic from
+    // the Device Settings dropdown below (selectedMicIdRef stays '' — i.e.
+    // "System Default" — until they do). This can't rely on the selectedMicId
+    // STATE inside this closure, since switchMicrophone calls this function in
+    // the same tick as setSelectedMicId, before React re-renders with the new
+    // value — the ref is always current.
+    if (!selectedMicIdRef.current) {
+      updateSystemCheck('microphone', {
+        status: 'fail',
+        detail: 'Select your microphone in Device Settings below to complete this check',
+      });
+      return;
+    }
     updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone active' });
-    void refreshDeviceLists();
   }, [ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists]);
 
   const runInternet = useCallback(async () => {
@@ -1553,6 +1584,7 @@ export default function StepSystemCheck({
                   <div>
                     <label htmlFor="tf-mic-select" className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1">
                       <Mic className="w-3.5 h-3.5" /> Microphone
+                      <span className="text-red-500 font-semibold">*</span>
                     </label>
                     <select
                       id="tf-mic-select"
@@ -1561,11 +1593,20 @@ export default function StepSystemCheck({
                       disabled={isSwitchingDevice || checksRunning}
                       className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/20"
                     >
-                      <option value="">System Default</option>
+                      <option value="" disabled>Select your microphone…</option>
                       {micDevices.map((d, i) => (
                         <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
                       ))}
                     </select>
+                    {/* The Microphone check in the list on the right cannot pass
+                        until an explicit device is chosen here — "System Default"
+                        does not count, so this option is disabled and the placeholder
+                        stays selected until the candidate actively picks one. */}
+                    {!selectedMicId && (
+                      <p className="mt-1 text-xs text-amber-600 font-medium">
+                        Required — select your microphone to complete the Microphone check.
+                      </p>
+                    )}
                   </div>
 
                   <p className="text-xs text-gray-400">
@@ -1661,6 +1702,8 @@ export default function StepSystemCheck({
                   <p className="text-sm text-amber-700 mt-0.5">
                     {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
                       ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
+                      : systemChecks.find((c) => c.id === 'microphone' && c.status === 'fail')
+                      ? 'Select your microphone from the Device Settings panel below to complete this check.'
                       : 'Fix the issues above and click Retry on each failed check to re-run just that one.'}
                   </p>
                 </div>
