@@ -25,6 +25,7 @@ import {
   CircleDot,
   Play,
   RefreshCw,
+  Settings,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
@@ -315,6 +316,24 @@ export default function StepSystemCheck({
     useState<'idle' | 'recording' | 'success' | 'failed'>('idle');
   const [voiceEnrollProgress, setVoiceEnrollProgress] = useState(0); // 0..100
 
+  // Candidate-selectable camera/microphone — lets the candidate pick whichever
+  // connected device is actually compatible (e.g. a USB webcam over a broken
+  // built-in one, or a headset mic over a noisy laptop mic) instead of being
+  // stuck with whatever the OS treats as default.
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+  const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>('');
+  const [selectedMicId, setSelectedMicId] = useState<string>('');
+  const [isSwitchingDevice, setIsSwitchingDevice] = useState(false);
+  // Mirrors of the two selected-id state values above, read inside
+  // getUserMedia calls. A ref (not the state) is used there because
+  // switchCamera/switchMicrophone call runWebcam/ensureAudioAnalyser
+  // synchronously, in the same tick as setSelectedCameraId/setSelectedMicId —
+  // before React re-renders — so a closure over the state value would still
+  // see the OLD selection.
+  const selectedCameraIdRef = useRef<string>('');
+  const selectedMicIdRef = useRef<string>('');
+
   // Measured metric values to include when submitting to backend
   const networkLatencyMsRef = useRef<number | null>(null);
   const networkSpeedMbpsRef = useRef<number | null>(null);
@@ -454,7 +473,10 @@ export default function StepSystemCheck({
       return true;
     }
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: true });
+      const videoConstraint: MediaTrackConstraints | boolean = selectedCameraIdRef.current
+        ? { deviceId: { exact: selectedCameraIdRef.current } }
+        : true;
+      const s = await navigator.mediaDevices.getUserMedia({ video: videoConstraint });
       streamRef.current = s;
       if (videoRef.current) videoRef.current.srcObject = s;
       await new Promise((r) => setTimeout(r, 1200)); // let metadata / first frames arrive
@@ -469,7 +491,10 @@ export default function StepSystemCheck({
       return analyserRef.current;
     }
     try {
-      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioConstraint: MediaTrackConstraints | boolean = selectedMicIdRef.current
+        ? { deviceId: { exact: selectedMicIdRef.current } }
+        : true;
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
       const Ctx: typeof AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       const audioContext = new Ctx();
       try { await audioContext.resume(); } catch { /* ignore */ }
@@ -494,6 +519,19 @@ export default function StepSystemCheck({
     }
   }, []);
 
+  // Populate the dropdown option lists. Labels are only populated by the
+  // browser once camera/mic permission has been granted, so this is called
+  // again after each successful webcam/microphone check.
+  const refreshDeviceLists = useCallback(async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setCameraDevices(devices.filter((d) => d.kind === 'videoinput'));
+      setMicDevices(devices.filter((d) => d.kind === 'audioinput'));
+    } catch {
+      /* enumeration unsupported or blocked — dropdowns just stay empty */
+    }
+  }, []);
+
   // ── Individual checks — each self-contained so it can run standalone (retry) ──
   const runDevice = useCallback(async () => {
     updateSystemCheck('device', { status: 'checking', detail: 'Detecting device...' });
@@ -507,8 +545,15 @@ export default function StepSystemCheck({
   const runWebcam = useCallback(async () => {
     updateSystemCheck('webcam', { status: 'checking', detail: 'Requesting webcam access...' });
     try {
+      // Preserve any already-acquired audio track (e.g. from a prior mic
+      // check) — replacing streamRef wholesale would silently drop it and
+      // force an unnecessary mic re-check whenever the candidate switches camera.
+      const existingAudioTracks = streamRef.current?.getAudioTracks() ?? [];
       streamRef.current?.getVideoTracks().forEach((t) => t.stop()); // release stale track on retry
-      const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const videoConstraint: MediaTrackConstraints | boolean = selectedCameraIdRef.current
+        ? { deviceId: { exact: selectedCameraIdRef.current } }
+        : true;
+      const videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint });
 
       // Reject mobile-camera-relay virtual drivers (Motorola Smart Connect,
       // DroidCam, Iriun, EpocCam, Camo, OBS Virtual Camera, etc.) before this
@@ -524,8 +569,9 @@ export default function StepSystemCheck({
         return;
       }
 
-      streamRef.current = videoStream;
-      if (videoRef.current) videoRef.current.srcObject = videoStream;
+      const combinedStream = new MediaStream([...videoStream.getVideoTracks(), ...existingAudioTracks]);
+      streamRef.current = combinedStream;
+      if (videoRef.current) videoRef.current.srcObject = combinedStream;
       updateSystemCheck('webcam', { status: 'checking', detail: 'Verifying video signal...' });
       await new Promise((r) => setTimeout(r, 1200));
       let videoOk = false;
@@ -548,10 +594,11 @@ export default function StepSystemCheck({
       updateSystemCheck('webcam', videoOk
         ? { status: 'pass', detail: 'Webcam producing video' }
         : { status: 'fail', detail: 'Camera connected but no video signal — check if lens is covered' });
+      void refreshDeviceLists();
     } catch {
       updateSystemCheck('webcam', { status: 'fail', detail: 'Webcam access denied' });
     }
-  }, [updateSystemCheck]);
+  }, [updateSystemCheck, refreshDeviceLists]);
 
   const runMicrophone = useCallback(async () => {
     if (micIntervalRef.current) { clearInterval(micIntervalRef.current); micIntervalRef.current = null; }
@@ -566,7 +613,8 @@ export default function StepSystemCheck({
     // sub-step below (which does server-side speech/silence detection and gates
     // Continue). Here we only confirm the microphone is accessible.
     updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone active' });
-  }, [ensureAudioAnalyser, updateSystemCheck]);
+    void refreshDeviceLists();
+  }, [ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists]);
 
   const runInternet = useCallback(async () => {
     updateSystemCheck('internet', { status: 'checking', detail: 'Measuring your connection speed...' });
@@ -910,6 +958,58 @@ export default function StepSystemCheck({
     }
   }, [runDevice, runWebcam, runMicrophone, runInternet, runAiEngine, runWebsocket, runLighting, runNoise, runFaceMultiple]);
 
+  // Candidate picked a different camera from the dropdown — re-acquire that
+  // specific device and re-run every check that depends on the video feed.
+  const switchCamera = useCallback(async (deviceId: string) => {
+    if (isSwitchingDevice || deviceId === selectedCameraId) return;
+    setIsSwitchingDevice(true);
+    selectedCameraIdRef.current = deviceId;
+    setSelectedCameraId(deviceId);
+    try {
+      await runWebcam();
+      await runLighting();
+      await runFaceMultiple();
+    } finally {
+      setIsSwitchingDevice(false);
+    }
+  }, [isSwitchingDevice, selectedCameraId, runWebcam, runLighting, runFaceMultiple]);
+
+  // Candidate picked a different microphone — drop the cached analyser so
+  // ensureAudioAnalyser is forced to re-acquire on the newly selected device,
+  // then re-run the checks that depend on audio input.
+  const switchMicrophone = useCallback(async (deviceId: string) => {
+    if (isSwitchingDevice || deviceId === selectedMicId) return;
+    setIsSwitchingDevice(true);
+    selectedMicIdRef.current = deviceId;
+    setSelectedMicId(deviceId);
+    try {
+      if (audioContextRef.current) {
+        await audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      analyserRef.current = null;
+      if (streamRef.current) {
+        streamRef.current.getAudioTracks().forEach((t) => {
+          t.stop();
+          streamRef.current!.removeTrack(t);
+        });
+      }
+      await runMicrophone();
+      await runNoise();
+    } finally {
+      setIsSwitchingDevice(false);
+    }
+  }, [isSwitchingDevice, selectedMicId, runMicrophone, runNoise]);
+
+  // Keep the dropdown options current if the candidate plugs/unplugs a device
+  // mid-check (e.g. connects a USB webcam after the page already loaded).
+  useEffect(() => {
+    if (phase !== 'system_checks') return;
+    void refreshDeviceLists();
+    if (!navigator.mediaDevices?.addEventListener) return;
+    navigator.mediaDevices.addEventListener('devicechange', refreshDeviceLists);
+    return () => navigator.mediaDevices.removeEventListener('devicechange', refreshDeviceLists);
+  }, [phase, refreshDeviceLists]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1399,25 +1499,78 @@ export default function StepSystemCheck({
           {/* Card body: 2-column layout */}
           <div className="bg-white rounded-b-xl p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left column: Camera Preview */}
-              <div className="rounded-xl overflow-hidden border border-gray-200">
-                <div className="bg-gray-900 px-4 py-3 flex items-center gap-2">
-                  <CircleDot className="w-4 h-4 text-white" />
-                  <h3 className="text-sm font-semibold text-white">Camera Preview</h3>
-                </div>
-                <div className="relative bg-gray-900 aspect-video">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-                  {/* Camera Active badge */}
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-green-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
-                    <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
-                    Camera Active
+              {/* Left column: Camera Preview + Device Settings */}
+              <div className="space-y-4">
+                <div className="rounded-xl overflow-hidden border border-gray-200">
+                  <div className="bg-gray-900 px-4 py-3 flex items-center gap-2">
+                    <CircleDot className="w-4 h-4 text-white" />
+                    <h3 className="text-sm font-semibold text-white">Camera Preview</h3>
                   </div>
+                  <div className="relative bg-gray-900 aspect-video">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                    {/* Camera Active badge */}
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-green-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
+                      <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
+                      Camera Active
+                    </div>
+                  </div>
+                </div>
+
+                {/* Device Settings — lets the candidate pick whichever connected
+                    camera/microphone is actually compatible, instead of being
+                    stuck with whatever the OS treats as default. */}
+                <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Settings className="w-4 h-4 text-gray-500" />
+                    <h3 className="text-sm font-semibold text-gray-900">Device Settings</h3>
+                    {isSwitchingDevice && <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />}
+                  </div>
+
+                  <div>
+                    <label htmlFor="tf-camera-select" className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1">
+                      <Camera className="w-3.5 h-3.5" /> Camera
+                    </label>
+                    <select
+                      id="tf-camera-select"
+                      value={selectedCameraId}
+                      onChange={(e) => switchCamera(e.target.value)}
+                      disabled={isSwitchingDevice || checksRunning}
+                      className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                    >
+                      <option value="">System Default</option>
+                      {cameraDevices.map((d, i) => (
+                        <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="tf-mic-select" className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1">
+                      <Mic className="w-3.5 h-3.5" /> Microphone
+                    </label>
+                    <select
+                      id="tf-mic-select"
+                      value={selectedMicId}
+                      onChange={(e) => switchMicrophone(e.target.value)}
+                      disabled={isSwitchingDevice || checksRunning}
+                      className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                    >
+                      <option value="">System Default</option>
+                      {micDevices.map((d, i) => (
+                        <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <p className="text-xs text-gray-400">
+                    Not seeing the right device? Choose a different one above — we&apos;ll re-check it automatically.
+                  </p>
                 </div>
               </div>
 
