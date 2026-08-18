@@ -39,6 +39,7 @@ interface ShareAssessmentModalProps {
   };
   prefilledCandidates?: CandidateEmail[]; // Optional pre-filled candidates from resume selection
   inviteSource?: string; // Source context: "Resume Scoring", "JD", "Assessment", "Internal DB", "Manual"
+  onInviteSent?: (count: number) => void;
   additionalAssessments?: Array<{
     id: string;
     title: string;
@@ -75,7 +76,7 @@ interface Resume {
   skills: string[];
 }
 
-export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, additionalAssessments }: ShareAssessmentModalProps) {
+export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, onInviteSent, additionalAssessments }: ShareAssessmentModalProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { quotaData } = useQuota();
@@ -402,6 +403,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         }
 
         setSentCount(sentCount);
+        if (sentCount > 0) onInviteSent?.(sentCount);
         setShowSuccess(true);
         setTimeout(() => {
           setShowSuccess(false);
@@ -439,6 +441,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       }
 
       setSentCount(validCandidates.length);
+      onInviteSent?.(validCandidates.length);
       setIsSubmitting(false);
       setShowSuccess(true);
       setTimeout(() => {

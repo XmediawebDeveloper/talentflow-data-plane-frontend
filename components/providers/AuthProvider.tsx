@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User, Tenant, Permission, FeatureFlags, UserRole } from '@/lib/types/tenant';
 import { authService, clearTokens } from '@/lib/services';
-import { handleUnauthorized } from '@/lib/services/api';
+import { handleUnauthorized, dispatchAccessRestrictedEvent } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { mockTenant } from '@/lib/mockData/tenantData';
 import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/services/authService';
@@ -139,7 +139,7 @@ function mapApiFeatureFlagsToFeatureFlags(apiFlags?: ApiFeatureFlags): FeatureFl
 // - tenant_admin: Backend should return ALL permissions as true (bypass)
 // - All other roles: Backend returns ONLY explicitly assigned permissions
 // Frontend does NOT add role defaults - it uses EXACTLY what backend sends
-function mapApiUserToUser(apiUser: ApiUser): User {
+export function mapApiUserToUser(apiUser: ApiUser): User {
   return {
     id: apiUser.id,
     email: apiUser.email,
@@ -261,6 +261,19 @@ function mapApiUserToUser(apiUser: ApiUser): User {
     tenantSubdomain: apiUser.tenant_subdomain,
     tenantAdminEmail: apiUser.tenant_admin_email,
   };
+}
+
+// Backend-driven active check. If /auth/me reports the account is no longer
+// active, fire the global Access Restricted modal and return false so callers
+// bail out before applying the (now invalid) user to app state. This is the
+// proactive path (WebSocket permission push, tab-visibility refresh, session
+// restore); the axios interceptor covers the reactive path (rejected requests).
+function isAccountActive(apiUser: ApiUser): boolean {
+  if (apiUser && apiUser.is_active === false) {
+    dispatchAccessRestrictedEvent({ name: apiUser.name, email: apiUser.email });
+    return false;
+  }
+  return true;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -388,6 +401,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           const apiUserData = await authService.getCurrentUser();
 
+          // Account deactivated while this session was cached → block via modal.
+          if (!isAccountActive(apiUserData)) return;
+
           // Catch existing sessions that have must_reset_password=true in DB but no local flag.
           // (e.g. user was invited before this flag was introduced, or flag was cleared by browser)
           if (apiUserData.must_reset_password && typeof window !== 'undefined' && !window.location.pathname.startsWith('/set-password')) {
@@ -479,6 +495,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const apiUserData = await authService.getCurrentUser();
           console.log('[AUTH] Got user data:', apiUserData);
 
+          // Account deactivated → block via modal instead of restoring the session.
+          if (!isAccountActive(apiUserData)) {
+            setIsLoading(false);
+            return;
+          }
+
           // must_reset_password guard — catches users with no cached data (first-ever session restore)
           if (apiUserData.must_reset_password && typeof window !== 'undefined' && !window.location.pathname.startsWith('/set-password')) {
             console.log('[AUTH] must_reset_password=true — redirecting to /set-password');
@@ -554,6 +576,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // Fetch fresh user data with new permissions
         const apiUserData = await authService.getCurrentUser();
+
+        // Admin deactivated this user → block via modal, don't apply new state.
+        if (!isAccountActive(apiUserData)) return;
 
         // Admin forced a password reset → bounce to /set-password immediately
         // (no manual reload needed). Mirrors the page-load guard.
@@ -781,6 +806,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[AUTH] refreshUser() called — fetching latest user from API...');
       const apiUserData = await authService.getCurrentUser();
+
+      // Admin deactivated this user (e.g. pushed via WebSocket) → block via modal.
+      if (!isAccountActive(apiUserData)) return;
 
       // Enforce admin-initiated forced password reset WITHOUT a manual page reload.
       // force-password-change / reset-password set must_reset_password=true on the

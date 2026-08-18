@@ -208,7 +208,6 @@ import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
-import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -999,8 +998,14 @@ Best regards`);
     languages: (resume.languages || []).filter(l => l.name),
   };
 
+  /* Deliberately not wrapped in <FeatureGate feature="resume_upload">. Reading a
+     resume that is already stored is not an upload, and `resume_upload` is a
+     metered feature — PlanFeaturesProvider turns it off once the RU quota hits
+     EXCEEDED. Gating this page on it meant that running out of upload units
+     made every resume already in the database unopenable. Per-action controls
+     (share, delete, score, assessment) keep their own permission and plan
+     checks below. */
   return (
-    <FeatureGate feature="resume_upload">
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
@@ -2587,6 +2592,5 @@ Best regards`);
         </div>
       </div>
     </main>
-    </FeatureGate>
   );
 }
