@@ -1281,6 +1281,12 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   // showing "0:09") — this shows the correctly ROUNDED whole-second value
   // alongside it instead, without touching the actual recording/upload.
   const [envVideoDurations, setEnvVideoDurations] = useState<Record<string, number>>({});
+  // One <video> element ref per verification card, keyed by verification_id —
+  // lets a flagged item's timestamp jump straight to that point in THIS clip
+  // (as opposed to the header's jump-to-recording link, which seeks the main
+  // interview recording instead), matching Integrity Check's click-to-jump
+  // format for the flagged-item evidence too.
+  const envVideoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const envVideoBlobRequestedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -2823,14 +2829,42 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   {envVerifications.map((v) => {
                     const videoSrc = v.video_url || envVideoBlobUrls[v.verification_id] || null;
                     const videoStillLoading = v.video_uploaded && !videoSrc && !envVideoBlobUrls[v.verification_id] && !v.video_url;
+                    // Same click-to-jump-to-recording pattern as Integrity Check /
+                    // Question Analysis: seek the main interview Recording tab to
+                    // the moment this QR verification happened (not the QR clip
+                    // itself, which already plays inline below).
+                    const envTs = v.submitted_at || v.triggered_at || '';
+                    const envOffsetSec = videoOffsetSeconds(envTs, videoAnchor);
+                    const envHasRecording = !!(liveSession.recording_file_path || liveSession.screen_recording_file_path);
+                    const envSeekable = envOffsetSec != null && envHasRecording;
+                    const jumpToRecordingFromEnv = () => {
+                      if (envOffsetSec == null) return;
+                      seekNonceRef.current += 1;
+                      setRecordingSeek({ seconds: envOffsetSec, key: seekNonceRef.current });
+                      setActiveTab('recording');
+                    };
                     return (
                       <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
                         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
                             <ShieldAlert className="w-4 h-4 text-brand-blue" />
                             <span className="text-sm font-semibold text-gray-900">Environment Verification</span>
-                            {(v.submitted_at || v.triggered_at) && (
-                              <span className="text-xs text-gray-500">{formatTs(v.submitted_at || v.triggered_at || '')}</span>
+                            {envTs && (
+                              <div>
+                                {envSeekable ? (
+                                  <button
+                                    type="button"
+                                    onClick={jumpToRecordingFromEnv}
+                                    title="Jump to this moment in the recording"
+                                    className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono"
+                                  >
+                                    <Play className="w-3 h-3" />{formatVideoOffset(envTs, videoAnchor)}
+                                  </button>
+                                ) : (
+                                  <span className="text-xs font-mono text-gray-400">{formatVideoOffset(envTs, videoAnchor)}</span>
+                                )}
+                                <div className="text-[11px] text-gray-400 font-mono">{formatTs(envTs)}</div>
+                              </div>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -2858,6 +2892,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             ) : (
                               <>
                                 <video
+                                  ref={(el) => { envVideoRefs.current[v.verification_id] = el; }}
                                   controls
                                   preload="metadata"
                                   className="w-full max-w-lg rounded-lg bg-black"
@@ -2931,18 +2966,51 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           )}
                           {v.flagged_items && v.flagged_items.length > 0 && (() => {
                             const items = v.flagged_items;
+                            // Parse the first number out of approx_timestamp (e.g. "~6.2s-8.1s",
+                            // "frame 12 only") — same regex approach as the backend's own
+                            // phase-derivation fallback — to make it clickable.
+                            const parseApproxSeconds = (ts: string | null): number | null => {
+                              if (!ts) return null;
+                              const match = ts.match(/(\d+(?:\.\d+)?)/);
+                              return match ? parseFloat(match[1]) : null;
+                            };
+                            const seekEnvVideo = (seconds: number) => {
+                              const el = envVideoRefs.current[v.verification_id];
+                              if (el) {
+                                el.currentTime = seconds;
+                                el.play().catch(() => { /* autoplay may be blocked; seek still applies */ });
+                              }
+                            };
                             const renderItem = (item: Record<string, unknown>, i: number) => {
                               const location = typeof item.location === 'string' ? item.location : null;
                               const approxTimestamp = typeof item.approx_timestamp === 'string' ? item.approx_timestamp : null;
-                              const evidence = [location, approxTimestamp].filter(Boolean).join(' · ');
+                              const seekSeconds = parseApproxSeconds(approxTimestamp);
                               return (
                                 <span
                                   key={i}
                                   className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-700 ring-1 ring-red-200 block"
-                                  title={evidence || undefined}
                                 >
                                   {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
-                                  {evidence && <span className="text-red-500/70 block text-[11px]">{evidence}</span>}
+                                  {(location || approxTimestamp) && (
+                                    <span className="block text-[11px] mt-0.5">
+                                      {location && <span className="text-red-500/70">{location}</span>}
+                                      {location && approxTimestamp && <span className="text-red-500/70"> · </span>}
+                                      {approxTimestamp && (
+                                        seekSeconds != null ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => seekEnvVideo(seekSeconds)}
+                                            title="Jump to this moment in the verification video"
+                                            className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 font-mono"
+                                          >
+                                            <Play className="w-3 h-3" />{approxTimestamp}
+                                          </button>
+                                        ) : (
+                                          <span className="text-red-500/70">{approxTimestamp}</span>
+                                        )
+                                      )}
+                                    </span>
+                                  )}
                                 </span>
                               );
                             };
