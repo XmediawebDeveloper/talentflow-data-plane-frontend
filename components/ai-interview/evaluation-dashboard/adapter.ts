@@ -2107,8 +2107,31 @@ export function buildDashboardData(params: {
     return out;
   })();
 
-  /** Union of [primary, ...secondaries] over the plan slots this section
-   *  delivered — the authoritative set of skills that were actually asked. */
+  /** Skills the DELIVERED questions were actually attributed to, per section.
+   *  Used to identify WHICH plan slots ran — see plannedAskedBySection. */
+  const deliveredSkillKeysBySection = (() => {
+    const out: Record<'mth' | 'nth', Set<string>> = { mth: new Set(), nth: new Set() };
+    for (const h of ((eval_?.question_history || []) as any[])) {
+      if (!h || isExplicitFollowUpRow(h) || isUndeliveredHistoryRow(h)) continue;
+      const rt = String(h?.round_type || '').toLowerCase();
+      if (rt === 'hr') continue;
+      const sec: 'mth' | 'nth' = rt === 'nice_to_have_skills' ? 'nth' : 'mth';
+      const names = [
+        ...(Array.isArray(h?.assigned_skills) ? h.assigned_skills : []),
+        h?.topic,
+      ];
+      for (const n of names) {
+        if (typeof n !== 'string' || !n.trim()) continue;
+        out[sec].add(n.toLowerCase().trim());
+        const c = compactSkillKey(n);
+        if (c) out[sec].add(c);
+      }
+    }
+    return out;
+  })();
+
+  /** Union of [primary, ...secondaries] over the plan slots this section actually
+   *  delivered — the authoritative set of skills that were asked. */
   const plannedAskedBySection = (() => {
     const build = (sec: 'mth' | 'nth') => {
       const raw = new Set<string>();
@@ -2116,10 +2139,31 @@ export function buildDashboardData(params: {
       const rows = planRowsBySection[sec];
       const delivered = deliveredMainCountBySection[sec];
       if (rows.length === 0 || delivered <= 0) return { raw, compact };
-      // Slots are consumed in plan order — the runtime resolves a slot by its
-      // position within the round (get_slot_plan_for_q_num → slot_in_round), so
-      // the first `delivered` rows are the ones that were asked.
-      for (const r of rows.slice(0, Math.min(delivered, rows.length))) {
+      // WHICH slots ran is matched by SKILL IDENTITY, not by position. The plan's
+      // `question_number` is the round-robin renumbered order produced by
+      // _apply_cross_priority_mix, which diverges from the ask order whenever a
+      // slot is consumed out of turn (auto-skip, swap, an opening HR slot). Taking
+      // "the first N slots" therefore credited a slot that was never asked —
+      // observed as 9/11 covered against only 8 skills in Question Analysis, the
+      // extra one being "Scripting in Python or JavaScript" from an unasked slot.
+      // This is the same order-independent join `applyPlanForSection` uses for the
+      // Question Analysis tab, so the two tabs now agree by construction.
+      const deliveredKeys = deliveredSkillKeysBySection[sec];
+      const matched = deliveredKeys.size > 0
+        ? rows.filter(r => {
+            const names = [
+              String(r?.primary_skill || ''),
+              ...(Array.isArray(r?.secondary_skills) ? r.secondary_skills : []),
+            ];
+            return names.some(n => typeof n === 'string' && n.trim() && (
+              deliveredKeys.has(n.toLowerCase().trim())
+              || deliveredKeys.has(compactSkillKey(n))
+            ));
+          }).slice(0, delivered)   // never credit more slots than questions delivered
+        // No per-question skill signal at all (legacy rows with neither
+        // assigned_skills nor topic): fall back to plan order.
+        : rows.slice(0, Math.min(delivered, rows.length));
+      for (const r of matched) {
         const names = [
           String(r?.primary_skill || ''),
           ...(Array.isArray(r?.secondary_skills) ? r.secondary_skills : []),
@@ -2657,9 +2701,19 @@ export function buildDashboardData(params: {
     mustHaveAvgQA   * (weights.mustHave   / 100) +
     niceToHaveAvgQA * (weights.niceToHave / 100) +
     hr              * (weights.hr         / 100);
-  const finalScoreQA = (mode === 'Timed' && sectionsPresent.mustHave)
+  // PARITY GUARD (invite-list % === Results %): the invite popup shows
+  // Math.round(capability_score). The Results headline MUST equal it, so when
+  // the backend stored capability_score we use that SAME value verbatim rather
+  // than an independent recompute that can cross a .5 rounding boundary and
+  // read 20 vs 21. Fall back to the QA-derived recompute only for legacy evals
+  // that never stored capability_score. (capability_score is already on the
+  // 0-100 scale = MHS section avg ÷ planned × 10, so it is scale-identical.)
+  const _recomputedFinalQA = (mode === 'Timed' && sectionsPresent.mustHave)
     ? Math.round(mustHaveAvgQA * 100) / 10
     : Math.round(weightedSumQA * 100) / 10;
+  const finalScoreQA = (typeof eval_?.capability_score === 'number')
+    ? eval_.capability_score
+    : _recomputedFinalQA;
 
   // 5. Pass/Fail from QA-derived MHS average (prefer backend authoritative).
   let finalResultQA: 'Pass' | 'Fail' | null = null;
