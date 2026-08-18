@@ -86,7 +86,9 @@ export interface CreateOrderResponse {
 
 export const adminAssignedPlanService = {
   async getPendingPlan(): Promise<AdminAssignedPlan | null> {
-    const response = await api.get('/subscription/admin-assigned-plan');
+    // Background poller — bound the wait so a hung connection surfaces as a
+    // retryable timeout instead of an XHR that never settles.
+    const response = await api.get('/subscription/admin-assigned-plan', { timeout: 15000 });
     return (response.data?.data as AdminAssignedPlan | null) ?? null;
   },
 

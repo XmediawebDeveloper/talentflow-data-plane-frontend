@@ -7,7 +7,9 @@ import type {
 
 export const planChangeService = {
   async getPendingChanges(): Promise<PlanChangeNotification[]> {
-    const response = await api.get('/plan-changes/pending');
+    // Background poller — bound the wait so a hung connection surfaces as a
+    // retryable timeout instead of an XHR that never settles.
+    const response = await api.get('/plan-changes/pending', { timeout: 15000 });
     return response.data?.data ?? response.data;
   },
 

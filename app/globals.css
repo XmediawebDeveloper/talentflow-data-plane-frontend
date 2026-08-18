@@ -1862,3 +1862,72 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
   flex: 1 1 auto;
   height: 60vh;
 }
+
+/* ── Word document preview (docx-preview) ──────────────────────────────
+   docx-preview reproduces the Word document faithfully, which means it
+   emits `<section>` elements carrying the file's real page geometry —
+   `width: 8.5in` (≈816px) plus the page's own inch-wide margins. Dropped
+   straight into the resume preview's 672px (`max-w-2xl`) page card, that
+   section is wider than its container: the text ran off the right edge
+   mid-word, the modal grew a horizontal scrollbar, and the page's top
+   margin opened a third of a screen of empty white above the name.
+
+   The width and page height are suppressed at the source, by passing
+   `ignoreWidth`/`ignoreHeight` to renderAsync. The page MARGINS have no
+   such option — they are written as inline padding on the section — so
+   they are overridden here, and `!important` is required to outrank an
+   inline style. The width/min-height rules are kept as a backstop in case
+   those render options are ever dropped.
+
+   Scoped to `.tf-docx-preview` so only the resume preview is affected;
+   any other docx-preview mount keeps the faithful page rendering. */
+/* docx-preview injects its own <style> into the container at render time —
+   after this file in document order — so every rule here needs !important
+   to win, regardless of specificity. */
+
+/* The wrapper docx-preview builds around the document paints a grey mat and
+   centres the pages on it. That is a second mat inside the one the modal
+   already draws, so it is flattened to a plain block. */
+.tf-docx-preview .docx-preview-wrapper-wrapper {
+  background: transparent !important;
+  padding: 0 !important;
+  display: block !important;
+}
+
+/* Each page also gets its own white card and drop shadow from that wrapper —
+   likewise doubled up with the modal's page card. */
+.tf-docx-preview .docx-preview-wrapper-wrapper > section.docx-preview-wrapper {
+  background: transparent !important;
+  box-shadow: none !important;
+  margin-bottom: 0 !important;
+}
+
+.tf-docx-preview .docx-preview-wrapper,
+.tf-docx-preview section.docx-preview-wrapper {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Long unbroken strings (URLs, email addresses) are the other way this
+   overflows once the section itself is constrained. */
+.tf-docx-preview {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Tables and images in a résumé are authored against the full Word page
+   width, so they need the same treatment as the section. */
+.tf-docx-preview table {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed;
+}
+
+.tf-docx-preview img {
+  max-width: 100%;
+  height: auto;
+}
