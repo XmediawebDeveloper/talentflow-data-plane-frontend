@@ -26,6 +26,7 @@ import {
   Play,
   RefreshCw,
   Settings,
+  MicOff,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
@@ -333,6 +334,12 @@ export default function StepSystemCheck({
   // see the OLD selection.
   const selectedCameraIdRef = useRef<string>('');
   const selectedMicIdRef = useRef<string>('');
+  // Set the moment a PREVIOUSLY-PASSING microphone check goes dead (headset
+  // unplugged, Bluetooth drop, etc.) here on the System Check screen itself —
+  // i.e. after the candidate already selected a mic and it passed, but before
+  // they've clicked Continue. Blocks Continue and shows a reconnect popup
+  // until the same device (or a newly selected one) is live again.
+  const [micDisconnectedPopup, setMicDisconnectedPopup] = useState(false);
 
   // Measured metric values to include when submitting to backend
   const networkLatencyMsRef = useRef<number | null>(null);
@@ -1041,6 +1048,87 @@ export default function StepSystemCheck({
     navigator.mediaDevices.addEventListener('devicechange', refreshDeviceLists);
     return () => navigator.mediaDevices.removeEventListener('devicechange', refreshDeviceLists);
   }, [phase, refreshDeviceLists]);
+
+  // Once the Microphone check has PASSED on this screen, keep watching the
+  // live track — if the headset is pulled before the candidate clicks
+  // Continue, this is the only thing that would otherwise catch it (the
+  // check itself only runs once, at "Run Check" / selection time). The
+  // instant the track dies, fail the check (which disables Continue via
+  // allSystemPassed) and show the reconnect popup.
+  const micCheckStatus = systemChecks.find((c) => c.id === 'microphone')?.status;
+  useEffect(() => {
+    if (phase !== 'system_checks' || micCheckStatus !== 'pass') return;
+    const track = streamRef.current?.getAudioTracks().find((t) => t.readyState === 'live');
+    if (!track) return;
+
+    const handleDisconnect = () => {
+      // Drop the cached analyser/AudioContext — ensureAudioAnalyser() short-
+      // circuits and returns them as-is whenever they exist, regardless of
+      // whether the underlying track is still live. Without clearing them
+      // here, the auto-recovery retry below would report success by handing
+      // back the same dead analyser instead of re-acquiring the microphone.
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      analyserRef.current = null;
+      if (streamRef.current) {
+        streamRef.current.getAudioTracks().forEach((t) => {
+          t.stop();
+          streamRef.current!.removeTrack(t);
+        });
+      }
+      updateSystemCheck('microphone', {
+        status: 'fail',
+        detail: 'Microphone disconnected — reconnect your headset to continue',
+      });
+      setMicDisconnectedPopup(true);
+    };
+    track.addEventListener('ended', handleDisconnect);
+    // Backstop poll — some drivers/OSes don't fire `ended` promptly on unplug.
+    const poll = setInterval(() => {
+      if (track.readyState !== 'live') handleDisconnect();
+    }, 1000);
+
+    return () => {
+      track.removeEventListener('ended', handleDisconnect);
+      clearInterval(poll);
+    };
+  }, [phase, micCheckStatus, updateSystemCheck]);
+
+  // While the reconnect popup is showing, try to recover automatically the
+  // moment the OS reports a device change (headset plugged back in) — no
+  // button for the candidate to click, matching how the in-interview
+  // headset-disconnect pause also auto-resumes on reconnect. Uses
+  // ensureAudioAnalyser directly (not the full runMicrophone) so a still-
+  // disconnected retry fails silently instead of flashing "checking..." /
+  // "access denied" over the reconnect message every couple of seconds.
+  useEffect(() => {
+    if (!micDisconnectedPopup) return;
+    const tryRecover = async () => {
+      const analyser = await ensureAudioAnalyser();
+      if (!analyser || !selectedMicIdRef.current) return; // still gone — stay quiet
+      updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone active' });
+      void refreshDeviceLists();
+    };
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', tryRecover);
+    }
+    // Also poll — devicechange doesn't fire in every browser/driver combo.
+    const poll = setInterval(tryRecover, 2000);
+    return () => {
+      if (navigator.mediaDevices?.removeEventListener) {
+        navigator.mediaDevices.removeEventListener('devicechange', tryRecover);
+      }
+      clearInterval(poll);
+    };
+  }, [micDisconnectedPopup, ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists]);
+
+  // Clear the popup the moment the check is passing again (auto-recovery
+  // above, or the candidate manually re-selecting a device from the dropdown).
+  useEffect(() => {
+    if (micCheckStatus === 'pass' && micDisconnectedPopup) setMicDisconnectedPopup(false);
+  }, [micCheckStatus, micDisconnectedPopup]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1842,17 +1930,19 @@ export default function StepSystemCheck({
               {checksCompleted && (
                 <button
                   type="button"
-                  onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading) handleProceed(); }}
-                  disabled={!allSystemPassed || !voiceGateOk || isProceedLoading}
-                  title={!voiceGateOk ? 'Record your voice sample first' : undefined}
+                  onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup) handleProceed(); }}
+                  disabled={!allSystemPassed || !voiceGateOk || isProceedLoading || micDisconnectedPopup}
+                  title={micDisconnectedPopup ? 'Reconnect your headset to continue' : !voiceGateOk ? 'Record your voice sample first' : undefined}
                   className={`flex-1 inline-flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-lg text-sm transition-all ${
-                    allSystemPassed && voiceGateOk && !isProceedLoading
+                    allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup
                       ? 'bg-gray-900 text-white hover:bg-gray-800 cursor-pointer'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
                 >
                   {isProceedLoading ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>
+                  ) : micDisconnectedPopup ? (
+                    <>Reconnect your headset to continue</>
                   ) : !voiceGateOk ? (
                     <>Record your voice to continue</>
                   ) : (
@@ -1863,6 +1953,33 @@ export default function StepSystemCheck({
             </div>
           </div>
         </div>
+
+        {/* Headset/microphone disconnected popup — appears the instant a
+            PREVIOUSLY-PASSING microphone check goes dead (see the track
+            'ended' + poll effect above). Continue is disabled via its own
+            `disabled` attribute (not by this overlay blocking clicks) —
+            deliberately NOT a full-screen click-blocking modal, so the
+            Device Settings dropdown underneath stays reachable in case the
+            candidate needs to pick a DIFFERENT microphone (new deviceId)
+            rather than the original one reconnecting. Auto-dismisses the
+            moment the device is back — no button to click here. */}
+        {micDisconnectedPopup && (
+          <div className="fixed top-4 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
+            <div className="w-full max-w-md bg-white border border-red-300 rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 flex-shrink-0">
+                <MicOff className="w-5 h-5 text-red-600" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-gray-900 font-semibold text-sm mb-0.5">Headset Disconnected</h3>
+                <p className="text-gray-500 text-xs leading-relaxed">
+                  Your microphone was disconnected. Reconnect your headset to continue — this is
+                  detected automatically. If it&apos;s a different device, select it from Device
+                  Settings below.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
