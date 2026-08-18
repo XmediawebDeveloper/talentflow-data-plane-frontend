@@ -41,17 +41,22 @@ import QuotaBadge from '@/components/ui/quota-badge';
 const INVITATIONS_PAGE_SIZE = 10;
 /** Batch size when pulling every assessment for a browser-side filter. */
 const FULL_SET_BATCH_SIZE = 100;
+// Labels mirror the AI Interview invite wording (AI_INTERVIEW_INVITE_STATUS_OPTIONS
+// in AIInterview.tsx) so a recruiter reads the same lifecycle across both modules:
+// sent -> Invited, opened -> System Check (the candidate consented and is on the
+// system-check step), started -> In Progress, abandoned -> Terminated. Only the
+// labels change — the `value`s are the API/DB statuses and must stay as-is.
 const ASSESSMENT_INVITE_STATUS_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
   { value: 'pending', label: 'Pending' },
-  { value: 'sent', label: 'Invite Sent' },
-  { value: 'opened', label: 'Link Opened' },
-  { value: 'started', label: 'Started' },
+  { value: 'sent', label: 'Invited' },
+  { value: 'opened', label: 'System Check' },
+  { value: 'started', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
   { value: 'expired', label: 'Expired' },
   { value: 'failed', label: 'Invite Failed' },
   { value: 'bounced', label: 'Bounced' },
-  { value: 'abandoned', label: 'Abandoned' },
+  { value: 'abandoned', label: 'Terminated' },
 ];
 
 interface AssessmentsProps {
@@ -3916,16 +3921,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Clock className="w-3 h-3" /> Expired</span>;
                           }
                           if (s === 'abandoned') {
-                            return <span className={`${base} bg-gray-100 text-gray-700 ring-gray-200`}><X className="w-3 h-3" /> Abandoned</span>;
+                            return <span className={`${base} bg-red-50 text-red-600 ring-red-200`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
                           }
                           if (s === 'started' || inv.started_at) {
-                            return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Play className="w-3 h-3" /> Started</span>;
+                            return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Play className="w-3 h-3" /> In Progress</span>;
                           }
                           if (s === 'opened' || inv.opened_at) {
-                            return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`}><Eye className="w-3 h-3" /> Link Opened</span>;
+                            return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`} title="Consent accepted — the candidate is on the system check step"><Monitor className="w-3 h-3" /> System Check</span>;
                           }
                           if (s === 'sent' || inv.sent_at) {
-                            return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-3 h-3" /> Invite Sent</span>;
+                            return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-3 h-3" /> Invited</span>;
                           }
                           return <span className={`${base} bg-gray-100 text-gray-600 ring-gray-200`}><Clock className="w-3 h-3" /> Pending</span>;
                         };
