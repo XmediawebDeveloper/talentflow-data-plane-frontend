@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, Building2, KeyRound } from 'lucide-react';
+import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, ShieldAlert, Building2, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from 'next-themes';
 import { User } from '@/lib/types/tenant';
-import { authService, isTwoFactorRequired, LoginResponse } from '@/lib/services';
+import { authService, isTwoFactorRequired, LoginResponse, clearTokens } from '@/lib/services';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { mapApiUserToUser } from '@/components/providers/AuthProvider';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 import { detectSubdomain } from '@/lib/utils/subdomain';
 import ForgotPasswordModal from './ForgotPasswordModal';
@@ -17,6 +18,19 @@ interface LoginProps {
   onSwitchToSignUp?: () => void;
   onBackToPublic?: () => void;
 }
+
+// Recognise the backend's "account inactive / restricted" signal on a *rejected*
+// login. The backend can express a deactivated account either as a 200 response
+// carrying is_active=false (handled inline in handleSubmit) or — more commonly —
+// as a 403/401 rejection whose message mentions the restriction. We match on the
+// message text so a plain wrong-password 401 ("Invalid email or password") is NOT
+// mistaken for a restriction.
+const RESTRICTION_KEYWORDS = ['restrict', 'inactive', 'deactivat', 'disabled', 'not active'];
+const isAccountRestrictedError = (err: unknown): boolean => {
+  const e = err as { status?: number; message?: string };
+  const msg = (e?.message || '').toLowerCase();
+  return RESTRICTION_KEYWORDS.some((k) => msg.includes(k));
+};
 
 export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) {
   const router = useRouter();
@@ -53,6 +67,10 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  // Set when the backend confirms the account is inactive/restricted. Renders a
+  // dedicated red alert below the form (distinct from the generic `error` line)
+  // and blocks any navigation to the dashboard.
+  const [restricted, setRestricted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
@@ -112,100 +130,15 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   }, [emailFromUrl]);
 
   const handleLoginSuccess = (response: LoginResponse) => {
-    const user: User = {
-      id: response.user.id,
-      tenantId: response.user.tenant_id,
-      email: response.user.email,
-      name: response.user.name,
-      role: response.user.role,
-      phone: response.user.phone,
-      avatarUrl: response.user.avatar_url,
-      isActive: response.user.is_active,
-      permissions: {
-        // Job Descriptions - Granular CRUD
-        canReadJD: response.user.permissions.can_view_jd,
-        canCreateJD: response.user.permissions.can_create_jd,
-        canUpdateJD: response.user.permissions.can_update_jd,
-        canDeleteJD: response.user.permissions.can_delete_jd,
-        canManageJD: response.user.permissions.can_manage_jd,
-        // Resumes - Granular CRUD
-        canViewResumes: response.user.permissions.can_view_resumes,
-        canUploadResumes: response.user.permissions.can_upload_resumes,
-        canUpdateResumes: response.user.permissions.can_update_resumes,
-        canDeleteResumes: response.user.permissions.can_delete_resumes,
-        // Resume Database - Granular CRUD
-        canAccessInternalDB: response.user.permissions.can_access_internal_db,
-        canViewInternalDB: response.user.permissions.can_view_internal_db,
-        // Assessments - Granular CRUD
-        canViewAssessments: response.user.permissions.can_view_assessments,
-        canCreateAssessments: response.user.permissions.can_create_assessments,
-        canUpdateAssessments: response.user.permissions.can_update_assessments,
-        canDeleteAssessments: response.user.permissions.can_delete_assessments,
-        canDownloadAssessmentPDF: response.user.permissions.can_download_assessment_pdf,
-        canViewHRQuestionBank: response.user.permissions.can_view_hr_question_bank,
-        canCreateHRQuestionBank: response.user.permissions.can_create_hr_question_bank,
-        canUpdateHRQuestionBank: response.user.permissions.can_update_hr_question_bank,
-        canDeleteHRQuestionBank: response.user.permissions.can_delete_hr_question_bank,
-        // Analytics & Reports
-        canViewAnalytics: response.user.permissions.can_view_analytics || (response.user.permissions as any).can_view_analytics_granular,
-        // Settings & Admin — accept either legacy bundle or granular grant
-        canManageSettings: response.user.permissions.can_manage_settings || (response.user.permissions as any).can_view_settings || (response.user.permissions as any).can_update_settings,
-        canManageUsers: response.user.permissions.can_manage_users || (response.user.permissions as any).can_view_users,
-        // Billing permissions — same fallback (granular *_granular OR legacy bundle)
-        canViewBilling: response.user.permissions.can_view_billing || (response.user.permissions as any).can_view_billing_granular,
-        canViewInvoices: response.user.permissions.can_view_invoices || (response.user.permissions as any).can_view_invoices_granular,
-        canViewUsage: response.user.permissions.can_view_usage || (response.user.permissions as any).can_view_usage_granular,
-        // Granular billing section view permissions
-        canViewCurrentPlan: response.user.permissions.can_view_current_plan,
-        canViewPaymentMethods: response.user.permissions.can_view_payment_methods,
-        canViewBillingHistory: response.user.permissions.can_view_billing_history,
-        canViewRefundHistory: response.user.permissions.can_view_refund_history,
-        canViewDisputeHistory: response.user.permissions.can_view_dispute_history,
-        // Granular settings section view permissions
-        canViewGeneralSettings: response.user.permissions.can_view_general_settings,
-        canViewPermissionsRoles: response.user.permissions.can_view_permissions_roles,
-        canViewRoles: response.user.permissions.can_view_roles,
-        canViewApiManagement: response.user.permissions.can_view_api_management,
-        canViewBranding: response.user.permissions.can_view_branding,
-        canViewSecuritySettings: response.user.permissions.can_view_security_settings,
-        canViewSupport: (response.user.permissions as any).can_view_support,
-        // Granular Action Permissions — Billing
-        canUpgradePlan: response.user.permissions.can_upgrade_plan,
-        canExportUsage: response.user.permissions.can_export_usage,
-        canAddPaymentMethod: response.user.permissions.can_add_payment_method,
-        canEditPaymentMethod: response.user.permissions.can_edit_payment_method,
-        canDeletePaymentMethod: response.user.permissions.can_delete_payment_method,
-        // Granular Action Permissions — Settings
-        canManagePermissionsRoles: response.user.permissions.can_manage_permissions_roles,
-        canManageApiManagement: response.user.permissions.can_manage_api_management,
-        canManageBranding: response.user.permissions.can_manage_branding,
-        canManageSecuritySettings: response.user.permissions.can_manage_security_settings,
-        // Feature permissions
-        canViewScoring: response.user.permissions.can_view_scoring,
-        canRunScoring: response.user.permissions.can_run_scoring,
-        canViewAIInterviews: response.user.permissions.can_view_ai_interviews,
-        canCreateAIInterviews: response.user.permissions.can_create_ai_interviews,
-        canUpdateAIInterviews: response.user.permissions.can_update_ai_interviews,
-        canShareAIInterviews: response.user.permissions.can_share_ai_interviews,
-        canInviteAIInterviews: response.user.permissions.can_invite_ai_interviews,
-        canPublishAIInterviews: response.user.permissions.can_publish_ai_interviews,
-        canArchiveAIInterviews: response.user.permissions.can_archive_ai_interviews,
-        canDeleteAIInterviews: response.user.permissions.can_delete_ai_interviews,
-        canRunAiInterviews: response.user.permissions.can_run_ai_interviews,
-        canViewAiMatch: response.user.permissions.can_view_ai_match,
-        canRunAiMatch: response.user.permissions.can_run_ai_match,
-        canBulkOperations: response.user.permissions.can_bulk_operations,
-        canExport: response.user.permissions.can_export,
-        canApiAccess: response.user.permissions.can_api_access,
-      },
-      lastLogin: response.user.last_login,
-      createdAt: response.user.created_at,
-      // Feature flags and tenant status
-      featureFlags: response.user.feature_flags,
-      enabledFeatures: response.user.enabled_features,
-      tenantStatus: response.user.tenant_status,
-      tenantSubdomain: response.user.tenant_subdomain,
-    };
+    // Build the user via the SAME mapper the session-restore path uses
+    // (AuthProvider.mapApiUserToUser). Previously this component hand-rolled the
+    // User object and silently omitted several fields — permissionCodes, Teams
+    // perms, canArchiveJD/canDisableJD, and the internal-DB create/update/delete
+    // grants. That made permission-gated buttons stay hidden until a manual
+    // refresh (which runs /auth/me → mapApiUserToUser and fills them in). Reusing
+    // the single mapper guarantees the just-logged-in state matches the
+    // post-refresh state exactly, so gated UI appears immediately.
+    const user: User = mapApiUserToUser(response.user);
 
     // Save or clear email based on "Remember me" checkbox
     try {
@@ -258,6 +191,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setRestricted(false);
 
     // Prefer React state, but fall back to the live DOM value in case the field
     // was autofilled without firing onChange (see emailInputRef comment above).
@@ -290,6 +224,17 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         return;
       }
 
+      // Account restriction gate — if the backend authenticated the request but
+      // the account is inactive, stop here. We do NOT populate the auth store or
+      // navigate, and we clear the just-stored tokens so a page reload can't use
+      // them to restore a session and slip into the dashboard (acceptance #5).
+      if (response.user && response.user.is_active === false) {
+        clearTokens();
+        setRestricted(true);
+        setIsLoading(false);
+        return;
+      }
+
       // Normal login success — tokens are now stored.
       // must_reset_password is already in the login response; no need for a second /auth/me roundtrip.
       if (response.must_reset_password) {
@@ -301,7 +246,14 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       handleLoginSuccess(response);
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Invalid email or password. Please check your credentials.');
+      // The backend more commonly rejects an inactive account outright (403/401).
+      // Show the dedicated restriction alert instead of the generic error line.
+      if (isAccountRestrictedError(err)) {
+        setError('');
+        setRestricted(true);
+      } else {
+        setError(err.message || 'Invalid email or password. Please check your credentials.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -538,6 +490,35 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     display: 'flex',
     alignItems: 'flex-start',
     gap: '12px',
+  };
+
+  // Dedicated "account restricted" alert shown BELOW the form. A more prominent
+  // full-width red box (bolder border + shield icon + two lines) than the inline
+  // credential-error box above the form.
+  const restrictedBoxStyle: React.CSSProperties = {
+    marginTop: '24px',
+    width: '100%',
+    padding: '16px',
+    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2',
+    border: isDark ? '1px solid rgba(239, 68, 68, 0.45)' : '1px solid #FCA5A5',
+    borderRadius: '12px',
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '12px',
+    boxSizing: 'border-box',
+  };
+
+  const restrictedTitleStyle: React.CSSProperties = {
+    fontSize: '15px',
+    fontWeight: 600,
+    color: isDark ? '#FCA5A5' : '#991B1B',
+    marginBottom: '4px',
+  };
+
+  const restrictedSubtitleStyle: React.CSSProperties = {
+    fontSize: '14px',
+    lineHeight: 1.5,
+    color: isDark ? '#F87171' : '#B91C1C',
   };
 
   const inputGroupStyle: React.CSSProperties = {
@@ -982,6 +963,18 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                 )}
               </button>
             </form>
+
+            {/* Account restricted alert — shown directly below the form only
+                after a login attempt confirms the account is inactive. */}
+            {restricted && (
+              <div style={restrictedBoxStyle} role="alert" aria-live="assertive">
+                <ShieldAlert style={{ width: 22, height: 22, color: '#DC2626', flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <div style={restrictedTitleStyle}>Your account has been restricted.</div>
+                  <div style={restrictedSubtitleStyle}>Please contact your administrator for more information.</div>
+                </div>
+              </div>
+            )}
 
             {/* Footer */}
             <div style={footerStyle}>

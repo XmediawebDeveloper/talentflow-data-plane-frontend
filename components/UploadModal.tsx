@@ -123,6 +123,17 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
       setSelectedFolder(rootFolder.id);
     }
   }, [rootFolder?.id, targetFolder]);
+
+  /* The destination exactly as the dropdown states it ("Arun / sub folder"),
+     for anything downstream that has to name where these files were headed —
+     the duplicate dialog above all. Read from `allFolders`, the same list the
+     <option>s are built from, so the dialog can never disagree with what the
+     user just picked. Callers prefix it with the section name. */
+  const selectedFolderPath = useMemo(() => {
+    const id = selectedFolder || rootFolder?.id;
+    if (!id) return 'root';
+    return allFolders.find(entry => entry.folder.id === id)?.path || 'root';
+  }, [selectedFolder, rootFolder?.id, allFolders]);
   const [isDragging, setIsDragging] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -514,7 +525,11 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           // Not in scoring mode - check if parent wants to handle duplicates
           if (onDuplicateDetected && result.duplicateData) {
             console.log('[UPLOAD-MODAL-DEBUG] Calling onDuplicateDetected with data');
-            onDuplicateDetected(result.duplicateData);
+            /* Carry the chosen destination through with it. The parent used to
+               re-derive this from its own folder state, which reported Root
+               whenever that lookup came up empty — so the duplicate dialog
+               named a folder the user had not picked. */
+            onDuplicateDetected({ ...result.duplicateData, targetFolderPath: selectedFolderPath });
             onClose(); // Close upload modal, parent will show duplicate modal
             return;
           }

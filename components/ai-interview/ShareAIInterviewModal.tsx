@@ -582,6 +582,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       toast.error('Please enter a valid email address');
       return;
     }
+    // Copy Link creates a real invitation server-side, so it has to respect the
+    // same in-list duplicate rule that disables Send Invitations. Without this,
+    // clicking it on two rows holding one address minted two invitations.
+    if (isDuplicateEmail(candidate.id, candidate.email)) {
+      toast.error('This email is already in the list — remove the duplicate row first');
+      return;
+    }
 
     // If link already generated, just copy it again (same session, no new quota deduction)
     if (candidate.generatedLink) {
@@ -1188,8 +1195,18 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               {/* Per-candidate Copy Link button */}
                               <button
                                 onClick={() => handleCopyLinkForCandidate(candidate.id)}
-                                disabled={generatingLinkFor === candidate.id}
-                                title={candidate.generatedLink ? 'Link generated — click to copy again' : 'Generate & copy interview link'}
+                                disabled={
+                                  generatingLinkFor === candidate.id ||
+                                  (!candidate.generatedLink &&
+                                    isDuplicateEmail(candidate.id, candidate.email))
+                                }
+                                title={
+                                  candidate.generatedLink
+                                    ? 'Link generated — click to copy again'
+                                    : isDuplicateEmail(candidate.id, candidate.email)
+                                      ? 'This email is already in the list'
+                                      : 'Generate & copy interview link'
+                                }
                                 className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs border transition-colors whitespace-nowrap flex-shrink-0 ${
                                   candidate.generatedLink
                                     ? 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100'

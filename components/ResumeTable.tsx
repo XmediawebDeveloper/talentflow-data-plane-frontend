@@ -133,6 +133,11 @@ interface ResumeTableProps {
    *  actually lives in — what an aggregated view (All Resumes) needs to stay
    *  readable, and noise in a view that is already one folder. */
   getFolderName?: (folderId?: string) => string | undefined;
+  showEmptyAction?: boolean;
+  /** Replaces the built-in "No resumes found" block. Pages whose whole body is
+   *  the empty state (My Resumes) pass their own illustrated version; every
+   *  other caller keeps the default. */
+  emptyState?: React.ReactNode;
 }
 
 // Helper function to highlight matching text
@@ -189,6 +194,8 @@ export default function ResumeTable({
   enableRowReorder = false,
   reorderScopeKey,
   getFolderName,
+  showEmptyAction = true,
+  emptyState,
 }: ResumeTableProps) {
   const router = useRouter();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -339,19 +346,20 @@ export default function ResumeTable({
   };
 
   if (resumes.length === 0) {
+    if (emptyState) return <>{emptyState}</>;
     return (
       <EmptyState
         icon={FileText}
         title="No resumes found"
         description="We couldn't find any resumes matching your search criteria. Try adjusting your filters or search terms."
-        action={{
+        action={showEmptyAction ? {
           label: 'Clear all filters',
           onClick: () => {
             // This would be handled by parent component
             window.location.reload();
           },
           variant: 'secondary'
-        }}
+        } : undefined}
       />
     );
   }

@@ -1,19 +1,28 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Eye, Download, FileText, Loader2 } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
 
 interface ResumeTextPreviewModalProps {
-  /** Resume (or version) id — a version is a resume record in its own right. */
-  resumeId: string;
+  /** Resume (or version) id — a version is a resume record in its own right.
+   *  Optional: a file that isn't saved yet has no id, and passes its own
+   *  content through `documentUrl` / `docxBlob` instead. */
+  resumeId?: string;
   /** Heading, e.g. "Arvind Nair" or "Version 2". */
   title: string;
   /** Sub-heading, usually the file name. */
   subtitle?: string;
   /** Text already to hand; skips the fetch when provided. */
   text?: string;
+  /** Render this PDF in place of extracted text — for a file with no server
+   *  record yet, where there is nothing to fetch text from. */
+  documentUrl?: string;
+  /** Same, for a Word document, rendered with docx-preview. */
+  docxBlob?: Blob;
+  /** Replaces the id-based download — a local file downloads from memory. */
+  onDownload?: () => void;
   onClose: () => void;
 }
 
@@ -42,14 +51,23 @@ export default function ResumeTextPreviewModal({
   title,
   subtitle,
   text,
+  documentUrl,
+  docxBlob,
+  onDownload,
   onClose,
 }: ResumeTextPreviewModalProps) {
+  /* A file the server has never seen has no extracted text to show, so it is
+     rendered as the document itself. The frame around it — header, download,
+     grey mat, footer — stays the same either way, so the two previews in the
+     duplicate dialog read as one thing. */
+  const documentMode = !!(documentUrl || docxBlob);
   const [content, setContent] = useState(text || '');
-  const [loading, setLoading] = useState(!text);
+  const [loading, setLoading] = useState(!text && !documentMode && !!resumeId);
+  const docxContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (text) {
-      setContent(text);
+    if (text || documentMode || !resumeId) {
+      if (text) setContent(text);
       return;
     }
     let cancelled = false;
@@ -68,9 +86,43 @@ export default function ResumeTextPreviewModal({
     return () => {
       cancelled = true;
     };
-  }, [resumeId, text]);
+  }, [resumeId, text, documentMode]);
+
+  /* docx-preview is imported inside this handler, not at the top of the file.
+     It reaches for the DOM as it loads, which is why every other component that
+     renders Word documents pulls it in through `dynamic(..., { ssr: false })`.
+     This modal, by contrast, is a plain static import in a dozen places — so a
+     top-level import here dragged the dependency into all of their server
+     bundles. Loading it on demand keeps it out of the module graph until a Word
+     file is actually opened, in the browser, where it works. */
+  const renderDocx = useCallback(async (blob: Blob) => {
+    if (!docxContainerRef.current) return;
+    docxContainerRef.current.innerHTML = '';
+    try {
+      const { renderAsync } = await import('docx-preview');
+      if (!docxContainerRef.current) return;
+      await renderAsync(blob, docxContainerRef.current, undefined, {
+        className: 'docx-preview-wrapper',
+        inWrapper: true,
+        breakPages: true,
+      });
+    } catch {
+      if (!docxContainerRef.current) return;
+      docxContainerRef.current.innerHTML =
+        '<p style="color:#6b7280;font-size:14px;text-align:center;padding:24px">Could not render this document. Download it to view the original file.</p>';
+    }
+  }, []);
+
+  useEffect(() => {
+    if (docxBlob) renderDocx(docxBlob);
+  }, [docxBlob, renderDocx]);
 
   const handleDownload = async () => {
+    if (onDownload) {
+      onDownload();
+      return;
+    }
+    if (!resumeId) return;
     try {
       toast.loading('Downloading...', { id: 'resume-preview-download' });
       const blob = await resumeService.download(resumeId);
@@ -106,13 +158,17 @@ export default function ResumeTextPreviewModal({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={handleDownload}
-              className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
-            >
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Download</span>
-            </button>
+            {/* Nothing to download when there is neither a stored record nor a
+                caller-supplied handler — an inert button would just lie. */}
+            {(resumeId || onDownload) && (
+              <button
+                onClick={handleDownload}
+                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Download</span>
+              </button>
+            )}
             <button
               onClick={onClose}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -125,7 +181,15 @@ export default function ResumeTextPreviewModal({
 
         {/* Document */}
         <div className="flex-1 overflow-y-auto bg-gray-100 p-4 sm:p-6">
-          {loading ? (
+          {documentMode ? (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 max-w-2xl mx-auto min-h-full overflow-hidden">
+              {documentUrl ? (
+                <iframe src={documentUrl} className="w-full h-[70vh] border-0" title={title} />
+              ) : (
+                <div ref={docxContainerRef} className="w-full overflow-auto p-4 sm:p-6" />
+              )}
+            </div>
+          ) : loading ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center gap-3">
               <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
               <p className="text-sm text-gray-500">Loading resume...</p>
