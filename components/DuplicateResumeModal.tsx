@@ -110,9 +110,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
     setPreview({ kind: 'existing', resumeId, title: candidateName || 'Existing Resume', subtitle: fileName });
   };
 
-  /* The refused file has no record to read text from, so its own bytes go to
-     the popup: a PDF through an object URL, a Word file straight as a blob.
-     The frame around it is the one above. */
+  /* The refused file has no record to read text from, so the file itself goes
+     to the popup, which reads its text in the browser and renders the same
+     formatted page a stored resume gets. The object URL is only a fallback,
+     for a scanned PDF that has no text layer to extract. */
   const handlePreviewNew = (file: File, candidateName: string) => {
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     setPreview({
@@ -136,20 +137,28 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
      dialog — and both carry a View Resume button. The overlay used to live
      inside the second return only, so in the blocked dialog the button set its
      state and rendered nothing at all. Declared once here, rendered by both. */
+  /* z-[80]: the preview is a SIBLING of this component's own overlay, which
+     sits at z-[60] (higher than the z-50 most dialogs use). The preview's
+     default z-50 therefore lost to it and the resume opened *behind* the
+     Duplicate Resume Detected dialog. 80 clears z-[60] and also the z-[70]
+     BulkVersionResolutionModal that shares the my-resumes page, while staying
+     under the dashboard's blocking overlays (terms z-[95], suspension z-[100]). */
   const previewOverlay = preview ? (
     preview.kind === 'existing' ? (
       <ResumeTextPreviewModal
         resumeId={preview.resumeId}
         title={preview.title}
         subtitle={preview.subtitle}
+        zIndexClassName="z-[80]"
         onClose={closePreview}
       />
     ) : (
       <ResumeTextPreviewModal
         title={preview.title}
         subtitle={preview.subtitle}
+        localFile={preview.file}
         documentUrl={preview.url}
-        docxBlob={preview.url ? undefined : preview.file}
+        zIndexClassName="z-[80]"
         onDownload={() => {
           const url = window.URL.createObjectURL(preview.file);
           const a = document.createElement('a');

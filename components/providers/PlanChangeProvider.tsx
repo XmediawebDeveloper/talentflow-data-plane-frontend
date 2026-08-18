@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { planChangeService } from '@/lib/services/planChangeService';
 import { PLAN_CHANGE_PENDING_EVENT } from '@/lib/services/api';
+import { isOnline, isTransientNetworkError, withNetworkRetry } from '@/lib/utils/networkRetry';
 import { toast } from 'sonner';
 import type {
   PlanChangeNotification,
@@ -73,8 +74,15 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const fetchPendingChanges = useCallback(async () => {
+    // Offline (sleep/wake, VPN drop, dead WiFi) — skip the request entirely.
+    // The `online` listener below re-runs this as soon as the browser reconnects.
+    if (!isOnline()) {
+      setLoading(false);
+      return;
+    }
+
     try {
-      const changes = await planChangeService.getPendingChanges();
+      const changes = await withNetworkRetry(() => planChangeService.getPendingChanges());
       const pending = Array.isArray(changes)
         ? changes.filter((c) => c.status?.toLowerCase() === 'pending')
         : [];
@@ -87,8 +95,15 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
         setIsSuspendedDueToPlanChange(false);
       }
     } catch (error) {
-      console.error('[PlanChange] Failed to fetch pending changes:', error);
-      setPendingChanges([]);
+      if (isTransientNetworkError(error)) {
+        // The request never reached the server. Keep whatever we already know —
+        // clearing here would silently drop a real pending-change banner on a
+        // momentary connection blip. Warn (not error) so the dev overlay stays quiet.
+        console.warn('[PlanChange] Pending-changes check skipped (network unavailable), will retry');
+      } else {
+        console.error('[PlanChange] Failed to fetch pending changes:', error);
+        setPendingChanges([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -118,6 +133,14 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [fetchPendingChanges]);
+
+  // Re-fetch as soon as connectivity returns — covers the fetches that were
+  // skipped or failed transiently while the browser was offline.
+  useEffect(() => {
+    const handleOnline = () => fetchPendingChanges();
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
   }, [fetchPendingChanges]);
 
   // Listen for plan change events (from WebSocket or API interceptor)
