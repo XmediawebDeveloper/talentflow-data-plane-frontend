@@ -678,6 +678,32 @@ function indexHistoryByText(questionHistory: any[]): Map<string, any> {
  *  Must-Have Q1 ("Hi, I'm Bina, your interviewer today. In the role of …").
  *  Matched by unique lead-ins that never open a real interview question; a real
  *  question that merely quotes one still has a "?" and is kept. */
+/** True only for a row that is a GENUINE follow-up sub-turn of an earlier main
+ *  question, i.e. `is_follow_up` AND a `parent_question_number` that points at an
+ *  earlier main row.
+ *
+ *  The bare `is_follow_up` flag CANNOT be trusted: the backend's skip-recovery and
+ *  resume paths tag the NEXT MAIN question with `is_follow_up=true` (e.g. a
+ *  "Welcome back — let's continue! …" turn emitted after several skipped
+ *  questions), even though that turn covers its own slot and its own skills.
+ *  Dropping those rows hides delivered questions — it once hid 8-9 of 15 in
+ *  Question Analysis, and it made Cluster Coverage under-count the delivered slots
+ *  so the last question's skills read "Not Covered" (observed: a 4-question ROS
+ *  interview reporting 8/15 covered instead of 11/15, missing exactly Q4's Python /
+ *  Middleware communication / GitHub).
+ *
+ *  Shared by the Question Analysis row filter and the coverage delivered-count so
+ *  the two can never disagree about what counts as a delivered question. */
+function isExplicitFollowUpRow(q: any): boolean {
+  if (!q?.is_follow_up) return false;
+  const parentQn = Number(q?.parent_question_number);
+  const ownQn = Number(q?.question_number);
+  // Mis-labelled: flagged as a follow-up with no usable parent → it is a main.
+  if (!Number.isFinite(parentQn) || parentQn <= 0) return false;
+  if (Number.isFinite(ownQn) && ownQn === parentQn) return true;
+  return parentQn < (ownQn || Number.MAX_SAFE_INTEGER);
+}
+
 function isMetaAssistantTurn(content: string): boolean {
   const t = (content || '').toLowerCase().trim();
   if (!t) return false;
@@ -1261,15 +1287,8 @@ function buildPerQuestionDetailsFromHistory(
   // Bug-tagged rows where is_follow_up=true but parent_question_number is
   // missing/equal still flow into the main filter (backwards-compat with
   // the skip-recovery mis-tagging documented earlier).
-  const explicitFollowUps = indexedHistory.filter(q => {
-    if (!q?.is_follow_up) return false;
-    const parentQn = Number(q?.parent_question_number);
-    const ownQn = Number(q?.question_number);
-    if (!Number.isFinite(parentQn) || parentQn <= 0) return false;
-    if (Number.isFinite(ownQn) && ownQn === parentQn) return true; // standard follow-up shares parent qnum
-    // Or it sits ahead of its parent in chronological order — fine.
-    return parentQn < (ownQn || Number.MAX_SAFE_INTEGER);
-  });
+  // Same predicate the coverage delivered-count uses — see isExplicitFollowUpRow.
+  const explicitFollowUps = indexedHistory.filter(isExplicitFollowUpRow);
   const followUpHistoryIds = new Set(
     explicitFollowUps.map(f => Number(f._historyIdx)),
   );
@@ -2059,7 +2078,10 @@ export function buildDashboardData(params: {
     const out: Record<'mth' | 'nth', number> = { mth: 0, nth: 0 };
     const seen = new Set<string>();
     for (const h of ((eval_?.question_history || []) as any[])) {
-      if (!h || h.is_follow_up) continue;
+      // NOT a bare `is_follow_up` check — see isExplicitFollowUpRow. A resume /
+      // skip-recovery turn is mis-tagged as a follow-up while being a real
+      // delivered question, and dropping it under-counts the reached slots.
+      if (!h || isExplicitFollowUpRow(h)) continue;
       if (isUndeliveredHistoryRow(h)) continue;
       const qText = String(h?.question || '').trim();
       if (!qText) continue;
