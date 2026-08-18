@@ -81,22 +81,6 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     panNextResolveRef.current = null;
   };
 
-  // Landscape enforcement — spec explicitly requires "a 10-second video ...
-  // in Landscape mode" (Step 3); previously this was only stated as text on
-  // the instructions screen with nothing actually checking it. Blocks
-  // permission/recording/upload with a rotate-prompt overlay whenever the
-  // device is in portrait, so a candidate can't proceed holding the phone
-  // the wrong way. Does not touch recording/timer/upload logic — purely a
-  // gate rendered on top.
-  const [isLandscape, setIsLandscape] = useState(true);
-  useEffect(() => {
-    const mq = window.matchMedia('(orientation: landscape)');
-    const update = () => setIsLandscape(mq.matches);
-    update();
-    mq.addEventListener('change', update);
-    return () => mq.removeEventListener('change', update);
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -341,27 +325,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     }
   };
 
-  const orientationGateActive =
-    !isLandscape &&
-    phase !== 'loading' && phase !== 'expired' && phase !== 'error' && phase !== 'done';
-
   return (
     <div className="min-h-screen bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center">
-      {orientationGateActive && (
-        <div className="fixed inset-0 z-50 bg-[#0F1929] flex flex-col items-center justify-center gap-4 p-6 text-center">
-          <span className="text-6xl inline-block animate-[tf-rotate-hint_1.6s_ease-in-out_infinite]">📱</span>
-          <h1 className="text-lg font-semibold">Rotate your phone</h1>
-          <p className="text-sm text-[#94a3b8] max-w-xs">
-            This verification must be recorded in landscape (horizontal) mode. Please turn your phone sideways to continue.
-          </p>
-          <style>{`
-            @keyframes tf-rotate-hint {
-              0%, 100% { transform: rotate(0deg); }
-              50% { transform: rotate(90deg); }
-            }
-          `}</style>
-        </div>
-      )}
       {phase === 'loading' && <p className="text-[#94a3b8]">Loading verification…</p>}
 
       {(phase === 'expired' || phase === 'error') && (
@@ -396,7 +361,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
                   nearby devices.
                 </p>
                 <div className="mt-2 flex items-center gap-1.5">
-                  <span className="text-xl inline-block animate-[tf-instr-pan_2.4s_ease-in-out_infinite]">📱</span>
+                  <span className="text-xl inline-block animate-[tf-instr-tilt_1.2s_ease-in-out_infinite]">📱</span>
                   <span className="text-[11px] text-[#94a3b8]">left ↔ right</span>
                 </div>
               </div>
@@ -410,10 +375,9 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             Next
           </button>
           <style>{`
-            @keyframes tf-instr-pan {
-              0%   { transform: translateX(-10px); }
-              50%  { transform: translateX(10px); }
-              100% { transform: translateX(-10px); }
+            @keyframes tf-instr-tilt {
+              0%, 100% { transform: rotate(-25deg); }
+              50% { transform: rotate(25deg); }
             }
           `}</style>
         </div>
@@ -453,23 +417,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           )}
           {phase === 'pan_instructions' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 rounded-xl px-4 overflow-hidden">
-              <div className="flex items-center gap-2 animate-[tf-pan-sweep_2.4s_ease-in-out_infinite]">
-                <span className="text-3xl inline-block leading-none animate-[tf-arrow-flip_2.4s_ease-in-out_infinite]">➜</span>
-                <span className="text-5xl inline-block leading-none">📱</span>
-              </div>
+              <span className="text-5xl inline-block animate-[tf-phone-tilt_1.2s_ease-in-out_infinite]">📱</span>
               <p className="text-sm font-medium text-white text-center">
                 Now slowly move your phone from left to right and back again — capture your workspace, surrounding area, and any nearby devices.
               </p>
               <style>{`
-                @keyframes tf-pan-sweep {
-                  0%   { transform: translateX(-120px); }
-                  50%  { transform: translateX(120px); }
-                  100% { transform: translateX(-120px); }
-                }
-                @keyframes tf-arrow-flip {
-                  0%, 49.9%  { transform: scaleX(1); }
-                  50%, 99.9% { transform: scaleX(-1); }
-                  100%       { transform: scaleX(1); }
+                @keyframes tf-phone-tilt {
+                  0%, 100% { transform: rotate(-25deg); }
+                  50% { transform: rotate(25deg); }
                 }
               `}</style>
             </div>
