@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap, Loader2, Monitor, Ban } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
@@ -169,10 +169,10 @@ export default function AssessmentDetailsView({
 
   // Fetch recent activity when assessment changes.
   // Each invitation is expanded into MULTIPLE timeline events (Invited,
-  // Email Sent, Link Opened, Assessment Started, Completed, Bounced,
-  // Expired) so the recruiter sees the full lifecycle, not just the latest
-  // state. The list is then sorted newest-first and paginated client-side
-  // (10 per page).
+  // Email Sent, System Check, Assessment Started, Completed, Terminated,
+  // Bounced, Expired) so the recruiter sees the full lifecycle, not just the
+  // latest state. Wording follows the AI Interview module. The list is then
+  // sorted newest-first and paginated client-side (10 per page).
   useEffect(() => {
     const fetchActivity = async () => {
       if (!assessment?.id) return;
@@ -190,6 +190,11 @@ export default function AssessmentDetailsView({
           if (inv.opened_at) events.push({ ...inv, _eventType: 'opened', _eventAt: inv.opened_at });
           if (inv.started_at) events.push({ ...inv, _eventType: 'started', _eventAt: inv.started_at });
           if (inv.completed_at) events.push({ ...inv, _eventType: 'completed', _eventAt: inv.completed_at });
+          // Candidate walked out mid-assessment (attempt.exited_at). Never set
+          // on a completed attempt, so this can't double up with 'completed'.
+          if (inv.terminated_at && !inv.completed_at) {
+            events.push({ ...inv, _eventType: 'terminated', _eventAt: inv.terminated_at });
+          }
           if (inv.bounced_at) events.push({ ...inv, _eventType: 'bounced', _eventAt: inv.bounced_at });
           // Expired event — clock-based when the link passed its deadline
           // without the candidate starting (and no unit was consumed).
@@ -483,10 +488,13 @@ export default function AssessmentDetailsView({
     return Array.from(seen.values());
   })();
   const _now = new Date();
-  const _bucket = (inv: any): 'completed' | 'failed' | 'expired' | 'started' | 'sent' => {
+  const _bucket = (inv: any): 'completed' | 'failed' | 'terminated' | 'expired' | 'started' | 'sent' => {
     const s = (inv.status || '').toLowerCase();
     if (s === 'completed' || inv.completed_at) return 'completed';
-    if (['failed', 'bounced', 'abandoned'].includes(s)) return 'failed';
+    // 'abandoned' = candidate left mid-assessment → its own "Terminated"
+    // bucket (AI Interview wording), not an invite-delivery failure.
+    if (s === 'abandoned') return 'terminated';
+    if (['failed', 'bounced'].includes(s)) return 'failed';
     if (s === 'expired') return 'expired';
     if (!inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < _now) {
       return 'expired';
@@ -497,6 +505,7 @@ export default function AssessmentDetailsView({
   const _bucketCounts = {
     completed: 0,
     failed: 0,
+    terminated: 0,
     expired: 0,
     started: 0,
     sent: 0,
@@ -510,6 +519,7 @@ export default function AssessmentDetailsView({
     totalInvites: _totalInvites,
     expired: _bucketCounts.expired,
     failed: _bucketCounts.failed,
+    terminated: _bucketCounts.terminated,
     started: _bucketCounts.started || assessment.in_progress_count || 0,
     completed: _completed,
     inProgress: _bucketCounts.started || assessment.in_progress_count || 0,
@@ -1136,8 +1146,8 @@ export default function AssessmentDetailsView({
               <div className="p-3 sm:p-4 lg:p-6">
                 {/* Quick Stats — mirrors the Track Invites popup card row:
                     Total Invited / Expired / Invite Failed / In Progress /
-                    Completed / Completion Rate. */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4 mb-4 sm:mb-6">
+                    Completed / Terminated / Completion Rate. */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3 lg:gap-4 mb-4 sm:mb-6">
                   <div className="bg-gradient-to-br from-brand-blue/5 to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-2.5 sm:p-3 lg:p-4">
                     <div className="flex items-center gap-1.5 sm:gap-2 text-brand-blue text-xs mb-1.5 sm:mb-2">
                       <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -1176,6 +1186,15 @@ export default function AssessmentDetailsView({
                       <span>Completed</span>
                     </div>
                     <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 tracking-tight">{analyticsData.completed}</div>
+                  </div>
+
+                  {/* Terminated — candidate exited mid-assessment. */}
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-red-600 text-xs mb-1.5 sm:mb-2">
+                      <Ban className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      <span>Terminated</span>
+                    </div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-red-600 tracking-tight">{analyticsData.terminated}</div>
                   </div>
 
                   <div className="bg-gradient-to-br from-brand-blue/5 to-brand-blue-2/5 border border-brand-blue/15 rounded-xl p-2.5 sm:p-3 lg:p-4">
@@ -1223,17 +1242,34 @@ export default function AssessmentDetailsView({
                         }
                         return uniqueInvitations.slice(0, 5);
                       })().map((activity: any) => {
+                        // Same status vocabulary as the Track Invites popup —
+                        // Invited / System Check / In Progress / Completed /
+                        // Terminated — so this card can't drift from it. The
+                        // old version only knew completed/sent/failed (and an
+                        // 'in_progress' value assessments never emit), so an
+                        // opened, started, expired or abandoned invitation all
+                        // fell through to "Pending".
                         const getStatusBadge = () => {
-                          if (activity.status === 'completed') {
-                            return { color: 'bg-green-100 text-green-700 ring-1 ring-green-200', label: 'Completed' };
-                          } else if (activity.status === 'in_progress') {
-                            return { color: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20', label: 'In Progress' };
-                          } else if (activity.status === 'sent') {
-                            return { color: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20', label: 'Sent' };
-                          } else if (activity.status === 'failed') {
-                            return { color: 'bg-red-100 text-red-700 ring-1 ring-red-200', label: 'Failed' };
+                          switch (activity.status) {
+                            case 'completed':
+                              return { color: 'bg-green-100 text-green-700 ring-1 ring-green-200', label: 'Completed' };
+                            case 'abandoned':
+                              return { color: 'bg-red-100 text-red-700 ring-1 ring-red-200', label: 'Terminated' };
+                            case 'failed':
+                              return { color: 'bg-red-100 text-red-700 ring-1 ring-red-200', label: 'Invite Failed' };
+                            case 'bounced':
+                              return { color: 'bg-red-100 text-red-700 ring-1 ring-red-200', label: 'Bounced' };
+                            case 'expired':
+                              return { color: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20', label: 'Expired' };
+                            case 'started':
+                              return { color: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20', label: 'In Progress' };
+                            case 'opened':
+                              return { color: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20', label: 'System Check' };
+                            case 'sent':
+                              return { color: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20', label: 'Invited' };
+                            default:
+                              return { color: 'bg-slate-100 text-gray-700 ring-1 ring-gray-200', label: 'Pending' };
                           }
-                          return { color: 'bg-slate-100 text-gray-700 ring-1 ring-gray-200', label: 'Pending' };
                         };
 
                         const statusBadge = getStatusBadge();
@@ -1283,15 +1319,20 @@ export default function AssessmentDetailsView({
                                     Sent: {formattedDate}
                                   </span>
                                 </div>
-                                {activity.status === 'in_progress' && activity.progress != null && (
+                                {/* Progress bar for an in-progress candidate.
+                                    Keyed on 'started' + progress_percent — the
+                                    values the invitations API actually returns
+                                    (it never emits 'in_progress'/'progress', so
+                                    this block used to be dead). */}
+                                {activity.status === 'started' && activity.progress_percent != null && (
                                   <div className="mt-2">
                                     <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                                      <span>{activity.progress}% Complete</span>
+                                      <span>{activity.progress_percent}% Complete</span>
                                     </div>
                                     <div className="w-full bg-gray-100 rounded-full h-2">
                                       <div
                                         className="bg-gradient-to-r from-brand-blue to-brand-cyan h-2 rounded-full transition-all"
-                                        style={{ width: `${activity.progress}%` }}
+                                        style={{ width: `${activity.progress_percent}%` }}
                                       ></div>
                                     </div>
                                   </div>
@@ -1384,15 +1425,20 @@ export default function AssessmentDetailsView({
                     {pageItems.map((activity: any, idx: number) => {
                       // Per-event icon + label, derived from _eventType so each
                       // lifecycle moment (invited, sent, opened, started,
-                      // completed, bounced, expired) renders as its own row.
+                      // completed, terminated, bounced, expired) renders as its
+                      // own row. Wording matches the AI Interview lifecycle:
+                      // Invited -> System Check -> In Progress -> Completed /
+                      // Terminated.
                       const getActivityInfo = () => {
                         switch (activity._eventType) {
                           case 'completed':
                             return { icon: CheckCircle, color: 'text-green-700 bg-green-100 ring-1 ring-green-200', label: 'Completed assessment' };
+                          case 'terminated':
+                            return { icon: Ban, color: 'text-red-700 bg-red-100 ring-1 ring-red-200', label: 'Terminated before completion' };
                           case 'started':
-                            return { icon: Play, color: 'text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20', label: 'Assessment started' };
+                            return { icon: Play, color: 'text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20', label: 'Started the assessment (In Progress)' };
                           case 'opened':
-                            return { icon: Eye, color: 'text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20', label: 'Link opened' };
+                            return { icon: Monitor, color: 'text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20', label: 'Reached system check' };
                           case 'sent':
                             return { icon: Mail, color: 'text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20', label: 'Invitation email sent' };
                           case 'bounced':

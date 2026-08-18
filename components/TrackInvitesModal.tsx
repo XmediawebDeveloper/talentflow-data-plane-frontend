@@ -62,6 +62,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
     started: 0,
     completed: 0,
     failed: 0,
+    terminated: 0,
   });
   // Email editing state
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
@@ -93,7 +94,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
 
       if (!assessmentsResponse.data?.items || assessmentsResponse.data.items.length === 0) {
         setInvitations([]);
-        setStats({ total: 0, expired: 0, started: 0, completed: 0, failed: 0 });
+        setStats({ total: 0, expired: 0, started: 0, completed: 0, failed: 0, terminated: 0 });
         setIsLoading(false);
         return;
       }
@@ -128,10 +129,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
       // rule as the assessment-level popup. Every invitation falls into
       // exactly one of completed / failed / expired / started / sent.
       const _now = new Date();
-      const _bucket = (inv: any): 'completed' | 'failed' | 'expired' | 'started' | 'sent' => {
+      const _bucket = (inv: any): 'completed' | 'failed' | 'terminated' | 'expired' | 'started' | 'sent' => {
         const s = (inv.status || '').toLowerCase();
         if (s === 'completed' || inv.completed_at) return 'completed';
-        if (['failed', 'bounced', 'abandoned'].includes(s)) return 'failed';
+        // 'abandoned' = candidate walked out mid-assessment. Counted on its own
+        // as "Terminated" (AI Interview wording), NOT as an invite failure.
+        if (s === 'abandoned') return 'terminated';
+        if (['failed', 'bounced'].includes(s)) return 'failed';
         if (s === 'expired') return 'expired';
         if (!inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < _now) {
           return 'expired';
@@ -145,6 +149,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
         started: allInvitations.filter(inv => _bucket(inv) === 'started').length,
         completed: allInvitations.filter(inv => _bucket(inv) === 'completed').length,
         failed: allInvitations.filter(inv => _bucket(inv) === 'failed').length,
+        terminated: allInvitations.filter(inv => _bucket(inv) === 'terminated').length,
       };
 
       setInvitations(allInvitations);
@@ -241,11 +246,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
   // rows to five lines while their neighbours had one, and nothing lined up.
   const timelineEvents = (inv: any) => {
     const out: { label: string; at: string; Icon: typeof Mail; tone: string }[] = [];
-    if (inv.sent_at) out.push({ label: 'Sent', at: inv.sent_at, Icon: Mail, tone: 'text-brand-blue' });
+    if (inv.sent_at) out.push({ label: 'Invited', at: inv.sent_at, Icon: Mail, tone: 'text-brand-blue' });
     if (inv.email_read_at) out.push({ label: 'Email Read', at: inv.email_read_at, Icon: Eye, tone: 'text-brand-cyan' });
     if (inv.bounced_at) out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-red-600' });
+    if (inv.opened_at) out.push({ label: 'System Check', at: inv.opened_at, Icon: Monitor, tone: 'text-brand-cyan' });
     if (inv.started_at) out.push({ label: 'Started', at: inv.started_at, Icon: Play, tone: 'text-brand-orange-deep' });
     if (inv.completed_at) out.push({ label: 'Completed', at: inv.completed_at, Icon: CheckCircle, tone: 'text-brand-blue' });
+    if (inv.terminated_at && !inv.completed_at) out.push({ label: 'Terminated', at: inv.terminated_at, Icon: Ban, tone: 'text-red-600' });
 
     const s = (inv.status || '').toLowerCase();
     const clockExpired = !inv.started_at
@@ -298,7 +305,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
         {/* Stats Cards */}
         <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
           {/* Mirrors the assessment-level popup's stats row exactly. */}
-          <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-1 sm:gap-4">
+          <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-7 gap-1 sm:gap-4">
             <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 dark:border-slate-700 text-center sm:text-left">
               <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-500 dark:text-slate-500 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                 <Users className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
@@ -333,6 +340,15 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                 <span>Completed</span>
               </div>
               <p className="text-sm sm:text-2xl font-bold text-gray-700 dark:text-slate-300">{stats.completed}</p>
+            </div>
+            {/* Terminated — candidate left mid-assessment. Kept apart from
+                "Invite Failed" (an email problem), mirroring AI Interview. */}
+            <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 dark:border-slate-700 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                <Ban className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
+                <span>Terminated</span>
+              </div>
+              <p className="text-sm sm:text-2xl font-bold text-red-600">{stats.terminated}</p>
             </div>
             <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 dark:border-slate-700 text-center sm:text-left">
               <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 dark:text-slate-400 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
