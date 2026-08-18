@@ -22,17 +22,24 @@ type Phase =
   | 'done';
 
 const RECORD_SCREEN_MS = 5000;
-// Exactly 5000 (not padded) — per spec, "a 10-second video": 5s screen + 5s
-// pan = 10.000s of real recorded content by construction. A prior version
-// of this padded RECORD_PAN_MS to 5300 to make the browser's native <video>
-// controls display "0:10" instead of "0:09" (they FLOOR the duration, and a
-// genuine 10.000s recording can measure ~9.98s in the WebM container due to
-// a few tens of ms of ordinary encoder/container overhead — not missing
-// footage). Reverted: the spec asks for a true 10-second recording, not a
-// duration inflated to satisfy a display rounding quirk. The player showing
-// "0:09" on a ~9.98s-measured file is a cosmetic display-only artifact of
-// the browser's own floor(), not a content defect.
-const RECORD_PAN_MS = 5000;
+// Not padded — the display/color+ID phase must stay exactly the real 5s
+// the backend's per-second RGB check expects (it samples timestamps
+// 0.5s-4.5s of the file).
+//
+// RECORD_PAN_MS below carries a small +50ms buffer instead of the bare
+// 5000 — the ONLY phase touched, per instruction. Real uploads measured via
+// ffprobe on a genuine 5000+5000ms recording came in at ~9.9827s and
+// ~9.9846s (both ~15-18ms short of 10.0s) from ordinary WebM encoder/
+// container overhead — a universal browser-recording artifact, not missing
+// footage, and not something JS timing precision alone can eliminate. A
+// prior version padded this phase by +300ms to fix the native <video>
+// player's floor()'d time display, which was reverted for adding too much
+// real recording time beyond 10s. This smaller +50ms is sized only to
+// comfortably clear that ~15-18ms shortfall with margin, not to visibly
+// extend the recording — total real content is ~10.03-10.05s, effectively
+// indistinguishable from 10s to the candidate, while reliably pushing the
+// file's measured duration past the 10.0s floor threshold.
+const RECORD_PAN_MS = 5050;
 const GET_READY_SECONDS = 3;
 
 interface MobileEnvironmentVerificationPortalProps {
@@ -394,7 +401,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
                 <span className="text-5xl inline-block leading-none">📱</span>
               </div>
               <p className="text-sm font-medium text-white text-center">
-                Now turn your phone slowly — left to right, then right to left
+                Now slowly move your phone from left to right and back again — capture your workspace, surrounding area, and any nearby devices.
               </p>
               <style>{`
                 @keyframes tf-pan-sweep {
@@ -436,8 +443,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             </div>
             <p className="text-sm leading-relaxed">
               {phase === 'recording_screen'
-                ? 'Recording your screen with this frame — point your camera at your laptop screen and keep it steady.'
-                : 'Now slowly turn your mobile from left to right, and right to left.'}
+                ? 'Focus your camera on your laptop screen/display. Keep it centered and hold steady — do not move yet.'
+                : 'Now slowly move your phone from left to right and back again, capturing your workspace, surrounding area, and any nearby devices.'}
             </p>
           </>
         )}
