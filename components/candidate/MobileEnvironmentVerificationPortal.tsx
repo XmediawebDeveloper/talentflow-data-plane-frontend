@@ -55,10 +55,15 @@ const ALIGN_SAMPLE_W = 160; // downscaled analysis canvas width
 const ALIGN_CHECK_INTERVAL_MS = 300;
 const ALIGN_PASS_STREAK_NEEDED = 3; // ~0.9s of consecutive PASS before showing Record
 const ALIGN_FAIL_STREAK_NEEDED = 2; // ~0.6s of consecutive FAIL before hiding Record
-const ALIGN_COLOR_DISTANCE = 42; // RGB distance to count a pixel as "part of the screen"
+// 110 (not a tight ~40-50) — real screens show a brightness gradient/
+// vignette from center to edge, not a flat color; a tight tolerance only
+// matches a thin band of that gradient and never covers the whole screen
+// (confirmed live 2026-08-19 — see the seed-sampling comment below). Still
+// comfortably excludes the near-black bezel and most desk/background colors.
+const ALIGN_COLOR_DISTANCE = 110; // RGB distance to count a pixel as "part of the screen"
 const ALIGN_MIN_AREA_RATIO = 0.12; // screen too small below this
 const ALIGN_MAX_AREA_RATIO = 0.85; // screen too large above this
-const ALIGN_MIN_DENSITY = 0.55; // fraction of pixels inside bbox that must match — rejects noisy/speckled false positives
+const ALIGN_MIN_DENSITY = 0.45; // fraction of pixels inside bbox that must match — rejects noisy/speckled false positives
 const ALIGN_MAX_CENTER_OFFSET_RATIO = 0.24; // how far the screen's center may drift from frame center
 const ALIGN_MIN_ASPECT = 1.05; // laptop-screen-ish aspect ratio band (tolerant of tilt/pan/keystoning)
 const ALIGN_MAX_ASPECT = 2.6;
@@ -283,23 +288,36 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       let pass = false;
       try {
         const { data } = ctx.getImageData(0, 0, w, h);
-        // Coarse color histogram (6 levels/channel) to find the dominant color.
-        const buckets = new Map<number, { count: number; r: number; g: number; b: number }>();
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i], g = data[i + 1], b = data[i + 2];
-          const key = ((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5);
-          const entry = buckets.get(key);
-          if (entry) { entry.count++; entry.r += r; entry.g += g; entry.b += b; }
-          else buckets.set(key, { count: 1, r, g, b });
+        // Seed color = the actual center of the frame, NOT a whole-frame
+        // histogram mode. The laptop screen's background is a solid color
+        // only in principle — real screens show a visible brightness
+        // gradient/vignette (confirmed 2026-08-19 live: a well-centered,
+        // fully-visible screen never passed alignment because a tight
+        // histogram-mode match only covered a thin band of that gradient,
+        // failing the area/density checks below even though a human could
+        // see the whole screen clearly). Candidates are explicitly
+        // instructed to center the screen in frame, so sampling directly at
+        // the frame's own center reliably lands ON the screen once aligned,
+        // and a wide-enough tolerance (below) absorbs the rest of the
+        // gradient's range — the same fix this session already had to apply
+        // to the backend's near-identical corner-icon detector for the
+        // exact same root cause.
+        const seedBoxW = Math.max(2, Math.round(w * 0.08));
+        const seedBoxH = Math.max(2, Math.round(h * 0.08));
+        const seedX0 = Math.round(w / 2 - seedBoxW / 2);
+        const seedY0 = Math.round(h / 2 - seedBoxH / 2);
+        let seedR = 0, seedG = 0, seedB = 0, seedN = 0;
+        for (let y = seedY0; y < seedY0 + seedBoxH; y++) {
+          for (let x = seedX0; x < seedX0 + seedBoxW; x++) {
+            const i = (y * w + x) * 4;
+            seedR += data[i]; seedG += data[i + 1]; seedB += data[i + 2];
+            seedN++;
+          }
         }
-        let dominant: { count: number; r: number; g: number; b: number } | null = null;
-        for (const entry of buckets.values()) {
-          if (!dominant || entry.count > dominant.count) dominant = entry;
-        }
-        if (dominant && dominant.count > 0) {
-          const domR = dominant.r / dominant.count;
-          const domG = dominant.g / dominant.count;
-          const domB = dominant.b / dominant.count;
+        if (seedN > 0) {
+          const domR = seedR / seedN;
+          const domG = seedG / seedN;
+          const domB = seedB / seedN;
 
           let minX = w, maxX = -1, minY = h, maxY = -1, matched = 0;
           for (let y = 0; y < h; y++) {
@@ -672,8 +690,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
                   left to right and back again, capturing your workspace, surrounding area, and any
                   nearby devices.
                 </p>
-                <div className="mt-2 flex items-center gap-1.5">
-                  <span className="text-xl inline-block animate-[tf-instr-tilt_1.2s_ease-in-out_infinite]">📱</span>
+                <div className="mt-2 flex items-center gap-1.5 px-2">
+                  <span className="text-xl inline-block animate-[tf-instr-curve_1.6s_ease-in-out_infinite_alternate]">📱</span>
                   <span className="text-[11px] text-[#94a3b8]">left ↔ right</span>
                 </div>
               </div>
@@ -687,9 +705,10 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             Next
           </button>
           <style>{`
-            @keyframes tf-instr-tilt {
-              0%, 100% { transform: rotate(-25deg); }
-              50% { transform: rotate(25deg); }
+            @keyframes tf-instr-curve {
+              0%   { transform: translateX(-8px) translateY(0) rotate(-12deg); }
+              50%  { transform: translateX(0)     translateY(-4px) rotate(0deg); }
+              100% { transform: translateX(8px)  translateY(0) rotate(12deg); }
             }
           `}</style>
         </div>
@@ -731,14 +750,17 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           )}
           {phase === 'pan_instructions' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 rounded-xl px-4 overflow-hidden">
-              <span className="text-5xl inline-block animate-[tf-phone-tilt_1.2s_ease-in-out_infinite]">📱</span>
+              <span className="text-5xl inline-block animate-[tf-phone-curve_1.8s_ease-in-out_infinite_alternate]">📱</span>
               <p className="text-sm font-medium text-white text-center">
                 Now slowly move your phone from left to right and back again — capture your workspace, surrounding area, and any nearby devices.
               </p>
               <style>{`
-                @keyframes tf-phone-tilt {
-                  0%, 100% { transform: rotate(-25deg); }
-                  50% { transform: rotate(25deg); }
+                @keyframes tf-phone-curve {
+                  0%   { transform: translateX(-40px) translateY(0)    rotate(-16deg); }
+                  25%  { transform: translateX(-20px) translateY(-14px) rotate(-6deg); }
+                  50%  { transform: translateX(0)      translateY(-18px) rotate(0deg); }
+                  75%  { transform: translateX(20px)  translateY(-14px) rotate(6deg); }
+                  100% { transform: translateX(40px)  translateY(0)    rotate(16deg); }
                 }
               `}</style>
             </div>
