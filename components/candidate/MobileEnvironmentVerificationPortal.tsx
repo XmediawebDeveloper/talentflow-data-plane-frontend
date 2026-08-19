@@ -12,7 +12,7 @@ type Phase =
   | 'error'
   | 'instructions'
   | 'requesting_permission'
-  | 'get_ready'
+  | 'aligning'
   | 'permission_denied'
   | 'recording_screen'
   | 'pan_instructions'
@@ -40,7 +40,47 @@ const RECORD_SCREEN_MS = 5000;
 // indistinguishable from 10s to the candidate, while reliably pushing the
 // file's measured duration past the 10.0s floor threshold.
 const RECORD_PAN_MS = 5050;
-const GET_READY_SECONDS = 3;
+
+// ── Screen-alignment detection (gates Record button visibility) ──
+// No existing alignment/detection logic exists anywhere in this codebase, so
+// this is a new, best-effort, purely client-side heuristic: after the phone
+// opens this link, the laptop already shows the anti-replay challenge (a
+// solid background color + a short ID — see EnvironmentVerificationOverlay
+// on the laptop side), so "is the laptop screen aligned in frame" reduces to
+// "is there one large, roughly uniform-colored, centered, non-edge-touching
+// rectangular region in the camera view." This intentionally does NOT try to
+// detect the exact screen edges/corners or correct for tilt precisely — it's
+// a coarse, honest signal, tuned conservatively (see ACCEPTANCE TEST cases).
+const ALIGN_SAMPLE_W = 160; // downscaled analysis canvas width
+const ALIGN_CHECK_INTERVAL_MS = 300;
+const ALIGN_PASS_STREAK_NEEDED = 3; // ~0.9s of consecutive PASS before showing Record
+const ALIGN_FAIL_STREAK_NEEDED = 2; // ~0.6s of consecutive FAIL before hiding Record
+const ALIGN_COLOR_DISTANCE = 42; // RGB distance to count a pixel as "part of the screen"
+const ALIGN_MIN_AREA_RATIO = 0.12; // screen too small below this
+const ALIGN_MAX_AREA_RATIO = 0.85; // screen too large above this
+const ALIGN_MIN_DENSITY = 0.55; // fraction of pixels inside bbox that must match — rejects noisy/speckled false positives
+const ALIGN_MAX_CENTER_OFFSET_RATIO = 0.24; // how far the screen's center may drift from frame center
+const ALIGN_MIN_ASPECT = 1.05; // laptop-screen-ish aspect ratio band (tolerant of tilt/pan/keystoning)
+const ALIGN_MAX_ASPECT = 2.6;
+const ALIGN_EDGE_MARGIN_PX = 2; // touching this close to a canvas edge = "partially outside frame"
+
+// ── Voice activity detection (VAD) — runs only while actually recording ──
+// Web Audio API only (no new library) on the SAME getUserMedia stream
+// already captured for the recording. Deliberately more than a volume
+// threshold (spec explicitly forbids that): requires BOTH sustained energy
+// above an auto-calibrated noise floor AND a zero-crossing-rate in the band
+// typical of voiced speech (very low ZCR ≈ steady hums/fans; very high ZCR ≈
+// hiss/fricative noise/static) for several consecutive ticks before counting
+// it as speech — a single loud click or a steady fan/AC hum should not pass
+// both gates.
+const VAD_TICK_MS = 100;
+const VAD_CALIBRATION_MS = 700; // brief window to measure this room's own noise floor
+const VAD_MIN_THRESHOLD = 0.02; // floor for VAD_THRESHOLD_MULT below, even in a dead-silent room
+const VAD_THRESHOLD_MULT = 3.5; // speech energy must exceed noiseFloor * this
+const VAD_ZCR_MIN = 0.02;
+const VAD_ZCR_MAX = 0.35;
+const VAD_ON_STREAK_NEEDED = 3; // ~300ms sustained before flipping to DETECTED — rejects clicks/transients
+const VAD_OFF_STREAK_NEEDED = 5; // ~500ms of quiet before flipping back — avoids flicker mid-sentence
 
 interface MobileEnvironmentVerificationPortalProps {
   token: string;
@@ -63,11 +103,12 @@ interface MobileEnvironmentVerificationPortalProps {
 export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironmentVerificationPortalProps) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [errorMessage, setErrorMessage] = useState('');
-  const [getReadyCount, setGetReadyCount] = useState(GET_READY_SECONDS);
   // Two SEPARATE 5s countdowns (resets at the phase switch), not one
   // continuous 10s countdown — matches the spec's own wording ("start 5 secs
   // timer" for phase 1, "another 5 secs timer" for phase 2).
   const [recordingCountdown, setRecordingCountdown] = useState(5);
+  // Drives Record button visibility ONLY — see ALIGN_* constants above.
+  const [canRecord, setCanRecord] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -79,6 +120,269 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   const handlePanNext = () => {
     panNextResolveRef.current?.();
     panNextResolveRef.current = null;
+  };
+
+  // ── Screen alignment ──
+  const alignCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const alignIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const alignPassStreakRef = useRef(0);
+  const alignFailStreakRef = useRef(0);
+  const lastLoggedAlignRef = useRef<boolean | null>(null);
+  const lastLoggedButtonShownRef = useRef<boolean | null>(null);
+
+  // ── Manual Record click gate — startVerificationFlow awaits this instead
+  // of any timer/countdown (req #10: "NEVER automatically start recording
+  // merely because the screen becomes aligned"). ──
+  const recordClickResolveRef = useRef<(() => void) | null>(null);
+  const recordClickedRef = useRef(false); // guards against double-clicks (req #5/F)
+  const [recordClicked, setRecordClicked] = useState(false);
+
+  // ── Voice activity detection — see VAD_* constants above. ──
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const vadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const vadOnStreakRef = useRef(0);
+  const vadOffStreakRef = useRef(0);
+  const vadActiveRef = useRef(false);
+  const vadCalibrationSamplesRef = useRef<number[]>([]);
+  const vadNoiseFloorRef = useRef<number | null>(null);
+  const vadStartedAtRef = useRef(0);
+  const vadElapsedRecordingMsRef = useRef(0);
+  const vadLastTickAtRef = useRef(0);
+  const voiceEventsRef = useRef<number[]>([]); // millisecond offsets of DETECTED transitions
+
+  const stopVoiceMonitoring = () => {
+    if (vadIntervalRef.current) {
+      clearInterval(vadIntervalRef.current);
+      vadIntervalRef.current = null;
+    }
+    analyserRef.current = null;
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => { /* best-effort */ });
+      audioCtxRef.current = null;
+    }
+  };
+
+  const startVoiceMonitoring = (stream: MediaStream) => {
+    if (stream.getAudioTracks().length === 0) return; // no mic track — nothing to monitor
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const audioCtx = new AudioCtx();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      // Deliberately NOT connected to audioCtx.destination — this is
+      // analysis-only, connecting to destination would cause audio feedback.
+      source.connect(analyser);
+      audioCtxRef.current = audioCtx;
+      analyserRef.current = analyser;
+      vadOnStreakRef.current = 0;
+      vadOffStreakRef.current = 0;
+      vadActiveRef.current = false;
+      vadCalibrationSamplesRef.current = [];
+      vadNoiseFloorRef.current = null;
+      vadStartedAtRef.current = Date.now();
+      vadElapsedRecordingMsRef.current = 0;
+      vadLastTickAtRef.current = Date.now();
+      voiceEventsRef.current = [];
+
+      const buf = new Float32Array(analyser.fftSize);
+      vadIntervalRef.current = setInterval(() => {
+        const analyserNode = analyserRef.current;
+        const now = Date.now();
+        const delta = now - vadLastTickAtRef.current;
+        vadLastTickAtRef.current = now;
+        // Only accumulate "recording time" (and only analyze) while the
+        // recorder is ACTUALLY recording — MediaRecorder.pause() (used
+        // around the pan-instructions transition) excludes that wall time
+        // from the final video, so voice-event offsets must too.
+        if (!analyserNode || recorderRef.current?.state !== 'recording') return;
+        vadElapsedRecordingMsRef.current += delta;
+
+        analyserNode.getFloatTimeDomainData(buf);
+        let sumSquares = 0;
+        let zeroCrossings = 0;
+        for (let i = 0; i < buf.length; i++) {
+          sumSquares += buf[i] * buf[i];
+          if (i > 0 && ((buf[i] >= 0) !== (buf[i - 1] >= 0))) zeroCrossings++;
+        }
+        const rms = Math.sqrt(sumSquares / buf.length);
+        const zcr = zeroCrossings / buf.length;
+
+        // Calibrate this room's noise floor from the first
+        // VAD_CALIBRATION_MS of actual recording — never flags as speech
+        // during calibration itself.
+        if (vadNoiseFloorRef.current === null) {
+          vadCalibrationSamplesRef.current.push(rms);
+          if (now - vadStartedAtRef.current >= VAD_CALIBRATION_MS) {
+            const samples = vadCalibrationSamplesRef.current;
+            const avg = samples.reduce((s, v) => s + v, 0) / (samples.length || 1);
+            vadNoiseFloorRef.current = avg;
+          }
+          return;
+        }
+
+        const threshold = Math.max(vadNoiseFloorRef.current * VAD_THRESHOLD_MULT, VAD_MIN_THRESHOLD);
+        const qualifies = rms > threshold && zcr > VAD_ZCR_MIN && zcr < VAD_ZCR_MAX;
+
+        if (qualifies) {
+          vadOnStreakRef.current += 1;
+          vadOffStreakRef.current = 0;
+        } else {
+          vadOffStreakRef.current += 1;
+          vadOnStreakRef.current = 0;
+        }
+
+        if (!vadActiveRef.current && vadOnStreakRef.current >= VAD_ON_STREAK_NEEDED) {
+          vadActiveRef.current = true;
+          const offsetMs = Math.round(vadElapsedRecordingMsRef.current);
+          voiceEventsRef.current.push(offsetMs);
+          console.info(`[ENV-VERIFY] Voice activity: DETECTED (offset=${offsetMs}ms)`);
+        } else if (vadActiveRef.current && vadOffStreakRef.current >= VAD_OFF_STREAK_NEEDED) {
+          vadActiveRef.current = false;
+          console.info('[ENV-VERIFY] Voice activity: NOT DETECTED');
+        }
+      }, VAD_TICK_MS);
+    } catch (e) {
+      console.warn('[ENV-VERIFY] Voice activity monitoring could not be started', e);
+    }
+  };
+
+  // ── Screen-alignment detection loop — see constants above for the "one
+  // large, roughly uniform, centered, non-edge-touching region" heuristic. ──
+  const stopAlignmentLoop = () => {
+    if (alignIntervalRef.current) {
+      clearInterval(alignIntervalRef.current);
+      alignIntervalRef.current = null;
+    }
+  };
+
+  const startAlignmentLoop = () => {
+    alignPassStreakRef.current = 0;
+    alignFailStreakRef.current = 0;
+    lastLoggedAlignRef.current = null;
+    lastLoggedButtonShownRef.current = null;
+    if (!alignCanvasRef.current) {
+      alignCanvasRef.current = document.createElement('canvas');
+    }
+    const canvas = alignCanvasRef.current;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+
+    alignIntervalRef.current = setInterval(() => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return;
+
+      const w = ALIGN_SAMPLE_W;
+      const h = Math.round(w * (video.videoHeight / video.videoWidth));
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(video, 0, 0, w, h);
+
+      let pass = false;
+      try {
+        const { data } = ctx.getImageData(0, 0, w, h);
+        // Coarse color histogram (6 levels/channel) to find the dominant color.
+        const buckets = new Map<number, { count: number; r: number; g: number; b: number }>();
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          const key = ((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5);
+          const entry = buckets.get(key);
+          if (entry) { entry.count++; entry.r += r; entry.g += g; entry.b += b; }
+          else buckets.set(key, { count: 1, r, g, b });
+        }
+        let dominant: { count: number; r: number; g: number; b: number } | null = null;
+        for (const entry of buckets.values()) {
+          if (!dominant || entry.count > dominant.count) dominant = entry;
+        }
+        if (dominant && dominant.count > 0) {
+          const domR = dominant.r / dominant.count;
+          const domG = dominant.g / dominant.count;
+          const domB = dominant.b / dominant.count;
+
+          let minX = w, maxX = -1, minY = h, maxY = -1, matched = 0;
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const i = (y * w + x) * 4;
+              const dr = data[i] - domR, dg = data[i + 1] - domG, db = data[i + 2] - domB;
+              if (Math.sqrt(dr * dr + dg * dg + db * db) <= ALIGN_COLOR_DISTANCE) {
+                matched++;
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+              }
+            }
+          }
+
+          if (matched > 0 && maxX > minX && maxY > minY) {
+            const bboxW = maxX - minX;
+            const bboxH = maxY - minY;
+            const areaRatio = (bboxW * bboxH) / (w * h);
+            const density = matched / (bboxW * bboxH);
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+            const centerOffset = Math.sqrt(
+              ((centerX - w / 2) / w) ** 2 + ((centerY - h / 2) / h) ** 2
+            );
+            const aspect = bboxW / bboxH;
+            const touchesEdge =
+              minX <= ALIGN_EDGE_MARGIN_PX || maxX >= w - ALIGN_EDGE_MARGIN_PX ||
+              minY <= ALIGN_EDGE_MARGIN_PX || maxY >= h - ALIGN_EDGE_MARGIN_PX;
+
+            pass =
+              areaRatio >= ALIGN_MIN_AREA_RATIO && areaRatio <= ALIGN_MAX_AREA_RATIO &&
+              density >= ALIGN_MIN_DENSITY &&
+              centerOffset <= ALIGN_MAX_CENTER_OFFSET_RATIO &&
+              aspect >= ALIGN_MIN_ASPECT && aspect <= ALIGN_MAX_ASPECT &&
+              !touchesEdge;
+          }
+        }
+      } catch (e) {
+        // getImageData can throw on a tainted canvas in rare cross-origin
+        // setups — never crash the alignment loop over it, just fail this tick.
+        console.warn('[ENV-VERIFY] Alignment check failed', e);
+        pass = false;
+      }
+
+      if (pass) {
+        alignPassStreakRef.current += 1;
+        alignFailStreakRef.current = 0;
+      } else {
+        alignFailStreakRef.current += 1;
+        alignPassStreakRef.current = 0;
+      }
+
+      if (lastLoggedAlignRef.current !== pass) {
+        lastLoggedAlignRef.current = pass;
+        console.info(`[ENV-VERIFY] Screen alignment: ${pass ? 'PASS' : 'FAIL'}`);
+      }
+
+      setCanRecord(prev => {
+        let next = prev;
+        if (!prev && alignPassStreakRef.current >= ALIGN_PASS_STREAK_NEEDED) next = true;
+        else if (prev && alignFailStreakRef.current >= ALIGN_FAIL_STREAK_NEEDED) next = false;
+        if (lastLoggedButtonShownRef.current !== next) {
+          lastLoggedButtonShownRef.current = next;
+          console.info(`[ENV-VERIFY] Record button: ${next ? 'SHOWN' : 'HIDDEN'}`);
+        }
+        return next;
+      });
+    }, ALIGN_CHECK_INTERVAL_MS);
+  };
+
+  // Candidate manually taps Record. Guards against multiple clicks (req #5/F)
+  // and against clicking while alignment hasn't actually passed (mirrors the
+  // button's own disabled/hidden state as a second line of defense). Only
+  // resolves the promise startVerificationFlow is awaiting — no timer, no
+  // delay; MediaRecorder.start() is the very next statement that runs.
+  const handleRecordClick = () => {
+    if (recordClickedRef.current || !canRecord) return;
+    recordClickedRef.current = true;
+    setRecordClicked(true);
+    recordClickResolveRef.current?.();
+    recordClickResolveRef.current = null;
   };
 
   useEffect(() => {
@@ -170,7 +474,9 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     chunksRef.current = [];
     recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = () => {
-      console.info('[ENV-VERIFY] Recording stopped');
+      console.info('[ENV-VERIFY] Recording: STOPPED');
+      stopAlignmentLoop();
+      stopVoiceMonitoring();
       streamRef.current?.getTracks().forEach(t => t.stop());
       // Blob validation (spec #17) before ever offering Upload — never show
       // a fake success state on an empty/invalid recording.
@@ -188,30 +494,28 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     };
     recorderRef.current = recorder;
 
-    // Elapsed-time-based countdown/phase driver (spec #27) — a single
-    // 200ms-tick interval computes each stage from Date.now() deltas rather
-    // than chaining setTimeout durations, so rendering delays can't cause
-    // drift or a skipped transition.
-    const getReadyStart = Date.now();
-    setGetReadyCount(GET_READY_SECONDS);
-    setPhase('get_ready');
+    // ── Alignment-gated Record button — replaces the old fixed "get ready"
+    // countdown entirely. No auto-start: camera stays open showing a live
+    // preview while startAlignmentLoop() continuously evaluates the frame;
+    // the Record button only becomes clickable once alignment passes (see
+    // canRecord), and this function does not proceed past this point until
+    // the candidate actually clicks it (recordClickResolveRef, resolved by
+    // handleRecordClick below) — never on a timer. ──
+    recordClickedRef.current = false;
+    setRecordClicked(false);
+    setCanRecord(false);
+    setPhase('aligning');
+    startAlignmentLoop();
 
-    await new Promise<void>(resolve => {
-      const tick = setInterval(() => {
-        const elapsedSec = (Date.now() - getReadyStart) / 1000;
-        const remaining = Math.max(0, Math.ceil(GET_READY_SECONDS - elapsedSec));
-        if (elapsedSec >= GET_READY_SECONDS) {
-          clearInterval(tick);
-          resolve();
-        } else {
-          setGetReadyCount(remaining);
-        }
-      }, 200);
-    });
+    await new Promise<void>(resolve => { recordClickResolveRef.current = resolve; });
+    stopAlignmentLoop();
 
     // Guard: only ever call .start() once, and only if not already recording
     // (spec #5, #28) — verify actual recorder.state afterward rather than
-    // assuming success.
+    // assuming success. No setTimeout/delay of any kind between the
+    // candidate's click (handleRecordClick) and this call — the click
+    // resolves the promise above synchronously, and this is the very next
+    // statement to run.
     if (recorderRef.current && (recorderRef.current.state as string) !== 'recording') {
       recorderRef.current.start();
       const stateAfterStart: string = recorderRef.current.state;
@@ -221,14 +525,16 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
         setPhase('error');
         return;
       }
-      console.info('[ENV-VERIFY] Recording started');
+      console.info('[ENV-VERIFY] Recording: STARTED');
+      startVoiceMonitoring(stream);
       // Tell the backend the INSTANT recording is confirmed live — this is
       // what the laptop's 1-color-per-second RGB cycle syncs to, not link-
       // open time, so candidate-side delays (reading instructions, granting
-      // permission) never desync the sequence from what's actually being
-      // filmed. Best-effort/fire-and-forget: a failed push just means the
-      // laptop keeps showing color #1 a little longer — never blocks the
-      // phone's own recording, which is already running by this point.
+      // permission, aligning the screen) never desync the sequence from
+      // what's actually being filmed. Best-effort/fire-and-forget: a failed
+      // push just means the laptop keeps showing color #1 a little longer —
+      // never blocks the phone's own recording, which is already running by
+      // this point.
       verifyApi.post(`/candidate/environment-verify/${token}/recording-started`).catch(() => { /* best-effort */ });
     }
 
@@ -283,6 +589,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
 
   useEffect(() => {
     return () => {
+      stopAlignmentLoop();
+      stopVoiceMonitoring();
       streamRef.current?.getTracks().forEach(t => t.stop());
     };
   }, []);
@@ -300,10 +608,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       return;
     }
     setPhase('uploading');
-    console.info('[ENV-VERIFY] Upload started');
+    console.info('[ENV-VERIFY] Upload: STARTED');
     try {
       const formData = new FormData();
       formData.append('file', blob, 'env_verify.webm');
+      // Best-effort — the video upload itself must never depend on this.
+      if (voiceEventsRef.current.length > 0) {
+        formData.append('voice_events', JSON.stringify(voiceEventsRef.current));
+      }
       const res = await verifyApi.post(`/candidate/environment-verify/${token}/submit`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -311,15 +623,15 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       // video_uploaded=true is only ever returned after storage AND the DB
       // commit both succeeded (spec #15/#6).
       if (!res?.data?.video_uploaded) {
-        console.warn('[ENV-VERIFY] Upload response did not confirm persistence — treating as failure');
+        console.warn('[ENV-VERIFY] Upload: FAILED (response did not confirm persistence)');
         setErrorMessage('Upload could not be confirmed. Please close this page and rescan the QR code to try again.');
         setPhase('error');
         return;
       }
-      console.info('[ENV-VERIFY] Upload completed');
+      console.info('[ENV-VERIFY] Upload: SUCCESS');
       setPhase('done');
     } catch (err) {
-      console.warn('[ENV-VERIFY] Upload failed', err);
+      console.warn('[ENV-VERIFY] Upload: FAILED', err);
       setErrorMessage('Upload failed. Please close this page and rescan the QR code to try again.');
       setPhase('error');
     }
@@ -400,8 +712,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           already available the instant getUserMedia resolves, above —
           otherwise the stream has nowhere to attach to and the preview
           stays black even though recording is happening. Hidden outside
-          the get-ready/recording phases via `hidden` rather than unmounted. */}
-      <div className={`w-full max-w-2xl space-y-4 ${(phase === 'get_ready' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+          the aligning/recording phases via `hidden` rather than unmounted. */}
+      <div className={`w-full max-w-2xl space-y-4 ${(phase === 'aligning' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
         <div className="relative">
           <video
             ref={videoRef}
@@ -410,9 +722,11 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             playsInline
             className="w-full aspect-video rounded-xl bg-black object-cover"
           />
-          {phase === 'get_ready' && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-xl">
-              <span className="text-6xl font-bold text-white drop-shadow-lg">{getReadyCount}</span>
+          {phase === 'aligning' && !canRecord && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 rounded-xl px-4 text-center">
+              <span className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
+              <p className="text-sm font-medium text-white">Align your phone with your laptop screen…</p>
+              <p className="text-xs text-[#cbd5e1]">Center it, hold steady, and make sure the whole screen is in view.</p>
             </div>
           )}
           {phase === 'pan_instructions' && (
@@ -430,8 +744,27 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             </div>
           )}
         </div>
-        {phase === 'get_ready' ? (
-          <p className="text-sm leading-relaxed font-medium">Get ready — recording starts now…</p>
+        {phase === 'aligning' ? (
+          canRecord ? (
+            <>
+              <div className="flex items-center justify-center gap-2 text-green-400 text-xs font-medium">
+                <span className="w-2 h-2 rounded-full bg-green-400" />
+                Screen aligned
+              </div>
+              <button
+                type="button"
+                onClick={handleRecordClick}
+                disabled={recordClicked}
+                className="w-full py-3 rounded-xl bg-red-500 text-white font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {recordClicked ? 'Recording…' : '● Record'}
+              </button>
+            </>
+          ) : (
+            <p className="text-sm leading-relaxed text-[#94a3b8]">
+              Waiting for your laptop screen to be clearly visible and centered in the camera…
+            </p>
+          )
         ) : phase === 'pan_instructions' ? (
           <>
             <div className="flex items-center justify-center gap-2 text-amber-400 text-xs font-medium">

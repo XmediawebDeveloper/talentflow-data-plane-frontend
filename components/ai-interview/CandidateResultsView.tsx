@@ -70,7 +70,7 @@ interface CandidateResultsViewProps {
   breadcrumbItems?: { label: string; href?: string; onClick?: () => void }[];
 }
 
-type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios' | 'verification' | 'verification_frames';
+type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios' | 'verification';
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -1290,7 +1290,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const envVideoBlobRequestedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if ((activeTab !== 'verification' && activeTab !== 'verification_frames') || envVerifications !== null) return;
+    if (activeTab !== 'verification' || envVerifications !== null) return;
     let cancelled = false;
     setEnvVerificationsLoading(true);
     console.info(`[ENV-VERIFY] Fetching verification for interview=${liveSession.id}`);
@@ -1317,10 +1317,10 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const [envFrames, setEnvFrames] = useState<Record<string, EnvFrame[]>>({});
   const [envFramesLoading, setEnvFramesLoading] = useState<Record<string, boolean>>({});
   const [envFramesError, setEnvFramesError] = useState<Record<string, boolean>>({});
-  const [envFrameLightbox, setEnvFrameLightbox] = useState<string | null>(null);
+  const [envFrameViewer, setEnvFrameViewer] = useState<{ urls: string[]; index: number } | null>(null);
 
   useEffect(() => {
-    if (activeTab !== 'verification_frames' || !envVerifications || envVerifications.length === 0) return;
+    if (activeTab !== 'verification' || !envVerifications || envVerifications.length === 0) return;
     envVerifications.forEach((v) => {
       const id = v.verification_id;
       if (envFrames[id] || envFramesLoading[id]) return;
@@ -1437,7 +1437,6 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     // { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
-    { key: 'verification_frames', label: 'Verification Frames', icon: <Camera className="w-4 h-4" /> },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Integrity Check',  icon: <ShieldAlert className="w-4 h-4" />, badge: violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
   ];
@@ -2859,19 +2858,11 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   {envVerifications.map((v) => {
                     const videoSrc = v.video_url || envVideoBlobUrls[v.verification_id] || null;
                     const videoStillLoading = v.video_uploaded && !videoSrc && !envVideoBlobUrls[v.verification_id] && !v.video_url;
-                    // Same click-to-jump-to-recording pattern as Integrity Check /
-                    // Question Analysis: seek the main interview Recording tab to
-                    // the moment this QR verification happened (not the QR clip
-                    // itself, which already plays inline below).
-                    const envTs = v.submitted_at || v.triggered_at || '';
-                    const envOffsetSec = videoOffsetSeconds(envTs, videoAnchor);
-                    const envHasRecording = !!(liveSession.recording_file_path || liveSession.screen_recording_file_path);
-                    const envSeekable = envOffsetSec != null && envHasRecording;
-                    const jumpToRecordingFromEnv = () => {
-                      if (envOffsetSec == null) return;
-                      seekNonceRef.current += 1;
-                      setRecordingSeek({ seconds: envOffsetSec, key: seekNonceRef.current });
-                      setActiveTab('recording');
+                    const envFramesForVerification = envFrames[v.verification_id];
+                    const envAvailableFrames = envFramesForVerification ? envFramesForVerification.filter(f => f.url) : [];
+                    const openAllFramesViewer = () => {
+                      if (envAvailableFrames.length === 0) return;
+                      setEnvFrameViewer({ urls: envAvailableFrames.map(f => f.url as string), index: 0 });
                     };
                     return (
                       <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
@@ -2879,23 +2870,16 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           <div className="flex items-center gap-2">
                             <ShieldAlert className="w-4 h-4 text-brand-blue" />
                             <span className="text-sm font-semibold text-gray-900">Environment Verification</span>
-                            {envTs && (
-                              <div>
-                                {envSeekable ? (
-                                  <button
-                                    type="button"
-                                    onClick={jumpToRecordingFromEnv}
-                                    title="Jump to this moment in the recording"
-                                    className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono"
-                                  >
-                                    <Play className="w-3 h-3" />{formatVideoOffset(envTs, videoAnchor)}
-                                  </button>
-                                ) : (
-                                  <span className="text-xs font-mono text-gray-400">{formatVideoOffset(envTs, videoAnchor)}</span>
-                                )}
-                                <div className="text-[11px] text-gray-400 font-mono">{formatTs(envTs)}</div>
-                              </div>
-                            )}
+                            <button
+                              type="button"
+                              disabled={envAvailableFrames.length === 0}
+                              onClick={openAllFramesViewer}
+                              title={envAvailableFrames.length > 0 ? `View ${envAvailableFrames.length} analyzed frames` : 'No stored frames for this attempt'}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:underline underline-offset-2 disabled:text-gray-300 disabled:no-underline disabled:cursor-not-allowed"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              Analyzed Frames{envAvailableFrames.length > 0 ? ` (${envAvailableFrames.length})` : ''}
+                            </button>
                           </div>
                           <div className="flex items-center gap-1.5">
                             {v.color_match !== null && (
@@ -3011,6 +2995,37 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                 el.play().catch(() => { /* autoplay may be blocked; seek still applies */ });
                               }
                             };
+                            // Parse BOTH numbers out of a range like "~6.2s-8.1s" (start+end); a
+                            // single-point timestamp like "frame 12 only" or "~2.0s" yields the
+                            // same number twice, widened below by _FRAME_MATCH_PAD.
+                            const parseApproxRange = (ts: string | null): [number, number] | null => {
+                              if (!ts) return null;
+                              const nums = ts.match(/\d+(?:\.\d+)?/g);
+                              if (!nums || nums.length === 0) return null;
+                              const a = parseFloat(nums[0]);
+                              const b = nums.length > 1 ? parseFloat(nums[1]) : a;
+                              return [Math.min(a, b), Math.max(a, b)];
+                            };
+                            const _FRAME_MATCH_PAD = 0.4; // seconds — frames are ~0.5s apart at 2fps
+                            // Which stored frames (2fps, index*0.5s ≈ that frame's timestamp) fall
+                            // inside this flagged item's approx_timestamp range — lets a recruiter
+                            // click straight to the exact evidence frame(s) instead of just seeking
+                            // the video and hunting for it themselves.
+                            const framesForRange = (range: [number, number] | null) => {
+                              const frames = envFrames[v.verification_id];
+                              if (!frames || frames.length === 0 || !range) return [];
+                              const [start, end] = range;
+                              const inRange = frames.filter(f => {
+                                const t = f.index * 0.5;
+                                return t >= start - _FRAME_MATCH_PAD && t <= end + _FRAME_MATCH_PAD;
+                              });
+                              return inRange.length > 0 ? inRange : frames.filter(f => Math.abs(f.index * 0.5 - start) < 0.5);
+                            };
+                            const openFrameViewer = (frames: EnvFrame[], startIndex: number) => {
+                              const urls = frames.filter(f => f.url).map(f => f.url as string);
+                              if (urls.length === 0) return;
+                              setEnvFrameViewer({ urls, index: Math.min(startIndex, urls.length - 1) });
+                            };
                             // Legacy rows analyzed before the 2-column merge may still carry
                             // "pan_left_to_right"/"pan_right_to_left" — both fold into "pan" here.
                             const normalizedPhase = (item: Record<string, unknown>): string => {
@@ -3054,7 +3069,8 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                 : '';
                               const description = `Detected${location ? ` in the ${location}` : ''}${phaseDescription ? ` ${phaseDescription}` : ''}.`;
                               const severity = severityForConfidence(confidence);
-                              return { item, i, label, confidence, location, approxTimestamp, phase, seekSeconds, absoluteTs, description, severity };
+                              const matchedFrames = framesForRange(parseApproxRange(approxTimestamp));
+                              return { item, i, label, confidence, location, approxTimestamp, phase, seekSeconds, absoluteTs, description, severity, matchedFrames };
                             });
                             return (
                               <div>
@@ -3067,6 +3083,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                         <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">What we saw</th>
                                         <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Segment</th>
                                         <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">When</th>
+                                        <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Frame</th>
                                         <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Severity</th>
                                       </tr>
                                     </thead>
@@ -3108,6 +3125,29 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                             )}
                                           </td>
                                           <td className="px-3 py-2.5">
+                                            {r.matchedFrames.length > 0 ? (
+                                              <button
+                                                type="button"
+                                                onClick={() => openFrameViewer(r.matchedFrames, 0)}
+                                                title={`View ${r.matchedFrames.length} matching frame${r.matchedFrames.length > 1 ? 's' : ''}`}
+                                                className="relative w-14 h-9 rounded overflow-hidden ring-1 ring-gray-200 bg-gray-100 group flex-shrink-0"
+                                              >
+                                                {r.matchedFrames[0].url ? (
+                                                  <img src={r.matchedFrames[0].url} alt="" className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
+                                                ) : (
+                                                  <span className="absolute inset-0 flex items-center justify-center text-[9px] text-gray-400">N/A</span>
+                                                )}
+                                                {r.matchedFrames.length > 1 && (
+                                                  <span className="absolute bottom-0 right-0 text-[9px] font-mono text-white bg-black/60 px-1">
+                                                    {r.matchedFrames.length}
+                                                  </span>
+                                                )}
+                                              </button>
+                                            ) : (
+                                              <span className="text-xs text-gray-300">—</span>
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2.5">
                                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.severity.cls}`}>
                                               {r.severity.label}
                                             </span>
@@ -3120,80 +3160,60 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               </div>
                             );
                           })()}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )
-            )}
-
-            {/* Verification Frames Tab — the ~20 individual frames (2fps) the
-                vision LLM actually analyzed for each QR verification attempt,
-                so a recruiter can review exactly what the AI saw rather than
-                only its written conclusions. */}
-            {!evaluationPending && activeTab === 'verification_frames' && (
-              envVerificationsLoading && envVerifications === null ? (
-                renderPlaceholder('Loading verification frames…')
-              ) : !envVerifications || envVerifications.length === 0 ? (
-                renderPlaceholder(
-                  envVerificationsError
-                    ? 'Could not load verification data — please refresh and try again.'
-                    : liveSession.environment_verification_enabled
-                    ? 'No QR verification was triggered during this interview.'
-                    : 'Mobile Environment Verification was not enabled for this interview.'
-                )
-              ) : (
-                <div className="space-y-6">
-                  {envVerifications.map((v) => {
-                    const frames = envFrames[v.verification_id];
-                    const loading = envFramesLoading[v.verification_id];
-                    const error = envFramesError[v.verification_id];
-                    return (
-                      <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
-                        <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
-                            <Camera className="w-4 h-4 text-brand-blue" />
-                            <span className="text-sm font-semibold text-gray-900">Analyzed Frames</span>
-                            {(v.submitted_at || v.triggered_at) && (
-                              <span className="text-xs text-gray-500">{formatTs(v.submitted_at || v.triggered_at || '')}</span>
-                            )}
-                          </div>
-                          {frames && frames.length > 0 && (
-                            <span className="text-xs text-gray-500">{frames.length} frames</span>
-                          )}
-                        </div>
-                        <div className="p-4 sm:p-5">
-                          {loading || (!frames && !error) ? (
-                            <p className="text-sm text-gray-400 italic">Loading frames…</p>
-                          ) : error ? (
-                            <p className="text-sm text-red-600 italic">Could not load frames.</p>
-                          ) : !frames || frames.length === 0 ? (
-                            <p className="text-sm text-gray-400 italic">
-                              No stored frames for this attempt (analyzed before this feature was added, or local-disk storage).
-                            </p>
-                          ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                              {frames.map((f) => (
-                                <button
-                                  key={f.index}
-                                  type="button"
-                                  disabled={!f.url}
-                                  onClick={() => f.url && setEnvFrameLightbox(f.url)}
-                                  className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 ring-1 ring-gray-200 disabled:cursor-not-allowed group"
-                                >
-                                  {f.url ? (
-                                    <img src={f.url} alt={`Frame ${f.index + 1}`} className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
-                                  ) : (
-                                    <span className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400">unavailable</span>
+                          {(() => {
+                            const frames = envFrames[v.verification_id];
+                            const loading = envFramesLoading[v.verification_id];
+                            const error = envFramesError[v.verification_id];
+                            if (!frames || frames.length === 0) {
+                              if (!loading && !error) return null;
+                            }
+                            return (
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                                    <Camera className="w-3.5 h-3.5" /> Analyzed Frames
+                                  </p>
+                                  {frames && frames.length > 0 && (
+                                    <span className="text-xs text-gray-500">{frames.length} frames</span>
                                   )}
-                                  <span className="absolute bottom-0.5 right-1 text-[10px] font-mono text-white bg-black/50 px-1 rounded">
-                                    {f.index + 1}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                                </div>
+                                {loading || (!frames && !error) ? (
+                                  <p className="text-sm text-gray-400 italic">Loading frames…</p>
+                                ) : error ? (
+                                  <p className="text-sm text-red-600 italic">Could not load frames.</p>
+                                ) : !frames || frames.length === 0 ? (
+                                  <p className="text-sm text-gray-400 italic">
+                                    No stored frames for this attempt (analyzed before this feature was added, or local-disk storage).
+                                  </p>
+                                ) : (
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                                    {frames.map((f) => (
+                                      <button
+                                        key={f.index}
+                                        type="button"
+                                        disabled={!f.url}
+                                        onClick={() => {
+                                          const available = frames.filter(fr => fr.url);
+                                          const startIndex = available.findIndex(fr => fr.index === f.index);
+                                          if (startIndex >= 0) setEnvFrameViewer({ urls: available.map(fr => fr.url as string), index: startIndex });
+                                        }}
+                                        className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 ring-1 ring-gray-200 disabled:cursor-not-allowed group"
+                                      >
+                                        {f.url ? (
+                                          <img src={f.url} alt={`Frame ${f.index + 1}`} className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
+                                        ) : (
+                                          <span className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400">unavailable</span>
+                                        )}
+                                        <span className="absolute bottom-0.5 right-1 text-[10px] font-mono text-white bg-black/50 px-1 rounded">
+                                          {f.index + 1}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -3202,12 +3222,33 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
               )
             )}
 
-            {envFrameLightbox && (
+            {envFrameViewer && (
               <div
                 className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6"
-                onClick={() => setEnvFrameLightbox(null)}
+                onClick={() => setEnvFrameViewer(null)}
               >
-                <img src={envFrameLightbox} alt="Frame preview" className="max-w-full max-h-full rounded-lg" />
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setEnvFrameViewer(prev => prev && prev.index > 0 ? { ...prev, index: prev.index - 1 } : prev); }}
+                  disabled={envFrameViewer.index === 0}
+                  title="Previous frame"
+                  className="absolute left-2 sm:left-6 text-white/80 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed p-2"
+                >
+                  <ChevronLeft className="w-8 h-8" />
+                </button>
+                <div className="flex flex-col items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <img src={envFrameViewer.urls[envFrameViewer.index]} alt="Frame preview" className="max-w-full max-h-[80vh] rounded-lg" />
+                  <span className="text-white/70 text-xs font-mono">{envFrameViewer.index + 1} / {envFrameViewer.urls.length}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setEnvFrameViewer(prev => prev && prev.index < prev.urls.length - 1 ? { ...prev, index: prev.index + 1 } : prev); }}
+                  disabled={envFrameViewer.index === envFrameViewer.urls.length - 1}
+                  title="Next frame"
+                  className="absolute right-2 sm:right-6 text-white/80 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed p-2"
+                >
+                  <ChevronRight className="w-8 h-8" />
+                </button>
               </div>
             )}
 
