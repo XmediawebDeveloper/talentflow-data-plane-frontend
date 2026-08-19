@@ -1,11 +1,18 @@
 'use client';
 
 import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Pencil, Send, Loader2, Monitor, Ban } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
+import InviteFilterBar, {
+  EMPTY_INVITE_FILTERS,
+  ASSESSMENT_INVITE_STATUS_OPTIONS,
+  hasActiveInviteFilters,
+  type InviteFilterState,
+} from '@/components/InviteFilterBar';
+import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 
 interface TrackInvitesModalProps {
   isOpen: boolean;
@@ -18,6 +25,8 @@ interface TrackInvitesModalProps {
   onViewResult?: (invitation: any) => void;
 }
 
+
+const INVITES_PAGE_SIZE = 10;
 
 const isValidEmail = (email: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -65,6 +74,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
     terminated: 0,
   });
   // Email editing state
+  /* Filters run over the merged list rather than being pushed to the API.
+     Unlike the per-assessment tracker on the Assessments page, this popup
+     aggregates every assessment attached to the JD, and the stat cards are
+     computed from that whole set — filtering server-side would silently
+     narrow the totals too. */
+  const [filters, setFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
+  const [page, setPage] = useState(1);
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [newEmailValue, setNewEmailValue] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -199,6 +215,63 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
     }
   };
 
+  const filtersActive = hasActiveInviteFilters(filters);
+
+  /* Matches the server-side filter the Assessments page applies, so the same
+     search finds the same people from either entry point: free text over
+     name / email / candidate id, status over the derived status (not the raw
+     field, which can be stale), and an inclusive invite-date range. */
+  const filteredInvitations = useMemo(() => {
+    const term = filters.search.trim().toLowerCase();
+    const from = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00`) : null;
+    // Inclusive of the whole end day, not midnight at its start.
+    const to = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59.999`) : null;
+
+    return invitations.filter((inv: any) => {
+      if (term) {
+        const haystack = [
+          inv.candidate_name,
+          inv.candidate_email,
+          inv.email,
+          inv.candidate_display_id,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+
+      if (filters.status !== 'all' && getEffectiveStatus(inv) !== filters.status) return false;
+
+      if (from || to) {
+        const raw = inv.invited_at || inv.sent_at || inv.created_at;
+        if (!raw) return false;
+        const invitedAt = new Date(raw);
+        if (Number.isNaN(invitedAt.getTime())) return false;
+        if (from && invitedAt < from) return false;
+        if (to && invitedAt > to) return false;
+      }
+
+      return true;
+    });
+  }, [invitations, filters]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredInvitations.length / INVITES_PAGE_SIZE));
+  // Clamped rather than stored: the list refreshes every 15s and a filter can
+  // shrink it under the current page at any moment.
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * INVITES_PAGE_SIZE;
+  const visibleInvitations = filteredInvitations.slice(pageStart, pageStart + INVITES_PAGE_SIZE);
+
+  const resultsLabel = filtersActive
+    ? `${filteredInvitations.length} matching invite${filteredInvitations.length === 1 ? '' : 's'}`
+    : `Showing ${filteredInvitations.length === 0 ? 0 : pageStart + 1} to ${pageStart + visibleInvitations.length} of ${filteredInvitations.length} invites`;
+
+  const pageBtn =
+    'px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 ' +
+    'bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ' +
+    'hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors';
+
   if (!isOpen) return null;
 
   // Status badge labels and styling kept in lockstep with the
@@ -278,8 +351,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-t-xl sm:rounded-xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] w-full sm:max-w-5xl h-[95dvh] sm:h-[calc(100dvh-3rem)] max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
+      {/* Height is content-driven with a viewport cap, not a fixed dvh, so a
+          short list no longer stretches the dialog down a large monitor. */}
+      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] w-full sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[92dvh] sm:max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Modal Header */}
         <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between flex-shrink-0 bg-slate-50 dark:bg-slate-950">
           <div className="min-w-0 flex-1 flex items-center gap-2.5">
@@ -302,82 +377,77 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
           </button>
         </div>
 
-        {/* Stats Cards */}
-        <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
-          {/* Mirrors the assessment-level popup's stats row exactly. */}
-          <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-7 gap-1 sm:gap-4">
-            <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 dark:border-slate-700 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-500 dark:text-slate-500 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                <Users className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Total Invited</span>
-              </div>
-              <p className="text-sm sm:text-2xl font-bold text-gray-900 dark:text-slate-50">{stats.total}</p>
-            </div>
-            <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 dark:border-slate-700 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-orange-deep text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                <Clock className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Invite Expired</span>
-              </div>
-              <p className="text-sm sm:text-2xl font-bold text-brand-orange-deep">{stats.expired}</p>
-            </div>
-            <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 dark:border-slate-700 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                <X className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Invite Failed</span>
-              </div>
-              <p className="text-sm sm:text-2xl font-bold text-red-600">{stats.failed}</p>
-            </div>
-            <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 dark:border-slate-700 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 dark:text-slate-400 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                <Play className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>In Progress</span>
-              </div>
-              <p className="text-sm sm:text-2xl font-bold text-gray-700 dark:text-slate-300">{stats.started}</p>
-            </div>
-            <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 dark:border-slate-700 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 dark:text-slate-400 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                <CheckCircle className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Completed</span>
-              </div>
-              <p className="text-sm sm:text-2xl font-bold text-gray-700 dark:text-slate-300">{stats.completed}</p>
-            </div>
-            {/* Terminated — candidate left mid-assessment. Kept apart from
-                "Invite Failed" (an email problem), mirroring AI Interview. */}
-            <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 dark:border-slate-700 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                <Ban className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Terminated</span>
-              </div>
-              <p className="text-sm sm:text-2xl font-bold text-red-600">{stats.terminated}</p>
-            </div>
-            <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 dark:border-slate-700 text-center sm:text-left">
-              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 dark:text-slate-400 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                <TrendingUp className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
-                <span>Completion Rate</span>
-              </div>
-              <p className="text-sm sm:text-2xl font-bold text-gray-700 dark:text-slate-300">
-                {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%
-              </p>
-            </div>
+        {/* Stat row doubles as the status filter — identical buckets, wording and
+            behaviour to the Assessments page popup. Filtering here is client-side
+            over the loaded list, and getEffectiveStatus returns exactly these
+            keys, so a card and its rows always agree. */}
+        <InviteStatCards
+          gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-4"
+          activeStatus={filters.status}
+          onSelect={(status) => {
+            setFilters({ ...filters, status });
+            setPage(1);
+          }}
+          cards={[
+            { key: 'all', label: 'Total Invited', Icon: Users, value: stats.total, ...INVITE_CARD_TONES.blue },
+            { key: 'expired', label: 'Invite Expired', Icon: Clock, value: stats.expired, ...INVITE_CARD_TONES.orange },
+            { key: 'failed', label: 'Invite Failed', Icon: X, value: stats.failed, ...INVITE_CARD_TONES.red },
+            { key: 'started', label: 'In Progress', Icon: Play, value: stats.started, ...INVITE_CARD_TONES.cyan },
+            { key: 'completed', label: 'Completed', Icon: CheckCircle, value: stats.completed, ...INVITE_CARD_TONES.blue },
+            /* Terminated — candidate walked out mid-assessment; getEffectiveStatus
+               returns 'abandoned' for exactly these rows, so the card and the
+               table it filters to always agree. */
+            { key: 'abandoned', label: 'Terminated', Icon: Ban, value: stats.terminated, ...INVITE_CARD_TONES.red },
+            {
+              key: 'completion-rate',
+              label: 'Completion Rate',
+              Icon: TrendingUp,
+              value: `${stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%`,
+              filterable: false,
+              ...INVITE_CARD_TONES.blue,
+            },
+          ]}
+        />
+
+        <InviteFilterBar
+          filters={filters}
+          onChange={(nextFilters) => {
+            setFilters(nextFilters);
+            // A narrowed list has its own page 1; staying on page 4 would look empty.
+            setPage(1);
+          }}
+          statusOptions={ASSESSMENT_INVITE_STATUS_OPTIONS}
+          searchPlaceholder="Search by candidate name, email, or CID..."
+        />
+
+        {!isLoading && invitations.length > 0 && (
+          <div className="px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
+            <p className="text-[11px] sm:text-xs text-gray-500 dark:text-slate-500">{resultsLabel}</p>
           </div>
-        </div>
+        )}
 
         {/* Invitations Table / Cards */}
-        <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-auto flex-1 min-h-0">
+        <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
           {isLoading ? (
             <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center tf-loader-center--compact">
               <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
             </div>
-          ) : invitations.length === 0 ? (
+          ) : visibleInvitations.length === 0 ? (
             <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
               <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
-              <p className="text-xs sm:text-sm">No invitations found for this job's assessments.</p>
+              {/* "None found" is wrong when a filter is what emptied the list —
+                  it reads as data loss rather than as a narrowed view. */}
+              <p className="text-xs sm:text-sm">
+                {filtersActive
+                  ? 'No invitations match the current filters.'
+                  : "No invitations found for this job's assessments."}
+              </p>
             </div>
           ) : (
             <>
               {/* Mobile Card View */}
-              <div className="sm:hidden space-y-2">
-                {invitations.map((invitation: any) => {
+              <div className="sm:hidden space-y-2 flex-1 min-h-0 overflow-y-auto">
+                {visibleInvitations.map((invitation: any) => {
                   const initials = invitation.candidate_name
                     ?.split(' ')
                     .map((n: string) => n[0])
@@ -533,18 +603,14 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                   when at least one row in the JD's invitations belongs to
                   an assessment that has that round enabled. Same rule as
                   the Results page: no all-empty columns. */}
-              <div className="hidden sm:block overflow-x-auto tf-table-shell tf-table-shell--compact">
-                <table className="w-full min-w-[960px] table-fixed">
-                  <colgroup>
-                    <col className="w-[72px]" />
-                    <col className="w-[220px]" />
-                    <col className="w-[160px]" />
-                    <col className="w-[150px]" />
-                    <col className="w-[190px]" />
-                    {invitations.some(inv => inv.assessment_technical_enabled) && <col className="w-[110px]" />}
-                    {invitations.some(inv => inv.assessment_coding_enabled) && <col className="w-[110px]" />}
-                    <col className="w-[168px]" />
-                  </colgroup>
+              <div className="hidden sm:block tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0">
+                {/* Auto layout, not table-fixed. The fixed column widths
+                    summed well past the table's min-width, so every column
+                    was scaled down and the Actions cell wrapped its two
+                    buttons onto a second line. Columns now size to their
+                    content, which cannot wrap, and the shell scrolls
+                    horizontally instead. */}
+                <table className="w-max min-w-full">
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-slate-700">
                       <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">CID</th>
@@ -562,7 +628,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                    {invitations.map((invitation: any) => {
+                    {visibleInvitations.map((invitation: any) => {
                       const initials = invitation.candidate_name
                         ?.split(' ')
                         .map((n: string) => n[0])
@@ -572,26 +638,28 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
 
                       return (
                         <tr key={invitation.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
-                          <td className="py-3 px-3 lg:px-4 align-middle">
+                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
                             <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded whitespace-nowrap">
                               {invitation.candidate_display_id || '-'}
                             </span>
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle">
+                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
                             <div className="flex items-center gap-2 lg:gap-3">
                               <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-xs lg:text-sm flex-shrink-0">
                                 {initials}
                               </div>
-                              <div className="min-w-0">
+                              {/* Capped rather than free: with auto layout a single
+                                  long email would otherwise set the column width. */}
+                              <div className="min-w-0 max-w-[220px]">
                                 <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
                                 <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle">
-                            <p className="text-sm text-gray-700 dark:text-slate-300 truncate" title={invitation.assessment_title}>{invitation.assessment_title}</p>
+                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                            <p className="text-sm text-gray-700 dark:text-slate-300 truncate max-w-[200px]" title={invitation.assessment_title}>{invitation.assessment_title}</p>
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle">
+                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
                             {/* Badges stay on one line — the row height is set by
                                 the candidate cell, and a wrapping second badge
                                 was what pushed neighbouring columns out of line. */}
@@ -607,30 +675,28 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                               )}
                             </div>
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle text-xs text-gray-500 dark:text-slate-500">
-                            {/* Latest milestone only — earlier ones are in the
-                                hover title, counted by the trailing "+N". */}
+                          {/* Every milestone on its own line, oldest first, the
+                              way the Assessments page's Invite Status Tracking
+                              table shows it. This used to print only the newest
+                              with a "+N" counter, which hid the progression
+                              behind a tooltip. align-top so the first line sits
+                              level with the other columns' single line. */}
+                          <td className="py-3 px-3 lg:px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">
                             {(() => {
                               const events = timelineEvents(invitation);
                               if (events.length === 0) {
                                 return <span className="text-gray-400 dark:text-slate-500">—</span>;
                               }
-                              const latest = events[events.length - 1];
-                              const { Icon } = latest;
                               return (
-                                <div
-                                  className="flex items-center gap-2 whitespace-nowrap"
-                                  title={events.map(e => `${e.label}: ${formatIST(e.at)}`).join('\n')}
-                                >
-                                  <Icon className={`w-3 h-3 flex-shrink-0 ${latest.tone}`} />
-                                  <span className={`truncate ${latest.tone}`}>
-                                    {latest.label}: {formatIST(latest.at)}
-                                  </span>
-                                  {events.length > 1 && (
-                                    <span className="text-[10px] text-gray-400 dark:text-slate-500 flex-shrink-0">
-                                      +{events.length - 1}
-                                    </span>
-                                  )}
+                                <div className="space-y-1">
+                                  {events.map(({ label, at, Icon, tone }) => (
+                                    <div key={label} className="flex items-center gap-2 whitespace-nowrap">
+                                      <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                      <span className={tone}>
+                                        {label}: {formatIST(at)}
+                                      </span>
+                                    </div>
+                                  ))}
                                 </div>
                               );
                             })()}
@@ -640,7 +706,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                               is gated identically). For a row whose source
                               assessment doesn't have tech, render '—'. */}
                           {invitations.some(inv => inv.assessment_technical_enabled) && (
-                            <td className="py-3 px-3 lg:px-4 align-middle text-sm text-center">
+                            <td className="py-3 px-3 lg:px-4 align-middle text-sm text-center whitespace-nowrap">
                               {(() => {
                                 if (!invitation.assessment_technical_enabled) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const ready =
@@ -663,7 +729,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                             </td>
                           )}
                           {invitations.some(inv => inv.assessment_coding_enabled) && (
-                            <td className="py-3 px-3 lg:px-4 align-middle text-sm text-center">
+                            <td className="py-3 px-3 lg:px-4 align-middle text-sm text-center whitespace-nowrap">
                               {(() => {
                                 if (!invitation.assessment_coding_enabled) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const ready =
@@ -685,7 +751,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                               })()}
                             </td>
                           )}
-                          <td className="py-3 px-3 lg:px-4 align-middle">
+                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
                             {/* Action rules mirror the assessment-level
                                 popup so a recruiter sees the same controls
                                 from either entry point: View Results when
@@ -716,16 +782,16 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                               )
                             ) : invitation.status === 'bounced' ? (
                               editingEmailId === invitation.id ? (
-                                <div className="flex flex-col gap-1.5 min-w-[190px]">
+                                <div className="flex items-center gap-1.5">
                                   <input
                                     type="email"
                                     value={newEmailValue}
                                     onChange={e => setNewEmailValue(e.target.value)}
                                     placeholder="new@email.com"
-                                    className="text-xs text-black placeholder-gray-400 border border-gray-300 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-full"
+                                    className="text-xs text-black placeholder-gray-400 border border-gray-300 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-[170px] flex-shrink-0"
                                     autoFocus
                                   />
-                                  <div className="flex gap-1">
+                                  <div className="flex items-center gap-1 flex-shrink-0">
                                     <button
                                       onClick={() => handleUpdateEmail(invitation)}
                                       disabled={!isValidEmail(newEmailValue) || isSendingEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
@@ -757,16 +823,16 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                               // mistyped address before resending (the common cause of
                               // a "failed"/"Incorrect Email" invite). Mirrors mobile.
                               editingEmailId === invitation.id ? (
-                                <div className="flex flex-col gap-1.5 min-w-[190px]">
+                                <div className="flex items-center gap-1.5">
                                   <input
                                     type="email"
                                     value={newEmailValue}
                                     onChange={e => setNewEmailValue(e.target.value)}
                                     placeholder="new@email.com"
-                                    className="text-xs text-black placeholder-gray-400 border border-gray-300 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-full"
+                                    className="text-xs text-black placeholder-gray-400 border border-gray-300 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-[170px] flex-shrink-0"
                                     autoFocus
                                   />
-                                  <div className="flex gap-1">
+                                  <div className="flex items-center gap-1 flex-shrink-0">
                                     <button
                                       onClick={() => handleUpdateEmail(invitation)}
                                       disabled={!isValidEmail(newEmailValue) || isSendingEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
@@ -784,12 +850,15 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                                   </div>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-1">
+                                /* Stacked one per line. items-stretch rather than items-start so both
+                                    buttons take the width of the wider label, instead of each sizing to
+                                    its own text and leaving a ragged right edge. */
+                                <div className="flex flex-col items-stretch gap-1.5">
                                   <button
                                     onClick={() => handleResendInvitation(invitation)}
                                     disabled={resendingId === invitation.id}
                                     aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
-                                    className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors whitespace-nowrap ${
+                                    className={`flex items-center justify-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors whitespace-nowrap ${
                                       invitation.status === 'failed'
                                         ? 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-60'
                                         : 'border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-60'
@@ -801,7 +870,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                                   <button
                                     onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
                                     aria-label="Edit email address and resend" title="Edit email address and resend"
-                                    className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap"
+                                    className="flex items-center justify-center gap-1 px-3 py-1.5 text-xs border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap"
                                   >
                                     <Pencil className="w-3.5 h-3.5" />
                                     Edit Email
@@ -821,16 +890,41 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
         </div>
 
         {/* Modal Footer */}
-        <div className="px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between bg-slate-50 dark:bg-slate-950 flex-shrink-0">
-          <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">
-            <strong>{invitations.length}</strong> invitation{invitations.length !== 1 ? 's' : ''}
+        {/* Footer — stacks on phones; First/Last drop out below sm, matching the
+            Assessments and AI Interviews trackers. */}
+        <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
+          <p className="text-[11px] sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+            {/* The filtered count, not the raw total — the number has to agree
+                with the rows actually on screen. */}
+            {resultsLabel}
           </p>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
-          >
-            Close
-          </button>
+          <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
+            {totalPages > 1 && (
+              <>
+                <button onClick={() => setPage(() => 1)} disabled={currentPage === 1} className={`hidden sm:inline-flex ${pageBtn}`}>
+                  First
+                </button>
+                <button onClick={() => setPage(() => Math.max(1, currentPage - 1))} disabled={currentPage === 1} className={pageBtn}>
+                  Prev
+                </button>
+                <span className="px-1 sm:px-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button onClick={() => setPage(() => Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className={pageBtn}>
+                  Next
+                </button>
+                <button onClick={() => setPage(() => totalPages)} disabled={currentPage === totalPages} className={`hidden sm:inline-flex ${pageBtn}`}>
+                  Last
+                </button>
+              </>
+            )}
+            <button
+              onClick={onClose}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

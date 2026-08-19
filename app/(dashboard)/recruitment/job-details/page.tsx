@@ -5,9 +5,11 @@ import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import JobDetailView from '@/components/JobDetailView';
+import JDEditBlockedModal from '@/components/JDEditBlockedModal';
 import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
+import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { toast } from 'sonner';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -50,6 +52,11 @@ function JobDetailsContent() {
   const [allJDIds, setAllJDIds] = useState<string[]>([]);
   const [showDisableModal, setShowDisableModal] = useState(false);
   const [jobToDisable, setJobToDisable] = useState<Job | null>(null);
+  /* Set when Edit is refused: the modules holding the JD, plus whatever reason
+     the backend gave if it blocked for something other than module usage. */
+  const [editBlock, setEditBlock] = useState<{ modules: JDUsageModule[]; reason?: string } | null>(null);
+  const [checkingEditUsage, setCheckingEditUsage] = useState(false);
+  const [creatingVersion, setCreatingVersion] = useState(false);
 
   useEffect(() => {
     if (jobId) {
@@ -182,16 +189,62 @@ function JobDetailsContent() {
     router.push(fromAiInterview ? '/recruitment/ai-interviews/jd-selection' : '/recruitment/job-openings');
   };
 
-  const handleEdit = (editJob: Job) => {
-    // JD13: Check usage status before allowing edit
-    const extendedJob = editJob as ExtendedJob;
-    if (extendedJob.usageStatus && !extendedJob.usageStatus.can_edit) {
-      toast.error(extendedJob.usageStatus.edit_restriction_reason ||
-        'This JD cannot be edited because it has been used in scoring, assessments, or AI matching.');
+  const handleEdit = async (editJob: Job) => {
+    if (checkingEditUsage) return;
+
+    /* Re-read usage at click time rather than trusting what the page loaded
+       with. A recruiter can sit on this screen while a colleague runs the JD
+       through Assessment or AI Interview in another tab, and the stale answer
+       would be the permissive one. */
+    setCheckingEditUsage(true);
+    let usageStatus = (editJob as ExtendedJob).usageStatus;
+    try {
+      usageStatus = await jdService.getUsageStatus(editJob.id);
+      setJob(prev => (prev ? { ...prev, usageStatus } : prev));
+    } catch (error) {
+      // Endpoint unreachable — fall through on what we already had. Editing is
+      // checked again when jd-creation loads, so this cannot skip the guard.
+      console.warn('[JobDetails] Could not refresh usage status for edit:', error);
+    } finally {
+      setCheckingEditUsage(false);
+    }
+
+    const modules = getJDUsageModules(usageStatus?.usage);
+
+    /* Used in any module blocks the edit, and so does an explicit backend
+       refusal — the two can disagree when the JD is held by something that
+       isn't reported as a per-module count. */
+    if (modules.length > 0 || usageStatus?.can_edit === false) {
+      setEditBlock({ modules, reason: usageStatus?.edit_restriction_reason });
       return;
     }
-    // Navigate to first stage (create) for editing
+
+    // Not in use — open the creation flow, which loads this JD by id and
+    // pre-fills every stage from it.
     router.push(`/recruitment/jd-creation?id=${editJob.id}&stage=create${fromAiInterview ? '&from=ai-interview' : ''}`);
+  };
+
+  /* Editing an in-use JD forks it into a NEW version — a fresh draft copy with
+     its own id, pre-filled from this one. The in-use JD is left alone, so the
+     assessments, interviews and scores already hanging off it keep pointing at
+     the text they were produced from. */
+  const handleCreateNewVersion = async () => {
+    if (!jobId || creatingVersion) return;
+    setCreatingVersion(true);
+    try {
+      const newJd = await jdService.createNewVersion(jobId);
+      setEditBlock(null);
+      toast.success('New version created', {
+        description: `Version ${(newJd as { version_number?: number }).version_number ?? ''} created as a new draft. Edit and publish it independently.`,
+      });
+      router.push(`/recruitment/jd-creation?id=${newJd.id}&stage=create${fromAiInterview ? '&from=ai-interview' : ''}`);
+    } catch (error) {
+      console.error('Failed to create new JD version:', error);
+      setCreatingVersion(false);
+      toast.error('Could not create new version', {
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
+    }
   };
 
   // JD13: Handle republish for edited JDs
@@ -372,12 +425,25 @@ function JobDetailsContent() {
         </div>
       )}
 
+      <JDEditBlockedModal
+        open={!!editBlock}
+        modules={editBlock?.modules ?? []}
+        reason={editBlock?.reason}
+        creating={creatingVersion}
+        onClose={() => setEditBlock(null)}
+        onCreateNewVersion={handleCreateNewVersion}
+        onCreateNewJD={() => {
+          setEditBlock(null);
+          router.push('/recruitment/jd-creation');
+        }}
+      />
+
       <JobDetailView
         job={job}
         onBack={handleBack}
         initialTab={tabParam || undefined}
         initialAction={actionParam || undefined}
-        onEdit={handleEdit}
+        onEdit={isTenantAdmin || hasPermission('canUpdateJD') ? handleEdit : undefined}
         onDisable={isTenantAdmin || hasPermission('canDisableJD') ? handleDisable : undefined}
         onEnable={isTenantAdmin || hasPermission('canDisableJD') ? handleEnable : undefined}
         onArchive={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchive : undefined}

@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban, XCircle, Check } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban, XCircle, Check } from 'lucide-react';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -17,7 +17,9 @@ import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewMod
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
 import AIInterviewCandidateResults from '@/components/ai-interview/AIInterviewCandidateResults';
-import InviteFilterBar, { EMPTY_INVITE_FILTERS, type InviteFilterState } from '@/components/InviteFilterBar';
+import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState } from '@/components/InviteFilterBar';
+import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
+import AIInterviewInviteTable, { isRevocableInvite } from '@/components/AIInterviewInviteTable';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -58,20 +60,6 @@ const CONFIG_PAGE_SIZE = 10;
 const PROCESSING_PAGE_SIZE = 10;
 const INVITATION_PAGE_SIZE = 10;
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
-const AI_INTERVIEW_INVITE_STATUS_OPTIONS = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'invited', label: 'Invited' },
-  { value: 'consent_pending', label: 'Consent Pending' },
-  { value: 'system_check', label: 'System Check' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'terminated', label: 'Terminated' },
-  { value: 'expired', label: 'Expired' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'revoked', label: 'Revoked' },
-];
-
 const CONFIG_FETCH_PAGE_SIZE = 20;
 
 export default function AIInterview() {
@@ -182,6 +170,7 @@ export default function AIInterview() {
   const [invitationTotalPages, setInvitationTotalPages] = useState(1);
   const [invitationOverview, setInvitationOverview] = useState({
     total: 0,
+    invited: 0,
     completed: 0,
     inProgress: 0,
     terminated: 0,
@@ -405,13 +394,19 @@ export default function AIInterview() {
 
   const loadInvitationOverview = useCallback(async (configId: string) => {
     try {
-      const result = await aiInterviewService.getConfigInvitations(configId, {
-        page: 1,
-        page_size: 1,
-        compact: true,
-      });
+      /* Two calls, both page_size 1 — the list endpoint returns aggregate counts
+         for completed/in_progress/terminated/cancelled but not for `invited`.
+         Deriving Invited as "total minus the rest" would have made that card
+         disagree with the rows it filters to: the remainder also holds revoked,
+         expired and system_check sessions. Asking the endpoint for the invited
+         bucket directly keeps the number and the filtered table in step. */
+      const [result, invitedOnly] = await Promise.all([
+        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true }),
+        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'invited' }),
+      ]);
       setInvitationOverview({
         total: result.total || 0,
+        invited: invitedOnly.total || 0,
         completed: result.completed || 0,
         inProgress: result.in_progress || 0,
         terminated: result.terminated || 0,
@@ -421,6 +416,7 @@ export default function AIInterview() {
       console.error('Failed to load invitation overview:', error);
       setInvitationOverview({
         total: 0,
+        invited: 0,
         completed: 0,
         inProgress: 0,
         terminated: 0,
@@ -2325,190 +2321,99 @@ export default function AIInterview() {
         </div>
       )}
 
-      {/* Track Invites Modal */}
+      {/* Invite Status Tracking — same dialog the Assessments page uses, down to
+          the clickable stat row, the table shell and the footer pagination. The
+          list itself is <AIInterviewInviteTable>, shared with the Job Details
+          tracker so both entry points show identical columns and action rules. */}
       {viewInvitationsConfig && (() => {
-        // Resolve effective status — client-side expiry check in case DB hasn't been updated yet
-        const resolveStatus = (inv: any): string => {
-          if (['invited', 'scheduled', 'draft'].includes(inv.status) && inv.expires_at && new Date(inv.expires_at) < new Date()) {
-            return 'expired';
-          }
-          return inv.status;
-        };
-
-        // Expired indicator — shown alongside the base status badge when the invitation
-        // has passed its expiry but hasn't reached a terminal state. Covers the case
-        // where a candidate started the system check but never started the interview.
-        // Once a unit has been consumed (candidate actually started the interview),
-        // expiry no longer applies.
-        const isInvExpired = (inv: any): boolean => {
-          if (['completed', 'cancelled', 'terminated', 'expired', 'revoked'].includes(inv.status)) return false;
-          if (inv.unit_consumed) return false;
-          return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
-        };
-
-        // Single source of truth for "should this row be treated as expired for
-        // action-button purposes". Covers both ways an invite can be expired:
-        // resolveStatus(inv) === 'expired' catches the backend literally flipping
-        // status to 'expired', as well as a still-'invited'/'scheduled'/'draft' row
-        // whose expires_at has lapsed; isInvExpired(inv) additionally catches a row
-        // that has moved past invitation (e.g. 'system_check') but was abandoned
-        // before starting and is now past its expiry — resolveStatus doesn't relabel
-        // those statuses, so without this half they'd fall through every condition
-        // below and render with no action buttons at all.
-        const isExpiredForActions = (inv: any): boolean =>
-          resolveStatus(inv) === 'expired' || isInvExpired(inv);
-
-        // Same eligibility rule as the per-row Revoke button below: hidden once the
-        // candidate has accepted Consent & Terms and entered the interview process
-        // (system_check/in_progress), engaged with the interview (completed/terminated),
-        // the invite was abandoned pre-send (cancelled), it's already revoked, or the
-        // link has expired (only Resend is offered at that point).
-        const isRevocableInvite = (inv: any): boolean =>
-          !['system_check', 'in_progress', 'completed', 'terminated', 'cancelled', 'revoked'].includes(inv.status) &&
-          !isExpiredForActions(inv);
-
-        const invTotal = invitationOverview.total;
-        const invInProgress = invitationOverview.inProgress;
-        const invCompleted = invitationOverview.completed;
-        const invTerminated = invitationOverview.terminated;
-        const invCancelled = invitationOverview.cancelled;
-        // Everything not in a completed/in-progress/terminated/cancelled state is
-        // still awaiting the candidate → "Invited". Subtract the explicit terminal
-        // counts so terminated/cancelled sessions don't inflate the Invited card.
-        const invInvited = Math.max(0, invTotal - invCompleted - invInProgress - invTerminated - invCancelled);
-        const invCompletionRate = invTotal > 0 ? Math.round((invCompleted / invTotal) * 100) : 0;
-        const paginatedInvitations = invitations;
         // "Select All" only ever targets revocable rows on the CURRENT page — the
-        // list is server-paginated (INVITATION_PAGE_SIZE), so this intentionally
-        // does not reach across pages.
-        const selectableIds = paginatedInvitations.filter(isRevocableInvite).map((inv) => inv.id);
-        const allSelectableOnPageSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedInviteIds.has(id));
-        const toggleSelectAll = () => {
-          setSelectedInviteIds((prev) => {
-            if (allSelectableOnPageSelected) return new Set();
-            return new Set(selectableIds);
-          });
-        };
-        const toggleSelectOne = (id: string) => {
+        // list is server-paginated, so this intentionally does not reach across
+        // pages. isRevocableInvite is the table's own rule, imported rather than
+        // restated so the checkboxes can't disagree with the Revoke action.
+        const selectableIds = invitations.filter(isRevocableInvite).map((inv) => inv.id);
+        const allSelectableOnPageSelected =
+          selectableIds.length > 0 && selectableIds.every((id) => selectedInviteIds.has(id));
+        const toggleSelectAll = () =>
+          setSelectedInviteIds(() => (allSelectableOnPageSelected ? new Set<string>() : new Set(selectableIds)));
+        const toggleSelectOne = (id: string) =>
           setSelectedInviteIds((prev) => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
             else next.add(id);
             return next;
           });
-        };
-        const hasActiveInviteFilters =
-          inviteFilters.search.trim() !== '' ||
-          inviteFilters.status !== 'all' ||
-          inviteFilters.dateFrom !== '' ||
-          inviteFilters.dateTo !== '';
-        const invitationResultsLabel = hasActiveInviteFilters
-          ? `${invitationTotal} matching candidate${invitationTotal === 1 ? '' : 's'}`
-          : `${invitationTotal} candidate${invitationTotal !== 1 ? 's' : ''} invited`;
 
-        const getInvStatusBadge = (inv: any) => {
-          const status = inv.status;
-          switch (status) {
-            case 'completed': {
-              // (Auto) chip surfaces when the timeout monitor finalized the
-              // session because the candidate abandoned — closing_reason starts
-              // with 'time_limit' (set by ai_interview_timeout_monitor.py).
-              // Mirrors the assessment pattern in Assessments.tsx.
-              const reason: string = (inv.ai_evaluation?.closing_reason || '').toString().toLowerCase();
-              const autoCompleted = reason.startsWith('time_limit');
-              return (
-                <span
-                  className="px-2 py-0.5 bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300 ring-1 ring-green-200 dark:ring-green-500/25 rounded-full text-xs flex items-center gap-1"
-                  title={autoCompleted ? 'Auto-completed when the interview duration elapsed' : undefined}
-                >
-                  <CheckCircle className="w-3 h-3" /> Completed
-                  {autoCompleted && <span className="text-green-600/80 dark:text-green-400/80">(Auto)</span>}
-                </span>
-              );
-            }
-            case 'in_progress': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> In Progress</span>;
-            case 'invited': return <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Invited</span>;
-            case 'cancelled': return <span className="px-2 py-0.5 bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-1 ring-red-200 dark:ring-red-500/25 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Cancelled</span>;
-            case 'terminated': return <span className="px-2 py-0.5 bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-1 ring-red-200 dark:ring-red-500/25 rounded-full text-xs flex items-center gap-1" title="Auto-ended by the proctoring policy — candidate left the interview screen"><Ban className="w-3 h-3" /> Terminated</span>;
-            case 'expired': return <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
-            case 'revoked': return <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 text-gray-700 dark:text-slate-300 ring-1 ring-gray-300 dark:ring-slate-600 rounded-full text-xs flex items-center gap-1" title="Revoked by recruiter — the old link no longer works"><Ban className="w-3 h-3" /> Revoked</span>;
-            default: return <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> {status}</span>;
-          }
-        };
+        const filtersActive = hasActiveInviteFilters(inviteFilters);
+        const startIndex = invitationTotal === 0 ? 0 : (invitationPage - 1) * INVITATION_PAGE_SIZE + 1;
+        const endIndex = Math.min(invitationPage * INVITATION_PAGE_SIZE, invitationTotal);
+        const invitationResultsLabel = filtersActive
+          ? `${invitationTotal} matching candidate${invitationTotal === 1 ? '' : 's'}`
+          : `Showing ${startIndex} to ${endIndex} of ${invitationTotal} invites`;
+
+        const completionRate = invitationOverview.total > 0
+          ? Math.round((invitationOverview.completed / invitationOverview.total) * 100)
+          : 0;
+
+        const pageBtn =
+          'px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 ' +
+          'bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ' +
+          'hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors';
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] lg:max-w-5xl h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
+            {/* Height is content-driven with a viewport cap, not a fixed dvh: a
+                three-invite list on a large monitor used to stretch the dialog the
+                full screen with empty space under the rows. The list absorbs the
+                overflow once the cap engages, so a long list still scrolls inside
+                the dialog on a 320px phone. */}
+            <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] w-full sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[92dvh] sm:max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
               {/* Header */}
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                    <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">Candidate Invitations</h2>
-                    <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{viewInvitationsConfig.jd_title || viewInvitationsConfig.position}</p>
+              <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                      <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
+                        <span className="hidden sm:inline">Invite Status Tracking</span>
+                        <span className="sm:hidden">Invite Status</span>
+                      </h2>
+                      <p className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">
+                        {viewInvitationsConfig.jd_title || viewInvitationsConfig.position}
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <button onClick={() => setViewInvitationsConfig(null)} className="p-1.5 sm:p-2 text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-700 rounded-lg transition-colors flex-shrink-0" aria-label="Close">
-                  <X className="w-5 h-5" />
+                <button
+                  onClick={() => setViewInvitationsConfig(null)}
+                  className="p-2 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               </div>
 
-              {/* Stats Cards */}
-              <div className="px-3 sm:px-6 py-3 sm:py-4 bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
-                <div className="grid grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-4">
-                  <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-                    <div className="flex items-center gap-1.5 text-gray-500 dark:text-slate-500 text-[10px] sm:text-xs mb-1">
-                      <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                      <span className="truncate">Total</span>
-                    </div>
-                    <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">{invTotal}</p>
-                  </div>
-                  <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-                    <div className="flex items-center gap-1.5 text-brand-blue text-[10px] sm:text-xs mb-1">
-                      <Mail className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                      <span className="truncate">Invited</span>
-                    </div>
-                    <p className="text-lg sm:text-2xl font-bold text-brand-blue tracking-tight">{invInvited}</p>
-                  </div>
-                  <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-                    <div className="flex items-center gap-1.5 text-brand-orange-deep text-[10px] sm:text-xs mb-1">
-                      <Play className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                      <span className="truncate">In Progress</span>
-                    </div>
-                    <p className="text-lg sm:text-2xl font-bold text-brand-orange-deep tracking-tight">{invInProgress}</p>
-                  </div>
-                  <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-                    <div className="flex items-center gap-1.5 text-green-600 text-[10px] sm:text-xs mb-1">
-                      <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                      <span className="truncate">Completed</span>
-                    </div>
-                    <p className="text-lg sm:text-2xl font-bold text-green-600 tracking-tight">{invCompleted}</p>
-                  </div>
-                  <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-                    <div className="flex items-center gap-1.5 text-red-600 text-[10px] sm:text-xs mb-1">
-                      <Ban className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                      <span className="truncate">Terminated</span>
-                    </div>
-                    <p className="text-lg sm:text-2xl font-bold text-red-600 tracking-tight">{invTerminated}</p>
-                  </div>
-                  <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-                    <div className="flex items-center gap-1.5 text-red-600 text-[10px] sm:text-xs mb-1">
-                      <X className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                      <span className="truncate">Cancelled</span>
-                    </div>
-                    <p className="text-lg sm:text-2xl font-bold text-red-600 tracking-tight">{invCancelled}</p>
-                  </div>
-                  <div className="bg-white dark:bg-slate-900 rounded-xl p-2 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-                    <div className="flex items-center gap-1.5 text-brand-cyan text-[10px] sm:text-xs mb-1">
-                      <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                      <span className="truncate">Completion</span>
-                    </div>
-                    <p className="text-lg sm:text-2xl font-bold text-brand-cyan tracking-tight">{invCompletionRate}%</p>
-                  </div>
-                </div>
-              </div>
+              {/* Stat row doubles as the status filter. Counts come from
+                  loadInvitationOverview, which queries unfiltered — selecting a
+                  bucket narrows the table without collapsing the other cards. */}
+              <InviteStatCards
+                gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
+                activeStatus={inviteFilters.status}
+                onSelect={(status) => {
+                  setInviteFilters({ ...inviteFilters, status });
+                  setInvitationPage(1);
+                }}
+                cards={[
+                  { key: 'all', label: 'Total', Icon: Users, value: invitationOverview.total, ...INVITE_CARD_TONES.slate },
+                  { key: 'invited', label: 'Invited', Icon: Mail, value: invitationOverview.invited, ...INVITE_CARD_TONES.blue },
+                  { key: 'in_progress', label: 'In Progress', Icon: Play, value: invitationOverview.inProgress, ...INVITE_CARD_TONES.orange },
+                  { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationOverview.completed, ...INVITE_CARD_TONES.green },
+                  { key: 'terminated', label: 'Terminated', Icon: Ban, value: invitationOverview.terminated, ...INVITE_CARD_TONES.red },
+                  { key: 'cancelled', label: 'Cancelled', Icon: X, value: invitationOverview.cancelled, ...INVITE_CARD_TONES.red },
+                  { key: 'completion-rate', label: 'Completion', Icon: TrendingUp, value: `${completionRate}%`, filterable: false, ...INVITE_CARD_TONES.cyan },
+                ]}
+              />
 
               <InviteFilterBar
                 filters={inviteFilters}
@@ -2520,14 +2425,13 @@ export default function AIInterview() {
                 searchPlaceholder="Search by candidate name or email..."
               />
 
-              {/* Bulk selection bar — only shown once there's at least one
-                  revocable invitation on the current page. */}
+              {/* Bulk selection bar — only once there's a revocable invite on this page. */}
               {!loadingInvitations && selectableIds.length > 0 && (
-                <div className="flex items-center justify-between px-3 sm:px-6 pt-3">
+                <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
                   <button
                     type="button"
                     onClick={toggleSelectAll}
-                    className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+                    className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
                   >
                     <span
                       role="checkbox"
@@ -2557,250 +2461,60 @@ export default function AIInterview() {
                 </div>
               )}
 
-              {/* Candidate List */}
-              <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-3 sm:py-4 min-h-0">
-                {loadingInvitations ? (
-                  <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-                    <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                  </div>
-                ) : invitations.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Users className="w-10 h-10 mx-auto mb-3 text-brand-blue/30" />
-                    <p className="text-gray-500 dark:text-slate-500 mb-2 text-sm">
-                      {hasActiveInviteFilters ? 'No candidates match the current filters' : 'No candidates invited yet'}
-                    </p>
-                    {!hasActiveInviteFilters && (
-                      <p className="text-xs sm:text-sm text-gray-400 dark:text-slate-500">Use the &quot;Send via Email&quot; button to invite candidates</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-2 sm:space-y-3">
-                    {paginatedInvitations.map((inv) => (
-                      <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all gap-2 sm:gap-3">
-                        {/* Candidate info */}
-                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                          {/* Selection checkbox — only interactive for revocable invitations;
-                              a fixed-width spacer keeps every row's avatar aligned regardless
-                              of whether the checkbox is shown. */}
-                          <div className="w-5 flex-shrink-0 flex items-center justify-center">
-                            {isRevocableInvite(inv) && (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); toggleSelectOne(inv.id); }}
-                                role="checkbox"
-                                aria-checked={selectedInviteIds.has(inv.id)}
-                                aria-label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
-                                className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
-                                  selectedInviteIds.has(inv.id)
-                                    ? 'bg-brand-blue border-brand-blue'
-                                    : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
-                                }`}
-                              >
-                                {selectedInviteIds.has(inv.id) && <Check className="w-3 h-3 text-white" />}
-                              </button>
-                            )}
-                          </div>
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                            <span className="text-xs sm:text-sm font-medium text-brand-blue">
-                              {(inv.candidate_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2)}
-                            </span>
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate">{inv.candidate_name || 'Unknown'}</div>
-                            <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{inv.candidate_email}</div>
-                          </div>
-                        </div>
-
-                        {/* Status + Score + Timeline */}
-                        <div className="flex items-center gap-3 sm:gap-4 flex-wrap pl-10 sm:pl-0">
-                          {/* Status badge */}
-                          {getInvStatusBadge(inv)}
-                          {isInvExpired(inv) && (
-                            <span className="px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs flex items-center gap-1">
-                              <Clock className="w-3 h-3" /> Expired
-                            </span>
-                          )}
-
-                          {/* Score — prefer ai_evaluation.capability_score (matches evaluation page) */}
-                          {(() => {
-                            const capScore = inv.ai_evaluation?.capability_score;
-                            const displayScore = capScore != null ? capScore : inv.score;
-                            if (displayScore == null) return null;
-                            // Round to a whole number so this matches the detail
-                            // page (which shows Math.round) — 17.5 → 18, not 17.5.
-                            const rounded = Math.round(Number(displayScore));
-                            // Pass ≥ 60% → green, otherwise red.
-                            const scoreColor = rounded >= 60 ? 'text-green-600' : 'text-red-600';
-                            return (
-                              <div className="text-right">
-                                <div className="text-[10px] text-gray-500 dark:text-slate-500">Score</div>
-                                <div className={`text-sm font-semibold ${scoreColor}`}>{rounded}%</div>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Timeline */}
-                          <div className="hidden sm:flex items-center gap-3 text-[10px] text-gray-400 dark:text-slate-500">
-                            {inv.created_at && (
-                              <span className="flex items-center gap-1" title="Invited">
-                                <Mail className="w-3 h-3 text-brand-blue" />
-                                {formatIST(inv.created_at)}
-                              </span>
-                            )}
-                            {inv.started_at && (
-                              <span className="flex items-center gap-1" title="Started">
-                                <Play className="w-3 h-3 text-brand-orange" />
-                                {formatIST(inv.started_at)}
-                              </span>
-                            )}
-                            {inv.completed_at && (
-                              <span className="flex items-center gap-1" title="Completed">
-                                <CheckCircle className="w-3 h-3 text-green-500" />
-                                {formatIST(inv.completed_at)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Copy Link — available while session is still active */}
-                          {inv.interview_token && !['completed', 'cancelled', 'terminated', 'expired', 'revoked'].includes(resolveStatus(inv)) && !isInvExpired(inv) && (
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                const link = `${window.location.origin}/ai-interview/${inv.interview_token}`;
-                                await navigator.clipboard.writeText(link);
-                                toast.success('Interview link copied!');
-                              }}
-                              title="Copy interview link"
-                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                            >
-                              <Copy className="w-3 h-3" />
-                              Copy Link
-                            </button>
-                          )}
-
-                          {/* Resend Email — for invited (regenerates token), revoked
-                              (reactivates + issues a fresh token), or expired invites —
-                              whether the backend already flipped status to 'expired',
-                              it's stale-but-still-'invited' client-side, or it's a
-                              system_check/in_progress invite abandoned before its
-                              expiry lapsed — as long as the candidate hasn't already
-                              started/completed. */}
-                          {(resolveStatus(inv) === 'invited' || inv.status === 'revoked' || isExpiredForActions(inv)) && !inv.started_at && !inv.completed_at && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setResendInviteTarget(inv);
-                              }}
-                              disabled={resendingEmailFor === inv.id}
-                              aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
-                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 rounded-lg hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
-                            >
-                              {resendingEmailFor === inv.id
-                                ? <Loader2 className="w-3 h-3 animate-spin" />
-                                : <Mail className="w-3 h-3" />
-                              }
-                              {inv.status === 'revoked' ? 'Send Again' : 'Resend Email'}
-                            </button>
-                          )}
-
-                          {/* Edit / Revoke — Edit is only ever enabled once the
-                              invitation has been revoked; Revoke is enabled for
-                              any invitation that hasn't already reached a
-                              terminal/interview-in-progress state. Hidden together
-                              once the candidate has accepted Consent & Terms and
-                              entered the interview process (system_check/in_progress),
-                              actually engaged with the interview (completed/terminated),
-                              the invite was abandoned pre-send (cancelled), or the link
-                              has expired — only Resend is offered at that point. */}
-                          {!['system_check', 'in_progress', 'completed', 'terminated', 'cancelled'].includes(inv.status) && !isExpiredForActions(inv) && (
-                            <>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setEditInviteForm({
-                                    candidate_name: inv.candidate_name || '',
-                                    candidate_email: inv.candidate_email || '',
-                                  });
-                                  setEditInviteTarget(inv);
-                                }}
-                                disabled={inv.status !== 'revoked'}
-                                aria-label="Edit invitation"
-                                title={inv.status === 'revoked' ? 'Edit candidate details' : 'Revoke this invitation first to edit it'}
-                                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:disabled:hover:bg-slate-900 disabled:hover:border-gray-200 dark:disabled:hover:border-slate-700 disabled:hover:text-gray-700 dark:disabled:hover:text-slate-300"
-                              >
-                                <Pencil className="w-3 h-3" />
-                                Edit
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setRevokeInviteTarget(inv);
-                                }}
-                                disabled={inv.status === 'revoked' || revokingInviteFor === inv.id}
-                                aria-label="Revoke invitation"
-                                title={inv.status === 'revoked' ? 'Already revoked' : 'Revoke this invitation — the candidate\'s link will stop working'}
-                                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 ring-1 ring-red-200 dark:ring-red-500/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                              >
-                                {revokingInviteFor === inv.id
-                                  ? <Loader2 className="w-3 h-3 animate-spin" />
-                                  : <Ban className="w-3 h-3" />
-                                }
-                                Revoke
-                              </button>
-                            </>
-                          )}
-
-                          {/* View Details button — also for terminated sessions so
-                              the recruiter can review whatever the candidate answered
-                              before the proctoring policy ended the interview. */}
-                          {(inv.status === 'completed' || inv.status === 'in_progress' || inv.status === 'terminated') && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleViewCandidateDetail(inv.id); }}
-                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                            >
-                              <Eye className="w-3 h-3" />
-                              View Details
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {invitationTotalPages > 1 && (
-                      <div className="flex items-center justify-between pt-2">
-                        <div className="text-sm text-gray-500 dark:text-slate-500">
-                          Showing {((invitationPage - 1) * INVITATION_PAGE_SIZE) + 1}–{Math.min(invitationPage * INVITATION_PAGE_SIZE, invitationTotal)} of {invitationTotal}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setInvitationPage((p) => Math.max(1, p - 1))}
-                            disabled={invitationPage === 1}
-                            className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ChevronLeft className="w-4 h-4" />
-                          </button>
-                          <span className="text-sm text-brand-blue font-semibold px-2">
-                            {invitationPage} / {invitationTotalPages}
-                          </span>
-                          <button
-                            onClick={() => setInvitationPage((p) => Math.min(invitationTotalPages, p + 1))}
-                            disabled={invitationPage === invitationTotalPages}
-                            className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+              {/* Candidate list. overflow-hidden, not overflow-auto: the table
+                  shell (or the mobile card stack) inside is the single vertical
+                  scroller. Two nested scrollers meant this one won, scrolling the
+                  sticky header and pinned Actions column away with the rows. */}
+              <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
+                <AIInterviewInviteTable
+                  invitations={invitations}
+                  isLoading={loadingInvitations}
+                  hasActiveFilters={filtersActive}
+                  emptyHint={'Use the "Send via Email" button to invite candidates'}
+                  selectedIds={selectedInviteIds}
+                  onToggleSelect={toggleSelectOne}
+                  onResend={(inv) => setResendInviteTarget(inv)}
+                  onEdit={(inv) => {
+                    setEditInviteForm({
+                      candidate_name: inv.candidate_name || '',
+                      candidate_email: inv.candidate_email || '',
+                    });
+                    setEditInviteTarget(inv);
+                  }}
+                  onRevoke={(inv) => setRevokeInviteTarget(inv)}
+                  onViewDetails={(inv) => handleViewCandidateDetail(inv.id)}
+                  resendingId={resendingEmailFor}
+                  revokingId={revokingInviteFor}
+                />
               </div>
 
-              {/* Footer */}
-              <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
-                <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">
+              {/* Footer. Stacks on phones: the count line plus four page buttons,
+                  Invite More and Close overflowed a 320px row. First/Last drop out
+                  below sm — Prev/Next and the indicator are enough there. */}
+              <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
+                <p className="text-[11px] sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
                   {invitationResultsLabel}
-                </span>
-                <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                </p>
+                <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
+                  {invitationTotalPages > 1 && (
+                    <>
+                      <button onClick={() => setInvitationPage(1)} disabled={invitationPage === 1} className={`hidden sm:inline-flex ${pageBtn}`}>
+                        First
+                      </button>
+                      <button onClick={() => setInvitationPage((p) => Math.max(1, p - 1))} disabled={invitationPage === 1} className={pageBtn}>
+                        Prev
+                      </button>
+                      <span className="px-1 sm:px-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                        Page {invitationPage} of {invitationTotalPages}
+                      </span>
+                      <button onClick={() => setInvitationPage((p) => Math.min(invitationTotalPages, p + 1))} disabled={invitationPage === invitationTotalPages} className={pageBtn}>
+                        Next
+                      </button>
+                      <button onClick={() => setInvitationPage(invitationTotalPages)} disabled={invitationPage === invitationTotalPages} className={`hidden sm:inline-flex ${pageBtn}`}>
+                        Last
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={() => {
                       // Remember where we came from so closing Share returns here.
@@ -2808,14 +2522,14 @@ export default function AIInterview() {
                       setViewInvitationsConfig(null);
                       setShareConfig(viewInvitationsConfig);
                     }}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                    className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                   >
-                    <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                    <Send className="w-3.5 h-3.5 flex-shrink-0" />
                     Invite More
                   </button>
                   <button
                     onClick={() => setViewInvitationsConfig(null)}
-                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                   >
                     Close
                   </button>

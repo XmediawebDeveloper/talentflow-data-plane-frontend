@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
+import JDEditBlockedModal from '@/components/JDEditBlockedModal';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -11,6 +12,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
+import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
   AlertDialog,
@@ -38,13 +40,16 @@ export default function JobOpeningsPage() {
   const [loading, setLoading] = useState(true);
   const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
+  /* The modules holding the JD, not pre-formatted strings: the dialog draws
+     each one with its own dashboard icon and count, so it needs the parts. */
   const [editWarningDialog, setEditWarningDialog] = useState<{
     open: boolean;
     jobTitle: string;
-    usageDetails: string[];
+    modules: JDUsageModule[];
+    reason?: string;
     jobId?: string;
     creating?: boolean;
-  }>({ open: false, jobTitle: '', usageDetails: [] });
+  }>({ open: false, jobTitle: '', modules: [] });
   const [deleteWarningDialog, setDeleteWarningDialog] = useState<{
     open: boolean;
     jobTitle: string;
@@ -292,20 +297,19 @@ export default function JobOpeningsPage() {
     // For Published JDs, check if modules are in use before allowing edit
     try {
       const usageStatus = await jdService.getUsageStatus(job.id);
-      if (usageStatus && usageStatus.is_used) {
-        // JD has modules in use - show warning dialog and block edit
-        const usageDetails = [
-          usageStatus.usage?.resume_scores_count ? `Resume Scoring (${usageStatus.usage.resume_scores_count})` : '',
-          usageStatus.usage?.assessments_count ? `Assessments (${usageStatus.usage.assessments_count})` : '',
-          usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : '',
-          usageStatus.usage?.ai_interview_count ? `AI Interview (${usageStatus.usage.ai_interview_count})` : ''
-        ].filter(Boolean) as string[];
 
+      /* Derived from whatever the endpoint reports rather than a hand-listed
+         set, and blocked on either signal — used in any module, or an explicit
+         backend refusal. Matches the JD detail page exactly, so the same JD
+         cannot be editable from one screen and blocked from another. */
+      const modules = getJDUsageModules(usageStatus?.usage);
+      if (modules.length > 0 || usageStatus?.can_edit === false) {
         setEditWarningDialog({
           open: true,
           jobId: job.id,
           jobTitle: job.title,
-          usageDetails,
+          modules,
+          reason: usageStatus?.edit_restriction_reason,
           creating: false,
         });
         return;
@@ -330,7 +334,7 @@ export default function JobOpeningsPage() {
     setEditWarningDialog(prev => ({ ...prev, creating: true }));
     try {
       const newJd = await jdService.createNewVersion(sourceId);
-      setEditWarningDialog({ open: false, jobTitle: '', usageDetails: [] });
+      setEditWarningDialog({ open: false, jobTitle: '', modules: [] });
       toast.success('New version created', {
         description: `Version ${(newJd as any).version_number ?? ''} created as a new draft. Edit and publish it independently.`,
       });
@@ -531,68 +535,16 @@ export default function JobOpeningsPage() {
         masterDataLinks={canManageMasters ? MASTER_DATA_LINKS : undefined}
       />
 
-      {/* Edit Warning Dialog */}
-      <AlertDialog open={editWarningDialog.open} onOpenChange={(open) => setEditWarningDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <AlertDialogHeader>
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-amber-600" />
-              </div>
-              <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-lg font-semibold text-gray-900">
-                  Create a New Version?
-                </AlertDialogTitle>
-                <AlertDialogDescription className="mt-1 text-sm text-gray-500">
-                  This job description is actively used, so it can&apos;t be edited directly.
-                </AlertDialogDescription>
-              </div>
-            </div>
-          </AlertDialogHeader>
-
-          <div className="mt-4 space-y-4">
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 mb-2.5">Active in</p>
-              <div className="flex flex-wrap gap-2">
-                {editWarningDialog.usageDetails.map((usage, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white border border-amber-300 text-amber-800 shadow-sm"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-                    {usage}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm text-gray-700">
-                <span className="font-medium text-gray-900">&quot;{editWarningDialog.jobTitle}&quot;</span> is linked to the active modules above. To keep their data intact, editing creates a <span className="font-medium text-gray-900">new version</span> instead.
-              </p>
-              <p className="mt-1.5 text-sm text-gray-500">
-                The new version is an independent copy (its own assessments, AI interviews and resume scoring). This version and its existing data are left untouched.
-              </p>
-            </div>
-          </div>
-
-          <AlertDialogFooter className="mt-5 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-            <AlertDialogAction
-              onClick={() => setEditWarningDialog({ open: false, jobTitle: '', usageDetails: [] })}
-              disabled={editWarningDialog.creating}
-              className="w-full sm:w-auto bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 text-sm"
-            >
-              Cancel
-            </AlertDialogAction>
-            <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); handleCreateNewVersion(); }}
-              disabled={editWarningDialog.creating}
-              className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white text-sm disabled:opacity-60"
-            >
-              {editWarningDialog.creating ? 'Creating…' : 'Create New Version'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Edit Warning Dialog — same component the JD detail page uses, so the
+          grid and list views cannot drift from it again. */}
+      <JDEditBlockedModal
+        open={editWarningDialog.open}
+        modules={editWarningDialog.modules}
+        reason={editWarningDialog.reason}
+        creating={!!editWarningDialog.creating}
+        onClose={() => setEditWarningDialog({ open: false, jobTitle: '', modules: [] })}
+        onCreateNewVersion={handleCreateNewVersion}
+      />
 
       {/* Delete Warning Dialog - shown when JD is in use */}
       <AlertDialog open={deleteWarningDialog.open} onOpenChange={(open) => setDeleteWarningDialog(prev => ({ ...prev, open }))}>
