@@ -7,6 +7,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import JDCreation from '@/components/JDCreation';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
+import { getJDUsageModules } from '@/lib/utils/jdUsageModules';
 
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 
@@ -283,11 +284,12 @@ function JDCreationContent() {
                 if (usageStatus && usageStatus.is_used) {
                   // JD is in use - set flag to show warning and disable editing
                   setIsJDInUse(true);
-                  const usageDetails = [
-                    usageStatus.usage?.resume_scores_count ? `Resume Scoring (${usageStatus.usage.resume_scores_count})` : '',
-                    usageStatus.usage?.assessments_count ? `Assessments (${usageStatus.usage.assessments_count})` : '',
-                    usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : ''
-                  ].filter(Boolean).join(', ');
+                  /* Derived from whatever the endpoint reports rather than a
+                     hand-listed three — this used to omit AI Interview, so a JD
+                     blocked solely by an interview named no module at all. */
+                  const usageDetails = getJDUsageModules(usageStatus.usage)
+                    .map(module => `${module.name} (${module.count})`)
+                    .join(', ');
                   setJdUsageMessage(
                     usageStatus.edit_restriction_reason ||
                     `This job description has been used in: ${usageDetails}. It cannot be modified. Please create a new JD instead.`

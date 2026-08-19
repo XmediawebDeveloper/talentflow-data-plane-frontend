@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -15,7 +15,14 @@ import ConsentLogs from './compliance/ConsentLogs';
 import AssessmentPreviewModal from './AssessmentPreviewModal';
 import AssessmentEditModal from './AssessmentEditModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
-import InviteFilterBar, { EMPTY_INVITE_FILTERS, type InviteFilterState } from './InviteFilterBar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import InviteFilterBar, { EMPTY_INVITE_FILTERS, ASSESSMENT_INVITE_STATUS_OPTIONS, type InviteFilterState } from './InviteFilterBar';
+import InviteStatCards, { INVITE_CARD_TONES } from './InviteStatCards';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
@@ -3764,8 +3771,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       {/* Track Invites Modal */}
       {showTrackInvitesModal && selectedAssessmentForTracking && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] w-full sm:max-w-5xl h-[95dvh] sm:h-[calc(100dvh-3rem)] max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
+          {/* Height is content-driven with a viewport cap, not a fixed 95dvh:
+              a 3-invite list on a 27" monitor used to stretch the dialog the
+              full screen with an empty table below the rows. The table shell
+              (flex-1 min-h-0) absorbs the overflow once the cap engages, so a
+              long list still scrolls inside the dialog on a 320px phone. */}
+          <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] w-full sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[92dvh] sm:max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
               <div className="min-w-0 flex-1">
@@ -3861,7 +3873,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             />
 
             {/* Invitations Table / Cards */}
-            <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-auto flex-1 min-h-0">
+            {/* overflow-hidden, not overflow-auto: the shell below is the
+                single vertical scroller. Two nested scrollers meant this one
+                won, scrolling the sticky header and pinned Actions column
+                away with the rest of the table. */}
+            <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
               {isLoadingInvitations ? (
                 <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center tf-loader-center--compact">
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
@@ -3876,23 +3892,30 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </p>
                 </div>
               ) : (
-                <div className="tf-table-shell tf-table-shell--compact">
-                  <table className="w-full min-w-[900px] table-fixed">
-                    <colgroup>
-                      <col className="w-[80px]" />
-                      <col className="w-[240px]" />
-                      <col className="w-[140px]" />
-                      <col className="w-[220px]" />
-                      {(selectedAssessmentForTracking?.technical_enabled ?? true) && <col className="w-[100px]" />}
-                      {selectedAssessmentForTracking?.coding_enabled && <col className="w-[100px]" />}
-                      <col className="w-[170px]" />
-                    </colgroup>
+                /* Outer border on the scroll shell rather than the table: the
+                   shell is what stays put, so a border on the table itself would
+                   scroll away with the content. Deliberately no overflow-hidden —
+                   the shell's overflow:auto is what lets the wide auto-layout
+                   table scroll sideways. */
+                <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg">
+                  {/* Auto layout, not table-fixed. The colgroup widths summed
+                      past the table's min-width, so every column was scaled
+                      down; combined with the shell's white-space: nowrap the
+                      content overflowed its cell instead of reflowing, and the
+                      sticky header stopped lining up with the rows. Columns now
+                      size to their own content and the shell scrolls sideways.
+                      px-4 on every cell gives the consistent column gutter. */}
+                  <table className="w-max min-w-full">
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Timeline</th>
+                        {/* hidden md:table-cell mirrors this column's <td>. Without
+                            it the header carried one more cell than the body between
+                            sm and md, shifting every heading after Timeline off its
+                            column. */}
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
                         {/* Tech / Coding Score columns are conditional on the
                             assessment having that round enabled — same rule as
                             the Results page. Showing a "Coding Score" column
@@ -3904,7 +3927,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         {selectedAssessmentForTracking?.coding_enabled && (
                           <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
                         )}
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -3981,9 +4004,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm flex-shrink-0">
                                   {initials}
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate">{invitation.candidate_name}</p>
-                                  <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{invitation.candidate_email}</p>
+                                {/* Capped rather than free: under auto layout a
+                                    single long email would otherwise set the
+                                    column width for the whole table. */}
+                                <div className="min-w-0 max-w-[240px]">
+                                  <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
+                                  <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                                 </div>
                               </div>
                             </td>
@@ -4002,7 +4028,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 )}
                               </div>
                             </td>
-                                <td className="py-3 px-3 lg:px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
+                                <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
                                   <div className="space-y-1">
                                     {invitation.sent_at && (
                                       <div className="flex items-center gap-2">
@@ -4133,126 +4159,109 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 </td>
                               );
                             })()}
-                            <td className="py-3 px-4 align-top">
-                              {(invitation.status === 'completed' || invitation.completed_at) ? (
-                                invitation.attempt_id ? (
-                                  <button
-                                    onClick={() => router.push(
-                                      `/recruitment/assessments/${selectedAssessmentForTracking.id}/results/details`
-                                      + `?candidate_id=${invitation.attempt_id}`
-                                      + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
-                                    )}
-                                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-brand-blue hover:bg-brand-blue/10 rounded-lg transition-colors"
-                                  >
-                                    <Eye className="w-3.5 h-3.5" />
-                                    View Results
-                                  </button>
-                                ) : (
-                                  // Completed-but-no-attempt — extremely rare orphaned invitation. Render
-                                  // disabled so we don't silently dump the user on the aggregate page.
-                                  <button
-                                    disabled
-                                    title="Result detail unavailable for this invitation"
-                                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-400 rounded-lg cursor-not-allowed"
-                                  >
-                                    <Eye className="w-3.5 h-3.5" />
-                                    View Results
-                                  </button>
-                                )
-                              ) : invitation.status === 'bounced' ? (
-                                editingEmailId === invitation.id ? (
-                                  <div className="flex flex-col gap-1.5 min-w-[190px]">
-                                    <input
-                                      type="email"
-                                      value={newEmailValue}
-                                      onChange={e => setNewEmailValue(e.target.value)}
-                                      placeholder="new@email.com"
-                                      className="text-xs border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full"
-                                      autoFocus
-                                    />
-                                    <div className="flex gap-1">
-                                      <button
-                                        onClick={() => handleUpdateEmail(invitation)}
-                                        disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
-                                        className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-                                      >
-                                        <Send className="w-3 h-3" />
-                                        {isSendingChangeEmail ? 'Sending…' : 'Send'}
-                                      </button>
-                                      <button
-                                        onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
-                                        className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-slate-100 rounded transition-colors"
-                                      >
-                                        Cancel
-                                      </button>
-                                    </div>
+                            <td className="py-3 px-4 align-top tf-sticky-col">
+                              {/* Actions collapse into a kebab menu. This uses Radix's
+                                  DropdownMenu rather than the hand-rolled absolute
+                                  dropdown the cards above use, because this table sits
+                                  inside tf-table-shell (overflow: auto) — an absolutely
+                                  positioned menu would be clipped by the scroll
+                                  container. Radix portals the menu out of it. */}
+                              {editingEmailId === invitation.id ? (
+                                /* The email editor stays inline in the cell rather than
+                                   living in the menu: a text input inside a menu fights
+                                   the menu's own keyboard handling. Choosing "Edit Email"
+                                   closes the menu and swaps the cell to this form. Held
+                                   once here — it used to be duplicated across the bounced
+                                   and resendable branches. */
+                                <div className="flex flex-col gap-1.5 min-w-[190px]">
+                                  <input
+                                    type="email"
+                                    value={newEmailValue}
+                                    onChange={e => setNewEmailValue(e.target.value)}
+                                    placeholder="new@email.com"
+                                    className="text-xs border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full"
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => handleUpdateEmail(invitation)}
+                                      disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
+                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      {isSendingChangeEmail ? 'Sending…' : 'Send'}
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
+                                      className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-slate-100 rounded transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
                                   </div>
-                                ) : (
-                                  <button
-                                    onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
-                                    className="flex items-center gap-1 px-3 py-1.5 text-xs border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 hover:bg-brand-blue/5 rounded-lg transition-colors whitespace-nowrap"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                    Change Email
-                                  </button>
-                                )
-                              ) : (['sent', 'opened', 'failed'].includes(invitation.status) && !invitation.started_at && !invitation.completed_at) ? (
+                                </div>
+                              ) : (() => {
+                                const isCompleted = invitation.status === 'completed' || !!invitation.completed_at;
+                                const isBounced = invitation.status === 'bounced';
                                 // Resend retries the SAME address (good for a transient
-                                // network failure); Edit Email lets the recruiter fix a
-                                // mistyped address before resending (the common cause of
-                                // a "failed"/"Incorrect Email" invite).
-                                editingEmailId === invitation.id ? (
-                                  <div className="flex flex-col gap-1.5 min-w-[190px]">
-                                    <input
-                                      type="email"
-                                      value={newEmailValue}
-                                      onChange={e => setNewEmailValue(e.target.value)}
-                                      placeholder="new@email.com"
-                                      className="text-xs border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full"
-                                      autoFocus
-                                    />
-                                    <div className="flex gap-1">
+                                // network failure); Edit Email fixes a mistyped one (the
+                                // common cause of a "failed"/"Incorrect Email" invite).
+                                const canResend = ['sent', 'opened', 'failed'].includes(invitation.status)
+                                  && !invitation.started_at
+                                  && !invitation.completed_at;
+
+                                // Nothing actionable — render no trigger rather than an
+                                // empty menu the user can open onto nothing.
+                                if (!isCompleted && !isBounced && !canResend) return null;
+
+                                return (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
                                       <button
-                                        onClick={() => handleUpdateEmail(invitation)}
-                                        disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
-                                        className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                                        aria-label="Actions"
+                                        title="Actions"
+                                        className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
                                       >
-                                        <Send className="w-3 h-3" />
-                                        {isSendingChangeEmail ? 'Sending…' : 'Send'}
+                                        <MoreVertical className="w-4 h-4" />
                                       </button>
-                                      <button
-                                        onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
-                                        className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-slate-100 rounded transition-colors"
-                                      >
-                                        Cancel
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-1">
-                                    <button
-                                      onClick={() => setResendTargetInvitation(invitation)}
-                                      aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
-                                      className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-all ${
-                                        invitation.status === 'failed'
-                                          ? 'bg-red-600 text-white hover:bg-red-700'
-                                          : 'border border-brand-blue/30 text-brand-blue bg-white hover:bg-brand-blue/5'
-                                      }`}
-                                    >
-                                      <Mail className="w-3.5 h-3.5" />
-                                      Resend
-                                    </button>
-                                    <button
-                                      onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
-                                      aria-label="Edit email address and resend" title="Edit email address and resend"
-                                      className="flex items-center gap-1 px-3 py-1.5 text-xs border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 hover:bg-brand-blue/5 rounded-lg transition-colors whitespace-nowrap"
-                                    >
-                                      <Pencil className="w-3.5 h-3.5" />
-                                      Edit Email
-                                    </button>
-                                  </div>
-                                )
-                              ) : null}
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-44">
+                                      {isCompleted && (
+                                        // Completed-but-no-attempt is a rare orphaned
+                                        // invitation: disabled, so we never silently drop
+                                        // the user on the aggregate results page.
+                                        <DropdownMenuItem
+                                          disabled={!invitation.attempt_id}
+                                          onSelect={() => router.push(
+                                            `/recruitment/assessments/${selectedAssessmentForTracking.id}/results/details`
+                                            + `?candidate_id=${invitation.attempt_id}`
+                                            + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
+                                          )}
+                                        >
+                                          <Eye className="w-3.5 h-3.5" />
+                                          View Results
+                                        </DropdownMenuItem>
+                                      )}
+                                      {canResend && (
+                                        <DropdownMenuItem onSelect={() => setResendTargetInvitation(invitation)}>
+                                          <Mail className="w-3.5 h-3.5" />
+                                          Resend
+                                        </DropdownMenuItem>
+                                      )}
+                                      {(isBounced || canResend) && (
+                                        <DropdownMenuItem
+                                          onSelect={() => {
+                                            setEditingEmailId(invitation.id);
+                                            setNewEmailValue(invitation.candidate_email);
+                                          }}
+                                        >
+                                          <Pencil className="w-3.5 h-3.5" />
+                                          {isBounced ? 'Change Email' : 'Edit Email'}
+                                        </DropdownMenuItem>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                );
+                              })()}
                             </td>
                           </tr>
                         );
@@ -4264,41 +4273,45 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between bg-slate-50 dark:bg-slate-950 shrink-0">
-              <p className="text-sm text-gray-500 dark:text-slate-500">
+            {/* Stacks on phones: the count line plus four page buttons and Close
+                overflowed a 320px row and pushed Close off-screen. First/Last are
+                hidden below sm — Prev/Next and the page indicator are enough on a
+                phone, and the full set comes back from sm up. */}
+            <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
+              <p className="text-[11px] sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
                 {trackingResultsLabel}
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
                 {trackingPaginationVisible && (
                   <>
                     <button
                       onClick={() => setTrackingCurrentPage(1)}
                       disabled={trackingCurrentPage === 1}
-                      className="px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                      className="hidden sm:inline-flex px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                     >
                       First
                     </button>
                     <button
                       onClick={() => setTrackingCurrentPage(trackingCurrentPage - 1)}
                       disabled={trackingCurrentPage === 1}
-                      className="px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                      className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                     >
                       Prev
                     </button>
-                    <span className="px-2 text-sm text-gray-600 dark:text-slate-400">
+                    <span className="px-1 sm:px-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
                       Page {trackingCurrentPage} of {trackingTotalPages}
                     </span>
                     <button
                       onClick={() => setTrackingCurrentPage(trackingCurrentPage + 1)}
                       disabled={trackingCurrentPage === trackingTotalPages}
-                      className="px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                      className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                     >
                       Next
                     </button>
                     <button
                       onClick={() => setTrackingCurrentPage(trackingTotalPages)}
                       disabled={trackingCurrentPage === trackingTotalPages}
-                      className="px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                      className="hidden sm:inline-flex px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
                     >
                       Last
                     </button>
@@ -4306,7 +4319,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 )}
                 <button
                   onClick={closeTrackInvitesModal}
-                  className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                 >
                   Close
                 </button>
