@@ -73,6 +73,11 @@ export interface PerQuestionSkill {
    *  question score and rendered as "Not evaluated" rather than a misleading
    *  0.0 that fails the candidate as if they said nothing. */
   is_unscored?: boolean;
+  /** True when this skill belongs to an UN-ASKED (not delivered) question but
+   *  still received a recovered score from another answer (or 0 if demonstrated
+   *  nowhere). Lets the UI note the score came from recovery, not this (never
+   *  asked) question. */
+  not_delivered?: boolean;
 }
 
 /**
@@ -171,6 +176,15 @@ export interface PerQuestionDetail {
    *  EXCLUDED from the section average — counting it as 0.0 would unfairly
    *  tank the section. Mirrors the backend's "never fabricate a 0.0" rule. */
   isUnscored?: boolean;
+  /** True when this planned question was NEVER ASKED — the candidate ended the
+   *  interview before reaching it (backend response_type 'not_asked'). The
+   *  question is still shown (recruiters see all planned slots) and its skills
+   *  are still scored by whole-interview recovery: a skill the candidate
+   *  demonstrated in another answer keeps that recovered score, otherwise 0.
+   *  It STILL counts toward the section denominator (÷planned) — un-reached
+   *  questions with no recovered evidence contribute 0. Drives a "Not Delivered"
+   *  badge across all tabs / the PDF instead of a misleading "Skipped"/score. */
+  notDelivered?: boolean;
   /** Display-only score for terminated / disconnect sessions. Derived from the
    *  live runtime evaluator snapshot when the full post-interview evaluation
    *  never landed. Shown on the question card, but EXCLUDED from section /

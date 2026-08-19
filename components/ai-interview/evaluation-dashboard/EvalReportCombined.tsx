@@ -157,6 +157,7 @@ export function EvalReportCombined({
       const SKILL_ROW_GAP = 0.8;
       const RATIONALE_LINE_H = 3.4;
       const RATIONALE_PARAGRAPH_GAP = 0.6;
+      const ANSWER_LINE_H = 3.6;
       const splitLines = (
         value: string,
         width: number,
@@ -236,12 +237,34 @@ export function EvalReportCombined({
           const src = (q.skipSource || '').toLowerCase();
           let status: { label: string; color: RGB; isScore: boolean };
           if (key === 'hr') status = { label: 'Not Scored', color: faint, isScore: false };
+          else if (q.notDelivered) status = { label: `Not Delivered · ${q.questionScore.toFixed(2)}/10`, color: scoreRGB(q.questionScore), isScore: false };
           else if (rt === 'skipped' || src === 'candidate') status = { label: 'Skipped', color: sub, isScore: false };
           else if (['not_answered', 'idk', 'timeout', 'low_coverage'].includes(rt)) status = { label: 'Not Answered', color: faint, isScore: false };
           else status = { label: `${q.questionScore.toFixed(2)}/10`, color: scoreRGB(q.questionScore), isScore: true };
 
           const qSkills = key === 'hr' ? [] : q.skills;
           const qText = splitLines(q.question || `Question ${q.qNum}`, CW - 28, 8.5);
+          // Candidate's answer — recruiters need the actual response to validate
+          // the score, not just the question/skills/rationale. Derive a clear
+          // placeholder for the no-answer cases so a blank never reads as "the
+          // candidate said nothing scorable" when they were simply never asked.
+          const _rawAns = String(q.answer || '').trim();
+          const _rt = (q.responseType || '').toLowerCase();
+          const _src = (q.skipSource || '').toLowerCase();
+          let answerDisplay: string;
+          if (q.notDelivered) {
+            answerDisplay = 'Not asked — the interview ended before this question was reached.';
+          } else if (!_rawAns || _rawAns.toUpperCase() === '[SKIPPED]' || _rawAns.toUpperCase() === '[NOT ASKED]') {
+            answerDisplay = _src === 'candidate'
+              ? 'Skipped — candidate moved to the next question.'
+              : _rt === 'idk'
+                ? 'Candidate answered "I don\'t know".'
+                : 'No response — no answer was given.';
+          } else {
+            answerDisplay = _rawAns;
+          }
+          const ansLines = splitLines(answerDisplay, CW - 10, 8);
+          const answerBlockH = 4.5 + ansLines.length * ANSWER_LINE_H;
           const skillRows = qSkills.map((s) => {
             const lines = splitLines(s.name, CW - 62, 8);
             return {
@@ -264,7 +287,7 @@ export function EvalReportCombined({
           const ratBoxH = rationaleBlocks.length > 0 ? ratContentH + 10.5 : 0;
           const questionTextH = qText.length * QUESTION_LINE_H + 1;
           const skillsBlockH = skillRows.reduce((sum, row) => sum + row.rowHeight, 0);
-          const blockH = 5 + questionTextH + skillsBlockH + (rationaleBlocks.length > 0 ? ratBoxH + 1 : 0) + 3.5;
+          const blockH = 5 + questionTextH + answerBlockH + skillsBlockH + (rationaleBlocks.length > 0 ? ratBoxH + 1 : 0) + 3.5;
           ensure(blockH);
 
           let cursorY = y;
@@ -279,6 +302,21 @@ export function EvalReportCombined({
             doc.text(lineText, M, cursorY + 2.5 + idx * QUESTION_LINE_H);
           });
           cursorY += questionTextH;
+
+          // Candidate's Answer block (label + wrapped response / placeholder).
+          const _ansTop = cursorY;
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(7); txt(sub);
+          doc.text('Answer', M, _ansTop + 2.5);
+          const _ansIsPlaceholder = q.notDelivered
+            || !_rawAns
+            || _rawAns.toUpperCase() === '[SKIPPED]'
+            || _rawAns.toUpperCase() === '[NOT ASKED]';
+          doc.setFont('helvetica', _ansIsPlaceholder ? 'italic' : 'normal');
+          doc.setFontSize(8); txt(_ansIsPlaceholder ? faint : ink);
+          ansLines.forEach((lineText, idx) => {
+            doc.text(lineText, M + 12, _ansTop + 2.5 + idx * ANSWER_LINE_H);
+          });
+          cursorY += answerBlockH;
 
           skillRows.forEach(({ skill, lines, rowHeight }) => {
             const rowTop = cursorY;
@@ -796,6 +834,22 @@ export function EvalReportCombined({
                 // Skills-assessed scores everywhere); HR has none.
                 const rationaleLines = isHR ? [] : buildRationaleLines(q.skills, q.scoreRationale);
                 const hasRationale = rationaleLines.length > 0;
+                // Candidate's answer (with clear placeholders for the no-answer
+                // cases) so the report shows the actual response, not just Q+score.
+                const rawAns = String(q.answer || '').trim();
+                const rtL = (q.responseType || '').toLowerCase();
+                const srcL = (q.skipSource || '').toLowerCase();
+                const ansIsPlaceholder = q.notDelivered || !rawAns
+                  || rawAns.toUpperCase() === '[SKIPPED]' || rawAns.toUpperCase() === '[NOT ASKED]';
+                const answerText = q.notDelivered
+                  ? 'Not asked — the interview ended before this question was reached.'
+                  : ansIsPlaceholder
+                    ? (srcL === 'candidate'
+                        ? 'Skipped — candidate moved to the next question.'
+                        : rtL === 'idk'
+                          ? 'Candidate answered "I don\'t know".'
+                          : 'No response — no answer was given.')
+                    : rawAns;
                 return (
                   <div key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} style={{ pageBreakInside: 'avoid' }}>
                     <div className="grid grid-cols-[15%_20%_minmax(0,1fr)_15%] items-center px-5 py-3 gap-3">
@@ -804,17 +858,25 @@ export function EvalReportCombined({
                       <div className="text-xs text-gray-500 truncate">{skillsText}</div>
                       {isHR
                         ? <div className="text-xs font-medium text-gray-400 text-right italic">Review only</div>
-                        : <div className={`text-base font-bold ${sc.text} text-right`}>{q.questionScore.toFixed(2)}</div>}
+                        : q.notDelivered
+                          ? <div className="text-right"><div className={`text-base font-bold ${sc.text}`}>{q.questionScore.toFixed(2)}</div><div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Not Delivered</div></div>
+                          : <div className={`text-base font-bold ${sc.text} text-right`}>{q.questionScore.toFixed(2)}</div>}
                     </div>
                     {/* Actual interview question text (was missing — recruiters
                         need to see WHAT was asked, not just the mapped skills). */}
                     {q.question && q.question.trim() && (
-                      <div className="px-5 pb-3 -mt-1">
+                      <div className="px-5 pb-2 -mt-1">
                         <div className="text-sm text-gray-800 leading-relaxed">
                           <span className="font-semibold text-gray-500">Q:&nbsp;</span>{q.question}
                         </div>
                       </div>
                     )}
+                    {/* Candidate's answer — the actual response the score is based on. */}
+                    <div className="px-5 pb-3">
+                      <div className={`text-sm leading-relaxed ${ansIsPlaceholder ? 'text-gray-400 italic' : 'text-gray-700'}`}>
+                        <span className="font-semibold text-gray-500 not-italic">A:&nbsp;</span>{answerText}
+                      </div>
+                    </div>
                     {hasRationale && (
                       <div className="px-5 pb-3 -mt-1">
                         <div className="text-[11px] leading-relaxed text-amber-900 bg-amber-50 border border-amber-100 rounded-md px-3 py-2" style={{ pageBreakInside: 'avoid' }}>

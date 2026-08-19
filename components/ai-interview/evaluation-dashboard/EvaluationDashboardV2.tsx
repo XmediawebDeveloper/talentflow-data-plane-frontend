@@ -471,6 +471,13 @@ export function QuestionsView({ data }: { data: DashboardData }) {
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-violet-50 text-violet-700 border-violet-200">
                 HR · Not Scored
               </span>
+            ) : q.notDelivered ? (
+              <span
+                className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(q.questionScore)}`}
+                title="This planned question was never asked — the candidate ended the interview before reaching it. Its skills are still scored from evidence in other answers (recovered); skills demonstrated nowhere score 0. It counts toward the section denominator."
+              >
+                Not Delivered · {q.questionScore.toFixed(1)}/10
+              </span>
             ) : q.isUnscored && displayOnlyScore !== null ? (
               <span
                 className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${scoreColorClass(displayOnlyScore)}`}
@@ -559,6 +566,16 @@ export function QuestionsView({ data }: { data: DashboardData }) {
               // derive one (e.g. no transcript available).
               const rt = (q.responseType || '').toLowerCase();
               const ansClean = (answer || '').trim();
+              // Un-reached planned question — never asked, so there is no answer
+              // to show. Distinct from "Not Answered" (asked, candidate silent).
+              if (q.notDelivered) {
+                return (
+                  <span className="text-gray-400 italic inline-flex items-center gap-1.5">
+                    <SkipForward className="w-3.5 h-3.5" />
+                    Not asked — the interview ended before this question was reached
+                  </span>
+                );
+              }
               const noRealAnswer =
                 !ansClean ||
                 ansClean.toLowerCase() === '[skipped]' ||

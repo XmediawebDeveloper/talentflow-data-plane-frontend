@@ -102,9 +102,15 @@ export const isInterviewLinkLive = (inv: any): boolean =>
   !['completed', 'cancelled', 'terminated', 'expired', 'revoked'].includes(resolveInviteStatus(inv)) &&
   !isInviteExpired(inv);
 
-/** Prefer the evaluation's capability score so this matches the Result tab;
- *  round so 17.5 reads as 18 in both places. */
+/** Invite/list Score is ALWAYS the Must-Have Skills percentage (MHS section
+ *  average ×10), shown only once an evaluation exists — otherwise a dash.
+ *  Full (non-compact) payloads carry `section_question_avg.mth` (0-10); the
+ *  compact list payload instead carries the MHS%-derived value directly in
+ *  `capability_score` (the backend mirrors it there). Never fall back to a
+ *  blended capability_score or the legacy `score`. Round so 17.5 reads as 18. */
 export const displayInviteScore = (inv: any): number | null => {
+  const mth = inv.ai_evaluation?.section_question_avg?.mth;
+  if (typeof mth === 'number') return Math.round(mth * 10);
   const raw = inv.ai_evaluation?.capability_score ?? inv.score;
   return raw != null ? Math.round(Number(raw)) : null;
 };
