@@ -6,7 +6,7 @@ import {
   AlertTriangle, VideoOff, ChevronDown, ChevronUp, Video,
   BarChart3, Brain, FileText, Layers, Bot,
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
-  Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
+  Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
   Download, Loader2, Sparkles, SkipForward, Play,
 } from 'lucide-react';
@@ -70,7 +70,7 @@ interface CandidateResultsViewProps {
   breadcrumbItems?: { label: string; href?: string; onClick?: () => void }[];
 }
 
-type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios' | 'verification';
+type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios' | 'verification' | 'verification_frames';
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -1281,10 +1281,16 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   // showing "0:09") — this shows the correctly ROUNDED whole-second value
   // alongside it instead, without touching the actual recording/upload.
   const [envVideoDurations, setEnvVideoDurations] = useState<Record<string, number>>({});
+  // One <video> element ref per verification card, keyed by verification_id —
+  // lets a flagged item's timestamp jump straight to that point in THIS clip
+  // (as opposed to the header's jump-to-recording link, which seeks the main
+  // interview recording instead), matching Integrity Check's click-to-jump
+  // format for the flagged-item evidence too.
+  const envVideoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const envVideoBlobRequestedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (activeTab !== 'verification' || envVerifications !== null) return;
+    if ((activeTab !== 'verification' && activeTab !== 'verification_frames') || envVerifications !== null) return;
     let cancelled = false;
     setEnvVerificationsLoading(true);
     console.info(`[ENV-VERIFY] Fetching verification for interview=${liveSession.id}`);
@@ -1303,6 +1309,35 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
       .finally(() => { if (!cancelled) setEnvVerificationsLoading(false); });
     return () => { cancelled = true; };
   }, [activeTab, liveSession.id, envVerifications]);
+
+  // Verification Frames tab — the ~20 individual frames the vision LLM
+  // actually analyzed, one fetch per verification record (frames are
+  // per-verification, not per-interview, unlike the list above).
+  type EnvFrame = { index: number; url: string | null };
+  const [envFrames, setEnvFrames] = useState<Record<string, EnvFrame[]>>({});
+  const [envFramesLoading, setEnvFramesLoading] = useState<Record<string, boolean>>({});
+  const [envFramesError, setEnvFramesError] = useState<Record<string, boolean>>({});
+  const [envFrameLightbox, setEnvFrameLightbox] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== 'verification_frames' || !envVerifications || envVerifications.length === 0) return;
+    envVerifications.forEach((v) => {
+      const id = v.verification_id;
+      if (envFrames[id] || envFramesLoading[id]) return;
+      setEnvFramesLoading(prev => ({ ...prev, [id]: true }));
+      api.get(`/ai-interview/environment-verification/${id}/frames`)
+        .then(res => {
+          const frames: EnvFrame[] = Array.isArray(res?.data?.frames) ? res.data.frames : [];
+          setEnvFrames(prev => ({ ...prev, [id]: frames }));
+        })
+        .catch(() => {
+          setEnvFramesError(prev => ({ ...prev, [id]: true }));
+        })
+        .finally(() => {
+          setEnvFramesLoading(prev => ({ ...prev, [id]: false }));
+        });
+    });
+  }, [activeTab, envVerifications, envFrames, envFramesLoading]);
 
   useEffect(() => {
     if (!envVerifications || envVerifications.length === 0) return;
@@ -1402,6 +1437,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     // { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
+    { key: 'verification_frames', label: 'Verification Frames', icon: <Camera className="w-4 h-4" /> },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Integrity Check',  icon: <ShieldAlert className="w-4 h-4" />, badge: violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
   ];
@@ -2823,14 +2859,42 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   {envVerifications.map((v) => {
                     const videoSrc = v.video_url || envVideoBlobUrls[v.verification_id] || null;
                     const videoStillLoading = v.video_uploaded && !videoSrc && !envVideoBlobUrls[v.verification_id] && !v.video_url;
+                    // Same click-to-jump-to-recording pattern as Integrity Check /
+                    // Question Analysis: seek the main interview Recording tab to
+                    // the moment this QR verification happened (not the QR clip
+                    // itself, which already plays inline below).
+                    const envTs = v.submitted_at || v.triggered_at || '';
+                    const envOffsetSec = videoOffsetSeconds(envTs, videoAnchor);
+                    const envHasRecording = !!(liveSession.recording_file_path || liveSession.screen_recording_file_path);
+                    const envSeekable = envOffsetSec != null && envHasRecording;
+                    const jumpToRecordingFromEnv = () => {
+                      if (envOffsetSec == null) return;
+                      seekNonceRef.current += 1;
+                      setRecordingSeek({ seconds: envOffsetSec, key: seekNonceRef.current });
+                      setActiveTab('recording');
+                    };
                     return (
                       <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
                         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2">
                             <ShieldAlert className="w-4 h-4 text-brand-blue" />
                             <span className="text-sm font-semibold text-gray-900">Environment Verification</span>
-                            {(v.submitted_at || v.triggered_at) && (
-                              <span className="text-xs text-gray-500">{formatTs(v.submitted_at || v.triggered_at || '')}</span>
+                            {envTs && (
+                              <div>
+                                {envSeekable ? (
+                                  <button
+                                    type="button"
+                                    onClick={jumpToRecordingFromEnv}
+                                    title="Jump to this moment in the recording"
+                                    className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono"
+                                  >
+                                    <Play className="w-3 h-3" />{formatVideoOffset(envTs, videoAnchor)}
+                                  </button>
+                                ) : (
+                                  <span className="text-xs font-mono text-gray-400">{formatVideoOffset(envTs, videoAnchor)}</span>
+                                )}
+                                <div className="text-[11px] text-gray-400 font-mono">{formatTs(envTs)}</div>
+                              </div>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -2858,6 +2922,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             ) : (
                               <>
                                 <video
+                                  ref={(el) => { envVideoRefs.current[v.verification_id] = el; }}
                                   controls
                                   preload="metadata"
                                   className="w-full max-w-lg rounded-lg bg-black"
@@ -2929,26 +2994,204 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <p className="text-sm text-gray-700 leading-relaxed">{v.ai_summary}</p>
                             </div>
                           )}
-                          {v.flagged_items && v.flagged_items.length > 0 && (
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Flagged Items</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {v.flagged_items.map((item, i) => {
-                                  const location = typeof item.location === 'string' ? item.location : null;
-                                  const approxTimestamp = typeof item.approx_timestamp === 'string' ? item.approx_timestamp : null;
-                                  const evidence = [location, approxTimestamp].filter(Boolean).join(' · ');
-                                  return (
-                                    <span
-                                      key={i}
-                                      className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700 ring-1 ring-red-200"
-                                      title={evidence || undefined}
-                                    >
-                                      {String(item.label ?? 'Unknown')} {item.confidence ? `(${String(item.confidence)})` : ''}
-                                      {evidence && <span className="text-red-500/70"> — {evidence}</span>}
-                                    </span>
-                                  );
-                                })}
+                          {v.flagged_items && v.flagged_items.length > 0 && (() => {
+                            const items = v.flagged_items;
+                            // Parse the first number out of approx_timestamp (e.g. "~6.2s-8.1s",
+                            // "frame 12 only") — same regex approach as the backend's own
+                            // phase-derivation fallback — to make it clickable.
+                            const parseApproxSeconds = (ts: string | null): number | null => {
+                              if (!ts) return null;
+                              const match = ts.match(/(\d+(?:\.\d+)?)/);
+                              return match ? parseFloat(match[1]) : null;
+                            };
+                            const seekEnvVideo = (seconds: number) => {
+                              const el = envVideoRefs.current[v.verification_id];
+                              if (el) {
+                                el.currentTime = seconds;
+                                el.play().catch(() => { /* autoplay may be blocked; seek still applies */ });
+                              }
+                            };
+                            // Legacy rows analyzed before the 2-column merge may still carry
+                            // "pan_left_to_right"/"pan_right_to_left" — both fold into "pan" here.
+                            const normalizedPhase = (item: Record<string, unknown>): string => {
+                              const p = String(item.phase ?? '');
+                              return p === 'pan_left_to_right' || p === 'pan_right_to_left' ? 'pan' : p;
+                            };
+                            const segmentLabel = (phase: string) =>
+                              phase === 'display' ? 'Display' : phase === 'pan' ? 'Pan' : '—';
+                            const iconForLabel = (label: string) => {
+                              const l = label.toLowerCase();
+                              if (l.includes('person')) return <Users className="w-3.5 h-3.5" />;
+                              if (l.includes('phone') || l.includes('tablet')) return <Smartphone className="w-3.5 h-3.5" />;
+                              if (l.includes('laptop') || l.includes('monitor') || l.includes('screen') || l.includes('display')) return <Monitor className="w-3.5 h-3.5" />;
+                              return <AlertTriangle className="w-3.5 h-3.5" />;
+                            };
+                            const severityForConfidence = (confidence: string) => {
+                              if (confidence === 'high') return { label: 'Serious', cls: 'bg-red-100 text-red-700 ring-1 ring-red-200' };
+                              if (confidence === 'medium') return { label: 'Moderate', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' };
+                              return { label: 'Minor', cls: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' };
+                            };
+                            const rows = items.map((item, i) => {
+                              const label = String(item.label ?? 'Unknown');
+                              const confidence = typeof item.confidence === 'string' ? item.confidence : 'low';
+                              const location = typeof item.location === 'string' ? item.location : null;
+                              const approxTimestamp = typeof item.approx_timestamp === 'string' ? item.approx_timestamp : null;
+                              const phase = normalizedPhase(item);
+                              const seekSeconds = parseApproxSeconds(approxTimestamp);
+                              // Best-effort absolute wall-clock moment: this verification's own
+                              // trigger/submit time + the parsed offset into the 10s clip — same
+                              // "offset + absolute clock underneath" convention used everywhere
+                              // else in this file (Integrity Check, Question Analysis, the card
+                              // header above).
+                              const baseTs = v.submitted_at || v.triggered_at || '';
+                              const absoluteTs = baseTs && seekSeconds != null
+                                ? new Date(new Date(baseTs).getTime() + seekSeconds * 1000).toISOString()
+                                : null;
+                              const phaseDescription = phase === 'display'
+                                ? 'during the display phase (first 5s)'
+                                : phase === 'pan'
+                                ? 'during the panning phase (5s-10s)'
+                                : '';
+                              const description = `Detected${location ? ` in the ${location}` : ''}${phaseDescription ? ` ${phaseDescription}` : ''}.`;
+                              const severity = severityForConfidence(confidence);
+                              return { item, i, label, confidence, location, approxTimestamp, phase, seekSeconds, absoluteTs, description, severity };
+                            });
+                            return (
+                              <div>
+                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Flagged Items</p>
+                                <div className="overflow-x-auto rounded-lg ring-1 ring-gray-100">
+                                  <table className="min-w-full text-left">
+                                    <thead>
+                                      <tr className="bg-gray-50 border-b border-gray-100">
+                                        <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">What happened</th>
+                                        <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">What we saw</th>
+                                        <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Segment</th>
+                                        <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">When</th>
+                                        <th className="px-3 py-2 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Severity</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                      {rows.map((r) => (
+                                        <tr key={r.i} className="align-top">
+                                          <td className="px-3 py-2.5">
+                                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200/60">
+                                              {iconForLabel(r.label)}
+                                              {r.label}
+                                            </div>
+                                            <div className="mt-1">
+                                              {r.confidence === 'high' ? (
+                                                <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 ring-1 ring-red-200">HIGH CONFIDENCE</span>
+                                              ) : (
+                                                <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full text-brand-orange-deep ring-1 ring-brand-orange/40">POSSIBLE</span>
+                                              )}
+                                            </div>
+                                          </td>
+                                          <td className="px-3 py-2.5 text-xs text-gray-500 max-w-[34ch] whitespace-normal break-words">
+                                            {r.description}
+                                          </td>
+                                          <td className="px-3 py-2.5 text-xs text-gray-600">{segmentLabel(r.phase)}</td>
+                                          <td className="px-3 py-2.5">
+                                            {r.seekSeconds != null ? (
+                                              <button
+                                                type="button"
+                                                onClick={() => seekEnvVideo(r.seekSeconds as number)}
+                                                title="Jump to this moment in the verification video"
+                                                className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono"
+                                              >
+                                                <Play className="w-3 h-3" />{r.approxTimestamp}
+                                              </button>
+                                            ) : (
+                                              <span className="text-xs font-mono text-gray-400">{r.approxTimestamp ?? '—'}</span>
+                                            )}
+                                            {r.absoluteTs && (
+                                              <div className="text-[11px] text-gray-400 font-mono mt-0.5">{formatTs(r.absoluteTs)}</div>
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2.5">
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.severity.cls}`}>
+                                              {r.severity.label}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
                               </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
+            {/* Verification Frames Tab — the ~20 individual frames (2fps) the
+                vision LLM actually analyzed for each QR verification attempt,
+                so a recruiter can review exactly what the AI saw rather than
+                only its written conclusions. */}
+            {!evaluationPending && activeTab === 'verification_frames' && (
+              envVerificationsLoading && envVerifications === null ? (
+                renderPlaceholder('Loading verification frames…')
+              ) : !envVerifications || envVerifications.length === 0 ? (
+                renderPlaceholder(
+                  envVerificationsError
+                    ? 'Could not load verification data — please refresh and try again.'
+                    : liveSession.environment_verification_enabled
+                    ? 'No QR verification was triggered during this interview.'
+                    : 'Mobile Environment Verification was not enabled for this interview.'
+                )
+              ) : (
+                <div className="space-y-6">
+                  {envVerifications.map((v) => {
+                    const frames = envFrames[v.verification_id];
+                    const loading = envFramesLoading[v.verification_id];
+                    const error = envFramesError[v.verification_id];
+                    return (
+                      <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
+                        <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <Camera className="w-4 h-4 text-brand-blue" />
+                            <span className="text-sm font-semibold text-gray-900">Analyzed Frames</span>
+                            {(v.submitted_at || v.triggered_at) && (
+                              <span className="text-xs text-gray-500">{formatTs(v.submitted_at || v.triggered_at || '')}</span>
+                            )}
+                          </div>
+                          {frames && frames.length > 0 && (
+                            <span className="text-xs text-gray-500">{frames.length} frames</span>
+                          )}
+                        </div>
+                        <div className="p-4 sm:p-5">
+                          {loading || (!frames && !error) ? (
+                            <p className="text-sm text-gray-400 italic">Loading frames…</p>
+                          ) : error ? (
+                            <p className="text-sm text-red-600 italic">Could not load frames.</p>
+                          ) : !frames || frames.length === 0 ? (
+                            <p className="text-sm text-gray-400 italic">
+                              No stored frames for this attempt (analyzed before this feature was added, or local-disk storage).
+                            </p>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                              {frames.map((f) => (
+                                <button
+                                  key={f.index}
+                                  type="button"
+                                  disabled={!f.url}
+                                  onClick={() => f.url && setEnvFrameLightbox(f.url)}
+                                  className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 ring-1 ring-gray-200 disabled:cursor-not-allowed group"
+                                >
+                                  {f.url ? (
+                                    <img src={f.url} alt={`Frame ${f.index + 1}`} className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
+                                  ) : (
+                                    <span className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400">unavailable</span>
+                                  )}
+                                  <span className="absolute bottom-0.5 right-1 text-[10px] font-mono text-white bg-black/50 px-1 rounded">
+                                    {f.index + 1}
+                                  </span>
+                                </button>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -2957,6 +3200,15 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   })}
                 </div>
               )
+            )}
+
+            {envFrameLightbox && (
+              <div
+                className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6"
+                onClick={() => setEnvFrameLightbox(null)}
+              >
+                <img src={envFrameLightbox} alt="Frame preview" className="max-w-full max-h-full rounded-lg" />
+              </div>
             )}
 
             {/* Transcript Tab — use liveSession so evaluation_ready refresh populates

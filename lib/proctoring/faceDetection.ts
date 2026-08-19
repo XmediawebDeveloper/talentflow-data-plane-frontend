@@ -85,14 +85,25 @@ export async function loadFaceApiNetWithFallback(
   if (net.isLoaded) return;
 
   let lastError: unknown = null;
+  const failures: string[] = [];
   for (const url of urls) {
     try {
       await net.loadFromUri(url);
       return;
     } catch (error) {
       lastError = error;
+      failures.push(`${url}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+
+  // Every source failed. Callers swallow this to fall back / hard-block, so log
+  // it here or the real cause is invisible — the UI just says "Face detection
+  // unavailable". A NON-network message repeated identically for all three URLs
+  // (e.g. "ENGINE.makeTensor is not a function") means TF.js itself is broken,
+  // not the model hosting — check for a duplicate @tensorflow/tfjs-core in the
+  // bundle (two copies share window._tfengine and cross-wire each other).
+  // eslint-disable-next-line no-console
+  console.error('[face-api] model load failed from every source: ' + failures.join(' | '));
 
   throw lastError instanceof Error ? lastError : new Error('Face-api model unavailable');
 }

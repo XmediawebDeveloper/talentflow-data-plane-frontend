@@ -22,17 +22,24 @@ type Phase =
   | 'done';
 
 const RECORD_SCREEN_MS = 5000;
-// Exactly 5000 (not padded) — per spec, "a 10-second video": 5s screen + 5s
-// pan = 10.000s of real recorded content by construction. A prior version
-// of this padded RECORD_PAN_MS to 5300 to make the browser's native <video>
-// controls display "0:10" instead of "0:09" (they FLOOR the duration, and a
-// genuine 10.000s recording can measure ~9.98s in the WebM container due to
-// a few tens of ms of ordinary encoder/container overhead — not missing
-// footage). Reverted: the spec asks for a true 10-second recording, not a
-// duration inflated to satisfy a display rounding quirk. The player showing
-// "0:09" on a ~9.98s-measured file is a cosmetic display-only artifact of
-// the browser's own floor(), not a content defect.
-const RECORD_PAN_MS = 5000;
+// Not padded — the display/color+ID phase must stay exactly the real 5s
+// the backend's per-second RGB check expects (it samples timestamps
+// 0.5s-4.5s of the file).
+//
+// RECORD_PAN_MS below carries a small +50ms buffer instead of the bare
+// 5000 — the ONLY phase touched, per instruction. Real uploads measured via
+// ffprobe on a genuine 5000+5000ms recording came in at ~9.9827s and
+// ~9.9846s (both ~15-18ms short of 10.0s) from ordinary WebM encoder/
+// container overhead — a universal browser-recording artifact, not missing
+// footage, and not something JS timing precision alone can eliminate. A
+// prior version padded this phase by +300ms to fix the native <video>
+// player's floor()'d time display, which was reverted for adding too much
+// real recording time beyond 10s. This smaller +50ms is sized only to
+// comfortably clear that ~15-18ms shortfall with margin, not to visibly
+// extend the recording — total real content is ~10.03-10.05s, effectively
+// indistinguishable from 10s to the candidate, while reliably pushing the
+// file's measured duration past the 10.0s floor threshold.
+const RECORD_PAN_MS = 5050;
 const GET_READY_SECONDS = 3;
 
 interface MobileEnvironmentVerificationPortalProps {
@@ -332,18 +339,33 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       {phase === 'instructions' && (
         <div className="max-w-sm space-y-5">
           <h1 className="text-lg font-semibold">Environment Verification</h1>
-          <div className="text-sm text-[#cbd5e1] leading-relaxed text-left space-y-3 bg-white/5 rounded-xl p-4 border border-white/10">
+          <div className="text-sm text-[#cbd5e1] leading-relaxed text-left space-y-4 bg-white/5 rounded-xl p-4 border border-white/10">
             <p>
-              Please record a <strong className="text-white">10-second video</strong> of your interview
-              setup in <strong className="text-white">landscape mode</strong>. Ensure your laptop screen
-              is visible throughout the recording.
+              You'll record a <strong className="text-white">10-second video</strong> in{' '}
+              <strong className="text-white">landscape mode</strong>, in two steps:
             </p>
-            <p>Slowly move your mobile phone:</p>
-            <ul className="list-disc list-inside space-y-1 text-[#94a3b8]">
-              <li>Left to Right</li>
-              <li>Right to Left</li>
-            </ul>
-            <p>Keep your recording steady until instructed.</p>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue/20 text-brand-blue text-xs font-bold flex items-center justify-center mt-0.5">1</span>
+              <p>
+                <strong className="text-white">First 5 seconds</strong> — focus your camera on your
+                laptop screen/display. It will show a changing color and a unique ID; keep it
+                centered and hold steady.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue/20 text-brand-blue text-xs font-bold flex items-center justify-center mt-0.5">2</span>
+              <div className="flex-1">
+                <p>
+                  <strong className="text-white">Next 5 seconds</strong> — slowly move your phone from
+                  left to right and back again, capturing your workspace, surrounding area, and any
+                  nearby devices.
+                </p>
+                <div className="mt-2 flex items-center gap-1.5">
+                  <span className="text-xl inline-block animate-[tf-instr-tilt_1.2s_ease-in-out_infinite]">📱</span>
+                  <span className="text-[11px] text-[#94a3b8]">left ↔ right</span>
+                </div>
+              </div>
+            </div>
           </div>
           <button
             type="button"
@@ -352,6 +374,12 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           >
             Next
           </button>
+          <style>{`
+            @keyframes tf-instr-tilt {
+              0%, 100% { transform: rotate(-25deg); }
+              50% { transform: rotate(25deg); }
+            }
+          `}</style>
         </div>
       )}
 
@@ -373,7 +401,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           otherwise the stream has nowhere to attach to and the preview
           stays black even though recording is happening. Hidden outside
           the get-ready/recording phases via `hidden` rather than unmounted. */}
-      <div className={`w-full max-w-sm space-y-4 ${(phase === 'get_ready' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+      <div className={`w-full max-w-2xl space-y-4 ${(phase === 'get_ready' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
         <div className="relative">
           <video
             ref={videoRef}
@@ -389,23 +417,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           )}
           {phase === 'pan_instructions' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 rounded-xl px-4 overflow-hidden">
-              <div className="flex items-center gap-2 animate-[tf-pan-sweep_2.4s_ease-in-out_infinite]">
-                <span className="text-3xl inline-block leading-none animate-[tf-arrow-flip_2.4s_ease-in-out_infinite]">➜</span>
-                <span className="text-5xl inline-block leading-none">📱</span>
-              </div>
+              <span className="text-5xl inline-block animate-[tf-phone-tilt_1.2s_ease-in-out_infinite]">📱</span>
               <p className="text-sm font-medium text-white text-center">
-                Now turn your phone slowly — left to right, then right to left
+                Now slowly move your phone from left to right and back again — capture your workspace, surrounding area, and any nearby devices.
               </p>
               <style>{`
-                @keyframes tf-pan-sweep {
-                  0%   { transform: translateX(-120px); }
-                  50%  { transform: translateX(120px); }
-                  100% { transform: translateX(-120px); }
-                }
-                @keyframes tf-arrow-flip {
-                  0%, 49.9%  { transform: scaleX(1); }
-                  50%, 99.9% { transform: scaleX(-1); }
-                  100%       { transform: scaleX(1); }
+                @keyframes tf-phone-tilt {
+                  0%, 100% { transform: rotate(-25deg); }
+                  50% { transform: rotate(25deg); }
                 }
               `}</style>
             </div>
@@ -436,8 +455,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             </div>
             <p className="text-sm leading-relaxed">
               {phase === 'recording_screen'
-                ? 'Recording your screen with this frame — point your camera at your laptop screen and keep it steady.'
-                : 'Now slowly turn your mobile from left to right, and right to left.'}
+                ? 'Focus your camera on your laptop screen/display. Keep it centered and hold steady — do not move yet.'
+                : 'Now slowly move your phone from left to right and back again, capturing your workspace, surrounding area, and any nearby devices.'}
             </p>
           </>
         )}

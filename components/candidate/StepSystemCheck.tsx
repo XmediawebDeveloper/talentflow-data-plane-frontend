@@ -25,6 +25,8 @@ import {
   CircleDot,
   Play,
   RefreshCw,
+  Settings,
+  MicOff,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
@@ -315,6 +317,30 @@ export default function StepSystemCheck({
     useState<'idle' | 'recording' | 'success' | 'failed'>('idle');
   const [voiceEnrollProgress, setVoiceEnrollProgress] = useState(0); // 0..100
 
+  // Candidate-selectable camera/microphone — lets the candidate pick whichever
+  // connected device is actually compatible (e.g. a USB webcam over a broken
+  // built-in one, or a headset mic over a noisy laptop mic) instead of being
+  // stuck with whatever the OS treats as default.
+  const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
+  const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState<string>('');
+  const [selectedMicId, setSelectedMicId] = useState<string>('');
+  const [isSwitchingDevice, setIsSwitchingDevice] = useState(false);
+  // Mirrors of the two selected-id state values above, read inside
+  // getUserMedia calls. A ref (not the state) is used there because
+  // switchCamera/switchMicrophone call runWebcam/ensureAudioAnalyser
+  // synchronously, in the same tick as setSelectedCameraId/setSelectedMicId —
+  // before React re-renders — so a closure over the state value would still
+  // see the OLD selection.
+  const selectedCameraIdRef = useRef<string>('');
+  const selectedMicIdRef = useRef<string>('');
+  // Set the moment a PREVIOUSLY-PASSING microphone check goes dead (headset
+  // unplugged, Bluetooth drop, etc.) here on the System Check screen itself —
+  // i.e. after the candidate already selected a mic and it passed, but before
+  // they've clicked Continue. Blocks Continue and shows a reconnect popup
+  // until the same device (or a newly selected one) is live again.
+  const [micDisconnectedPopup, setMicDisconnectedPopup] = useState(false);
+
   // Measured metric values to include when submitting to backend
   const networkLatencyMsRef = useRef<number | null>(null);
   const networkSpeedMbpsRef = useRef<number | null>(null);
@@ -454,7 +480,10 @@ export default function StepSystemCheck({
       return true;
     }
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: true });
+      const videoConstraint: MediaTrackConstraints | boolean = selectedCameraIdRef.current
+        ? { deviceId: { exact: selectedCameraIdRef.current } }
+        : true;
+      const s = await navigator.mediaDevices.getUserMedia({ video: videoConstraint });
       streamRef.current = s;
       if (videoRef.current) videoRef.current.srcObject = s;
       await new Promise((r) => setTimeout(r, 1200)); // let metadata / first frames arrive
@@ -469,7 +498,10 @@ export default function StepSystemCheck({
       return analyserRef.current;
     }
     try {
-      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioConstraint: MediaTrackConstraints | boolean = selectedMicIdRef.current
+        ? { deviceId: { exact: selectedMicIdRef.current } }
+        : true;
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
       const Ctx: typeof AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       const audioContext = new Ctx();
       try { await audioContext.resume(); } catch { /* ignore */ }
@@ -494,6 +526,35 @@ export default function StepSystemCheck({
     }
   }, []);
 
+  // Chrome/Edge expose two synthetic aliases per physical audio device
+  // ("default" and "communications", deviceId literally 'default'/'communications')
+  // that just point at whichever real device is already listed — without this
+  // filter the dropdown shows the same physical mic three times. Drop the
+  // aliases and keep only the actual connected hardware; also de-dupe by
+  // groupId in case a device is otherwise listed twice.
+  const dedupeRealDevices = (devices: MediaDeviceInfo[]): MediaDeviceInfo[] => {
+    const seenGroups = new Set<string>();
+    return devices.filter((d) => {
+      if (d.deviceId === 'default' || d.deviceId === 'communications') return false;
+      if (d.groupId && seenGroups.has(d.groupId)) return false;
+      if (d.groupId) seenGroups.add(d.groupId);
+      return true;
+    });
+  };
+
+  // Populate the dropdown option lists. Labels are only populated by the
+  // browser once camera/mic permission has been granted, so this is called
+  // again after each successful webcam/microphone check.
+  const refreshDeviceLists = useCallback(async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setCameraDevices(dedupeRealDevices(devices.filter((d) => d.kind === 'videoinput')));
+      setMicDevices(dedupeRealDevices(devices.filter((d) => d.kind === 'audioinput')));
+    } catch {
+      /* enumeration unsupported or blocked — dropdowns just stay empty */
+    }
+  }, []);
+
   // ── Individual checks — each self-contained so it can run standalone (retry) ──
   const runDevice = useCallback(async () => {
     updateSystemCheck('device', { status: 'checking', detail: 'Detecting device...' });
@@ -507,8 +568,15 @@ export default function StepSystemCheck({
   const runWebcam = useCallback(async () => {
     updateSystemCheck('webcam', { status: 'checking', detail: 'Requesting webcam access...' });
     try {
+      // Preserve any already-acquired audio track (e.g. from a prior mic
+      // check) — replacing streamRef wholesale would silently drop it and
+      // force an unnecessary mic re-check whenever the candidate switches camera.
+      const existingAudioTracks = streamRef.current?.getAudioTracks() ?? [];
       streamRef.current?.getVideoTracks().forEach((t) => t.stop()); // release stale track on retry
-      const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const videoConstraint: MediaTrackConstraints | boolean = selectedCameraIdRef.current
+        ? { deviceId: { exact: selectedCameraIdRef.current } }
+        : true;
+      const videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint });
 
       // Reject mobile-camera-relay virtual drivers (Motorola Smart Connect,
       // DroidCam, Iriun, EpocCam, Camo, OBS Virtual Camera, etc.) before this
@@ -524,8 +592,9 @@ export default function StepSystemCheck({
         return;
       }
 
-      streamRef.current = videoStream;
-      if (videoRef.current) videoRef.current.srcObject = videoStream;
+      const combinedStream = new MediaStream([...videoStream.getVideoTracks(), ...existingAudioTracks]);
+      streamRef.current = combinedStream;
+      if (videoRef.current) videoRef.current.srcObject = combinedStream;
       updateSystemCheck('webcam', { status: 'checking', detail: 'Verifying video signal...' });
       await new Promise((r) => setTimeout(r, 1200));
       let videoOk = false;
@@ -548,15 +617,17 @@ export default function StepSystemCheck({
       updateSystemCheck('webcam', videoOk
         ? { status: 'pass', detail: 'Webcam producing video' }
         : { status: 'fail', detail: 'Camera connected but no video signal — check if lens is covered' });
+      void refreshDeviceLists();
     } catch {
       updateSystemCheck('webcam', { status: 'fail', detail: 'Webcam access denied' });
     }
-  }, [updateSystemCheck]);
+  }, [updateSystemCheck, refreshDeviceLists]);
 
   const runMicrophone = useCallback(async () => {
     if (micIntervalRef.current) { clearInterval(micIntervalRef.current); micIntervalRef.current = null; }
     updateSystemCheck('microphone', { status: 'checking', detail: 'Requesting microphone access...' });
     const analyser = await ensureAudioAnalyser();
+    void refreshDeviceLists();
     if (!analyser) {
       updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
       return;
@@ -565,8 +636,23 @@ export default function StepSystemCheck({
     // candidate proves their voice in the dedicated, manual Voice Verification
     // sub-step below (which does server-side speech/silence detection and gates
     // Continue). Here we only confirm the microphone is accessible.
+    //
+    // This check is gated on an EXPLICIT device selection: mic access being
+    // granted is not enough to pass — the candidate must pick their mic from
+    // the Device Settings dropdown below (selectedMicIdRef stays '' — i.e.
+    // "System Default" — until they do). This can't rely on the selectedMicId
+    // STATE inside this closure, since switchMicrophone calls this function in
+    // the same tick as setSelectedMicId, before React re-renders with the new
+    // value — the ref is always current.
+    if (!selectedMicIdRef.current) {
+      updateSystemCheck('microphone', {
+        status: 'fail',
+        detail: 'Select your microphone in Device Settings below to complete this check',
+      });
+      return;
+    }
     updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone active' });
-  }, [ensureAudioAnalyser, updateSystemCheck]);
+  }, [ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists]);
 
   const runInternet = useCallback(async () => {
     updateSystemCheck('internet', { status: 'checking', detail: 'Measuring your connection speed...' });
@@ -910,6 +996,139 @@ export default function StepSystemCheck({
     }
   }, [runDevice, runWebcam, runMicrophone, runInternet, runAiEngine, runWebsocket, runLighting, runNoise, runFaceMultiple]);
 
+  // Candidate picked a different camera from the dropdown — re-acquire that
+  // specific device and re-run every check that depends on the video feed.
+  const switchCamera = useCallback(async (deviceId: string) => {
+    if (isSwitchingDevice || deviceId === selectedCameraId) return;
+    setIsSwitchingDevice(true);
+    selectedCameraIdRef.current = deviceId;
+    setSelectedCameraId(deviceId);
+    try {
+      await runWebcam();
+      await runLighting();
+      await runFaceMultiple();
+    } finally {
+      setIsSwitchingDevice(false);
+    }
+  }, [isSwitchingDevice, selectedCameraId, runWebcam, runLighting, runFaceMultiple]);
+
+  // Candidate picked a different microphone — drop the cached analyser so
+  // ensureAudioAnalyser is forced to re-acquire on the newly selected device,
+  // then re-run the checks that depend on audio input.
+  const switchMicrophone = useCallback(async (deviceId: string) => {
+    if (isSwitchingDevice || deviceId === selectedMicId) return;
+    setIsSwitchingDevice(true);
+    selectedMicIdRef.current = deviceId;
+    setSelectedMicId(deviceId);
+    try {
+      if (audioContextRef.current) {
+        await audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      analyserRef.current = null;
+      if (streamRef.current) {
+        streamRef.current.getAudioTracks().forEach((t) => {
+          t.stop();
+          streamRef.current!.removeTrack(t);
+        });
+      }
+      await runMicrophone();
+      await runNoise();
+    } finally {
+      setIsSwitchingDevice(false);
+    }
+  }, [isSwitchingDevice, selectedMicId, runMicrophone, runNoise]);
+
+  // Keep the dropdown options current if the candidate plugs/unplugs a device
+  // mid-check (e.g. connects a USB webcam after the page already loaded).
+  useEffect(() => {
+    if (phase !== 'system_checks') return;
+    void refreshDeviceLists();
+    if (!navigator.mediaDevices?.addEventListener) return;
+    navigator.mediaDevices.addEventListener('devicechange', refreshDeviceLists);
+    return () => navigator.mediaDevices.removeEventListener('devicechange', refreshDeviceLists);
+  }, [phase, refreshDeviceLists]);
+
+  // Once the Microphone check has PASSED on this screen, keep watching the
+  // live track — if the headset is pulled before the candidate clicks
+  // Continue, this is the only thing that would otherwise catch it (the
+  // check itself only runs once, at "Run Check" / selection time). The
+  // instant the track dies, fail the check (which disables Continue via
+  // allSystemPassed) and show the reconnect popup.
+  const micCheckStatus = systemChecks.find((c) => c.id === 'microphone')?.status;
+  useEffect(() => {
+    if (phase !== 'system_checks' || micCheckStatus !== 'pass') return;
+    const track = streamRef.current?.getAudioTracks().find((t) => t.readyState === 'live');
+    if (!track) return;
+
+    const handleDisconnect = () => {
+      // Drop the cached analyser/AudioContext — ensureAudioAnalyser() short-
+      // circuits and returns them as-is whenever they exist, regardless of
+      // whether the underlying track is still live. Without clearing them
+      // here, the auto-recovery retry below would report success by handing
+      // back the same dead analyser instead of re-acquiring the microphone.
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      analyserRef.current = null;
+      if (streamRef.current) {
+        streamRef.current.getAudioTracks().forEach((t) => {
+          t.stop();
+          streamRef.current!.removeTrack(t);
+        });
+      }
+      updateSystemCheck('microphone', {
+        status: 'fail',
+        detail: 'Microphone disconnected — reconnect your headset to continue',
+      });
+      setMicDisconnectedPopup(true);
+    };
+    track.addEventListener('ended', handleDisconnect);
+    // Backstop poll — some drivers/OSes don't fire `ended` promptly on unplug.
+    const poll = setInterval(() => {
+      if (track.readyState !== 'live') handleDisconnect();
+    }, 1000);
+
+    return () => {
+      track.removeEventListener('ended', handleDisconnect);
+      clearInterval(poll);
+    };
+  }, [phase, micCheckStatus, updateSystemCheck]);
+
+  // While the reconnect popup is showing, try to recover automatically the
+  // moment the OS reports a device change (headset plugged back in) — no
+  // button for the candidate to click, matching how the in-interview
+  // headset-disconnect pause also auto-resumes on reconnect. Uses
+  // ensureAudioAnalyser directly (not the full runMicrophone) so a still-
+  // disconnected retry fails silently instead of flashing "checking..." /
+  // "access denied" over the reconnect message every couple of seconds.
+  useEffect(() => {
+    if (!micDisconnectedPopup) return;
+    const tryRecover = async () => {
+      const analyser = await ensureAudioAnalyser();
+      if (!analyser || !selectedMicIdRef.current) return; // still gone — stay quiet
+      updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone active' });
+      void refreshDeviceLists();
+    };
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', tryRecover);
+    }
+    // Also poll — devicechange doesn't fire in every browser/driver combo.
+    const poll = setInterval(tryRecover, 2000);
+    return () => {
+      if (navigator.mediaDevices?.removeEventListener) {
+        navigator.mediaDevices.removeEventListener('devicechange', tryRecover);
+      }
+      clearInterval(poll);
+    };
+  }, [micDisconnectedPopup, ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists]);
+
+  // Clear the popup the moment the check is passing again (auto-recovery
+  // above, or the candidate manually re-selecting a device from the dropdown).
+  useEffect(() => {
+    if (micCheckStatus === 'pass' && micDisconnectedPopup) setMicDisconnectedPopup(false);
+  }, [micCheckStatus, micDisconnectedPopup]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1399,25 +1618,88 @@ export default function StepSystemCheck({
           {/* Card body: 2-column layout */}
           <div className="bg-white rounded-b-xl p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left column: Camera Preview */}
-              <div className="rounded-xl overflow-hidden border border-gray-200">
-                <div className="bg-gray-900 px-4 py-3 flex items-center gap-2">
-                  <CircleDot className="w-4 h-4 text-white" />
-                  <h3 className="text-sm font-semibold text-white">Camera Preview</h3>
-                </div>
-                <div className="relative bg-gray-900 aspect-video">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                  />
-                  {/* Camera Active badge */}
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-green-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
-                    <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
-                    Camera Active
+              {/* Left column: Camera Preview + Device Settings */}
+              <div className="space-y-4">
+                <div className="rounded-xl overflow-hidden border border-gray-200">
+                  <div className="bg-gray-900 px-4 py-3 flex items-center gap-2">
+                    <CircleDot className="w-4 h-4 text-white" />
+                    <h3 className="text-sm font-semibold text-white">Camera Preview</h3>
                   </div>
+                  <div className="relative bg-gray-900 aspect-video">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
+                    {/* Camera Active badge */}
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-green-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
+                      <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
+                      Camera Active
+                    </div>
+                  </div>
+                </div>
+
+                {/* Device Settings — lets the candidate pick whichever connected
+                    camera/microphone is actually compatible, instead of being
+                    stuck with whatever the OS treats as default. */}
+                <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Settings className="w-4 h-4 text-gray-500" />
+                    <h3 className="text-sm font-semibold text-gray-900">Device Settings</h3>
+                    {isSwitchingDevice && <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />}
+                  </div>
+
+                  <div>
+                    <label htmlFor="tf-camera-select" className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1">
+                      <Camera className="w-3.5 h-3.5" /> Camera
+                    </label>
+                    <select
+                      id="tf-camera-select"
+                      value={selectedCameraId}
+                      onChange={(e) => switchCamera(e.target.value)}
+                      disabled={isSwitchingDevice || checksRunning}
+                      className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                    >
+                      <option value="">System Default</option>
+                      {cameraDevices.map((d, i) => (
+                        <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="tf-mic-select" className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1">
+                      <Mic className="w-3.5 h-3.5" /> Microphone
+                      <span className="text-red-500 font-semibold">*</span>
+                    </label>
+                    <select
+                      id="tf-mic-select"
+                      value={selectedMicId}
+                      onChange={(e) => switchMicrophone(e.target.value)}
+                      disabled={isSwitchingDevice || checksRunning}
+                      className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/20"
+                    >
+                      <option value="" disabled>Select your microphone…</option>
+                      {micDevices.map((d, i) => (
+                        <option key={d.deviceId} value={d.deviceId}>{d.label || `Microphone ${i + 1}`}</option>
+                      ))}
+                    </select>
+                    {/* The Microphone check in the list on the right cannot pass
+                        until an explicit device is chosen here — "System Default"
+                        does not count, so this option is disabled and the placeholder
+                        stays selected until the candidate actively picks one. */}
+                    {!selectedMicId && (
+                      <p className="mt-1 text-xs text-amber-600 font-medium">
+                        Required — select your microphone to complete the Microphone check.
+                      </p>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-gray-400">
+                    Not seeing the right device? Choose a different one above — we&apos;ll re-check it automatically.
+                  </p>
                 </div>
               </div>
 
@@ -1508,6 +1790,8 @@ export default function StepSystemCheck({
                   <p className="text-sm text-amber-700 mt-0.5">
                     {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
                       ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
+                      : systemChecks.find((c) => c.id === 'microphone' && c.status === 'fail')
+                      ? 'Select your microphone from the Device Settings panel below to complete this check.'
                       : 'Fix the issues above and click Retry on each failed check to re-run just that one.'}
                   </p>
                 </div>
@@ -1646,17 +1930,19 @@ export default function StepSystemCheck({
               {checksCompleted && (
                 <button
                   type="button"
-                  onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading) handleProceed(); }}
-                  disabled={!allSystemPassed || !voiceGateOk || isProceedLoading}
-                  title={!voiceGateOk ? 'Record your voice sample first' : undefined}
+                  onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup) handleProceed(); }}
+                  disabled={!allSystemPassed || !voiceGateOk || isProceedLoading || micDisconnectedPopup}
+                  title={micDisconnectedPopup ? 'Reconnect your headset to continue' : !voiceGateOk ? 'Record your voice sample first' : undefined}
                   className={`flex-1 inline-flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-lg text-sm transition-all ${
-                    allSystemPassed && voiceGateOk && !isProceedLoading
+                    allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup
                       ? 'bg-gray-900 text-white hover:bg-gray-800 cursor-pointer'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
                 >
                   {isProceedLoading ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>
+                  ) : micDisconnectedPopup ? (
+                    <>Reconnect your headset to continue</>
                   ) : !voiceGateOk ? (
                     <>Record your voice to continue</>
                   ) : (
@@ -1667,6 +1953,33 @@ export default function StepSystemCheck({
             </div>
           </div>
         </div>
+
+        {/* Headset/microphone disconnected popup — appears the instant a
+            PREVIOUSLY-PASSING microphone check goes dead (see the track
+            'ended' + poll effect above). Continue is disabled via its own
+            `disabled` attribute (not by this overlay blocking clicks) —
+            deliberately NOT a full-screen click-blocking modal, so the
+            Device Settings dropdown underneath stays reachable in case the
+            candidate needs to pick a DIFFERENT microphone (new deviceId)
+            rather than the original one reconnecting. Auto-dismisses the
+            moment the device is back — no button to click here. */}
+        {micDisconnectedPopup && (
+          <div className="fixed top-4 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
+            <div className="w-full max-w-md bg-white border border-red-300 rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 flex-shrink-0">
+                <MicOff className="w-5 h-5 text-red-600" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-gray-900 font-semibold text-sm mb-0.5">Headset Disconnected</h3>
+                <p className="text-gray-500 text-xs leading-relaxed">
+                  Your microphone was disconnected. Reconnect your headset to continue — this is
+                  detected automatically. If it&apos;s a different device, select it from Device
+                  Settings below.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

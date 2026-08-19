@@ -338,10 +338,16 @@ export interface AccessRestrictedDetail {
   message?: string;
 }
 
+let accessRestrictedDispatched = false;
+
 export const dispatchAccessRestrictedEvent = (detail: AccessRestrictedDetail = {}) => {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(ACCESS_RESTRICTED_EVENT, { detail }));
-  }
+  if (typeof window === 'undefined') return;
+  if (accessRestrictedDispatched) return;
+  accessRestrictedDispatched = true;
+  // The account is gone, not the session — make sure a parallel fetch/authFetch 401
+  // can't stack the generic "Session expired" modal on top of this one.
+  sessionExpiredDispatched = true;
+  window.dispatchEvent(new CustomEvent(ACCESS_RESTRICTED_EVENT, { detail }));
 };
 
 // Backend signals for an inactive USER ACCOUNT — distinct from (a) a normal
@@ -407,6 +413,22 @@ export const isAccountRestrictedResponse = (error: AxiosError): boolean => {
     data?.message || data?.error || '';
   const msg = String(rawMsg).toLowerCase();
   return ACCOUNT_INACTIVE_KEYWORDS.some((k) => msg.includes(k));
+};
+
+// Pulls the affected user's identity off an account-restricted 401/403 so the
+// modal can name the account. The data-plane sends these under `detail` for
+// USER_INACTIVE (app/dependencies.py); anything missing falls back to the
+// modal's own localStorage lookup.
+export const readAccountRestrictedDetail = (error: AxiosError): AccessRestrictedDetail => {
+  const data: any = error.response?.data;
+  const d: any = data?.detail;
+  const src = (d && typeof d === 'object') ? d : data;
+  if (!src || typeof src !== 'object') return {};
+  return {
+    name: src.name || src.full_name || undefined,
+    email: src.email || undefined,
+    message: typeof src.message === 'string' ? src.message : undefined,
+  };
 };
 
 // Custom event for units consumed - triggers header quota refresh
@@ -568,7 +590,7 @@ api.interceptors.response.use(
       const url = originalRequest?.url || '';
       const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/verify-2fa-login');
       if (!isAuthEndpoint) {
-        dispatchAccessRestrictedEvent();
+        dispatchAccessRestrictedEvent(readAccountRestrictedDetail(error));
         return Promise.reject(error);
       }
     }

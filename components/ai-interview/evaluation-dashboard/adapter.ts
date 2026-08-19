@@ -678,6 +678,32 @@ function indexHistoryByText(questionHistory: any[]): Map<string, any> {
  *  Must-Have Q1 ("Hi, I'm Bina, your interviewer today. In the role of …").
  *  Matched by unique lead-ins that never open a real interview question; a real
  *  question that merely quotes one still has a "?" and is kept. */
+/** True only for a row that is a GENUINE follow-up sub-turn of an earlier main
+ *  question, i.e. `is_follow_up` AND a `parent_question_number` that points at an
+ *  earlier main row.
+ *
+ *  The bare `is_follow_up` flag CANNOT be trusted: the backend's skip-recovery and
+ *  resume paths tag the NEXT MAIN question with `is_follow_up=true` (e.g. a
+ *  "Welcome back — let's continue! …" turn emitted after several skipped
+ *  questions), even though that turn covers its own slot and its own skills.
+ *  Dropping those rows hides delivered questions — it once hid 8-9 of 15 in
+ *  Question Analysis, and it made Cluster Coverage under-count the delivered slots
+ *  so the last question's skills read "Not Covered" (observed: a 4-question ROS
+ *  interview reporting 8/15 covered instead of 11/15, missing exactly Q4's Python /
+ *  Middleware communication / GitHub).
+ *
+ *  Shared by the Question Analysis row filter and the coverage delivered-count so
+ *  the two can never disagree about what counts as a delivered question. */
+function isExplicitFollowUpRow(q: any): boolean {
+  if (!q?.is_follow_up) return false;
+  const parentQn = Number(q?.parent_question_number);
+  const ownQn = Number(q?.question_number);
+  // Mis-labelled: flagged as a follow-up with no usable parent → it is a main.
+  if (!Number.isFinite(parentQn) || parentQn <= 0) return false;
+  if (Number.isFinite(ownQn) && ownQn === parentQn) return true;
+  return parentQn < (ownQn || Number.MAX_SAFE_INTEGER);
+}
+
 function isMetaAssistantTurn(content: string): boolean {
   const t = (content || '').toLowerCase().trim();
   if (!t) return false;
@@ -1261,15 +1287,8 @@ function buildPerQuestionDetailsFromHistory(
   // Bug-tagged rows where is_follow_up=true but parent_question_number is
   // missing/equal still flow into the main filter (backwards-compat with
   // the skip-recovery mis-tagging documented earlier).
-  const explicitFollowUps = indexedHistory.filter(q => {
-    if (!q?.is_follow_up) return false;
-    const parentQn = Number(q?.parent_question_number);
-    const ownQn = Number(q?.question_number);
-    if (!Number.isFinite(parentQn) || parentQn <= 0) return false;
-    if (Number.isFinite(ownQn) && ownQn === parentQn) return true; // standard follow-up shares parent qnum
-    // Or it sits ahead of its parent in chronological order — fine.
-    return parentQn < (ownQn || Number.MAX_SAFE_INTEGER);
-  });
+  // Same predicate the coverage delivered-count uses — see isExplicitFollowUpRow.
+  const explicitFollowUps = indexedHistory.filter(isExplicitFollowUpRow);
   const followUpHistoryIds = new Set(
     explicitFollowUps.map(f => Number(f._historyIdx)),
   );
@@ -2059,7 +2078,10 @@ export function buildDashboardData(params: {
     const out: Record<'mth' | 'nth', number> = { mth: 0, nth: 0 };
     const seen = new Set<string>();
     for (const h of ((eval_?.question_history || []) as any[])) {
-      if (!h || h.is_follow_up) continue;
+      // NOT a bare `is_follow_up` check — see isExplicitFollowUpRow. A resume /
+      // skip-recovery turn is mis-tagged as a follow-up while being a real
+      // delivered question, and dropping it under-counts the reached slots.
+      if (!h || isExplicitFollowUpRow(h)) continue;
       if (isUndeliveredHistoryRow(h)) continue;
       const qText = String(h?.question || '').trim();
       if (!qText) continue;
@@ -2085,8 +2107,31 @@ export function buildDashboardData(params: {
     return out;
   })();
 
-  /** Union of [primary, ...secondaries] over the plan slots this section
-   *  delivered — the authoritative set of skills that were actually asked. */
+  /** Skills the DELIVERED questions were actually attributed to, per section.
+   *  Used to identify WHICH plan slots ran — see plannedAskedBySection. */
+  const deliveredSkillKeysBySection = (() => {
+    const out: Record<'mth' | 'nth', Set<string>> = { mth: new Set(), nth: new Set() };
+    for (const h of ((eval_?.question_history || []) as any[])) {
+      if (!h || isExplicitFollowUpRow(h) || isUndeliveredHistoryRow(h)) continue;
+      const rt = String(h?.round_type || '').toLowerCase();
+      if (rt === 'hr') continue;
+      const sec: 'mth' | 'nth' = rt === 'nice_to_have_skills' ? 'nth' : 'mth';
+      const names = [
+        ...(Array.isArray(h?.assigned_skills) ? h.assigned_skills : []),
+        h?.topic,
+      ];
+      for (const n of names) {
+        if (typeof n !== 'string' || !n.trim()) continue;
+        out[sec].add(n.toLowerCase().trim());
+        const c = compactSkillKey(n);
+        if (c) out[sec].add(c);
+      }
+    }
+    return out;
+  })();
+
+  /** Union of [primary, ...secondaries] over the plan slots this section actually
+   *  delivered — the authoritative set of skills that were asked. */
   const plannedAskedBySection = (() => {
     const build = (sec: 'mth' | 'nth') => {
       const raw = new Set<string>();
@@ -2094,10 +2139,31 @@ export function buildDashboardData(params: {
       const rows = planRowsBySection[sec];
       const delivered = deliveredMainCountBySection[sec];
       if (rows.length === 0 || delivered <= 0) return { raw, compact };
-      // Slots are consumed in plan order — the runtime resolves a slot by its
-      // position within the round (get_slot_plan_for_q_num → slot_in_round), so
-      // the first `delivered` rows are the ones that were asked.
-      for (const r of rows.slice(0, Math.min(delivered, rows.length))) {
+      // WHICH slots ran is matched by SKILL IDENTITY, not by position. The plan's
+      // `question_number` is the round-robin renumbered order produced by
+      // _apply_cross_priority_mix, which diverges from the ask order whenever a
+      // slot is consumed out of turn (auto-skip, swap, an opening HR slot). Taking
+      // "the first N slots" therefore credited a slot that was never asked —
+      // observed as 9/11 covered against only 8 skills in Question Analysis, the
+      // extra one being "Scripting in Python or JavaScript" from an unasked slot.
+      // This is the same order-independent join `applyPlanForSection` uses for the
+      // Question Analysis tab, so the two tabs now agree by construction.
+      const deliveredKeys = deliveredSkillKeysBySection[sec];
+      const matched = deliveredKeys.size > 0
+        ? rows.filter(r => {
+            const names = [
+              String(r?.primary_skill || ''),
+              ...(Array.isArray(r?.secondary_skills) ? r.secondary_skills : []),
+            ];
+            return names.some(n => typeof n === 'string' && n.trim() && (
+              deliveredKeys.has(n.toLowerCase().trim())
+              || deliveredKeys.has(compactSkillKey(n))
+            ));
+          }).slice(0, delivered)   // never credit more slots than questions delivered
+        // No per-question skill signal at all (legacy rows with neither
+        // assigned_skills nor topic): fall back to plan order.
+        : rows.slice(0, Math.min(delivered, rows.length));
+      for (const r of matched) {
         const names = [
           String(r?.primary_skill || ''),
           ...(Array.isArray(r?.secondary_skills) ? r.secondary_skills : []),
@@ -2635,9 +2701,19 @@ export function buildDashboardData(params: {
     mustHaveAvgQA   * (weights.mustHave   / 100) +
     niceToHaveAvgQA * (weights.niceToHave / 100) +
     hr              * (weights.hr         / 100);
-  const finalScoreQA = (mode === 'Timed' && sectionsPresent.mustHave)
+  // PARITY GUARD (invite-list % === Results %): the invite popup shows
+  // Math.round(capability_score). The Results headline MUST equal it, so when
+  // the backend stored capability_score we use that SAME value verbatim rather
+  // than an independent recompute that can cross a .5 rounding boundary and
+  // read 20 vs 21. Fall back to the QA-derived recompute only for legacy evals
+  // that never stored capability_score. (capability_score is already on the
+  // 0-100 scale = MHS section avg ÷ planned × 10, so it is scale-identical.)
+  const _recomputedFinalQA = (mode === 'Timed' && sectionsPresent.mustHave)
     ? Math.round(mustHaveAvgQA * 100) / 10
     : Math.round(weightedSumQA * 100) / 10;
+  const finalScoreQA = (typeof eval_?.capability_score === 'number')
+    ? eval_.capability_score
+    : _recomputedFinalQA;
 
   // 5. Pass/Fail from QA-derived MHS average (prefer backend authoritative).
   let finalResultQA: 'Pass' | 'Fail' | null = null;

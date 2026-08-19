@@ -21,7 +21,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, MessageSquare, ShieldCheck, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera, Monitor, Loader2 } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -82,6 +82,14 @@ interface InterviewUIProps {
    * chat avatar. Null/undefined (e.g. identity step skipped) → the "You" text
    * avatar is shown instead. */
   candidatePhotoUrl?: string | null;
+  /**
+   * True while the parent portal has an active screen recording detected (BUG09).
+   * The interview PAUSES for as long as it stays true: session_pause freezes the
+   * backend question timer and cancels Bina's pipeline, a blocking overlay asks
+   * the candidate to stop recording, and session_resume replays the interrupted
+   * question when it goes false. Never terminates, never drops an answer.
+   */
+  screenRecordingDetected?: boolean;
 }
 
 interface Message {
@@ -506,7 +514,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
 });
 const LiveAIBubbleMemo = memo(LiveAIBubble);
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl, screenRecordingDetected = false }: InterviewUIProps) {
   // ── Effective device capability ──────────────────────────────────────────
   // The portal detects this at the system-check step, but a RESUMED session (or
   // any entry path that skips system check) arrives with deviceCapability=undefined
@@ -1504,6 +1512,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // device is live again — this effect just reacts to that transition.
   const MEDIA_PAUSE_GRACE_MS = 180000; // 3 minutes
   const [isMediaPaused, setIsMediaPaused] = useState(false);
+  // True while the interview is paused because a screen recording was detected
+  // (BUG09). Drives the blocking overlay; the pause itself is sent to the
+  // backend by the effect below.
+  const [isRecordingPaused, setIsRecordingPaused] = useState(false);
   const [mediaPauseSecondsRemaining, setMediaPauseSecondsRemaining] = useState<number | null>(null);
   const isMediaPausedRef = useRef(false);
   const mediaPauseStartMsRef = useRef<number | null>(null);
@@ -1595,6 +1607,56 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }).catch(() => { /* best-effort */ });
     }
   }, [isConnected, proctoringState.isMicrophoneActive, proctoringState.isCameraActive, token, onTerminate, clearMediaPauseTimers, mediaDownReason]);
+
+  // ── Screen-recording pause (BUG09) ────────────────────────────────────────
+  // Driven by the parent portal's detection, which stays active for the whole
+  // interview. Same shape as the media-disconnect pause above — session_pause on
+  // arm, session_resume on recovery — with two deliberate differences: there is
+  // NO grace countdown and NO termination (the candidate can take as long as
+  // they need to stop their recorder), and the overlay blocks interaction
+  // because the interview genuinely must not proceed while recording.
+  //
+  // Nothing is lost across the pause: the backend freezes the question timer,
+  // shifts it forward by the pause duration on resume, cancels Bina's pipeline
+  // and replays the exact question she was interrupted on. A transcript captured
+  // mid-pause is stashed server-side and applied on resume.
+  const isRecordingPausedRef = useRef(false);
+  const recordingPauseStartMsRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!isConnected) return;
+
+    if (screenRecordingDetected && !isRecordingPausedRef.current) {
+      if (isClosingRef.current) return; // already wrapping up — don't pause
+      isRecordingPausedRef.current = true;
+      recordingPauseStartMsRef.current = Date.now();
+      setIsRecordingPaused(true);
+      setStatus('Interview paused — screen recording detected.');
+      try { wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason: 'screen_recording' })); } catch { /* best-effort */ }
+      candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: 'session_paused',
+        severity: 'low',
+        details: { reason: 'screen_recording_detected', phase: 'in_interview' },
+      }).catch(() => { /* best-effort */ });
+      console.log('[INTERVIEW-DEBUG] Interview paused — screen recording detected');
+    } else if (!screenRecordingDetected && isRecordingPausedRef.current) {
+      const startedAt = recordingPauseStartMsRef.current;
+      const pauseDurationMs = startedAt !== null ? Math.max(0, Date.now() - startedAt) : null;
+      isRecordingPausedRef.current = false;
+      recordingPauseStartMsRef.current = null;
+      setIsRecordingPaused(false);
+      try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+      candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: 'session_resumed',
+        severity: 'low',
+        details: {
+          reason: 'screen_recording_stopped',
+          pause_duration_ms: pauseDurationMs,
+          pause_duration_seconds: pauseDurationMs !== null ? Math.round(pauseDurationMs / 1000) : null,
+        },
+      }).catch(() => { /* best-effort */ });
+      console.log('[INTERVIEW-DEBUG] Interview resumed — screen recording stopped');
+    }
+  }, [isConnected, screenRecordingDetected, token]);
 
   // Belt-and-braces cleanup on unmount so a stray timer can never fire into
   // an unmounted tree (mirrors the pattern used for other proctoring timers).
@@ -9102,11 +9164,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       || isAiSpeaking
                       || questionTimerSeconds === null
                       || nextSkipInFlight
+                      || isMediaPaused
                     }
                     onClick={() => {
                       if (questionTimerExpired) return;
                       // Disable on last question — candidate must answer Q15/15, not skip it
                       if (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) return;
+                      // Camera/mic disconnected (headset pulled, etc.) — the interview
+                      // is paused and nothing can advance it until the device is back.
+                      if (isMediaPausedRef.current) return;
                       // Re-entry guard: if another skip is still in flight (no new
                       // question_timer_started has arrived yet), ignore the click
                       // completely. This mirrors the disabled prop but covers the
@@ -9254,7 +9320,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       questionTimerExpiredRef.current = false;
                     }}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 ${
-                      questionTimerExpired || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions)
+                      questionTimerExpired || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) || isMediaPaused
                         ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400'
                         : 'bg-white hover:bg-violet-50 border-violet-200 text-violet-700 hover:border-violet-400'
                     }`}
@@ -9414,18 +9480,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           computed straight from proctoringState so they always reflect
           what's CURRENTLY down, independent of what originally armed the
           pause. Auto-resumes the moment every affected device is back (no
-          button — nothing here for the candidate to click, since
-          InterviewProctoringMonitor's health-check clears isCameraActive/
-          isMicrophoneActive on its own). If the countdown reaches zero while
-          still disconnected, the parent portal terminates the interview. */}
+          button to click — InterviewProctoringMonitor's health-check clears
+          isCameraActive/isMicrophoneActive on its own the instant the device
+          is live again). If the countdown reaches zero while still
+          disconnected, the parent portal terminates the interview.
+          When the MICROPHONE (headset) is down, the candidate cannot answer
+          anyway, so this hard-blocks the page — a real backdrop plus
+          pointer-events-auto on the wrapper — so Next/Skip and everything
+          else behind it is unreachable until the headset is reconnected.
+          When only the camera is down and the mic is still fine, the overlay
+          stays the original non-blocking heads-up (transparent,
+          pointer-events-none on the wrapper) so the candidate can keep
+          answering by voice while the camera recovers. */}
       {isMediaPaused && isConnected && !isClosing && (
-        // Transparent, no blur — camera and mic issues are independent of
-        // each other, so whichever one is still healthy must stay exactly as
-        // clear as normal behind this card. pointer-events-none on the
-        // wrapper (nothing to click here anyway) keeps the underlying page
-        // fully interactive; the card re-enables events for itself since it
-        // needs to be readable/selectable.
-        <div className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none">
+        <div className={`fixed inset-0 z-[200] flex items-center justify-center ${
+          proctoringState.isMicrophoneActive
+            ? 'pointer-events-none'
+            : 'pointer-events-auto bg-black/70 backdrop-blur-sm'
+        }`}>
           <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/30 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5 pointer-events-auto">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/15 border border-red-400/30">
               {!proctoringState.isCameraActive
@@ -9497,6 +9569,40 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 Please exit Picture-in-Picture mode to continue the interview.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Screen recording detected (BUG09) — the interview is PAUSED, not ended.
+          Blocks interaction because it must not proceed while recording, and
+          lifts itself as soon as the parent portal's re-check sees the recording
+          has stopped. Sits above the media-pause card but below the terminal
+          media-block overlay. */}
+      {isRecordingPaused && isConnected && !isClosing && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/85 backdrop-blur-sm">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/30 p-7 flex flex-col items-center gap-5">
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/15 border border-red-400/30">
+              <Monitor className="w-7 h-7 text-red-400" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-base mb-2">
+                Screen recording detected. Please stop or turn off screen recording to continue.
+              </h3>
+              <p className="text-[#94A3B8] text-sm leading-relaxed">
+                Your interview is paused — nothing has been lost. Stop the recording
+                (in the recorder app, or with your system&apos;s stop shortcut), and the
+                interview resumes automatically from the same question.
+              </p>
+              <p className="text-[#64748B] text-xs leading-relaxed mt-3">
+                Keep sharing your screen for the interview — that must stay on. Your
+                answer time is frozen while this message is showing.
+              </p>
+            </div>
+            <div className="w-full flex items-center justify-center gap-2 rounded-xl border border-red-400/30 bg-red-500/5 px-4 py-2.5">
+              <Loader2 className="w-3.5 h-3.5 text-red-300 animate-spin" />
+              <span className="text-[11px] text-red-200">Checking every few seconds…</span>
+            </div>
+            <div className="text-xs text-[#64748B]">This event has been recorded</div>
           </div>
         </div>
       )}

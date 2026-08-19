@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Pencil, Send, Loader2 } from 'lucide-react';
+import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Pencil, Send, Loader2, Monitor, Ban } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/services/api';
@@ -71,6 +71,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
     started: 0,
     completed: 0,
     failed: 0,
+    terminated: 0,
   });
   // Email editing state
   /* Filters run over the merged list rather than being pushed to the API.
@@ -109,7 +110,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
 
       if (!assessmentsResponse.data?.items || assessmentsResponse.data.items.length === 0) {
         setInvitations([]);
-        setStats({ total: 0, expired: 0, started: 0, completed: 0, failed: 0 });
+        setStats({ total: 0, expired: 0, started: 0, completed: 0, failed: 0, terminated: 0 });
         setIsLoading(false);
         return;
       }
@@ -144,10 +145,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
       // rule as the assessment-level popup. Every invitation falls into
       // exactly one of completed / failed / expired / started / sent.
       const _now = new Date();
-      const _bucket = (inv: any): 'completed' | 'failed' | 'expired' | 'started' | 'sent' => {
+      const _bucket = (inv: any): 'completed' | 'failed' | 'terminated' | 'expired' | 'started' | 'sent' => {
         const s = (inv.status || '').toLowerCase();
         if (s === 'completed' || inv.completed_at) return 'completed';
-        if (['failed', 'bounced', 'abandoned'].includes(s)) return 'failed';
+        // 'abandoned' = candidate walked out mid-assessment. Counted on its own
+        // as "Terminated" (AI Interview wording), NOT as an invite failure.
+        if (s === 'abandoned') return 'terminated';
+        if (['failed', 'bounced'].includes(s)) return 'failed';
         if (s === 'expired') return 'expired';
         if (!inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < _now) {
           return 'expired';
@@ -161,6 +165,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
         started: allInvitations.filter(inv => _bucket(inv) === 'started').length,
         completed: allInvitations.filter(inv => _bucket(inv) === 'completed').length,
         failed: allInvitations.filter(inv => _bucket(inv) === 'failed').length,
+        terminated: allInvitations.filter(inv => _bucket(inv) === 'terminated').length,
       };
 
       setInvitations(allInvitations);
@@ -271,8 +276,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
 
   // Status badge labels and styling kept in lockstep with the
   // assessment-level popup (Assessments.tsx) so a recruiter sees the
-  // same wording — "Link Opened" / "Invite Sent" / "Invite Failed" —
-  // regardless of which surface they opened the popup from.
+  // same wording — "System Check" / "Invited" / "Invite Failed" —
+  // regardless of which surface they opened the popup from. That wording now
+  // mirrors the AI Interview lifecycle (Invited -> System Check -> In Progress
+  // -> Completed / Terminated); the underlying status values are unchanged.
   const getStatusBadge = (inv: any) => {
     const effective = getEffectiveStatus(inv);
     const base = "inline-flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
@@ -289,19 +296,19 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
       return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Expired</span>;
     }
     if (effective === 'abandoned') {
-      return <span className={`${base} bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`}><X className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Abandoned</span>;
+      return <span className={`${base} bg-red-50 text-red-600 ring-red-200`} title="Ended before completion — the candidate left the assessment"><Ban className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Terminated</span>;
     }
     if (effective === 'started') {
-      return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Play className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Started</span>;
+      return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Play className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> In Progress</span>;
     }
     if (effective === 'opened') {
-      return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`}><Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Link Opened</span>;
+      return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`} title="Consent accepted — the candidate is on the system check step"><Monitor className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> System Check</span>;
     }
     if (inv.email_read_at) {
       return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`}><Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Read</span>;
     }
     if (effective === 'sent') {
-      return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Invite Sent</span>;
+      return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Invited</span>;
     }
     return <span className={`${base} bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700`}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Pending</span>;
   };
@@ -312,11 +319,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
   // rows to five lines while their neighbours had one, and nothing lined up.
   const timelineEvents = (inv: any) => {
     const out: { label: string; at: string; Icon: typeof Mail; tone: string }[] = [];
-    if (inv.sent_at) out.push({ label: 'Sent', at: inv.sent_at, Icon: Mail, tone: 'text-brand-blue' });
+    if (inv.sent_at) out.push({ label: 'Invited', at: inv.sent_at, Icon: Mail, tone: 'text-brand-blue' });
     if (inv.email_read_at) out.push({ label: 'Email Read', at: inv.email_read_at, Icon: Eye, tone: 'text-brand-cyan' });
     if (inv.bounced_at) out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-red-600' });
+    if (inv.opened_at) out.push({ label: 'System Check', at: inv.opened_at, Icon: Monitor, tone: 'text-brand-cyan' });
     if (inv.started_at) out.push({ label: 'Started', at: inv.started_at, Icon: Play, tone: 'text-brand-orange-deep' });
     if (inv.completed_at) out.push({ label: 'Completed', at: inv.completed_at, Icon: CheckCircle, tone: 'text-brand-blue' });
+    if (inv.terminated_at && !inv.completed_at) out.push({ label: 'Terminated', at: inv.terminated_at, Icon: Ban, tone: 'text-red-600' });
 
     const s = (inv.status || '').toLowerCase();
     const clockExpired = !inv.started_at

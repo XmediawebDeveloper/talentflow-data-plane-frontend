@@ -48,6 +48,24 @@ import QuotaBadge from '@/components/ui/quota-badge';
 const INVITATIONS_PAGE_SIZE = 10;
 /** Batch size when pulling every assessment for a browser-side filter. */
 const FULL_SET_BATCH_SIZE = 100;
+// Labels mirror the AI Interview invite wording (AI_INTERVIEW_INVITE_STATUS_OPTIONS
+// in AIInterview.tsx) so a recruiter reads the same lifecycle across both modules:
+// sent -> Invited, opened -> System Check (the candidate consented and is on the
+// system-check step), started -> In Progress, abandoned -> Terminated. Only the
+// labels change — the `value`s are the API/DB statuses and must stay as-is.
+const ASSESSMENT_INVITE_STATUS_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'sent', label: 'Invited' },
+  { value: 'opened', label: 'System Check' },
+  { value: 'started', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'expired', label: 'Expired' },
+  { value: 'failed', label: 'Invite Failed' },
+  { value: 'bounced', label: 'Bounced' },
+  { value: 'abandoned', label: 'Terminated' },
+];
+
 interface AssessmentsProps {
   jobs: Job[];
   onOpenCandidateView?: () => void;
@@ -163,6 +181,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     started: 0,
     completed: 0,
     failed: 0,
+    terminated: 0,
   });
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [newEmailValue, setNewEmailValue] = useState('');
@@ -568,6 +587,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         started: response.started || 0,
         completed: response.completed || 0,
         failed: response.failed || 0,
+        terminated: response.terminated || 0,
       });
     } catch (error) {
       console.error('Failed to load invitation summary:', error);
@@ -577,6 +597,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         started: 0,
         completed: 0,
         failed: 0,
+        terminated: 0,
       });
     }
   };
@@ -612,6 +633,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         started: 0,
         completed: 0,
         failed: 0,
+        terminated: 0,
       });
     } finally {
       setIsLoadingInvitations(false);
@@ -3780,36 +3802,65 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </button>
             </div>
 
-            {/* Stat row doubles as the status filter — shared with both AI
-                interview trackers so the three read identically. Total Invited is
-                the "all" reset; Completion Rate is derived, so it is not a bucket
-                and stays a plain tile.
-
-                Counts come from loadTrackingInvitationSummary, which queries
-                unfiltered on open — selecting a bucket narrows the table without
-                collapsing the other cards to zero. */}
-            <InviteStatCards
-              activeStatus={trackingFilters.status}
-              onSelect={(status) => {
-                setTrackingFilters({ ...trackingFilters, status });
-                setTrackingCurrentPage(1);
-              }}
-              cards={[
-                { key: 'all', label: 'Total Invited', Icon: Users, value: invitationStats.total, ...INVITE_CARD_TONES.blue },
-                { key: 'expired', label: 'Invite Expired', Icon: Clock, value: invitationStats.expired, ...INVITE_CARD_TONES.orange },
-                { key: 'failed', label: 'Invite Failed', Icon: X, value: invitationStats.failed, ...INVITE_CARD_TONES.red },
-                { key: 'started', label: 'In Progress', Icon: Play, value: invitationStats.started, ...INVITE_CARD_TONES.cyan },
-                { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationStats.completed, ...INVITE_CARD_TONES.blue },
-                {
-                  key: 'completion-rate',
-                  label: 'Completion Rate',
-                  Icon: TrendingUp,
-                  value: `${invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}%`,
-                  filterable: false,
-                  ...INVITE_CARD_TONES.blue,
-                },
-              ]}
-            />
+            {/* Stats Cards */}
+            <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
+              <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-7 gap-1 sm:gap-4">
+                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-blue text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <Users className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Total Invited</span>
+                  </div>
+                  <p className="text-sm sm:text-2xl font-bold text-brand-blue">{invitationStats.total}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-orange-deep text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <Clock className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Invite Expired</span>
+                  </div>
+                  <p className="text-sm sm:text-2xl font-bold text-brand-orange-deep">{invitationStats.expired}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <X className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Invite Failed</span>
+                  </div>
+                  <p className="text-sm sm:text-2xl font-bold text-red-600">{invitationStats.failed}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-cyan text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <Play className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>In Progress</span>
+                  </div>
+                  <p className="text-sm sm:text-2xl font-bold text-brand-cyan">{invitationStats.started}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-blue text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <CheckCircle className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Completed</span>
+                  </div>
+                  <p className="text-sm sm:text-2xl font-bold text-brand-blue">{invitationStats.completed}</p>
+                </div>
+                {/* Terminated — candidate exited mid-assessment. Its own card
+                    (mirrors the AI Interview invitations popup) so these never
+                    read as "Invite Failed", which means email delivery. */}
+                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <Ban className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Terminated</span>
+                  </div>
+                  <p className="text-sm sm:text-2xl font-bold text-red-600">{invitationStats.terminated}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-blue text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <TrendingUp className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Completion Rate</span>
+                  </div>
+                  <p className="text-sm sm:text-2xl font-bold text-brand-blue">
+                    {invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}%
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <InviteFilterBar
               filters={trackingFilters}
@@ -3907,16 +3958,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Clock className="w-3 h-3" /> Expired</span>;
                           }
                           if (s === 'abandoned') {
-                            return <span className={`${base} bg-gray-100 text-gray-700 ring-gray-200`}><X className="w-3 h-3" /> Abandoned</span>;
+                            return <span className={`${base} bg-red-50 text-red-600 ring-red-200`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
                           }
                           if (s === 'started' || inv.started_at) {
-                            return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Play className="w-3 h-3" /> Started</span>;
+                            return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Play className="w-3 h-3" /> In Progress</span>;
                           }
                           if (s === 'opened' || inv.opened_at) {
-                            return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`}><Eye className="w-3 h-3" /> Link Opened</span>;
+                            return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`} title="Consent accepted — the candidate is on the system check step"><Monitor className="w-3 h-3" /> System Check</span>;
                           }
                           if (s === 'sent' || inv.sent_at) {
-                            return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-3 h-3" /> Invite Sent</span>;
+                            return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-3 h-3" /> Invited</span>;
                           }
                           return <span className={`${base} bg-gray-100 text-gray-600 ring-gray-200`}><Clock className="w-3 h-3" /> Pending</span>;
                         };
@@ -3982,13 +4033,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     {invitation.sent_at && (
                                       <div className="flex items-center gap-2">
                                         <Mail className="w-3 h-3 text-brand-blue flex-shrink-0" />
-                                        <span>Sent: {formatIST(invitation.sent_at)}</span>
+                                        <span>Invited: {formatIST(invitation.sent_at)}</span>
                                   </div>
                                 )}
                                 {invitation.bounced_at && (
                                   <div className="flex items-center gap-2">
                                     <RefreshCw className="w-3 h-3 text-red-600 flex-shrink-0" />
                                     <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
+                                  </div>
+                                )}
+                                {invitation.opened_at && (
+                                  <div className="flex items-center gap-2">
+                                    <Monitor className="w-3 h-3 text-brand-cyan flex-shrink-0" />
+                                    <span>System Check: {formatIST(invitation.opened_at)}</span>
                                   </div>
                                 )}
                                 {invitation.started_at && (
@@ -4001,6 +4058,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <div className="flex items-center gap-2">
                                     <CheckCircle className="w-3 h-3 text-brand-blue flex-shrink-0" />
                                     <span>Completed: {formatIST(invitation.completed_at)}</span>
+                                  </div>
+                                )}
+                                {invitation.terminated_at && !invitation.completed_at && (
+                                  <div className="flex items-center gap-2">
+                                    <Ban className="w-3 h-3 text-red-600 flex-shrink-0" />
+                                    <span className="text-red-600">Terminated: {formatIST(invitation.terminated_at)}</span>
                                   </div>
                                 )}
                                 {/* Expired-at timestamp — shown when the link

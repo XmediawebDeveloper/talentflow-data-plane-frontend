@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { SESSION_EXPIRED_EVENT, performSessionLogout } from '@/lib/services/api';
+import { SESSION_EXPIRED_EVENT, ACCESS_RESTRICTED_EVENT, performSessionLogout } from '@/lib/services/api';
 
 export default function SessionExpiredModal() {
   const [isVisible, setIsVisible] = useState(false);
@@ -12,8 +12,18 @@ export default function SessionExpiredModal() {
       setIsVisible(true);
     };
 
+    // An account restriction is the more specific reason for the same 401 — yield
+    // to AccessRestrictedModal so the user never sees both dialogs stacked.
+    const handleAccessRestricted = () => {
+      setIsVisible(false);
+    };
+
     window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
-    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    window.addEventListener(ACCESS_RESTRICTED_EVENT, handleAccessRestricted);
+    return () => {
+      window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+      window.removeEventListener(ACCESS_RESTRICTED_EVENT, handleAccessRestricted);
+    };
   }, []);
 
   if (!isVisible) return null;
