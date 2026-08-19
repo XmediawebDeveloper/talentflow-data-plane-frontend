@@ -58,9 +58,6 @@ export interface CandidateInterviewInfo {
   // When true, show the "hide the screen-share bar" (vision-LLM verified) step
   // between the final consent and interview start.
   verify_share_bar_hidden?: boolean | null;
-  // How often (seconds) the running interview re-scans its own Entire-Screen
-  // capture for a visible third-party screen recorder. 0 disables the scan.
-  recorder_scan_interval_sec?: number | null;
   // Expiry timestamp for client-side expiry checks
   expires_at?: string | null;
 }
@@ -368,23 +365,12 @@ export const candidateAIInterviewService = {
 
   /** Send a frame of the shared screen; the backend vision-LLM says whether
    *  Chrome's "sharing your screen" bar is hidden/collapsed, whether a floating
-   *  Picture-in-Picture window is visible, and whether the screen is being
-   *  RECORDED — by the OS's own recording indicator (macOS menu-bar icon, GNOME
-   *  top-bar dot, Windows Game Bar capture widget) or by a recorder's own UI.
-   *  `recorder_evidence` names what was seen; `reason` ends in `_failopen` when
-   *  the check could not actually run (no frame / vision error / timeout), which
-   *  callers must treat as "not verified" rather than "clean". */
+   *  Picture-in-Picture window is visible, and whether a third-party screen
+   *  recorder's own overlay (toolbar/border/REC timer) is visible. */
   async verifyShareBarHidden(
     token: string,
     blob: Blob,
-  ): Promise<{
-    enabled: boolean;
-    hidden: boolean;
-    pip_detected?: boolean;
-    recorder_overlay_detected?: boolean;
-    recorder_evidence?: string;
-    reason?: string;
-  }> {
+  ): Promise<{ enabled: boolean; hidden: boolean; pip_detected?: boolean; recorder_overlay_detected?: boolean; reason?: string }> {
     const fd = new FormData();
     fd.append('file', blob, 'screen.jpg');
     const url = `${API_BASE_URL}/candidate/ai-interview/${token}/verify-share-bar`;

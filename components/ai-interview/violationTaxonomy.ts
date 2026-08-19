@@ -427,28 +427,8 @@ export function describeViolation(v: ViolationRecord): string {
       const key = typeof d.key === 'string' ? d.key : '';
       return key ? `Screenshot shortcut used (${key}).` : 'A screenshot shortcut was pressed.';
     }
-    case 'screen_recording_attempt': {
-      // details.source distinguishes the two things a browser can actually see.
-      // Neither can see a native recorder's process — only what it does in the
-      // page, or what its window/tray icon looks like on the shared screen.
-      const src = typeof d.source === 'string' ? d.source : '';
-      if (src === 'get_display_media_blocked') {
-        const phase = typeof d.phase === 'string' && d.phase ? ` (during: ${d.phase.replace(/_/g, ' ')})` : '';
-        return `Something in the page tried to start a screen capture and was blocked${phase}.`;
-      }
-      if (src === 'screen_frame_vision') {
-        // details: { evidence, blocked_start?, advisory? }
-        const ev = typeof d.evidence === 'string' && d.evidence ? ` What was seen: ${d.evidence}` : '';
-        if (d.blocked_start) {
-          return 'An active screen recording was detected on the candidate’s screen, so the ' +
-            'interview was not allowed to start until they stopped it — the candidate was not ' +
-            `penalised beyond the wait.${ev}`;
-        }
-        return 'An active screen recording was detected on the candidate’s screen during the ' +
-          `interview. Logged for review only — the interview was not interrupted.${ev}`;
-      }
+    case 'screen_recording_attempt':
       return 'A screen-recording tool was detected.';
-    }
     case 'picture_in_picture_detected': {
       const via = typeof d.via === 'string' ? d.via : '';
       return via === 'blur_recheck'
