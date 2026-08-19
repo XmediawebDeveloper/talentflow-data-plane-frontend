@@ -48,24 +48,6 @@ import QuotaBadge from '@/components/ui/quota-badge';
 const INVITATIONS_PAGE_SIZE = 10;
 /** Batch size when pulling every assessment for a browser-side filter. */
 const FULL_SET_BATCH_SIZE = 100;
-// Labels mirror the AI Interview invite wording (AI_INTERVIEW_INVITE_STATUS_OPTIONS
-// in AIInterview.tsx) so a recruiter reads the same lifecycle across both modules:
-// sent -> Invited, opened -> System Check (the candidate consented and is on the
-// system-check step), started -> In Progress, abandoned -> Terminated. Only the
-// labels change — the `value`s are the API/DB statuses and must stay as-is.
-const ASSESSMENT_INVITE_STATUS_OPTIONS = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'sent', label: 'Invited' },
-  { value: 'opened', label: 'System Check' },
-  { value: 'started', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'expired', label: 'Expired' },
-  { value: 'failed', label: 'Invite Failed' },
-  { value: 'bounced', label: 'Bounced' },
-  { value: 'abandoned', label: 'Terminated' },
-];
-
 interface AssessmentsProps {
   jobs: Job[];
   onOpenCandidateView?: () => void;
@@ -3802,65 +3784,37 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </button>
             </div>
 
-            {/* Stats Cards */}
-            <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
-              <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-7 gap-1 sm:gap-4">
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-blue text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <Users className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Total Invited</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-brand-blue">{invitationStats.total}</p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-orange-deep text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <Clock className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Invite Expired</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-brand-orange-deep">{invitationStats.expired}</p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <X className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Invite Failed</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-red-600">{invitationStats.failed}</p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-cyan text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <Play className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>In Progress</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-brand-cyan">{invitationStats.started}</p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-blue text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <CheckCircle className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Completed</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-brand-blue">{invitationStats.completed}</p>
-                </div>
-                {/* Terminated — candidate exited mid-assessment. Its own card
-                    (mirrors the AI Interview invitations popup) so these never
-                    read as "Invite Failed", which means email delivery. */}
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <Ban className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Terminated</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-red-600">{invitationStats.terminated}</p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-blue text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <TrendingUp className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Completion Rate</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-brand-blue">
-                    {invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}%
-                  </p>
-                </div>
-              </div>
-            </div>
+            {/* Stat row doubles as the status filter — same component, buckets
+                and wording as the JD-level popup and the AI Interview trackers.
+                Counts come from the API's unfiltered summary, so selecting a
+                bucket narrows the table without collapsing the other cards. */}
+            <InviteStatCards
+              gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-4"
+              activeStatus={trackingFilters.status}
+              onSelect={(status) => {
+                setTrackingFilters({ ...trackingFilters, status });
+                setTrackingCurrentPage(1);
+              }}
+              cards={[
+                { key: 'all', label: 'Total Invited', Icon: Users, value: invitationStats.total, ...INVITE_CARD_TONES.blue },
+                { key: 'expired', label: 'Invite Expired', Icon: Clock, value: invitationStats.expired, ...INVITE_CARD_TONES.orange },
+                { key: 'failed', label: 'Invite Failed', Icon: X, value: invitationStats.failed, ...INVITE_CARD_TONES.red },
+                { key: 'started', label: 'In Progress', Icon: Play, value: invitationStats.started, ...INVITE_CARD_TONES.cyan },
+                { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationStats.completed, ...INVITE_CARD_TONES.blue },
+                /* Terminated — candidate walked out mid-assessment. Its own card
+                   so these never read as "Invite Failed", which means email
+                   delivery. Mirrors the AI Interview tracker. */
+                { key: 'abandoned', label: 'Terminated', Icon: Ban, value: invitationStats.terminated, ...INVITE_CARD_TONES.red },
+                {
+                  key: 'completion-rate',
+                  label: 'Completion Rate',
+                  Icon: TrendingUp,
+                  value: `${invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}%`,
+                  filterable: false,
+                  ...INVITE_CARD_TONES.blue,
+                },
+              ]}
+            />
 
             <InviteFilterBar
               filters={trackingFilters}

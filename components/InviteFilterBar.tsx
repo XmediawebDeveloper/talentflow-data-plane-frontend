@@ -30,17 +30,21 @@ interface InviteFilterBarProps {
  * from two places — its own module page and the JD detail page's Track tile —
  * and those used to carry separate copies that drifted.
  */
-/* Deliberately the same five buckets as the tracker's stat cards, in the same
-   order and with the same wording — "All Statuses" is the Total Invited card.
-   The dropdown used to carry ten values (pending, sent, opened, bounced,
-   abandoned…) that no card counted, so picking one returned a list the cards
-   above it could not explain. */
+/* Deliberately the same buckets as the tracker's stat cards, in the same order
+   and with the same wording — "All Statuses" is the Total Invited card. The
+   dropdown used to carry ten values (pending, sent, opened, bounced…) that no
+   card counted, so picking one returned a list the cards above it could not
+   explain.
+   Wording follows the AI Interview list below: 'started' reads "In Progress"
+   and 'abandoned' — the candidate walked out mid-assessment — reads
+   "Terminated", counted apart from "Invite Failed" (an email problem). */
 export const ASSESSMENT_INVITE_STATUS_OPTIONS: InviteStatusOption[] = [
   { value: 'all', label: 'All Statuses' },
   { value: 'expired', label: 'Invite Expired' },
   { value: 'failed', label: 'Invite Failed' },
   { value: 'started', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
+  { value: 'abandoned', label: 'Terminated' },
 ];
 
 /* Same rule as the assessment list above: one option per stat card, in card
