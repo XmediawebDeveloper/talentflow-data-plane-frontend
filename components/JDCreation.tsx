@@ -612,6 +612,8 @@ interface ExtractedData {
   experience: string;
   experienceRequired: boolean;
   industryType: string;
+  roleFamily?: string;
+  roleFamilyConfidence?: number;
   industryTypeRequired: boolean;
   department: string;
   allowOverqualified: boolean;
@@ -649,6 +651,8 @@ interface EditingJDData {
   experience_min?: number;
   experience_max?: number;
   industry_type?: string;
+  role_family?: string;
+  role_family_confidence?: number;
   department?: string;
   salary_min?: number;
   salary_max?: number;
@@ -1160,6 +1164,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             experience_min: jd.experience_min,
             experience_max: jd.experience_max,
             industry_type: jd.industry_type,
+            // See the note in jd-creation/page.tsx - BOTH mappings must forward this.
+            role_family: jd.role_family,
+            role_family_confidence: jd.role_family_confidence,
             salary_min: jd.salary_min,
             salary_max: jd.salary_max,
             compensation_type: jd.compensation_type,
@@ -1247,6 +1254,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     experience: '',
     experienceRequired: false,
     industryType: '',
+    roleFamily: undefined,
+    roleFamilyConfidence: undefined,
     industryTypeRequired: false,
     department: '',
     allowOverqualified: false,
@@ -2361,6 +2370,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || (isEditMode ? prev.education : ''),
         experience: expValue || prev.experience,
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
+        roleFamily: params.role_family || (isEditMode ? prev.roleFamily : undefined),
+        roleFamilyConfidence: params.role_family_confidence ?? (isEditMode ? prev.roleFamilyConfidence : undefined),
         employmentType: prev.employmentType,
         workModel: prev.workModel,
         // Pre-fill salary from AI extraction
@@ -2503,7 +2514,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             }
 
             // Pre-fill step 2 form with extracted params (salary, skills, etc.)
-            if (response.extracted_params) {
+            // `{}` is truthy in JS, so this must test for CONTENT, not existence.
+            // The generation endpoint now deliberately returns an empty params object:
+            // the second generation pass that used to produce them was deleted, because
+            // Step 1 -> 2 extraction re-derives the same values from this description
+            // anyway. Passing `{}` through would blank the Step 2 fields for no reason.
+            if (response.extracted_params && Object.keys(response.extracted_params).length > 0) {
               console.log('[TalentFlow] Extracted params from stream:', response.extracted_params);
               processExtractedParams(response.extracted_params, response.description);
 
@@ -3205,6 +3221,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience_min: extractionExperiencePayload.experienceMin,
         experience_max: extractionExperiencePayload.experienceMax,
         industry_type: extraction.industryType || undefined,
+        role_family: extraction.roleFamily || undefined,
+        role_family_confidence: extraction.roleFamilyConfidence ?? undefined,
         salary_min: extraction.salaryFrom ? parseInt(extraction.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extraction.salaryTo ? parseInt(extraction.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extraction.compensationType,
@@ -4314,6 +4332,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience_min: experienceMin,
         experience_max: experienceMax,
         industry_type: extractedData.industryType || undefined,
+        role_family: extractedData.roleFamily || undefined,
+        role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
@@ -4642,6 +4662,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience_min: experienceMin,
         experience_max: experienceMax,
         industry_type: extractedData.industryType || undefined,
+        role_family: extractedData.roleFamily || undefined,
+        role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
@@ -4934,6 +4956,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience_min: experienceMin,
         experience_max: experienceMax,
         industry_type: extractedData.industryType || undefined,
+        role_family: extractedData.roleFamily || undefined,
+        role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
