@@ -355,6 +355,9 @@ export default function StepSystemCheck({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const lightingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const noiseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Consecutive loud readings — a single spike (cough, chair scrape) must NOT
+  // flip the check to fail; only sustained noise across several ticks should.
+  const noiseFailStreakRef = useRef(0);
   const faceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const micIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Voice enrollment is captured WHILE the candidate speaks during the mic
@@ -555,6 +558,49 @@ export default function StepSystemCheck({
     }
   }, []);
 
+  // Shared by both runMicrophone's failure path and the live-disconnect
+  // watcher below: when the currently-selected microphone is unreachable,
+  // try any OTHER enumerated mic before giving up. The web platform has no
+  // "is this a laptop" API — device form-factor isn't exposed to pages — so
+  // the presence of another live microphone is used as the practical stand-in
+  // for "this machine has a built-in mic to fall back to." Desktops typically
+  // have no built-in mic (the headset IS the only device), so this naturally
+  // only kicks in on machines that do.
+  //   - Alternate found  → switch to it silently, check stays 'pass' (no popup).
+  //   - None found       → fail the check and show the reconnect popup.
+  const tryMicFallbackOrFail = useCallback(async (deadDeviceId: string): Promise<boolean> => {
+    let fallbackDeviceId: string | null = null;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const altMic = dedupeRealDevices(devices.filter((d) => d.kind === 'audioinput'))
+        .find((d) => d.deviceId && d.deviceId !== deadDeviceId);
+      if (altMic) fallbackDeviceId = altMic.deviceId;
+    } catch { /* enumeration failed — fall through to the popup */ }
+
+    if (fallbackDeviceId) {
+      selectedMicIdRef.current = fallbackDeviceId;
+      setSelectedMicId(fallbackDeviceId);
+      const analyser = await ensureAudioAnalyser();
+      if (analyser) {
+        updateSystemCheck('microphone', {
+          status: 'pass',
+          detail: 'Microphone active — switched to built-in microphone after headset disconnected',
+        });
+        void refreshDeviceLists();
+        return true;
+      }
+      // The "fallback" device turned out to be unreachable too (rare) — fall
+      // through to the popup below.
+    }
+
+    updateSystemCheck('microphone', {
+      status: 'fail',
+      detail: 'Microphone disabled — please reconnect your microphone',
+    });
+    setMicDisconnectedPopup(true);
+    return false;
+  }, [ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists]);
+
   // ── Individual checks — each self-contained so it can run standalone (retry) ──
   const runDevice = useCallback(async () => {
     updateSystemCheck('device', { status: 'checking', detail: 'Detecting device...' });
@@ -629,7 +675,17 @@ export default function StepSystemCheck({
     const analyser = await ensureAudioAnalyser();
     void refreshDeviceLists();
     if (!analyser) {
-      updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
+      // A specific device was already selected (this check likely passed
+      // before) but is no longer reachable — that's a disconnect, not a
+      // permission denial. Try a fallback device (built-in mic) before
+      // failing, and keep the reconnect messaging/popup consistent regardless
+      // of WHICH path discovered it: the live track-ended watcher, a manual
+      // "Retry" click, or the initial "Run Check" running mid-outage.
+      if (selectedMicIdRef.current) {
+        await tryMicFallbackOrFail(selectedMicIdRef.current);
+      } else {
+        updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
+      }
       return;
     }
     // Voice-activity detection was intentionally REMOVED from this check. The
@@ -652,7 +708,7 @@ export default function StepSystemCheck({
       return;
     }
     updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone active' });
-  }, [ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists]);
+  }, [ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists, tryMicFallbackOrFail]);
 
   const runInternet = useCallback(async () => {
     updateSystemCheck('internet', { status: 'checking', detail: 'Measuring your connection speed...' });
@@ -811,27 +867,49 @@ export default function StepSystemCheck({
 
   const runNoise = useCallback(async () => {
     if (noiseIntervalRef.current) { clearInterval(noiseIntervalRef.current); noiseIntervalRef.current = null; }
+    noiseFailStreakRef.current = 0;
     updateSystemCheck('noise', { status: 'checking', detail: 'Analyzing background noise...' });
     const analyser = await ensureAudioAnalyser();
     await new Promise((r) => setTimeout(r, 1000));
     if (analyser) {
+      // A single loud reading must NOT fail the check — a cough, a chair
+      // scrape, or a driver still settling right after a device
+      // reconnect/switch would otherwise flip this to 'fail' (and show
+      // Retry) for one bad tick and immediately bounce back, which read as
+      // "Retry keeps appearing again and again." Require NOISE_FAIL_STREAK
+      // consecutive loud ticks (3s apart) before actually failing; a single
+      // good tick clears the streak and resets to pass immediately.
+      const NOISE_FAIL_STREAK = 2; // ~6s of sustained noise
       const readAvg = () => {
         const da = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(da);
         return da.length > 0 ? da.reduce((a, b) => a + b, 0) / da.length : 0;
       };
-      updateSystemCheck('noise', readAvg() < 80
-        ? { status: 'pass', detail: 'Background noise: Low (Good)' }
-        : { status: 'fail', detail: 'Background noise: High - find a quieter space' });
+      if (readAvg() < 80) {
+        noiseFailStreakRef.current = 0;
+        updateSystemCheck('noise', { status: 'pass', detail: 'Background noise: Low (Good)' });
+      } else {
+        // Loud on the very first reading — don't fail yet, give it a chance
+        // to settle; the interval below will fail it if it's still loud.
+        noiseFailStreakRef.current = 1;
+        updateSystemCheck('noise', { status: 'pass', detail: 'Background noise: Low (Good)' });
+      }
       noiseIntervalRef.current = setInterval(() => {
         const a = analyserRef.current;
         if (!a) return;
         const da = new Uint8Array(a.frequencyBinCount);
         a.getByteFrequencyData(da);
         const avg = da.length > 0 ? da.reduce((x, y) => x + y, 0) / da.length : 0;
-        updateSystemCheck('noise', avg < 80
-          ? { status: 'pass', detail: 'Background noise: Low (Good)' }
-          : { status: 'fail', detail: 'Background noise: High - find a quieter space' });
+        if (avg < 80) {
+          noiseFailStreakRef.current = 0;
+          updateSystemCheck('noise', { status: 'pass', detail: 'Background noise: Low (Good)' });
+        } else {
+          noiseFailStreakRef.current += 1;
+          if (noiseFailStreakRef.current >= NOISE_FAIL_STREAK) {
+            updateSystemCheck('noise', { status: 'fail', detail: 'Background noise: High - find a quieter space' });
+          }
+          // else: stay on the current status — one loud tick alone doesn't fail it.
+        }
       }, 3000);
     } else {
       updateSystemCheck('noise', { status: 'fail', detail: 'Microphone not available for noise check' });
@@ -1049,6 +1127,21 @@ export default function StepSystemCheck({
     return () => navigator.mediaDevices.removeEventListener('devicechange', refreshDeviceLists);
   }, [phase, refreshDeviceLists]);
 
+  // If exactly one microphone is connected, there's nothing to choose between —
+  // auto-select it so the check can pass without making the candidate open the
+  // dropdown just to pick the only option. With 2+ devices, the dropdown stays
+  // in charge and the candidate must explicitly choose (see runMicrophone's
+  // selectedMicIdRef gate). Guarded on `!selectedMicId` so this never overrides
+  // a choice the candidate (or a prior auto-select) already made — e.g. if a
+  // second mic is plugged in later, the first one stays selected.
+  useEffect(() => {
+    if (phase !== 'system_checks' || selectedMicId || micDevices.length !== 1) return;
+    const only = micDevices[0];
+    selectedMicIdRef.current = only.deviceId;
+    setSelectedMicId(only.deviceId);
+    void runMicrophone();
+  }, [phase, micDevices, selectedMicId, runMicrophone]);
+
   // Once the Microphone check has PASSED on this screen, keep watching the
   // live track — if the headset is pulled before the candidate clicks
   // Continue, this is the only thing that would otherwise catch it (the
@@ -1061,40 +1154,68 @@ export default function StepSystemCheck({
     const track = streamRef.current?.getAudioTracks().find((t) => t.readyState === 'live');
     if (!track) return;
 
-    const handleDisconnect = () => {
-      // Drop the cached analyser/AudioContext — ensureAudioAnalyser() short-
-      // circuits and returns them as-is whenever they exist, regardless of
-      // whether the underlying track is still live. Without clearing them
-      // here, the auto-recovery retry below would report success by handing
-      // back the same dead analyser instead of re-acquiring the microphone.
-      if (audioContextRef.current) {
-        audioContextRef.current.close().catch(() => {});
-        audioContextRef.current = null;
+    let handling = false;
+    const handleDisconnect = async () => {
+      if (handling) return; // re-entrancy guard — 'ended' + the 1s poll can both fire
+      handling = true;
+      try {
+        // Drop the cached analyser/AudioContext — ensureAudioAnalyser() short-
+        // circuits and returns them as-is whenever they exist, regardless of
+        // whether the underlying track is still live. Without clearing them
+        // here, a retry would report success by handing back the same dead
+        // analyser instead of re-acquiring the microphone.
+        const deadDeviceId = selectedMicIdRef.current;
+        if (audioContextRef.current) {
+          audioContextRef.current.close().catch(() => {});
+          audioContextRef.current = null;
+        }
+        analyserRef.current = null;
+        if (streamRef.current) {
+          streamRef.current.getAudioTracks().forEach((t) => {
+            t.stop();
+            streamRef.current!.removeTrack(t);
+          });
+        }
+
+        // Desktops typically have no built-in microphone, so a headset is the
+        // only mic device — tryMicFallbackOrFail finds nothing to switch to
+        // and blocks on the reconnect popup. Laptops almost always still have
+        // their built-in mic enumerated as a second device even while a
+        // headset was in use — when one exists, it switches to it silently
+        // and the popup never shows, since the candidate can keep going.
+        await tryMicFallbackOrFail(deadDeviceId);
+      } finally {
+        handling = false;
       }
-      analyserRef.current = null;
-      if (streamRef.current) {
-        streamRef.current.getAudioTracks().forEach((t) => {
-          t.stop();
-          streamRef.current!.removeTrack(t);
-        });
-      }
-      updateSystemCheck('microphone', {
-        status: 'fail',
-        detail: 'Microphone disconnected — reconnect your headset to continue',
-      });
-      setMicDisconnectedPopup(true);
     };
     track.addEventListener('ended', handleDisconnect);
     // Backstop poll — some drivers/OSes don't fire `ended` promptly on unplug.
+    // Requires 2 CONSECUTIVE non-live ticks (~2s) before acting, not 1 — a
+    // driver still settling right after a reconnect/switch can report a
+    // transient non-live blip for a single tick, which was flipping the
+    // check to fail immediately after it had just recovered ("Retry keeps
+    // appearing again and again"). The 'ended' event above stays instant —
+    // it's a reliable signal for a real unplug, unlike this poll.
+    let missedTicks = 0;
     const poll = setInterval(() => {
-      if (track.readyState !== 'live') handleDisconnect();
+      if (track.readyState !== 'live') {
+        missedTicks += 1;
+        if (missedTicks >= 2) void handleDisconnect();
+      } else {
+        missedTicks = 0;
+      }
     }, 1000);
 
     return () => {
       track.removeEventListener('ended', handleDisconnect);
       clearInterval(poll);
     };
-  }, [phase, micCheckStatus, updateSystemCheck]);
+    // selectedMicId (not just micCheckStatus) is a dependency because a
+    // successful "laptop" silent fallback switch keeps the check at 'pass'
+    // the whole time — status never changes — so without also re-running on
+    // selectedMicId, this effect would keep polling the OLD, now-dead track
+    // forever instead of picking up the newly-active fallback device's track.
+  }, [phase, micCheckStatus, selectedMicId, updateSystemCheck, tryMicFallbackOrFail]);
 
   // While the reconnect popup is showing, try to recover automatically the
   // moment the OS reports a device change (headset plugged back in) — no
@@ -1932,7 +2053,7 @@ export default function StepSystemCheck({
                   type="button"
                   onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup) handleProceed(); }}
                   disabled={!allSystemPassed || !voiceGateOk || isProceedLoading || micDisconnectedPopup}
-                  title={micDisconnectedPopup ? 'Reconnect your headset to continue' : !voiceGateOk ? 'Record your voice sample first' : undefined}
+                  title={micDisconnectedPopup ? 'Please reconnect your microphone to continue' : !voiceGateOk ? 'Record your voice sample first' : undefined}
                   className={`flex-1 inline-flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-lg text-sm transition-all ${
                     allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup
                       ? 'bg-gray-900 text-white hover:bg-gray-800 cursor-pointer'
@@ -1942,7 +2063,7 @@ export default function StepSystemCheck({
                   {isProceedLoading ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>
                   ) : micDisconnectedPopup ? (
-                    <>Reconnect your headset to continue</>
+                    <>Please reconnect your microphone</>
                   ) : !voiceGateOk ? (
                     <>Record your voice to continue</>
                   ) : (
@@ -1970,11 +2091,10 @@ export default function StepSystemCheck({
                 <MicOff className="w-5 h-5 text-red-600" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-gray-900 font-semibold text-sm mb-0.5">Headset Disconnected</h3>
+                <h3 className="text-gray-900 font-semibold text-sm mb-0.5">Microphone disabled.</h3>
                 <p className="text-gray-500 text-xs leading-relaxed">
-                  Your microphone was disconnected. Reconnect your headset to continue — this is
-                  detected automatically. If it&apos;s a different device, select it from Device
-                  Settings below.
+                  Please reconnect your microphone. This is detected automatically — if it&apos;s a
+                  different device, you can also select it from Device Settings below.
                 </p>
               </div>
             </div>
