@@ -70,7 +70,7 @@ interface CandidateResultsViewProps {
   breadcrumbItems?: { label: string; href?: string; onClick?: () => void }[];
 }
 
-type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios' | 'verification' | 'verification_frames';
+type TabKey = 'overview' | 'eval' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations' | 'skill_breakdown' | 'question_analysis' | 'example_scenarios' | 'verification';
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -1290,7 +1290,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const envVideoBlobRequestedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if ((activeTab !== 'verification' && activeTab !== 'verification_frames') || envVerifications !== null) return;
+    if (activeTab !== 'verification' || envVerifications !== null) return;
     let cancelled = false;
     setEnvVerificationsLoading(true);
     console.info(`[ENV-VERIFY] Fetching verification for interview=${liveSession.id}`);
@@ -1320,7 +1320,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const [envFrameLightbox, setEnvFrameLightbox] = useState<string | null>(null);
 
   useEffect(() => {
-    if (activeTab !== 'verification_frames' || !envVerifications || envVerifications.length === 0) return;
+    if (activeTab !== 'verification' || !envVerifications || envVerifications.length === 0) return;
     envVerifications.forEach((v) => {
       const id = v.verification_id;
       if (envFrames[id] || envFramesLoading[id]) return;
@@ -1437,7 +1437,6 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     // { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
-    { key: 'verification_frames', label: 'Verification Frames', icon: <Camera className="w-4 h-4" /> },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Integrity Check',  icon: <ShieldAlert className="w-4 h-4" />, badge: violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
   ];
@@ -3120,80 +3119,56 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               </div>
                             );
                           })()}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )
-            )}
-
-            {/* Verification Frames Tab — the ~20 individual frames (2fps) the
-                vision LLM actually analyzed for each QR verification attempt,
-                so a recruiter can review exactly what the AI saw rather than
-                only its written conclusions. */}
-            {!evaluationPending && activeTab === 'verification_frames' && (
-              envVerificationsLoading && envVerifications === null ? (
-                renderPlaceholder('Loading verification frames…')
-              ) : !envVerifications || envVerifications.length === 0 ? (
-                renderPlaceholder(
-                  envVerificationsError
-                    ? 'Could not load verification data — please refresh and try again.'
-                    : liveSession.environment_verification_enabled
-                    ? 'No QR verification was triggered during this interview.'
-                    : 'Mobile Environment Verification was not enabled for this interview.'
-                )
-              ) : (
-                <div className="space-y-6">
-                  {envVerifications.map((v) => {
-                    const frames = envFrames[v.verification_id];
-                    const loading = envFramesLoading[v.verification_id];
-                    const error = envFramesError[v.verification_id];
-                    return (
-                      <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
-                        <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2">
-                            <Camera className="w-4 h-4 text-brand-blue" />
-                            <span className="text-sm font-semibold text-gray-900">Analyzed Frames</span>
-                            {(v.submitted_at || v.triggered_at) && (
-                              <span className="text-xs text-gray-500">{formatTs(v.submitted_at || v.triggered_at || '')}</span>
-                            )}
-                          </div>
-                          {frames && frames.length > 0 && (
-                            <span className="text-xs text-gray-500">{frames.length} frames</span>
-                          )}
-                        </div>
-                        <div className="p-4 sm:p-5">
-                          {loading || (!frames && !error) ? (
-                            <p className="text-sm text-gray-400 italic">Loading frames…</p>
-                          ) : error ? (
-                            <p className="text-sm text-red-600 italic">Could not load frames.</p>
-                          ) : !frames || frames.length === 0 ? (
-                            <p className="text-sm text-gray-400 italic">
-                              No stored frames for this attempt (analyzed before this feature was added, or local-disk storage).
-                            </p>
-                          ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                              {frames.map((f) => (
-                                <button
-                                  key={f.index}
-                                  type="button"
-                                  disabled={!f.url}
-                                  onClick={() => f.url && setEnvFrameLightbox(f.url)}
-                                  className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 ring-1 ring-gray-200 disabled:cursor-not-allowed group"
-                                >
-                                  {f.url ? (
-                                    <img src={f.url} alt={`Frame ${f.index + 1}`} className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
-                                  ) : (
-                                    <span className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400">unavailable</span>
+                          {(() => {
+                            const frames = envFrames[v.verification_id];
+                            const loading = envFramesLoading[v.verification_id];
+                            const error = envFramesError[v.verification_id];
+                            if (!frames || frames.length === 0) {
+                              if (!loading && !error) return null;
+                            }
+                            return (
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                                    <Camera className="w-3.5 h-3.5" /> Analyzed Frames
+                                  </p>
+                                  {frames && frames.length > 0 && (
+                                    <span className="text-xs text-gray-500">{frames.length} frames</span>
                                   )}
-                                  <span className="absolute bottom-0.5 right-1 text-[10px] font-mono text-white bg-black/50 px-1 rounded">
-                                    {f.index + 1}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                                </div>
+                                {loading || (!frames && !error) ? (
+                                  <p className="text-sm text-gray-400 italic">Loading frames…</p>
+                                ) : error ? (
+                                  <p className="text-sm text-red-600 italic">Could not load frames.</p>
+                                ) : !frames || frames.length === 0 ? (
+                                  <p className="text-sm text-gray-400 italic">
+                                    No stored frames for this attempt (analyzed before this feature was added, or local-disk storage).
+                                  </p>
+                                ) : (
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                                    {frames.map((f) => (
+                                      <button
+                                        key={f.index}
+                                        type="button"
+                                        disabled={!f.url}
+                                        onClick={() => f.url && setEnvFrameLightbox(f.url)}
+                                        className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 ring-1 ring-gray-200 disabled:cursor-not-allowed group"
+                                      >
+                                        {f.url ? (
+                                          <img src={f.url} alt={`Frame ${f.index + 1}`} className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
+                                        ) : (
+                                          <span className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400">unavailable</span>
+                                        )}
+                                        <span className="absolute bottom-0.5 right-1 text-[10px] font-mono text-white bg-black/50 px-1 rounded">
+                                          {f.index + 1}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
