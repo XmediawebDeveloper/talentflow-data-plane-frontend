@@ -340,6 +340,12 @@ export default function StepSystemCheck({
   // they've clicked Continue. Blocks Continue and shows a reconnect popup
   // until the same device (or a newly selected one) is live again.
   const [micDisconnectedPopup, setMicDisconnectedPopup] = useState(false);
+  // Fires alongside the SILENT fallback switch (external mic pulled, but a
+  // system/built-in mic is still available) — the switch itself doesn't
+  // block anything, but the candidate should still be told their device was
+  // removed. Non-blocking, auto-dismisses itself after a few seconds.
+  const [micFallbackNotice, setMicFallbackNotice] = useState(false);
+  const micFallbackNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Measured metric values to include when submitting to backend
   const networkLatencyMsRef = useRef<number | null>(null);
@@ -568,6 +574,15 @@ export default function StepSystemCheck({
   // only kicks in on machines that do.
   //   - Alternate found  → switch to it silently, check stays 'pass' (no popup).
   //   - None found       → fail the check and show the reconnect popup.
+  // NOTE: this never sets micDisconnectedPopup itself — only the live watch
+  // effect below does that (see its handleDisconnect), because it's the only
+  // caller that KNOWS this is a genuine regression (the mic was passing and
+  // just died). This function is also called from runMicrophone's plain
+  // failure path — used by the very first "Run Check", a manual Retry click,
+  // AND the auto-select-single-device effect that fires silently the moment
+  // the System Check page loads, before the candidate has done anything. If
+  // this set the popup on every failure, that background auto-select attempt
+  // alone could pop the reconnect modal before checks even ran once.
   const tryMicFallbackOrFail = useCallback(async (deadDeviceId: string): Promise<boolean> => {
     let fallbackDeviceId: string | null = null;
     try {
@@ -575,7 +590,7 @@ export default function StepSystemCheck({
       const altMic = dedupeRealDevices(devices.filter((d) => d.kind === 'audioinput'))
         .find((d) => d.deviceId && d.deviceId !== deadDeviceId);
       if (altMic) fallbackDeviceId = altMic.deviceId;
-    } catch { /* enumeration failed — fall through to the popup */ }
+    } catch { /* enumeration failed — caller decides how to handle */ }
 
     if (fallbackDeviceId) {
       selectedMicIdRef.current = fallbackDeviceId;
@@ -590,14 +605,13 @@ export default function StepSystemCheck({
         return true;
       }
       // The "fallback" device turned out to be unreachable too (rare) — fall
-      // through to the popup below.
+      // through to the plain failure below.
     }
 
     updateSystemCheck('microphone', {
       status: 'fail',
       detail: 'Microphone disabled — please reconnect your microphone',
     });
-    setMicDisconnectedPopup(true);
     return false;
   }, [ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists]);
 
@@ -1179,11 +1193,25 @@ export default function StepSystemCheck({
 
         // Desktops typically have no built-in microphone, so a headset is the
         // only mic device — tryMicFallbackOrFail finds nothing to switch to
-        // and blocks on the reconnect popup. Laptops almost always still have
+        // and the popup below covers it. Laptops almost always still have
         // their built-in mic enumerated as a second device even while a
         // headset was in use — when one exists, it switches to it silently
         // and the popup never shows, since the candidate can keep going.
-        await tryMicFallbackOrFail(deadDeviceId);
+        // This effect only ever runs after a confirmed 'pass', so unlike
+        // runMicrophone's own failure path, reacting here IS always a
+        // genuine "you had it working and it just died" regression — safe
+        // to surface to the candidate either way.
+        const recovered = await tryMicFallbackOrFail(deadDeviceId);
+        if (recovered) {
+          // Fell back to the system mic silently — still let the candidate
+          // know their external device was removed, but don't block them;
+          // the interview can keep going on the fallback device.
+          setMicFallbackNotice(true);
+          if (micFallbackNoticeTimerRef.current) clearTimeout(micFallbackNoticeTimerRef.current);
+          micFallbackNoticeTimerRef.current = setTimeout(() => setMicFallbackNotice(false), 5000);
+        } else {
+          setMicDisconnectedPopup(true);
+        }
       } finally {
         handling = false;
       }
@@ -1256,6 +1284,7 @@ export default function StepSystemCheck({
     return () => {
       mountedRef.current = false;
       stopActiveChecks();
+      if (micFallbackNoticeTimerRef.current) clearTimeout(micFallbackNoticeTimerRef.current);
     };
   }, [stopActiveChecks]);
 
@@ -2095,6 +2124,28 @@ export default function StepSystemCheck({
                 <p className="text-gray-500 text-xs leading-relaxed">
                   Please reconnect your microphone. This is detected automatically — if it&apos;s a
                   different device, you can also select it from Device Settings below.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* External-mic-removed notice — a system/built-in mic was still
+            available, so tryMicFallbackOrFail already switched to it
+            silently and the check stayed 'pass'. This is purely informational
+            (the candidate can keep going on the fallback device), so unlike
+            the popup above it never blocks Continue and dismisses itself. */}
+        {micFallbackNotice && (
+          <div className="fixed top-4 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
+            <div className="w-full max-w-md bg-white border border-amber-300 rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 flex-shrink-0">
+                <MicOff className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-gray-900 font-semibold text-sm mb-0.5">Your device removed</h3>
+                <p className="text-gray-500 text-xs leading-relaxed">
+                  Your microphone device was removed — switched to your system&apos;s default
+                  microphone automatically. You can keep going.
                 </p>
               </div>
             </div>
