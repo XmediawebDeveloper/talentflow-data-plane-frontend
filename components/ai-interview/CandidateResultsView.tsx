@@ -8,7 +8,7 @@ import {
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
-  Download, Loader2, Sparkles, SkipForward, Play,
+  Download, Loader2, Sparkles, SkipForward, Play, X,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -1264,6 +1264,11 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     id_match: boolean | null;
     rgb_sequence_results: Array<{ second: number; expected_rgb: string; detected_rgb: string | null; distance: number | null; match: boolean }> | null;
     result_severity: string | null;
+    // Millisecond offsets (into the actual recorded timeline, pause-time
+    // excluded) where the phone's client-side VAD detected sustained
+    // human-speech-like audio. Null/absent for older attempts or when none
+    // was detected.
+    voice_activity_offsets_ms: number[] | null;
   };
   const [envVerifications, setEnvVerifications] = useState<EnvVerificationRecord[] | null>(null);
   const [envVerificationsLoading, setEnvVerificationsLoading] = useState(false);
@@ -1318,6 +1323,17 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const [envFramesLoading, setEnvFramesLoading] = useState<Record<string, boolean>>({});
   const [envFramesError, setEnvFramesError] = useState<Record<string, boolean>>({});
   const [envFrameViewer, setEnvFrameViewer] = useState<{ urls: string[]; index: number } | null>(null);
+
+  useEffect(() => {
+    if (!envFrameViewer) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setEnvFrameViewer(null);
+      else if (e.key === 'ArrowLeft') setEnvFrameViewer(prev => prev && prev.index > 0 ? { ...prev, index: prev.index - 1 } : prev);
+      else if (e.key === 'ArrowRight') setEnvFrameViewer(prev => prev && prev.index < prev.urls.length - 1 ? { ...prev, index: prev.index + 1 } : prev);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [envFrameViewer]);
 
   useEffect(() => {
     if (activeTab !== 'verification' || !envVerifications || envVerifications.length === 0) return;
@@ -1438,7 +1454,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
-    { key: 'violations',       label: 'Integrity Check',  icon: <ShieldAlert className="w-4 h-4" />, badge: violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
+    { key: 'violations',       label: 'Integrity Check',  icon: <ShieldAlert className="w-4 h-4" />, badge: (violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted) || undefined, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -1814,14 +1830,14 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
               sits on z-30, so pinning the tabs at the same offset would park them
               underneath it. 36px = the breadcrumb's height (py-2 + text-sm line). */}
           <div className="sticky top-9 z-20 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm rounded-t-xl px-6 overflow-x-auto">
-            <div className="flex gap-1 min-w-max">
+            <div className="flex gap-1 min-w-max sm:min-w-0">
               {tabs.map(tab => (
                 <button
                   key={tab.key}
                   onClick={() => { setActiveTab(tab.key); setViolationPage(1); }}
-                  className={`flex items-center gap-1.5 py-4 px-3 text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  className={`flex flex-1 items-center justify-center gap-1.5 py-4 px-3 text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === tab.key
-                      ? tab.key === 'violations'
+                      ? tab.key === 'violations' || tab.key === 'verification'
                         ? 'border-red-500 text-red-700 font-medium'
                         : 'border-brand-blue text-brand-blue font-medium'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -2978,8 +2994,20 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <p className="text-sm text-gray-700 leading-relaxed">{v.ai_summary}</p>
                             </div>
                           )}
-                          {v.flagged_items && v.flagged_items.length > 0 && (() => {
-                            const items = v.flagged_items;
+                          {((v.flagged_items && v.flagged_items.length > 0) || (v.voice_activity_offsets_ms && v.voice_activity_offsets_ms.length > 0)) && (() => {
+                            // Voice-activity offsets are a deterministic client-side VAD signal
+                            // (energy + zero-crossing-rate, not vision-LLM judged) — surfaced here
+                            // as synthetic flagged_items-shaped rows so they flow through the exact
+                            // same table/seek/frame-matching pipeline as the AI-detected items below,
+                            // rather than a separate disconnected UI section.
+                            const voiceItems = (v.voice_activity_offsets_ms || []).map((ms) => ({
+                              label: 'Voice/speech detected',
+                              confidence: 'medium',
+                              location: null,
+                              approx_timestamp: `~${(ms / 1000).toFixed(1)}s`,
+                              phase: ms < 5000 ? 'display' : 'pan',
+                            }));
+                            const items = [...(v.flagged_items || []), ...voiceItems];
                             // Parse the first number out of approx_timestamp (e.g. "~6.2s-8.1s",
                             // "frame 12 only") — same regex approach as the backend's own
                             // phase-derivation fallback — to make it clickable.
@@ -3036,6 +3064,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               phase === 'display' ? 'Display' : phase === 'pan' ? 'Pan' : '—';
                             const iconForLabel = (label: string) => {
                               const l = label.toLowerCase();
+                              if (l.includes('voice') || l.includes('speech')) return <Mic className="w-3.5 h-3.5" />;
                               if (l.includes('person')) return <Users className="w-3.5 h-3.5" />;
                               if (l.includes('phone') || l.includes('tablet')) return <Smartphone className="w-3.5 h-3.5" />;
                               if (l.includes('laptop') || l.includes('monitor') || l.includes('screen') || l.includes('display')) return <Monitor className="w-3.5 h-3.5" />;
@@ -3227,6 +3256,15 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6"
                 onClick={() => setEnvFrameViewer(null)}
               >
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setEnvFrameViewer(null); }}
+                  title="Close"
+                  aria-label="Close"
+                  className="absolute top-4 right-4 sm:top-6 sm:right-6 text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setEnvFrameViewer(prev => prev && prev.index > 0 ? { ...prev, index: prev.index - 1 } : prev); }}
