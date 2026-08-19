@@ -196,7 +196,19 @@ export default function JobOpeningsPage() {
     setActiveDropdown(null);
   };
 
-  const getStatusBadge = (status: string) => {
+  // `republishedAt` is passed separately rather than folded into `status` on purpose:
+  // the filter tabs and every backend query key off status === 'published', so a
+  // distinct 'republished' status would drop these JDs out of the Published tab.
+  // A JD edited into a NEW VERSION is a fresh row and stays 'Published'; only one
+  // edited and published IN PLACE carries republished_at.
+  const getStatusBadge = (status: string, republishedAt?: string | null) => {
+    if (status === 'published' && republishedAt) {
+      return (
+        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+          Republished
+        </span>
+      );
+    }
     const configs: Record<string, { bg: string; text: string; label: string }> = {
       published: { bg: 'bg-green-100', text: 'text-green-700', label: 'Published' },
       draft: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Draft' },
@@ -444,7 +456,7 @@ export default function JobOpeningsPage() {
                     <h3 className="font-semibold text-gray-900 text-base mb-1 line-clamp-1 group-hover:text-gray-800 transition-colors">
                       {job.title}
                     </h3>
-                    {getStatusBadge(job.status)}
+                    {getStatusBadge(job.status, job.republished_at)}
                   </div>
                   <div className="relative">
                     <button
@@ -630,7 +642,7 @@ export default function JobOpeningsPage() {
                       {getExperienceText(job.experience_min, job.experience_max)}
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4">
-                      {getStatusBadge(job.status)}
+                      {getStatusBadge(job.status, job.republished_at)}
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4 hidden lg:table-cell">
                       <div className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-600">

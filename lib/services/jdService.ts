@@ -31,6 +31,8 @@ export interface JDCreate {
   domain_keywords?: string[];
   job_level?: string;
   industry_type?: string;
+  republished_at?: string | null;
+  republish_count?: number;
   role_family?: string;
   role_family_confidence?: number;
   salary_min?: number;

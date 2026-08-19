@@ -2728,12 +2728,26 @@ export function buildDashboardData(params: {
     ? eval_.capability_score
     : _recomputedFinalQA;
 
-  // 5. Pass/Fail from QA-derived MHS average (prefer backend authoritative).
+  // Headline Must-Have Section Score. The backend's stored
+  // `section_question_avg.mth` is AUTHORITATIVE — it is the exact value the
+  // Results/invite list shows (× 10) and the one Pass/Fail is gated on. The
+  // frontend `mustHaveAvgQA` is an independent per-skill recompute that can
+  // drift by ~0.1 (e.g. backend 6.61 vs recompute 6.50 → list 66% vs report
+  // 65%), so for the HEADLINE we display the backend value verbatim when
+  // present (Timed mode) and fall back to the recompute only for legacy evals
+  // that never stored it. The per-Q recompute is still used for the Question
+  // Analysis tab's per-question badges. (2026-08-19)
+  const _backendMth = eval_?.section_question_avg?.mth;
+  const mustHaveHeadline = (mode === 'Timed' && typeof _backendMth === 'number')
+    ? _backendMth
+    : mustHaveAvgQA;
+
+  // 5. Pass/Fail from the authoritative MHS average (prefer backend final).
   let finalResultQA: 'Pass' | 'Fail' | null = null;
   if (!isPartialEval) {
     if (backendFinal === 'pass') finalResultQA = 'Pass';
     else if (backendFinal === 'fail') finalResultQA = 'Fail';
-    else if (mustHaveAvgQA > 0) finalResultQA = mustHaveAvgQA >= MHS_THRESHOLD ? 'Pass' : 'Fail';
+    else if (mustHaveHeadline > 0) finalResultQA = mustHaveHeadline >= MHS_THRESHOLD ? 'Pass' : 'Fail';
     else finalResultQA = finalResult;
   }
 
@@ -2750,7 +2764,7 @@ export function buildDashboardData(params: {
     },
     isPartialEvaluation: isPartialEval,
     scores: {
-      mustHave:   Math.round(mustHaveAvgQA  * 100) / 100,
+      mustHave:   Math.round(mustHaveHeadline * 100) / 100,
       niceToHave: Math.round(niceToHaveAvgQA * 100) / 100,
       hr:         Math.round(hr             * 100) / 100,
       final:      finalScoreQA,
