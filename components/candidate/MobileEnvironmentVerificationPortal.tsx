@@ -61,13 +61,22 @@ const ALIGN_FAIL_STREAK_NEEDED = 2; // ~0.6s of consecutive FAIL before hiding R
 // (confirmed live 2026-08-19 — see the seed-sampling comment below). Still
 // comfortably excludes the near-black bezel and most desk/background colors.
 const ALIGN_COLOR_DISTANCE = 110; // RGB distance to count a pixel as "part of the screen"
-const ALIGN_MIN_AREA_RATIO = 0.12; // screen too small below this
-const ALIGN_MAX_AREA_RATIO = 0.85; // screen too large above this
-const ALIGN_MIN_DENSITY = 0.45; // fraction of pixels inside bbox that must match — rejects noisy/speckled false positives
-const ALIGN_MAX_CENTER_OFFSET_RATIO = 0.24; // how far the screen's center may drift from frame center
-const ALIGN_MIN_ASPECT = 1.05; // laptop-screen-ish aspect ratio band (tolerant of tilt/pan/keystoning)
-const ALIGN_MAX_ASPECT = 2.6;
-const ALIGN_EDGE_MARGIN_PX = 2; // touching this close to a canvas edge = "partially outside frame"
+
+// ── Fixed viewfinder guide (corner-bracket outline) ──
+// Replaces free-floating "find the screen anywhere in frame" bbox search
+// with a much simpler, more predictable rule the candidate can directly see
+// and act on: a fixed outline is drawn over the camera preview (matching a
+// viewfinder-reticle reference the user provided 2026-08-19) and the ONLY
+// question the algorithm answers is "is this rectangle mostly filled with
+// one uniform color" — i.e. did the candidate actually fit their laptop
+// screen inside the visible brackets. As fractions of the analysis frame
+// (which now matches the visible preview crop exactly — see the
+// object-cover mirroring above).
+const GUIDE_X0 = 0.12;
+const GUIDE_X1 = 0.88;
+const GUIDE_Y0 = 0.16;
+const GUIDE_Y1 = 0.84;
+const ALIGN_GUIDE_MIN_DENSITY = 0.62; // fraction of guide-rect pixels that must match the seed color
 
 // ── Voice activity detection (VAD) — runs only while actually recording ──
 // Web Audio API only (no new library) on the SAME getUserMedia stream
@@ -279,33 +288,57 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       const video = videoRef.current;
       if (!video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return;
 
+      // Analyze the SAME crop the candidate actually sees, not the full raw
+      // camera frame. The <video> preview below is styled `aspect-video
+      // object-cover` — CSS crops the raw feed to a 16:9 box (cutting off
+      // top/bottom or left/right depending on the phone camera's native
+      // aspect ratio). Previously this canvas drew the ENTIRE uncropped raw
+      // frame, so a screen that looked perfectly centered/full-frame in the
+      // visible preview could still fail area/centering checks against the
+      // larger, differently-proportioned real frame the algorithm was
+      // actually scoring (confirmed live 2026-08-19: several fully-visible,
+      // well-centered previews never passed alignment). Mirroring the exact
+      // same object-cover crop here keeps what's analyzed identical to what
+      // the candidate is looking at and aligning to.
       const w = ALIGN_SAMPLE_W;
-      const h = Math.round(w * (video.videoHeight / video.videoWidth));
+      const targetAspect = 16 / 9; // matches the preview's `aspect-video` class
+      const h = Math.round(w / targetAspect);
       canvas.width = w;
       canvas.height = h;
-      ctx.drawImage(video, 0, 0, w, h);
+      const nativeAspect = video.videoWidth / video.videoHeight;
+      let sx = 0, sy = 0, sw = video.videoWidth, sh = video.videoHeight;
+      if (nativeAspect > targetAspect) {
+        // Native frame is relatively wider than the box — object-cover crops the sides.
+        sw = Math.round(video.videoHeight * targetAspect);
+        sx = Math.round((video.videoWidth - sw) / 2);
+      } else if (nativeAspect < targetAspect) {
+        // Native frame is relatively taller than the box — object-cover crops top/bottom.
+        sh = Math.round(video.videoWidth / targetAspect);
+        sy = Math.round((video.videoHeight - sh) / 2);
+      }
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, w, h);
 
       let pass = false;
       try {
         const { data } = ctx.getImageData(0, 0, w, h);
-        // Seed color = the actual center of the frame, NOT a whole-frame
-        // histogram mode. The laptop screen's background is a solid color
-        // only in principle — real screens show a visible brightness
-        // gradient/vignette (confirmed 2026-08-19 live: a well-centered,
-        // fully-visible screen never passed alignment because a tight
-        // histogram-mode match only covered a thin band of that gradient,
-        // failing the area/density checks below even though a human could
-        // see the whole screen clearly). Candidates are explicitly
-        // instructed to center the screen in frame, so sampling directly at
-        // the frame's own center reliably lands ON the screen once aligned,
-        // and a wide-enough tolerance (below) absorbs the rest of the
-        // gradient's range — the same fix this session already had to apply
-        // to the backend's near-identical corner-icon detector for the
-        // exact same root cause.
-        const seedBoxW = Math.max(2, Math.round(w * 0.08));
-        const seedBoxH = Math.max(2, Math.round(h * 0.08));
-        const seedX0 = Math.round(w / 2 - seedBoxW / 2);
-        const seedY0 = Math.round(h / 2 - seedBoxH / 2);
+        // Guide-rect bounds in canvas pixels — same fixed box drawn as the
+        // corner-bracket overlay on the preview (GUIDE_X0/X1/Y0/Y1 above).
+        const gx0 = Math.round(w * GUIDE_X0);
+        const gx1 = Math.round(w * GUIDE_X1);
+        const gy0 = Math.round(h * GUIDE_Y0);
+        const gy1 = Math.round(h * GUIDE_Y1);
+
+        // Seed color = the center of the GUIDE RECT (not the whole frame).
+        // The laptop screen's background is a solid color only in
+        // principle — real screens show a visible brightness gradient/
+        // vignette (confirmed 2026-08-19 live: a well-centered, fully-
+        // visible screen still failed a tight/whole-frame match because of
+        // this). Sampling inside the guide box the candidate is filling
+        // reliably lands ON the screen once aligned.
+        const seedBoxW = Math.max(2, Math.round((gx1 - gx0) * 0.15));
+        const seedBoxH = Math.max(2, Math.round((gy1 - gy0) * 0.15));
+        const seedX0 = Math.round((gx0 + gx1) / 2 - seedBoxW / 2);
+        const seedY0 = Math.round((gy0 + gy1) / 2 - seedBoxH / 2);
         let seedR = 0, seedG = 0, seedB = 0, seedN = 0;
         for (let y = seedY0; y < seedY0 + seedBoxH; y++) {
           for (let x = seedX0; x < seedX0 + seedBoxW; x++) {
@@ -319,43 +352,23 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           const domG = seedG / seedN;
           const domB = seedB / seedN;
 
-          let minX = w, maxX = -1, minY = h, maxY = -1, matched = 0;
-          for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
+          // Only question that matters now: is the fixed guide rectangle
+          // itself mostly filled with one uniform color — i.e. did the
+          // candidate actually fit their laptop screen inside the visible
+          // brackets. No more free-floating bbox search across the whole
+          // frame (replaced 2026-08-19 per a viewfinder-reticle reference —
+          // simpler and matches exactly what the candidate can see and act on).
+          let matched = 0;
+          const guideArea = (gx1 - gx0) * (gy1 - gy0);
+          for (let y = gy0; y < gy1; y++) {
+            for (let x = gx0; x < gx1; x++) {
               const i = (y * w + x) * 4;
               const dr = data[i] - domR, dg = data[i + 1] - domG, db = data[i + 2] - domB;
-              if (Math.sqrt(dr * dr + dg * dg + db * db) <= ALIGN_COLOR_DISTANCE) {
-                matched++;
-                if (x < minX) minX = x;
-                if (x > maxX) maxX = x;
-                if (y < minY) minY = y;
-                if (y > maxY) maxY = y;
-              }
+              if (Math.sqrt(dr * dr + dg * dg + db * db) <= ALIGN_COLOR_DISTANCE) matched++;
             }
           }
-
-          if (matched > 0 && maxX > minX && maxY > minY) {
-            const bboxW = maxX - minX;
-            const bboxH = maxY - minY;
-            const areaRatio = (bboxW * bboxH) / (w * h);
-            const density = matched / (bboxW * bboxH);
-            const centerX = (minX + maxX) / 2;
-            const centerY = (minY + maxY) / 2;
-            const centerOffset = Math.sqrt(
-              ((centerX - w / 2) / w) ** 2 + ((centerY - h / 2) / h) ** 2
-            );
-            const aspect = bboxW / bboxH;
-            const touchesEdge =
-              minX <= ALIGN_EDGE_MARGIN_PX || maxX >= w - ALIGN_EDGE_MARGIN_PX ||
-              minY <= ALIGN_EDGE_MARGIN_PX || maxY >= h - ALIGN_EDGE_MARGIN_PX;
-
-            pass =
-              areaRatio >= ALIGN_MIN_AREA_RATIO && areaRatio <= ALIGN_MAX_AREA_RATIO &&
-              density >= ALIGN_MIN_DENSITY &&
-              centerOffset <= ALIGN_MAX_CENTER_OFFSET_RATIO &&
-              aspect >= ALIGN_MIN_ASPECT && aspect <= ALIGN_MAX_ASPECT &&
-              !touchesEdge;
-          }
+          const density = guideArea > 0 ? matched / guideArea : 0;
+          pass = density >= ALIGN_GUIDE_MIN_DENSITY;
         }
       } catch (e) {
         // getImageData can throw on a tainted canvas in rare cross-origin
@@ -741,13 +754,42 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             playsInline
             className="w-full aspect-video rounded-xl bg-black object-cover"
           />
-          {phase === 'aligning' && !canRecord && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 rounded-xl px-4 text-center">
-              <span className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
-              <p className="text-sm font-medium text-white">Align your phone with your laptop screen…</p>
-              <p className="text-xs text-[#cbd5e1]">Center it, hold steady, and make sure the whole screen is in view.</p>
-            </div>
-          )}
+          {phase === 'aligning' && (() => {
+            // Corner-bracket viewfinder outline (per the reference image) —
+            // positioned via the SAME GUIDE_X0/X1/Y0/Y1 fractions the
+            // alignment loop scores against, so what the candidate sees is
+            // exactly the region that must be filled with their laptop
+            // screen. object-cover's crop is symmetric-about-center, and
+            // the analysis canvas mirrors that same crop, so plain CSS %
+            // positioning over the <video> box lines up correctly with what
+            // the algorithm is actually checking.
+            const bracketColor = canRecord ? 'border-green-400' : 'border-white/80';
+            const armStyle = 'absolute w-7 h-7 border-[3px]';
+            return (
+              <>
+                <div
+                  className="absolute pointer-events-none"
+                  style={{ left: `${GUIDE_X0 * 100}%`, top: `${GUIDE_Y0 * 100}%`, right: `${(1 - GUIDE_X1) * 100}%`, bottom: `${(1 - GUIDE_Y1) * 100}%` }}
+                >
+                  <span className={`${armStyle} ${bracketColor} left-0 top-0 border-r-0 border-b-0 rounded-tl-md`} />
+                  <span className={`${armStyle} ${bracketColor} right-0 top-0 border-l-0 border-b-0 rounded-tr-md`} />
+                  <span className={`${armStyle} ${bracketColor} left-0 bottom-0 border-r-0 border-t-0 rounded-bl-md`} />
+                  <span className={`${armStyle} ${bracketColor} right-0 bottom-0 border-l-0 border-t-0 rounded-br-md`} />
+                </div>
+                <div className="absolute inset-x-0 bottom-2 flex flex-col items-center gap-1 px-4 text-center">
+                  {canRecord ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-400 bg-black/50 rounded-full px-3 py-1">
+                      <span className="w-2 h-2 rounded-full bg-green-400" /> Screen aligned
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-black/50 rounded-full px-3 py-1">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" /> Fit your laptop screen inside the outline
+                    </span>
+                  )}
+                </div>
+              </>
+            );
+          })()}
           {phase === 'pan_instructions' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 rounded-xl px-4 overflow-hidden">
               <span className="text-5xl inline-block animate-[tf-phone-curve_1.8s_ease-in-out_infinite_alternate]">📱</span>
@@ -784,7 +826,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             </>
           ) : (
             <p className="text-sm leading-relaxed text-[#94a3b8]">
-              Waiting for your laptop screen to be clearly visible and centered in the camera…
+              Fit your laptop screen inside the outline above — the Record button appears automatically once it's aligned.
             </p>
           )
         ) : phase === 'pan_instructions' ? (
