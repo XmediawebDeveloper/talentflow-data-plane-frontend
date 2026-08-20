@@ -1219,6 +1219,38 @@ export function useInterviewProctoringMonitor({
     console.log(`[INTERVIEW_PROCTORING] Load shedding: ${reduced ? 'ON' : 'OFF'}`);
   }, []);
 
+  // Identity of the CURRENT video track, not the stream wrapper object. Webcam.tsx's
+  // reacquireAudio() (headset reconnect / mic-only swap) always publishes a brand-new
+  // MediaStream object via onStream even though the video track inside is completely
+  // untouched — see that function's own comment. Keying the video worker effect below
+  // on this id instead of `stream` means an audio-only swap can't retrigger it; it only
+  // re-runs when the video track itself actually changes (a genuine camera reacquire).
+  const videoTrackId = stream?.getVideoTracks()[0]?.id ?? null;
+
+  // ==================== VIDEO WORKER EFFECT ====================
+  // Split out from the main stream-dependent effect below. That effect used to own
+  // the video worker + hidden analysis <video>/<canvas> too, keyed on `stream`
+  // identity — so EVERY mic reconnect (audio-only, video untouched) tore down and
+  // rebuilt the entire camera-obstruction pipeline (2 Worker terminate+respawn, DOM
+  // element recreation, interval reset) for no reason. That's exactly the
+  // "recreate the camera/video stream" churn a headset disconnect/reconnect must
+  // never cause. This effect is inert across an audio-only swap; only a real video
+  // track change (or enabled toggling) restarts it.
+  useEffect(() => {
+    if (!enabledRef.current || !videoTrackId) return;
+    const timer = setTimeout(() => {
+      setupVideoWorker();
+    }, 100);
+    return () => {
+      clearTimeout(timer);
+      if (videoIntervalRef.current) { clearInterval(videoIntervalRef.current); videoIntervalRef.current = null; }
+      if (videoRef.current) { videoRef.current.srcObject = null; videoRef.current = null; }
+      canvasRef.current = null;
+      if (videoWorkerRef.current) { videoWorkerRef.current.terminate(); videoWorkerRef.current = null; }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, videoTrackId]);
+
   // ==================== MAIN EFFECT ====================
   useEffect(() => {
     if (!enabledRef.current) return;
@@ -1256,11 +1288,13 @@ export function useInterviewProctoringMonitor({
       setupMouseTracking(),
     ];
 
-    // Stream-dependent: workers + track monitoring
+    // Stream-dependent: audio worker + track monitoring. The video worker
+    // (camera-obstruction analysis) is owned by its own effect above, keyed on
+    // the video track id instead of stream identity, so it's unaffected by
+    // this effect re-running on an audio-only swap.
     // (Face detection is handled by useInterviewFaceDetection hook, not here)
     if (streamRef.current) {
       setTimeout(() => {
-        setupVideoWorker();
         setupAudioWorker();
         setupTrackMonitoring();
       }, 100);
@@ -1280,8 +1314,7 @@ export function useInterviewProctoringMonitor({
       // Cleanup event listeners
       cleanups.forEach(fn => fn());
 
-      // Cleanup intervals
-      if (videoIntervalRef.current) { clearInterval(videoIntervalRef.current); videoIntervalRef.current = null; }
+      // Cleanup intervals (videoIntervalRef belongs to the video worker effect above)
       if (voiceIntervalRef.current) { clearInterval(voiceIntervalRef.current); voiceIntervalRef.current = null; }
       if (batchFlushIntervalRef.current) { clearInterval(batchFlushIntervalRef.current); batchFlushIntervalRef.current = null; }
       if (trackHealthIntervalRef.current) { clearInterval(trackHealthIntervalRef.current); trackHealthIntervalRef.current = null; }
@@ -1299,12 +1332,7 @@ export function useInterviewProctoringMonitor({
       // Cleanup audio
       if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
 
-      // Cleanup video elements
-      if (videoRef.current) { videoRef.current.srcObject = null; videoRef.current = null; }
-      canvasRef.current = null;
-
-      // Terminate workers
-      if (videoWorkerRef.current) { videoWorkerRef.current.terminate(); videoWorkerRef.current = null; }
+      // Video elements/worker are cleaned up by the video worker effect above.
       if (audioWorkerRef.current) { audioWorkerRef.current.terminate(); audioWorkerRef.current = null; }
 
       console.log('[INTERVIEW_PROCTORING] All monitoring stopped');

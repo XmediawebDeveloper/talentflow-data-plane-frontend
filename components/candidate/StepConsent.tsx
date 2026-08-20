@@ -7,7 +7,7 @@ import remarkBreaks from 'remark-breaks';
 import {
   Video, Mic, Eye, Shield, Clock, Trash2, CheckCircle, AlertTriangle,
   Circle, Briefcase, MapPin, Building2, Award, ExternalLink, X,
-  FileText, Timer, HelpCircle, ChevronRight,
+  FileText, Timer, HelpCircle, ChevronRight, Smartphone,
 } from 'lucide-react';
 
 interface StepConsentProps {
@@ -105,6 +105,12 @@ export default function StepConsent({
     consent_terms: false,
   });
   const [consentAccepted, setConsentAccepted] = useState(false);
+  // Dedicated acknowledgement for the "Mobile Verification Required" notice
+  // below — separate from the general consent checkbox, and only relevant
+  // (rendered + required) when this interview actually has proxy-integrity
+  // verification enabled. Forces the candidate to specifically confirm they
+  // read THIS notice, not just the general consent block.
+  const [mobileVerificationAcknowledged, setMobileVerificationAcknowledged] = useState(false);
 
   const allChecked = Object.values(consents).every(Boolean);
 
@@ -145,8 +151,9 @@ export default function StepConsent({
 
   const handleProceed = useCallback(() => {
     if (!consentAccepted || submitting) return;
+    if (environmentVerificationEnabled && !mobileVerificationAcknowledged) return;
     onAccept(consentAccepted ? ALL_CONSENTS : consents);
-  }, [consentAccepted, submitting, consents, onAccept]);
+  }, [consentAccepted, submitting, consents, onAccept, environmentVerificationEnabled, mobileVerificationAcknowledged]);
 
   const title = jdTitle || position || 'Interview Position';
   const expStr = jdExperienceMin != null && jdExperienceMax != null
@@ -333,19 +340,42 @@ export default function StepConsent({
               <li>• If a genuine network or client failure occurs, the assessment can recover from the saved server state</li>
               <li>• Ensure you are in a quiet, well-lit environment</li>
               <li>• Tab switching and copy/paste are monitored</li>
-              {environmentVerificationEnabled && (
-                <li>
-                  • At any point during the interview, you may be asked to scan a QR code
-                  with your <strong>mobile phone</strong> to briefly verify your physical
-                  environment — have your phone within reach. No app installation is
-                  required; it opens directly in your phone&apos;s browser, which may ask
-                  for camera and microphone permission.
-                </li>
-              )}
             </ul>
           </div>
         </div>
       </div>
+
+      {/* ── Mobile verification notice — kept separate from the general
+          "Before You Begin" list above since it's a distinct requirement
+          (its own acceptance criteria: mobile phone required, no app
+          install, camera/mic permission, may trigger at any point). ── */}
+      {environmentVerificationEnabled && (
+        <div className="bg-brand-blue/5 border border-brand-blue/20 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <Smartphone className="w-5 h-5 text-brand-blue flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Mobile Verification Required</p>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                At any point during the interview, you may be asked to scan a QR code with your{' '}
+                <strong>mobile phone</strong> to briefly verify your physical environment — have your
+                phone within reach. No app installation is required; it opens directly in your phone&apos;s
+                browser, which may ask for camera and microphone permission.
+              </p>
+              <label className="mt-3 flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={mobileVerificationAcknowledged}
+                  onChange={() => setMobileVerificationAcknowledged(prev => !prev)}
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue flex-shrink-0"
+                />
+                <span className="text-sm text-gray-700">
+                  I have read and understood the mobile verification requirement above.
+                </span>
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Consent acceptance row ── */}
       <div className={`bg-white border rounded-xl p-5 transition-colors ${consentAccepted ? 'border-green-300 bg-green-50/30' : 'border-gray-200'}`}>
@@ -386,7 +416,7 @@ export default function StepConsent({
       <button
         type="button"
         onClick={handleProceed}
-        disabled={!consentAccepted || submitting}
+        disabled={!consentAccepted || submitting || (environmentVerificationEnabled && !mobileVerificationAcknowledged)}
         className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3.5 px-4 rounded-xl hover:bg-gray-800 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {submitting ? 'Submitting…' : (

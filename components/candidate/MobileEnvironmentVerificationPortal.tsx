@@ -81,8 +81,11 @@ const ALIGN_GUIDE_MIN_DENSITY = 0.62; // fraction of guide-rect pixels that must
 // that ordinary physical surfaces usually don't:
 const ALIGN_MIN_SATURATION = 0.16; // the challenge palette is deliberately vivid, not neutral gray
 const ALIGN_MIN_WHITE_BRIGHTNESS = 195; // still accept the one guaranteed near-white challenge slot
-const ALIGN_BEZEL_MARGIN_FRAC = 0.035; // thin band just outside the guide rect, as a fraction of min(w,h)
-const ALIGN_BEZEL_MIN_DISTANCE = 55; // a real laptop bezel is meaningfully darker/different from the screen
+// Minimum canvas margin (in analysis-canvas px, out of ALIGN_SAMPLE_W=160
+// wide) that must remain between the detected screen edge and the frame
+// boundary on each side — proves the screen doesn't run off the frame
+// without assuming any particular framing distance (see findEdgeMargin).
+const ALIGN_MIN_EDGE_MARGIN_PX = 4;
 // Wider region (nearly the whole visible frame) the SAME dominant color must
 // also cover — rejects "the correct-looking color, but only in one small
 // panel of a busy multi-content screen" (confirmed live 2026-08-20: the
@@ -392,40 +395,46 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           const brightness = (domR + domG + domB) / 3;
           const colorPlausible = saturation >= ALIGN_MIN_SATURATION || brightness >= ALIGN_MIN_WHITE_BRIGHTNESS;
 
-          // 2) Bezel contrast on EACH of the four sides independently — a
-          //    real, FULLY visible laptop screen sits inside a distinctly
-          //    darker bezel on all four sides. Averaging all four sides
-          //    together (the first version of this check) let a screen
-          //    that's cut off on just ONE edge still pass, because the
-          //    other three genuinely-contrasting sides pulled the combined
-          //    average back over the threshold (confirmed live 2026-08-20:
-          //    a screen partially outside the frame on one side still
-          //    showed "Screen aligned"). Requiring every side to
-          //    individually clear the threshold is what actually enforces
-          //    "the whole screen, bezel included, is inside the frame" —
-          //    req #3's "partially outside the camera frame" case.
-          const marginPx = Math.max(3, Math.round(Math.min(w, h) * ALIGN_BEZEL_MARGIN_FRAC));
-          const bandDistance = (x0: number, y0: number, x1: number, y1: number): number => {
-            let r = 0, g = 0, b = 0, n = 0;
-            for (let y = Math.max(0, y0); y < Math.min(h, y1); y++) {
-              for (let x = Math.max(0, x0); x < Math.min(w, x1); x++) {
-                const i = (y * w + x) * 4;
-                r += data[i]; g += data[i + 1]; b += data[i + 2];
-                n++;
+          // 2) Bezel contrast on EACH of the four sides — ADAPTIVE, not a
+          //    fixed offset. A fixed-distance sample just past the guide
+          //    box's edge (the first version of this check) assumed the
+          //    candidate always frames the shot with roughly the same
+          //    amount of margin around the screen. When framed MORE
+          //    TIGHTLY (screen fills more of the photo — still fully
+          //    contained, just closer/zoomed-in), the real bezel sits
+          //    further out than that fixed offset, so the fixed sample
+          //    landed back on the screen's own color and wrongly reported
+          //    "no bezel" (confirmed live 2026-08-20: two fully-visible,
+          //    generously-margined shots passed, while two equally
+          //    fully-visible but more tightly-framed shots of the SAME
+          //    screen failed). Fix: scan outward from the guide box toward
+          //    the canvas edge along each side until the color actually
+          //    stops matching the screen — that's the real screen edge,
+          //    wherever it happens to be — and require it to be found with
+          //    at least a small margin before the canvas boundary (proving
+          //    the screen doesn't run off the frame on that side, without
+          //    assuming any particular framing distance).
+          const findEdgeMargin = (startX: number, startY: number, stepX: number, stepY: number): number => {
+            let x = startX, y = startY;
+            while (x >= 0 && x < w && y >= 0 && y < h) {
+              const i = (Math.floor(y) * w + Math.floor(x)) * 4;
+              const dr = data[i] - domR, dg = data[i + 1] - domG, db = data[i + 2] - domB;
+              if (Math.sqrt(dr * dr + dg * dg + db * db) > ALIGN_COLOR_DISTANCE) {
+                // Found where the screen's own color ends — return how much
+                // canvas remains between here and the frame edge along this axis.
+                return stepX !== 0 ? (stepX > 0 ? w - x : x) : (stepY > 0 ? h - y : y);
               }
+              x += stepX; y += stepY;
             }
-            // No pixels available for this band (guide box runs to the
-            // canvas edge) — that itself means the screen isn't safely
-            // clear of the frame edge on this side; treat as no contrast.
-            if (n === 0) return 0;
-            const dr = r / n - domR, dg = g / n - domG, db = b / n - domB;
-            return Math.sqrt(dr * dr + dg * dg + db * db);
+            return 0; // never left the screen color before hitting the canvas edge — likely cut off
           };
+          const midX = (gx0 + gx1) / 2;
+          const midY = (gy0 + gy1) / 2;
           const bezelContrasts =
-            bandDistance(gx0 - marginPx, gy0 - marginPx, gx1 + marginPx, gy0) >= ALIGN_BEZEL_MIN_DISTANCE && // top
-            bandDistance(gx0 - marginPx, gy1, gx1 + marginPx, gy1 + marginPx) >= ALIGN_BEZEL_MIN_DISTANCE && // bottom
-            bandDistance(gx0 - marginPx, gy0, gx0, gy1) >= ALIGN_BEZEL_MIN_DISTANCE && // left
-            bandDistance(gx1, gy0, gx1 + marginPx, gy1) >= ALIGN_BEZEL_MIN_DISTANCE; // right
+            findEdgeMargin(midX, gy0, 0, -1) >= ALIGN_MIN_EDGE_MARGIN_PX && // top
+            findEdgeMargin(midX, gy1, 0, 1) >= ALIGN_MIN_EDGE_MARGIN_PX && // bottom
+            findEdgeMargin(gx0, midY, -1, 0) >= ALIGN_MIN_EDGE_MARGIN_PX && // left
+            findEdgeMargin(gx1, midY, 1, 0) >= ALIGN_MIN_EDGE_MARGIN_PX; // right
 
           // 3) Uniform-color density — is the guide rectangle itself mostly
           //    filled with that one color (candidate actually fit the
