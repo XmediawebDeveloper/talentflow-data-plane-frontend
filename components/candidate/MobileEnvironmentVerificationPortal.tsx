@@ -123,6 +123,11 @@ interface MobileEnvironmentVerificationPortalProps {
 export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironmentVerificationPortalProps) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  // True only when the error phase was reached from a failed UPLOAD (blob
+  // still sitting in chunksRef.current, unchanged) — as opposed to an
+  // unrecoverable failure (expired link, empty/corrupt recording) where
+  // retrying the same request can't help and the candidate must rescan.
+  const [canRetryUpload, setCanRetryUpload] = useState(false);
   // Two SEPARATE 5s countdowns (resets at the phase switch), not one
   // continuous 10s countdown — matches the spec's own wording ("start 5 secs
   // timer" for phase 1, "another 5 secs timer" for phase 2).
@@ -376,32 +381,40 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           const brightness = (domR + domG + domB) / 3;
           const colorPlausible = saturation >= ALIGN_MIN_SATURATION || brightness >= ALIGN_MIN_WHITE_BRIGHTNESS;
 
-          // 2) Bezel contrast — a real laptop screen sits inside a distinctly
-          //    darker bezel; a floor or desk surface just continues past the
-          //    guide box with no such edge. Sample a thin band just outside
-          //    the guide rect and require it to differ meaningfully from the
-          //    guide box's own color.
+          // 2) Bezel contrast on EACH of the four sides independently — a
+          //    real, FULLY visible laptop screen sits inside a distinctly
+          //    darker bezel on all four sides. Averaging all four sides
+          //    together (the first version of this check) let a screen
+          //    that's cut off on just ONE edge still pass, because the
+          //    other three genuinely-contrasting sides pulled the combined
+          //    average back over the threshold (confirmed live 2026-08-20:
+          //    a screen partially outside the frame on one side still
+          //    showed "Screen aligned"). Requiring every side to
+          //    individually clear the threshold is what actually enforces
+          //    "the whole screen, bezel included, is inside the frame" —
+          //    req #3's "partially outside the camera frame" case.
           const marginPx = Math.max(3, Math.round(Math.min(w, h) * ALIGN_BEZEL_MARGIN_FRAC));
-          let bezelR = 0, bezelG = 0, bezelB = 0, bezelN = 0;
-          const sampleBand = (x0: number, y0: number, x1: number, y1: number) => {
+          const bandDistance = (x0: number, y0: number, x1: number, y1: number): number => {
+            let r = 0, g = 0, b = 0, n = 0;
             for (let y = Math.max(0, y0); y < Math.min(h, y1); y++) {
               for (let x = Math.max(0, x0); x < Math.min(w, x1); x++) {
                 const i = (y * w + x) * 4;
-                bezelR += data[i]; bezelG += data[i + 1]; bezelB += data[i + 2];
-                bezelN++;
+                r += data[i]; g += data[i + 1]; b += data[i + 2];
+                n++;
               }
             }
+            // No pixels available for this band (guide box runs to the
+            // canvas edge) — that itself means the screen isn't safely
+            // clear of the frame edge on this side; treat as no contrast.
+            if (n === 0) return 0;
+            const dr = r / n - domR, dg = g / n - domG, db = b / n - domB;
+            return Math.sqrt(dr * dr + dg * dg + db * db);
           };
-          sampleBand(gx0 - marginPx, gy0 - marginPx, gx1 + marginPx, gy0); // top
-          sampleBand(gx0 - marginPx, gy1, gx1 + marginPx, gy1 + marginPx); // bottom
-          sampleBand(gx0 - marginPx, gy0, gx0, gy1); // left
-          sampleBand(gx1, gy0, gx1 + marginPx, gy1); // right
-          let bezelContrasts = true;
-          if (bezelN > 0) {
-            const bezR = bezelR / bezelN, bezG = bezelG / bezelN, bezB = bezelB / bezelN;
-            const dr = bezR - domR, dg = bezG - domG, db = bezB - domB;
-            bezelContrasts = Math.sqrt(dr * dr + dg * dg + db * db) >= ALIGN_BEZEL_MIN_DISTANCE;
-          }
+          const bezelContrasts =
+            bandDistance(gx0 - marginPx, gy0 - marginPx, gx1 + marginPx, gy0) >= ALIGN_BEZEL_MIN_DISTANCE && // top
+            bandDistance(gx0 - marginPx, gy1, gx1 + marginPx, gy1 + marginPx) >= ALIGN_BEZEL_MIN_DISTANCE && // bottom
+            bandDistance(gx0 - marginPx, gy0, gx0, gy1) >= ALIGN_BEZEL_MIN_DISTANCE && // left
+            bandDistance(gx1, gy0, gx1 + marginPx, gy1) >= ALIGN_BEZEL_MIN_DISTANCE; // right
 
           // 3) Uniform-color density — is the guide rectangle itself mostly
           //    filled with that one color (candidate actually fit the
@@ -703,9 +716,11 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     if (!blob || blob.size === 0) {
       console.warn('[ENV-VERIFY] Empty blob at submit time — refusing to upload');
       setErrorMessage('Recording is empty or unavailable. Please close this page and rescan the QR code to try again.');
+      setCanRetryUpload(false); // nothing a retry can fix — the recording itself is gone
       setPhase('error');
       return;
     }
+    setCanRetryUpload(false); // reset — set true again only if THIS attempt fails in a retryable way
     setPhase('uploading');
     console.info('[ENV-VERIFY] Upload: STARTED');
     try {
@@ -723,7 +738,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       // commit both succeeded (spec #15/#6).
       if (!res?.data?.video_uploaded) {
         console.warn('[ENV-VERIFY] Upload: FAILED (response did not confirm persistence)');
-        setErrorMessage('Upload could not be confirmed. Please close this page and rescan the QR code to try again.');
+        setErrorMessage('Upload could not be confirmed.');
+        setCanRetryUpload(true); // blob is still in memory — no need to rescan
         setPhase('error');
         return;
       }
@@ -731,7 +747,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       setPhase('done');
     } catch (err) {
       console.warn('[ENV-VERIFY] Upload: FAILED', err);
-      setErrorMessage('Upload failed. Please close this page and rescan the QR code to try again.');
+      setErrorMessage('Upload failed.');
+      setCanRetryUpload(true); // blob is still in memory — no need to rescan
       setPhase('error');
     }
   };
@@ -741,9 +758,18 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       {phase === 'loading' && <p className="text-[#94a3b8]">Loading verification…</p>}
 
       {(phase === 'expired' || phase === 'error') && (
-        <div className="max-w-sm space-y-2">
+        <div className="max-w-sm space-y-4">
           <h1 className="text-lg font-semibold">Unable to verify</h1>
           <p className="text-sm text-[#94a3b8]">{errorMessage}</p>
+          {canRetryUpload && (
+            <button
+              type="button"
+              onClick={() => { void handleSubmit(); }}
+              className="w-full py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 
@@ -768,14 +794,22 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               <div className="flex-1">
                 <p>
                   <strong className="text-white">Next 5 seconds</strong> — slowly move your phone from
-                  left to right and back again, capturing your workspace, surrounding area, and any
-                  nearby devices.
+                  left to right, then right to left back to center, capturing your workspace,
+                  surrounding area, and any nearby devices. Move slowly and keep the phone steady —
+                  no sudden movements.
                 </p>
                 <div className="mt-2 flex items-center gap-1.5 px-2">
                   <span className="text-xl inline-block animate-[tf-instr-curve_1.6s_ease-in-out_infinite_alternate]">📱</span>
-                  <span className="text-[11px] text-[#94a3b8]">left ↔ right</span>
+                  <span className="text-[11px] text-[#94a3b8]">left → right → left</span>
                 </div>
               </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue/20 text-brand-blue text-xs font-bold flex items-center justify-center mt-0.5">3</span>
+              <p>
+                <strong className="text-white">After recording</strong> — review your video and tap
+                Upload to submit it.
+              </p>
             </div>
           </div>
           <button
@@ -833,7 +867,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 rounded-xl px-4 overflow-hidden">
               <span className="text-5xl inline-block animate-[tf-phone-curve_1.8s_ease-in-out_infinite_alternate]">📱</span>
               <p className="text-sm font-medium text-white text-center">
-                Now slowly move your phone from left to right and back again — capture your workspace, surrounding area, and any nearby devices.
+                Slowly turn the mobile from left to right and right to left — capture your workspace, surrounding area, and any nearby devices.
               </p>
               <style>{`
                 @keyframes tf-phone-curve {
@@ -844,6 +878,11 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
                   100% { transform: translateX(40px)  translateY(0)    rotate(16deg); }
                 }
               `}</style>
+            </div>
+          )}
+          {(phase === 'recording_screen' || phase === 'recording_pan') && (
+            <div className="absolute top-3 right-3 w-12 h-12 rounded-full bg-black/60 flex items-center justify-center">
+              <span className="text-2xl font-bold text-white tabular-nums">{recordingCountdown}</span>
             </div>
           )}
         </div>
@@ -892,7 +931,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             <p className="text-sm leading-relaxed">
               {phase === 'recording_screen'
                 ? 'Focus your camera on your laptop screen/display. Keep it centered and hold steady — do not move yet.'
-                : 'Now slowly move your phone from left to right and back again, capturing your workspace, surrounding area, and any nearby devices.'}
+                : 'Slowly turn the mobile from left to right and right to left, capturing your workspace, surrounding area, and any nearby devices.'}
             </p>
           </>
         )}
@@ -921,7 +960,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
 
       {phase === 'done' && (
         <div className="max-w-sm space-y-2">
-          <h1 className="text-lg font-semibold">Verification submitted</h1>
+          <h1 className="text-lg font-semibold">Recordings uploaded successfully.</h1>
           <p className="text-sm text-[#94a3b8]">
             You can put your phone down — your interview is resuming on your laptop.
           </p>
