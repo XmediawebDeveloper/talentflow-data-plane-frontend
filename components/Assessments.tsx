@@ -43,6 +43,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
+import JDVersionHistory from '@/components/JDVersionHistory';
 
 
 const INVITATIONS_PAGE_SIZE = 10;
@@ -2172,7 +2173,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60">
                           <h2 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 tracking-tight">Candidate Results</h2>
                         </div>
-                        <div className="min-h-[400px] max-h-[calc(100vh-24rem)] overflow-auto tf-table-shell">
+                        <div className="min-h-[400px] max-h-[calc(100dvh-24rem)] overflow-auto tf-table-shell">
                         <table className="w-full min-w-[1500px] table-auto">
                           <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                             <tr>
@@ -3030,6 +3031,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {(assessment.job?.version || assessment.jd_version) && (
                             <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.job?.version || assessment.jd_version}</span>
                           )}
+                          <JDVersionHistory
+                            jdId={assessment.jd_id}
+                            version={assessment.job?.version || assessment.jd_version}
+                            className="mt-1.5"
+                          />
                         </div>
                       )}
 
@@ -3150,7 +3156,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <>
                         <div
                           ref={openMenuRef}
-                          className="absolute right-0 sm:right-4 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto"
+                          className="absolute right-0 sm:right-4 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70dvh] overflow-y-auto"
                         >
                           {/* Draft assessments hide Activate/Archive — drafts go
                               through the configure-page Publish button, and an
@@ -3303,6 +3309,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               {(assessment.job?.version || assessment.jd_version) && (
                                 <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.job?.version || assessment.jd_version}</span>
                               )}
+                              <JDVersionHistory
+                                jdId={assessment.jd_id}
+                                version={assessment.job?.version || assessment.jd_version}
+                                className="mt-1.5"
+                              />
                             </div>
                           )}
 
@@ -3428,7 +3439,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <>
                               <div
                                 ref={openMenuRef}
-                                className="absolute right-0 top-full mt-2 w-44 sm:w-52 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto"
+                                className="absolute right-0 top-full mt-2 w-44 sm:w-52 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70dvh] overflow-y-auto"
                               >
                                 {assessment.status !== 'Archived' && canCreateAssessment && (() => {
                                   // Gating computed FRONT-END so it works regardless of
@@ -3626,7 +3637,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             onClick={() => setShowInvitePicker(false)}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[80dvh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="flex-shrink-0 flex items-center gap-4 p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white">
                 <div className="w-12 h-12 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
                   <Mail className="w-6 h-6 text-white" />

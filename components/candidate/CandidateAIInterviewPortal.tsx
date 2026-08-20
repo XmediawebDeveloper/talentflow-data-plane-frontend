@@ -12,6 +12,10 @@ import { useInterviewFaceVerification } from '@/components/ai-interview/proctori
 import { useInterviewVoiceVerification } from '@/components/ai-interview/proctoring/InterviewVoiceVerification';
 import { recordPcm16, MicDisconnectedDuringRecordingError } from '@/lib/utils/pcmEnroll';
 import { InterviewEventBus } from '@/components/ai-interview/proctoring/InterviewEventBus';
+import {
+  beginLegitimateShare,
+  endLegitimateShare,
+} from '@/components/ai-interview/proctoring/ScreenRecordingGuard';
 
 // Pre-interview step components
 import PreInterviewLayout from '@/components/candidate/PreInterviewLayout';
@@ -1025,14 +1029,18 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // getDisplayMedia guards let it through instead of blocking it as a
     // "screen recording attempt". Without this, the mid-interview
     // "Re-share Entire Screen" picker never opened (proctoring had already
-    // monkey-patched getDisplayMedia to throw). Reset in finally so any other
+    // monkey-patched getDisplayMedia to throw). Closed in finally so any other
     // getDisplayMedia call stays blocked.
+    //
+    // Ref-counted (not a bare boolean) so two overlapping app-owned requests
+    // can't have the first one's finally revoke permission from the second and
+    // turn our own share into a false "recording attempt" against the candidate.
     let screenStream: MediaStream;
-    (window as any).__tfAllowLegitimateShare = true;
+    beginLegitimateShare();
     try {
       screenStream = await (navigator.mediaDevices as any).getDisplayMedia(displayMediaOptions);
     } finally {
-      (window as any).__tfAllowLegitimateShare = false;
+      endLegitimateShare();
     }
     const videoTrack = screenStream.getVideoTracks()[0];
     const displaySurface = (videoTrack?.getSettings?.() as any)?.displaySurface;
@@ -2136,7 +2144,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // other side releases (or goes stale) this recovers automatically.
   if (preInterviewBlocked && step !== 'interview' && step !== 'completed' && step !== 'terminated' && step !== 'error') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
           <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5 text-3xl">🔒</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Already open on another device</h1>
@@ -2182,7 +2190,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== LOADING ==========
   if (step === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 px-4">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-gray-600 animate-spin" />
           <p className="text-sm text-gray-500">Loading interview...</p>
@@ -2194,7 +2202,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== COMPLETED ==========
   if (step === 'completed') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4" style={{ colorScheme: 'light' }}>
+      <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 px-4" style={{ colorScheme: 'light' }}>
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-8 h-8 text-green-600" />
@@ -2219,7 +2227,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== ERROR ==========
   if (step === 'error') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4" style={{ colorScheme: 'light' }}>
+      <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 px-4" style={{ colorScheme: 'light' }}>
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
           <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${(isExpiredError || isRevokedError) ? 'bg-amber-100' : 'bg-red-100'}`}>
             {isExpiredError
@@ -2360,7 +2368,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       : null;
 
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" style={{ colorScheme: 'light' }}>
+      <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4" style={{ colorScheme: 'light' }}>
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8">
           <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <KeyRound className="w-8 h-8 text-indigo-600" />
@@ -2443,7 +2451,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== FULLSCREEN PROMPT ==========
   if (step === 'fullscreen_prompt') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
         <div className={`bg-white rounded-2xl shadow-2xl w-full p-8 md:p-10 ${screenShareDeclined ? 'max-w-2xl' : 'max-w-5xl'}`}>
 
           {screenShareDeclined ? (
@@ -2586,7 +2594,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== FINAL CONSENT (shown in fullscreen, right before the interview starts) ==========
   if (step === 'final_consent') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-10">
           {/* Prominent do-not-refresh warning — reloading here drops fullscreen
               + screen sharing and sends the candidate back to re-share. */}
@@ -2665,7 +2673,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== HIDE SCREEN-SHARE BAR (vision-LLM verified, pre-start) ==========
   if (step === 'hide_share_bar') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-10">
           <div className="flex items-center justify-center gap-2 bg-red-600 text-white font-semibold text-sm md:text-base rounded-xl px-4 py-3 mb-6 text-center shadow-sm">
             <AlertTriangle className="w-5 h-5 shrink-0" />
@@ -2968,7 +2976,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // reopening the link keeps showing this — the candidate cannot restart.
   if (step === 'terminated') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-red-50 px-4" style={{ colorScheme: 'light' }}>
+      <div className="min-h-[100dvh] flex items-center justify-center bg-red-50 px-4" style={{ colorScheme: 'light' }}>
         <div className="bg-white rounded-2xl shadow-2xl border-2 border-red-300 max-w-md w-full p-8 text-center">
           <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-6">
             <AlertTriangle className="w-10 h-10 text-red-600" />

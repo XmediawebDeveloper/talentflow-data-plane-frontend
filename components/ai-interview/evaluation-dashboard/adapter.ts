@@ -2535,9 +2535,11 @@ export function buildDashboardData(params: {
           (row.skills.some(s => s.is_skipped)) ||
           (!row.answer || !row.answer.trim())
         );
+        let matchCount = 0;
         const replacedSkills: PerQuestionSkill[] = planSkills.map(ps => {
           const match = existingByName[ps.name.toLowerCase().trim()];
           if (match) {
+            matchCount++;
             // Preserve original per-skill score + flags exactly.
             return { ...match, priority: ps.priority, weight: ps.weight };
           }
@@ -2554,7 +2556,24 @@ export function buildDashboardData(params: {
           }
           return { ...ps, score: 0, is_unscored: true };
         });
-        return { ...row, skills: replacedSkills };
+        // If NONE of the plan slot's skills matched what the evaluator actually
+        // scored on this question, the plan-binding picked the wrong slot (the
+        // eval scored the answer under different skill names than this plan
+        // slot). Replacing would show every skill "Not evaluated" while the
+        // question keeps a positive score — a contradiction. KEEP the row's real
+        // scored skills instead, so the score and the skill rows always agree.
+        const rowHasRealScores = row.skills.some(s => !s.is_unscored && !s.is_skipped);
+        if (matchCount === 0 && rowHasRealScores) {
+          return row;
+        }
+        // Otherwise recompute the question score from the DISPLAYED (replaced)
+        // skills so the card's Q Score is always Σ(shown skill × weight)/Σweight
+        // — never a stale number from skills we just swapped out.
+        const _scored = replacedSkills.filter(k => !k.is_unscored);
+        const _sumW = _scored.reduce((s, k) => s + k.weight, 0);
+        const _sumWS = _scored.reduce((s, k) => s + k.score * k.weight, 0);
+        const _qScore = _sumW > 0 ? Math.round((_sumWS / _sumW) * 10) / 10 : 0;
+        return { ...row, skills: replacedSkills, questionScore: _qScore };
       });
     };
     // MHS offset = 0 (starts at global Q1).

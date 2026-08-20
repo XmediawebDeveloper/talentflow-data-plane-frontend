@@ -101,7 +101,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col" lang="en">
+    <div className="min-h-[100dvh] bg-gray-50 flex flex-col" lang="en">
       {/* Sticky Header Container */}
       <div className="sticky top-0 z-50">
         {/* Header - Full Width */}

@@ -181,7 +181,7 @@ export default function InviteShareModal({ candidate, jobId, jobTitle, onClose }
   // phase === 'picker' — JD has multiple published assessments; choose one.
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl max-w-[95vw] sm:max-w-2xl w-full shadow-xl max-h-[80vh] flex flex-col">
+      <div className="bg-white rounded-xl max-w-[95vw] sm:max-w-2xl w-full shadow-xl max-h-[80dvh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h3 className="text-base font-semibold text-gray-900">Select an Assessment</h3>

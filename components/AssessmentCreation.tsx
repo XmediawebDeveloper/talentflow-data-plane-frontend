@@ -12,6 +12,7 @@ import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import JDVersionHistory from '@/components/JDVersionHistory';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -912,6 +913,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         const mappedJobs: Job[] = response.items.map((jd: any) => ({
           id: jd.id,
           title: jd.title,
+          currentVersion: jd.current_version,  // republish counter -> the vN badge
           description: jd.description || '',
           department: jd.department || 'General',
           location: jd.location || '',
@@ -965,6 +967,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             id: jd.id,
             job_id: jd.job_id || '',
             title: jd.title,
+            currentVersion: jd.current_version,  // republish counter -> the vN badge
             description: jd.description || '',
             department: jd.department || 'General',
             location: jd.location || '',
@@ -2045,6 +2048,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                             <h3 className="text-sm sm:text-base text-gray-900 font-medium truncate">
                               {job.title}
                             </h3>
+                            {/* Version from the JD row's own `current_version`. A JD
+                                that has never been republished carries no value, and
+                                that IS v1 — the same reading JDListPage and the JD
+                                header use, so the number matches wherever it shows. */}
+                            <span className="flex-shrink-0 px-2 py-0.5 bg-gray-100 text-gray-700 ring-1 ring-gray-200 rounded-full text-xs font-medium">
+                              v{job.currentVersion ?? 1}
+                            </span>
                             <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1">
                               <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
                               Published
@@ -2088,6 +2098,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               {job.applicants || 0} applicants
                             </span>
                           </div>
+                          <JDVersionHistory jdId={job.id} version={job.currentVersion} className="mt-2" />
                         </div>
 
                         {/* Right side - Coding badge and Select button */}

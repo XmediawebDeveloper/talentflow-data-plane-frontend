@@ -225,7 +225,7 @@ export default function InterviewFeedbackModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="feedback-title"
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {submitted ? (

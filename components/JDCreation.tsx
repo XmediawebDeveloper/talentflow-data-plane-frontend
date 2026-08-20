@@ -4082,7 +4082,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // DEFENSIVE CHECK: Early return if critical fields are empty
     // This prevents any edge case where button might be clickable
     const earlyCheckFailed = [];
-    if (!extractedData.education?.trim()) earlyCheckFailed.push('Education');
+    // Education deliberately absent: its Step 2 control was removed 2026-08-20, so a
+    // recruiter could never clear this check. Extraction guarantees the requirement
+    // lands in Must-Have or Nice-to-Have Additional Requirements instead.
     if (!extractedData.experience?.trim()) earlyCheckFailed.push('Experience');
     if (!extractedData.industryType?.trim()) earlyCheckFailed.push('Industry Type');
 
@@ -4114,11 +4116,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Must-Have Comments are optional - no validation required
 
-    // Education is required - check for empty string, null, undefined, or whitespace only
-    if (!extractedData.education || extractedData.education.trim() === '') {
-      missingFields.push('Education');
-      errors.education = 'Education is required';
-    }
+    // Education is NOT validated here any more: the field was removed from Step 2 and
+    // extraction now guarantees it lands in Must-Have or Nice-to-Have Additional
+    // Requirements. Blocking publish on a control the recruiter can no longer see would
+    // be an unfixable error.
 
     // Experience is required - check for empty string, null, undefined, or whitespace only
     if (!extractedData.experience || extractedData.experience.trim() === '') {
@@ -4453,11 +4454,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Must-Have Comments are optional - no validation required
 
-    // Education is required - check for empty string, null, undefined, or whitespace only
-    const educationValue = extractedData.education?.trim() || '';
-    if (!educationValue) {
-      missingFields.push('Education');
-    }
+    // Education is NOT required here any more - the Step 2 control was removed
+    // 2026-08-20 and extraction guarantees the requirement lands in Must-Have or
+    // Nice-to-Have Additional Requirements. This was the THIRD place blocking on it.
 
     // Experience is required - check for empty string, null, undefined, or whitespace only
     const experienceValue = extractedData.experience?.trim() || '';
@@ -4480,7 +4479,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Debug logging
     console.log('[TalentFlow] Validation check:', {
       experience: experienceValue,
-      education: educationValue,
       industryType: industryValue,
       isValid: missingFields.length === 0,
       missingFields
@@ -6260,10 +6258,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     // the re-ordered canonical form (see experienceDraft above).
                     const from = experienceDraft ? experienceDraft.from : canonical.from;
                     const to = experienceDraft ? experienceDraft.to : canonical.to;
+                    // Tolerant parse. Number('3+') is NaN, which made
+                    // buildExperienceYearsString treat the bound as ABSENT and return an
+                    // empty string - so a recruiter who entered "3+" in From (a natural way
+                    // to write an open-ended minimum) was told "Experience is required"
+                    // while the box still showed their input. Strip anything that is not a
+                    // digit or decimal point before converting; '' still means "not given",
+                    // so a MIN-ONLY range stays valid and open-ended.
+                    const toYears = (raw: string): number | null => {
+                      const cleaned = (raw ?? '').replace(/[^0-9.]/g, '');
+                      if (cleaned === '') return null;
+                      const n = Number(cleaned);
+                      return Number.isNaN(n) ? null : n;
+                    };
                     const commitYears = (nextFrom: string, nextTo: string) => {
                       const canonical = buildExperienceYearsString(
-                        nextFrom === '' ? null : Number(nextFrom),
-                        nextTo === '' ? null : Number(nextTo)
+                        toYears(nextFrom),
+                        toYears(nextTo)
                       );
                       setShowCustomExperienceInput(false);
                       setExperienceYearsExplicit(nextFrom !== '' || nextTo !== '');
@@ -6326,48 +6337,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   )}
                 </div>
 
-                {/* Education */}
-                <div>
-                  <div className="mb-3 sm:mb-4 flex items-center justify-between gap-3">
-                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Education <span className="text-red-500">*</span></h3>
-                    <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(extractedData.educationRequired)}
-                        onChange={(e) => { setExtractedData(prev => ({ ...prev, educationRequired: e.target.checked })); markExtractedDataModified(); }}
-                        className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
-                        disabled={isRegenerating}
-                      />
-                      <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
-                    </label>
-                  </div>
-                  <select
-                    value={extractedData.education}
-                    onChange={(e) => {
-                      setExtractedData(prev => ({ ...prev, education: e.target.value }));
-                      markExtractedDataModified();
-                      // Clear validation error when user makes a selection
-                      if (e.target.value) {
-                        setValidationErrors(prev => ({ ...prev, education: undefined }));
-                      }
-                    }}
-                    className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black mb-3 ${
-                      validationErrors.education ? 'border-red-500' : 'border-gray-200'
-                    } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                    disabled={masterDataLoading || isRegenerating}
-                  >
-                    <option value="">{masterDataLoading ? 'Loading...' : 'Select education level'}</option>
-                    {educationLevels.map((level) => (
-                      <option key={level.id} value={level.code}>{level.label}</option>
-                    ))}
-                  </select>
-                  {validationErrors.education && (
-                    <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
-                      <AlertCircle className="w-4 h-4" />
-                      {validationErrors.education}
-                    </p>
-                  )}
-                </div>
+                {/* Education field REMOVED 2026-08-20.
+                    Education is no longer a separate Step 2 control. Extraction now
+                    always places it in the Additional Requirements lists instead:
+                      stated in the JD      -> Must-Have Additional Requirements
+                      not stated (inferred) -> Nice-to-Have Additional Requirements
+                    and never in the Skills lists. The structured education_degree /
+                    education_requirements values are STILL produced by extraction and
+                    still persisted - AI interview question generation and the interview
+                    prompts read them - they are simply no longer edited here. See
+                    _enforce_education_placement() in the backend. */}
 
                 {/* Industry Type */}
                 <div>

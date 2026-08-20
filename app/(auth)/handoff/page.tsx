@@ -58,7 +58,7 @@ export default function AuthHandoffPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="min-h-[100dvh] flex items-center justify-center">
       <div className="flex items-center gap-3 text-gray-600">
         <Loader2 className="w-5 h-5 animate-spin" />
         <span>Signing you in…</span>

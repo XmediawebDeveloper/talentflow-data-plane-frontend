@@ -583,7 +583,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <div className="mx-auto mb-6 flex h-20 w-20 animate-pulse items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal shadow-lg shadow-brand-blue/25 ring-4 ring-brand-blue/10">
             <BarChart3 className="h-10 w-10 text-white" />
