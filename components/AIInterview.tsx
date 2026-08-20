@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban, XCircle, Check } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban, XCircle, Check, Info, RefreshCw } from 'lucide-react';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -152,6 +152,7 @@ export default function AIInterview() {
   const [viewInvitationsConfig, setViewInvitationsConfig] = useState<AIInterviewResponse | null>(null);
   const [invitations, setInvitations] = useState<AIInterviewResponse[]>([]);
   const [loadingInvitations, setLoadingInvitations] = useState(false);
+  const [isRefreshingInvites, setIsRefreshingInvites] = useState(false);
   const [resendingEmailFor, setResendingEmailFor] = useState<string | null>(null); // session id
   // Resend-with-new-link confirmation dialog target
   const [resendInviteTarget, setResendInviteTarget] = useState<any | null>(null);
@@ -467,6 +468,19 @@ export default function AIInterview() {
       loadInvitationOverview(configId),
     ]);
   }, [loadInvitations, loadInvitationOverview, invitationPage, inviteFilters]);
+
+  /* Manual Refresh in the tracking popup — same refetch the row actions use,
+     in place with no page reload. Guarded so rapid clicks (or a click while
+     the popup's own load is still in flight) can't stack duplicate API calls. */
+  const handleRefreshInvitations = async () => {
+    if (!viewInvitationsConfig || isRefreshingInvites || loadingInvitations) return;
+    setIsRefreshingInvites(true);
+    try {
+      await refreshInvitationsView(viewInvitationsConfig.id);
+    } finally {
+      setIsRefreshingInvites(false);
+    }
+  };
 
   const loadProctoringSettings = useCallback(async () => {
     setProctoringLoading(true);
@@ -2398,13 +2412,28 @@ export default function AIInterview() {
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => setViewInvitationsConfig(null)}
-                  className="p-2 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
-                  aria-label="Close"
-                >
-                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
+                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                  {/* Refetches the live statuses in place — the popup stays
+                      open, the icon spins while the request runs, and the
+                      handler's guard drops repeat clicks until it settles. */}
+                  <button
+                    onClick={handleRefreshInvitations}
+                    disabled={isRefreshingInvites || loadingInvitations}
+                    title="Fetch the latest invite statuses"
+                    aria-label="Refresh"
+                    className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingInvites ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline">{isRefreshingInvites ? 'Refreshing...' : 'Refresh'}</span>
+                  </button>
+                  <button
+                    onClick={() => setViewInvitationsConfig(null)}
+                    className="p-2 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
+                    aria-label="Close"
+                  >
+                    <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </button>
+                </div>
               </div>
 
               {/* Stat row doubles as the status filter. Counts come from
@@ -2428,13 +2457,31 @@ export default function AIInterview() {
                 ]}
               />
 
+              {/* Row clicks and View Details open the candidate result only for
+                  Completed / Auto Completed invites — same note and banner
+                  treatment as the assessment tracker, so the recruiter knows
+                  why other rows don't navigate anywhere. */}
+              <div className="px-2.5 sm:px-6 pt-2 sm:pt-3 flex-shrink-0">
+                <div className="flex items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
+                  <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                  <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <span className="font-semibold">Note:</span> Results are available only for candidates with Complete status. Other candidates&rsquo; results are not available.
+                  </p>
+                </div>
+              </div>
+
               <InviteFilterBar
                 filters={inviteFilters}
                 onChange={(nextFilters) => {
                   setInviteFilters(nextFilters);
                   setInvitationPage(1);
                 }}
-                statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS}
+                statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS.filter(
+                  // Cancelled is dropped from this popup's dropdown only; the
+                  // shared list is filtered here so the Job Details tracker
+                  // keeps its full set.
+                  (option) => option.value !== 'cancelled'
+                )}
                 searchPlaceholder="Search by candidate name or email..."
               />
 

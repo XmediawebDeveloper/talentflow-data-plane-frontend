@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Moon, Sun } from 'lucide-react';
+import { ArrowUpRight, Bell, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Moon, Sun } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
@@ -682,12 +682,27 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 <div className="fixed inset-0 z-[80]" onClick={() => setShowPlanMenu(false)} />
                 <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-[85]">
                   {/* Header */}
-                  <div className="px-4 py-3 bg-brand-blue text-white">
-                    <h3 className="font-medium flex items-center gap-2 text-sm">
-                      <CreditCard className="w-4 h-4" />
-                      {planName}
-                    </h3>
-                    <p className="text-xs text-white/80 mt-0.5">Unit balance breakdown</p>
+                  <div className="px-4 py-3 bg-brand-blue text-white flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="font-medium flex items-center gap-2 text-sm">
+                        <CreditCard className="w-4 h-4" />
+                        {planName}
+                      </h3>
+                      <p className="text-xs text-white/80 mt-0.5">Unit balance breakdown</p>
+                    </div>
+                    {/* Same deep link as the arrow on the trigger: Current Plan →
+                        Usage & Quotas, scrolled to Quota Overview. */}
+                    <button
+                      onClick={() => {
+                        setShowPlanMenu(false);
+                        router.push('/subscription/current-plan?section=usage-quotas&focus=quota-overview');
+                      }}
+                      aria-label="Open Quota Overview"
+                      title="Open Quota Overview"
+                      className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/15 transition-colors flex-shrink-0"
+                    >
+                      <ArrowUpRight className="w-4 h-4" />
+                    </button>
                   </div>
 
                   {/* Quota rows */}

@@ -2164,6 +2164,9 @@ export default function ResumeScoringPage({
                               v{item.jdCurrentVersion}
                             </span>
                           )}
+                          {/* View Versions — same control, same slot as the grid
+                              card: after the vN chip, before the history icon. */}
+                          <JDVersionHistory jdId={item.jobId} version={item.jdCurrentVersion} />
                           {/* History icon button */}
                           <button
                             onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
