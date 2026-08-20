@@ -1282,6 +1282,25 @@ export default function StepSystemCheck({
         // false, and the voice panel reads "No microphone detected."
         const duringVoiceEnroll =
           voiceEnrollStatusRef.current === 'recording' || voiceEnrollStatusRef.current === 'disconnected';
+
+        // An ALREADY-SUCCEEDED voiceprint is invalidated by this disconnect too,
+        // not just one that interrupts an in-flight recording — it was captured
+        // on the track/device that just died, so it can't be trusted to still
+        // match whatever device is live once reconnected (or, if a silent
+        // laptop fallback fires below, the DIFFERENT device it just switched
+        // to). Without this, voiceEnrollStatus stays stuck on 'success' forever
+        // and Continue reappears the moment the Microphone check re-passes,
+        // without the candidate ever re-proving their voice on the live device.
+        // Reuses the same 'disconnected' panel/copy as the mid-recording case
+        // ("No microphone detected" → "Microphone reconnected — start over")
+        // for consistent messaging, and requires the same explicit "Start
+        // over" click rather than auto-restarting.
+        if (voiceEnrollStatusRef.current === 'success') {
+          voiceEnrollPromiseRef.current = null;
+          setVoiceEnrollStatus('disconnected');
+          setVoiceEnrollProgress(0);
+        }
+
         const recovered = await tryMicFallbackOrFail(deadDeviceId, !duringVoiceEnroll);
         if (recovered) {
           // Fell back to the system mic silently — still let the candidate
