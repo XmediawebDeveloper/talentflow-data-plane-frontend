@@ -1452,9 +1452,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     // visible tab nav.
     // { key: 'qa',               label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
-    { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Integrity Check',  icon: <ShieldAlert className="w-4 h-4" />, badge: (violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted) || undefined, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
+    { key: 'verification',     label: 'QR Verification',  icon: <ShieldAlert className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -2897,6 +2897,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <Camera className="w-3.5 h-3.5" />
                               Analyzed Frames{envAvailableFrames.length > 0 ? ` (${envAvailableFrames.length})` : ''}
                             </button>
+                            {(v.submitted_at || v.triggered_at) && (
+                              <span className="text-[11px] text-gray-400 font-mono">{formatTs(v.submitted_at || v.triggered_at || undefined)}</span>
+                            )}
                           </div>
                           <div className="flex items-center gap-1.5">
                             {v.color_match !== null && (
@@ -2941,6 +2944,17 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                   {envVideoDurations[v.verification_id] ? ` · ${envVideoDurations[v.verification_id]}s` : ''}
                                   {v.analysis_status === 'pending' || v.analysis_status === 'running' ? ' · Analysis pending' : ''}
                                 </p>
+                                {v.download_url && (
+                                  <a
+                                    href={v.download_url}
+                                    download
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 mt-1.5 text-xs font-medium text-brand-blue hover:underline underline-offset-2"
+                                  >
+                                    <Download className="w-3.5 h-3.5" /> Download verification video
+                                  </a>
+                                )}
                               </>
                             )}
                           </div>

@@ -335,9 +335,11 @@ export default function StepConsent({
               <li>• Tab switching and copy/paste are monitored</li>
               {environmentVerificationEnabled && (
                 <li>
-                  • At some point during the interview, you&apos;ll be asked to scan a QR code
+                  • At any point during the interview, you may be asked to scan a QR code
                   with your <strong>mobile phone</strong> to briefly verify your physical
-                  environment — have your phone within reach
+                  environment — have your phone within reach. No app installation is
+                  required; it opens directly in your phone&apos;s browser, which may ask
+                  for camera and microphone permission.
                 </li>
               )}
             </ul>
