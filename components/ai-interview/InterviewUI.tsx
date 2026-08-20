@@ -3229,8 +3229,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
     let sharedTrack = findSharedTrack();
     if (!sharedTrack) {
-      console.warn('[InterviewUI] Shared webcam audio track unavailable — attempting webcam reacquire');
-      const reacquired = (await webcamRef.current?.reacquire()) ?? false;
+      // Audio-only recovery. This fallback is reached mid-turn — often right
+      // as a just-reconnected headset is still settling — so the camera is
+      // almost always fine; dragging it through a full reacquire() here would
+      // restart the live video track for a problem that was never video's,
+      // producing exactly the visible refocus/"blur" a candidate would see.
+      // reacquireAudio() never touches videoRef.current.srcObject or the video
+      // track, so the on-screen camera feed is untouched either way.
+      console.warn('[InterviewUI] Shared webcam audio track unavailable — attempting audio-only reacquire');
+      const reacquired = (await webcamRef.current?.reacquireAudio()) ?? false;
       if (!reacquired) {
         throw new Error('Shared webcam stream unavailable');
       }
