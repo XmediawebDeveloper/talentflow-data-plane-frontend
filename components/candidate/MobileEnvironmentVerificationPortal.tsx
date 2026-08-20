@@ -62,21 +62,27 @@ const ALIGN_FAIL_STREAK_NEEDED = 2; // ~0.6s of consecutive FAIL before hiding R
 // comfortably excludes the near-black bezel and most desk/background colors.
 const ALIGN_COLOR_DISTANCE = 110; // RGB distance to count a pixel as "part of the screen"
 
-// ── Fixed viewfinder guide (corner-bracket outline) ──
-// Replaces free-floating "find the screen anywhere in frame" bbox search
-// with a much simpler, more predictable rule the candidate can directly see
-// and act on: a fixed outline is drawn over the camera preview (matching a
-// viewfinder-reticle reference the user provided 2026-08-19) and the ONLY
-// question the algorithm answers is "is this rectangle mostly filled with
-// one uniform color" — i.e. did the candidate actually fit their laptop
-// screen inside the visible brackets. As fractions of the analysis frame
-// (which now matches the visible preview crop exactly — see the
-// object-cover mirroring above).
+// ── Fixed internal guide region (NOT rendered — invisible to the candidate,
+// per explicit instruction 2026-08-20: a corner-bracket outline was tried as
+// a visible overlay and removed again; only the underlying "check a fixed
+// central region" mechanism was kept, since it's simpler and more
+// predictable than a free-floating bbox search across the whole frame). ──
+// As fractions of the analysis frame (which matches the visible preview
+// crop exactly — see the object-cover mirroring above).
 const GUIDE_X0 = 0.12;
 const GUIDE_X1 = 0.88;
 const GUIDE_Y0 = 0.16;
 const GUIDE_Y1 = 0.84;
 const ALIGN_GUIDE_MIN_DENSITY = 0.62; // fraction of guide-rect pixels that must match the seed color
+// Rejects "any large uniform surface" false positives (confirmed live
+// 2026-08-20: a wood floor, shoes, and a gray trackpad/keyboard deck all
+// passed the density-only check above, pointed at NOTHING resembling the
+// actual laptop screen). Two extra, cheap signals real screen content has
+// that ordinary physical surfaces usually don't:
+const ALIGN_MIN_SATURATION = 0.16; // the challenge palette is deliberately vivid, not neutral gray
+const ALIGN_MIN_WHITE_BRIGHTNESS = 195; // still accept the one guaranteed near-white challenge slot
+const ALIGN_BEZEL_MARGIN_FRAC = 0.035; // thin band just outside the guide rect, as a fraction of min(w,h)
+const ALIGN_BEZEL_MIN_DISTANCE = 55; // a real laptop bezel is meaningfully darker/different from the screen
 
 // ── Voice activity detection (VAD) — runs only while actually recording ──
 // Web Audio API only (no new library) on the SAME getUserMedia stream
@@ -352,12 +358,54 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           const domG = seedG / seedN;
           const domB = seedB / seedN;
 
-          // Only question that matters now: is the fixed guide rectangle
-          // itself mostly filled with one uniform color — i.e. did the
-          // candidate actually fit their laptop screen inside the visible
-          // brackets. No more free-floating bbox search across the whole
-          // frame (replaced 2026-08-19 per a viewfinder-reticle reference —
-          // simpler and matches exactly what the candidate can see and act on).
+          // Uniform-color density alone is NOT enough — a wood floor, a
+          // gray trackpad, or a keyboard deck are all "one uniform color
+          // filling a box" too (confirmed live 2026-08-20: the guide-rect
+          // check alone showed "Screen aligned" pointed at a floor, at
+          // shoes, and at a trackpad). Two extra, cheap discriminators that
+          // actually distinguish "a lit LCD showing the challenge" from "an
+          // ordinary physical surface":
+          //
+          // 1) Color plausibility — the challenge palette is deliberately
+          //    vivid (saturated colors, or the one guaranteed near-white
+          //    slot). A gray trackpad/keyboard deck is low-saturation AND
+          //    not bright enough to be the white slot; reject those.
+          const maxC = Math.max(domR, domG, domB);
+          const minC = Math.min(domR, domG, domB);
+          const saturation = maxC === 0 ? 0 : (maxC - minC) / maxC;
+          const brightness = (domR + domG + domB) / 3;
+          const colorPlausible = saturation >= ALIGN_MIN_SATURATION || brightness >= ALIGN_MIN_WHITE_BRIGHTNESS;
+
+          // 2) Bezel contrast — a real laptop screen sits inside a distinctly
+          //    darker bezel; a floor or desk surface just continues past the
+          //    guide box with no such edge. Sample a thin band just outside
+          //    the guide rect and require it to differ meaningfully from the
+          //    guide box's own color.
+          const marginPx = Math.max(3, Math.round(Math.min(w, h) * ALIGN_BEZEL_MARGIN_FRAC));
+          let bezelR = 0, bezelG = 0, bezelB = 0, bezelN = 0;
+          const sampleBand = (x0: number, y0: number, x1: number, y1: number) => {
+            for (let y = Math.max(0, y0); y < Math.min(h, y1); y++) {
+              for (let x = Math.max(0, x0); x < Math.min(w, x1); x++) {
+                const i = (y * w + x) * 4;
+                bezelR += data[i]; bezelG += data[i + 1]; bezelB += data[i + 2];
+                bezelN++;
+              }
+            }
+          };
+          sampleBand(gx0 - marginPx, gy0 - marginPx, gx1 + marginPx, gy0); // top
+          sampleBand(gx0 - marginPx, gy1, gx1 + marginPx, gy1 + marginPx); // bottom
+          sampleBand(gx0 - marginPx, gy0, gx0, gy1); // left
+          sampleBand(gx1, gy0, gx1 + marginPx, gy1); // right
+          let bezelContrasts = true;
+          if (bezelN > 0) {
+            const bezR = bezelR / bezelN, bezG = bezelG / bezelN, bezB = bezelB / bezelN;
+            const dr = bezR - domR, dg = bezG - domG, db = bezB - domB;
+            bezelContrasts = Math.sqrt(dr * dr + dg * dg + db * db) >= ALIGN_BEZEL_MIN_DISTANCE;
+          }
+
+          // 3) Uniform-color density — is the guide rectangle itself mostly
+          //    filled with that one color (candidate actually fit the
+          //    screen inside frame, not just touching a corner of it).
           let matched = 0;
           const guideArea = (gx1 - gx0) * (gy1 - gy0);
           for (let y = gy0; y < gy1; y++) {
@@ -368,7 +416,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             }
           }
           const density = guideArea > 0 ? matched / guideArea : 0;
-          pass = density >= ALIGN_GUIDE_MIN_DENSITY;
+
+          pass = colorPlausible && bezelContrasts && density >= ALIGN_GUIDE_MIN_DENSITY;
         }
       } catch (e) {
         // getImageData can throw on a tainted canvas in rare cross-origin
@@ -467,14 +516,33 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
 
     setPhase('requesting_permission');
     let stream: MediaStream;
+    // `audio: true` (a bare boolean) lets the browser apply its own default
+    // processing — echoCancellation/noiseSuppression/autoGainControl all ON
+    // by default on most browsers. That actively undermines the energy-
+    // based VAD below: autoGainControl continuously normalizes volume
+    // (shrinking the very "speech is N× louder than the noise floor"
+    // contrast the detector relies on), and noiseSuppression can dull or
+    // partially suppress soft/distant speech and smooth the high-frequency
+    // content the zero-crossing-rate check looks at (confirmed as the
+    // likely cause of missed detections 2026-08-20). Requesting the raw,
+    // unprocessed signal instead gives the VAD real energy contrast to work
+    // with. Falls back to a bare audio request if a device/browser rejects
+    // these specific constraints, rather than failing permission entirely.
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' } },
-        audio: true,
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
     } catch {
-      setPhase('permission_denied');
-      return;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: true,
+        });
+      } catch {
+        setPhase('permission_denied');
+        return;
+      }
     }
 
     // Verify the stream actually has a live video track before proceeding —
@@ -754,42 +822,13 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             playsInline
             className="w-full aspect-video rounded-xl bg-black object-cover"
           />
-          {phase === 'aligning' && (() => {
-            // Corner-bracket viewfinder outline (per the reference image) —
-            // positioned via the SAME GUIDE_X0/X1/Y0/Y1 fractions the
-            // alignment loop scores against, so what the candidate sees is
-            // exactly the region that must be filled with their laptop
-            // screen. object-cover's crop is symmetric-about-center, and
-            // the analysis canvas mirrors that same crop, so plain CSS %
-            // positioning over the <video> box lines up correctly with what
-            // the algorithm is actually checking.
-            const bracketColor = canRecord ? 'border-green-400' : 'border-white/80';
-            const armStyle = 'absolute w-7 h-7 border-[3px]';
-            return (
-              <>
-                <div
-                  className="absolute pointer-events-none"
-                  style={{ left: `${GUIDE_X0 * 100}%`, top: `${GUIDE_Y0 * 100}%`, right: `${(1 - GUIDE_X1) * 100}%`, bottom: `${(1 - GUIDE_Y1) * 100}%` }}
-                >
-                  <span className={`${armStyle} ${bracketColor} left-0 top-0 border-r-0 border-b-0 rounded-tl-md`} />
-                  <span className={`${armStyle} ${bracketColor} right-0 top-0 border-l-0 border-b-0 rounded-tr-md`} />
-                  <span className={`${armStyle} ${bracketColor} left-0 bottom-0 border-r-0 border-t-0 rounded-bl-md`} />
-                  <span className={`${armStyle} ${bracketColor} right-0 bottom-0 border-l-0 border-t-0 rounded-br-md`} />
-                </div>
-                <div className="absolute inset-x-0 bottom-2 flex flex-col items-center gap-1 px-4 text-center">
-                  {canRecord ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-400 bg-black/50 rounded-full px-3 py-1">
-                      <span className="w-2 h-2 rounded-full bg-green-400" /> Screen aligned
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-black/50 rounded-full px-3 py-1">
-                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" /> Fit your laptop screen inside the outline
-                    </span>
-                  )}
-                </div>
-              </>
-            );
-          })()}
+          {phase === 'aligning' && !canRecord && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 rounded-xl px-4 text-center">
+              <span className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
+              <p className="text-sm font-medium text-white">Align your phone with your laptop screen…</p>
+              <p className="text-xs text-[#cbd5e1]">Center it, hold steady, and make sure the whole screen is in view.</p>
+            </div>
+          )}
           {phase === 'pan_instructions' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 rounded-xl px-4 overflow-hidden">
               <span className="text-5xl inline-block animate-[tf-phone-curve_1.8s_ease-in-out_infinite_alternate]">📱</span>
@@ -826,7 +865,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             </>
           ) : (
             <p className="text-sm leading-relaxed text-[#94a3b8]">
-              Fit your laptop screen inside the outline above — the Record button appears automatically once it's aligned.
+              Waiting for your laptop screen to be clearly visible and centered in the camera…
             </p>
           )
         ) : phase === 'pan_instructions' ? (
