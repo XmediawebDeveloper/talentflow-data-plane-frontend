@@ -1654,6 +1654,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
             microphone_disconnected_timeout: 'Microphone stayed disconnected for over 3 minutes',
             camera_disconnected_timeout: 'Camera stayed disconnected for over 3 minutes',
             camera_and_microphone_disconnected_timeout: 'Camera and microphone stayed disconnected for over 3 minutes',
+            headset_disconnected_limit: 'Disconnected the microphone 3 times (only 2 are allowed)',
           };
           const reason = typeof d.reason === 'string' ? d.reason : '';
           const what = (typeof d.message === 'string' && d.message)
