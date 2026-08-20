@@ -1377,7 +1377,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // S3 multipart-upload segment index (0-based → backend part_number = idx + 1).
   // recordedChunksRef now holds only the UNFLUSHED clusters since the last
   // segment; we flush a segment once the buffer reaches RECORDING_MIN_SEGMENT_BYTES.
-  const recordingSegmentIndexRef = useRef(0);
+  // Camera-recording segment index. PERSISTED in sessionStorage (survives a
+  // page reload in the same tab) so a reconnect-triggered refresh RESUMES the
+  // segment numbering instead of restarting at 0. Restarting at 0 made the
+  // backend MPU service abort the pre-refresh multipart upload
+  // (recording_mpu_service: segment_index==0 → _abort_all_for_key_sync), which
+  // DISCARDED all pre-refresh video and left the recording un-concatenated.
+  const _recSegKey = `tf_rec_seg_cam_${token}`;
+  const recordingSegmentIndexRef = useRef<number>((() => {
+    try {
+      const v = typeof window !== 'undefined' ? window.sessionStorage.getItem(_recSegKey) : null;
+      const n = v != null ? parseInt(v, 10) : 0;
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch { return 0; }
+  })());
+  const _saveRecSeg = (next: number) => {
+    try { if (typeof window !== 'undefined') window.sessionStorage.setItem(_recSegKey, String(next)); } catch { /* ignore */ }
+  };
 
   // Avatar state controller
   const avatarState = useAvatarState();
@@ -1565,6 +1581,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const [mediaPauseSecondsRemaining, setMediaPauseSecondsRemaining] = useState<number | null>(null);
   const isMediaPausedRef = useRef(false);
   const mediaPauseStartMsRef = useRef<number | null>(null);
+  // True when the PINNED microphone device disappeared (e.g. wired headset
+  // unplugged). The mic MediaStreamTrack does NOT always end on unplug — when a
+  // built-in mic exists (e.g. "Microphone Array (Realtek)") the OS silently
+  // swaps to it on the same live track, so `isMicrophoneActive` stays true and
+  // the interview would keep running (Bina keeps speaking). This flag detects
+  // the device-list change directly and feeds the SAME media-pause machinery,
+  // so unplugging the mic pauses the interview like covering the camera does.
+  const [audioDeviceLost, setAudioDeviceLost] = useState(false);
+  const audioDeviceLostRef = useRef(false);
   const mediaPauseCountdownIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaPauseTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mirrors proctoringState so the setTimeout fired at ARM time can read
@@ -1657,7 +1682,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   useEffect(() => {
     if (!isConnected) return;
-    const anyDown = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive;
+    // `audioDeviceLost` covers the wired-unplug case where the mic track stays
+    // live (built-in mic silently takes over) — without it, that unplug would
+    // NOT pause. It rides the exact same pause/grace/terminate path as a camera
+    // or mic-track drop, so Bina stops and the answer clock freezes identically.
+    const anyDown = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive || audioDeviceLost;
 
     if (anyDown && !isMediaPausedRef.current) {
       // ARM: a device just went down — start the pause+grace window.
@@ -1747,7 +1776,48 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         },
       }).catch(() => { /* best-effort */ });
     }
-  }, [isConnected, proctoringState.isMicrophoneActive, proctoringState.isCameraActive, token, onTerminate, clearMediaPauseTimers, mediaDownReason]);
+  }, [isConnected, proctoringState.isMicrophoneActive, proctoringState.isCameraActive, audioDeviceLost, token, onTerminate, clearMediaPauseTimers, mediaDownReason]);
+
+  // Keep the audioDeviceLost ref mirror current for the always-on listener.
+  useEffect(() => { audioDeviceLostRef.current = audioDeviceLost; }, [audioDeviceLost]);
+
+  // Detect the PINNED microphone device disappearing / reappearing via the
+  // devicechange event (fires even when the track survives a fallback swap).
+  // Pause when the interview's mic device vanishes; resume when it returns.
+  useEffect(() => {
+    if (!isConnected) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (cancelled) return;
+        const inputs = devices.filter(d => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
+        const pinned = pinnedAudioDeviceIdRef.current;
+        // Only meaningful once we've pinned the interview's mic device.
+        if (!pinned) return;
+        const pinnedExists = inputs.some(d => d.deviceId === pinned);
+        if (!pinnedExists && !audioDeviceLostRef.current) {
+          // The interview's mic (e.g. wired headset) is gone → pause.
+          setAudioDeviceLost(true);
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'microphone_disabled',
+            severity: 'severe',
+            details: { phase: 'in_interview', reason: 'audio_device_unplugged' },
+          }).catch(() => { /* best-effort */ });
+        } else if (pinnedExists && audioDeviceLostRef.current) {
+          // The original device is back (candidate re-plugged) → resume.
+          setAudioDeviceLost(false);
+        }
+      } catch { /* enumeration failed — leave state as-is */ }
+    };
+    navigator.mediaDevices.addEventListener('devicechange', check);
+    void check(); // catch a device already removed before this mounted
+    return () => {
+      cancelled = true;
+      navigator.mediaDevices.removeEventListener('devicechange', check);
+    };
+  }, [isConnected, token]);
 
   // Belt-and-braces cleanup on unmount so a stray timer can never fire into
   // an unmounted tree (mirrors the pattern used for other proctoring timers).
@@ -5832,6 +5902,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       try {
         await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, false);
         recordingSegmentIndexRef.current = segmentIndex + 1;
+        _saveRecSeg(segmentIndex + 1);  // survive a reload → continue, not restart at 0
         console.log(`[Recording] Segment ${segmentIndex} uploaded: ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
       } catch (err: unknown) {
         // Upload failed — put the clusters back at the FRONT of the buffer so the
@@ -5915,6 +5986,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         try {
           await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, true);
           recordingSegmentIndexRef.current = segmentIndex + 1;
+          // Recording finalized — clear the persisted index so a fresh interview
+          // in the same tab starts at segment 0 again.
+          try { if (typeof window !== 'undefined') window.sessionStorage.removeItem(_recSegKey); } catch { /* ignore */ }
           console.log(`[Recording] Final upload + multipart completion succeeded${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
           return;
         } catch (err: unknown) {
@@ -9664,9 +9738,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           stays the original non-blocking heads-up (transparent,
           pointer-events-none on the wrapper) so the candidate can keep
           answering by voice while the camera recovers. */}
-      {isMediaPaused && isConnected && !isClosing && (
+      {isMediaPaused && isConnected && !isClosing && (() => {
+        // Mic is "down" for the overlay when either the track dropped OR the
+        // pinned device was unplugged (track survived via a built-in fallback).
+        const _micDown = !proctoringState.isMicrophoneActive || audioDeviceLost;
+        return (
         <div className={`fixed inset-0 z-[200] flex items-center justify-center ${
-          proctoringState.isMicrophoneActive
+          !_micDown
             ? 'pointer-events-none'
             : 'pointer-events-auto bg-black/70 backdrop-blur-sm'
         }`}>
@@ -9678,18 +9756,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             </div>
             <div className="text-center">
               <h3 className="text-white font-semibold text-base mb-1">
-                {!proctoringState.isCameraActive && !proctoringState.isMicrophoneActive
+                {!proctoringState.isCameraActive && _micDown
                   ? "Camera & Microphone Disconnected"
                   : !proctoringState.isCameraActive
                   ? "Camera Disconnected"
                   : "Microphone Disconnected"}
               </h3>
               <p className="text-[#94A3B8] text-sm leading-relaxed">
-                {!proctoringState.isCameraActive && !proctoringState.isMicrophoneActive
+                {!proctoringState.isCameraActive && _micDown
                   ? "Your interview is paused. Please reconnect your camera and microphone — it will resume automatically."
                   : !proctoringState.isCameraActive
                   ? "Your interview is paused. Please reconnect your camera — it will resume automatically."
-                  : "Your interview is paused. Please reconnect your microphone — it will resume automatically."}
+                  : "Your interview is paused. Please reconnect your microphone (or headset) — it will resume automatically."}
               </p>
             </div>
             {mediaPauseSecondsRemaining !== null && (
@@ -9735,7 +9813,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             <div className="text-xs text-[#64748B]">This event has been recorded</div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Media-permission terminal block ──
           Shown the moment camera / mic permission is revoked or denied.

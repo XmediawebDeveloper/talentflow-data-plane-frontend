@@ -2772,6 +2772,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       try {
         const screenStream = await requestEntireScreenShare();
         screenStreamRef.current = screenStream;
+        // Re-enter fullscreen right after the share picker closes (still within
+        // the click gesture), mirroring the normal start flow. On a resume the
+        // page reloaded out of fullscreen, so without this the interview would
+        // run windowed after re-share. Best-effort — the fullscreen guard also
+        // re-prompts if this is refused.
+        try { await requestFullscreen(); setIsFullscreenActive(isFullscreen()); } catch { /* guard re-prompts */ }
         const recordingStream = await buildRecordingStreamWithAudio(screenStream);
         const screenMime = SCREEN_MIME_TYPES
           .find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
@@ -2824,6 +2830,41 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         setResharing(false);
       }
     };
+
+    // RESUME GATE — after a reload/recovery the screen recorder is gone and we
+    // are out of fullscreen. Hold the interview HERE (do NOT mount InterviewUI,
+    // so Bina/the WebSocket/the timer/the recorders never start) until the
+    // candidate re-shares their screen. handleReshareScreen re-enters fullscreen
+    // and rebuilds the screen recorder; clearing screenReshareOnResume then
+    // mounts InterviewUI, which reconnects and resumes the current question —
+    // now WITH screen sharing + fullscreen, and nothing ran unpaused underneath.
+    if (screenReshareOnResume) {
+      return (
+        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-5">
+              <Monitor className="w-8 h-8 text-blue-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Re-share your screen to continue</h2>
+            <p className="text-gray-600 mb-2 text-sm">
+              Your interview reconnected. To keep the screen recording in sync with your camera, please share your <span className="font-semibold">Entire Screen</span> again. Your interview will resume right after.
+            </p>
+            <p className="text-sm text-gray-500 mb-6">Window and Current Tab are not allowed.</p>
+            <button
+              onClick={handleReshareScreen}
+              disabled={resharing}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
+            >
+              {resharing ? (
+                <><Loader2 className="w-4 h-4 animate-spin" />Requesting Permission...</>
+              ) : (
+                <><Monitor className="w-4 h-4" />Share Entire Screen &amp; Resume</>
+              )}
+            </button>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <>
@@ -2893,38 +2934,6 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           </div>
         )}
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
-        {/* RESUME re-share prompt — shown after a reload/recovery when the
-            screen recorder was lost (getDisplayMedia can't restart without a
-            fresh gesture). Distinct from the "stopped sharing" violation overlay:
-            this is a recovery step, not a malpractice event. Hidden if the
-            stopped-sharing overlay is already up (that one takes precedence). */}
-        {screenReshareOnResume && !screenShareStopped && (
-          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                <Monitor className="w-8 h-8 text-blue-600" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Re-share your screen to continue</h2>
-              <p className="text-gray-600 mb-2 text-sm">
-                Your interview reconnected. To keep the screen recording in sync with your camera, please share your <span className="font-semibold">Entire Screen</span> again.
-              </p>
-              <p className="text-sm text-gray-500 mb-6">
-                Window and Current Tab are not allowed.
-              </p>
-              <button
-                onClick={handleReshareScreen}
-                disabled={resharing}
-                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
-              >
-                {resharing ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />Requesting Permission...</>
-                ) : (
-                  <><Monitor className="w-4 h-4" />Share Entire Screen</>
-                )}
-              </button>
-            </div>
-          </div>
-        )}
         {screenShareStopped && (
           <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
