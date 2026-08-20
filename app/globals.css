@@ -4,9 +4,21 @@
 /* ── Configure dark mode to use .dark class (matches next-themes) ─────── */
 @variant dark (&:where(.dark, .dark *));
 
-/* ── Global thin scrollbars across the whole app (applies to every scrollable element) ── */
+/* ── Global thin scrollbars across the whole app (applies to every scrollable element) ──
+   `scrollbar-width`/`scrollbar-color` are the standard properties and are what
+   every current target browser actually uses: Firefox 64+, Chrome/Edge 121+,
+   Safari 18.2+.
+
+   The `::-webkit-scrollbar` rules below are NOT a second opinion on the same
+   thing — they are unreachable in any browser that supports the standard
+   property, because specifying `scrollbar-width` makes WebKit/Blink ignore the
+   legacy pseudo-elements on that element. They only ever render in WebKit
+   builds older than Safari 18.2, which is why their metrics are sized to match
+   what `thin` produces (~10px) rather than the 5px they used to carry: at 5px
+   the same app had noticeably slimmer bars in older Safari than in Chrome and
+   Firefox, which is exactly the cross-engine drift they were meant to prevent. */
 *, html, body { scrollbar-width: thin !important; scrollbar-color: rgba(156, 163, 175, 0.5) transparent !important; }
-*::-webkit-scrollbar, html::-webkit-scrollbar, body::-webkit-scrollbar { width: 5px !important; height: 5px !important; }
+*::-webkit-scrollbar, html::-webkit-scrollbar, body::-webkit-scrollbar { width: 10px !important; height: 10px !important; }
 *::-webkit-scrollbar-track, html::-webkit-scrollbar-track, body::-webkit-scrollbar-track { background: transparent !important; }
 *::-webkit-scrollbar-thumb, html::-webkit-scrollbar-thumb, body::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.5) !important; border-radius: 999px !important; }
 *::-webkit-scrollbar-thumb:hover, html::-webkit-scrollbar-thumb:hover, body::-webkit-scrollbar-thumb:hover { background: rgba(107, 114, 128, 0.7) !important; }
@@ -14,7 +26,9 @@
 /* ── Always-visible scrollbar — for modals/tables that need an obvious scroll affordance.
    Overrides the global thin (5px) scrollbar, so it must also use !important. ── */
 .scrollbar-visible { scrollbar-width: auto !important; scrollbar-color: rgba(100, 116, 139, 0.75) rgba(148, 163, 184, 0.18) !important; }
-.scrollbar-visible::-webkit-scrollbar { width: 11px !important; height: 11px !important; }
+/* Sized to `scrollbar-width: auto`, for the same pre-18.2-WebKit-only reason
+   as the global block above. */
+.scrollbar-visible::-webkit-scrollbar { width: 15px !important; height: 15px !important; }
 .scrollbar-visible::-webkit-scrollbar-track { background: rgba(148, 163, 184, 0.18) !important; border-radius: 999px !important; }
 .scrollbar-visible::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.75) !important; border-radius: 999px !important; border: 2px solid transparent !important; background-clip: padding-box !important; }
 .scrollbar-visible::-webkit-scrollbar-thumb:hover { background: rgba(71, 85, 105, 0.95) !important; background-clip: padding-box !important; }
@@ -422,10 +436,20 @@
   margin: 1.5rem 0;
 }
 
+/* Markdown tables are the one place the removed global `table { display:
+   block }` rule was load-bearing: this content is generated from model output,
+   so there is no wrapper element to hang a scroll container on, and a wide
+   table would otherwise push the page itself sideways. Kept here, scoped to
+   prose, where the engine differences that rule caused elsewhere don't apply —
+   no sticky header to mis-position, and no enclosing table shell to nest a
+   second scroll container inside. */
 .markdown-content table {
   width: 100%;
   border-collapse: collapse;
   margin: 1rem 0;
+  display: block;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .markdown-content th,
@@ -720,12 +744,26 @@ a:focus:not(:focus-visible) {
 
 /* Mobile: Base responsive adjustments - MINIMAL CHANGES */
 @media (max-width: 768px) {
-  /* Tables: Make scrollable horizontally */
-  table {
-    display: block;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
+  /* Tables used to be given `display: block; overflow-x: auto` here so they
+     could scroll sideways on a phone. Removed, and deliberately not replaced:
+
+     - It was redundant. Every <table> in the app already sits inside a
+       horizontal scroll container (`.tf-table-shell`, `.table-responsive`, or
+       an `overflow-x-auto` wrapper), so the sideways scroll it was adding was
+       a SECOND one nested inside the first — two horizontal bars on every
+       table below 768px, against the one-scroll-container-per-table rule this
+       file states further down.
+
+     - `display: block` on a table is where the browsers part company. It
+       drops the table box, so thead/tbody/tr have to be re-parented into
+       anonymous table boxes, and engines do that fixup differently: column
+       widths, `width: 100%` resolution and — the visible one — `position:
+       sticky` on the thead all come out differently in Gecko than in Blink.
+       That is the "correct in Chrome, wrong in Firefox" scrolling: same
+       markup, two different box trees, only below 768px.
+
+     Sideways scrolling still works everywhere, from the wrapper, which is a
+     plain block container and so behaves identically in every engine. */
 
   /* Reduce page padding on mobile */
   /* main > div {
@@ -1480,6 +1518,31 @@ a:focus:not(:focus-visible) {
 [data-slot="dialog-content"] {
   max-height: calc(100dvh - 2rem);
 }
+
+/* ── Scroll isolation inside overlays ──────────────────────────────────
+   A scroll container that reaches its end hands the rest of the gesture to
+   whatever scrolls behind it. Inside a dialog that means the page underneath
+   creeps along while the user is reading a modal — and it does so differently
+   per engine: Blink and Gecko chain on the same wheel tick, WebKit chains
+   after its rubber-band settles, and a touchpad's momentum crosses the
+   boundary in all three at different speeds.
+
+   `overscroll-behavior: contain` is the standard answer and needs no JS: the
+   gesture stops at the dialog. Scrolling itself is untouched — this only ends
+   the chain, it never blocks a scroll the container can still perform.
+
+   Matched off the overlay's own utility classes (a `fixed inset-0` root is
+   what every dialog in this app is built from) and the overflow utilities on
+   the scrollers inside it, the same way the neutraliser rules further down
+   key off `.overflow-x-auto`. Zero specificity via :where(), so nothing here
+   competes with a component's own classes. */
+:where(.fixed.inset-0):where(.overflow-y-auto, .overflow-auto, .overflow-y-scroll, .overflow-scroll),
+:where(.fixed.inset-0)
+  :where(.overflow-y-auto, .overflow-auto, .overflow-y-scroll, .overflow-scroll, .tf-table-shell, .modal-body),
+[data-slot="dialog-content"],
+[data-slot="dialog-content"] :where(.overflow-y-auto, .overflow-auto, .tf-table-shell) {
+  overscroll-behavior: contain;
+}
 @media (max-width: 640px) {
   [data-slot="dialog-content"] {
     padding: 1rem;
@@ -1663,7 +1726,12 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
    Cells that genuinely need to wrap opt out with `tf-wrap`. */
 .tf-table-shell {
   min-height: 400px;
-  max-height: calc(100vh - 20rem);
+  /* dvh, not vh: on a phone `100vh` is the URL-bar-hidden viewport, so a vh
+     cap is taller than what the user can actually see — and by a different
+     amount in Safari, Firefox and Chrome, since each retracts its chrome on a
+     different trigger. dvh is the visible viewport in all of them, and is
+     identical to vh on desktop. Matches the dialog caps in this file. */
+  max-height: calc(100dvh - 20rem);
   overflow: auto;
 }
 .tf-table-shell thead {
@@ -1739,13 +1807,13 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
    viewport. */
 .tf-table-shell--compact {
   min-height: 0;
-  max-height: 55vh;
+  max-height: 55dvh;
 }
 
 /* Fill-the-parent variant. The dialog already hands the table its own flex row,
    so the shell should take exactly that height and scroll inside it.
 
-   A fixed cap can't do that: 55vh is usually TALLER than the space left after
+   A fixed cap can't do that: 55dvh is usually TALLER than the space left after
    the dialog's header, stats, filter bar and footer, so the cap never engages
    and the dialog body scrolls instead — carrying the sticky header and the
    pinned Actions column out of view, which is the whole point of them. Pair
@@ -1909,7 +1977,7 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
    below the header — no vh arithmetic that would have to know how tall the
    header is, and nothing to update when it changes.
 
-   The 60vh is a fallback for a loader mounted outside that column, where
+   The 60dvh is a fallback for a loader mounted outside that column, where
    there is no flex parent to grow into. It is `height`, deliberately, not
    `min-height`: height acts as the flex basis and can still be shrunk, so
    a squeezed content area (short window with the terms, plan-change and
@@ -1924,7 +1992,7 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
   align-items: center;
   justify-content: center;
   flex: 1 1 auto;
-  height: 60vh;
+  height: 60dvh;
 }
 
 /* ── Word document preview (docx-preview) ──────────────────────────────

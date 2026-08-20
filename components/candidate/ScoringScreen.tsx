@@ -41,7 +41,7 @@ export function ScoringScreen() {
   const progressPercent = Math.min(95, (waitTime / 120) * 100);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full">
         {/* Success Header */}
         <div className="text-center mb-8">

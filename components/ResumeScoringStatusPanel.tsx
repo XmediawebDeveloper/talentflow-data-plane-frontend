@@ -582,7 +582,7 @@ export default function ResumeScoringStatusPanel({
 
       {/* Status Panel */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-4xl w-full max-h-[90vh] overflow-hidden pointer-events-auto animate-in zoom-in-95 duration-200 flex flex-col">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-4xl w-full max-h-[90dvh] overflow-hidden pointer-events-auto animate-in zoom-in-95 duration-200 flex flex-col">
           {/* Header */}
           <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-900 px-6 py-5">
             <div className="flex items-center gap-3 mb-4">

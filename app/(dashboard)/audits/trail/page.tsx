@@ -1431,7 +1431,7 @@ export default function AuditTrailPage() {
       {/* Detail Modal */}
       {selectedLog && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-lg md:max-w-2xl w-full flex flex-col max-h-[90vh] sm:max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-lg md:max-w-2xl w-full flex flex-col max-h-[90dvh] sm:max-h-[85dvh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-5 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white dark:from-slate-800/50 dark:to-slate-900">
               <div className="flex items-center gap-2 sm:gap-3">
@@ -1747,7 +1747,7 @@ export default function AuditTrailPage() {
       {/* Export Modal */}
       {exportModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90dvh] overflow-hidden flex flex-col">
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white dark:from-slate-800/50 dark:to-slate-900">
               <div className="flex items-center gap-3">

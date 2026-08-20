@@ -532,7 +532,7 @@ export default function CreateRoleForm() {
   if (isLoading) {
     return (
       <main className="flex-1 bg-slate-50">
-        <div className="flex h-full min-h-[60vh] items-center justify-center p-8">
+        <div className="flex h-full min-h-[60dvh] items-center justify-center p-8">
           <div className="flex items-center gap-3 text-gray-600">
             <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
             <span className="font-medium">Loading role builder...</span>

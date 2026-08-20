@@ -395,7 +395,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
                 setShowAuditTrail(false);
               }}
             />
-            <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80dvh] flex flex-col overflow-hidden">
               <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200">
                 <h3 className="text-lg font-semibold text-gray-900">Agreement Log Details</h3>
               </div>

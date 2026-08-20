@@ -37,7 +37,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
     : `assessment-${Date.now().toString(36)}`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-8">
         {/* Success Icon */}
         <div className="flex justify-center mb-6">

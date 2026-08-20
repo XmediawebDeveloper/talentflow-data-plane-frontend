@@ -372,7 +372,7 @@ export default function ResumeTable({
           grew to fit every row and never scrolled — `sticky top-0` had nothing
           to stick to, and the header scrolled away with the page. Capping the
           height makes the rows scroll inside it and pins the header. */}
-      <div className="hidden md:block overflow-auto min-h-[320px] max-h-[calc(100vh-24rem)] tf-table-shell">
+      <div className="hidden md:block overflow-auto min-h-[320px] max-h-[calc(100dvh-24rem)] tf-table-shell">
         <table className="w-full min-w-[1200px] table-auto">
         {/* Background goes on the cells, not just <thead>: with separate cell
             backgrounds the rows would otherwise show through as they pass under. */}
@@ -913,7 +913,7 @@ export default function ResumeTable({
       {/* Edit Details Modal */}
       {showEditModal && selectedResumeForAction && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] flex flex-col">
             <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-2">
@@ -1031,7 +1031,7 @@ export default function ResumeTable({
       {/* Add Tags Modal */}
       {showAddTagsModal && selectedResumeForAction && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90dvh] flex flex-col">
             <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-2">
@@ -1108,7 +1108,7 @@ export default function ResumeTable({
       {/* Archive Resume Modal */}
       {showArchiveModal && selectedResumeForAction && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90dvh] flex flex-col">
             <div className="p-6 border-b border-gray-200 shrink-0 flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-3 mb-2">

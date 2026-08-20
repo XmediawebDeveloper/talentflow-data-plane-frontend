@@ -51,7 +51,7 @@ export default function PreInterviewLayout({
   const steps = stepLabels ?? STEP_LABELS.slice(0, totalSteps);
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50 !bg-gray-50 [color-scheme:light]">
+    <div className="flex min-h-[100dvh] flex-col bg-gray-50 !bg-gray-50 [color-scheme:light]">
       {/* Header with logo */}
       <header className="w-full bg-white border-b border-gray-200">
         <div className="w-full px-6 lg:px-12 py-4">

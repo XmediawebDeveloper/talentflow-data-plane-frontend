@@ -486,12 +486,23 @@ export default function BulkScoringProgressModal({
 
         {/* Table / Cards */}
         {/* pt lives on the children so the sticky table header can pin flush to the scrollport top */}
-        <div className="flex-1 overflow-auto px-3 sm:px-5 pb-3 sm:pb-5 min-h-[200px] scrollbar-visible">
+        {/* One scroll container per breakpoint, and this wrapper is not it.
+            It used to scroll BOTH axes on top of the table shell inside it, in
+            fat `scrollbar-visible` tracks: a wide table drew two horizontal
+            bars, a long one drew two vertical bars, and dragging the outer bar
+            carried the shell's sticky header out of view. Now it just bounds
+            the area (flex-1 min-h-0 + overflow-hidden, the pairing
+            tf-table-shell--fill is documented against in globals.css) and hands
+            the height to whichever child is visible: the shell above `sm`, the
+            card list below it. */}
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-3 sm:px-5 pb-3 sm:pb-5">
           {filteredData.length > 0 ? (
             <>
-              {/* Desktop table */}
-              <div className="tf-table-shell tf-table-shell--compact">
-                <table className="hidden sm:table w-full">
+              {/* Desktop table. The breakpoint moved from the <table> to the
+                  shell — an empty shell left mounted on phones still drew its
+                  own scroll box around nothing. */}
+              <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill hidden sm:block flex-1 min-h-0">
+                <table className="w-full">
                   <thead className="sticky top-0 z-10">
                     <tr>
                       <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate Name</th>
@@ -584,8 +595,9 @@ export default function BulkScoringProgressModal({
                 </table>
               </div>
 
-              {/* Mobile card list */}
-              <div className="sm:hidden space-y-2 pt-3">
+              {/* Mobile card list — the only scroller below `sm`, where the
+                  shell above is display:none. */}
+              <div className="sm:hidden flex-1 min-h-0 overflow-y-auto space-y-2 pt-3 scrollbar-visible">
                 {filteredData.map((item) => (
                   <div key={item.id} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-3 shadow-sm">
                     {/* Name + Status */}

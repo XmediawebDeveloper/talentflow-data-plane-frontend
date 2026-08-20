@@ -356,7 +356,7 @@ export default function DashboardLayout({
     console.log('[DASHBOARD] Still loading...');
     // FIX-002: Skeleton loader instead of spinner
     return (
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-[100dvh] bg-gray-50">
         {/* Main content area (no sidebar) */}
         <div className="flex-1 flex flex-col">
           {/* Header Skeleton */}
@@ -428,7 +428,7 @@ export default function DashboardLayout({
           <Suspense fallback={null}>
             <SearchParamsErrorHandler />
           </Suspense>
-          <div className="flex h-screen bg-gray-50">
+          <div className="flex h-[100dvh] bg-gray-50">
             <div className="flex-1 flex flex-col overflow-hidden">
               <Header
                 user={user}

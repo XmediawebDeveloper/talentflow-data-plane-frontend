@@ -184,7 +184,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
 
   if (loading && !data) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/30 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-50 to-gray-100/30 flex items-center justify-center">
         <div className="flex items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-gray-700" />
           <span className="text-lg text-gray-600">Loading usage transparency data...</span>
@@ -194,7 +194,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/30">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-gray-50 to-gray-100/30">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-6">

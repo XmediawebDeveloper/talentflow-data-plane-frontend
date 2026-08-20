@@ -2459,7 +2459,7 @@ export default function AIInterviewClusters() {
 
   if (!config) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
+      <div className="tf-loader-page bg-slate-50">
         <div className="text-center">
           <p className="text-sm text-gray-500">No interview configuration found.</p>
           <button
@@ -2477,7 +2477,7 @@ export default function AIInterviewClusters() {
     <DndProvider backend={HTML5Backend}>
       <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
               className="mb-4 md:mb-6"
               items={
@@ -3003,7 +3003,7 @@ export default function AIInterviewClusters() {
                           <PopoverContent
                             side="bottom"
                             align="start"
-                            className="w-[480px] max-h-[70vh] overflow-y-auto p-0"
+                            className="w-[480px] max-h-[70dvh] overflow-y-auto p-0"
                           >
                             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
                               <div>
@@ -3081,7 +3081,7 @@ export default function AIInterviewClusters() {
                       <PopoverContent
                         side="bottom"
                         align="start"
-                        className="w-[440px] max-h-[70vh] overflow-y-auto p-5 text-sm leading-relaxed"
+                        className="w-[440px] max-h-[70dvh] overflow-y-auto p-5 text-sm leading-relaxed"
                       >
                         <div className="space-y-3 text-gray-700">
                           <div className="text-sm font-semibold text-gray-900">Skill Distribution</div>

@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import JDVersionHistory from '@/components/JDVersionHistory';
 
 const normalizeSearchValue = (value?: string | null) => (value || '').toLowerCase().trim();
 const normalizeIdentifier = (value?: string | null) => normalizeSearchValue(value).replace(/[^a-z0-9]/g, '');
@@ -72,7 +73,7 @@ export default function AIInterviewJDSelection() {
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={[
@@ -178,6 +179,13 @@ export default function AIInterviewJDSelection() {
                           </span>
                         )}
                         <h3 className="font-semibold text-gray-900 truncate tracking-tight">{jd.title}</h3>
+                        {/* Version from the JD row's own `current_version`. A JD
+                            that has never been republished carries no value, and
+                            that IS v1 — the same reading JDListPage and the JD
+                            header use, so the number matches wherever it shows. */}
+                        <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-full ring-1 ring-gray-200">
+                          v{jd.current_version ?? 1}
+                        </span>
                         <span className="flex items-center gap-1 px-2 py-0.5 text-xs text-green-700 bg-green-100 rounded-full ring-1 ring-green-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                           Published
@@ -228,6 +236,7 @@ export default function AIInterviewJDSelection() {
                           </span>
                         )}
                       </div>
+                      <JDVersionHistory jdId={jd.id} version={jd.current_version} className="mt-2" />
                     </div>
                   </div>
 
