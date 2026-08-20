@@ -12,6 +12,10 @@ import { useInterviewFaceVerification } from '@/components/ai-interview/proctori
 import { useInterviewVoiceVerification } from '@/components/ai-interview/proctoring/InterviewVoiceVerification';
 import { recordPcm16, MicDisconnectedDuringRecordingError } from '@/lib/utils/pcmEnroll';
 import { InterviewEventBus } from '@/components/ai-interview/proctoring/InterviewEventBus';
+import {
+  beginLegitimateShare,
+  endLegitimateShare,
+} from '@/components/ai-interview/proctoring/ScreenRecordingGuard';
 
 // Pre-interview step components
 import PreInterviewLayout from '@/components/candidate/PreInterviewLayout';
@@ -1025,14 +1029,18 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // getDisplayMedia guards let it through instead of blocking it as a
     // "screen recording attempt". Without this, the mid-interview
     // "Re-share Entire Screen" picker never opened (proctoring had already
-    // monkey-patched getDisplayMedia to throw). Reset in finally so any other
+    // monkey-patched getDisplayMedia to throw). Closed in finally so any other
     // getDisplayMedia call stays blocked.
+    //
+    // Ref-counted (not a bare boolean) so two overlapping app-owned requests
+    // can't have the first one's finally revoke permission from the second and
+    // turn our own share into a false "recording attempt" against the candidate.
     let screenStream: MediaStream;
-    (window as any).__tfAllowLegitimateShare = true;
+    beginLegitimateShare();
     try {
       screenStream = await (navigator.mediaDevices as any).getDisplayMedia(displayMediaOptions);
     } finally {
-      (window as any).__tfAllowLegitimateShare = false;
+      endLegitimateShare();
     }
     const videoTrack = screenStream.getVideoTracks()[0];
     const displaySurface = (videoTrack?.getSettings?.() as any)?.displaySurface;
