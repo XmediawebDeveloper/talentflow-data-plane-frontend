@@ -29,7 +29,7 @@ export default function UsagePage() {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <div className="tf-loader-page bg-slate-50">
         <p className="text-gray-500">Please log in to view usage data.</p>
       </div>
     );

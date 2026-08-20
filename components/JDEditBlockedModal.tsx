@@ -58,7 +58,7 @@ export default function JDEditBlockedModal({
       aria-modal="true"
       aria-labelledby="jd-edit-blocked-title"
     >
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-lg w-full max-h-[90vh] flex flex-col border border-gray-300 dark:border-slate-700">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-lg w-full max-h-[90dvh] flex flex-col border border-gray-300 dark:border-slate-700">
         {/* Header */}
         <div className="flex items-start gap-3 px-4 sm:px-5 pt-4 pb-3 shrink-0">
           <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center shrink-0">

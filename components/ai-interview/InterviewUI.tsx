@@ -8494,7 +8494,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── END DEV DEBUG OVERLAY ── */}
 
       {/* ── Main interview UI ── */}
-      <div className="flex h-screen overflow-hidden bg-[#0F1117]">
+      <div className="flex h-[100dvh] overflow-hidden bg-[#0F1117]">
 
         {/* ════ LEFT PANEL: Video feeds (dark) — 40% ════ */}
         <div className="w-[40%] flex-shrink-0 flex flex-col bg-[#0F1117] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>

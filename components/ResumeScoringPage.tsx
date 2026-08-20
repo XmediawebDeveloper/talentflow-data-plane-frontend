@@ -25,6 +25,7 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import JDVersionHistory from '@/components/JDVersionHistory';
 
 const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -1469,7 +1470,7 @@ export default function ResumeScoringPage({
     return (
       <main className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         {/* Previous / Next rides inside the breadcrumb bar, as on job-details,
             so it stays reachable while the sticky crumb is pinned. */}
         <PageBreadcrumb
@@ -1739,7 +1740,7 @@ export default function ResumeScoringPage({
     return (
       <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
-        <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${pageView === 'list' ? 'min-h-[calc(100vh-7rem)]' : ''}`}>
+        <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${pageView === 'list' ? 'min-h-[calc(100dvh-7rem)]' : ''}`}>
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
         {/* Header */}
         <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
@@ -2326,6 +2327,7 @@ export default function ResumeScoringPage({
                                 v{item.jdCurrentVersion}
                               </span>
                             )}
+                            <JDVersionHistory jdId={item.jobId} version={item.jdCurrentVersion} />
                             {/* History icon button */}
                             <button
                               onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
@@ -2652,7 +2654,7 @@ export default function ResumeScoringPage({
         });
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90vh] flex flex-col tf-round-edges">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90dvh] flex flex-col tf-round-edges">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
@@ -2667,11 +2669,17 @@ export default function ResumeScoringPage({
                   <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
                 </button>
               </div>
-              <div className="overflow-y-auto flex-1">
+              {/* The shell is the dialog's only scroller. The body used to scroll
+                  too, and --compact's 55vh cap is taller than what is left of a
+                  90vh dialog after the header — so the cap never engaged, the
+                  body scrolled instead, and the sticky <thead> rode up out of
+                  view. --fill + flex-1/min-h-0 against an overflow-hidden
+                  parent is the pairing globals.css documents for this. */}
+              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
                 {groups.length === 0 ? (
                   <div className="px-6 py-10 text-center text-sm text-gray-400 dark:text-slate-500">No scoring history available.</div>
                 ) : (
-                  <div className="tf-table-shell tf-table-shell--compact">
+                  <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 sticky top-0">
                         <tr>

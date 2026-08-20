@@ -1253,7 +1253,7 @@ export default function UsageHistory() {
   // ── Access guard ─────────────────────────────────────────────────────────
   if (!isTenantAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+      <div className="flex flex-col items-center justify-center min-h-[60dvh] text-center p-8">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
           <Shield className="w-8 h-8 text-brand-blue" />
         </div>

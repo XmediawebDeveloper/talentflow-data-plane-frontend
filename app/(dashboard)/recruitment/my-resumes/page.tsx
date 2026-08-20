@@ -2215,11 +2215,34 @@ export default function MyResumesPage() {
     }
   };
 
+  /* The folder the user is looking at right now, or null when the view is an
+     aggregate. List view filters by `selectedFolder`; card view drills with
+     `cardViewFolder` (and keeps `selectedFolder` in step — see
+     navigateToFolder). 'all' and the folder grid show every folder's resumes,
+     so no move can empty them. */
+  const getViewedFolderId = (): string | null => {
+    const viewed = viewMode === 'card' ? cardViewFolder : selectedFolder;
+    return viewed && viewed !== 'all' ? viewed : null;
+  };
+
   const handleMoveToFolder = async (resumeIds: string[], folderId: string) => {
     // Source folders, captured before the rows are re-pointed.
     const movedFrom = resumeIds
       .map(id => resumes.find(r => r.id === id)?.folderId)
       .filter((id): id is string => !!id);
+    /* Which folder this move might empty, and what it held before the move.
+       Read here, off the pre-move state: `setFolders` below queues a patch, it
+       does not update `folders` in this closure.
+
+       The folder on screen, deliberately — not "wherever the rows came from".
+       A selection can span folders (handleSelectAll keeps picks made in other
+       folders), and the rule is about the view the user would otherwise be
+       left staring at. */
+    const sourceFolderId = getViewedFolderId();
+    const sourceCountBefore =
+      sourceFolderId && sourceFolderId !== folderId
+        ? getFolderById(sourceFolderId)?.count
+        : undefined;
     try {
       await Promise.all(resumeIds.map(id => resumeService.move(id, folderId)));
       setResumes(prev => prev.map(r =>
@@ -2253,6 +2276,40 @@ export default function MyResumesPage() {
 
       setSelectedResumes([]);
       toast.success(`${resumeIds.length} resume(s) moved`);
+
+      /* Where the user ends up. Driven by what the SOURCE folder has left, not
+         by which folder was the destination — so it reads the same for the
+         root folder, Archived Resumes, or any folder a customer made.
+
+         Emptied it: follow the resumes into the destination rather than leave
+         the user on a folder with nothing in it. Setting the folder is enough
+         to load it — the params effect refetches on `selectedFolder`, which is
+         what puts the moved rows on screen.
+
+         Still holds resumes: hold position and refresh, so the moved rows drop
+         out of the list. The refresh is not optional in list view — it renders
+         the server page as-is, so a moved row keeps its seat until the next
+         fetch. (Card view filters by `folderId` and drops it immediately, but
+         it still needs the fetch for the page count.)
+
+         `undefined` count means the source folder isn't known here — an
+         aggregate view, a move back into the same folder, or a folder missing
+         from state. Nothing to empty, so nothing to do. */
+      const sourceRemaining =
+        sourceCountBefore === undefined
+          ? undefined
+          : Math.max(0, sourceCountBefore - (leaving.get(sourceFolderId!) || 0));
+
+      if (sourceRemaining === 0) {
+        if (viewMode === 'card') {
+          navigateToFolder(folderId);
+        } else {
+          setSelectedFolder(folderId);
+          setCurrentPage(1);
+        }
+      } else if (sourceRemaining !== undefined) {
+        fetchData(appliedSearchQuery, filters, selectedFolder, true);
+      }
     } catch (error) {
       toast.error('Failed to move resumes');
     }
@@ -4909,7 +4966,7 @@ export default function MyResumesPage() {
           />
           {/* Centered Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-4xl max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-4xl max-h-[85dvh] flex flex-col animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4 rounded-t-2xl">
                 <div className="flex items-center justify-between">

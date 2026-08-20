@@ -280,7 +280,7 @@ export default function SearchFilterBarCompact({
 
           {/* Filter Panel - Matching Screenshot Layout */}
           {showAdvancedFilters && (
-            <div className="fixed inset-x-2 sm:inset-x-auto bottom-2 sm:bottom-auto sm:absolute sm:right-0 sm:top-12 sm:w-[500px] md:w-[700px] bg-white rounded-xl sm:rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden max-h-[80vh] sm:max-h-[600px] flex flex-col">
+            <div className="fixed inset-x-2 sm:inset-x-auto bottom-2 sm:bottom-auto sm:absolute sm:right-0 sm:top-12 sm:w-[500px] md:w-[700px] bg-white rounded-xl sm:rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden max-h-[80dvh] sm:max-h-[600px] flex flex-col">
               <div className="flex-1 overflow-y-auto">
                 {/* Experience Row */}
                 <div className="p-3 sm:p-5 border-b border-gray-100">

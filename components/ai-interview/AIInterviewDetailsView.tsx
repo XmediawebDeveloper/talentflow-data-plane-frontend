@@ -506,7 +506,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           {/* Previous / Next rides inside the breadcrumb bar, as on
               job-details, so it stays reachable while the sticky crumb is
               pinned. Passed as undefined when there's no list to page through,
@@ -1187,7 +1187,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                               <PopoverContent
                                 side="bottom"
                                 align="start"
-                                className="w-[480px] max-h-[70vh] overflow-y-auto p-0"
+                                className="w-[480px] max-h-[70dvh] overflow-y-auto p-0"
                               >
                                 <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
                                   <div>

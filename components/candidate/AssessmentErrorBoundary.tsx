@@ -32,7 +32,7 @@ export class AssessmentErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+        <div className="min-h-[100dvh] bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
             <p className="text-gray-600 text-lg font-medium">Something went wrong</p>
             <p className="text-gray-500 text-sm mt-2">Reconnecting your assessment...</p>

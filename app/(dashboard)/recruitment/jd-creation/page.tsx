@@ -494,7 +494,7 @@ function JDCreationContent() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="flex h-[calc(100vh-64px)] flex-col overflow-hidden bg-slate-50">
+      <div className="flex h-[calc(100dvh-64px)] flex-col overflow-hidden bg-slate-50">
         <JDCreation
           // Remount fresh per edit-target / per "Create JD" click so the cached
           // route segment never carries a prior draft's in-progress state.

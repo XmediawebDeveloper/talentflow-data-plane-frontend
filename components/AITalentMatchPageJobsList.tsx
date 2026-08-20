@@ -8,6 +8,7 @@ import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
+import JDVersionHistory from '@/components/JDVersionHistory';
 
 interface Job {
   id: string;
@@ -118,7 +119,7 @@ export default function AITalentMatchPageJobsList({
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={[
@@ -446,6 +447,7 @@ export default function AITalentMatchPageJobsList({
                             {job.employmentType && <span>{job.employmentType}</span>}
                             {job.experience && <span className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-gray-400" />{job.experience}</span>}
                           </div>
+                          <JDVersionHistory jdId={job.id} version={job.currentVersion} className="mt-2" />
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-3 lg:flex-nowrap">

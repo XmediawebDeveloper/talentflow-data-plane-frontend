@@ -289,10 +289,15 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
               </div>
             </div>
           ) : (
-            <div className="flex-1 overflow-auto p-3 sm:p-6">
+            /* Pane bounds, shell scrolls. Both used to scroll both axes, so the
+               min-w-[400px] table drew a horizontal bar inside a horizontally
+               scrolling pane, and --compact's 55vh cap sits above what this
+               dialog leaves the pane, so the pane scrolled vertically too and
+               took the sticky header and sticky Feature column with it. */
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col p-3 sm:p-6">
               {/* Matrix View */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="overflow-x-auto tf-table-shell tf-table-shell--compact">
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col">
+                <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0">
                   <table className="w-full border-collapse min-w-[400px]">
                     <thead className="bg-gray-50">
                       <tr>

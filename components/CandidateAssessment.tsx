@@ -190,7 +190,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
   // Consent Screen
   if (step === 'consent') {
     return (
-      <div className="min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center p-6">
+      <div className="min-h-[100dvh] max-h-[100dvh] overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center p-6">
         <div className="max-w-3xl w-full bg-white rounded-2xl shadow-xl border border-gray-200 my-6">
           {/* Header */}
           <div className="bg-gradient-to-r from-gray-800 to-gray-800 text-white p-8 rounded-t-2xl">
@@ -332,7 +332,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
   // Ready Screen
   if (step === 'ready') {
     return (
-      <div className="min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center p-6">
+      <div className="min-h-[100dvh] max-h-[100dvh] overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center p-6">
         <div className="max-w-4xl w-full bg-white rounded-2xl shadow-xl border border-gray-200 my-6">
           {/* Header */}
           <div className="bg-gradient-to-r from-green-600 to-gray-800 text-white p-6 rounded-t-2xl">
@@ -423,7 +423,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
     const progress = ((currentQuestion + 1) / aiQuestions.length) * 100;
 
     return (
-      <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+      <div className="h-[100dvh] bg-gray-50 flex flex-col overflow-hidden">
         {/* Top Bar */}
         <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
@@ -707,7 +707,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
   // Completed Screen
   if (step === 'completed') {
     return (
-      <div className="min-h-screen max-h-screen overflow-y-auto bg-gradient-to-br from-green-50 via-white to-gray-50 flex items-center justify-center p-6">
+      <div className="min-h-[100dvh] max-h-[100dvh] overflow-y-auto bg-gradient-to-br from-green-50 via-white to-gray-50 flex items-center justify-center p-6">
         <div className="max-w-3xl w-full bg-white rounded-2xl shadow-xl border border-gray-200 my-6">
           <div className="p-8 text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">

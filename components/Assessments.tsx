@@ -43,28 +43,12 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
+import JDVersionHistory from '@/components/JDVersionHistory';
 
 
 const INVITATIONS_PAGE_SIZE = 10;
 /** Batch size when pulling every assessment for a browser-side filter. */
 const FULL_SET_BATCH_SIZE = 100;
-// Labels mirror the AI Interview invite wording (AI_INTERVIEW_INVITE_STATUS_OPTIONS
-// in AIInterview.tsx) so a recruiter reads the same lifecycle across both modules:
-// sent -> Invited, opened -> System Check (the candidate consented and is on the
-// system-check step), started -> In Progress, abandoned -> Terminated. Only the
-// labels change — the `value`s are the API/DB statuses and must stay as-is.
-const ASSESSMENT_INVITE_STATUS_OPTIONS = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'sent', label: 'Invited' },
-  { value: 'opened', label: 'System Check' },
-  { value: 'started', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'expired', label: 'Expired' },
-  { value: 'failed', label: 'Invite Failed' },
-  { value: 'bounced', label: 'Bounced' },
-  { value: 'abandoned', label: 'Terminated' },
-];
 
 interface AssessmentsProps {
   jobs: Job[];
@@ -2190,7 +2174,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60">
                           <h2 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 tracking-tight">Candidate Results</h2>
                         </div>
-                        <div className="min-h-[400px] max-h-[calc(100vh-24rem)] overflow-auto tf-table-shell">
+                        <div className="min-h-[400px] max-h-[calc(100dvh-24rem)] overflow-auto tf-table-shell">
                         <table className="w-full min-w-[1500px] table-auto">
                           <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                             <tr>
@@ -3048,6 +3032,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {(assessment.job?.version || assessment.jd_version) && (
                             <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.job?.version || assessment.jd_version}</span>
                           )}
+                          <JDVersionHistory
+                            jdId={assessment.jd_id}
+                            version={assessment.job?.version || assessment.jd_version}
+                            className="mt-1.5"
+                          />
                         </div>
                       )}
 
@@ -3168,7 +3157,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <>
                         <div
                           ref={openMenuRef}
-                          className="absolute right-0 sm:right-4 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto"
+                          className="absolute right-0 sm:right-4 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70dvh] overflow-y-auto"
                         >
                           {/* Draft assessments hide Activate/Archive — drafts go
                               through the configure-page Publish button, and an
@@ -3321,6 +3310,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               {(assessment.job?.version || assessment.jd_version) && (
                                 <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.job?.version || assessment.jd_version}</span>
                               )}
+                              <JDVersionHistory
+                                jdId={assessment.jd_id}
+                                version={assessment.job?.version || assessment.jd_version}
+                                className="mt-1.5"
+                              />
                             </div>
                           )}
 
@@ -3446,7 +3440,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <>
                               <div
                                 ref={openMenuRef}
-                                className="absolute right-0 top-full mt-2 w-44 sm:w-52 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto"
+                                className="absolute right-0 top-full mt-2 w-44 sm:w-52 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70dvh] overflow-y-auto"
                               >
                                 {assessment.status !== 'Archived' && canCreateAssessment && (() => {
                                   // Gating computed FRONT-END so it works regardless of
@@ -3644,7 +3638,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             onClick={() => setShowInvitePicker(false)}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[80dvh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               <div className="flex-shrink-0 flex items-center gap-4 p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white">
                 <div className="w-12 h-12 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
                   <Mail className="w-6 h-6 text-white" />
@@ -3802,65 +3796,38 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </button>
             </div>
 
-            {/* Stats Cards */}
-            <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
-              <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-7 gap-1 sm:gap-4">
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-blue text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <Users className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Total Invited</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-brand-blue">{invitationStats.total}</p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-orange-deep text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <Clock className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Invite Expired</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-brand-orange-deep">{invitationStats.expired}</p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <X className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Invite Failed</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-red-600">{invitationStats.failed}</p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-cyan text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <Play className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>In Progress</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-brand-cyan">{invitationStats.started}</p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-blue text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <CheckCircle className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Completed</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-brand-blue">{invitationStats.completed}</p>
-                </div>
-                {/* Terminated — candidate exited mid-assessment. Its own card
-                    (mirrors the AI Interview invitations popup) so these never
-                    read as "Invite Failed", which means email delivery. */}
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <Ban className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Terminated</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-red-600">{invitationStats.terminated}</p>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-brand-blue text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <TrendingUp className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Completion Rate</span>
-                  </div>
-                  <p className="text-sm sm:text-2xl font-bold text-brand-blue">
-                    {invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}%
-                  </p>
-                </div>
-              </div>
-            </div>
+            {/* Stat row doubles as the status filter — same behaviour as the AI
+                Interview tracker's popup. Counts come from
+                loadTrackingInvitationSummary, which queries unfiltered, so
+                selecting a bucket narrows the table without collapsing the
+                other cards. */}
+            <InviteStatCards
+              gridClassName="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-7 gap-1 sm:gap-4"
+              activeStatus={trackingFilters.status}
+              onSelect={(status) => {
+                setTrackingFilters({ ...trackingFilters, status });
+                setTrackingCurrentPage(1);
+              }}
+              cards={[
+                { key: 'all', label: 'Total Invited', Icon: Users, value: invitationStats.total, ...INVITE_CARD_TONES.blue },
+                { key: 'expired', label: 'Invite Expired', Icon: Clock, value: invitationStats.expired, ...INVITE_CARD_TONES.orange },
+                { key: 'failed', label: 'Invite Failed', Icon: X, value: invitationStats.failed, ...INVITE_CARD_TONES.red },
+                { key: 'started', label: 'In Progress', Icon: Play, value: invitationStats.started, ...INVITE_CARD_TONES.cyan },
+                { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationStats.completed, ...INVITE_CARD_TONES.blue },
+                /* 'abandoned' is the API/DB status behind the "Terminated" wording —
+                   the candidate exited mid-assessment. The card filters on the value
+                   the endpoint understands, not on the label. */
+                { key: 'abandoned', label: 'Terminated', Icon: Ban, value: invitationStats.terminated, ...INVITE_CARD_TONES.red },
+                {
+                  key: 'completion-rate',
+                  label: 'Completion Rate',
+                  Icon: TrendingUp,
+                  value: `${invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}%`,
+                  filterable: false,
+                  ...INVITE_CARD_TONES.blue,
+                },
+              ]}
+            />
 
             <InviteFilterBar
               filters={trackingFilters}

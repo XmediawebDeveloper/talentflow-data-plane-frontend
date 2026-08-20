@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, GitBranch } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -16,6 +16,7 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import { jdService, JDLineageVersion } from '@/lib/services/jdService';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -166,6 +167,47 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  /* Jobs whose version history is expanded in place, keyed by lineage (job_id,
+     or the row's own id when it has none). A Set so several can be open at
+     once — collapsing one must not close the rest. */
+  const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
+  /* Lineage per expanded job, from GET /jd/{id}/lineage — the authoritative
+     answer to "what versions does this job have". Deliberately NOT derived from
+     the rows on screen: whether the list returns every version or only the
+     latest is the list endpoint's business, and gating the feature on that made
+     the action disappear whenever the list returned one row per job. Cached by
+     lineage key so re-expanding is instant and never refetches. */
+  const [versionLineages, setVersionLineages] = useState<Record<string, JDLineageVersion[]>>({});
+  const [loadingLineages, setLoadingLineages] = useState<Set<string>>(new Set());
+
+  const loadLineage = async (key: string, jobId: string) => {
+    if (versionLineages[key] || loadingLineages.has(key)) return;
+    setLoadingLineages(prev => new Set(prev).add(key));
+    try {
+      const lineage = await jdService.getLineageVersions(jobId);
+      setVersionLineages(prev => ({ ...prev, [key]: lineage || [] }));
+    } catch {
+      // Leave it uncached so the next expand retries rather than showing an
+      // empty history as if the job genuinely had one version.
+      setVersionLineages(prev => ({ ...prev, [key]: [] }));
+    } finally {
+      setLoadingLineages(prev => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+    }
+  };
+
+  const toggleVersions = (key: string, jobId: string) => {
+    setExpandedVersions(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+    if (!expandedVersions.has(key)) void loadLineage(key, jobId);
+  };
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAIMatchModal, setShowAIMatchModal] = useState(false);
   const [selectedJobForAIMatch, setSelectedJobForAIMatch] = useState<Job | null>(null);
@@ -383,8 +425,49 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
            matchesApplicants && matchesCreationMethod;
   });
 
+  /* ── One row per job, not one per version ─────────────────────────────
+     Every version of a JD is its own row in the API response (its own id,
+     sharing the lineage's human-readable `job_id`), so a job republished twice
+     arrived here three times and the list read as duplicates.
+
+     Collapsed AFTER filtering rather than before, deliberately: with a status
+     filter on, the representative is the newest version that PASSED the filter,
+     so filtering to Published still shows a job whose newest version happens to
+     be a draft. Collapsing first would have made the whole job vanish.
+
+     Keyed on `job_id` because that is what the lineage shares; rows without one
+     (drafts that never got an ID) fall back to their own id and so stay
+     individual. "Latest" is the highest version_number present — read from the
+     data, never assumed to be first or last in the response. */
+  const lineageKey = (job: Job) => job.job_id || job.id;
+
+  const groupByLineage = (list: Job[]) => {
+    const groups = new Map<string, Job[]>();
+    for (const job of list) {
+      const key = lineageKey(job);
+      const bucket = groups.get(key);
+      if (bucket) bucket.push(job);
+      else groups.set(key, [job]);
+    }
+    // Newest first inside each group, so [0] is the one that represents it.
+    groups.forEach(bucket => bucket.sort((a, b) => (b.versionNumber ?? 1) - (a.versionNumber ?? 1)));
+    return groups;
+  };
+
+  const dedupedJobs = Array.from(groupByLineage(filteredJobs).values(), bucket => bucket[0]);
+
+  /* Grouped over the WHOLE list, not the filtered one, so the counts below
+     describe the library rather than the current filter. The expanded history
+     itself does not come from here — it is fetched per job from the lineage
+     endpoint, which is authoritative about what versions exist. */
+  const allVersionGroups = groupByLineage(jobs);
+
+  /* Distinct jobs, ignoring filters — what the stat cards and the "of N jobs"
+     badge count, so those numbers describe the same thing the list shows. */
+  const distinctJobs = Array.from(allVersionGroups.values(), bucket => bucket[0]);
+
   // Apply sorting to filtered jobs
-  const sortedJobs = [...filteredJobs].sort((a, b) => {
+  const sortedJobs = [...dedupedJobs].sort((a, b) => {
     let comparison = 0;
 
     switch (sortBy) {
@@ -637,13 +720,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const uniqueIndustries = Array.from(new Set(jobs.map(job => job.industry_type).filter(Boolean)));
 
   // Calculate stats
+  /* Counted over `distinctJobs`, not raw `jobs` — one entry per job, matching
+     the list. Counting versions made the cards read higher than the rows
+     underneath them the moment anything was republished. */
   const stats = {
-    total: jobs.length,
-    published: jobs.filter(j => j.status === 'Published').length,
-    draft: jobs.filter(j => j.status === 'Draft').length,
-    closed: jobs.filter(j => j.status === 'Closed').length,
-    archived: jobs.filter(j => j.status === 'Archived').length,
-    totalApplicants: jobs.reduce((sum, j) => sum + (j.applicants || 0), 0)
+    total: distinctJobs.length,
+    published: distinctJobs.filter(j => j.status === 'Published').length,
+    draft: distinctJobs.filter(j => j.status === 'Draft').length,
+    closed: distinctJobs.filter(j => j.status === 'Closed').length,
+    archived: distinctJobs.filter(j => j.status === 'Archived').length,
+    totalApplicants: distinctJobs.reduce((sum, j) => sum + (j.applicants || 0), 0)
   };
 
   const activeFiltersCount = search.activeFilterCount;
@@ -862,8 +948,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             onClearFilters={clearAllFilters}
             countBadge={
               <ListCountBadge
-                filtered={filteredJobs.length}
-                total={jobs.length}
+                filtered={sortedJobs.length}
+                total={distinctJobs.length}
                 noun="job"
                 selected={selectedJobs.size}
               />
@@ -1468,6 +1554,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 const displayStatus = getDisplayStatus(job.status, job.currentVersion);
                 const statusConfig = getStatusConfig(displayStatus);
                 const creationMethodConfig = getCreationMethodConfig(job.creation_method);
+                const versionKey = job.job_id || job.id;
+                const versionsExpanded = expandedVersions.has(versionKey);
+                /* Only jobs with history get the control. `versionNumber` is the
+                   row's own place in the lineage — the number already on screen
+                   in the vN chip — so anything past v1 has earlier versions to
+                   show. The second test catches the case where the list returned
+                   the siblings itself and the row happens to be v1. */
+                const hasVersionHistory =
+                  (job.versionNumber ?? 1) > 1 ||
+                  (allVersionGroups.get(versionKey)?.length ?? 1) > 1;
+                const lineage = versionLineages[versionKey];
+                const lineageLoading = loadingLineages.has(versionKey);
+                const jobVersions = lineage ?? [];
 
                 return (
                   <div
@@ -1598,8 +1697,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         </div>
                       </div>
 
-                      {/* Actions */}
-                      <div className="flex flex-wrap gap-2 flex-shrink-0 items-start">
+                      {/* Actions — icon row, then the version toggle beneath it */}
+                      <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <div className="flex flex-wrap gap-2 items-start justify-end">
                         {/* Edit Button - icon only (hidden for Disabled JDs) */}
                         {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
                           <button
@@ -1750,7 +1850,110 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                           )}
                         </div>
                       </div>
+                        {/* View Versions — on the row itself, directly under the
+                            icon buttons, rather than hidden inside the ⋮ menu.
+                            Shown only for jobs that have earlier versions: on a
+                            v1 job it would open onto a single entry repeating the
+                            row above it. Toggles the history tree below the card;
+                            the label flips so the control says what the next click
+                            does. stopPropagation because the card behind it opens
+                            the job. */}
+                        {hasVersionHistory && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleVersions(versionKey, job.id);
+                          }}
+                          aria-expanded={versionsExpanded}
+                          className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all ${
+                            versionsExpanded
+                              ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
+                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          }`}
+                          title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                        >
+                          <GitBranch className="w-3.5 h-3.5" />
+                          {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                        </button>
+                        )}
+                      </div>
                     </div>
+
+                    {/* ── Version history, expanded in place ───────────────
+                        Same card, below the latest version, so the list never
+                        gains a second entry for the same job. The connector is
+                        drawn per row rather than as one spine: each row owns a
+                        vertical segment down to its own centre plus a stub, and
+                        the last row omits the segment below centre, which is
+                        what turns the run into a tree that closes off instead
+                        of a line dangling past the final version.
+
+                        Click is stopped here — the card itself opens the job,
+                        and a click meant for a version must not be read as a
+                        click on the row behind it. */}
+                    {versionsExpanded && (
+                      <div
+                        className="mt-3 pt-3 border-t border-gray-100 md:pl-[3.25rem]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <p className="text-xs font-medium text-gray-500 mb-1">Version history</p>
+                        {lineageLoading && !lineage ? (
+                          <div className="flex items-center gap-2 py-2 text-xs text-gray-500">
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            Loading versions...
+                          </div>
+                        ) : jobVersions.length === 0 ? (
+                          <p className="py-2 text-xs text-gray-500">No other versions of this job.</p>
+                        ) : (
+                          <ul>
+                            {jobVersions.map((version, index) => {
+                              const isLast = index === jobVersions.length - 1;
+                              /* Lineage rows carry the raw DB status ('published');
+                                 the status helpers here speak the Job type's
+                                 capitalised form. */
+                              const rawStatus = version.status || '';
+                              const versionStatus = getDisplayStatus(
+                                rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase(),
+                                version.current_version,
+                              );
+                              const versionStatusConfig = getStatusConfig(versionStatus);
+                              return (
+                                <li key={version.id} className="relative pl-8 py-1.5">
+                                  {/* connector: down to centre, stub across, and on
+                                      through only while rows remain */}
+                                  <span aria-hidden="true" className="absolute left-2 top-0 h-1/2 w-px bg-gray-200" />
+                                  {!isLast && (
+                                    <span aria-hidden="true" className="absolute left-2 top-1/2 bottom-0 w-px bg-gray-200" />
+                                  )}
+                                  <span aria-hidden="true" className="absolute left-2 top-1/2 w-4 h-px bg-gray-200" />
+                                  <Link
+                                    href={`/recruitment/job-details?id=${version.id}`}
+                                    className="w-full flex flex-wrap items-center gap-2 text-left rounded-lg px-2 py-1 -mx-2 hover:bg-gray-50 transition-colors"
+                                  >
+                                    <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
+                                      v{version.version_number ?? 1}
+                                    </span>
+                                    {version.is_latest_version && (
+                                      <span className="px-2 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20">
+                                        Latest
+                                      </span>
+                                    )}
+                                    <span className={`px-2 py-0.5 rounded-full text-xs ${versionStatusConfig.bg} ${versionStatusConfig.text} border ${versionStatusConfig.border} flex items-center gap-1`}>
+                                      <div className={`w-1.5 h-1.5 rounded-full ${versionStatusConfig.dot}`}></div>
+                                      {versionStatus}
+                                    </span>
+                                    <span className="text-xs text-gray-500">
+                                      {formatLastUpdated(version.published_at || version.created_at)}
+                                    </span>
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

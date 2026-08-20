@@ -47,7 +47,7 @@ export function DuplicateResumeDetectedModal({
           max-w-md override also clobbered the base mobile width guard via
           tailwind-merge, so it is dropped rather than replaced. The footer's
           wrap guards below handle the three buttons at this width. */}
-      <DialogContent className="mx-2 sm:mx-auto max-h-[90vh] flex flex-col">
+      <DialogContent className="mx-2 sm:mx-auto max-h-[90dvh] flex flex-col">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-amber-600 text-base sm:text-lg">
             <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />

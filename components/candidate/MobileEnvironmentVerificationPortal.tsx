@@ -326,7 +326,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   };
 
   return (
-    <div className="min-h-screen bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center">
+    <div className="min-h-[100dvh] bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center">
       {phase === 'loading' && <p className="text-[#94a3b8]">Loading verification…</p>}
 
       {(phase === 'expired' || phase === 'error') && (

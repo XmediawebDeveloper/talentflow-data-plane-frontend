@@ -18,7 +18,7 @@ export function PublicLayout({
   onSignup,
 }: PublicLayoutProps) {
   return (
-    <div className="min-h-screen flex flex-col bg-white dark:bg-[#0F172A] transition-colors duration-300">
+    <div className="min-h-[100dvh] flex flex-col bg-white dark:bg-[#0F172A] transition-colors duration-300">
       <PublicHeader
         activePage={activePage}
         onNavigate={onNavigate}

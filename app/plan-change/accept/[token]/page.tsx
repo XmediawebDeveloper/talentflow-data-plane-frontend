@@ -42,7 +42,7 @@ export default function PlanChangeAcceptPage() {
   }, [token]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4 sm:p-6">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4 sm:p-6">
       <div className="max-w-md w-full">
         <div className="bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
           {/* Header */}

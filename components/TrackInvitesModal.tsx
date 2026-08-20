@@ -382,6 +382,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
             over the loaded list, and getEffectiveStatus returns exactly these
             keys, so a card and its rows always agree. */}
         <InviteStatCards
+          gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
           activeStatus={filters.status}
           onSelect={(status) => {
             setFilters({ ...filters, status });
@@ -393,6 +394,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
             { key: 'failed', label: 'Invite Failed', Icon: X, value: stats.failed, ...INVITE_CARD_TONES.red },
             { key: 'started', label: 'In Progress', Icon: Play, value: stats.started, ...INVITE_CARD_TONES.cyan },
             { key: 'completed', label: 'Completed', Icon: CheckCircle, value: stats.completed, ...INVITE_CARD_TONES.blue },
+            /* Keyed on 'abandoned' — the raw status getEffectiveStatus reports —
+               even though the count above buckets it as 'terminated'. The filter
+               below compares against the raw value. */
+            { key: 'abandoned', label: 'Terminated', Icon: Ban, value: stats.terminated, ...INVITE_CARD_TONES.red },
             {
               key: 'completion-rate',
               label: 'Completion Rate',
