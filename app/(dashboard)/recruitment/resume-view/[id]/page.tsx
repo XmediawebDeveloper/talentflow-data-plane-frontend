@@ -956,7 +956,7 @@ Best regards`);
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50 min-h-screen">
+      <div className="tf-loader-page bg-slate-50">
         <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         <span className="ml-3 text-gray-600">Loading resume...</span>
       </div>
@@ -965,7 +965,7 @@ Best regards`);
 
   if (error || !resume) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 min-h-screen">
+      <div className="tf-loader-page flex-col bg-slate-50">
         <p className="text-gray-600 mb-4">{error || 'Resume not found'}</p>
         <button
           onClick={() => router.back()}
@@ -1008,7 +1008,7 @@ Best regards`);
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           {/* Previous / Next rides inside the breadcrumb bar, as on
               job-details, and uses the shared RecordPager instead of the grey
               hand-rolled buttons that used to sit in the header row. */}
@@ -2022,7 +2022,7 @@ Best regards`);
 
         return (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
               {/* Header */}
               <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
@@ -2320,7 +2320,7 @@ Best regards`);
       {/* Invite — step 1: choose the job the invite belongs to */}
       {showInviteJobPicker && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80dvh] flex flex-col">
             <div className="flex items-start justify-between p-5 border-b border-gray-200 shrink-0">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">
@@ -2439,7 +2439,7 @@ Best regards`);
       {/* Share via Email Modal */}
       {isShareModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">

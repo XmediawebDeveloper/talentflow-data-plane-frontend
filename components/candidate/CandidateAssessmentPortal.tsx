@@ -60,7 +60,7 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-12">
         <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
           <Monitor className="w-12 h-12 text-blue-600" />
@@ -1662,7 +1662,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     case 'hr_questions':
       const hrQuestions = getHRQuestions();
       return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
+        <div className="min-h-[100dvh] bg-gray-50 flex flex-col">
           {/* Header */}
           <header className="w-full bg-white border-b border-gray-200">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">

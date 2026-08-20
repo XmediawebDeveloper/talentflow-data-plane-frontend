@@ -327,7 +327,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
   };
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen">
+    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-[100dvh]">
       {/* Logo - matches header height h-[72px] */}
       <div className="h-[72px] px-6 border-b border-gray-200 flex items-center">
         <div className="flex items-center gap-3">

@@ -30,6 +30,7 @@ import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import JDVersionHistory from '@/components/JDVersionHistory';
 
 interface Job {
   id: string;
@@ -1406,7 +1407,7 @@ export default function AITalentMatchPage({
     return (
       <main className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
               className="mb-4 md:mb-6"
               items={[
@@ -1415,7 +1416,7 @@ export default function AITalentMatchPage({
                 { label: selectedJobData?.title || 'Matching' },
               ]}
             />
-            <div className="min-h-[50vh] flex items-center justify-center">
+            <div className="min-h-[50dvh] flex items-center justify-center">
               {matchError ? (
                 <div className="text-center max-w-md">
                   <div className="w-12 h-12 bg-red-50 ring-1 ring-red-200 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -1479,7 +1480,7 @@ export default function AITalentMatchPage({
 
       <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <div className="flex items-center justify-between gap-3 mb-4 md:mb-6">
               {/* Previous / Next rides inside the breadcrumb bar, as on
                   job-details. Run AI Match stays down in the actions row — only
@@ -1734,7 +1735,7 @@ export default function AITalentMatchPage({
           {/* Bounded viewport: rows scroll vertically (and horizontally) while the
               header stays pinned. Header background/border live on the cells so the
               pinned row paints solid over the rows sliding underneath. */}
-          <div className="min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
+          <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
           <table className="w-full min-w-[1450px] table-auto">
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
@@ -2658,7 +2659,7 @@ export default function AITalentMatchPage({
               /* Table format, matching the Resume Scoring "Scored Resumes"
                  table: desktop table + mobile card fallback. */
               <>
-                <div className="hidden md:block min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
+                <div className="hidden md:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
                   <table className="w-full min-w-[1330px] table-auto">
                     {/* Sticky header — background/border live on the cells, since
                         a sticky <tr> doesn't paint them reliably. */}
@@ -3050,6 +3051,7 @@ export default function AITalentMatchPage({
                               {jobData.currentVersion > 1 ? 'Republished' : 'Published'}
                             </span>
                           )}
+                          <JDVersionHistory jdId={item.jobId} version={jobData?.currentVersion} />
                         </div>
                         <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1 group-hover:text-brand-blue transition-colors">
                           {item.jobTitle}
@@ -3384,7 +3386,7 @@ export default function AITalentMatchPage({
           ) : (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
             {/* Bounded viewport so only the rows scroll — pagination below stays put. */}
-            <div className="min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto tf-table-shell">
+            <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
             <table className="w-full min-w-[1450px]">
               <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>

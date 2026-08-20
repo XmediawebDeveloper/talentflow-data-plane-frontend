@@ -169,7 +169,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
   };
 
   return (
-    <aside className="relative w-64 sm:w-72 lg:w-64 bg-white border-r border-gray-100 flex flex-col shadow-xl lg:shadow-sm h-screen">
+    <aside className="relative w-64 sm:w-72 lg:w-64 bg-white border-r border-gray-100 flex flex-col shadow-xl lg:shadow-sm h-[100dvh]">
       {/* Logo + Close Button */}
       <div className="h-14 sm:h-16 lg:h-[72px] px-4 border-b border-gray-100 flex items-center justify-between shrink-0">
         <Link href="/dashboard" prefetch={false} className="flex items-center justify-center flex-1">

@@ -347,7 +347,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                 setShowAuditTrail(false);
               }}
             />
-            <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden mx-2 sm:mx-0">
+            <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[85dvh] flex flex-col overflow-hidden mx-2 sm:mx-0">
               <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
                 <h3 className="text-sm sm:text-lg font-semibold text-gray-900">Consent Log Details</h3>
               </div>

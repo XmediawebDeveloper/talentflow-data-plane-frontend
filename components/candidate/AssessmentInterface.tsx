@@ -1590,7 +1590,7 @@ export function AssessmentInterface({
   ];
 
   return (
-    <div className="min-h-screen bg-white flex flex-col relative">
+    <div className="min-h-[100dvh] bg-white flex flex-col relative">
       {/* DISQUALIFICATION Modal - Shows when fullscreen is exited */}
       {showDisqualificationModal && (
         <div className="fixed inset-0 bg-black/98 backdrop-blur-lg flex items-center justify-center z-[10000]">

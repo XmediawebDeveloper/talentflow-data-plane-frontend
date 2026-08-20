@@ -320,7 +320,7 @@ export default function AIInterviewPreview() {
 
   if (!interview) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] bg-slate-50">
+      <div className="flex items-center justify-center min-h-[60dvh] bg-slate-50">
         <div className="text-center">
           <p className="text-gray-600 mb-4">Interview configuration not found.</p>
           <button
@@ -341,7 +341,7 @@ export default function AIInterviewPreview() {
           card so both steps of the flow line up at the same width and gutters. */}
       <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
               className="mb-4 md:mb-6"
               items={

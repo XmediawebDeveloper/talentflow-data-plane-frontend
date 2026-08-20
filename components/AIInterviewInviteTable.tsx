@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { technicalScoreOf, codingScoreOf } from '@/lib/utils/aiInterviewScores';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -111,8 +110,14 @@ export const isInterviewLinkLive = (inv: any): boolean =>
 export const displayInviteScore = (inv: any): number | null => {
   const mth = inv.ai_evaluation?.section_question_avg?.mth;
   if (typeof mth === 'number') return Math.round(mth * 10);
-  const raw = inv.ai_evaluation?.capability_score ?? inv.score;
-  return raw != null ? Math.round(Number(raw)) : null;
+  const evaluation = inv?.ai_evaluation;
+  if (!evaluation) return null;
+  if (evaluation.partial === true || evaluation.evaluation_incomplete === true) return null;
+
+  const raw = evaluation.capability_score;
+  if (raw === null || raw === undefined || raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? Math.round(value) : null;
 };
 
 const initialsOf = (name: string | null | undefined): string =>
@@ -203,7 +208,7 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
   }
 };
 
-/** Percentage cell shared by Score / Tech Score / Coding Score. null renders an
+/** Percentage cell for the Score column. null renders an
  *  em dash — the round wasn't run, isn't scored yet, or the evaluation carries no
  *  per-round breakdown. 60 is the same pass mark the overall Score column uses. */
 const ScoreCell = ({ value }: { value: number | null }) =>
@@ -366,8 +371,6 @@ export default function AIInterviewInviteTable({
       <div className="sm:hidden space-y-2 flex-1 min-h-0 overflow-y-auto">
         {invitations.map((inv: any) => {
           const score = displayInviteScore(inv);
-          const techScore = technicalScoreOf(inv);
-          const codingScore = codingScoreOf(inv);
           const actions = rowActions(inv);
           return (
             <div
@@ -408,10 +411,11 @@ export default function AIInterviewInviteTable({
 
               <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
                 <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap min-w-0">
+                  {/* Score only — the per-round Tech and Coding figures were
+                      dropped from this tracker; the interview result view is
+                      where a round-by-round breakdown belongs. */}
                   {([
                     { label: 'Score', value: score },
-                    { label: 'Tech', value: techScore },
-                    { label: 'Coding', value: codingScore },
                   ] as const).map(({ label, value }) => (
                     <span key={label} className="text-[10px] text-gray-600 dark:text-slate-400 whitespace-nowrap">
                       {label}:{' '}
@@ -472,12 +476,6 @@ export default function AIInterviewInviteTable({
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
               <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
-              {/* Tech / Coding mirror the assessment tracker's columns. Kept
-                  unconditional and dashed when empty rather than hidden: an AI
-                  interview's rounds vary per config, so a column that appears and
-                  disappears between rows of the same table reads as a bug. */}
-              <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Tech Score</th>
-              <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Coding Score</th>
               {/* hidden md:table-cell mirrors this column's <td> — without it the
                   header carries one more cell than the body between sm and md and
                   every heading after Timeline shifts off its column. */}
@@ -488,8 +486,6 @@ export default function AIInterviewInviteTable({
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
             {invitations.map((inv: any) => {
               const score = displayInviteScore(inv);
-              const techScore = technicalScoreOf(inv);
-              const codingScore = codingScoreOf(inv);
               const events = timelineEvents(inv);
               const actions = rowActions(inv);
 
@@ -536,14 +532,6 @@ export default function AIInterviewInviteTable({
 
                   <td className="py-3 px-4 align-middle text-center text-sm whitespace-nowrap">
                     <ScoreCell value={score} />
-                  </td>
-
-                  <td className="py-3 px-4 align-middle text-center text-sm whitespace-nowrap">
-                    <ScoreCell value={techScore} />
-                  </td>
-
-                  <td className="py-3 px-4 align-middle text-center text-sm whitespace-nowrap">
-                    <ScoreCell value={codingScore} />
                   </td>
 
                   {/* Every milestone on its own line, oldest first. align-top so

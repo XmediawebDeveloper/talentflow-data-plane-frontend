@@ -9,7 +9,7 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
   const tenantSubdomain = (await headers()).get('x-tenant-subdomain');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#667EEA] via-[#764BA2] to-[#F093FB]">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-[#667EEA] via-[#764BA2] to-[#F093FB]">
       {!tenantSubdomain && <Header />}
       {children}
     </div>

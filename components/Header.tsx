@@ -1,5 +1,5 @@
 import { Bell, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Moon, Sun } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
 import { User as UserType } from '@/lib/types/tenant';
@@ -15,6 +15,18 @@ import { useRouter } from 'next/navigation';
 import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'sonner';
+
+/* Highest unread count the bell badge spells out. 1-9 show as themselves;
+   anything from 10 up reads "9+" — the count keeps growing behind the scenes
+   (the popup header and the Unread tab both show the real number), the badge
+   just stops widening the header. */
+const MAX_BADGE_COUNT = 9;
+
+/* How many notifications the popup shows before it starts scrolling. The list
+   is measured against the rows actually rendered rather than given a pixel
+   height: a row is as tall as its message wraps, and that differs between the
+   phone-width sheet and the desktop dropdown. */
+const VISIBLE_NOTIFICATIONS = 2;
 
 interface HeaderProps {
   onLogout: () => void;
@@ -41,8 +53,18 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   // Notification state
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  /* Every notification the user has, read or not. Kept apart from
+     `notifications.length`, which is only what the open tab last loaded — the
+     All tab used to label itself with the Unread tab's row count the moment you
+     switched over. */
+  const [totalCount, setTotalCount] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [activeNotificationTab, setActiveNotificationTab] = useState<'all' | 'unread'>('all');
+  /* Height of exactly VISIBLE_NOTIFICATIONS rows, measured off the rendered
+     list (see the layout effect). Undefined until measured, and whenever the
+     list is short enough not to need capping. */
+  const [notificationListHeight, setNotificationListHeight] = useState<number | undefined>(undefined);
+  const notificationListRef = useRef<HTMLDivElement | null>(null);
 
   // Use shared quota context instead of separate API call
   const { quotaData, loading: loadingQuota, error: quotaError, hasPermission: hasQuotaPermission, refetch: fetchQuotaStatus } = useQuota();
@@ -144,6 +166,9 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
       );
       setNotifications(response.notifications);
       setUnreadCount(response.unread_count);
+      // Only the All tab's response counts everything; the Unread tab's total
+      // is the unread subset, and taking it would shrink the All tab's label.
+      if (activeNotificationTab === 'all') setTotalCount(response.total);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -158,6 +183,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     try {
       const response = await notificationService.getNotificationCounts();
       setUnreadCount(response.unread);
+      setTotalCount(response.total);
     } catch (error) {
       console.error('Error fetching notification count:', error);
     }
@@ -228,6 +254,48 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
       fetchNotifications();
     }
   }, [showNotifications, fetchNotifications]);
+
+  /* Cap the popup's list at VISIBLE_NOTIFICATIONS rows.
+     Measured rather than hard-coded: rows are as tall as their message wraps,
+     and a fixed pixel height would cut the second row in half on one screen and
+     leave a gap on another. Runs before paint (useLayoutEffect) so the popup
+     never flashes open at full height and then snaps shorter.
+     Re-measured on resize because the popup is a full-width sheet under `sm`
+     and a 24rem dropdown above it — the same two rows are not the same height
+     in both. */
+  useLayoutEffect(() => {
+    if (!showNotifications) return;
+
+    const measure = () => {
+      /* The list is swapped for a spinner on every refresh — and while the
+         popup is open that is every 10s. Holding the last height through it
+         keeps the popup from collapsing to spinner-height and springing back. */
+      if (notificationsLoading) return;
+
+      const list = notificationListRef.current;
+      const rows = list ? (Array.from(list.children) as HTMLElement[]) : [];
+      // Nothing to scroll past — let the popup size to its content instead,
+      // so one notification doesn't sit in a two-row well of white space.
+      if (!list || rows.length <= VISIBLE_NOTIFICATIONS) {
+        setNotificationListHeight(undefined);
+        return;
+      }
+      /* Rows plus the list's own padding. Deliberately offset-based rather
+         than getBoundingClientRect: a re-measure that lands while the user has
+         the list scrolled would read rects that have already moved up, and the
+         popup would shrink by however far they had scrolled. offsetTop is
+         measured from a shared ancestor, so the difference holds either way. */
+      const lastVisible = rows[VISIBLE_NOTIFICATIONS - 1];
+      const style = getComputedStyle(list);
+      const padding = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+      const height = lastVisible.offsetTop + lastVisible.offsetHeight - rows[0].offsetTop + padding;
+      setNotificationListHeight(Math.round(height));
+    };
+
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [showNotifications, notifications, notificationsLoading, activeNotificationTab]);
 
   // Initial fetch: Only fetch once on mount when user is available
   useEffect(() => {
@@ -712,16 +780,32 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 setShowUserMenu(false);
               }}
               className="relative p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
-              aria-label="Notifications"
+              aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
             >
               <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
               {unreadCount > 0 && (
-                <>
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
-                  <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-xs rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center font-medium text-[10px] sm:text-xs">
-                    {unreadCount > 9 ? '9+' : unreadCount}
+                /* Pinned to the button's very corner and kept small, so the
+                   bell reads as a bell: at the previous size (h-4/h-5 plus a
+                   2px white ring, inset from the corner) the badge sat over the
+                   top-right quarter of the glyph. min-w + px rather than a
+                   fixed width, because "9+" is twice as wide as "3" and a fixed
+                   circle clipped it. */
+                <span className="absolute top-0 right-0 flex items-center justify-center">
+                  {/* The pulse. A halo expanding out from under the badge, not
+                      the badge itself blinking — the number stays still and
+                      legible, and nothing shifts the header's layout. Dropped
+                      entirely for anyone who asked for less motion. */}
+                  <span
+                    className="absolute inset-0 rounded-full bg-red-500/60 animate-ping motion-reduce:hidden"
+                    aria-hidden="true"
+                  />
+                  <span
+                    className="relative flex items-center justify-center min-w-[0.875rem] sm:min-w-[1rem] h-3.5 sm:h-4 px-[3px] sm:px-1 bg-red-500 text-white rounded-full ring-1 ring-white font-semibold text-[9px] sm:text-[10px] leading-none tabular-nums"
+                    aria-hidden="true"
+                  >
+                    {unreadCount > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : unreadCount}
                   </span>
-                </>
+                </span>
               )}
             </button>
           </Tooltip>
@@ -760,7 +844,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         : 'text-gray-600 hover:text-brand-blue'
                     }`}
                   >
-                    All ({notifications.length})
+                    All ({totalCount})
                   </button>
                   <button
                     onClick={() => setActiveNotificationTab('unread')}
@@ -774,7 +858,16 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   </button>
                 </div>
 
-                <div className="max-h-96 overflow-y-auto">
+                {/* Fixed to VISIBLE_NOTIFICATIONS rows once there are more than
+                    that (see the layout effect) — the popup keeps its height and
+                    the list scrolls inside it. `overscroll-contain` stops a
+                    flick past the end from scrolling the page behind the popup;
+                    the thin rounded scrollbar is the app-wide one from
+                    globals.css. */}
+                <div
+                  className="overflow-y-auto scroll-smooth overscroll-contain max-h-[60dvh] sm:max-h-96"
+                  style={notificationListHeight ? { height: notificationListHeight } : undefined}
+                >
                   {notificationsLoading ? (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -782,11 +875,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   ) : notifications.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 text-gray-500">
                       <Bell className="w-8 h-8 mb-2 opacity-50" />
-                      <p className="text-sm">No notifications</p>
+                      <p className="text-sm">
+                        {activeNotificationTab === 'unread' ? 'No unread notifications' : 'No notifications'}
+                      </p>
                       <p className="text-xs text-gray-400 mt-1">You're all caught up!</p>
                     </div>
                   ) : (
-                    <div className="p-2 space-y-1">
+                    <div ref={notificationListRef} className="p-2 space-y-1">
                       {notifications.map((notification) => {
                         const style = getNotificationStyle(notification.type);
                         const IconComponent = style.icon;
@@ -888,7 +983,16 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-[80]"
                 onClick={() => setShowUserMenu(false)}
               ></div>
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-[85] max-h-[calc(100vh-80px)] overflow-y-auto">
+              {/* The panel bounds, the menu list scrolls — one bar, not two.
+                  This carried `overflow-hidden` AND `overflow-y-auto`, so it
+                  scrolled alongside the max-h-[200px] menu list inside it and
+                  the dropdown showed two vertical bars side by side. The
+                  `shrink-0` markers on the profile, org and logout rows were
+                  written for a flex column that was never declared; with it
+                  declared they hold their size and the menu list is what gives
+                  way on a short viewport, so the logout button stays reachable
+                  instead of being clipped by the overflow-hidden. */}
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-[85] max-h-[calc(100dvh-80px)] flex flex-col">
                 {/* User Profile Header */}
                 <div className="bg-brand-blue px-5 py-4 shrink-0">
                   <div className="flex items-center gap-4">
@@ -918,7 +1022,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 )}
 
                 {/* Menu Items — shows ~3, rest accessible via scroll */}
-                <div className="py-2 max-h-[200px] overflow-y-auto">
+                <div className="py-2 max-h-[200px] flex-1 min-h-0 overflow-y-auto">
                   <button
                     onClick={() => {
                       if (subscriptionExpired) return;

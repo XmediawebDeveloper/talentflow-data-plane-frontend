@@ -61,13 +61,28 @@ const ALIGN_FAIL_STREAK_NEEDED = 2; // ~0.6s of consecutive FAIL before hiding R
 // (confirmed live 2026-08-19 — see the seed-sampling comment below). Still
 // comfortably excludes the near-black bezel and most desk/background colors.
 const ALIGN_COLOR_DISTANCE = 110; // RGB distance to count a pixel as "part of the screen"
-const ALIGN_MIN_AREA_RATIO = 0.12; // screen too small below this
-const ALIGN_MAX_AREA_RATIO = 0.85; // screen too large above this
-const ALIGN_MIN_DENSITY = 0.45; // fraction of pixels inside bbox that must match — rejects noisy/speckled false positives
-const ALIGN_MAX_CENTER_OFFSET_RATIO = 0.24; // how far the screen's center may drift from frame center
-const ALIGN_MIN_ASPECT = 1.05; // laptop-screen-ish aspect ratio band (tolerant of tilt/pan/keystoning)
-const ALIGN_MAX_ASPECT = 2.6;
-const ALIGN_EDGE_MARGIN_PX = 2; // touching this close to a canvas edge = "partially outside frame"
+
+// ── Fixed internal guide region (NOT rendered — invisible to the candidate,
+// per explicit instruction 2026-08-20: a corner-bracket outline was tried as
+// a visible overlay and removed again; only the underlying "check a fixed
+// central region" mechanism was kept, since it's simpler and more
+// predictable than a free-floating bbox search across the whole frame). ──
+// As fractions of the analysis frame (which matches the visible preview
+// crop exactly — see the object-cover mirroring above).
+const GUIDE_X0 = 0.12;
+const GUIDE_X1 = 0.88;
+const GUIDE_Y0 = 0.16;
+const GUIDE_Y1 = 0.84;
+const ALIGN_GUIDE_MIN_DENSITY = 0.62; // fraction of guide-rect pixels that must match the seed color
+// Rejects "any large uniform surface" false positives (confirmed live
+// 2026-08-20: a wood floor, shoes, and a gray trackpad/keyboard deck all
+// passed the density-only check above, pointed at NOTHING resembling the
+// actual laptop screen). Two extra, cheap signals real screen content has
+// that ordinary physical surfaces usually don't:
+const ALIGN_MIN_SATURATION = 0.16; // the challenge palette is deliberately vivid, not neutral gray
+const ALIGN_MIN_WHITE_BRIGHTNESS = 195; // still accept the one guaranteed near-white challenge slot
+const ALIGN_BEZEL_MARGIN_FRAC = 0.035; // thin band just outside the guide rect, as a fraction of min(w,h)
+const ALIGN_BEZEL_MIN_DISTANCE = 55; // a real laptop bezel is meaningfully darker/different from the screen
 
 // ── Voice activity detection (VAD) — runs only while actually recording ──
 // Web Audio API only (no new library) on the SAME getUserMedia stream
@@ -279,33 +294,57 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       const video = videoRef.current;
       if (!video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return;
 
+      // Analyze the SAME crop the candidate actually sees, not the full raw
+      // camera frame. The <video> preview below is styled `aspect-video
+      // object-cover` — CSS crops the raw feed to a 16:9 box (cutting off
+      // top/bottom or left/right depending on the phone camera's native
+      // aspect ratio). Previously this canvas drew the ENTIRE uncropped raw
+      // frame, so a screen that looked perfectly centered/full-frame in the
+      // visible preview could still fail area/centering checks against the
+      // larger, differently-proportioned real frame the algorithm was
+      // actually scoring (confirmed live 2026-08-19: several fully-visible,
+      // well-centered previews never passed alignment). Mirroring the exact
+      // same object-cover crop here keeps what's analyzed identical to what
+      // the candidate is looking at and aligning to.
       const w = ALIGN_SAMPLE_W;
-      const h = Math.round(w * (video.videoHeight / video.videoWidth));
+      const targetAspect = 16 / 9; // matches the preview's `aspect-video` class
+      const h = Math.round(w / targetAspect);
       canvas.width = w;
       canvas.height = h;
-      ctx.drawImage(video, 0, 0, w, h);
+      const nativeAspect = video.videoWidth / video.videoHeight;
+      let sx = 0, sy = 0, sw = video.videoWidth, sh = video.videoHeight;
+      if (nativeAspect > targetAspect) {
+        // Native frame is relatively wider than the box — object-cover crops the sides.
+        sw = Math.round(video.videoHeight * targetAspect);
+        sx = Math.round((video.videoWidth - sw) / 2);
+      } else if (nativeAspect < targetAspect) {
+        // Native frame is relatively taller than the box — object-cover crops top/bottom.
+        sh = Math.round(video.videoWidth / targetAspect);
+        sy = Math.round((video.videoHeight - sh) / 2);
+      }
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, w, h);
 
       let pass = false;
       try {
         const { data } = ctx.getImageData(0, 0, w, h);
-        // Seed color = the actual center of the frame, NOT a whole-frame
-        // histogram mode. The laptop screen's background is a solid color
-        // only in principle — real screens show a visible brightness
-        // gradient/vignette (confirmed 2026-08-19 live: a well-centered,
-        // fully-visible screen never passed alignment because a tight
-        // histogram-mode match only covered a thin band of that gradient,
-        // failing the area/density checks below even though a human could
-        // see the whole screen clearly). Candidates are explicitly
-        // instructed to center the screen in frame, so sampling directly at
-        // the frame's own center reliably lands ON the screen once aligned,
-        // and a wide-enough tolerance (below) absorbs the rest of the
-        // gradient's range — the same fix this session already had to apply
-        // to the backend's near-identical corner-icon detector for the
-        // exact same root cause.
-        const seedBoxW = Math.max(2, Math.round(w * 0.08));
-        const seedBoxH = Math.max(2, Math.round(h * 0.08));
-        const seedX0 = Math.round(w / 2 - seedBoxW / 2);
-        const seedY0 = Math.round(h / 2 - seedBoxH / 2);
+        // Guide-rect bounds in canvas pixels — same fixed box drawn as the
+        // corner-bracket overlay on the preview (GUIDE_X0/X1/Y0/Y1 above).
+        const gx0 = Math.round(w * GUIDE_X0);
+        const gx1 = Math.round(w * GUIDE_X1);
+        const gy0 = Math.round(h * GUIDE_Y0);
+        const gy1 = Math.round(h * GUIDE_Y1);
+
+        // Seed color = the center of the GUIDE RECT (not the whole frame).
+        // The laptop screen's background is a solid color only in
+        // principle — real screens show a visible brightness gradient/
+        // vignette (confirmed 2026-08-19 live: a well-centered, fully-
+        // visible screen still failed a tight/whole-frame match because of
+        // this). Sampling inside the guide box the candidate is filling
+        // reliably lands ON the screen once aligned.
+        const seedBoxW = Math.max(2, Math.round((gx1 - gx0) * 0.15));
+        const seedBoxH = Math.max(2, Math.round((gy1 - gy0) * 0.15));
+        const seedX0 = Math.round((gx0 + gx1) / 2 - seedBoxW / 2);
+        const seedY0 = Math.round((gy0 + gy1) / 2 - seedBoxH / 2);
         let seedR = 0, seedG = 0, seedB = 0, seedN = 0;
         for (let y = seedY0; y < seedY0 + seedBoxH; y++) {
           for (let x = seedX0; x < seedX0 + seedBoxW; x++) {
@@ -319,43 +358,66 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           const domG = seedG / seedN;
           const domB = seedB / seedN;
 
-          let minX = w, maxX = -1, minY = h, maxY = -1, matched = 0;
-          for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-              const i = (y * w + x) * 4;
-              const dr = data[i] - domR, dg = data[i + 1] - domG, db = data[i + 2] - domB;
-              if (Math.sqrt(dr * dr + dg * dg + db * db) <= ALIGN_COLOR_DISTANCE) {
-                matched++;
-                if (x < minX) minX = x;
-                if (x > maxX) maxX = x;
-                if (y < minY) minY = y;
-                if (y > maxY) maxY = y;
+          // Uniform-color density alone is NOT enough — a wood floor, a
+          // gray trackpad, or a keyboard deck are all "one uniform color
+          // filling a box" too (confirmed live 2026-08-20: the guide-rect
+          // check alone showed "Screen aligned" pointed at a floor, at
+          // shoes, and at a trackpad). Two extra, cheap discriminators that
+          // actually distinguish "a lit LCD showing the challenge" from "an
+          // ordinary physical surface":
+          //
+          // 1) Color plausibility — the challenge palette is deliberately
+          //    vivid (saturated colors, or the one guaranteed near-white
+          //    slot). A gray trackpad/keyboard deck is low-saturation AND
+          //    not bright enough to be the white slot; reject those.
+          const maxC = Math.max(domR, domG, domB);
+          const minC = Math.min(domR, domG, domB);
+          const saturation = maxC === 0 ? 0 : (maxC - minC) / maxC;
+          const brightness = (domR + domG + domB) / 3;
+          const colorPlausible = saturation >= ALIGN_MIN_SATURATION || brightness >= ALIGN_MIN_WHITE_BRIGHTNESS;
+
+          // 2) Bezel contrast — a real laptop screen sits inside a distinctly
+          //    darker bezel; a floor or desk surface just continues past the
+          //    guide box with no such edge. Sample a thin band just outside
+          //    the guide rect and require it to differ meaningfully from the
+          //    guide box's own color.
+          const marginPx = Math.max(3, Math.round(Math.min(w, h) * ALIGN_BEZEL_MARGIN_FRAC));
+          let bezelR = 0, bezelG = 0, bezelB = 0, bezelN = 0;
+          const sampleBand = (x0: number, y0: number, x1: number, y1: number) => {
+            for (let y = Math.max(0, y0); y < Math.min(h, y1); y++) {
+              for (let x = Math.max(0, x0); x < Math.min(w, x1); x++) {
+                const i = (y * w + x) * 4;
+                bezelR += data[i]; bezelG += data[i + 1]; bezelB += data[i + 2];
+                bezelN++;
               }
             }
+          };
+          sampleBand(gx0 - marginPx, gy0 - marginPx, gx1 + marginPx, gy0); // top
+          sampleBand(gx0 - marginPx, gy1, gx1 + marginPx, gy1 + marginPx); // bottom
+          sampleBand(gx0 - marginPx, gy0, gx0, gy1); // left
+          sampleBand(gx1, gy0, gx1 + marginPx, gy1); // right
+          let bezelContrasts = true;
+          if (bezelN > 0) {
+            const bezR = bezelR / bezelN, bezG = bezelG / bezelN, bezB = bezelB / bezelN;
+            const dr = bezR - domR, dg = bezG - domG, db = bezB - domB;
+            bezelContrasts = Math.sqrt(dr * dr + dg * dg + db * db) >= ALIGN_BEZEL_MIN_DISTANCE;
           }
 
-          if (matched > 0 && maxX > minX && maxY > minY) {
-            const bboxW = maxX - minX;
-            const bboxH = maxY - minY;
-            const areaRatio = (bboxW * bboxH) / (w * h);
-            const density = matched / (bboxW * bboxH);
-            const centerX = (minX + maxX) / 2;
-            const centerY = (minY + maxY) / 2;
-            const centerOffset = Math.sqrt(
-              ((centerX - w / 2) / w) ** 2 + ((centerY - h / 2) / h) ** 2
-            );
-            const aspect = bboxW / bboxH;
-            const touchesEdge =
-              minX <= ALIGN_EDGE_MARGIN_PX || maxX >= w - ALIGN_EDGE_MARGIN_PX ||
-              minY <= ALIGN_EDGE_MARGIN_PX || maxY >= h - ALIGN_EDGE_MARGIN_PX;
-
-            pass =
-              areaRatio >= ALIGN_MIN_AREA_RATIO && areaRatio <= ALIGN_MAX_AREA_RATIO &&
-              density >= ALIGN_MIN_DENSITY &&
-              centerOffset <= ALIGN_MAX_CENTER_OFFSET_RATIO &&
-              aspect >= ALIGN_MIN_ASPECT && aspect <= ALIGN_MAX_ASPECT &&
-              !touchesEdge;
+          // 3) Uniform-color density — is the guide rectangle itself mostly
+          //    filled with that one color (candidate actually fit the
+          //    screen inside frame, not just touching a corner of it).
+          let matched = 0;
+          const guideArea = (gx1 - gx0) * (gy1 - gy0);
+          for (let y = gy0; y < gy1; y++) {
+            for (let x = gx0; x < gx1; x++) {
+              const i = (y * w + x) * 4;
+              const dr = data[i] - domR, dg = data[i + 1] - domG, db = data[i + 2] - domB;
+              if (Math.sqrt(dr * dr + dg * dg + db * db) <= ALIGN_COLOR_DISTANCE) matched++;
+            }
           }
+          const density = guideArea > 0 ? matched / guideArea : 0;
+
+          pass = colorPlausible && bezelContrasts && density >= ALIGN_GUIDE_MIN_DENSITY;
         }
       } catch (e) {
         // getImageData can throw on a tainted canvas in rare cross-origin
@@ -454,14 +516,33 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
 
     setPhase('requesting_permission');
     let stream: MediaStream;
+    // `audio: true` (a bare boolean) lets the browser apply its own default
+    // processing — echoCancellation/noiseSuppression/autoGainControl all ON
+    // by default on most browsers. That actively undermines the energy-
+    // based VAD below: autoGainControl continuously normalizes volume
+    // (shrinking the very "speech is N× louder than the noise floor"
+    // contrast the detector relies on), and noiseSuppression can dull or
+    // partially suppress soft/distant speech and smooth the high-frequency
+    // content the zero-crossing-rate check looks at (confirmed as the
+    // likely cause of missed detections 2026-08-20). Requesting the raw,
+    // unprocessed signal instead gives the VAD real energy contrast to work
+    // with. Falls back to a bare audio request if a device/browser rejects
+    // these specific constraints, rather than failing permission entirely.
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' } },
-        audio: true,
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
     } catch {
-      setPhase('permission_denied');
-      return;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: true,
+        });
+      } catch {
+        setPhase('permission_denied');
+        return;
+      }
     }
 
     // Verify the stream actually has a live video track before proceeding —
@@ -656,7 +737,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   };
 
   return (
-    <div className="min-h-screen bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center">
+    <div className="min-h-[100dvh] bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center">
       {phase === 'loading' && <p className="text-[#94a3b8]">Loading verification…</p>}
 
       {(phase === 'expired' || phase === 'error') && (

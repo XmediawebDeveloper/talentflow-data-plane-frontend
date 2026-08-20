@@ -71,7 +71,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-[100dvh] bg-gray-50 flex flex-col">
       {/* Sticky Header Container */}
       <div className="sticky top-0 z-50">
         {/* Header - Full Width */}

@@ -125,7 +125,7 @@ export default function AITalentMatchRoute() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50 min-h-screen p-4">
+      <div className="tf-loader-page bg-slate-50 p-4">
         <div className="text-center">
           <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin mx-auto mb-3" />
           <p className="text-sm text-gray-600 dark:text-slate-400 font-medium">Loading jobs...</p>
@@ -136,7 +136,7 @@ export default function AITalentMatchRoute() {
 
   if (error) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50 min-h-screen p-4">
+      <div className="tf-loader-page bg-slate-50 p-4">
         <div className="text-center max-w-md">
           <div className="w-12 h-12 bg-red-100 dark:bg-red-500/20 ring-1 ring-red-200 dark:ring-red-500/40 rounded-full flex items-center justify-center mx-auto mb-3">
             <span className="text-red-600 dark:text-red-400 text-lg sm:text-xl">!</span>
