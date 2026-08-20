@@ -612,6 +612,8 @@ interface ExtractedData {
   experience: string;
   experienceRequired: boolean;
   industryType: string;
+  roleFamily?: string;
+  roleFamilyConfidence?: number;
   industryTypeRequired: boolean;
   department: string;
   allowOverqualified: boolean;
@@ -649,6 +651,8 @@ interface EditingJDData {
   experience_min?: number;
   experience_max?: number;
   industry_type?: string;
+  role_family?: string;
+  role_family_confidence?: number;
   department?: string;
   salary_min?: number;
   salary_max?: number;
@@ -1160,6 +1164,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             experience_min: jd.experience_min,
             experience_max: jd.experience_max,
             industry_type: jd.industry_type,
+            // See the note in jd-creation/page.tsx - BOTH mappings must forward this.
+            role_family: jd.role_family,
+            role_family_confidence: jd.role_family_confidence,
             salary_min: jd.salary_min,
             salary_max: jd.salary_max,
             compensation_type: jd.compensation_type,
@@ -1247,6 +1254,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     experience: '',
     experienceRequired: false,
     industryType: '',
+    roleFamily: undefined,
+    roleFamilyConfidence: undefined,
     industryTypeRequired: false,
     department: '',
     allowOverqualified: false,
@@ -1662,6 +1671,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [industryTypes, setIndustryTypes] = useState<IndustryType[]>(FALLBACK_INDUSTRY_TYPES);
   const [masterDataLoading, setMasterDataLoading] = useState(false);  // Set to false since we have fallback data
   const [showCustomExperienceInput, setShowCustomExperienceInput] = useState(false);
+
+  // What the recruiter is CURRENTLY typing in the experience From/To boxes, before it
+  // is normalized. null = not editing, so the boxes show the canonical stored value.
+  //
+  // Why this exists: the stored value is a canonical string ("7+ Years", "4-7 Years")
+  // that is re-parsed on every render, and the parser applies Math.min/Math.max to put
+  // the bounds in order. That ran on EVERY KEYSTROKE, so an incomplete number was
+  // treated as final. Starting from min=7 and typing "10" into the To box:
+  //     "1"   -> "7-1 Years"  -> parser swaps -> From=1, To=7
+  //     "0"   -> continues from the SWAPPED values -> From=1, To=10
+  // The recruiter's 7 was destroyed and the digits they typed landed in the wrong box.
+  // Holding the raw text while focused, and normalizing once on blur, fixes it.
+  const [experienceDraft, setExperienceDraft] = useState<{ from: string; to: string } | null>(null);
 
   // Fetch master data on mount
   useEffect(() => {
@@ -2361,6 +2383,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || (isEditMode ? prev.education : ''),
         experience: expValue || prev.experience,
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
+        roleFamily: params.role_family || (isEditMode ? prev.roleFamily : undefined),
+        roleFamilyConfidence: params.role_family_confidence ?? (isEditMode ? prev.roleFamilyConfidence : undefined),
         employmentType: prev.employmentType,
         workModel: prev.workModel,
         // Pre-fill salary from AI extraction
@@ -2503,7 +2527,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             }
 
             // Pre-fill step 2 form with extracted params (salary, skills, etc.)
-            if (response.extracted_params) {
+            // `{}` is truthy in JS, so this must test for CONTENT, not existence.
+            // The generation endpoint now deliberately returns an empty params object:
+            // the second generation pass that used to produce them was deleted, because
+            // Step 1 -> 2 extraction re-derives the same values from this description
+            // anyway. Passing `{}` through would blank the Step 2 fields for no reason.
+            if (response.extracted_params && Object.keys(response.extracted_params).length > 0) {
               console.log('[TalentFlow] Extracted params from stream:', response.extracted_params);
               processExtractedParams(response.extracted_params, response.description);
 
@@ -3205,6 +3234,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience_min: extractionExperiencePayload.experienceMin,
         experience_max: extractionExperiencePayload.experienceMax,
         industry_type: extraction.industryType || undefined,
+        role_family: extraction.roleFamily || undefined,
+        role_family_confidence: extraction.roleFamilyConfidence ?? undefined,
         salary_min: extraction.salaryFrom ? parseInt(extraction.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extraction.salaryTo ? parseInt(extraction.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extraction.compensationType,
@@ -4314,6 +4345,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience_min: experienceMin,
         experience_max: experienceMax,
         industry_type: extractedData.industryType || undefined,
+        role_family: extractedData.roleFamily || undefined,
+        role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
@@ -4642,6 +4675,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience_min: experienceMin,
         experience_max: experienceMax,
         industry_type: extractedData.industryType || undefined,
+        role_family: extractedData.roleFamily || undefined,
+        role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
@@ -4934,6 +4969,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience_min: experienceMin,
         experience_max: experienceMax,
         industry_type: extractedData.industryType || undefined,
+        role_family: extractedData.roleFamily || undefined,
+        role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
@@ -6218,7 +6255,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       extractedData.experience; persistence parses it back into
                       experience_min/experience_max and derives job_level. */}
                   {(() => {
-                    const { from, to } = parseExperienceYearsString(extractedData.experience);
+                    const canonical = parseExperienceYearsString(extractedData.experience);
+                    // While the recruiter is typing, show exactly what they typed - never
+                    // the re-ordered canonical form (see experienceDraft above).
+                    const from = experienceDraft ? experienceDraft.from : canonical.from;
+                    const to = experienceDraft ? experienceDraft.to : canonical.to;
                     const commitYears = (nextFrom: string, nextTo: string) => {
                       const canonical = buildExperienceYearsString(
                         nextFrom === '' ? null : Number(nextFrom),
@@ -6243,7 +6284,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           max={50}
                           step={0.5}
                           value={from}
-                          onChange={(e) => commitYears(e.target.value, to)}
+                          onChange={(e) => {
+                            // Track the keystrokes AND persist, but render from the draft so
+                            // no reordering is visible mid-number.
+                            setExperienceDraft({ from: e.target.value, to });
+                            commitYears(e.target.value, to);
+                          }}
+                          onBlur={() => setExperienceDraft(null)}
                           placeholder="From (years)"
                           disabled={isRegenerating}
                           className={inputClass}
@@ -6255,7 +6302,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           max={50}
                           step={0.5}
                           value={to}
-                          onChange={(e) => commitYears(from, e.target.value)}
+                          onChange={(e) => {
+                            setExperienceDraft({ from, to: e.target.value });
+                            commitYears(from, e.target.value);
+                          }}
+                          // Dropping the draft on blur re-reads the canonical value, so the
+                          // From/To ordering is normalized exactly once - when the recruiter
+                          // has finished typing, not partway through a number.
+                          onBlur={() => setExperienceDraft(null)}
                           placeholder="To (years)"
                           disabled={isRegenerating}
                           className={inputClass}

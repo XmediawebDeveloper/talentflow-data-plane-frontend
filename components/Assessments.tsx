@@ -49,7 +49,6 @@ import JDVersionHistory from '@/components/JDVersionHistory';
 const INVITATIONS_PAGE_SIZE = 10;
 /** Batch size when pulling every assessment for a browser-side filter. */
 const FULL_SET_BATCH_SIZE = 100;
-
 interface AssessmentsProps {
   jobs: Job[];
   onOpenCandidateView?: () => void;
@@ -3796,13 +3795,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </button>
             </div>
 
-            {/* Stat row doubles as the status filter — same behaviour as the AI
-                Interview tracker's popup. Counts come from
-                loadTrackingInvitationSummary, which queries unfiltered, so
-                selecting a bucket narrows the table without collapsing the
-                other cards. */}
+            {/* Stat row doubles as the status filter — same component, buckets
+                and wording as the JD-level popup and the AI Interview trackers.
+                Counts come from the API's unfiltered summary, so selecting a
+                bucket narrows the table without collapsing the other cards. */}
             <InviteStatCards
-              gridClassName="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-7 gap-1 sm:gap-4"
+              gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-4"
               activeStatus={trackingFilters.status}
               onSelect={(status) => {
                 setTrackingFilters({ ...trackingFilters, status });
@@ -3814,9 +3812,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 { key: 'failed', label: 'Invite Failed', Icon: X, value: invitationStats.failed, ...INVITE_CARD_TONES.red },
                 { key: 'started', label: 'In Progress', Icon: Play, value: invitationStats.started, ...INVITE_CARD_TONES.cyan },
                 { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationStats.completed, ...INVITE_CARD_TONES.blue },
-                /* 'abandoned' is the API/DB status behind the "Terminated" wording —
-                   the candidate exited mid-assessment. The card filters on the value
-                   the endpoint understands, not on the label. */
+                /* Terminated — candidate walked out mid-assessment. Its own card
+                   so these never read as "Invite Failed", which means email
+                   delivery. Mirrors the AI Interview tracker. */
                 { key: 'abandoned', label: 'Terminated', Icon: Ban, value: invitationStats.terminated, ...INVITE_CARD_TONES.red },
                 {
                   key: 'completion-rate',

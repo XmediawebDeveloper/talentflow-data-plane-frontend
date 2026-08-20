@@ -1454,6 +1454,7 @@ function buildPerQuestionDetailsFromHistory(
       ? q.score
       : null;
     const isSkippedRow = isSkippedOrIdk(q);
+    const rowNotDelivered = isUndeliveredHistoryRow(q);
 
     const skills: PerQuestionSkill[] = skillNames.map(skillName => {
       const priority = clusterPriorityBySkill[String(skillName).toLowerCase().trim()] || 'Medium';
@@ -1468,8 +1469,11 @@ function buildPerQuestionDetailsFromHistory(
         score: Math.round(score * 10) / 10,
         note,
         is_fallback,
-        is_skipped,
+        // An un-reached question is NOT "skipped by the candidate" — its skills
+        // carry recovered scores, so don't render a "Skipped" badge on them.
+        is_skipped: rowNotDelivered ? false : is_skipped,
         is_unscored,
+        not_delivered: rowNotDelivered || undefined,
       };
     });
     skills.sort((a, b) => b.weight - a.weight || b.score - a.score);
@@ -1524,6 +1528,9 @@ function buildPerQuestionDetailsFromHistory(
       skills,
       questionScore,
       isUnscored,
+      // Un-reached planned question (candidate ended early). Its skills are
+      // still scored via recovery; the card shows a "Not Delivered" badge.
+      notDelivered: isUndeliveredHistoryRow(q),
       displayOnlyQuestionScore: partialDisplayScore ?? undefined,
       followUps: followUps && followUps.length > 0 ? followUps : undefined,
       bundledFollowUp,
@@ -2523,29 +2530,29 @@ export function buildDashboardData(params: {
         for (const s of row.skills) {
           existingByName[s.name.toLowerCase().trim()] = s;
         }
-        const isSkippedRow = (row.skills.some(s => s.is_skipped)) ||
-          (!row.answer || !row.answer.trim());
-        const qScore = row.questionScore;
+        const rowUndelivered = !!row.notDelivered;
+        const isSkippedRow = !rowUndelivered && (
+          (row.skills.some(s => s.is_skipped)) ||
+          (!row.answer || !row.answer.trim())
+        );
         const replacedSkills: PerQuestionSkill[] = planSkills.map(ps => {
           const match = existingByName[ps.name.toLowerCase().trim()];
           if (match) {
             // Preserve original per-skill score + flags exactly.
             return { ...match, priority: ps.priority, weight: ps.weight };
           }
-          // No direct match — derive a sensible score:
-          //   • Skipped row → 0 with Skipped badge
-          //   • Otherwise → Q-fallback at the question's overall score
+          // Un-reached question, plan skill with no scored row → 0, not
+          // demonstrated anywhere (never a "Skipped" badge or Q-fallback).
+          if (rowUndelivered) {
+            return { ...ps, score: 0, not_delivered: true };
+          }
+          // No direct match on a delivered question → 0 with Skipped badge for a
+          // skipped turn, otherwise "Not evaluated" (is_unscored). The old
+          // question-level "Q" fallback was removed (it fabricated numbers).
           if (isSkippedRow) {
             return { ...ps, score: 0, is_skipped: true };
           }
-          if (qScore > 0) {
-            return {
-              ...ps,
-              score: Math.round(qScore * 10) / 10,
-              is_fallback: true,
-            };
-          }
-          return ps; // score 0, no flags
+          return { ...ps, score: 0, is_unscored: true };
         });
         return { ...row, skills: replacedSkills };
       });
@@ -2644,7 +2651,13 @@ export function buildDashboardData(params: {
     clusters.map(cluster => {
       const updatedSkills: Skill[] = cluster.skills.map(sk => {
         const qaScore = qaSkillScore.get((sk.name || '').toLowerCase().trim());
-        return typeof qaScore === 'number' ? { ...sk, score: qaScore } : sk;
+        if (typeof qaScore !== 'number') return sk;
+        // A positive score means the skill has REAL evidence somewhere in the
+        // interview — including a skill whose own question was never asked but
+        // that the candidate demonstrated in another answer (recovery). Mark it
+        // `asked` so Cluster Coverage shows it Covered/Demonstrated rather than
+        // "Not Covered" (a recovered score alone is invisible there otherwise).
+        return { ...sk, score: qaScore, asked: sk.asked || qaScore > 0 };
       });
       const scoredSkills = updatedSkills.filter(sk => sk.score > 0);
       const newClusterScore = scoredSkills.length > 0
@@ -2715,12 +2728,26 @@ export function buildDashboardData(params: {
     ? eval_.capability_score
     : _recomputedFinalQA;
 
-  // 5. Pass/Fail from QA-derived MHS average (prefer backend authoritative).
+  // Headline Must-Have Section Score. The backend's stored
+  // `section_question_avg.mth` is AUTHORITATIVE — it is the exact value the
+  // Results/invite list shows (× 10) and the one Pass/Fail is gated on. The
+  // frontend `mustHaveAvgQA` is an independent per-skill recompute that can
+  // drift by ~0.1 (e.g. backend 6.61 vs recompute 6.50 → list 66% vs report
+  // 65%), so for the HEADLINE we display the backend value verbatim when
+  // present (Timed mode) and fall back to the recompute only for legacy evals
+  // that never stored it. The per-Q recompute is still used for the Question
+  // Analysis tab's per-question badges. (2026-08-19)
+  const _backendMth = eval_?.section_question_avg?.mth;
+  const mustHaveHeadline = (mode === 'Timed' && typeof _backendMth === 'number')
+    ? _backendMth
+    : mustHaveAvgQA;
+
+  // 5. Pass/Fail from the authoritative MHS average (prefer backend final).
   let finalResultQA: 'Pass' | 'Fail' | null = null;
   if (!isPartialEval) {
     if (backendFinal === 'pass') finalResultQA = 'Pass';
     else if (backendFinal === 'fail') finalResultQA = 'Fail';
-    else if (mustHaveAvgQA > 0) finalResultQA = mustHaveAvgQA >= MHS_THRESHOLD ? 'Pass' : 'Fail';
+    else if (mustHaveHeadline > 0) finalResultQA = mustHaveHeadline >= MHS_THRESHOLD ? 'Pass' : 'Fail';
     else finalResultQA = finalResult;
   }
 
@@ -2737,7 +2764,7 @@ export function buildDashboardData(params: {
     },
     isPartialEvaluation: isPartialEval,
     scores: {
-      mustHave:   Math.round(mustHaveAvgQA  * 100) / 100,
+      mustHave:   Math.round(mustHaveHeadline * 100) / 100,
       niceToHave: Math.round(niceToHaveAvgQA * 100) / 100,
       hr:         Math.round(hr             * 100) / 100,
       final:      finalScoreQA,

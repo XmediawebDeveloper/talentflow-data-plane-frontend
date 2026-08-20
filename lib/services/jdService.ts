@@ -31,6 +31,10 @@ export interface JDCreate {
   domain_keywords?: string[];
   job_level?: string;
   industry_type?: string;
+  republished_at?: string | null;
+  republish_count?: number;
+  role_family?: string;
+  role_family_confidence?: number;
   salary_min?: number;
   salary_max?: number;
   salary_currency?: string;
@@ -104,6 +108,8 @@ export interface JDExtractedParams {
   domain_keywords: string[];
   job_level?: string;
   industry_type?: string;
+  role_family?: string;
+  role_family_confidence?: number;
   coding_required: boolean;
   suggested_languages: string[];
   // New fields for extraction
@@ -182,6 +188,8 @@ export interface JDVersion {
   domain_keywords: string[];
   job_level?: string;
   industry_type?: string;
+  role_family?: string;
+  role_family_confidence?: number;
   salary_min?: number;
   salary_max?: number;
   salary_currency?: string;

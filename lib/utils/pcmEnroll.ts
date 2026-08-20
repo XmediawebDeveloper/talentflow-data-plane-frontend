@@ -26,6 +26,19 @@ export interface Pcm16Capture {
 // Minimum genuine speech required for a valid enrollment capture.
 const MIN_SPEECH_SECONDS = 1.5;
 
+// Thrown when the microphone track dies (headset unplugged, Bluetooth drop,
+// etc.) partway through recordPcm16's capture window. Callers must treat this
+// as "the candidate has to redo the whole enrollment" — never analyze or
+// submit the partial audio captured before the drop, since a few seconds of
+// real speech followed by silence from a dead track could otherwise pass the
+// speech-presence check on a broken recording.
+export class MicDisconnectedDuringRecordingError extends Error {
+  constructor() {
+    super('Microphone disconnected during recording');
+    this.name = 'MicDisconnectedDuringRecordingError';
+  }
+}
+
 const TARGET_RATE = 16000;
 
 // Mirror the AI interview's capture config so the enrolled voiceprint is
@@ -195,12 +208,33 @@ export async function recordPcm16(
     }).catch(() => {})),
   );
 
-  await new Promise((r) => setTimeout(r, durationMs));
+  // Race the fixed capture window against the mic dying mid-recording, so a
+  // headset pull aborts immediately instead of silently finishing out the
+  // full durationMs on a dead track. 'ended' fires promptly on most
+  // OS/driver combos; the 250 ms readyState poll is the backstop for the
+  // ones that don't (mirrors the pattern used for the live system-check
+  // track watcher).
+  let disconnected = false;
+  const onTrackEnded = () => { disconnected = true; };
+  audioTracks.forEach((t) => t.addEventListener('ended', onTrackEnded));
+  const pollId = setInterval(() => {
+    if (audioTracks.some((t) => t.readyState !== 'live')) disconnected = true;
+  }, 250);
+
+  const started = Date.now();
+  while (!disconnected && Date.now() - started < durationMs) {
+    await new Promise((r) => setTimeout(r, Math.min(100, durationMs - (Date.now() - started))));
+  }
+
+  clearInterval(pollId);
+  audioTracks.forEach((t) => t.removeEventListener('ended', onTrackEnded));
 
   processor.disconnect();
   source.disconnect();
   const nativeRate = ctx.sampleRate || 48000;
-  await ctx.close();
+  await ctx.close().catch(() => {});
+
+  if (disconnected) throw new MicDisconnectedDuringRecordingError();
 
   const total = chunks.reduce((s, c) => s + c.length, 0);
   if (total === 0) return null;

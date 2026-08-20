@@ -180,6 +180,23 @@ export function InterviewProctoringWarnings() {
   // Subscribe to interview event bus on mount
   useEffect(() => {
     const unsubscribe = InterviewEventBus.subscribe((event: ProctoringEvent) => {
+      // screen_recording_attempt never becomes a candidate-facing toast here.
+      // The ONLY thing that emits it on this bus is the getDisplayMedia monkey
+      // patch in InterviewProctoringMonitor, which by construction can only see
+      // THIS PAGE's own calls — an external recorder (OBS, Game Bar, QuickTime)
+      // never routes through it. So every toast it produced was our own app's
+      // screen (re)share racing the __tfAllowLegitimateShare flag, i.e. a
+      // "Screen Recording Detected" warning shown to a candidate who had started
+      // no recorder, right as the session opened.
+      //
+      // Real screen-recording detection now lives in the portal's in-interview
+      // vision watch, which owns its own banner. The event is still emitted and
+      // still reported to the backend for the recruiter's timeline — it just no
+      // longer accuses the candidate on screen.
+      if (event.type === 'screen_recording_attempt') {
+        console.warn('[InterviewWarnings] suppressed legacy screen_recording_attempt toast (own-page getDisplayMedia, not an external recorder)');
+        return;
+      }
       setWarnings(prev => {
         const next: WarningItem = {
           id: event.id,

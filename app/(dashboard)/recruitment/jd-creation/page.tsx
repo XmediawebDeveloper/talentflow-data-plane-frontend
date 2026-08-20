@@ -446,6 +446,13 @@ function JDCreationContent() {
       // experience on edit. Forward it so it round-trips.
       job_level: editingJD.job_level,
       industry_type: editingJD.industry_type,
+      // role_family is decided during EXTRACTION so publish can resolve
+      // master_role_families by code instead of paying a classification LLM call.
+      // If this mapping drops it, the edited JD reverts to role_family=null and
+      // publish silently falls back to that call - the field-forwarding failure
+      // that previously lost job_level, department and certifications.
+      role_family: editingJD.role_family,
+      role_family_confidence: editingJD.role_family_confidence,
       department: editingJD.department,
       salary_min: editingJD.salary_min,
       salary_max: editingJD.salary_max,

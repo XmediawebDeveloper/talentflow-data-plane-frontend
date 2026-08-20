@@ -398,6 +398,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                even though the count above buckets it as 'terminated'. The filter
                below compares against the raw value. */
             { key: 'abandoned', label: 'Terminated', Icon: Ban, value: stats.terminated, ...INVITE_CARD_TONES.red },
+            /* Terminated — candidate walked out mid-assessment; getEffectiveStatus
+               returns 'abandoned' for exactly these rows, so the card and the
+               table it filters to always agree. */
+            { key: 'abandoned', label: 'Terminated', Icon: Ban, value: stats.terminated, ...INVITE_CARD_TONES.red },
             {
               key: 'completion-rate',
               label: 'Completion Rate',

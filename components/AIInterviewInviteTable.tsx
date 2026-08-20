@@ -101,27 +101,15 @@ export const isInterviewLinkLive = (inv: any): boolean =>
   !['completed', 'cancelled', 'terminated', 'expired', 'revoked'].includes(resolveInviteStatus(inv)) &&
   !isInviteExpired(inv);
 
-/**
- * The Match Score from the candidate's Evaluation Report, or null for a dash.
- *
- * `capability_score` IS that number, not a proxy for it: the adapter documents
- * it as "section avg / planned x 10" — the same quantity the Evaluation Report
- * headline shows — and carries a parity guard stating the report must equal
- * `Math.round(capability_score)` (evaluation-dashboard/adapter.ts, "PARITY
- * GUARD"). Rounded here for the same reason it is rounded there, so 17.5 reads
- * as 18 on both screens.
- *
- * Deliberately no fallback to any other field. This used to read
- * `?? inv.score`, which is a different number: when the row arrived without an
- * evaluation — not interviewed yet, evaluation still running, or a compact
- * payload that omits it — the column quietly showed that instead of admitting
- * it had no Match Score, and the two screens disagreed. Absent means dash.
- *
- * A partial evaluation counts as absent: the report withholds its Match Score
- * block entirely while `isPartialEvaluation` is set (OverviewSectionV2), so
- * showing a number here would be showing one the report refuses to.
- */
+/** Invite/list Score is ALWAYS the Must-Have Skills percentage (MHS section
+ *  average ×10), shown only once an evaluation exists — otherwise a dash.
+ *  Full (non-compact) payloads carry `section_question_avg.mth` (0-10); the
+ *  compact list payload instead carries the MHS%-derived value directly in
+ *  `capability_score` (the backend mirrors it there). Never fall back to a
+ *  blended capability_score or the legacy `score`. Round so 17.5 reads as 18. */
 export const displayInviteScore = (inv: any): number | null => {
+  const mth = inv.ai_evaluation?.section_question_avg?.mth;
+  if (typeof mth === 'number') return Math.round(mth * 10);
   const evaluation = inv?.ai_evaluation;
   if (!evaluation) return null;
   if (evaluation.partial === true || evaluation.evaluation_incomplete === true) return null;
