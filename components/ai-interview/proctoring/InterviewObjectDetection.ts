@@ -160,12 +160,26 @@ const WORKER_URL = `/workers/objectDetection.worker.js?v=${WORKER_VERSION}`;
  */
 export function prefetchObjectDetectionModel(): void {
   if (typeof navigator === "undefined" || !("gpu" in navigator)) return;
-  fetch(MODEL_URL, { method: "GET", cache: "force-cache", priority: "low" } as RequestInit)
-    .then(res => res.arrayBuffer())
-    .then(buf => console.log(
-      `[INTERVIEW_OBJECT_DETECTION] Model prefetched (${(buf.byteLength / 1e6).toFixed(1)} MB)`,
-    ))
-    .catch(() => { /* best-effort warm-up only */ });
+  void (async () => {
+    try {
+      const res = await fetch(MODEL_URL, { method: "GET", cache: "force-cache", priority: "low" } as RequestInit);
+      if (!res.ok || !res.body) return;
+      // Drain the body chunk by chunk and throw each one away. The response
+      // still has to be read to the end for the HTTP cache to keep it, but
+      // res.arrayBuffer() also parked the whole model — tens of MB — in the JS
+      // heap of the machine that is about to run the interview, for nothing.
+      const reader = res.body.getReader();
+      let bytes = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) bytes += value.length;
+      }
+      console.log(
+        `[INTERVIEW_OBJECT_DETECTION] Model prefetched (${(bytes / 1e6).toFixed(1)} MB)`,
+      );
+    } catch { /* best-effort warm-up only */ }
+  })();
 }
 
 interface ClassState {

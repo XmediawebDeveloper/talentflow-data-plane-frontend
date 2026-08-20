@@ -1672,6 +1672,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [masterDataLoading, setMasterDataLoading] = useState(false);  // Set to false since we have fallback data
   const [showCustomExperienceInput, setShowCustomExperienceInput] = useState(false);
 
+  // TRUE for the duration of one extraction that must REPLACE everything, not merge.
+  //
+  // Reaching the extraction call at all means Step 1 changed (or we have no baseline):
+  // every "nothing changed" path in handleNext returns early before it. So whatever is
+  // currently in Step 2 was derived from DIFFERENT Step 1 content and is stale by
+  // definition - the JD text, the title or the prompt no longer matches it.
+  //
+  // Without this, two preservation rules silently kept that stale data:
+  //   isEditMode        -> merged old list values in when the new extraction returned fewer
+  //   preserveUserEdits -> DISCARDED the new extraction outright if the recruiter had
+  //                        edited anything in Step 2 (extractedDataModified)
+  // So a recruiter who edited Step 2, went back, rewrote the JD and pressed Next got the
+  // OLD requirements against the NEW description. Applies to every state - new, draft,
+  // published edit and version fork - because all four run through this same call.
+  const forceFreshExtraction = useRef(false);
+
   // What the recruiter is CURRENTLY typing in the experience From/To boxes, before it
   // is normalized. null = not editing, so the boxes show the canonical stored value.
   //
@@ -2357,7 +2373,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // (switching Manual->AI must not preserve stale Manual-derived data).
       const extractionSourceModeChanged =
         lastExtractionSourceMode.current !== null && lastExtractionSourceMode.current !== mode;
-      const isEditMode = !!editingId && !extractionSourceModeChanged;
+      const isEditMode = !!editingId && !extractionSourceModeChanged
+        && !forceFreshExtraction.current;
       const nextExperienceValue = expValue || (isEditMode ? extractedData.experience : '');
       lastExtractionSourceMode.current = mode;
 
@@ -2820,6 +2837,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
+    // We only get here when Step 1 changed (or there is no baseline) - every
+    // no-change path above has already returned. So this extraction REPLACES Step 2
+    // rather than merging into it.
+    forceFreshExtraction.current = true;
+    setExtractedDataModified(false);
+    console.log('[TalentFlow] Step 1 changed - running a FRESH extraction; previous Step 2 data will be replaced');
+
     setIsExtracting(true);
     setHasProceededToExtract(true); // Disable regenerate button immediately when Next is clicked
 
@@ -3069,11 +3093,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // stale prior-mode (AI-generated) data does not linger in the other fields.
       const extractionSourceModeChanged =
         lastExtractionSourceMode.current !== null && lastExtractionSourceMode.current !== mode;
-      const isEditMode = !!editingId && !extractionSourceModeChanged;
+      const isEditMode = !!editingId && !extractionSourceModeChanged
+        && !forceFreshExtraction.current;
 
       // FIX: If user has modified extracted data (deleted/edited skills/comments), preserve their changes
       // Don't let AI extraction overwrite user's manual edits
-      const preserveUserEdits = isEditMode && extractedDataModified;
+      // Never preserve Step 2 edits across a Step 1 change: those edits were made
+      // against the OLD description, so keeping them would pair old requirements with
+      // new JD text - the exact mismatch this flag exists to prevent.
+      const preserveUserEdits = isEditMode && extractedDataModified
+        && !forceFreshExtraction.current;
       const nextExperienceYearsExplicit = (hasExpMin || hasExpMax)
         || (preserveUserEdits && resolvePersistedExperiencePayload(extractedData.experience).yearsWereExplicit);
       setExperienceYearsExplicit(nextExperienceYearsExplicit);
@@ -3320,6 +3349,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     } finally {
       setIsExtracting(false);
+      // Cleared in `finally`, not only on success: if the extraction call throws, a flag
+      // left set would suppress preservation on the NEXT extraction too, silently wiping
+      // Step 2 edits that had nothing to do with the failed attempt.
+      forceFreshExtraction.current = false;
     }
   };
 
