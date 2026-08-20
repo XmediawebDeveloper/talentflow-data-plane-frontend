@@ -12,6 +12,7 @@ import {
   useInterviewObjectDetection,
   useInterviewProctoringMonitor,
   InterviewProctoringWarnings,
+  ScreenRecordingBlockedModal,
   EnvironmentVerificationOverlay,
   type DetectedObjectEvent,
   type ObjectEventType,
@@ -9773,6 +9774,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       )}
 
       <InterviewProctoringWarnings />
+
+      {/* Fires the instant an in-page screen-recording attempt is refused by the
+          getDisplayMedia / desktop-getUserMedia guards in the proctoring
+          monitor. Self-subscribing — no props, no parent state. */}
+      <ScreenRecordingBlockedModal />
 
       <EnvironmentVerificationOverlay
         active={Boolean(envVerification)}

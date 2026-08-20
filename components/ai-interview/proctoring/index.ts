@@ -7,6 +7,15 @@ export type { ObjectEventType } from './detectableObjects';
 export { useInterviewFaceVerification } from './InterviewFaceVerification';
 export { useInterviewVoiceVerification } from './InterviewVoiceVerification';
 export { InterviewProctoringWarnings } from './InterviewProctoringWarnings';
+export { ScreenRecordingBlockedModal } from './ScreenRecordingBlockedModal';
+export {
+  beginLegitimateShare,
+  endLegitimateShare,
+  isLegitimateShareInFlight,
+  onScreenRecordingBlocked,
+  notifyScreenRecordingBlocked,
+  SCREEN_RECORDING_BLOCKED_MESSAGE,
+} from './ScreenRecordingGuard';
 export { EnvironmentVerificationOverlay } from './EnvironmentVerificationOverlay';
 export { InterviewEventBus } from './InterviewEventBus';
 export type { ProctoringEventType, ProctoringEvent } from './InterviewEventBus';
