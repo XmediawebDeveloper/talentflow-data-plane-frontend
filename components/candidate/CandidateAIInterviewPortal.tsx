@@ -235,6 +235,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // true when candidate stopped screen sharing during the interview
   const [screenShareStopped, setScreenShareStopped] = useState(false);
   const [resharing, setResharing] = useState(false);
+  // true when the interview was RESUMED (page reload / recovery after a dropped
+  // connection) and the screen recorder needs to be re-established. A reload
+  // auto-restarts the CAMERA recorder (getUserMedia needs no gesture) but the
+  // SCREEN recorder cannot restart silently — getDisplayMedia requires a fresh
+  // user click — so without this prompt the screen recording would be missing
+  // for the rest of the interview while the camera keeps recording (durations
+  // diverge). This drives a resume-specific "re-share your screen" overlay.
+  const [screenReshareOnResume, setScreenReshareOnResume] = useState(false);
 
   // Language state
   const [availableLanguages, setAvailableLanguages] = useState<string[]>(['English']);
@@ -444,6 +452,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           } catch (e) {
             console.warn('[Portal] Failed to pre-create AudioContext on resume:', e);
           }
+        }
+        // RESUME = the interview was already started in a prior session (a
+        // reload / recovery after a dropped connection). The screen recorder is
+        // gone (getDisplayMedia can't survive a reload without a fresh gesture)
+        // while the camera recorder will auto-restart. Prompt the candidate to
+        // re-share their screen so the screen recording resumes and both
+        // recordings stay in sync. (Screen share is mandatory for every
+        // interview, so no per-interview gate is needed.)
+        if (!screenRecorderRef.current) {
+          setScreenReshareOnResume(true);
         }
         setStep('interview');
         return;
@@ -2783,6 +2801,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           }
         });
         setScreenShareStopped(false);
+        // A successful re-share also satisfies the resume prompt (the screen
+        // recorder is live again), so clear that flag whichever overlay
+        // triggered the re-share.
+        setScreenReshareOnResume(false);
       } catch (e: any) {
         // User cancelled re-share — report as additional malpractice
         const cancelled = e?.name === 'NotAllowedError' || e?.name === 'AbortError';
@@ -2871,6 +2893,38 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           </div>
         )}
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
+        {/* RESUME re-share prompt — shown after a reload/recovery when the
+            screen recorder was lost (getDisplayMedia can't restart without a
+            fresh gesture). Distinct from the "stopped sharing" violation overlay:
+            this is a recovery step, not a malpractice event. Hidden if the
+            stopped-sharing overlay is already up (that one takes precedence). */}
+        {screenReshareOnResume && !screenShareStopped && (
+          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm">
+            <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                <Monitor className="w-8 h-8 text-blue-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Re-share your screen to continue</h2>
+              <p className="text-gray-600 mb-2 text-sm">
+                Your interview reconnected. To keep the screen recording in sync with your camera, please share your <span className="font-semibold">Entire Screen</span> again.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                Window and Current Tab are not allowed.
+              </p>
+              <button
+                onClick={handleReshareScreen}
+                disabled={resharing}
+                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
+              >
+                {resharing ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />Requesting Permission...</>
+                ) : (
+                  <><Monitor className="w-4 h-4" />Share Entire Screen</>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
         {screenShareStopped && (
           <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
