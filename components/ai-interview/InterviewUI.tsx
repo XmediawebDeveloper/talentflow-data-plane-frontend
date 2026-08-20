@@ -1447,6 +1447,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     return candidateAIInterviewService.reportProctorEvent(t, event);
   }, []);
 
+  // Tried by the proctoring monitor BEFORE it ever reports the mic disabled —
+  // e.g. a laptop's built-in mic taking over the instant an external headset
+  // is unplugged. reacquireAudio() asks for "the current default input" with
+  // no deviceId pin, so once the OS re-defaults away from the dead headset
+  // this naturally picks up whatever mic is now available. On success this is
+  // entirely invisible to the candidate — no popup, no pause, no strike
+  // counted against the 2-disconnect limit — but still logged (low severity)
+  // so the recruiter has an audit trail of the swap.
+  const attemptSilentMicFallback = useCallback(async (): Promise<boolean> => {
+    const ok = (await webcamRef.current?.reacquireAudio()) ?? false;
+    if (ok) {
+      candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: 'microphone_disabled',
+        severity: 'low',
+        details: {
+          phase: 'in_interview',
+          reason: 'auto_fallback_switch',
+          note: 'Microphone device dropped and was automatically switched to another available device (e.g. built-in mic) with no interruption to the candidate.',
+        },
+      }).catch(() => { /* best-effort */ });
+    }
+    return ok;
+  }, [token]);
+
   const { state: proctoringState, emitEvent, flushEvents } = useInterviewProctoringMonitor({
     token,
     stream: webcamStream,
@@ -1455,6 +1479,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
     reportEvent: reportProctorEvent,
+    attemptSilentMicFallback,
     // Suppress voice_detected while Bina is speaking (TTS echo), while we are
     // actively recording the candidate's answer, OR during the between-question
     // "Hold On — get ready" transition (isProcessing). All three are expected /
