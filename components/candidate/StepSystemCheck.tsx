@@ -572,12 +572,21 @@ export default function StepSystemCheck({
   // groupId in case a device is otherwise listed twice.
   const dedupeRealDevices = (devices: MediaDeviceInfo[]): MediaDeviceInfo[] => {
     const seenGroups = new Set<string>();
-    return devices.filter((d) => {
+    const filtered = devices.filter((d) => {
       if (d.deviceId === 'default' || d.deviceId === 'communications') return false;
       if (d.groupId && seenGroups.has(d.groupId)) return false;
       if (d.groupId) seenGroups.add(d.groupId);
       return true;
     });
+    // Before mic/camera permission is ever granted, some browsers expose
+    // ONLY the 'default'/'communications' pseudo-entries — no separate
+    // per-device entry at all yet — so filtering those out would leave the
+    // dropdown completely empty even though a real device IS connected.
+    // Fall back to the raw (un-deduped) list in that case so there's always
+    // something to select; once permission is granted (first "Run Check"),
+    // enumerateDevices() reveals the real per-device entries and normal
+    // dedup applies again on the next refresh.
+    return filtered.length > 0 ? filtered : devices;
   };
 
   // Populate the dropdown option lists. Labels are only populated by the
@@ -1912,7 +1921,18 @@ export default function StepSystemCheck({
                         until an explicit device is chosen here — "System Default"
                         does not count, so this option is disabled and the placeholder
                         stays selected until the candidate actively picks one. */}
-                    {!selectedMicId && (
+                    {micDevices.length === 0 ? (
+                      // Some browsers won't reveal real per-device entries until
+                      // mic permission has been granted at least once — which
+                      // hasn't happened yet if the candidate hasn't clicked "Run
+                      // Check" yet. The dropdown looks empty in the meantime even
+                      // though a device IS physically connected; this explains why
+                      // rather than leaving it looking silently broken.
+                      <p className="mt-1 text-xs text-gray-400">
+                        No microphones detected yet — click <strong>Run Check</strong> above
+                        to detect your connected microphone(s), then select one here.
+                      </p>
+                    ) : !selectedMicId && (
                       <p className="mt-1 text-xs text-amber-600 font-medium">
                         Required — select your microphone to complete the Microphone check.
                       </p>
