@@ -84,7 +84,7 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
               </div>
 
               {/* Content */}
-              <div className="p-6 overflow-y-auto max-h-[calc(80vh-100px)]">
+              <div className="p-6 overflow-y-auto max-h-[calc(80dvh-100px)]">
                 {Object.entries(groupedShortcuts).map(([category, categoryShortcuts]) => (
                   <div key={category} className="mb-6 last:mb-0">
                     <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">

@@ -315,18 +315,23 @@ const DEFAULT_REVEAL_CPS = 12;
 // pacer above governs; this only stops a bad CPS prior from completing the
 // bubble before `audio_end` confirms the total.
 const PHASE_A_MAX_FRACTION = 0.94;
-// TalkingHead's WORKLET path buffers incoming PCM before its speaker goes
-// audible. Text reveal must wait this long after the first chunk arrives, else
-// the bubble paints while Bina is still silent. 1500ms gives generous headroom
-// for network jitter + TalkingHead's internal codec init.
-// NOTE: this is an unmeasured estimate, and it is NOT universal — Talking-
-// HeadAvatar's raw Web Audio fallback (Edge / audioOnly / avatar-load failure)
-// plays chunks immediately, i.e. a delay of 0. Always read the ACTIVE path's
-// value via getAudibleDelayMs() rather than using this constant directly.
+// COLD-START PRIOR ONLY — no longer the steady-state value.
+// TalkingHead's WORKLET path becomes audible some time after the first PCM
+// chunk arrives (worklet module load on the first turn, then just the audio-
+// thread hop + hardware output latency). Text reveal must wait that long, else
+// the bubble paints while Bina is still silent.
+// TalkingHeadAvatar now MEASURES this per turn — `onAudioStart` (the worklet's
+// `playback-started`) minus first-chunk arrival, plus the context's output
+// latency — and publishes it to `__interviewAudibleDelayMs`, carrying the last
+// measurement forward as the next turn's prior. This constant therefore only
+// applies to the window before the very first measurement of the session lands.
+// It is deliberately generous: over-estimating makes captions trail slightly,
+// under-estimating makes them outrun Bina (and the reveal is monotonic, so an
+// over-reveal cannot be walked back within a turn).
 const TALKING_HEAD_BUFFER_MS = 1500;
 // Delay between chunk arrival and audible output for the path TalkingHeadAvatar
-// actually took this turn. It publishes 0 for its Web Audio fallback and null
-// for the worklet path (see TalkingHeadAvatar.streamStart).
+// actually took this turn — MEASURED, see TalkingHeadAvatar.streamStart's
+// `onAudioStart`. Non-numeric only before the session's first measurement.
 const getAudibleDelayMs = (): number => {
   const v = (window as InterviewWindow).__interviewAudibleDelayMs;
   return typeof v === 'number' && v >= 0 ? v : TALKING_HEAD_BUFFER_MS;
@@ -1443,6 +1448,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     return candidateAIInterviewService.reportProctorEvent(t, event);
   }, []);
 
+  // Tried by the proctoring monitor BEFORE it ever reports the mic disabled —
+  // e.g. a laptop's built-in mic taking over the instant an external headset
+  // is unplugged. reacquireAudio() asks for "the current default input" with
+  // no deviceId pin, so once the OS re-defaults away from the dead headset
+  // this naturally picks up whatever mic is now available. On success this is
+  // entirely invisible to the candidate — no popup, no pause, no strike
+  // counted against the 2-disconnect limit — but still logged (low severity)
+  // so the recruiter has an audit trail of the swap.
+  const attemptSilentMicFallback = useCallback(async (): Promise<boolean> => {
+    const ok = (await webcamRef.current?.reacquireAudio()) ?? false;
+    if (ok) {
+      candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: 'microphone_disabled',
+        severity: 'low',
+        details: {
+          phase: 'in_interview',
+          reason: 'auto_fallback_switch',
+          note: 'Microphone device dropped and was automatically switched to another available device (e.g. built-in mic) with no interruption to the candidate.',
+        },
+      }).catch(() => { /* best-effort */ });
+    }
+    return ok;
+  }, [token]);
+
   const { state: proctoringState, emitEvent, flushEvents } = useInterviewProctoringMonitor({
     token,
     stream: webcamStream,
@@ -1451,6 +1480,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
     reportEvent: reportProctorEvent,
+    attemptSilentMicFallback,
     // Suppress voice_detected while Bina is speaking (TTS echo), while we are
     // actively recording the candidate's answer, OR during the between-question
     // "Hold On — get ready" transition (isProcessing). All three are expected /
@@ -8632,7 +8662,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── END DEV DEBUG OVERLAY ── */}
 
       {/* ── Main interview UI ── */}
-      <div className="flex h-screen overflow-hidden bg-[#0F1117]">
+      <div className="flex h-[100dvh] overflow-hidden bg-[#0F1117]">
 
         {/* ════ LEFT PANEL: Video feeds (dark) — 40% ════ */}
         <div className="w-[40%] flex-shrink-0 flex flex-col bg-[#0F1117] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>

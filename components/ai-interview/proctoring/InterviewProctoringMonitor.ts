@@ -52,6 +52,17 @@ interface UseInterviewProctoringMonitorOptions {
   // "another voice detected" and the proctor floods the report with false
   // violations.
   shouldSuppressVoiceCheck?: () => boolean;
+  // Tried FIRST, before the mic is ever reported disabled — lets the caller
+  // silently reacquire audio (e.g. Webcam.reacquireAudio(), which asks for
+  // "the current default input" with no deviceId pin, so it naturally lands
+  // on a laptop's built-in mic once an external headset drops). Resolves
+  // true on success. When provided and it succeeds, isMicrophoneActive never
+  // flips false at all — no popup, no pause, no strike counted upstream —
+  // this is deliberately invisible to every consumer of this hook's state.
+  // The caller is responsible for its OWN backend logging of the fallback
+  // (kept out of this hook's typed ProctoringEventType/toast pipeline on
+  // purpose, since a toast here would defeat the point of "silent").
+  attemptSilentMicFallback?: () => Promise<boolean>;
 }
 
 interface ProctoringState {
@@ -326,6 +337,7 @@ export function useInterviewProctoringMonitor({
   obstructionThreshold = 30,
   reportEvent,
   shouldSuppressVoiceCheck,
+  attemptSilentMicFallback,
 }: UseInterviewProctoringMonitorOptions) {
   // Minimal React state — only what InterviewUI overlays need
   const [state, setState] = useState<ProctoringState>({
@@ -347,6 +359,7 @@ export function useInterviewProctoringMonitor({
   const obstructionThresholdRef = useRef(obstructionThreshold);
   const isMonitoringRef = useRef(false);
   const shouldSuppressVoiceCheckRef = useRef(shouldSuppressVoiceCheck);
+  const attemptSilentMicFallbackRef = useRef(attemptSilentMicFallback);
 
   useEffect(() => { tokenRef.current = token; }, [token]);
   useEffect(() => { streamRef.current = stream; }, [stream]);
@@ -356,6 +369,7 @@ export function useInterviewProctoringMonitor({
   useEffect(() => { voiceSensitivityRef.current = voiceDetectionSensitivity; }, [voiceDetectionSensitivity]);
   useEffect(() => { obstructionThresholdRef.current = obstructionThreshold; }, [obstructionThreshold]);
   useEffect(() => { shouldSuppressVoiceCheckRef.current = shouldSuppressVoiceCheck; }, [shouldSuppressVoiceCheck]);
+  useEffect(() => { attemptSilentMicFallbackRef.current = attemptSilentMicFallback; }, [attemptSilentMicFallback]);
 
   // Worker refs
   const videoWorkerRef = useRef<Worker | null>(null);
@@ -699,11 +713,44 @@ export function useInterviewProctoringMonitor({
     setState(prev => ({ ...prev, isCameraActive: true }));
   }, []);
 
-  const reportMicDisabled = useCallback((reason: string) => {
+  // Guards the async fallback attempt below so two near-simultaneous triggers
+  // (e.g. onended firing right before the health-check poll also notices)
+  // can't both race into attemptSilentMicFallback concurrently — the second
+  // caller just waits its turn behind the in-flight promise.
+  const micDisabledInFlightRef = useRef<Promise<void> | null>(null);
+
+  const reportMicDisabled = useCallback(async (reason: string) => {
     if (micDisabledRef.current) return;
-    micDisabledRef.current = true;
-    setState(prev => ({ ...prev, isMicrophoneActive: false }));
-    emitEventRef.current('microphone_disabled', { reason });
+    if (micDisabledInFlightRef.current) { await micDisabledInFlightRef.current; return; }
+
+    const run = (async () => {
+      // Try a SILENT recovery first — e.g. a laptop's built-in mic taking
+      // over after an external headset drops. Skipped for permission
+      // revocations: a per-origin mic block applies to every device, so a
+      // different deviceId wouldn't help and would just waste the retries.
+      const fallback = attemptSilentMicFallbackRef.current;
+      if (fallback && !reason.startsWith('permission_')) {
+        const FALLBACK_ATTEMPTS = 3;
+        const RETRY_GAP_MS = 400;
+        for (let attempt = 0; attempt < FALLBACK_ATTEMPTS; attempt++) {
+          try {
+            if (await fallback()) return; // recovered — never flip isMicrophoneActive
+          } catch { /* device still unavailable — keep retrying below */ }
+          if (attempt < FALLBACK_ATTEMPTS - 1) await new Promise(r => setTimeout(r, RETRY_GAP_MS));
+        }
+      }
+      if (micDisabledRef.current) return; // reportMicRestored already fired mid-retry
+      micDisabledRef.current = true;
+      setState(prev => ({ ...prev, isMicrophoneActive: false }));
+      emitEventRef.current('microphone_disabled', { reason });
+    })();
+
+    micDisabledInFlightRef.current = run;
+    try {
+      await run;
+    } finally {
+      micDisabledInFlightRef.current = null;
+    }
   }, []);
 
   const reportMicRestored = useCallback(() => {

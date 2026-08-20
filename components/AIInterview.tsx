@@ -28,6 +28,7 @@ import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
+import JDVersionHistory from '@/components/JDVersionHistory';
 
 // Returns the effective interview duration string.
 // New configs store the real 30 / 35 / N value in duration_minutes.
@@ -435,7 +436,14 @@ export default function AIInterview() {
         invite_date_to: filters.dateTo || undefined,
         page,
         page_size: INVITATION_PAGE_SIZE,
-        compact: true,
+        /* Deliberately NOT compact. The compact payload drops `ai_evaluation`,
+           and the Score column reads the Match Score out of it — without the
+           evaluation every row fell through to a different field and showed a
+           number that disagreed with the candidate's Evaluation Report. The
+           two count-only calls in loadInvitationOverview stay compact: they
+           ask for page_size 1 and use nothing but the totals.
+           The Job Details tracker has always fetched these rows non-compact,
+           which is why its Score column was already right. */
       });
       setInvitations(result.items);
       setInvitationTotal(result.total);
@@ -1655,6 +1663,11 @@ export default function AIInterview() {
                                 {(config.jd_title || config.position) && (
                                   <span className="ml-1.5 text-gray-400 dark:text-slate-500">· {config.jd_title || config.position}</span>
                                 )}
+                                <JDVersionHistory
+                                  jdId={config.jd_id}
+                                  version={config.jd_version}
+                                  className="mt-1.5"
+                                />
                               </div>
                             )}
                             <div className="flex items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-slate-500 flex-wrap">
@@ -1754,7 +1767,7 @@ export default function AIInterview() {
                             {openMenuId === config.id && (
                               <div
                                 onClick={(e) => e.stopPropagation()}
-                                className={`absolute right-0 w-52 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 rounded-lg shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 max-h-[70vh] overflow-y-auto p-1 ${
+                                className={`absolute right-0 w-52 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 rounded-lg shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 max-h-[70dvh] overflow-y-auto p-1 ${
                                 menuDropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
                               }`}>
                                 <button

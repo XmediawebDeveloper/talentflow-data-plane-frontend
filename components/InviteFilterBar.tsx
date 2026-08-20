@@ -45,6 +45,9 @@ export const ASSESSMENT_INVITE_STATUS_OPTIONS: InviteStatusOption[] = [
   { value: 'started', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
   { value: 'abandoned', label: 'Terminated' },
+  /* 'abandoned' is the DB status; recruiters read it as "Terminated" — the
+     candidate exited mid-assessment, which is not an invite failure. */
+  { value: 'abandoned', label: 'Terminated' },
 ];
 
 /* Same rule as the assessment list above: one option per stat card, in card

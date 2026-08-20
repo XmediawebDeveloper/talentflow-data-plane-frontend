@@ -36,7 +36,7 @@ export default function SuspendedAccountBlock({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 flex items-center justify-center p-4">
+    <div className="min-h-[100dvh] bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 flex items-center justify-center p-4">
       <div className="max-w-2xl w-full">
         {/* Main Card */}
         <div className="bg-white rounded-2xl shadow-2xl border-2 border-red-200 overflow-hidden">

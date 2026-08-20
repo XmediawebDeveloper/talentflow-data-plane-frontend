@@ -548,7 +548,7 @@ export default function JobOpeningsPage() {
 
       {/* Delete Warning Dialog - shown when JD is in use */}
       <AlertDialog open={deleteWarningDialog.open} onOpenChange={(open) => setDeleteWarningDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <AlertDialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
           <AlertDialogHeader>
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
@@ -603,7 +603,7 @@ export default function JobOpeningsPage() {
 
       {/* Disable Job Confirmation Dialog */}
       <AlertDialog open={disableDialog.open} onOpenChange={(open) => setDisableDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <AlertDialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <AlertDialogHeader>
             <div className="flex items-start gap-3 sm:gap-4">
               <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-red-100 flex items-center justify-center">

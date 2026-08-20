@@ -207,7 +207,7 @@ export default function ResumeTextPreviewModal({
 
   return (
     <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 ${zIndexClassName}`}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
@@ -247,7 +247,7 @@ export default function ResumeTextPreviewModal({
             documentUrl ? (
               /* Two things made this read as a raw file viewer rather than the
                  clean page the existing-resume preview shows:
-                 - h-[70vh] iframe inside a min-h-full card left a band of empty
+                 - h-[70dvh] iframe inside a min-h-full card left a band of empty
                    white below the document and gave the preview two competing
                    scrollbars. An iframe cannot report its content height, so
                    the card fills the mat exactly and the PDF scrolls inside it.

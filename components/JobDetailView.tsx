@@ -3641,7 +3641,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           User selects which one(s) before the Share modal opens. */}
       {showAssessmentPicker && pickerAssessments.length > 0 && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80vh] flex flex-col">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80dvh] flex flex-col">
             <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Choose an assessment</h3>
@@ -4252,7 +4252,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
         return (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-            <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full ${jdCompareViewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85vh] flex flex-col overflow-hidden transition-all duration-300`}>
+            <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full ${jdCompareViewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85dvh] flex flex-col overflow-hidden transition-all duration-300`}>
               {/* Header */}
               <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 flex-shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
@@ -4723,7 +4723,7 @@ function AIMatchTabContent({
         {/* Bounded viewport: rows scroll vertically (and horizontally) while the
             header stays pinned. Header background/border live on the cells so the
             pinned row paints solid over the rows sliding underneath. */}
-        <div className="min-h-[400px] max-h-[calc(100vh-20rem)] overflow-auto tf-table-shell">
+        <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
           <table className="w-full min-w-[1450px] table-auto">
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>

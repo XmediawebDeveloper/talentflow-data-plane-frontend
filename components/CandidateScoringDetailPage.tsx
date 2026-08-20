@@ -979,7 +979,7 @@ Best regards`);
   // Show loading state while waiting for complete data
   if (!isDataReady) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-white flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-50 via-gray-100 to-white flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 text-gray-800 animate-spin inline-block mb-4" />
           <p className="text-gray-600 font-medium">Loading candidate details...</p>
@@ -991,7 +991,7 @@ Best regards`);
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100vh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           {/* The resume is a modal now, so the trail always names the candidate —
               no "› Resume" leaf, and the pager keeps its place (the backdrop
               covers it while the modal is open). */}
@@ -2409,7 +2409,7 @@ Best regards`);
               published assessment. */}
           {showAssessmentPicker && pickerAssessments.length > 0 && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80vh] flex flex-col">
+              <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80dvh] flex flex-col">
                 <div className="flex items-center justify-between p-5 border-b border-gray-200 shrink-0">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900">Choose an assessment</h3>
@@ -2491,7 +2491,7 @@ Best regards`);
               z-[60], so it opens above this. */}
           {showShareResumeModal && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] overflow-y-auto">
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
@@ -2651,7 +2651,7 @@ Best regards`);
               dialog, the same level the resume preview uses. */}
           {scorecardPreviewUrl && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90vh] flex flex-col overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
                 {/* Header — the resume preview's, with the scorecard's own
                     subtitle. */}
                 <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
@@ -2818,7 +2818,7 @@ Best regards`);
 
             return (
               <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-                <div className={`bg-white rounded-2xl shadow-2xl w-full ${compareViewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85vh] flex flex-col overflow-hidden transition-all duration-300`}>
+                <div className={`bg-white rounded-2xl shadow-2xl w-full ${compareViewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85dvh] flex flex-col overflow-hidden transition-all duration-300`}>
                   {/* Header */}
                   <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
                     <div className="flex items-center gap-3 min-w-0">
@@ -3004,7 +3004,7 @@ Best regards`);
 
             return (
               <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90vh] flex flex-col overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
                   {/* Header */}
                   <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
                     <div className="flex items-center gap-3 min-w-0">

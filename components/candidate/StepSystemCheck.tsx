@@ -366,9 +366,6 @@ export default function StepSystemCheck({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const lightingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const noiseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Consecutive loud readings — a single spike (cough, chair scrape) must NOT
-  // flip the check to fail; only sustained noise across several ticks should.
-  const noiseFailStreakRef = useRef(0);
   const faceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const micIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Voice enrollment is captured WHILE the candidate speaks during the mic
@@ -575,12 +572,21 @@ export default function StepSystemCheck({
   // groupId in case a device is otherwise listed twice.
   const dedupeRealDevices = (devices: MediaDeviceInfo[]): MediaDeviceInfo[] => {
     const seenGroups = new Set<string>();
-    return devices.filter((d) => {
+    const filtered = devices.filter((d) => {
       if (d.deviceId === 'default' || d.deviceId === 'communications') return false;
       if (d.groupId && seenGroups.has(d.groupId)) return false;
       if (d.groupId) seenGroups.add(d.groupId);
       return true;
     });
+    // Before mic/camera permission is ever granted, some browsers expose
+    // ONLY the 'default'/'communications' pseudo-entries — no separate
+    // per-device entry at all yet — so filtering those out would leave the
+    // dropdown completely empty even though a real device IS connected.
+    // Fall back to the raw (un-deduped) list in that case so there's always
+    // something to select; once permission is granted (first "Run Check"),
+    // enumerateDevices() reveals the real per-device entries and normal
+    // dedup applies again on the next refresh.
+    return filtered.length > 0 ? filtered : devices;
   };
 
   // Populate the dropdown option lists. Labels are only populated by the
@@ -889,35 +895,39 @@ export default function StepSystemCheck({
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (video && canvas && video.readyState >= 2) {
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      if (ctx) {
+      const readBrightness = (): number | null => {
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx || video.readyState < 2) return null;
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0);
         const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        let totalBrightness = 0;
-        for (let i = 0; i < data.length; i += 4) totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
-        const avgBrightness = data.length > 0 ? totalBrightness / (data.length / 4) : 0;
+        let total = 0;
+        for (let i = 0; i < data.length; i += 4) total += (data[i] + data[i + 1] + data[i + 2]) / 3;
+        return data.length > 0 ? total / (data.length / 4) : 0;
+      };
+      // ONE-SHOT check — sampled a few times over ~1.5s so a single dark/bright
+      // frame (a flicker, a hand passing the lens) can't decide it alone, but
+      // this does NOT keep re-verifying itself in the background afterward on
+      // a timer. Verification only happens here, at explicit "Run Check" /
+      // "Retry" click time — never on an ongoing interval the candidate didn't ask for.
+      const first = readBrightness();
+      if (first === null) {
+        updateSystemCheck('lighting', { status: 'fail', detail: 'Unable to analyze lighting' });
+      } else {
+        const SAMPLE_COUNT = 3;
+        const SAMPLE_GAP_MS = 500;
+        const samples: number[] = [first];
+        for (let i = 1; i < SAMPLE_COUNT; i++) {
+          await new Promise((r) => setTimeout(r, SAMPLE_GAP_MS));
+          const s = readBrightness();
+          if (s !== null) samples.push(s);
+        }
+        const avgBrightness = samples.reduce((a, b) => a + b, 0) / samples.length;
         videoBrightnessRef.current = Math.round(avgBrightness);
         updateSystemCheck('lighting', avgBrightness >= 40
           ? { status: 'pass', detail: 'Lighting: Good (Face clearly visible)' }
           : { status: 'fail', detail: 'Lighting: Too dark - improve your lighting' });
-      } else {
-        updateSystemCheck('lighting', { status: 'fail', detail: 'Unable to analyze lighting' });
       }
-      lightingIntervalRef.current = setInterval(() => {
-        if (!video || !canvas || video.readyState < 2) return;
-        const ctx2 = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx2) return;
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        ctx2.drawImage(video, 0, 0);
-        const data = ctx2.getImageData(0, 0, canvas.width, canvas.height).data;
-        let tb = 0;
-        for (let i = 0; i < data.length; i += 4) tb += (data[i] + data[i + 1] + data[i + 2]) / 3;
-        const avg = data.length > 0 ? tb / (data.length / 4) : 0;
-        updateSystemCheck('lighting', avg >= 40
-          ? { status: 'pass', detail: 'Lighting: Good (Face clearly visible)' }
-          : { status: 'fail', detail: 'Lighting: Too dark - improve your lighting' });
-      }, 3000);
     } else {
       updateSystemCheck('lighting', { status: 'fail', detail: 'Camera not available for lighting check' });
     }
@@ -925,50 +935,31 @@ export default function StepSystemCheck({
 
   const runNoise = useCallback(async () => {
     if (noiseIntervalRef.current) { clearInterval(noiseIntervalRef.current); noiseIntervalRef.current = null; }
-    noiseFailStreakRef.current = 0;
     updateSystemCheck('noise', { status: 'checking', detail: 'Analyzing background noise...' });
     const analyser = await ensureAudioAnalyser();
     await new Promise((r) => setTimeout(r, 1000));
     if (analyser) {
-      // A single loud reading must NOT fail the check — a cough, a chair
-      // scrape, or a driver still settling right after a device
-      // reconnect/switch would otherwise flip this to 'fail' (and show
-      // Retry) for one bad tick and immediately bounce back, which read as
-      // "Retry keeps appearing again and again." Require NOISE_FAIL_STREAK
-      // consecutive loud ticks (3s apart) before actually failing; a single
-      // good tick clears the streak and resets to pass immediately.
-      const NOISE_FAIL_STREAK = 2; // ~6s of sustained noise
+      // ONE-SHOT check — sampled a few times over ~1.5s so a single spurious
+      // spike (cough, chair scrape) can't decide it alone, but this does NOT
+      // keep re-verifying itself in the background afterward on a timer.
+      // Verification only happens here, at explicit "Run Check" / "Retry"
+      // click time — never on an ongoing interval the candidate didn't ask for.
       const readAvg = () => {
         const da = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(da);
         return da.length > 0 ? da.reduce((a, b) => a + b, 0) / da.length : 0;
       };
-      if (readAvg() < 80) {
-        noiseFailStreakRef.current = 0;
-        updateSystemCheck('noise', { status: 'pass', detail: 'Background noise: Low (Good)' });
-      } else {
-        // Loud on the very first reading — don't fail yet, give it a chance
-        // to settle; the interval below will fail it if it's still loud.
-        noiseFailStreakRef.current = 1;
-        updateSystemCheck('noise', { status: 'pass', detail: 'Background noise: Low (Good)' });
+      const SAMPLE_COUNT = 3;
+      const SAMPLE_GAP_MS = 500;
+      const samples: number[] = [readAvg()];
+      for (let i = 1; i < SAMPLE_COUNT; i++) {
+        await new Promise((r) => setTimeout(r, SAMPLE_GAP_MS));
+        samples.push(readAvg());
       }
-      noiseIntervalRef.current = setInterval(() => {
-        const a = analyserRef.current;
-        if (!a) return;
-        const da = new Uint8Array(a.frequencyBinCount);
-        a.getByteFrequencyData(da);
-        const avg = da.length > 0 ? da.reduce((x, y) => x + y, 0) / da.length : 0;
-        if (avg < 80) {
-          noiseFailStreakRef.current = 0;
-          updateSystemCheck('noise', { status: 'pass', detail: 'Background noise: Low (Good)' });
-        } else {
-          noiseFailStreakRef.current += 1;
-          if (noiseFailStreakRef.current >= NOISE_FAIL_STREAK) {
-            updateSystemCheck('noise', { status: 'fail', detail: 'Background noise: High - find a quieter space' });
-          }
-          // else: stay on the current status — one loud tick alone doesn't fail it.
-        }
-      }, 3000);
+      const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+      updateSystemCheck('noise', avg < 80
+        ? { status: 'pass', detail: 'Background noise: Low (Good)' }
+        : { status: 'fail', detail: 'Background noise: High - find a quieter space' });
     } else {
       updateSystemCheck('noise', { status: 'fail', detail: 'Microphone not available for noise check' });
     }
@@ -1132,21 +1123,28 @@ export default function StepSystemCheck({
     }
   }, [runDevice, runWebcam, runMicrophone, runInternet, runAiEngine, runWebsocket, runLighting, runNoise, runFaceMultiple]);
 
-  // Candidate picked a different camera from the dropdown — re-acquire that
-  // specific device and re-run every check that depends on the video feed.
-  const switchCamera = useCallback(async (deviceId: string) => {
-    if (isSwitchingDevice || deviceId === selectedCameraId) return;
-    setIsSwitchingDevice(true);
+  // Mark camera-dependent checks as unverified after the selected camera
+  // changes — same rule and reason as markAudioChecksUnverified below:
+  // picking a device must never auto-verify it, only "Run Check" (first run)
+  // or a per-row "Retry" click may. The Camera Preview intentionally keeps
+  // showing the PREVIOUS device's feed until Retry actually swaps the stream
+  // via runWebcam() — that swap IS the verification, so it's deferred too.
+  const markCameraChecksUnverified = useCallback(() => {
+    if (lightingIntervalRef.current) { clearInterval(lightingIntervalRef.current); lightingIntervalRef.current = null; }
+    if (faceIntervalRef.current) { clearInterval(faceIntervalRef.current); faceIntervalRef.current = null; }
+    if (!checksCompleted) return;
+    updateSystemCheck('webcam', { status: 'fail', detail: 'Click Retry to verify this camera' });
+    updateSystemCheck('lighting', { status: 'fail', detail: 'Click Retry to re-check lighting' });
+    updateSystemCheck('face', { status: 'fail', detail: 'Click Retry to re-check face detection' });
+    updateSystemCheck('multiple', { status: 'fail', detail: 'Click Retry to re-check for other people' });
+  }, [checksCompleted, updateSystemCheck]);
+
+  const switchCamera = useCallback((deviceId: string) => {
+    if (deviceId === selectedCameraId) return;
     selectedCameraIdRef.current = deviceId;
     setSelectedCameraId(deviceId);
-    try {
-      await runWebcam();
-      await runLighting();
-      await runFaceMultiple();
-    } finally {
-      setIsSwitchingDevice(false);
-    }
-  }, [isSwitchingDevice, selectedCameraId, runWebcam, runLighting, runFaceMultiple]);
+    markCameraChecksUnverified();
+  }, [selectedCameraId, markCameraChecksUnverified]);
 
   // Mark BOTH audio-dependent checks as unverified after the selected mic
   // changes (dropdown pick, or the single-device auto-select).
@@ -1156,15 +1154,12 @@ export default function StepSystemCheck({
   // and never calls runMicrophone()/runNoise(): verification happens solely
   // on an explicit "Run Check" (first run) or per-row "Retry" click.
   //
-  // The noise check also owns a long-lived polling interval that keeps
-  // re-writing its own row every 3 s off analyserRef. Left running, it would
-  // flip Background Noise straight back to 'pass' on its own the moment any
-  // later code re-populates the analyser — the exact "it ticks itself without
-  // me clicking Run Check" behavior. So the interval is torn down here too,
-  // and only runNoise() (i.e. an explicit click) ever restarts it.
+  // Background Noise is a ONE-SHOT check (runNoise samples a few times and
+  // stops — no ongoing polling interval), so there's nothing left running to
+  // tear down here; this clear is just a defensive no-op against any stale
+  // interval from before that change.
   const markAudioChecksUnverified = useCallback(() => {
     if (noiseIntervalRef.current) { clearInterval(noiseIntervalRef.current); noiseIntervalRef.current = null; }
-    noiseFailStreakRef.current = 0;
     // Before the first "Run Check", leave both rows at their initial 'pending'
     // state — that button still exists and will run (and correctly pass) them
     // against the freshly selected device. After the first run, "Run Check" is
@@ -1926,7 +1921,18 @@ export default function StepSystemCheck({
                         until an explicit device is chosen here — "System Default"
                         does not count, so this option is disabled and the placeholder
                         stays selected until the candidate actively picks one. */}
-                    {!selectedMicId && (
+                    {micDevices.length === 0 ? (
+                      // Some browsers won't reveal real per-device entries until
+                      // mic permission has been granted at least once — which
+                      // hasn't happened yet if the candidate hasn't clicked "Run
+                      // Check" yet. The dropdown looks empty in the meantime even
+                      // though a device IS physically connected; this explains why
+                      // rather than leaving it looking silently broken.
+                      <p className="mt-1 text-xs text-gray-400">
+                        No microphones detected yet — click <strong>Run Check</strong> above
+                        to detect your connected microphone(s), then select one here.
+                      </p>
+                    ) : !selectedMicId && (
                       <p className="mt-1 text-xs text-amber-600 font-medium">
                         Required — select your microphone to complete the Microphone check.
                       </p>
