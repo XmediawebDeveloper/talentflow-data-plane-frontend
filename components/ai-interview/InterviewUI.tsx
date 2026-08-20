@@ -306,18 +306,23 @@ const DEFAULT_REVEAL_CPS = 12;
 // pacer above governs; this only stops a bad CPS prior from completing the
 // bubble before `audio_end` confirms the total.
 const PHASE_A_MAX_FRACTION = 0.94;
-// TalkingHead's WORKLET path buffers incoming PCM before its speaker goes
-// audible. Text reveal must wait this long after the first chunk arrives, else
-// the bubble paints while Bina is still silent. 1500ms gives generous headroom
-// for network jitter + TalkingHead's internal codec init.
-// NOTE: this is an unmeasured estimate, and it is NOT universal — Talking-
-// HeadAvatar's raw Web Audio fallback (Edge / audioOnly / avatar-load failure)
-// plays chunks immediately, i.e. a delay of 0. Always read the ACTIVE path's
-// value via getAudibleDelayMs() rather than using this constant directly.
+// COLD-START PRIOR ONLY — no longer the steady-state value.
+// TalkingHead's WORKLET path becomes audible some time after the first PCM
+// chunk arrives (worklet module load on the first turn, then just the audio-
+// thread hop + hardware output latency). Text reveal must wait that long, else
+// the bubble paints while Bina is still silent.
+// TalkingHeadAvatar now MEASURES this per turn — `onAudioStart` (the worklet's
+// `playback-started`) minus first-chunk arrival, plus the context's output
+// latency — and publishes it to `__interviewAudibleDelayMs`, carrying the last
+// measurement forward as the next turn's prior. This constant therefore only
+// applies to the window before the very first measurement of the session lands.
+// It is deliberately generous: over-estimating makes captions trail slightly,
+// under-estimating makes them outrun Bina (and the reveal is monotonic, so an
+// over-reveal cannot be walked back within a turn).
 const TALKING_HEAD_BUFFER_MS = 1500;
 // Delay between chunk arrival and audible output for the path TalkingHeadAvatar
-// actually took this turn. It publishes 0 for its Web Audio fallback and null
-// for the worklet path (see TalkingHeadAvatar.streamStart).
+// actually took this turn — MEASURED, see TalkingHeadAvatar.streamStart's
+// `onAudioStart`. Non-numeric only before the session's first measurement.
 const getAudibleDelayMs = (): number => {
   const v = (window as InterviewWindow).__interviewAudibleDelayMs;
   return typeof v === 'number' && v >= 0 ? v : TALKING_HEAD_BUFFER_MS;
