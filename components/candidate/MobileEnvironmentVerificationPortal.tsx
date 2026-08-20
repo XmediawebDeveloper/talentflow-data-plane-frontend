@@ -83,6 +83,17 @@ const ALIGN_MIN_SATURATION = 0.16; // the challenge palette is deliberately vivi
 const ALIGN_MIN_WHITE_BRIGHTNESS = 195; // still accept the one guaranteed near-white challenge slot
 const ALIGN_BEZEL_MARGIN_FRAC = 0.035; // thin band just outside the guide rect, as a fraction of min(w,h)
 const ALIGN_BEZEL_MIN_DISTANCE = 55; // a real laptop bezel is meaningfully darker/different from the screen
+// Wider region (nearly the whole visible frame) the SAME dominant color must
+// also cover — rejects "the correct-looking color, but only in one small
+// panel of a busy multi-content screen" (confirmed live 2026-08-20: the
+// ordinary live-interview UI's transcript panel alone passed the tight
+// guide-box checks above). A genuine full-screen challenge fills nearly
+// the whole display; a random UI panel does not.
+const ALIGN_OUTER_X0 = 0.04;
+const ALIGN_OUTER_X1 = 0.96;
+const ALIGN_OUTER_Y0 = 0.06;
+const ALIGN_OUTER_Y1 = 0.94;
+const ALIGN_OUTER_MIN_DENSITY = 0.45;
 
 // ── Voice activity detection (VAD) — runs only while actually recording ──
 // Web Audio API only (no new library) on the SAME getUserMedia stream
@@ -430,7 +441,38 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           }
           const density = guideArea > 0 ? matched / guideArea : 0;
 
-          pass = colorPlausible && bezelContrasts && density >= ALIGN_GUIDE_MIN_DENSITY;
+          // 4) Whole-frame coverage — the SAME dominant color must also fill
+          //    most of the ENTIRE visible screen, not just the small guide
+          //    box. Without this, any other content displayed on the laptop
+          //    (e.g. the live interview UI's white/light transcript panel)
+          //    can fool the guide-box-only checks above: that panel is
+          //    genuinely uniform, genuinely bright, and genuinely sits
+          //    inside the laptop's own real bezel — the phone is never told
+          //    the expected challenge color in advance (deliberate
+          //    anti-replay design), so it can't otherwise tell "the correct
+          //    verification screen" apart from "literally anything else
+          //    shown on that same laptop" (confirmed live 2026-08-20: the
+          //    ordinary interview UI — AI avatar + candidate video +
+          //    transcript — passed alignment because its transcript panel
+          //    alone filled the guide box). A genuine full-screen challenge
+          //    covers nearly the WHOLE display; a busy multi-panel UI only
+          //    has isolated patches of any single color.
+          const ox0 = Math.round(w * ALIGN_OUTER_X0);
+          const ox1 = Math.round(w * ALIGN_OUTER_X1);
+          const oy0 = Math.round(h * ALIGN_OUTER_Y0);
+          const oy1 = Math.round(h * ALIGN_OUTER_Y1);
+          let outerMatched = 0;
+          const outerArea = (ox1 - ox0) * (oy1 - oy0);
+          for (let y = oy0; y < oy1; y++) {
+            for (let x = ox0; x < ox1; x++) {
+              const i = (y * w + x) * 4;
+              const dr = data[i] - domR, dg = data[i + 1] - domG, db = data[i + 2] - domB;
+              if (Math.sqrt(dr * dr + dg * dg + db * db) <= ALIGN_COLOR_DISTANCE) outerMatched++;
+            }
+          }
+          const outerDensity = outerArea > 0 ? outerMatched / outerArea : 0;
+
+          pass = colorPlausible && bezelContrasts && density >= ALIGN_GUIDE_MIN_DENSITY && outerDensity >= ALIGN_OUTER_MIN_DENSITY;
         }
       } catch (e) {
         // getImageData can throw on a tainted canvas in rare cross-origin
