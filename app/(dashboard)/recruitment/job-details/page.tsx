@@ -439,6 +439,12 @@ function JobDetailsContent() {
       />
 
       <JobDetailView
+        /* Each lineage version is its own JD id, and the version switcher
+           navigates by id — keying on it guarantees every piece of internal
+           state (result tabs, counts, cached config lookups, drill-down views)
+           is rebuilt for the selected version, so nothing from the previously
+           viewed version can leak into this one. */
+        key={job.id}
         job={job}
         onBack={handleBack}
         initialTab={tabParam || undefined}

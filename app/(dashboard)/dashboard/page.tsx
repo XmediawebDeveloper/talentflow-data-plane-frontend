@@ -614,7 +614,7 @@ export default function DashboardPage() {
 
   // CTAs (gated by real permissions)
   const featuredActions = [
-    { label: 'Create job', href: '/recruitment/jd-creation', visible: isTenantAdmin || hasPermission('canCreateJD'), primary: true, icon: Plus },
+    { label: 'Create Job', href: '/recruitment/jd-creation', visible: isTenantAdmin || hasPermission('canCreateJD'), primary: true, icon: Plus },
   ].filter((item) => item.visible);
 
   return (
@@ -636,11 +636,15 @@ export default function DashboardPage() {
         <div className="space-y-4 md:space-y-6">
         {/* ── PROFILE BANNER ── useAuth only ──────────────────────────── */}
         <section className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.10)] transition-shadow hover:shadow-[0_4px_8px_rgba(15,23,42,0.06),0_16px_40px_-12px_rgba(15,23,42,0.18)] md:px-8 md:py-6">
-          {/* Identity row: avatar + name+text (left) · CTAs (right) */}
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-start gap-4">
-              {/* Avatar — solid rounded square */}
-              <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-brand-blue text-base font-semibold text-white shadow-md shadow-brand-blue/20 ring-1 ring-white/20">
+          {/* Identity row: stacked (avatar → text → CTA) on phones AND
+              tablets; only lg+ goes side-by-side with the CTA on the right. */}
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            {/* Phones and tablets stack one by one — avatar, then text, then
+                (via the outer column) the CTA button; lg+ returns to avatar
+                beside text. */}
+            <div className="flex flex-col lg:flex-row items-start gap-3 sm:gap-4">
+              {/* Avatar — solid rounded square, one size down on phones */}
+              <div className="grid h-11 w-11 sm:h-14 sm:w-14 shrink-0 place-items-center overflow-hidden rounded-xl sm:rounded-2xl bg-brand-blue text-sm sm:text-base font-semibold text-white shadow-md shadow-brand-blue/20 ring-1 ring-white/20">
                 {user?.avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover" />
@@ -654,7 +658,7 @@ export default function DashboardPage() {
                   {timeOfDayGreeting()},
                 </p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-[28px]">
+                  <h1 className="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-[28px]">
                     {displayName}
                   </h1>
                   {isTenantAdmin && (
@@ -664,18 +668,14 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
-                <p className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-500">
-                  <span>Streamline your entire recruitment journey with AI-powered talent solutions.</span>
-                  <Star
-                    className="h-4 w-4 shrink-0 fill-amber-400 text-amber-500 motion-safe:animate-[spin_2.8s_linear_infinite] motion-reduce:animate-none"
-                    aria-hidden="true"
-                  />
+                <p className="mt-1 sm:mt-1.5 text-[13px] sm:text-sm text-slate-500 dark:text-slate-500">
+                  Streamline your entire recruitment journey with AI-powered talent solutions.
                 </p>
               </div>
             </div>
 
-            {/* CTAs */}
-            <div className="flex flex-wrap items-center gap-2">
+            {/* CTAs — full-width stacked on phones, inline from sm: up */}
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
               {featuredActions.map((item) => {
                 const ItemIcon = item.icon;
                 return (
@@ -684,8 +684,8 @@ export default function DashboardPage() {
                     href={item.href}
                     className={
                       item.primary
-                        ? 'inline-flex items-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-blue/20 transition-colors hover:opacity-90'
-                        : 'inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors hover:border-brand-blue/30 hover:text-brand-blue'
+                        ? 'inline-flex w-full sm:w-auto items-center justify-center sm:justify-start gap-2 whitespace-nowrap rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-blue/20 transition-colors hover:opacity-90'
+                        : 'inline-flex w-full sm:w-auto items-center justify-center sm:justify-start gap-2 whitespace-nowrap rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors hover:border-brand-blue/30 hover:text-brand-blue'
                     }
                   >
                     <ItemIcon className="h-4 w-4" />

@@ -229,9 +229,14 @@ export function useNotificationWebSocket({
           }
         };
 
-        ws.onerror = (error) => {
-          console.error('[WebSocket] ❌ Error event fired:', error);
-          console.error('[WebSocket] readyState at error:', ws.readyState, '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)');
+        ws.onerror = () => {
+          /* warn, not error: a failed attempt is routine (expired token at
+             connect time, transient drop) and self-heals via the reconnect in
+             onclose — console.error here made Next.js dev raise its overlay on
+             every retry. The browser's error event carries no information
+             (always logs as {}), so don't log it; onclose reports the close
+             code and reason, which is the actual diagnostic. */
+          console.warn('[WebSocket] Connection attempt failed — readyState:', ws.readyState, '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED); see the close event for the code/reason');
           setConnectionError('WebSocket connection error');
           // Note: onclose will be called after onerror, so state cleanup happens there
         };

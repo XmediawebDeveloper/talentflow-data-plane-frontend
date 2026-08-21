@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Users, Mail, Play, CheckCircle, Ban, TrendingUp } from 'lucide-react';
+import { X, Users, Mail, Play, Check, CheckCircle, Ban, TrendingUp, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import InviteFilterBar, {
   EMPTY_INVITE_FILTERS,
   AI_INTERVIEW_INVITE_STATUS_OPTIONS,
@@ -11,7 +12,19 @@ import InviteFilterBar, {
   type InviteFilterState,
 } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
-import AIInterviewInviteTable from '@/components/AIInterviewInviteTable';
+import AIInterviewInviteTable, {
+  resolveInviteStatus,
+  isExpiredForActions,
+} from '@/components/AIInterviewInviteTable';
+
+/* Bulk resend eligibility — Invited and Expired rows only, and never once the
+   candidate has started or completed. Matches the per-row Resend rule (minus
+   revoked, which stays a deliberate one-at-a-time action) and the assessment
+   tracker's bulk-select gating, so the two popups behave the same. */
+const isBulkResendable = (inv: any): boolean =>
+  (resolveInviteStatus(inv) === 'invited' || isExpiredForActions(inv)) &&
+  !inv.started_at &&
+  !inv.completed_at;
 
 interface AIInterviewTrackInvitesModalProps {
   isOpen: boolean;
@@ -19,6 +32,10 @@ interface AIInterviewTrackInvitesModalProps {
   /** Published AI interview config whose invitations are being tracked. */
   configId: string;
   jdTitle: string;
+  /** Opens a completed candidate's result. When the host can render the result
+   *  inline (Job Details does), pass this; the table only offers View Details
+   *  on completed rows when it is present. */
+  onViewResult?: (inv: any) => void;
 }
 
 const PAGE_SIZE = 10;
@@ -26,17 +43,19 @@ const PAGE_SIZE = 10;
 /**
  * Invite tracking for a job's AI interview, opened from the Job Details page.
  *
- * Read-only by design: this answers "who was invited and how far did they get" —
- * resend/revoke/edit live on the AI Interviews page, and scores and transcripts
- * live in the AI Interview Result tab. It passes no action callbacks to
- * <AIInterviewInviteTable>, which is the same list the AI Interviews page renders
- * with its full action set, so the two show identical columns and wording.
+ * Follows the same per-status action rules as the assessment Track Invite
+ * popup: Invited/Expired → Resend only, System Check / In Progress → no
+ * action, Completed → View Result only. Edit and Revoke stay on the AI
+ * Interviews page — those callbacks are deliberately not passed to
+ * <AIInterviewInviteTable> (the same list the AI Interviews page renders),
+ * so omitting them simply drops those menu items here.
  */
 export default function AIInterviewTrackInvitesModal({
   isOpen,
   onClose,
   configId,
   jdTitle,
+  onViewResult,
 }: AIInterviewTrackInvitesModalProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [invitations, setInvitations] = useState<any[]>([]);
@@ -59,6 +78,75 @@ export default function AIInterviewTrackInvitesModal({
     cancelled: 0,
   });
   const refreshRef = useRef<NodeJS.Timeout | null>(null);
+  // Resend flow — confirm first (the old link stops working), then send.
+  const [resendTarget, setResendTarget] = useState<any | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  /* Bulk selection — same control and semantics as the assessment tracker's
+     Select All bar: only bulk-resendable rows (Invited/Expired) are
+     selectable, scoped to the rows on the CURRENT page. */
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkResendConfirm, setShowBulkResendConfirm] = useState(false);
+  const [isBulkResending, setIsBulkResending] = useState(false);
+  const selectableIds = invitations.filter(isBulkResendable).map((inv: any) => inv.id);
+  const allSelected =
+    selectableIds.length > 0 && selectableIds.every((id: string) => selectedIds.has(id));
+  const toggleSelectAll = () =>
+    setSelectedIds(() => (allSelected ? new Set<string>() : new Set<string>(selectableIds)));
+  const toggleSelectOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  /* Reloads (paging, filtering, the 15s refresh moving a candidate forward)
+     can leave selected ids pointing at rows that are gone or no longer
+     eligible — drop those so the bulk button's count always matches what a
+     resend would actually do. */
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const valid = new Set(invitations.filter(isBulkResendable).map((inv: any) => inv.id));
+      const next = new Set([...prev].filter((id) => valid.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [invitations]);
+
+  // Bulk resend — same endpoint as the single-row Resend, called per
+  // invitation. Sequential on purpose: a burst of parallel resends is exactly
+  // the kind of thing mail rate-limiters punish.
+  const handleBulkResend = async () => {
+    const targets = invitations.filter(
+      (inv: any) => selectedIds.has(inv.id) && isBulkResendable(inv)
+    );
+    if (targets.length === 0) {
+      setShowBulkResendConfirm(false);
+      return;
+    }
+    setIsBulkResending(true);
+    let sent = 0;
+    let failedCount = 0;
+    for (const inv of targets) {
+      try {
+        await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
+        sent++;
+      } catch (error) {
+        console.error(`Failed to resend AI interview invitation ${inv.id}:`, error);
+        failedCount++;
+      }
+    }
+    if (sent > 0) {
+      toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
+    }
+    if (failedCount > 0) {
+      toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
+    }
+    setSelectedIds(new Set());
+    setShowBulkResendConfirm(false);
+    setIsBulkResending(false);
+    await loadInvitations(true);
+  };
 
   const loadInvitations = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -150,7 +238,7 @@ export default function AIInterviewTrackInvitesModal({
               </div>
               <div className="min-w-0">
                 <h2 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
-                  <span className="hidden sm:inline">Invite Status Tracking</span>
+                  <span className="hidden sm:inline">AI Interview - Invite Status Tracking</span>
                   <span className="sm:hidden">Invite Status</span>
                 </h2>
                 <p className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{jdTitle}</p>
@@ -197,16 +285,118 @@ export default function AIInterviewTrackInvitesModal({
           searchPlaceholder="Search by candidate name or email..."
         />
 
+        {/* Select All — same control, wording and placement as the assessment
+            tracker's bulk-select bar. Only Invited/Expired rows count. */}
+        {!isLoading && selectableIds.length > 0 && (
+          <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+            >
+              <span
+                role="checkbox"
+                aria-checked={allSelected}
+                className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                  allSelected
+                    ? 'bg-brand-blue border-brand-blue'
+                    : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
+                }`}
+              >
+                {allSelected && <Check className="w-3 h-3 text-white" />}
+              </span>
+              Select All ({selectableIds.length})
+            </button>
+            {/* Bulk Resend — appears once something is ticked. */}
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowBulkResendConfirm(true)}
+                disabled={isBulkResending}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
+              >
+                {isBulkResending
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Mail className="w-3.5 h-3.5" />}
+                {isBulkResending ? 'Sending…' : `Resend (${selectedIds.size})`}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Candidate list. overflow-hidden, not overflow-auto: the table shell (or
             the mobile card stack) inside is the single vertical scroller. */}
         <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
+          {/* Same action rules as the assessment tracker: the table offers
+              Resend on Invited/Expired (and Send Again on revoked), View
+              Details on Completed, and nothing once the candidate is in the
+              interview flow (System Check / In Progress). Edit and Revoke are
+              not passed, so they never appear here. */}
           <AIInterviewInviteTable
             invitations={invitations}
             isLoading={isLoading}
             hasActiveFilters={filtersActive}
             emptyHint="Use Send Invite to invite candidates to this job's AI interview."
+            onResend={(inv) => setResendTarget(inv)}
+            resendingId={resendingId}
+            onViewDetails={onViewResult}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelectOne}
+            // Bulk-resend gating (Invited/Expired), not the AI Interviews
+            // page's revocable-only default.
+            isSelectable={isBulkResendable}
           />
         </div>
+
+        {/* Resend confirmation — regenerates the interview token, so the old
+            link stops working the moment the new email goes out. Mirrors the
+            AI Interviews page tracker's dialog and endpoint. */}
+        <ConfirmationDialog
+          isOpen={!!resendTarget}
+          onClose={() => { if (resendingId !== resendTarget?.id) setResendTarget(null); }}
+          onConfirm={async () => {
+            const inv = resendTarget;
+            if (!inv) return;
+            setResendingId(inv.id);
+            try {
+              await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
+              toast.success(`New invitation link sent to ${inv.candidate_email}`);
+              await loadInvitations(true);
+            } catch (err: any) {
+              const detail = err?.response?.data?.detail;
+              const msg =
+                (typeof detail === 'object' && detail?.message) ||
+                (typeof detail === 'string' && detail) ||
+                err?.message ||
+                'Failed to resend email';
+              toast.error(msg);
+            } finally {
+              setResendingId(null);
+              setResendTarget(null);
+            }
+          }}
+          title="Invalidate old link & send new invitation?"
+          description={
+            resendTarget
+              ? `A fresh interview link will be emailed to ${resendTarget.candidate_email}. The previous link will stop working immediately.`
+              : ''
+          }
+          confirmText={resendingId && resendingId === resendTarget?.id ? 'Sending…' : 'Yes, send new link'}
+          cancelText="Cancel"
+          variant="warning"
+        />
+
+        {/* Bulk resend confirmation — selected Invited/Expired candidates only. */}
+        <ConfirmationDialog
+          isOpen={showBulkResendConfirm}
+          onClose={() => { if (!isBulkResending) setShowBulkResendConfirm(false); }}
+          onConfirm={handleBulkResend}
+          title="Resend invitations to selected candidates?"
+          description={`A fresh interview link will be emailed to ${selectedIds.size} selected candidate${selectedIds.size === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
+          confirmText={isBulkResending ? 'Sending…' : `Yes, resend to ${selectedIds.size}`}
+          cancelText="Cancel"
+          variant="warning"
+        />
 
         {/* Footer — stacks on phones; First/Last drop out below sm. */}
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">

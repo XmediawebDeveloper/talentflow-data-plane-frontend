@@ -59,7 +59,10 @@ class NotificationService {
       const response = await api.get('/notifications', { params });
       return response.data;
     } catch (error) {
-      console.error('Error getting notifications:', error);
+      /* warn, not error: this read fails soft (empty list) and the caller
+         refetches — a transient network drop here is routine, and
+         console.error made Next.js dev raise its overlay on every one. */
+      console.warn('Could not load notifications (will retry):', error);
       // Return empty response on error
       return {
         notifications: [],
@@ -78,7 +81,9 @@ class NotificationService {
       const response = await api.get('/notifications/count');
       return response.data;
     } catch (error) {
-      console.error('Error getting notification counts:', error);
+      /* warn, not error: the badge count is polled and fails soft to zeros —
+         the next poll heals it, so a dropped request is not overlay-worthy. */
+      console.warn('Could not load notification counts (will retry):', error);
       return { total: 0, unread: 0, by_category: {} };
     }
   }

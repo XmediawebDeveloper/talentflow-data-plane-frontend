@@ -856,6 +856,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     // hasAnyAIInterview, which this sets — without it a user who can invite but
     // not view results would find the button permanently disabled.
     if (!permissions.canViewAIInterviews && !permissions.canShareAIInterviews) return;
+    // job.id changing means a different JD version — the fetched-once guard
+    // belongs to the previous id, so clear it or this version would keep
+    // showing the other version's interview config and invite count.
+    aiInterviewConfigFetchedRef.current = false;
     loadAIInterviewConfig();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job.id, hasPlanFeature]);
@@ -4479,6 +4483,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           onClose={() => setTrackAIInterviewConfig(null)}
           configId={trackAIInterviewConfig.id}
           jdTitle={job.title}
+          // Completed rows offer View Result — swap the popup for the same
+          // inline candidate result view the AI Interview Result tab opens.
+          onViewResult={(inv) => {
+            setTrackAIInterviewConfig(null);
+            handleAIInterviewCandidateClick(inv.id);
+          }}
         />
       )}
 

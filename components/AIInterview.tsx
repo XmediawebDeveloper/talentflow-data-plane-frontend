@@ -2403,7 +2403,7 @@ export default function AIInterview() {
                     </div>
                     <div className="min-w-0">
                       <h2 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
-                        <span className="hidden sm:inline">Invite Status Tracking</span>
+                        <span className="hidden sm:inline">AI Interview - Invite Status Tracking</span>
                         <span className="sm:hidden">Invite Status</span>
                       </h2>
                       <p className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">
