@@ -13,7 +13,7 @@ import { jdService, masterDataService, ExperienceLevel, EducationLevel, Industry
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { normalizeManualJDToMarkdown, stripEmptyCertificationSections } from '@/lib/utils/jdMarkdown';
-import { formatSalaryRange, getSalaryCurrencySymbol, normalizeSalaryCurrency } from '@/lib/utils/salary';
+import { formatSalaryRange, getSalaryCurrencySymbol, normalizeSalaryCurrency, parseSalaryInput } from '@/lib/utils/salary';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 
@@ -1555,11 +1555,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   }, [jobTitle]);
 
   // Sanitize a salary number from backend/extraction: if > 8 digits (>99999999), clear it
-  const sanitizeExtractedSalary = (val: number | null | undefined): string => {
-    if (val == null) return '';
-    const intVal = Math.trunc(val);
-    if (intVal > 99999999) return '';
-    return String(intVal);
+  // Renders an extracted salary into the Step 2 input. Math.trunc() here was the last
+  // of the four places a fractional rate was being floored: even once the backend
+  // returned 20.34, the box showed 20, and saving that wrote 20 back. Cents are kept and
+  // a whole amount still shows as a whole number ("120000", not "120000.00").
+  //
+  // The 8-digit ceiling is a product rule, not a column limit - validateSalaryRange()
+  // shows the recruiter the matching "cannot exceed ₹9,99,99,999" message - so it is
+  // applied to the rounded value and left as it was.
+  const sanitizeExtractedSalary = (val: number | string | null | undefined): string => {
+    if (val == null || val === '') return '';
+    const numeric = Number(val);
+    if (!Number.isFinite(numeric)) return '';
+    const rounded = Math.round(numeric * 100) / 100;
+    if (rounded > 99999999) return '';
+    return String(rounded);
   };
 
   // Helper function to parse salary value (handles LPA, L, K, commas, ₹)
@@ -1749,8 +1759,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // (7.5), not a 7 with a stray 6. The months must sit IMMEDIATELY after the years so an
   // unrelated later duration is never absorbed, and only a sub-year remainder folds -
   // "5 years, 18 months of which in leadership" is a separate duration, not a fraction.
-  const foldMonthsIntoYears = (text: string): string =>
-    text.replace(
+  //
+  // It ALSO converts a MIXED-UNIT range, where one bound is in months and the other in
+  // years: "6 months to 1 year" becomes "0.5 to 1 years". Without this the months bound
+  // was invisible to every pattern below - the year figure matched as a lone single
+  // figure, so "6 months to 1 year" became a MINIMUM of 1 year and the six-month floor
+  // vanished, turning a capped 0.5-1 band into an open-ended "1+ years". Entry-level
+  // requirements are routinely written this way across industries: "6 months to 1 year"
+  // (retail, hospitality, warehouse), "6 months to 2 years" (drivers, security, care
+  // assistants), "3 months to 1 year" (internships, apprenticeships).
+  const foldMonthsIntoYears = (text: string): string => {
+    // ORDER IS LOAD-BEARING: fold "N years M months" FIRST, or the mixed-unit passes
+    // below would find the "6 months to 5 years" inside "2 years 6 months to 5 years"
+    // and tear that phrase apart.
+    let out = text.replace(
       /(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)\s*(?:,\s*)?(?:and\s+)?(\d{1,2})\s*(?:months?|mos?\b)/gi,
       (whole, y: string, m: string) => {
         const months = Number(m);
@@ -1758,6 +1780,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return `${Number((Number(y) + months / 12).toFixed(2))} years`;
       },
     );
+
+    // Only a genuine range separator is accepted ("to", "-", en/em dash) and never
+    // "and" - "2 years and 6 months" is ONE figure, already folded above, so letting
+    // "and" through would turn it into a nonsensical 2-to-0.5 range.
+    const toYearsText = (n: number) => Number((n / 12).toFixed(2));
+    out = out.replace(
+      /(\d{1,3})\s*(?:months?|mos?)\s*(?:-|–|—|to)\s*(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)/gi,
+      (_whole, mo: string, yr: string) => `${toYearsText(Number(mo))} to ${Number(yr)} years`,
+    );
+    // The reverse order ("1 year to 18 months"): without this the 18-month upper bound
+    // is lost and the requirement becomes an open-ended "1+".
+    out = out.replace(
+      /(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)\s*(?:-|–|—|to)\s*(\d{1,3})\s*(?:months?|mos?)/gi,
+      (_whole, yr: string, mo: string) => `${Number(yr)} to ${toYearsText(Number(mo))} years`,
+    );
+    return out;
+  };
 
   const inferExperienceRangeFromCustomValue = (value?: string | null): { experienceMin?: number; experienceMax?: number } => {
     // Fold "N years M months" BEFORE any pattern below sees the text.
@@ -3318,8 +3357,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extraction.industryType || undefined,
         role_family: extraction.roleFamily || undefined,
         role_family_confidence: extraction.roleFamilyConfidence ?? undefined,
-        salary_min: extraction.salaryFrom ? parseInt(extraction.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
-        salary_max: extraction.salaryTo ? parseInt(extraction.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+        salary_min: parseSalaryInput(extraction.salaryFrom),
+        salary_max: parseSalaryInput(extraction.salaryTo),
         compensation_type: extraction.compensationType,
         salary_currency: extraction.salaryCurrency,
         employment_type: extraction.employmentType,
@@ -4315,8 +4354,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
             supported_languages: extractedData.suggestedLanguages,
-            salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
-            salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+            salary_min: parseSalaryInput(extractedData.salaryFrom),
+            salary_max: parseSalaryInput(extractedData.salaryTo),
             salary_currency: extractedData.salaryCurrency,
             compensation_type: extractedData.compensationType,
           };
@@ -4434,8 +4473,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extractedData.industryType || undefined,
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
-        salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
-        salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+        salary_min: parseSalaryInput(extractedData.salaryFrom),
+        salary_max: parseSalaryInput(extractedData.salaryTo),
         compensation_type: extractedData.compensationType,
         salary_currency: extractedData.salaryCurrency,
         employment_type: extractedData.employmentType,
@@ -4714,8 +4753,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
             supported_languages: extractedData.suggestedLanguages,
-            salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
-            salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+            salary_min: parseSalaryInput(extractedData.salaryFrom),
+            salary_max: parseSalaryInput(extractedData.salaryTo),
             salary_currency: extractedData.salaryCurrency,
             compensation_type: extractedData.compensationType,
           };
@@ -4754,8 +4793,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extractedData.industryType || undefined,
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
-        salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
-        salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+        salary_min: parseSalaryInput(extractedData.salaryFrom),
+        salary_max: parseSalaryInput(extractedData.salaryTo),
         compensation_type: extractedData.compensationType,
         salary_currency: extractedData.salaryCurrency,
         job_level: experiencePayload.jobLevel,
@@ -5048,8 +5087,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extractedData.industryType || undefined,
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
-        salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
-        salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+        salary_min: parseSalaryInput(extractedData.salaryFrom),
+        salary_max: parseSalaryInput(extractedData.salaryTo),
         compensation_type: extractedData.compensationType,
         salary_currency: extractedData.salaryCurrency,
         job_level: experiencePayload.jobLevel,
@@ -5346,6 +5385,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         const firstCountry = effectiveEditingJD.locations?.[0]?.country;
         if (firstCountry === 'US' || firstCountry === 'IN') {
           setLocationCountry(firstCountry);
+        } else if (normalizeSalaryCurrency(effectiveEditingJD.salary_currency) === 'USD') {
+          // NO saved location, and the JD quotes its pay in USD -> it is a US role.
+          //
+          // The same USD inference already existed on the post-generation path, but not
+          // here, so re-opening a draft or editing a published JD fell back to the 'IN'
+          // initial state: a US job description opened the Locations picker on India with
+          // an Indian city list, and the recruiter had to switch it by hand every time.
+          // Extraction deliberately returns no locations (the city is the recruiter's
+          // choice), so on this path there is nothing else to infer from - which is
+          // exactly why the currency signal is needed here rather than only there.
+          //
+          // Only reached when no location is saved, so it can never override a
+          // deliberate choice the recruiter already made.
+          setLocationCountry('US');
         }
 
         console.log('[TalentFlow] Extracted data loaded successfully from database');
@@ -6530,7 +6583,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={extractedData.salaryFrom || ''}
                         onChange={(e) => {
                           const newValue = e.target.value;
-                          if (newValue.replace(/\D/g, '').length > 8) return;
+                          // 8-DIGIT rule applies to the whole-currency part only. This
+                          // counted every digit in the string, so with decimals now
+                          // permitted a large rate with cents ("12345678.90" - 10 digits)
+                          // was blocked mid-typing by a rule that is about magnitude.
+                          if (newValue.split('.')[0].replace(/\D/g, '').length > 8) return;
                           setExtractedData(prev => ({ ...prev, salaryFrom: newValue }));
                           markExtractedDataModified();
                           const error = validateSalaryRange(newValue, extractedData.salaryTo || '');
@@ -6552,7 +6609,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={extractedData.salaryTo || ''}
                         onChange={(e) => {
                           const newValue = e.target.value;
-                          if (newValue.replace(/\D/g, '').length > 8) return;
+                          // 8-DIGIT rule applies to the whole-currency part only. This
+                          // counted every digit in the string, so with decimals now
+                          // permitted a large rate with cents ("12345678.90" - 10 digits)
+                          // was blocked mid-typing by a rule that is about magnitude.
+                          if (newValue.split('.')[0].replace(/\D/g, '').length > 8) return;
                           setExtractedData(prev => ({ ...prev, salaryTo: newValue }));
                           markExtractedDataModified();
                           const error = validateSalaryRange(extractedData.salaryFrom || '', newValue);
