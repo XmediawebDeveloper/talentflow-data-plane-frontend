@@ -12,7 +12,6 @@ import {
   useInterviewObjectDetection,
   useInterviewProctoringMonitor,
   InterviewProctoringWarnings,
-  ScreenRecordingBlockedModal,
   EnvironmentVerificationOverlay,
   type DetectedObjectEvent,
   type ObjectEventType,
@@ -1854,11 +1853,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason: 'screen_recording' }));
         } catch { /* best-effort */ }
       }
-      candidateAIInterviewService.reportProctorEvent(token, {
-        event_type: 'screen_recording_attempt',
-        severity: 'severe',
-        details: { phase: 'in_interview', action: 'paused' },
-      }).catch(() => { /* best-effort */ });
+      // NOT reported from here. The portal's vision watch raises this episode on
+      // the shared ScreenRecordingGuard bus the moment it confirms the recorder,
+      // and useScreenRecordingDefense reports it once from there — with the
+      // vector, the model's reason and whether the check was escalated. Reporting
+      // again here put two screen_recording_attempt rows on the recruiter
+      // timeline for one recorder.
       console.warn('[Interview] screen recorder detected — interview paused');
     } else if (!screenRecorderDetected && recorderPausedRef.current) {
       const startedAt = recorderPauseStartMsRef.current;
@@ -9891,10 +9891,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
       <InterviewProctoringWarnings />
 
-      {/* Fires the instant an in-page screen-recording attempt is refused by the
-          getDisplayMedia / desktop-getUserMedia guards in the proctoring
-          monitor. Self-subscribing — no props, no parent state. */}
-      <ScreenRecordingBlockedModal />
+      {/* The screen-recording popup is mounted by CandidateAIInterviewPortal,
+          not here: it has to cover the pre-interview steps too, and mounting it
+          in both places would show the candidate two identical dialogs. */}
 
       <EnvironmentVerificationOverlay
         active={Boolean(envVerification)}

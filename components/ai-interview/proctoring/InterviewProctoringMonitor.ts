@@ -19,12 +19,6 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { InterviewEventBus, ProctoringEventType } from './InterviewEventBus';
-import {
-  isLegitimateShareInFlight,
-  isDesktopCaptureConstraint,
-  notifyScreenRecordingBlocked,
-  SCREEN_RECORDING_BLOCKED_MESSAGE,
-} from './ScreenRecordingGuard';
 
 // Re-export for consumers that import from here
 export type { ProctoringEventType } from './InterviewEventBus';
@@ -1032,130 +1026,23 @@ export function useInterviewProctoringMonitor({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, []);
 
-  // Screen-recording attempts the browser can actually SEE — and therefore
-  // actually REFUSE. Every one of these is blocked before a single frame is
-  // captured, and raises the candidate-facing popup synchronously, in the same
-  // task as the click (see ScreenRecordingGuard.notifyScreenRecordingBlocked).
+  // Screen-recording detection deliberately does NOT live here any more.
   //
-  // Three vectors are covered, because a getDisplayMedia-only guard leaks:
-  //   1. navigator.mediaDevices.getDisplayMedia — the standard screen-capture API,
-  //   2. navigator.getDisplayMedia — the legacy alias still shipped by some builds,
-  //   3. getUserMedia with a chromeMediaSource: 'desktop' constraint — how every
-  //      Chrome recorder EXTENSION (Loom, Screencastify, …) actually captures.
+  // It moved to useScreenRecordingDefense, mounted once at the top of
+  // CandidateAIInterviewPortal. This hook only exists while step === 'interview',
+  // so a guard installed here left the whole pre-interview flow (system check,
+  // consent, language select, sample practice, the share-bar gate) completely
+  // unprotected — a candidate could start recording before the interview began
+  // and simply keep going. It also meant the getDisplayMedia/getUserMedia
+  // patches were installed and torn down on this hook's lifecycle, which is the
+  // wrong lifetime for a page-global monkey patch.
   //
-  // A fourth vector is DETECTED but cannot be refused: the OS recording hotkeys
-  // (Cmd+Shift+5, Win+Alt+R, Win+G). The keydown reaches the page, so the popup
-  // is still immediate, but the OS owns the shortcut and starts recording
-  // regardless — those are reported as observed, not blocked.
-  //
-  // What nothing here can see, by construction, is a recorder launched entirely
-  // outside the browser (OBS opened from the dock, QuickTime's File menu). No
-  // web API exposes those; they are covered separately by the portal's vision
-  // poll over the shared-screen feed, which pauses the interview.
-  const setupScreenRecordingDetection = useCallback(() => {
-    const refuse = (source: string): Error => {
-      // Popup first, synchronously — the candidate sees it the instant the
-      // click lands, not after a render tick or a network round-trip.
-      notifyScreenRecordingBlocked(source);
-      // Recruiter timeline + backend violation record.
-      emitEventRef.current('screen_recording_attempt', { source, blocked: true });
-      console.warn(`[INTERVIEW_PROCTORING] Screen recording BLOCKED via ${source}`);
-      const error = new Error(SCREEN_RECORDING_BLOCKED_MESSAGE);
-      // NotAllowedError is what a denied permission looks like to a caller, so
-      // recorders and extensions handle it on their existing failure path
-      // instead of hanging on an unexpected error shape.
-      error.name = 'NotAllowedError';
-      return error;
-    };
-
-    const mediaDevices = navigator.mediaDevices;
-    const originalGetDisplayMedia = mediaDevices?.getDisplayMedia;
-    const originalNavigatorGetDisplayMedia = (navigator as any).getDisplayMedia as
-      | ((constraints?: DisplayMediaStreamOptions) => Promise<MediaStream>)
-      | undefined;
-    const originalGetUserMedia = mediaDevices?.getUserMedia;
-
-    if (mediaDevices && originalGetDisplayMedia) {
-      mediaDevices.getDisplayMedia = async function (constraints?: DisplayMediaStreamOptions) {
-        // The app's OWN mandatory (re)share is the one caller allowed through.
-        if (isLegitimateShareInFlight()) {
-          return originalGetDisplayMedia.call(mediaDevices, constraints as any);
-        }
-        throw refuse('mediaDevices.getDisplayMedia');
-      };
-    }
-
-    if (originalNavigatorGetDisplayMedia) {
-      (navigator as any).getDisplayMedia = async function (constraints?: DisplayMediaStreamOptions) {
-        if (isLegitimateShareInFlight()) {
-          return originalNavigatorGetDisplayMedia.call(navigator, constraints);
-        }
-        throw refuse('navigator.getDisplayMedia');
-      };
-    }
-
-    // Camera/mic getUserMedia must keep working untouched — only desktop-source
-    // constraints are refused, so the interview's own devices are unaffected.
-    if (mediaDevices && originalGetUserMedia) {
-      mediaDevices.getUserMedia = async function (constraints?: MediaStreamConstraints) {
-        if (isDesktopCaptureConstraint(constraints) && !isLegitimateShareInFlight()) {
-          throw refuse('getUserMedia(chromeMediaSource:desktop)');
-        }
-        return originalGetUserMedia.call(mediaDevices, constraints as any);
-      };
-    }
-
-    // OS-level recording HOTKEYS. These cannot be cancelled — the OS owns the
-    // shortcut and acts on it whether or not the page calls preventDefault —
-    // but the keydown itself is visible here, which makes this the one signal
-    // that catches a native recorder the instant the candidate triggers it
-    // instead of waiting for the portal's vision poll to see it on screen.
-    // Reported as observed-not-blocked so the popup says "stop the recording"
-    // rather than falsely claiming we stopped it.
-    //   macOS  Cmd+Shift+5  — screenshot/recording toolbar
-    //   Windows Win+Alt+R   — Game Bar start/stop recording
-    //   Windows Win+G       — Game Bar overlay (where the record button lives)
-    // Platform-gated, because the SAME modifier means different things per OS:
-    // on macOS the Windows key is Cmd, so an ungated "Meta+G" rule would report
-    // Cmd+G (find-next) as a Game Bar launch on every Mac.
-    const ua = typeof navigator !== 'undefined' ? `${navigator.userAgent} ${(navigator as any).platform || ''}` : '';
-    const isMac = /Mac|iPhone|iPad|iPod/i.test(ua);
-    const isWindows = /Win/i.test(ua) && !isMac;
-    const recordingHotkey = (e: KeyboardEvent): string | null => {
-      const key = e.key?.toLowerCase();
-      if (isMac && e.metaKey && e.shiftKey && key === '5') return 'Cmd+Shift+5 (macOS screen recording)';
-      if (isWindows && e.metaKey && e.altKey && key === 'r') return 'Win+Alt+R (Game Bar recording)';
-      if (isWindows && e.metaKey && !e.altKey && !e.shiftKey && !e.ctrlKey && key === 'g') return 'Win+G (Game Bar)';
-      return null;
-    };
-    const handleRecordingHotkey = (e: KeyboardEvent) => {
-      const hotkey = recordingHotkey(e);
-      if (!hotkey) return;
-      // Best effort: some builds do let the page swallow the combo.
-      e.preventDefault();
-      notifyScreenRecordingBlocked(hotkey, false);
-      emitEventRef.current('screen_recording_attempt', { source: hotkey, blocked: false });
-      console.warn(`[INTERVIEW_PROCTORING] Screen recording hotkey detected: ${hotkey}`);
-    };
-    window.addEventListener('keydown', handleRecordingHotkey, true);
-
-    if (!originalGetDisplayMedia && !originalNavigatorGetDisplayMedia) {
-      console.warn('[INTERVIEW_PROCTORING] getDisplayMedia unavailable — in-page screen recording block skipped.');
-    }
-    console.log('[INTERVIEW_PROCTORING] Screen recording detection started (block + popup)');
-    return () => {
-      window.removeEventListener('keydown', handleRecordingHotkey, true);
-      if (mediaDevices && originalGetDisplayMedia) {
-        mediaDevices.getDisplayMedia = originalGetDisplayMedia;
-      }
-      if (originalNavigatorGetDisplayMedia) {
-        (navigator as any).getDisplayMedia = originalNavigatorGetDisplayMedia;
-      }
-      if (mediaDevices && originalGetUserMedia) {
-        mediaDevices.getUserMedia = originalGetUserMedia;
-      }
-    };
-  }, []);
+  // The portal-level hook owns: the blockable capture vectors
+  // (ScreenRecordingGuard), the recorder hotkey table (ScreenRecorderHotkeys),
+  // the virtual-device watch (ScreenRecorderDevices), the candidate popup and
+  // the backend reporting — for the portal's whole lifetime. Nothing about
+  // screen recording is reported from this file, so the recruiter timeline gets
+  // exactly one record per attempt rather than two.
 
   // Picture-in-Picture — Webcam.tsx and Avatar.tsx already set
   // disablePictureInPicture on every video element they render, so this only
@@ -1282,7 +1169,6 @@ export function useInterviewProctoringMonitor({
       setupTabSwitchDetection(),
       copyPasteBlockingRef.current ? setupCopyPasteDetection() : () => {},
       setupScreenshotDetection(),
-      setupScreenRecordingDetection(),
       setupPiPDetection(),
       setupFullscreenDetection(),
       setupMouseTracking(),

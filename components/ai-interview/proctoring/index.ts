@@ -8,14 +8,31 @@ export { useInterviewFaceVerification } from './InterviewFaceVerification';
 export { useInterviewVoiceVerification } from './InterviewVoiceVerification';
 export { InterviewProctoringWarnings } from './InterviewProctoringWarnings';
 export { ScreenRecordingBlockedModal } from './ScreenRecordingBlockedModal';
+export { useScreenRecordingDefense, RECORDER_SUSPICION_TTL_MS } from './useScreenRecordingDefense';
+export type { ScreenRecordingDefenseState } from './useScreenRecordingDefense';
 export {
   beginLegitimateShare,
   endLegitimateShare,
   isLegitimateShareInFlight,
-  onScreenRecordingBlocked,
-  notifyScreenRecordingBlocked,
+  resetLegitimateShareState,
+  registerAppOwnedStream,
+  unregisterAppOwnedStream,
+  installScreenCaptureGuard,
+  isScreenCaptureGuardInstalled,
+  isDesktopCaptureConstraint,
+  onScreenRecordingAttempt,
+  reportScreenRecordingAttempt,
   SCREEN_RECORDING_BLOCKED_MESSAGE,
 } from './ScreenRecordingGuard';
+export type {
+  ScreenRecordingAttempt,
+  ScreenRecordingVector,
+  ScreenRecordingEnforcement,
+} from './ScreenRecordingGuard';
+export { RECORDER_HOTKEYS, matchRecorderHotkey, detectRecorderPlatform } from './ScreenRecorderHotkeys';
+export type { RecorderHotkey, RecorderPlatform } from './ScreenRecorderHotkeys';
+export { listRecorderDevices, recorderDeviceKey } from './ScreenRecorderDevices';
+export type { RecorderDeviceMatch } from './ScreenRecorderDevices';
 export { EnvironmentVerificationOverlay } from './EnvironmentVerificationOverlay';
 export { InterviewEventBus } from './InterviewEventBus';
 export type { ProctoringEventType, ProctoringEvent } from './InterviewEventBus';
