@@ -278,7 +278,26 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // Incremented after each successful upload. segment 0 = first upload
   // (backend opens 'wb'); 1..N = appended segments (backend opens 'ab').
   // Lets us clear screenChunksRef after each upload so memory stays flat.
-  const screenSegmentIndexRef = useRef<number>(0);
+  // PERSISTED in sessionStorage (survives a same-tab reload) so a refresh
+  // RESUMES the screen segment numbering instead of restarting at 0. A restart
+  // at 0 makes the backend MPU service abort the pre-refresh multipart upload
+  // (recording_mpu_service: segment_index==0 → _abort_all_for_key_sync), which
+  // DISCARDS every pre-refresh interview-view segment — leaving only the
+  // last-refresh→end portion (the exact bug reported). Same fix the camera got.
+  const _screenSegKey = `tf_rec_seg_screen_${token}`;
+  const screenSegmentIndexRef = useRef<number>((() => {
+    try {
+      const v = typeof window !== 'undefined' ? window.sessionStorage.getItem(_screenSegKey) : null;
+      const n = v != null ? parseInt(v, 10) : 0;
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch { return 0; }
+  })());
+  const _saveScreenSeg = (next: number) => {
+    try { if (typeof window !== 'undefined') window.sessionStorage.setItem(_screenSegKey, String(next)); } catch { /* ignore */ }
+  };
+  const _clearScreenSeg = () => {
+    try { if (typeof window !== 'undefined') window.sessionStorage.removeItem(_screenSegKey); } catch { /* ignore */ }
+  };
   const screenStreamRef = useRef<MediaStream | null>(null);
   const screenCheckpointInProgressRef = useRef(false);
   const isFinalizingScreenUploadRef = useRef(false);
@@ -747,6 +766,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           try {
             await candidateAIInterviewService.uploadScreenRecording(token, blob, segmentIndex, true);
             screenSegmentIndexRef.current = segmentIndex + 1;
+            _clearScreenSeg();  // finalized → a fresh interview in this tab restarts at 0
             if (attempt > 1) console.log(`[ScreenRecording] Final upload succeeded on attempt ${attempt}`);
             break;
           } catch (e) {
@@ -1332,7 +1352,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         videoBitsPerSecond: 300_000, // 300 Kbps — sufficient for screen capture
       });
       screenChunksRef.current = [];
+      // FRESH start (not a resume — resume uses handleReshareScreen): begin at
+      // segment 0 and clear any stale persisted index from a prior interview in
+      // this tab.
       screenSegmentIndexRef.current = 0;
+      _clearScreenSeg();
       sr.ondataavailable = (e) => { if (e.data.size > 0) screenChunksRef.current.push(e.data); };
       // Do NOT start recording yet. The webcam recorder (InterviewUI) only starts
       // once the interview screen mounts, AFTER the pre-interview gates (consent /
@@ -1390,6 +1414,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           try {
             await candidateAIInterviewService.uploadScreenRecording(token, blob, segmentIndex, false);
             screenSegmentIndexRef.current = segmentIndex + 1;
+            _saveScreenSeg(segmentIndex + 1);  // survive a reload → continue, not restart at 0
             console.log(`[ScreenRecording] Segment ${segmentIndex} uploaded: ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
           } catch (err: any) {
             // Upload failed — put the chunks back at the front of the buffer

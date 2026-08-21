@@ -471,18 +471,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       .trim()
       .replace(/\b\w/g, (c) => c.toUpperCase());
 
-  const educationLabelMap: Record<string, string> = {
-    diploma: 'Diploma',
-    associate: 'Associate Degree',
-    bachelors: "Bachelor's Degree",
-    masters: "Master's Degree",
-    doctorate: 'Doctorate / PhD',
-    none: 'No formal education required',
-    others: 'Others',
-  };
-  const educationLabel = (value?: string): string =>
-    value ? (educationLabelMap[value.toLowerCase()] || prettifyCode(value)) : 'Not specified';
-
   const employmentTypeLabel = (value?: string): string => {
     switch (value) {
       case 'full_time': return 'Full Time';
@@ -515,7 +503,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const hasAnyExtractedData =
     mustHaveSkills.length > 0 || niceToHaveSkills.length > 0 ||
     mustHaveComments.length > 0 || niceToHaveComments.length > 0 ||
-    !!job.experience || !!job.education || !!job.industry_type ||
+    !!job.experience || !!job.industry_type ||
     !!job.employmentType || !!job.workMode;
 
   const handleEdit = () => {
@@ -2210,19 +2198,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </span>
                 )}
 
-                {/* Education */}
-                {job.education && (
-                  <>
-                    <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
-                      {job.education === 'bachelors' ? "Bachelor's Degree" :
-                       job.education === 'masters' ? "Master's Degree" :
-                       job.education === 'doctorate' ? 'Doctorate / PhD' :
-                       job.education === 'associate' ? 'Associate Degree' :
-                       job.education === 'diploma' ? 'Diploma' :
-                       job.education}
-                    </span>
-                  </>
-                )}
+                {/* Education chip REMOVED 2026-08-21. Education is a requirement
+                    line inside Must-Have / Nice-to-Have Additional Requirements and is
+                    shown there only. It used to appear here AND as a Requirements tile
+                    AND inside MHAR, so the same degree was on screen up to three times
+                    and was graded twice by resume scoring. */}
 
                 {/* Employment Type */}
                 {job.employmentType && (
@@ -2264,7 +2244,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 )}
 
                 {/* Separator before Posted Info */}
-                {(job.location || job.education || job.employmentType || job.workMode || job.salaryMin || job.salaryMax) && (
+                {(job.location || job.employmentType || job.workMode || job.salaryMin || job.salaryMax) && (
                   <span className="text-gray-300">•</span>
                 )}
 
@@ -2891,10 +2871,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                         <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Experience</h4>
                         <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{job.experience || 'Not specified'}</p>
                       </div>
-                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Education</h4>
-                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{educationLabel(job.education)}</p>
-                      </div>
+                      {/* Education tile REMOVED 2026-08-21 - see the chip note above.
+                          The requirement is listed in Must-Have / Nice-to-Have
+                          Additional Requirements, in the recruiter's own words and
+                          with the field of study a bare level throws away. */}
                       {job.industry_type && (
                         <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
                           <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Industry Type</h4>

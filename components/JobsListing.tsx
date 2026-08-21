@@ -575,7 +575,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       'JD ID', 'Title', 'Status', 'Creation Method', 'Version',
       'Industry', 'Department', 'Employment Type', 'Work Mode',
       'Experience (Min Years)', 'Experience (Max Years)', 'Experience',
-      'Salary', 'Location', 'Job Level', 'Education',
+      // 'Education' removed 2026-08-21. Education is a requirement, and requirements
+      // live in Must-Have / Nice-to-Have Additional Requirements now. This export is
+      // JD METADATA - it carries no skills or requirements columns at all - so a lone
+      // Education column was the odd one out. Keep this list and the value list below
+      // in the SAME order: they are joined positionally, so dropping one without the
+      // other silently shifts every following column.
+      'Salary', 'Location', 'Job Level',
       'Posted Date', 'Created Date', 'Last Updated', 'Created By',
       'Applicants'
     ];
@@ -602,7 +608,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
         (job as any).salary || '',
         job.location || '',
         (job as any).experience_level || '',
-        (job as any).education || '',
         job.postedDate || '',
         (job as any).created_at ? new Date((job as any).created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
         (job as any).updated_at ? new Date((job as any).updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',

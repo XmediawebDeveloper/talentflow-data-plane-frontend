@@ -4509,13 +4509,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     return level?.label || normalized;
   };
 
-  // Helper function to get education label from master data
-  const getEducationLabel = (code: string): string => {
-    if (!code) return 'Not specified';
-    const level = educationLevels.find(l => l.code === code);
-    return level?.label || code.charAt(0).toUpperCase() + code.slice(1).replace('-', ' ');
-  };
-
   // Helper function to get industry label from master data
   const getIndustryLabel = (code: string): string => {
     if (!code) return 'Not specified';
@@ -8133,7 +8126,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <button
                       onClick={() => {
                         const text = mode === 'ai' ? generatedJD : manualJD;
-                        const fullContent = `${jobTitle}\n\n${text}\n\n--- Skills ---\nMust Have: ${extractedData.mustHaveSkills.join(', ')}\nNice to Have: ${extractedData.niceToHaveSkills.join(', ')}\n\nExperience: ${extractedData.experience}\nEducation: ${extractedData.education}`;
+                        // The standalone "Education:" line was dropped 2026-08-21 and the Additional
+                        // Requirements lists added in its place. Education is a line inside those lists
+                        // now, so this export carries it exactly once - and it carries MHAR/NHAR at all,
+                        // which it previously omitted entirely.
+                        const fullContent = [
+                          jobTitle,
+                          '',
+                          text,
+                          '',
+                          '--- Skills ---',
+                          `Must Have: ${extractedData.mustHaveSkills.join(', ')}`,
+                          `Nice to Have: ${extractedData.niceToHaveSkills.join(', ')}`,
+                          '',
+                          '--- Additional Requirements ---',
+                          `Must Have: ${(extractedData.mustHaveComments || []).join('; ') || 'None'}`,
+                          `Nice to Have: ${(extractedData.niceToHaveComments || []).join('; ') || 'None'}`,
+                          '',
+                          `Experience: ${extractedData.experience}`,
+                        ].join('\n');
                         const blob = new Blob([fullContent], { type: 'text/plain' });
                         const url = URL.createObjectURL(blob);
                         const a = document.createElement('a');
@@ -8173,9 +8184,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {extractedData.experience && (
                         <span className="flex items-center gap-1">⏱️ {getExperienceLabel(extractedData.experience)}</span>
                       )}
-                      {extractedData.education && (
-                        <span className="flex items-center gap-1">🎓 {getEducationLabel(extractedData.education)}</span>
-                      )}
+                      {/* Education badge REMOVED 2026-08-21 - it is a requirement line
+                          in Must-Have / Nice-to-Have Additional Requirements, not a
+                          header attribute like location or employment type. */}
                       {extractedData.employmentType && (
                         <span className="flex items-center gap-1">💼 {extractedData.employmentType === 'full_time' ? 'Full Time' : extractedData.employmentType === 'part_time' ? 'Part Time' : extractedData.employmentType === 'contract' ? 'Contract' : extractedData.employmentType}</span>
                       )}
@@ -8342,14 +8353,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </p>
                   </div>
 
-                  {/* Education */}
-                  <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Education</h4>
-                    <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{getEducationLabel(extractedData.education)}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
-                      {extractedData.educationRequired ? '✓ Required' : '○ Preferred'}
-                    </p>
-                  </div>
+                  {/* Education tile REMOVED 2026-08-21. The Step 3 review showed the
+                      same degree twice - once here and once in the Must-Have /
+                      Nice-to-Have Additional Requirements listed directly above - which
+                      is what the recruiter reported. The lists are the only place
+                      education appears now; education_mandatory still decides WHICH of
+                      the two it lands in, so the Required-vs-Preferred distinction is
+                      preserved without a second tile saying it. */}
 
                   {/* Industry Type - Only show if specified */}
                   {extractedData.industryType && (

@@ -152,7 +152,12 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
         if (item.key === 'required_total') requiredSummary = item;
         else if (item.key === 'preferred_total') preferredSummary = item;
         else if (item.key === 'final_score') finalSummary = item;
-      } else if (item.key !== 'nice_to_have_comments') {
+      } else {
+        // nice_to_have_comments used to be filtered out here. It is a scored criterion
+        // and the PDF always printed it, so hiding it made the screen and the download
+        // disagree - and now that an INFERRED education requirement is routed to
+        // Nice-to-Have Additional Requirements, hiding the row would hide how the
+        // candidate's qualification was graded.
         regularItems.push(item);
       }
     });
@@ -205,7 +210,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     let preferredTotal = 0;
 
     criteriaScores = Object.entries(resume.criteriaScores)
-      .filter(([key]) => !key.startsWith('_') && key !== 'nice_to_have_comments')  // Skip internal keys and nice_to_have_comments
+      .filter(([key]) => !key.startsWith('_'))  // Skip internal keys only - see the note above
       .map(([key, value]: [string, any]) => {
         if (!value || typeof value !== 'object') return null;
         const rawScore = value.score ?? 0;
