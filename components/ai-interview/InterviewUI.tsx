@@ -1768,32 +1768,54 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (!isConnected) return;
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return;
     let cancelled = false;
+    // The original device must be SEEN present at least once before its absence
+    // counts as an unplug — guards against a transient enumerate that omits it,
+    // and against a stale captured id that never actually matched a listed
+    // device (which would otherwise false-fire the pause for a candidate who
+    // never had a headset).
+    let origConfirmedPresent = false;
+
+    const origMissingNow = async (): Promise<boolean> => {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputs = devices.filter(
+        d => d.kind === 'audioinput' && d.deviceId
+          && d.deviceId !== 'default' && d.deviceId !== 'communications'
+      );
+      const orig = interviewMicDeviceIdRef.current;
+      // Not yet captured, or a browser that hides deviceIds until a gesture
+      // (labels/ids empty) → cannot judge, treat as present.
+      if (!orig || inputs.length === 0) return false;
+      const present = inputs.some(d => d.deviceId === orig);
+      if (present) origConfirmedPresent = true;
+      return origConfirmedPresent && !present;
+    };
+
     const check = async () => {
       try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
+        const missing = await origMissingNow();
         if (cancelled) return;
-        const inputs = devices.filter(d => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
-        // Compare against the ORIGINAL device (never the drifting pin) so a
-        // silent fallback to the built-in mic doesn't hide the unplug.
-        const orig = interviewMicDeviceIdRef.current;
-        if (!orig) return; // not captured yet — nothing to compare
-        const origExists = inputs.some(d => d.deviceId === orig);
-        if (!origExists && !audioDeviceLostRef.current) {
-          // The device the interview started on (e.g. wired headset) is gone → pause.
+        if (missing && !audioDeviceLostRef.current) {
+          // Re-check after a short delay — a real unplug stays missing; a
+          // transient device-list glitch resolves. Only pause if STILL missing.
+          await new Promise(r => setTimeout(r, 700));
+          if (cancelled) return;
+          if (!(await origMissingNow()) || cancelled) return;
+          // The device the interview started on (e.g. wired headset) is really
+          // gone → pause via the shared media-pause path.
           setAudioDeviceLost(true);
           candidateAIInterviewService.reportProctorEvent(token, {
             event_type: 'microphone_disabled',
             severity: 'severe',
             details: { phase: 'in_interview', reason: 'audio_device_unplugged' },
           }).catch(() => { /* best-effort */ });
-        } else if (origExists && audioDeviceLostRef.current) {
+        } else if (!missing && audioDeviceLostRef.current) {
           // The original device is back (candidate re-plugged) → resume.
           setAudioDeviceLost(false);
         }
       } catch { /* enumeration failed — leave state as-is */ }
     };
     navigator.mediaDevices.addEventListener('devicechange', check);
-    void check(); // catch a device already removed before this mounted
+    void check(); // establish presence baseline / catch an already-removed device
     return () => {
       cancelled = true;
       navigator.mediaDevices.removeEventListener('devicechange', check);
