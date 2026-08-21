@@ -180,21 +180,17 @@ export function InterviewProctoringWarnings() {
   // Subscribe to interview event bus on mount
   useEffect(() => {
     const unsubscribe = InterviewEventBus.subscribe((event: ProctoringEvent) => {
-      // screen_recording_attempt never becomes a candidate-facing toast here.
-      // The ONLY thing that emits it on this bus is the getDisplayMedia monkey
-      // patch in InterviewProctoringMonitor, which by construction can only see
-      // THIS PAGE's own calls — an external recorder (OBS, Game Bar, QuickTime)
-      // never routes through it. So every toast it produced was our own app's
-      // screen (re)share racing the __tfAllowLegitimateShare flag, i.e. a
-      // "Screen Recording Detected" warning shown to a candidate who had started
-      // no recorder, right as the session opened.
-      //
-      // Real screen-recording detection now lives in the portal's in-interview
-      // vision watch, which owns its own banner. The event is still emitted and
-      // still reported to the backend for the recruiter's timeline — it just no
-      // longer accuses the candidate on screen.
+      // screen_recording_attempt is NOT a toast — it has a dedicated popup.
+      // Both of the surfaces that can raise it own their own, stronger UI:
+      //   • an in-page attempt the browser refused (getDisplayMedia, or an
+      //     extension's desktop getUserMedia) raises ScreenRecordingBlockedModal
+      //     synchronously from inside the patched API, and
+      //   • an OS-level recorder seen by the portal's vision watch raises the
+      //     top banner there, which also pauses the interview.
+      // A toast on top of either would just be a duplicate accusation that
+      // auto-dismisses in 2s. The event still reaches the backend for the
+      // recruiter's timeline; this only skips the toast.
       if (event.type === 'screen_recording_attempt') {
-        console.warn('[InterviewWarnings] suppressed legacy screen_recording_attempt toast (own-page getDisplayMedia, not an external recorder)');
         return;
       }
       setWarnings(prev => {

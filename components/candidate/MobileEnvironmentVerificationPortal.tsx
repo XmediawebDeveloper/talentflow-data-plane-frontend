@@ -81,8 +81,22 @@ const ALIGN_GUIDE_MIN_DENSITY = 0.62; // fraction of guide-rect pixels that must
 // that ordinary physical surfaces usually don't:
 const ALIGN_MIN_SATURATION = 0.16; // the challenge palette is deliberately vivid, not neutral gray
 const ALIGN_MIN_WHITE_BRIGHTNESS = 195; // still accept the one guaranteed near-white challenge slot
-const ALIGN_BEZEL_MARGIN_FRAC = 0.035; // thin band just outside the guide rect, as a fraction of min(w,h)
-const ALIGN_BEZEL_MIN_DISTANCE = 55; // a real laptop bezel is meaningfully darker/different from the screen
+// Minimum canvas margin (in analysis-canvas px, out of ALIGN_SAMPLE_W=160
+// wide) that must remain between the detected screen edge and the frame
+// boundary on each side — proves the screen doesn't run off the frame
+// without assuming any particular framing distance (see findEdgeMargin).
+const ALIGN_MIN_EDGE_MARGIN_PX = 4;
+// Wider region (nearly the whole visible frame) the SAME dominant color must
+// also cover — rejects "the correct-looking color, but only in one small
+// panel of a busy multi-content screen" (confirmed live 2026-08-20: the
+// ordinary live-interview UI's transcript panel alone passed the tight
+// guide-box checks above). A genuine full-screen challenge fills nearly
+// the whole display; a random UI panel does not.
+const ALIGN_OUTER_X0 = 0.04;
+const ALIGN_OUTER_X1 = 0.96;
+const ALIGN_OUTER_Y0 = 0.06;
+const ALIGN_OUTER_Y1 = 0.94;
+const ALIGN_OUTER_MIN_DENSITY = 0.45;
 
 // ── Voice activity detection (VAD) — runs only while actually recording ──
 // Web Audio API only (no new library) on the SAME getUserMedia stream
@@ -123,6 +137,11 @@ interface MobileEnvironmentVerificationPortalProps {
 export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironmentVerificationPortalProps) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  // True only when the error phase was reached from a failed UPLOAD (blob
+  // still sitting in chunksRef.current, unchanged) — as opposed to an
+  // unrecoverable failure (expired link, empty/corrupt recording) where
+  // retrying the same request can't help and the candidate must rescan.
+  const [canRetryUpload, setCanRetryUpload] = useState(false);
   // Two SEPARATE 5s countdowns (resets at the phase switch), not one
   // continuous 10s countdown — matches the spec's own wording ("start 5 secs
   // timer" for phase 1, "another 5 secs timer" for phase 2).
@@ -376,32 +395,46 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           const brightness = (domR + domG + domB) / 3;
           const colorPlausible = saturation >= ALIGN_MIN_SATURATION || brightness >= ALIGN_MIN_WHITE_BRIGHTNESS;
 
-          // 2) Bezel contrast — a real laptop screen sits inside a distinctly
-          //    darker bezel; a floor or desk surface just continues past the
-          //    guide box with no such edge. Sample a thin band just outside
-          //    the guide rect and require it to differ meaningfully from the
-          //    guide box's own color.
-          const marginPx = Math.max(3, Math.round(Math.min(w, h) * ALIGN_BEZEL_MARGIN_FRAC));
-          let bezelR = 0, bezelG = 0, bezelB = 0, bezelN = 0;
-          const sampleBand = (x0: number, y0: number, x1: number, y1: number) => {
-            for (let y = Math.max(0, y0); y < Math.min(h, y1); y++) {
-              for (let x = Math.max(0, x0); x < Math.min(w, x1); x++) {
-                const i = (y * w + x) * 4;
-                bezelR += data[i]; bezelG += data[i + 1]; bezelB += data[i + 2];
-                bezelN++;
+          // 2) Bezel contrast on EACH of the four sides — ADAPTIVE, not a
+          //    fixed offset. A fixed-distance sample just past the guide
+          //    box's edge (the first version of this check) assumed the
+          //    candidate always frames the shot with roughly the same
+          //    amount of margin around the screen. When framed MORE
+          //    TIGHTLY (screen fills more of the photo — still fully
+          //    contained, just closer/zoomed-in), the real bezel sits
+          //    further out than that fixed offset, so the fixed sample
+          //    landed back on the screen's own color and wrongly reported
+          //    "no bezel" (confirmed live 2026-08-20: two fully-visible,
+          //    generously-margined shots passed, while two equally
+          //    fully-visible but more tightly-framed shots of the SAME
+          //    screen failed). Fix: scan outward from the guide box toward
+          //    the canvas edge along each side until the color actually
+          //    stops matching the screen — that's the real screen edge,
+          //    wherever it happens to be — and require it to be found with
+          //    at least a small margin before the canvas boundary (proving
+          //    the screen doesn't run off the frame on that side, without
+          //    assuming any particular framing distance).
+          const findEdgeMargin = (startX: number, startY: number, stepX: number, stepY: number): number => {
+            let x = startX, y = startY;
+            while (x >= 0 && x < w && y >= 0 && y < h) {
+              const i = (Math.floor(y) * w + Math.floor(x)) * 4;
+              const dr = data[i] - domR, dg = data[i + 1] - domG, db = data[i + 2] - domB;
+              if (Math.sqrt(dr * dr + dg * dg + db * db) > ALIGN_COLOR_DISTANCE) {
+                // Found where the screen's own color ends — return how much
+                // canvas remains between here and the frame edge along this axis.
+                return stepX !== 0 ? (stepX > 0 ? w - x : x) : (stepY > 0 ? h - y : y);
               }
+              x += stepX; y += stepY;
             }
+            return 0; // never left the screen color before hitting the canvas edge — likely cut off
           };
-          sampleBand(gx0 - marginPx, gy0 - marginPx, gx1 + marginPx, gy0); // top
-          sampleBand(gx0 - marginPx, gy1, gx1 + marginPx, gy1 + marginPx); // bottom
-          sampleBand(gx0 - marginPx, gy0, gx0, gy1); // left
-          sampleBand(gx1, gy0, gx1 + marginPx, gy1); // right
-          let bezelContrasts = true;
-          if (bezelN > 0) {
-            const bezR = bezelR / bezelN, bezG = bezelG / bezelN, bezB = bezelB / bezelN;
-            const dr = bezR - domR, dg = bezG - domG, db = bezB - domB;
-            bezelContrasts = Math.sqrt(dr * dr + dg * dg + db * db) >= ALIGN_BEZEL_MIN_DISTANCE;
-          }
+          const midX = (gx0 + gx1) / 2;
+          const midY = (gy0 + gy1) / 2;
+          const bezelContrasts =
+            findEdgeMargin(midX, gy0, 0, -1) >= ALIGN_MIN_EDGE_MARGIN_PX && // top
+            findEdgeMargin(midX, gy1, 0, 1) >= ALIGN_MIN_EDGE_MARGIN_PX && // bottom
+            findEdgeMargin(gx0, midY, -1, 0) >= ALIGN_MIN_EDGE_MARGIN_PX && // left
+            findEdgeMargin(gx1, midY, 1, 0) >= ALIGN_MIN_EDGE_MARGIN_PX; // right
 
           // 3) Uniform-color density — is the guide rectangle itself mostly
           //    filled with that one color (candidate actually fit the
@@ -417,7 +450,38 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           }
           const density = guideArea > 0 ? matched / guideArea : 0;
 
-          pass = colorPlausible && bezelContrasts && density >= ALIGN_GUIDE_MIN_DENSITY;
+          // 4) Whole-frame coverage — the SAME dominant color must also fill
+          //    most of the ENTIRE visible screen, not just the small guide
+          //    box. Without this, any other content displayed on the laptop
+          //    (e.g. the live interview UI's white/light transcript panel)
+          //    can fool the guide-box-only checks above: that panel is
+          //    genuinely uniform, genuinely bright, and genuinely sits
+          //    inside the laptop's own real bezel — the phone is never told
+          //    the expected challenge color in advance (deliberate
+          //    anti-replay design), so it can't otherwise tell "the correct
+          //    verification screen" apart from "literally anything else
+          //    shown on that same laptop" (confirmed live 2026-08-20: the
+          //    ordinary interview UI — AI avatar + candidate video +
+          //    transcript — passed alignment because its transcript panel
+          //    alone filled the guide box). A genuine full-screen challenge
+          //    covers nearly the WHOLE display; a busy multi-panel UI only
+          //    has isolated patches of any single color.
+          const ox0 = Math.round(w * ALIGN_OUTER_X0);
+          const ox1 = Math.round(w * ALIGN_OUTER_X1);
+          const oy0 = Math.round(h * ALIGN_OUTER_Y0);
+          const oy1 = Math.round(h * ALIGN_OUTER_Y1);
+          let outerMatched = 0;
+          const outerArea = (ox1 - ox0) * (oy1 - oy0);
+          for (let y = oy0; y < oy1; y++) {
+            for (let x = ox0; x < ox1; x++) {
+              const i = (y * w + x) * 4;
+              const dr = data[i] - domR, dg = data[i + 1] - domG, db = data[i + 2] - domB;
+              if (Math.sqrt(dr * dr + dg * dg + db * db) <= ALIGN_COLOR_DISTANCE) outerMatched++;
+            }
+          }
+          const outerDensity = outerArea > 0 ? outerMatched / outerArea : 0;
+
+          pass = colorPlausible && bezelContrasts && density >= ALIGN_GUIDE_MIN_DENSITY && outerDensity >= ALIGN_OUTER_MIN_DENSITY;
         }
       } catch (e) {
         // getImageData can throw on a tainted canvas in rare cross-origin
@@ -703,9 +767,11 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     if (!blob || blob.size === 0) {
       console.warn('[ENV-VERIFY] Empty blob at submit time — refusing to upload');
       setErrorMessage('Recording is empty or unavailable. Please close this page and rescan the QR code to try again.');
+      setCanRetryUpload(false); // nothing a retry can fix — the recording itself is gone
       setPhase('error');
       return;
     }
+    setCanRetryUpload(false); // reset — set true again only if THIS attempt fails in a retryable way
     setPhase('uploading');
     console.info('[ENV-VERIFY] Upload: STARTED');
     try {
@@ -723,7 +789,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       // commit both succeeded (spec #15/#6).
       if (!res?.data?.video_uploaded) {
         console.warn('[ENV-VERIFY] Upload: FAILED (response did not confirm persistence)');
-        setErrorMessage('Upload could not be confirmed. Please close this page and rescan the QR code to try again.');
+        setErrorMessage('Upload could not be confirmed.');
+        setCanRetryUpload(true); // blob is still in memory — no need to rescan
         setPhase('error');
         return;
       }
@@ -731,7 +798,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       setPhase('done');
     } catch (err) {
       console.warn('[ENV-VERIFY] Upload: FAILED', err);
-      setErrorMessage('Upload failed. Please close this page and rescan the QR code to try again.');
+      setErrorMessage('Upload failed.');
+      setCanRetryUpload(true); // blob is still in memory — no need to rescan
       setPhase('error');
     }
   };
@@ -741,9 +809,18 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       {phase === 'loading' && <p className="text-[#94a3b8]">Loading verification…</p>}
 
       {(phase === 'expired' || phase === 'error') && (
-        <div className="max-w-sm space-y-2">
+        <div className="max-w-sm space-y-4">
           <h1 className="text-lg font-semibold">Unable to verify</h1>
           <p className="text-sm text-[#94a3b8]">{errorMessage}</p>
+          {canRetryUpload && (
+            <button
+              type="button"
+              onClick={() => { void handleSubmit(); }}
+              className="w-full py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 
@@ -768,14 +845,22 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               <div className="flex-1">
                 <p>
                   <strong className="text-white">Next 5 seconds</strong> — slowly move your phone from
-                  left to right and back again, capturing your workspace, surrounding area, and any
-                  nearby devices.
+                  left to right, then right to left back to center, capturing your workspace,
+                  surrounding area, and any nearby devices. Move slowly and keep the phone steady —
+                  no sudden movements.
                 </p>
                 <div className="mt-2 flex items-center gap-1.5 px-2">
                   <span className="text-xl inline-block animate-[tf-instr-curve_1.6s_ease-in-out_infinite_alternate]">📱</span>
-                  <span className="text-[11px] text-[#94a3b8]">left ↔ right</span>
+                  <span className="text-[11px] text-[#94a3b8]">left → right → left</span>
                 </div>
               </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue/20 text-brand-blue text-xs font-bold flex items-center justify-center mt-0.5">3</span>
+              <p>
+                <strong className="text-white">After recording</strong> — review your video and tap
+                Upload to submit it.
+              </p>
             </div>
           </div>
           <button
@@ -833,7 +918,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 rounded-xl px-4 overflow-hidden">
               <span className="text-5xl inline-block animate-[tf-phone-curve_1.8s_ease-in-out_infinite_alternate]">📱</span>
               <p className="text-sm font-medium text-white text-center">
-                Now slowly move your phone from left to right and back again — capture your workspace, surrounding area, and any nearby devices.
+                Slowly turn the mobile from left to right and right to left — capture your workspace, surrounding area, and any nearby devices.
               </p>
               <style>{`
                 @keyframes tf-phone-curve {
@@ -844,6 +929,11 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
                   100% { transform: translateX(40px)  translateY(0)    rotate(16deg); }
                 }
               `}</style>
+            </div>
+          )}
+          {(phase === 'recording_screen' || phase === 'recording_pan') && (
+            <div className="absolute top-3 right-3 w-12 h-12 rounded-full bg-black/60 flex items-center justify-center">
+              <span className="text-2xl font-bold text-white tabular-nums">{recordingCountdown}</span>
             </div>
           )}
         </div>
@@ -892,7 +982,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             <p className="text-sm leading-relaxed">
               {phase === 'recording_screen'
                 ? 'Focus your camera on your laptop screen/display. Keep it centered and hold steady — do not move yet.'
-                : 'Now slowly move your phone from left to right and back again, capturing your workspace, surrounding area, and any nearby devices.'}
+                : 'Slowly turn the mobile from left to right and right to left, capturing your workspace, surrounding area, and any nearby devices.'}
             </p>
           </>
         )}
@@ -921,7 +1011,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
 
       {phase === 'done' && (
         <div className="max-w-sm space-y-2">
-          <h1 className="text-lg font-semibold">Verification submitted</h1>
+          <h1 className="text-lg font-semibold">Recordings uploaded successfully.</h1>
           <p className="text-sm text-[#94a3b8]">
             You can put your phone down — your interview is resuming on your laptop.
           </p>

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
-import { filterMultipleFaceCandidates, type FaceRegion } from '@/lib/proctoring/faceDetection';
+import { createVideoFrameCanvas, filterMultipleFaceCandidates, type FaceRegion } from '@/lib/proctoring/faceDetection';
 import { MicDisconnectedDuringRecordingError } from '@/lib/utils/pcmEnroll';
 import {
   Monitor,
@@ -201,6 +201,29 @@ const MIN_INTERNET_MBPS = 1.0;
 // to practice while registration was still running in the background.
 const FACE_REGISTRATION_TIMEOUT_MS = 8000;
 
+// ── Face-detection cost controls ────────────────────────────────────────────
+// Windows Chrome has no native FaceDetector (the Shape Detection API only ships
+// on macOS / ChromeOS / Android), so effectively every candidate falls back to
+// face-api.js on the tf.js CPU backend — see lib/face-api-loader.ts for why the
+// backend is pinned to CPU. That runs on the main thread, so at the library's
+// default 416px input on a 4-core laptop it is roughly a second of blocking
+// work per tick: the screen froze and Continue silently missed clicks.
+// 224px on a 320px-wide frame is ~3-4x cheaper and still detects a face that
+// fills a webcam frame, which is the only thing this screen asks.
+const FACE_DETECT_INPUT_SIZE = 224;
+const FACE_DETECT_FRAME_WIDTH = 320;
+// The poll re-arms AFTER each detection returns rather than on a fixed
+// interval, backing off to a multiple of the last inference — a slow machine
+// gets idle main-thread time instead of a backlog of queued ticks.
+const FACE_POLL_MIN_MS = 2500;
+const FACE_POLL_MAX_MS = 8000;
+const FACE_POLL_BUSY_FACTOR = 3;
+// A single missed frame is not a failure — the detector blinks, especially at
+// the reduced input size. Only this many CONSECUTIVE bad ticks may flip a row
+// (and with it, disable Continue). Same rule the microphone-disconnect poll
+// further down already uses, and for the same reason.
+const FACE_MISS_STREAK = 2;
+
 const SYSTEM_REQUIREMENTS = [
   {
     label: 'Desktop or Laptop Computer',
@@ -366,10 +389,13 @@ export default function StepSystemCheck({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const lightingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const noiseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Consecutive loud readings — a single spike (cough, chair scrape) must NOT
-  // flip the check to fail; only sustained noise across several ticks should.
-  const noiseFailStreakRef = useRef(0);
-  const faceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const faceIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped whenever the face poll is stopped or restarted, so a tick that is
+  // already in flight can't re-arm a timer for a poll nobody wants any more.
+  const faceLoopGenRef = useRef(0);
+  // Consecutive-bad-tick counters behind FACE_MISS_STREAK.
+  const noFaceStreakRef = useRef(0);
+  const multiFaceStreakRef = useRef(0);
   const micIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Voice enrollment is captured WHILE the candidate speaks during the mic
   // check (reading the prompt below), not at proceed-time when they're silent —
@@ -394,11 +420,6 @@ export default function StepSystemCheck({
   // ────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'browser_check') return;
-
-    // Warm the proctoring object-detection weights (tens of MB) while the
-    // candidate works through the camera/mic checks, so the interview itself
-    // never waits on that download. Fire-and-forget; failure is harmless.
-    prefetchObjectDetectionModel();
 
     const timer = setTimeout(() => {
       if (!mountedRef.current) return;
@@ -478,16 +499,24 @@ export default function StepSystemCheck({
     return () => clearInterval(iv);
   }, [voiceEnrollStatus]);
 
+  // Cancels the face poll for good: clears the pending timer AND invalidates
+  // any tick already running, which a bare clearTimeout cannot do (the tick
+  // would finish and schedule the next one).
+  const stopFacePoll = useCallback(() => {
+    faceLoopGenRef.current += 1;
+    if (faceIntervalRef.current) { clearTimeout(faceIntervalRef.current); faceIntervalRef.current = null; }
+  }, []);
+
   const stopActiveChecks = useCallback(() => {
     checksCancelledRef.current = true;
     if (lightingIntervalRef.current) { clearInterval(lightingIntervalRef.current); lightingIntervalRef.current = null; }
     if (noiseIntervalRef.current) { clearInterval(noiseIntervalRef.current); noiseIntervalRef.current = null; }
-    if (faceIntervalRef.current) { clearInterval(faceIntervalRef.current); faceIntervalRef.current = null; }
+    stopFacePoll();
     if (micIntervalRef.current) { clearInterval(micIntervalRef.current); micIntervalRef.current = null; }
     if (audioContextRef.current) { audioContextRef.current.close().catch(() => {}); audioContextRef.current = null; }
     analyserRef.current = null;
     if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
-  }, []);
+  }, [stopFacePoll]);
 
   const INITIAL_CHECKS: SystemCheckItem[] = [
     { id: 'device', label: 'Device Type', detail: 'Pending...', icon: <Monitor className="w-4 h-4" />, status: 'pending', colorClass: 'text-gray-600' },
@@ -575,12 +604,21 @@ export default function StepSystemCheck({
   // groupId in case a device is otherwise listed twice.
   const dedupeRealDevices = (devices: MediaDeviceInfo[]): MediaDeviceInfo[] => {
     const seenGroups = new Set<string>();
-    return devices.filter((d) => {
+    const filtered = devices.filter((d) => {
       if (d.deviceId === 'default' || d.deviceId === 'communications') return false;
       if (d.groupId && seenGroups.has(d.groupId)) return false;
       if (d.groupId) seenGroups.add(d.groupId);
       return true;
     });
+    // Before mic/camera permission is ever granted, some browsers expose
+    // ONLY the 'default'/'communications' pseudo-entries — no separate
+    // per-device entry at all yet — so filtering those out would leave the
+    // dropdown completely empty even though a real device IS connected.
+    // Fall back to the raw (un-deduped) list in that case so there's always
+    // something to select; once permission is granted (first "Run Check"),
+    // enumerateDevices() reveals the real per-device entries and normal
+    // dedup applies again on the next refresh.
+    return filtered.length > 0 ? filtered : devices;
   };
 
   // Populate the dropdown option lists. Labels are only populated by the
@@ -889,35 +927,39 @@ export default function StepSystemCheck({
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (video && canvas && video.readyState >= 2) {
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      if (ctx) {
+      const readBrightness = (): number | null => {
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx || video.readyState < 2) return null;
         canvas.width = video.videoWidth; canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0);
         const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        let totalBrightness = 0;
-        for (let i = 0; i < data.length; i += 4) totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
-        const avgBrightness = data.length > 0 ? totalBrightness / (data.length / 4) : 0;
+        let total = 0;
+        for (let i = 0; i < data.length; i += 4) total += (data[i] + data[i + 1] + data[i + 2]) / 3;
+        return data.length > 0 ? total / (data.length / 4) : 0;
+      };
+      // ONE-SHOT check — sampled a few times over ~1.5s so a single dark/bright
+      // frame (a flicker, a hand passing the lens) can't decide it alone, but
+      // this does NOT keep re-verifying itself in the background afterward on
+      // a timer. Verification only happens here, at explicit "Run Check" /
+      // "Retry" click time — never on an ongoing interval the candidate didn't ask for.
+      const first = readBrightness();
+      if (first === null) {
+        updateSystemCheck('lighting', { status: 'fail', detail: 'Unable to analyze lighting' });
+      } else {
+        const SAMPLE_COUNT = 3;
+        const SAMPLE_GAP_MS = 500;
+        const samples: number[] = [first];
+        for (let i = 1; i < SAMPLE_COUNT; i++) {
+          await new Promise((r) => setTimeout(r, SAMPLE_GAP_MS));
+          const s = readBrightness();
+          if (s !== null) samples.push(s);
+        }
+        const avgBrightness = samples.reduce((a, b) => a + b, 0) / samples.length;
         videoBrightnessRef.current = Math.round(avgBrightness);
         updateSystemCheck('lighting', avgBrightness >= 40
           ? { status: 'pass', detail: 'Lighting: Good (Face clearly visible)' }
           : { status: 'fail', detail: 'Lighting: Too dark - improve your lighting' });
-      } else {
-        updateSystemCheck('lighting', { status: 'fail', detail: 'Unable to analyze lighting' });
       }
-      lightingIntervalRef.current = setInterval(() => {
-        if (!video || !canvas || video.readyState < 2) return;
-        const ctx2 = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx2) return;
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        ctx2.drawImage(video, 0, 0);
-        const data = ctx2.getImageData(0, 0, canvas.width, canvas.height).data;
-        let tb = 0;
-        for (let i = 0; i < data.length; i += 4) tb += (data[i] + data[i + 1] + data[i + 2]) / 3;
-        const avg = data.length > 0 ? tb / (data.length / 4) : 0;
-        updateSystemCheck('lighting', avg >= 40
-          ? { status: 'pass', detail: 'Lighting: Good (Face clearly visible)' }
-          : { status: 'fail', detail: 'Lighting: Too dark - improve your lighting' });
-      }, 3000);
     } else {
       updateSystemCheck('lighting', { status: 'fail', detail: 'Camera not available for lighting check' });
     }
@@ -925,57 +967,40 @@ export default function StepSystemCheck({
 
   const runNoise = useCallback(async () => {
     if (noiseIntervalRef.current) { clearInterval(noiseIntervalRef.current); noiseIntervalRef.current = null; }
-    noiseFailStreakRef.current = 0;
     updateSystemCheck('noise', { status: 'checking', detail: 'Analyzing background noise...' });
     const analyser = await ensureAudioAnalyser();
     await new Promise((r) => setTimeout(r, 1000));
     if (analyser) {
-      // A single loud reading must NOT fail the check — a cough, a chair
-      // scrape, or a driver still settling right after a device
-      // reconnect/switch would otherwise flip this to 'fail' (and show
-      // Retry) for one bad tick and immediately bounce back, which read as
-      // "Retry keeps appearing again and again." Require NOISE_FAIL_STREAK
-      // consecutive loud ticks (3s apart) before actually failing; a single
-      // good tick clears the streak and resets to pass immediately.
-      const NOISE_FAIL_STREAK = 2; // ~6s of sustained noise
+      // ONE-SHOT check — sampled a few times over ~1.5s so a single spurious
+      // spike (cough, chair scrape) can't decide it alone, but this does NOT
+      // keep re-verifying itself in the background afterward on a timer.
+      // Verification only happens here, at explicit "Run Check" / "Retry"
+      // click time — never on an ongoing interval the candidate didn't ask for.
       const readAvg = () => {
         const da = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(da);
         return da.length > 0 ? da.reduce((a, b) => a + b, 0) / da.length : 0;
       };
-      if (readAvg() < 80) {
-        noiseFailStreakRef.current = 0;
-        updateSystemCheck('noise', { status: 'pass', detail: 'Background noise: Low (Good)' });
-      } else {
-        // Loud on the very first reading — don't fail yet, give it a chance
-        // to settle; the interval below will fail it if it's still loud.
-        noiseFailStreakRef.current = 1;
-        updateSystemCheck('noise', { status: 'pass', detail: 'Background noise: Low (Good)' });
+      const SAMPLE_COUNT = 3;
+      const SAMPLE_GAP_MS = 500;
+      const samples: number[] = [readAvg()];
+      for (let i = 1; i < SAMPLE_COUNT; i++) {
+        await new Promise((r) => setTimeout(r, SAMPLE_GAP_MS));
+        samples.push(readAvg());
       }
-      noiseIntervalRef.current = setInterval(() => {
-        const a = analyserRef.current;
-        if (!a) return;
-        const da = new Uint8Array(a.frequencyBinCount);
-        a.getByteFrequencyData(da);
-        const avg = da.length > 0 ? da.reduce((x, y) => x + y, 0) / da.length : 0;
-        if (avg < 80) {
-          noiseFailStreakRef.current = 0;
-          updateSystemCheck('noise', { status: 'pass', detail: 'Background noise: Low (Good)' });
-        } else {
-          noiseFailStreakRef.current += 1;
-          if (noiseFailStreakRef.current >= NOISE_FAIL_STREAK) {
-            updateSystemCheck('noise', { status: 'fail', detail: 'Background noise: High - find a quieter space' });
-          }
-          // else: stay on the current status — one loud tick alone doesn't fail it.
-        }
-      }, 3000);
+      const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+      updateSystemCheck('noise', avg < 80
+        ? { status: 'pass', detail: 'Background noise: Low (Good)' }
+        : { status: 'fail', detail: 'Background noise: High - find a quieter space' });
     } else {
       updateSystemCheck('noise', { status: 'fail', detail: 'Microphone not available for noise check' });
     }
   }, [ensureAudioAnalyser, updateSystemCheck]);
 
   const runFaceMultiple = useCallback(async () => {
-    if (faceIntervalRef.current) { clearInterval(faceIntervalRef.current); faceIntervalRef.current = null; }
+    stopFacePoll();
+    noFaceStreakRef.current = 0;
+    multiFaceStreakRef.current = 0;
     updateSystemCheck('face', { status: 'checking', detail: 'Detecting face...' });
     updateSystemCheck('multiple', { status: 'checking', detail: 'Checking for multiple people...' });
     await ensureVideoStream();
@@ -995,12 +1020,16 @@ export default function StepSystemCheck({
     // Check" falsely failed with "2 people detected" while "Face Detection"
     // failed with "No face" — the two checks contradicting each other. Filtering
     // decouples them: an empty frame yields 0 → only the no-face result.
+    // Takes the dimensions of the frame the detector actually ran on — the
+    // face-api path detects on a downscaled canvas, so measuring its boxes
+    // against the full-resolution video would shrink every face below the
+    // significance threshold and report an empty room.
     const countSignificantFaces = (
       dets: any[],
       getRegion: (d: any) => FaceRegion | null,
+      w: number,
+      h: number,
     ): number => {
-      const w = video.videoWidth || 0;
-      const h = video.videoHeight || 0;
       if (w <= 0 || h <= 0) return 0;
       return filterMultipleFaceCandidates(dets, getRegion, w, h).length;
     };
@@ -1020,22 +1049,66 @@ export default function StepSystemCheck({
     // extra people); 1 face → both pass; 2+ faces → Face passes, Multiple fails.
     // Face Detection alone gates "you must be visible" (allSystemPassed needs it),
     // so passing Multiple at 0 faces can't let anyone through without a face.
+    //
+    // Both rows are debounced by FACE_MISS_STREAK: a row only flips to 'fail'
+    // once the detector has been sure for that many CONSECUTIVE ticks. A lone
+    // dropped frame used to knock Face Detection to 'fail' for ~2.5s, which
+    // disabled Continue (allSystemPassed) right as the candidate clicked it —
+    // the "I had to press Next several times" complaint. During a first miss
+    // the row keeps its status and only its detail line changes.
     const applyFaceCount = (count: number) => {
       // Face Detection: purely about the candidate's face being present.
       if (count >= 1) {
+        noFaceStreakRef.current = 0;
         updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
       } else {
-        updateSystemCheck('face', { status: 'fail', detail: 'No face detected — position yourself in front of the camera' });
+        noFaceStreakRef.current += 1;
+        updateSystemCheck('face', noFaceStreakRef.current >= FACE_MISS_STREAK
+          ? { status: 'fail', detail: 'No face detected — position yourself in front of the camera' }
+          : { detail: 'Looking for your face — hold still...' });
       }
       // Multiple People Check: purely about EXTRA people — independent of whether
       // the face is currently visible. Passes for 0 or 1 person; fails only at 2+.
       if (count >= 2) {
-        updateSystemCheck('multiple', { status: 'fail', detail: `${count} people detected — ensure you are alone` });
+        multiFaceStreakRef.current += 1;
+        updateSystemCheck('multiple', multiFaceStreakRef.current >= FACE_MISS_STREAK
+          ? { status: 'fail', detail: `${count} people detected — ensure you are alone` }
+          : { detail: 'Confirming you are alone...' });
       } else if (count === 1) {
+        multiFaceStreakRef.current = 0;
         updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
       } else {
+        multiFaceStreakRef.current = 0;
         updateSystemCheck('multiple', { status: 'pass', detail: 'No other people detected' });
       }
+    };
+
+    // Self-scheduling poll — the next tick is armed only once the previous one
+    // has returned, and waits FACE_POLL_BUSY_FACTOR x however long that took.
+    // The old fixed 2.5s setInterval kept firing while a ~1s CPU inference was
+    // still running, so the main thread never got a gap to paint or handle a
+    // click in.
+    const startFacePoll = (tick: () => Promise<void>) => {
+      const generation = ++faceLoopGenRef.current;
+      const run = async () => {
+        if (faceLoopGenRef.current !== generation || !mountedRef.current) return;
+        let elapsedMs = 0;
+        if (!faceApiBusyRef.current && video.readyState >= 2) {
+          faceApiBusyRef.current = true;
+          const startedAt = performance.now();
+          try { await tick(); } catch { /* skip frame */ }
+          finally {
+            elapsedMs = performance.now() - startedAt;
+            faceApiBusyRef.current = false;
+          }
+        }
+        if (faceLoopGenRef.current !== generation || !mountedRef.current) return;
+        faceIntervalRef.current = setTimeout(run, Math.min(
+          FACE_POLL_MAX_MS,
+          Math.max(FACE_POLL_MIN_MS, elapsedMs * FACE_POLL_BUSY_FACTOR),
+        ));
+      };
+      faceIntervalRef.current = setTimeout(run, FACE_POLL_MIN_MS);
     };
 
     const hasNative = typeof window !== 'undefined' && 'FaceDetector' in window;
@@ -1043,14 +1116,16 @@ export default function StepSystemCheck({
     if (hasNative) {
       try {
         const detector = new (window as any).FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
-        applyFaceCount(countSignificantFaces(Array.from(await detector.detect(video)), nativeRegion));
+        // Native detection is off-thread and cheap, so it reads the video
+        // element directly — boxes come back in video coordinates.
+        const detectNative = async () => {
+          applyFaceCount(countSignificantFaces(
+            Array.from(await detector.detect(video)), nativeRegion, video.videoWidth, video.videoHeight,
+          ));
+        };
+        await detectNative();
         setHasFaceDetector(true);
-        faceIntervalRef.current = setInterval(async () => {
-          if (faceApiBusyRef.current || !video || video.readyState < 2) return;
-          faceApiBusyRef.current = true;
-          try { applyFaceCount(countSignificantFaces(Array.from(await detector.detect(video)), nativeRegion)); } catch { /* skip frame */ }
-          finally { faceApiBusyRef.current = false; }
-        }, 2500);
+        startFacePoll(detectNative);
       } catch {
         useFaceApi = true;
       }
@@ -1061,15 +1136,19 @@ export default function StepSystemCheck({
         if (!faceapi.nets.tinyFaceDetector.isLoaded) {
           await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
         }
-        const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
-        applyFaceCount(countSignificantFaces(await faceapi.detectAllFaces(video, opts), faceApiRegion));
+        const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5, inputSize: FACE_DETECT_INPUT_SIZE });
+        // Detect on a downscaled copy of the frame, not the raw video: this is
+        // the CPU-backend path, and the cost scales with the pixels handed in.
+        const detectWithFaceApi = async () => {
+          const frame = createVideoFrameCanvas(video, FACE_DETECT_FRAME_WIDTH);
+          if (!frame) return;
+          applyFaceCount(countSignificantFaces(
+            await faceapi.detectAllFaces(frame, opts), faceApiRegion, frame.width, frame.height,
+          ));
+        };
+        await detectWithFaceApi();
         setHasFaceDetector(true);
-        faceIntervalRef.current = setInterval(async () => {
-          if (faceApiBusyRef.current || !video || video.readyState < 2) return;
-          faceApiBusyRef.current = true;
-          try { applyFaceCount(countSignificantFaces(await faceapi.detectAllFaces(video, opts), faceApiRegion)); } catch { /* skip frame */ }
-          finally { faceApiBusyRef.current = false; }
-        }, 2500);
+        startFacePoll(detectWithFaceApi);
       } catch {
         setHasFaceDetector(false);
         updateSystemCheck('face', { status: 'pass', detail: 'Camera working (face check unavailable on this browser)' });
@@ -1086,7 +1165,7 @@ export default function StepSystemCheck({
         }
       } catch { /* non-critical */ }
     }
-  }, [ensureVideoStream, onVerifyFace, updateSystemCheck]);
+  }, [ensureVideoStream, onVerifyFace, updateSystemCheck, stopFacePoll]);
 
   // Full run — orchestrates every check in order (initial "Run Check").
   const handleRunChecks = useCallback(async () => {
@@ -1103,6 +1182,13 @@ export default function StepSystemCheck({
     await runWebcam(); if (cancelled()) return;
     await runMicrophone(); if (cancelled()) return;
     await runInternet(); if (cancelled()) return;
+    // Warm the proctoring object-detection weights (tens of MB) so the
+    // interview itself never waits on that download. Deliberately started
+    // AFTER the speed test rather than on mount: the two used to pull ~25 MB
+    // and ~tens of MB down the same link at once, which both slowed the page
+    // and made the measured speed look worse than the candidate's connection
+    // actually is. Fire-and-forget; failure is harmless.
+    prefetchObjectDetectionModel();
     await runAiEngine(); if (cancelled()) return;
     await runWebsocket(); if (cancelled()) return;
     await runLighting(); if (cancelled()) return;
@@ -1132,21 +1218,28 @@ export default function StepSystemCheck({
     }
   }, [runDevice, runWebcam, runMicrophone, runInternet, runAiEngine, runWebsocket, runLighting, runNoise, runFaceMultiple]);
 
-  // Candidate picked a different camera from the dropdown — re-acquire that
-  // specific device and re-run every check that depends on the video feed.
-  const switchCamera = useCallback(async (deviceId: string) => {
-    if (isSwitchingDevice || deviceId === selectedCameraId) return;
-    setIsSwitchingDevice(true);
+  // Mark camera-dependent checks as unverified after the selected camera
+  // changes — same rule and reason as markAudioChecksUnverified below:
+  // picking a device must never auto-verify it, only "Run Check" (first run)
+  // or a per-row "Retry" click may. The Camera Preview intentionally keeps
+  // showing the PREVIOUS device's feed until Retry actually swaps the stream
+  // via runWebcam() — that swap IS the verification, so it's deferred too.
+  const markCameraChecksUnverified = useCallback(() => {
+    if (lightingIntervalRef.current) { clearInterval(lightingIntervalRef.current); lightingIntervalRef.current = null; }
+    stopFacePoll();
+    if (!checksCompleted) return;
+    updateSystemCheck('webcam', { status: 'fail', detail: 'Click Retry to verify this camera' });
+    updateSystemCheck('lighting', { status: 'fail', detail: 'Click Retry to re-check lighting' });
+    updateSystemCheck('face', { status: 'fail', detail: 'Click Retry to re-check face detection' });
+    updateSystemCheck('multiple', { status: 'fail', detail: 'Click Retry to re-check for other people' });
+  }, [checksCompleted, updateSystemCheck, stopFacePoll]);
+
+  const switchCamera = useCallback((deviceId: string) => {
+    if (deviceId === selectedCameraId) return;
     selectedCameraIdRef.current = deviceId;
     setSelectedCameraId(deviceId);
-    try {
-      await runWebcam();
-      await runLighting();
-      await runFaceMultiple();
-    } finally {
-      setIsSwitchingDevice(false);
-    }
-  }, [isSwitchingDevice, selectedCameraId, runWebcam, runLighting, runFaceMultiple]);
+    markCameraChecksUnverified();
+  }, [selectedCameraId, markCameraChecksUnverified]);
 
   // Mark BOTH audio-dependent checks as unverified after the selected mic
   // changes (dropdown pick, or the single-device auto-select).
@@ -1156,15 +1249,12 @@ export default function StepSystemCheck({
   // and never calls runMicrophone()/runNoise(): verification happens solely
   // on an explicit "Run Check" (first run) or per-row "Retry" click.
   //
-  // The noise check also owns a long-lived polling interval that keeps
-  // re-writing its own row every 3 s off analyserRef. Left running, it would
-  // flip Background Noise straight back to 'pass' on its own the moment any
-  // later code re-populates the analyser — the exact "it ticks itself without
-  // me clicking Run Check" behavior. So the interval is torn down here too,
-  // and only runNoise() (i.e. an explicit click) ever restarts it.
+  // Background Noise is a ONE-SHOT check (runNoise samples a few times and
+  // stops — no ongoing polling interval), so there's nothing left running to
+  // tear down here; this clear is just a defensive no-op against any stale
+  // interval from before that change.
   const markAudioChecksUnverified = useCallback(() => {
     if (noiseIntervalRef.current) { clearInterval(noiseIntervalRef.current); noiseIntervalRef.current = null; }
-    noiseFailStreakRef.current = 0;
     // Before the first "Run Check", leave both rows at their initial 'pending'
     // state — that button still exists and will run (and correctly pass) them
     // against the freshly selected device. After the first run, "Run Check" is
@@ -1287,6 +1377,25 @@ export default function StepSystemCheck({
         // false, and the voice panel reads "No microphone detected."
         const duringVoiceEnroll =
           voiceEnrollStatusRef.current === 'recording' || voiceEnrollStatusRef.current === 'disconnected';
+
+        // An ALREADY-SUCCEEDED voiceprint is invalidated by this disconnect too,
+        // not just one that interrupts an in-flight recording — it was captured
+        // on the track/device that just died, so it can't be trusted to still
+        // match whatever device is live once reconnected (or, if a silent
+        // laptop fallback fires below, the DIFFERENT device it just switched
+        // to). Without this, voiceEnrollStatus stays stuck on 'success' forever
+        // and Continue reappears the moment the Microphone check re-passes,
+        // without the candidate ever re-proving their voice on the live device.
+        // Reuses the same 'disconnected' panel/copy as the mid-recording case
+        // ("No microphone detected" → "Microphone reconnected — start over")
+        // for consistent messaging, and requires the same explicit "Start
+        // over" click rather than auto-restarting.
+        if (voiceEnrollStatusRef.current === 'success') {
+          voiceEnrollPromiseRef.current = null;
+          setVoiceEnrollStatus('disconnected');
+          setVoiceEnrollProgress(0);
+        }
+
         const recovered = await tryMicFallbackOrFail(deadDeviceId, !duringVoiceEnroll);
         if (recovered) {
           // Fell back to the system mic silently — still let the candidate
@@ -1393,7 +1502,7 @@ export default function StepSystemCheck({
 
     // Stop face detection intervals before face registration — concurrent face-api.js /
     // TF.js calls corrupt the WebGL backend (tensor.backend becomes undefined).
-    if (faceIntervalRef.current) { clearInterval(faceIntervalRef.current); faceIntervalRef.current = null; }
+    stopFacePoll();
 
     // Wait for any in-flight face-api.js / TF.js WebGL call to finish before
     // calling onRegisterFace. clearInterval does NOT cancel an already-executing
@@ -1427,8 +1536,12 @@ export default function StepSystemCheck({
             if (!faceapi.nets.tinyFaceDetector.isLoaded) {
               await faceapi.nets.tinyFaceDetector.loadFromUri('/models/');
             }
-            const _opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
-            _faces = (await faceapi.detectAllFaces(_vid, _opts)).length;
+            const _opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5, inputSize: FACE_DETECT_INPUT_SIZE });
+            // Same downscaled frame as the live poll — this one runs while the
+            // candidate is waiting on the Continue spinner, so it has to be
+            // just as cheap.
+            const _frame = createVideoFrameCanvas(_vid, FACE_DETECT_FRAME_WIDTH);
+            _faces = _frame ? (await faceapi.detectAllFaces(_frame, _opts)).length : -1;
           } catch { _faces = -1; }
         }
         faceApiBusyRef.current = false;
@@ -1926,7 +2039,18 @@ export default function StepSystemCheck({
                         until an explicit device is chosen here — "System Default"
                         does not count, so this option is disabled and the placeholder
                         stays selected until the candidate actively picks one. */}
-                    {!selectedMicId && (
+                    {micDevices.length === 0 ? (
+                      // Some browsers won't reveal real per-device entries until
+                      // mic permission has been granted at least once — which
+                      // hasn't happened yet if the candidate hasn't clicked "Run
+                      // Check" yet. The dropdown looks empty in the meantime even
+                      // though a device IS physically connected; this explains why
+                      // rather than leaving it looking silently broken.
+                      <p className="mt-1 text-xs text-gray-400">
+                        No microphones detected yet — click <strong>Run Check</strong> above
+                        to detect your connected microphone(s), then select one here.
+                      </p>
+                    ) : !selectedMicId && (
                       <p className="mt-1 text-xs text-amber-600 font-medium">
                         Required — select your microphone to complete the Microphone check.
                       </p>

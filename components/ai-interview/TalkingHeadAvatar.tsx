@@ -83,6 +83,21 @@ async function fetchAvatarWithRetry(url: string, attempts = 3): Promise<string> 
   throw lastErr;
 }
 
+/** Sanity ceiling on a measured audible-onset delay (ms). Anything larger is a
+ *  stalled worklet / suspended context, not a real buffering delay — clamp it
+ *  so one bad turn can't push the caption timeline wildly out. */
+const MAX_MEASURED_DELAY_MS = 4000;
+
+/** Hardware/output latency of an AudioContext in ms.
+ *  `outputLatency` is the real speaker delay but is unimplemented on Safari;
+ *  `baseLatency` (render-quantum buffering) is the portable approximation.
+ *  Either way it's part of "arrival → audible" and belongs in the offset. */
+function contextOutputLatencyMs(ctx: AudioContext | null | undefined): number {
+  if (!ctx) return 0;
+  const raw = (ctx as AudioContext & { outputLatency?: number }).outputLatency ?? ctx.baseLatency;
+  return typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? raw * 1000 : 0;
+}
+
 export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
   function TalkingHeadAvatar({ avatarUrl, className, style, onReady, onFallback, audioOnly }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -102,6 +117,28 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
     const fbPendingRef     = useRef(0);     // scheduled-but-not-finished buffers
     const fbNoMoreDataRef  = useRef(false);
     const fbActiveRef      = useRef(false); // fallback mode is active this session
+    // ── Measured audible onset (caption↔voice sync) ─────────────────────
+    // InterviewUI paces its caption reveal against the audio clock, offset by
+    // the delay between a PCM chunk ARRIVING and that audio actually becoming
+    // audible (`window.__interviewAudibleDelayMs`, read via getAudibleDelayMs).
+    // That used to be an unmeasured 1500 ms constant, which is the dominant
+    // source of caption drift: the offset is applied to BOTH ends of the
+    // reveal span, so every ms of error shifts the whole caption timeline.
+    //
+    // We now MEASURE it per turn instead of guessing. TalkingHead's playback
+    // worklet posts `playback-started` the moment the first chunk is handed to
+    // the audio thread, surfaced as the `onAudioStart` callback of
+    // `head.streamStart(...)`. Delay = (onset − first-chunk arrival) + the
+    // context's own output latency. On the very first turn this legitimately
+    // includes the one-off AudioWorklet module load; from then on it settles to
+    // a few ms + hardware latency.
+    const firstChunkAtRef      = useRef<number | null>(null);  // performance.now() of turn's 1st chunk
+    const onsetMeasuredRef     = useRef(false);                // onset already measured this turn
+    // Last WORKLET-path measurement, carried forward as the next worklet turn's
+    // prior. Fallback-path measurements are NOT stored here: the fallback is
+    // near-instant, so inheriting its value would UNDER-estimate a worklet turn
+    // and let captions outrun Bina — the one direction the reveal can't undo.
+    const lastMeasuredDelayRef = useRef<number | null>(null);
     // Phoneme-based lip sync: visemes from text, scaled to actual audio duration
     const fullTextRef          = useRef("");
     const lastBuiltTextRef     = useRef("");
@@ -753,6 +790,9 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         fbNoMoreDataRef.current = false;
         fbPendingRef.current = 0;
         fbActiveRef.current = false;
+        // New turn → re-arm the audible-onset measurement.
+        firstChunkAtRef.current = null;
+        onsetMeasuredRef.current = false;
 
         if (!head) {
           // ── Fallback: play audio directly via Web Audio API ──
@@ -764,6 +804,10 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           // only real for the worklet path); otherwise the text trails the voice by
           // ~1 s for the whole turn. Set per turn, because `head` may become ready
           // later in the session and flip us back to the worklet path.
+          // Provisional 0 in case the context setup below throws; it is refined
+          // to the context's real output latency as soon as we have the context
+          // (an immediately-scheduled buffer is still delayed by the hardware
+          // buffer, and that IS part of arrival→audible).
           (window as any).__interviewAudibleDelayMs = 0;
           try {
             // Reuse or create fallback AudioContext
@@ -776,6 +820,11 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             }
             const ctx = fbCtxRef.current;
             if (ctx.state === "suspended") ctx.resume().catch(() => {});
+            const fbDelay = contextOutputLatencyMs(ctx);
+            onsetMeasuredRef.current = true;   // nothing further to measure on this path
+            // NOTE: deliberately not written to lastMeasuredDelayRef — see its comment.
+            (window as any).__interviewAudibleDelayMs = fbDelay;
+            console.log(`[TalkingHead] audible delay (fallback path) = ${fbDelay.toFixed(0)}ms`);
           } catch {}
           fbNextTimeRef.current = 0;
           // Mark ready immediately — no worklet setup needed
@@ -785,10 +834,16 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           return;
         }
 
-        // Worklet path — TalkingHead buffers before its speaker goes audible, so
-        // clear any 0 left by a previous fallback turn and let InterviewUI apply
-        // TALKING_HEAD_BUFFER_MS again.
-        (window as any).__interviewAudibleDelayMs = null;
+        // Worklet path — audio is audible only after the worklet is up and the
+        // first chunk reaches the audio thread. Seed InterviewUI with the LAST
+        // MEASURED delay (self-calibrating across devices) and let it fall back
+        // to TALKING_HEAD_BUFFER_MS only until the very first measurement lands.
+        // `onAudioStart` below overwrites this with THIS turn's real value,
+        // typically within one 200 ms reveal tick — so an inherited prior can
+        // only be briefly wrong, never wrong for the whole turn. Note the first
+        // turn measures high (one-off AudioWorklet module load); erring high is
+        // the safe direction — captions trail slightly rather than outrun Bina.
+        (window as any).__interviewAudibleDelayMs = lastMeasuredDelayRef.current;
 
         // Pre-resume AudioContext if suspended BEFORE calling head.streamStart.
         // TalkingHead's streamStart has a 1-second resume timeout — if we don't
@@ -812,7 +867,26 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
                 lipsyncLang: "en",
                 waitForAudioChunks: 0,
               },
-              null,
+              // onAudioStart — the playback worklet has taken the first chunk,
+              // i.e. Bina is (about to become) audible. This is the measurement
+              // that replaces the old TALKING_HEAD_BUFFER_MS guess.
+              () => {
+                if (onsetMeasuredRef.current) return;
+                const arrivedAt = firstChunkAtRef.current;
+                if (arrivedAt === null) return;   // no chunk seen yet — nothing to measure against
+                onsetMeasuredRef.current = true;
+                const ctx = headRef.current?.audioCtx as AudioContext | undefined;
+                const measured = Math.min(
+                  MAX_MEASURED_DELAY_MS,
+                  Math.max(0, performance.now() - arrivedAt) + contextOutputLatencyMs(ctx),
+                );
+                lastMeasuredDelayRef.current = measured;
+                (window as any).__interviewAudibleDelayMs = measured;
+                console.log(
+                  `[TalkingHead] measured audible delay = ${measured.toFixed(0)}ms ` +
+                  `(worklet path, outputLatency=${contextOutputLatencyMs(ctx).toFixed(0)}ms)`,
+                );
+              },
               () => {
                 console.log("[TalkingHead] stream complete — audio finished");
                 streamReadyRef.current = false;
@@ -846,6 +920,14 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       },
 
       streamAudio(pcmData: ArrayBuffer) {
+        // Stamp the ARRIVAL of this turn's first chunk — the same instant
+        // InterviewUI anchors its silent mirror-buffer timeline on. Measured
+        // audible delay = onset − this. Stamped here (not in sendAudioChunk) so
+        // chunks that get queued while the worklet is still loading still count
+        // their true arrival time, which is what the mirror timeline uses.
+        if (firstChunkAtRef.current === null) {
+          firstChunkAtRef.current = performance.now();
+        }
         if (fbActiveRef.current) {
           // Fallback mode: play directly
           if (!streamReadyRef.current) {
@@ -894,6 +976,10 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         console.log("[TalkingHead] streamStop called");
         streamReadyRef.current = false;
         pendingRef.current = [];
+        // Turn is over — re-arm the onset measurement. `lastMeasuredDelayRef`
+        // is deliberately NOT cleared: it is the next turn's prior.
+        firstChunkAtRef.current = null;
+        onsetMeasuredRef.current = false;
         speechStartRef.current = null;
         currentMorphsRef.current = {};
         totalAudioMsRef.current = 0;

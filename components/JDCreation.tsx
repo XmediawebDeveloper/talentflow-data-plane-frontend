@@ -1037,6 +1037,11 @@ const DroppableCommentsContainer = ({ category, onDrop, children }: DroppableCom
 // two fallback buckets (e.g. the old 2-3/4-7 split left 3-4 uncovered), which
 // makes bucket-matching logic fall through to its "no containing range"
 // branch and pick the wrong level for perfectly valid years like 3.5.
+// Mirrors MAX_EXPERIENCE_YEARS in the backend's openai_service.py. Keep the two in sync:
+// the recruiter is blocked here with a visible error, and extraction drops anything above
+// this there, so no path can store an impossible requirement.
+const MAX_EXPERIENCE_YEARS = 50;
+
 const FALLBACK_EXPERIENCE_LEVELS: ExperienceLevel[] = [
   { id: 1, code: 'entry', label: 'Entry Level (0-2 Years)', min_years: 0, max_years: 2, sort_order: 1, is_active: true },
   { id: 2, code: 'junior', label: 'Junior Level (2-4 Years)', min_years: 2, max_years: 4, sort_order: 2, is_active: true },
@@ -1672,6 +1677,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [masterDataLoading, setMasterDataLoading] = useState(false);  // Set to false since we have fallback data
   const [showCustomExperienceInput, setShowCustomExperienceInput] = useState(false);
 
+  // TRUE for the duration of one extraction that must REPLACE everything, not merge.
+  //
+  // Reaching the extraction call at all means Step 1 changed (or we have no baseline):
+  // every "nothing changed" path in handleNext returns early before it. So whatever is
+  // currently in Step 2 was derived from DIFFERENT Step 1 content and is stale by
+  // definition - the JD text, the title or the prompt no longer matches it.
+  //
+  // Without this, two preservation rules silently kept that stale data:
+  //   isEditMode        -> merged old list values in when the new extraction returned fewer
+  //   preserveUserEdits -> DISCARDED the new extraction outright if the recruiter had
+  //                        edited anything in Step 2 (extractedDataModified)
+  // So a recruiter who edited Step 2, went back, rewrote the JD and pressed Next got the
+  // OLD requirements against the NEW description. Applies to every state - new, draft,
+  // published edit and version fork - because all four run through this same call.
+  const forceFreshExtraction = useRef(false);
+
   // What the recruiter is CURRENTLY typing in the experience From/To boxes, before it
   // is normalized. null = not editing, so the boxes show the canonical stored value.
   //
@@ -1724,8 +1745,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     return experienceLevels.find((level) => level.code === normalized);
   };
 
+  // Mirrors the backend's _fold_months_into_years(). "7 years 6 months" is ONE figure
+  // (7.5), not a 7 with a stray 6. The months must sit IMMEDIATELY after the years so an
+  // unrelated later duration is never absorbed, and only a sub-year remainder folds -
+  // "5 years, 18 months of which in leadership" is a separate duration, not a fraction.
+  const foldMonthsIntoYears = (text: string): string =>
+    text.replace(
+      /(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)\s*(?:,\s*)?(?:and\s+)?(\d{1,2})\s*(?:months?|mos?\b)/gi,
+      (whole, y: string, m: string) => {
+        const months = Number(m);
+        if (months <= 0 || months >= 12) return whole;
+        return `${Number((Number(y) + months / 12).toFixed(2))} years`;
+      },
+    );
+
   const inferExperienceRangeFromCustomValue = (value?: string | null): { experienceMin?: number; experienceMax?: number } => {
-    const normalized = value?.toLowerCase().trim() || '';
+    // Fold "N years M months" BEFORE any pattern below sees the text.
+    const normalized = foldMonthsIntoYears(value?.toLowerCase().trim() || '');
     if (!normalized) return {};
 
     // Mirrors the backend's _EXP_RANGE_RE. The optional `\+?` and unit word after the
@@ -1733,7 +1769,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // match as ONE range. Without them the match died at the first number, fell through
     // to the `plusMatch` branch below, and returned min=5 with NO max - dropping the
     // upper bound the recruiter typed. Keep in sync with the backend regex.
-    const rangeMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)?\s*(?:-|to|–)\s*(\d{1,2}(?:\.\d+)?)\s*\+?/);
+    // The unit after the SECOND number is MANDATORY, mirroring the backend's
+    // _EXP_RANGE_RE. Without it this matched any "A to B" pair: "Manage a team of 5-8
+    // people" became 5-8 years, and "12 to 24 months" became 12-24 YEARS. The unit
+    // before the connector stays optional so "5+ years to 8 years" still matches.
+    const rangeMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)?\s*(?:-|to|–)\s*(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)\b/);
     if (rangeMatch) {
       const first = Number(rangeMatch[1]);
       const second = Number(rangeMatch[2]);
@@ -1753,7 +1793,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     }
 
-    const minimumMatch = normalized.match(/(?:minimum|min\.?|at least)\s*(\d{1,2}(?:\.\d+)?)/);
+    // Unit required, mirroring the backend. Without it "minimum 6 months" matched
+    // "minimum 6" and returned SIX YEARS.
+    const minimumMatch = normalized.match(/(?:minimum|min\.?|at least)\s*(?:of\s*)?(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)\b/);
     if (minimumMatch) {
       const years = Number(minimumMatch[1]);
       if (!Number.isNaN(years)) {
@@ -1766,6 +1808,33 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const years = Number(singleMatch[1]);
       if (!Number.isNaN(years)) {
         return { experienceMin: years };
+      }
+    }
+
+    // MONTHS-ONLY fallback, mirroring the backend's _months_only_range(). Reached only
+    // when the text states no YEAR figure at all, so months can never dilute a stated
+    // year. Without this, "6 months of experience" parsed to nothing, the level was left
+    // to a guess, and the field came back as a whole band ("2 to 4 years") that the JD
+    // never asked for. Months-only requirements are normal outside office hiring:
+    // "18 months clinical" (nursing), "12 to 24 months" (apprenticeships, trades),
+    // "6 months" (hospitality, retail, warehouse).
+    const monthRange = normalized.match(/(\d{1,3})\s*(?:months?)?\s*(?:-|to|\u2013)\s*(\d{1,3})\s*months?/);
+    if (monthRange) {
+      const lo = Number(monthRange[1]) / 12;
+      const hi = Number(monthRange[2]) / 12;
+      if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
+        return {
+          experienceMin: Number(Math.min(lo, hi).toFixed(2)),
+          experienceMax: Number(Math.max(lo, hi).toFixed(2)),
+        };
+      }
+    }
+
+    const monthsOnly = normalized.match(/(\d{1,3})\s*months?/);
+    if (monthsOnly) {
+      const years = Number(monthsOnly[1]) / 12;
+      if (!Number.isNaN(years)) {
+        return { experienceMin: Number(years.toFixed(2)) };
       }
     }
 
@@ -2357,7 +2426,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // (switching Manual->AI must not preserve stale Manual-derived data).
       const extractionSourceModeChanged =
         lastExtractionSourceMode.current !== null && lastExtractionSourceMode.current !== mode;
-      const isEditMode = !!editingId && !extractionSourceModeChanged;
+      const isEditMode = !!editingId && !extractionSourceModeChanged
+        && !forceFreshExtraction.current;
       const nextExperienceValue = expValue || (isEditMode ? extractedData.experience : '');
       lastExtractionSourceMode.current = mode;
 
@@ -2820,6 +2890,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
+    // We only get here when Step 1 changed (or there is no baseline) - every
+    // no-change path above has already returned. So this extraction REPLACES Step 2
+    // rather than merging into it.
+    forceFreshExtraction.current = true;
+    setExtractedDataModified(false);
+    console.log('[TalentFlow] Step 1 changed - running a FRESH extraction; previous Step 2 data will be replaced');
+
     setIsExtracting(true);
     setHasProceededToExtract(true); // Disable regenerate button immediately when Next is clicked
 
@@ -3069,11 +3146,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // stale prior-mode (AI-generated) data does not linger in the other fields.
       const extractionSourceModeChanged =
         lastExtractionSourceMode.current !== null && lastExtractionSourceMode.current !== mode;
-      const isEditMode = !!editingId && !extractionSourceModeChanged;
+      const isEditMode = !!editingId && !extractionSourceModeChanged
+        && !forceFreshExtraction.current;
 
       // FIX: If user has modified extracted data (deleted/edited skills/comments), preserve their changes
       // Don't let AI extraction overwrite user's manual edits
-      const preserveUserEdits = isEditMode && extractedDataModified;
+      // Never preserve Step 2 edits across a Step 1 change: those edits were made
+      // against the OLD description, so keeping them would pair old requirements with
+      // new JD text - the exact mismatch this flag exists to prevent.
+      const preserveUserEdits = isEditMode && extractedDataModified
+        && !forceFreshExtraction.current;
       const nextExperienceYearsExplicit = (hasExpMin || hasExpMax)
         || (preserveUserEdits && resolvePersistedExperiencePayload(extractedData.experience).yearsWereExplicit);
       setExperienceYearsExplicit(nextExperienceYearsExplicit);
@@ -3320,6 +3402,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     } finally {
       setIsExtracting(false);
+      // Cleared in `finally`, not only on success: if the extraction call throws, a flag
+      // left set would suppress preservation on the NEXT extraction too, silently wiping
+      // Step 2 edits that had nothing to do with the failed attempt.
+      forceFreshExtraction.current = false;
     }
   };
 
@@ -4082,7 +4168,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // DEFENSIVE CHECK: Early return if critical fields are empty
     // This prevents any edge case where button might be clickable
     const earlyCheckFailed = [];
-    if (!extractedData.education?.trim()) earlyCheckFailed.push('Education');
+    // Education deliberately absent: its Step 2 control was removed 2026-08-20, so a
+    // recruiter could never clear this check. Extraction guarantees the requirement
+    // lands in Must-Have or Nice-to-Have Additional Requirements instead.
     if (!extractedData.experience?.trim()) earlyCheckFailed.push('Experience');
     if (!extractedData.industryType?.trim()) earlyCheckFailed.push('Industry Type');
 
@@ -4114,11 +4202,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Must-Have Comments are optional - no validation required
 
-    // Education is required - check for empty string, null, undefined, or whitespace only
-    if (!extractedData.education || extractedData.education.trim() === '') {
-      missingFields.push('Education');
-      errors.education = 'Education is required';
-    }
+    // Education is NOT validated here any more: the field was removed from Step 2 and
+    // extraction now guarantees it lands in Must-Have or Nice-to-Have Additional
+    // Requirements. Blocking publish on a control the recruiter can no longer see would
+    // be an unfixable error.
 
     // Experience is required - check for empty string, null, undefined, or whitespace only
     if (!extractedData.experience || extractedData.experience.trim() === '') {
@@ -4453,11 +4540,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Must-Have Comments are optional - no validation required
 
-    // Education is required - check for empty string, null, undefined, or whitespace only
-    const educationValue = extractedData.education?.trim() || '';
-    if (!educationValue) {
-      missingFields.push('Education');
-    }
+    // Education is NOT required here any more - the Step 2 control was removed
+    // 2026-08-20 and extraction guarantees the requirement lands in Must-Have or
+    // Nice-to-Have Additional Requirements. This was the THIRD place blocking on it.
 
     // Experience is required - check for empty string, null, undefined, or whitespace only
     const experienceValue = extractedData.experience?.trim() || '';
@@ -4480,7 +4565,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Debug logging
     console.log('[TalentFlow] Validation check:', {
       experience: experienceValue,
-      education: educationValue,
       industryType: industryValue,
       isValid: missingFields.length === 0,
       missingFields
@@ -6260,10 +6344,43 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     // the re-ordered canonical form (see experienceDraft above).
                     const from = experienceDraft ? experienceDraft.from : canonical.from;
                     const to = experienceDraft ? experienceDraft.to : canonical.to;
+                    // Tolerant parse. Number('3+') is NaN, which made
+                    // buildExperienceYearsString treat the bound as ABSENT and return an
+                    // empty string - so a recruiter who entered "3+" in From (a natural way
+                    // to write an open-ended minimum) was told "Experience is required"
+                    // while the box still showed their input. Strip anything that is not a
+                    // digit or decimal point before converting; '' still means "not given",
+                    // so a MIN-ONLY range stays valid and open-ended.
+                    const toYears = (raw: string): number | null => {
+                      const cleaned = (raw ?? '').replace(/[^0-9.]/g, '');
+                      if (cleaned === '') return null;
+                      const n = Number(cleaned);
+                      return Number.isNaN(n) ? null : n;
+                    };
                     const commitYears = (nextFrom: string, nextTo: string) => {
+                      const fromYears = toYears(nextFrom);
+                      const toYearsValue = toYears(nextTo);
+
+                      // HARD CEILING. A career longer than MAX_EXPERIENCE_YEARS is not a
+                      // real requirement, so the recruiter is TOLD rather than silently
+                      // corrected - clamping 51 to 50 would look like their own input.
+                      // The value is not stored, so an out-of-range figure can never reach
+                      // the JD. The backend enforces the same ceiling for extracted values,
+                      // where there is no one to show an error to.
+                      const over = [fromYears, toYearsValue].find(
+                        (v) => v !== null && v > MAX_EXPERIENCE_YEARS,
+                      );
+                      if (over !== undefined && over !== null) {
+                        setValidationErrors(prev => ({
+                          ...prev,
+                          experience: `Experience cannot exceed ${MAX_EXPERIENCE_YEARS} years.`,
+                        }));
+                        return;
+                      }
+
                       const canonical = buildExperienceYearsString(
-                        nextFrom === '' ? null : Number(nextFrom),
-                        nextTo === '' ? null : Number(nextTo)
+                        fromYears,
+                        toYearsValue
                       );
                       setShowCustomExperienceInput(false);
                       setExperienceYearsExplicit(nextFrom !== '' || nextTo !== '');
@@ -6326,48 +6443,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   )}
                 </div>
 
-                {/* Education */}
-                <div>
-                  <div className="mb-3 sm:mb-4 flex items-center justify-between gap-3">
-                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Education <span className="text-red-500">*</span></h3>
-                    <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(extractedData.educationRequired)}
-                        onChange={(e) => { setExtractedData(prev => ({ ...prev, educationRequired: e.target.checked })); markExtractedDataModified(); }}
-                        className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
-                        disabled={isRegenerating}
-                      />
-                      <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
-                    </label>
-                  </div>
-                  <select
-                    value={extractedData.education}
-                    onChange={(e) => {
-                      setExtractedData(prev => ({ ...prev, education: e.target.value }));
-                      markExtractedDataModified();
-                      // Clear validation error when user makes a selection
-                      if (e.target.value) {
-                        setValidationErrors(prev => ({ ...prev, education: undefined }));
-                      }
-                    }}
-                    className={`w-full px-3 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-sm text-black mb-3 ${
-                      validationErrors.education ? 'border-red-500' : 'border-gray-200'
-                    } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                    disabled={masterDataLoading || isRegenerating}
-                  >
-                    <option value="">{masterDataLoading ? 'Loading...' : 'Select education level'}</option>
-                    {educationLevels.map((level) => (
-                      <option key={level.id} value={level.code}>{level.label}</option>
-                    ))}
-                  </select>
-                  {validationErrors.education && (
-                    <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
-                      <AlertCircle className="w-4 h-4" />
-                      {validationErrors.education}
-                    </p>
-                  )}
-                </div>
+                {/* Education field REMOVED 2026-08-20.
+                    Education is no longer a separate Step 2 control. Extraction now
+                    always places it in the Additional Requirements lists instead:
+                      stated in the JD      -> Must-Have Additional Requirements
+                      not stated (inferred) -> Nice-to-Have Additional Requirements
+                    and never in the Skills lists. The structured education_degree /
+                    education_requirements values are STILL produced by extraction and
+                    still persisted - AI interview question generation and the interview
+                    prompts read them - they are simply no longer edited here. See
+                    _enforce_education_placement() in the backend. */}
 
                 {/* Industry Type */}
                 <div>

@@ -219,6 +219,25 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   const MULTI_FACE_HARD_FAIL = 2;
   const NO_FACE_HARD_FAIL = 2;
 
+  // ── Face-detection cost controls ──────────────────────────────────────────
+  // Windows Chrome has no native FaceDetector (the Shape Detection API only
+  // ships on macOS / ChromeOS / Android), so effectively every candidate takes
+  // the face-api.js path — on the tf.js CPU backend, on the main thread (see
+  // lib/face-api-loader.ts for why the backend is pinned to CPU). At the
+  // library's default 416px input that is ~a second of blocking work per tick
+  // on a 4-core laptop, which froze this screen. 224px on a 320px-wide frame
+  // is ~3-4x cheaper and still detects a face that fills a webcam frame.
+  const FACE_DETECT_INPUT_SIZE = 224;
+  const FACE_DETECT_FRAME_WIDTH = 320;
+  // The poll re-arms AFTER each detection returns instead of on a fixed
+  // interval, backing off to a multiple of the last inference, so a slow
+  // machine gets idle main-thread time rather than a backlog of ticks.
+  const FACE_POLL_MIN_MS = 2500;
+  const FACE_POLL_MAX_MS = 8000;
+  const FACE_POLL_BUSY_FACTOR = 3;
+  // Invalidates an in-flight tick so it can't re-arm a stopped poll.
+  const faceLoopGenRef = useRef(0);
+
   useEffect(() => {
     // Scroll to top when component mounts
     window.scrollTo(0, 0);
@@ -328,9 +347,13 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     setAllChecksComplete(allSuccess);
   }, [cameraCheck, micCheck, internetCheck, browserCheck]);
 
+  // Cancels the face poll for good: clears the pending timer AND invalidates
+  // any tick already running, which clearTimeout alone cannot do (that tick
+  // would finish and schedule the next one).
   const stopFaceDetectionPolling = () => {
+    faceLoopGenRef.current += 1;
     if (faceCheckIntervalRef.current) {
-      clearInterval(faceCheckIntervalRef.current);
+      clearTimeout(faceCheckIntervalRef.current);
       faceCheckIntervalRef.current = null;
     }
   };
@@ -613,11 +636,26 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     }
   };
 
+  // Liveness re-check: latency only, no download.
+  //
+  // This used to re-run the FULL checkInternet — a fresh 10 MB Cloudflare
+  // download — every 15 s for as long as the candidate sat on this screen.
+  // That saturated the link the page itself needed (the submit call at the
+  // end of the check queued behind it) and burned the candidate's data for a
+  // number nobody was reading a second time. The measured speed from the
+  // first run stands; all this does is notice the connection dropping, and
+  // it never overwrites a good reading with a worse-looking one.
+  const pollNetworkLiveness = async () => {
+    const latency = await measureLatencyMs(getHealthUrl());
+    networkLatencyMsRef.current = latency;
+    if (latency === null) {
+      setInternetCheck({ status: 'error', message: 'No internet connection' });
+    }
+  };
+
   const startNetworkPolling = () => {
     if (networkCheckIntervalRef.current) clearInterval(networkCheckIntervalRef.current);
-    // Re-check every 15 s to keep the displayed speed current without
-    // continuously consuming bandwidth with full download tests.
-    networkCheckIntervalRef.current = setInterval(checkInternet, 15000);
+    networkCheckIntervalRef.current = setInterval(() => { void pollNetworkLiveness(); }, 30000);
   };
 
   const loadSystemCheckFaceApi = async () => {
@@ -659,10 +697,11 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
           message: `Multiple faces detected (${result.visibleCount}). Only you should be in frame.`,
         });
       } else {
-        setCameraCheck({
-          status: 'checking',
+        // Grace tick — see the note on the no-face branch below.
+        setCameraCheck((prev) => ({
+          status: prev.status === 'success' ? 'success' : 'checking',
           message: 'Verifying you are alone in frame…',
-        });
+        }));
       }
       return;
     }
@@ -687,42 +726,35 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
         message: getSystemCheckFaceErrorMessage(result.reason),
       });
     } else {
-      setCameraCheck({
-        status: 'checking',
+      // Grace tick before NO_FACE_HARD_FAIL: the detector blinked, which is
+      // normal. Keep the status the row already had and change only the
+      // message — dropping an already-passing row to 'checking' cleared
+      // allChecksComplete and disabled "Start Assessment" between ticks, so a
+      // click landing in that window did nothing and the candidate pressed it
+      // over and over. A real absence still fails on the next tick.
+      setCameraCheck((prev) => ({
+        status: prev.status === 'success' ? 'success' : 'checking',
         message: getSystemCheckFacePendingMessage(result.reason),
-      });
+      }));
     }
   };
 
   const detectWithFaceApi = async (video: HTMLVideoElement): Promise<SystemCheckFaceResult> => {
     const faceapi = await loadSystemCheckFaceApi();
-    const options = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
-    let frameWidth = video.videoWidth;
-    let frameHeight = video.videoHeight;
-    let usedSnapshot = false;
-    let detections;
+    const options = new faceapi.TinyFaceDetectorOptions({
+      scoreThreshold: 0.5,
+      inputSize: FACE_DETECT_INPUT_SIZE,
+    });
 
-    try {
-      detections = await faceapi.detectAllFaces(video, options);
-    } catch (videoError) {
-      const snapshot = createVideoFrameCanvas(video);
-      if (!snapshot) {
-        throw videoError;
-      }
-      detections = await faceapi.detectAllFaces(snapshot, options);
-      frameWidth = snapshot.width;
-      frameHeight = snapshot.height;
-      usedSnapshot = true;
-    }
-
-    if (!detections.length && !usedSnapshot) {
-      const snapshot = createVideoFrameCanvas(video);
-      if (snapshot) {
-        detections = await faceapi.detectAllFaces(snapshot, options);
-        frameWidth = snapshot.width;
-        frameHeight = snapshot.height;
-      }
-    }
+    // ONE detection, on a downscaled copy of the frame. This used to run
+    // against the raw video element and then run a SECOND full detection on a
+    // snapshot whenever the first found nobody — i.e. it doubled the cost of
+    // the most expensive path, exactly while the candidate was out of frame
+    // and the Start button was already disabled.
+    const snapshot = createVideoFrameCanvas(video, FACE_DETECT_FRAME_WIDTH);
+    const frameWidth = snapshot ? snapshot.width : video.videoWidth;
+    const frameHeight = snapshot ? snapshot.height : video.videoHeight;
+    const detections = await faceapi.detectAllFaces(snapshot ?? video, options);
 
     const typedDetections = detections as Array<{
       box: { x: number; y: number; width: number; height: number };
@@ -849,13 +881,30 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
     }
   };
 
+  // Self-scheduling poll: the next tick is armed only once the previous one has
+  // returned, and waits FACE_POLL_BUSY_FACTOR x however long that took. The old
+  // fixed 2.5 s setInterval kept firing while a ~1 s CPU inference was still
+  // running (the busy flag just dropped those ticks), so the main thread never
+  // got a gap in which to paint or handle a click.
   const startFaceDetectionPolling = (useFaceApi: boolean) => {
-    if (faceCheckIntervalRef.current) clearInterval(faceCheckIntervalRef.current);
-    // Re-check every 2.5 s so status updates as the user moves in/out of frame
-    faceCheckIntervalRef.current = setInterval(
-      useFaceApi ? runFaceDetectionFaceApi : runFaceDetection,
-      2500
-    );
+    stopFaceDetectionPolling();
+    const generation = ++faceLoopGenRef.current;
+    const tick = useFaceApi ? runFaceDetectionFaceApi : runFaceDetection;
+    const run = async () => {
+      if (faceLoopGenRef.current !== generation) return;
+      const startedAt = performance.now();
+      try {
+        await tick();
+      } catch {
+        // tick() reports its own failures; never let one kill the poll.
+      }
+      if (faceLoopGenRef.current !== generation) return;
+      faceCheckIntervalRef.current = setTimeout(run, Math.min(
+        FACE_POLL_MAX_MS,
+        Math.max(FACE_POLL_MIN_MS, (performance.now() - startedAt) * FACE_POLL_BUSY_FACTOR),
+      ));
+    };
+    faceCheckIntervalRef.current = setTimeout(run, FACE_POLL_MIN_MS);
   };
 
   const checkCameraAndMicrophone = async () => {

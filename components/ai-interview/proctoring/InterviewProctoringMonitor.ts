@@ -19,6 +19,12 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { InterviewEventBus, ProctoringEventType } from './InterviewEventBus';
+import {
+  isLegitimateShareInFlight,
+  isDesktopCaptureConstraint,
+  notifyScreenRecordingBlocked,
+  SCREEN_RECORDING_BLOCKED_MESSAGE,
+} from './ScreenRecordingGuard';
 
 // Re-export for consumers that import from here
 export type { ProctoringEventType } from './InterviewEventBus';
@@ -46,6 +52,17 @@ interface UseInterviewProctoringMonitorOptions {
   // "another voice detected" and the proctor floods the report with false
   // violations.
   shouldSuppressVoiceCheck?: () => boolean;
+  // Tried FIRST, before the mic is ever reported disabled — lets the caller
+  // silently reacquire audio (e.g. Webcam.reacquireAudio(), which asks for
+  // "the current default input" with no deviceId pin, so it naturally lands
+  // on a laptop's built-in mic once an external headset drops). Resolves
+  // true on success. When provided and it succeeds, isMicrophoneActive never
+  // flips false at all — no popup, no pause, no strike counted upstream —
+  // this is deliberately invisible to every consumer of this hook's state.
+  // The caller is responsible for its OWN backend logging of the fallback
+  // (kept out of this hook's typed ProctoringEventType/toast pipeline on
+  // purpose, since a toast here would defeat the point of "silent").
+  attemptSilentMicFallback?: () => Promise<boolean>;
 }
 
 interface ProctoringState {
@@ -320,6 +337,7 @@ export function useInterviewProctoringMonitor({
   obstructionThreshold = 30,
   reportEvent,
   shouldSuppressVoiceCheck,
+  attemptSilentMicFallback,
 }: UseInterviewProctoringMonitorOptions) {
   // Minimal React state — only what InterviewUI overlays need
   const [state, setState] = useState<ProctoringState>({
@@ -341,6 +359,7 @@ export function useInterviewProctoringMonitor({
   const obstructionThresholdRef = useRef(obstructionThreshold);
   const isMonitoringRef = useRef(false);
   const shouldSuppressVoiceCheckRef = useRef(shouldSuppressVoiceCheck);
+  const attemptSilentMicFallbackRef = useRef(attemptSilentMicFallback);
 
   useEffect(() => { tokenRef.current = token; }, [token]);
   useEffect(() => { streamRef.current = stream; }, [stream]);
@@ -350,6 +369,7 @@ export function useInterviewProctoringMonitor({
   useEffect(() => { voiceSensitivityRef.current = voiceDetectionSensitivity; }, [voiceDetectionSensitivity]);
   useEffect(() => { obstructionThresholdRef.current = obstructionThreshold; }, [obstructionThreshold]);
   useEffect(() => { shouldSuppressVoiceCheckRef.current = shouldSuppressVoiceCheck; }, [shouldSuppressVoiceCheck]);
+  useEffect(() => { attemptSilentMicFallbackRef.current = attemptSilentMicFallback; }, [attemptSilentMicFallback]);
 
   // Worker refs
   const videoWorkerRef = useRef<Worker | null>(null);
@@ -693,11 +713,44 @@ export function useInterviewProctoringMonitor({
     setState(prev => ({ ...prev, isCameraActive: true }));
   }, []);
 
-  const reportMicDisabled = useCallback((reason: string) => {
+  // Guards the async fallback attempt below so two near-simultaneous triggers
+  // (e.g. onended firing right before the health-check poll also notices)
+  // can't both race into attemptSilentMicFallback concurrently — the second
+  // caller just waits its turn behind the in-flight promise.
+  const micDisabledInFlightRef = useRef<Promise<void> | null>(null);
+
+  const reportMicDisabled = useCallback(async (reason: string) => {
     if (micDisabledRef.current) return;
-    micDisabledRef.current = true;
-    setState(prev => ({ ...prev, isMicrophoneActive: false }));
-    emitEventRef.current('microphone_disabled', { reason });
+    if (micDisabledInFlightRef.current) { await micDisabledInFlightRef.current; return; }
+
+    const run = (async () => {
+      // Try a SILENT recovery first — e.g. a laptop's built-in mic taking
+      // over after an external headset drops. Skipped for permission
+      // revocations: a per-origin mic block applies to every device, so a
+      // different deviceId wouldn't help and would just waste the retries.
+      const fallback = attemptSilentMicFallbackRef.current;
+      if (fallback && !reason.startsWith('permission_')) {
+        const FALLBACK_ATTEMPTS = 3;
+        const RETRY_GAP_MS = 400;
+        for (let attempt = 0; attempt < FALLBACK_ATTEMPTS; attempt++) {
+          try {
+            if (await fallback()) return; // recovered — never flip isMicrophoneActive
+          } catch { /* device still unavailable — keep retrying below */ }
+          if (attempt < FALLBACK_ATTEMPTS - 1) await new Promise(r => setTimeout(r, RETRY_GAP_MS));
+        }
+      }
+      if (micDisabledRef.current) return; // reportMicRestored already fired mid-retry
+      micDisabledRef.current = true;
+      setState(prev => ({ ...prev, isMicrophoneActive: false }));
+      emitEventRef.current('microphone_disabled', { reason });
+    })();
+
+    micDisabledInFlightRef.current = run;
+    try {
+      await run;
+    } finally {
+      micDisabledInFlightRef.current = null;
+    }
   }, []);
 
   const reportMicRestored = useCallback(() => {
@@ -979,24 +1032,128 @@ export function useInterviewProctoringMonitor({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, []);
 
+  // Screen-recording attempts the browser can actually SEE — and therefore
+  // actually REFUSE. Every one of these is blocked before a single frame is
+  // captured, and raises the candidate-facing popup synchronously, in the same
+  // task as the click (see ScreenRecordingGuard.notifyScreenRecordingBlocked).
+  //
+  // Three vectors are covered, because a getDisplayMedia-only guard leaks:
+  //   1. navigator.mediaDevices.getDisplayMedia — the standard screen-capture API,
+  //   2. navigator.getDisplayMedia — the legacy alias still shipped by some builds,
+  //   3. getUserMedia with a chromeMediaSource: 'desktop' constraint — how every
+  //      Chrome recorder EXTENSION (Loom, Screencastify, …) actually captures.
+  //
+  // A fourth vector is DETECTED but cannot be refused: the OS recording hotkeys
+  // (Cmd+Shift+5, Win+Alt+R, Win+G). The keydown reaches the page, so the popup
+  // is still immediate, but the OS owns the shortcut and starts recording
+  // regardless — those are reported as observed, not blocked.
+  //
+  // What nothing here can see, by construction, is a recorder launched entirely
+  // outside the browser (OBS opened from the dock, QuickTime's File menu). No
+  // web API exposes those; they are covered separately by the portal's vision
+  // poll over the shared-screen feed, which pauses the interview.
   const setupScreenRecordingDetection = useCallback(() => {
-    const originalGetDisplayMedia = navigator.mediaDevices?.getDisplayMedia;
-    if (originalGetDisplayMedia) {
-      navigator.mediaDevices.getDisplayMedia = async function (constraints?: DisplayMediaStreamOptions) {
-        // Allow the app's OWN mandatory (re)share — the candidate portal sets
-        // this flag right before it (re)requests the screen share. Without it
-        // the block also killed the "Re-share Entire Screen" flow (picker never
-        // opened; logged as a false screen_recording_attempt).
-        if ((window as any).__tfAllowLegitimateShare) {
-          return originalGetDisplayMedia.call(navigator.mediaDevices, constraints as any);
+    const refuse = (source: string): Error => {
+      // Popup first, synchronously — the candidate sees it the instant the
+      // click lands, not after a render tick or a network round-trip.
+      notifyScreenRecordingBlocked(source);
+      // Recruiter timeline + backend violation record.
+      emitEventRef.current('screen_recording_attempt', { source, blocked: true });
+      console.warn(`[INTERVIEW_PROCTORING] Screen recording BLOCKED via ${source}`);
+      const error = new Error(SCREEN_RECORDING_BLOCKED_MESSAGE);
+      // NotAllowedError is what a denied permission looks like to a caller, so
+      // recorders and extensions handle it on their existing failure path
+      // instead of hanging on an unexpected error shape.
+      error.name = 'NotAllowedError';
+      return error;
+    };
+
+    const mediaDevices = navigator.mediaDevices;
+    const originalGetDisplayMedia = mediaDevices?.getDisplayMedia;
+    const originalNavigatorGetDisplayMedia = (navigator as any).getDisplayMedia as
+      | ((constraints?: DisplayMediaStreamOptions) => Promise<MediaStream>)
+      | undefined;
+    const originalGetUserMedia = mediaDevices?.getUserMedia;
+
+    if (mediaDevices && originalGetDisplayMedia) {
+      mediaDevices.getDisplayMedia = async function (constraints?: DisplayMediaStreamOptions) {
+        // The app's OWN mandatory (re)share is the one caller allowed through.
+        if (isLegitimateShareInFlight()) {
+          return originalGetDisplayMedia.call(mediaDevices, constraints as any);
         }
-        emitEventRef.current('screen_recording_attempt', {});
-        throw new Error('Screen recording is not allowed during the interview');
+        throw refuse('mediaDevices.getDisplayMedia');
       };
     }
-    console.log('[INTERVIEW_PROCTORING] Screen recording detection started');
+
+    if (originalNavigatorGetDisplayMedia) {
+      (navigator as any).getDisplayMedia = async function (constraints?: DisplayMediaStreamOptions) {
+        if (isLegitimateShareInFlight()) {
+          return originalNavigatorGetDisplayMedia.call(navigator, constraints);
+        }
+        throw refuse('navigator.getDisplayMedia');
+      };
+    }
+
+    // Camera/mic getUserMedia must keep working untouched — only desktop-source
+    // constraints are refused, so the interview's own devices are unaffected.
+    if (mediaDevices && originalGetUserMedia) {
+      mediaDevices.getUserMedia = async function (constraints?: MediaStreamConstraints) {
+        if (isDesktopCaptureConstraint(constraints) && !isLegitimateShareInFlight()) {
+          throw refuse('getUserMedia(chromeMediaSource:desktop)');
+        }
+        return originalGetUserMedia.call(mediaDevices, constraints as any);
+      };
+    }
+
+    // OS-level recording HOTKEYS. These cannot be cancelled — the OS owns the
+    // shortcut and acts on it whether or not the page calls preventDefault —
+    // but the keydown itself is visible here, which makes this the one signal
+    // that catches a native recorder the instant the candidate triggers it
+    // instead of waiting for the portal's vision poll to see it on screen.
+    // Reported as observed-not-blocked so the popup says "stop the recording"
+    // rather than falsely claiming we stopped it.
+    //   macOS  Cmd+Shift+5  — screenshot/recording toolbar
+    //   Windows Win+Alt+R   — Game Bar start/stop recording
+    //   Windows Win+G       — Game Bar overlay (where the record button lives)
+    // Platform-gated, because the SAME modifier means different things per OS:
+    // on macOS the Windows key is Cmd, so an ungated "Meta+G" rule would report
+    // Cmd+G (find-next) as a Game Bar launch on every Mac.
+    const ua = typeof navigator !== 'undefined' ? `${navigator.userAgent} ${(navigator as any).platform || ''}` : '';
+    const isMac = /Mac|iPhone|iPad|iPod/i.test(ua);
+    const isWindows = /Win/i.test(ua) && !isMac;
+    const recordingHotkey = (e: KeyboardEvent): string | null => {
+      const key = e.key?.toLowerCase();
+      if (isMac && e.metaKey && e.shiftKey && key === '5') return 'Cmd+Shift+5 (macOS screen recording)';
+      if (isWindows && e.metaKey && e.altKey && key === 'r') return 'Win+Alt+R (Game Bar recording)';
+      if (isWindows && e.metaKey && !e.altKey && !e.shiftKey && !e.ctrlKey && key === 'g') return 'Win+G (Game Bar)';
+      return null;
+    };
+    const handleRecordingHotkey = (e: KeyboardEvent) => {
+      const hotkey = recordingHotkey(e);
+      if (!hotkey) return;
+      // Best effort: some builds do let the page swallow the combo.
+      e.preventDefault();
+      notifyScreenRecordingBlocked(hotkey, false);
+      emitEventRef.current('screen_recording_attempt', { source: hotkey, blocked: false });
+      console.warn(`[INTERVIEW_PROCTORING] Screen recording hotkey detected: ${hotkey}`);
+    };
+    window.addEventListener('keydown', handleRecordingHotkey, true);
+
+    if (!originalGetDisplayMedia && !originalNavigatorGetDisplayMedia) {
+      console.warn('[INTERVIEW_PROCTORING] getDisplayMedia unavailable — in-page screen recording block skipped.');
+    }
+    console.log('[INTERVIEW_PROCTORING] Screen recording detection started (block + popup)');
     return () => {
-      if (originalGetDisplayMedia) navigator.mediaDevices.getDisplayMedia = originalGetDisplayMedia;
+      window.removeEventListener('keydown', handleRecordingHotkey, true);
+      if (mediaDevices && originalGetDisplayMedia) {
+        mediaDevices.getDisplayMedia = originalGetDisplayMedia;
+      }
+      if (originalNavigatorGetDisplayMedia) {
+        (navigator as any).getDisplayMedia = originalNavigatorGetDisplayMedia;
+      }
+      if (mediaDevices && originalGetUserMedia) {
+        mediaDevices.getUserMedia = originalGetUserMedia;
+      }
     };
   }, []);
 
@@ -1062,6 +1219,38 @@ export function useInterviewProctoringMonitor({
     console.log(`[INTERVIEW_PROCTORING] Load shedding: ${reduced ? 'ON' : 'OFF'}`);
   }, []);
 
+  // Identity of the CURRENT video track, not the stream wrapper object. Webcam.tsx's
+  // reacquireAudio() (headset reconnect / mic-only swap) always publishes a brand-new
+  // MediaStream object via onStream even though the video track inside is completely
+  // untouched — see that function's own comment. Keying the video worker effect below
+  // on this id instead of `stream` means an audio-only swap can't retrigger it; it only
+  // re-runs when the video track itself actually changes (a genuine camera reacquire).
+  const videoTrackId = stream?.getVideoTracks()[0]?.id ?? null;
+
+  // ==================== VIDEO WORKER EFFECT ====================
+  // Split out from the main stream-dependent effect below. That effect used to own
+  // the video worker + hidden analysis <video>/<canvas> too, keyed on `stream`
+  // identity — so EVERY mic reconnect (audio-only, video untouched) tore down and
+  // rebuilt the entire camera-obstruction pipeline (2 Worker terminate+respawn, DOM
+  // element recreation, interval reset) for no reason. That's exactly the
+  // "recreate the camera/video stream" churn a headset disconnect/reconnect must
+  // never cause. This effect is inert across an audio-only swap; only a real video
+  // track change (or enabled toggling) restarts it.
+  useEffect(() => {
+    if (!enabledRef.current || !videoTrackId) return;
+    const timer = setTimeout(() => {
+      setupVideoWorker();
+    }, 100);
+    return () => {
+      clearTimeout(timer);
+      if (videoIntervalRef.current) { clearInterval(videoIntervalRef.current); videoIntervalRef.current = null; }
+      if (videoRef.current) { videoRef.current.srcObject = null; videoRef.current = null; }
+      canvasRef.current = null;
+      if (videoWorkerRef.current) { videoWorkerRef.current.terminate(); videoWorkerRef.current = null; }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, videoTrackId]);
+
   // ==================== MAIN EFFECT ====================
   useEffect(() => {
     if (!enabledRef.current) return;
@@ -1099,11 +1288,13 @@ export function useInterviewProctoringMonitor({
       setupMouseTracking(),
     ];
 
-    // Stream-dependent: workers + track monitoring
+    // Stream-dependent: audio worker + track monitoring. The video worker
+    // (camera-obstruction analysis) is owned by its own effect above, keyed on
+    // the video track id instead of stream identity, so it's unaffected by
+    // this effect re-running on an audio-only swap.
     // (Face detection is handled by useInterviewFaceDetection hook, not here)
     if (streamRef.current) {
       setTimeout(() => {
-        setupVideoWorker();
         setupAudioWorker();
         setupTrackMonitoring();
       }, 100);
@@ -1123,8 +1314,7 @@ export function useInterviewProctoringMonitor({
       // Cleanup event listeners
       cleanups.forEach(fn => fn());
 
-      // Cleanup intervals
-      if (videoIntervalRef.current) { clearInterval(videoIntervalRef.current); videoIntervalRef.current = null; }
+      // Cleanup intervals (videoIntervalRef belongs to the video worker effect above)
       if (voiceIntervalRef.current) { clearInterval(voiceIntervalRef.current); voiceIntervalRef.current = null; }
       if (batchFlushIntervalRef.current) { clearInterval(batchFlushIntervalRef.current); batchFlushIntervalRef.current = null; }
       if (trackHealthIntervalRef.current) { clearInterval(trackHealthIntervalRef.current); trackHealthIntervalRef.current = null; }
@@ -1142,12 +1332,7 @@ export function useInterviewProctoringMonitor({
       // Cleanup audio
       if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
 
-      // Cleanup video elements
-      if (videoRef.current) { videoRef.current.srcObject = null; videoRef.current = null; }
-      canvasRef.current = null;
-
-      // Terminate workers
-      if (videoWorkerRef.current) { videoWorkerRef.current.terminate(); videoWorkerRef.current = null; }
+      // Video elements/worker are cleaned up by the video worker effect above.
       if (audioWorkerRef.current) { audioWorkerRef.current.terminate(); audioWorkerRef.current = null; }
 
       console.log('[INTERVIEW_PROCTORING] All monitoring stopped');

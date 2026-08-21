@@ -12,6 +12,10 @@ import { useInterviewFaceVerification } from '@/components/ai-interview/proctori
 import { useInterviewVoiceVerification } from '@/components/ai-interview/proctoring/InterviewVoiceVerification';
 import { recordPcm16, MicDisconnectedDuringRecordingError } from '@/lib/utils/pcmEnroll';
 import { InterviewEventBus } from '@/components/ai-interview/proctoring/InterviewEventBus';
+import {
+  beginLegitimateShare,
+  endLegitimateShare,
+} from '@/components/ai-interview/proctoring/ScreenRecordingGuard';
 
 // Pre-interview step components
 import PreInterviewLayout from '@/components/candidate/PreInterviewLayout';
@@ -231,6 +235,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // true when candidate stopped screen sharing during the interview
   const [screenShareStopped, setScreenShareStopped] = useState(false);
   const [resharing, setResharing] = useState(false);
+  // true when the interview was RESUMED (page reload / recovery after a dropped
+  // connection) and the screen recorder needs to be re-established. A reload
+  // auto-restarts the CAMERA recorder (getUserMedia needs no gesture) but the
+  // SCREEN recorder cannot restart silently — getDisplayMedia requires a fresh
+  // user click — so without this prompt the screen recording would be missing
+  // for the rest of the interview while the camera keeps recording (durations
+  // diverge). This drives a resume-specific "re-share your screen" overlay.
+  const [screenReshareOnResume, setScreenReshareOnResume] = useState(false);
 
   // Language state
   const [availableLanguages, setAvailableLanguages] = useState<string[]>(['English']);
@@ -440,6 +452,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           } catch (e) {
             console.warn('[Portal] Failed to pre-create AudioContext on resume:', e);
           }
+        }
+        // RESUME = the interview was already started in a prior session (a
+        // reload / recovery after a dropped connection). The screen recorder is
+        // gone (getDisplayMedia can't survive a reload without a fresh gesture)
+        // while the camera recorder will auto-restart. Prompt the candidate to
+        // re-share their screen so the screen recording resumes and both
+        // recordings stay in sync. (Screen share is mandatory for every
+        // interview, so no per-interview gate is needed.)
+        if (!screenRecorderRef.current) {
+          setScreenReshareOnResume(true);
         }
         setStep('interview');
         return;
@@ -1025,14 +1047,18 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // getDisplayMedia guards let it through instead of blocking it as a
     // "screen recording attempt". Without this, the mid-interview
     // "Re-share Entire Screen" picker never opened (proctoring had already
-    // monkey-patched getDisplayMedia to throw). Reset in finally so any other
+    // monkey-patched getDisplayMedia to throw). Closed in finally so any other
     // getDisplayMedia call stays blocked.
+    //
+    // Ref-counted (not a bare boolean) so two overlapping app-owned requests
+    // can't have the first one's finally revoke permission from the second and
+    // turn our own share into a false "recording attempt" against the candidate.
     let screenStream: MediaStream;
-    (window as any).__tfAllowLegitimateShare = true;
+    beginLegitimateShare();
     try {
       screenStream = await (navigator.mediaDevices as any).getDisplayMedia(displayMediaOptions);
     } finally {
-      (window as any).__tfAllowLegitimateShare = false;
+      endLegitimateShare();
     }
     const videoTrack = screenStream.getVideoTracks()[0];
     const displaySurface = (videoTrack?.getSettings?.() as any)?.displaySurface;
@@ -2746,6 +2772,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       try {
         const screenStream = await requestEntireScreenShare();
         screenStreamRef.current = screenStream;
+        // Re-enter fullscreen right after the share picker closes (still within
+        // the click gesture), mirroring the normal start flow. On a resume the
+        // page reloaded out of fullscreen, so without this the interview would
+        // run windowed after re-share. Best-effort — the fullscreen guard also
+        // re-prompts if this is refused.
+        try { await requestFullscreen(); setIsFullscreenActive(isFullscreen()); } catch { /* guard re-prompts */ }
         const recordingStream = await buildRecordingStreamWithAudio(screenStream);
         const screenMime = SCREEN_MIME_TYPES
           .find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
@@ -2775,6 +2807,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           }
         });
         setScreenShareStopped(false);
+        // A successful re-share also satisfies the resume prompt (the screen
+        // recorder is live again), so clear that flag whichever overlay
+        // triggered the re-share.
+        setScreenReshareOnResume(false);
       } catch (e: any) {
         // User cancelled re-share — report as additional malpractice
         const cancelled = e?.name === 'NotAllowedError' || e?.name === 'AbortError';
@@ -2794,6 +2830,41 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         setResharing(false);
       }
     };
+
+    // RESUME GATE — after a reload/recovery the screen recorder is gone and we
+    // are out of fullscreen. Hold the interview HERE (do NOT mount InterviewUI,
+    // so Bina/the WebSocket/the timer/the recorders never start) until the
+    // candidate re-shares their screen. handleReshareScreen re-enters fullscreen
+    // and rebuilds the screen recorder; clearing screenReshareOnResume then
+    // mounts InterviewUI, which reconnects and resumes the current question —
+    // now WITH screen sharing + fullscreen, and nothing ran unpaused underneath.
+    if (screenReshareOnResume) {
+      return (
+        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-5">
+              <Monitor className="w-8 h-8 text-blue-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Re-share your screen to continue</h2>
+            <p className="text-gray-600 mb-2 text-sm">
+              Your interview reconnected. To keep the screen recording in sync with your camera, please share your <span className="font-semibold">Entire Screen</span> again. Your interview will resume right after.
+            </p>
+            <p className="text-sm text-gray-500 mb-6">Window and Current Tab are not allowed.</p>
+            <button
+              onClick={handleReshareScreen}
+              disabled={resharing}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
+            >
+              {resharing ? (
+                <><Loader2 className="w-4 h-4 animate-spin" />Requesting Permission...</>
+              ) : (
+                <><Monitor className="w-4 h-4" />Share Entire Screen &amp; Resume</>
+              )}
+            </button>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <>
