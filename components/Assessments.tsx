@@ -494,11 +494,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   /* Bulk selection for the tracking popup — same control and semantics as the
-     AI Interviews tracker's Select All bar. Every displayed candidate is
-     selectable (this popup has no revocable-only gating), and Select All
-     targets the rows on the CURRENT page, exactly like the AI tracker. */
+     AI Interviews tracker's Select All bar, targeting the rows on the CURRENT
+     page. Only candidates a bulk Resend can act on are selectable: Invited
+     ('sent') and Expired rows that haven't started or completed. In Progress
+     ('started'), System Check ('opened'), Completed, failed and bounced rows
+     get no checkbox — their per-row actions (or lack of one) already say what
+     can be done with them. */
+  const isBulkResendable = (inv: any): boolean =>
+    ['sent', 'expired'].includes(inv.status)
+    && !inv.started_at
+    && !inv.completed_at;
   const [trackingSelectedIds, setTrackingSelectedIds] = useState<Set<string>>(new Set());
-  const trackingSelectableIds = trackingInvitations.map((inv: any) => inv.id);
+  const trackingSelectableIds = trackingInvitations.filter(isBulkResendable).map((inv: any) => inv.id);
   const allTrackingSelected =
     trackingSelectableIds.length > 0 && trackingSelectableIds.every((id: string) => trackingSelectedIds.has(id));
   const toggleTrackingSelectAll = () =>
@@ -510,6 +517,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       else next.add(id);
       return next;
     });
+  /* Reloads (paging, filtering, a resend flipping a status) can leave selected
+     ids pointing at rows that are gone or no longer eligible — drop those so
+     the bulk button's count always matches what a resend would actually do. */
+  useEffect(() => {
+    setTrackingSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const valid = new Set(trackingInvitations.filter(isBulkResendable).map((inv: any) => inv.id));
+      const next = new Set([...prev].filter((id) => valid.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackingInvitations]);
 
   const closeTrackInvitesModal = () => {
     setShowTrackInvitesModal(false);
@@ -1448,6 +1467,53 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setIsResending(false);
       setResendTargetInvitation(null);
     }
+  };
+
+  // Bulk resend for the selected Invited/Expired candidates — same endpoint as
+  // the single-row Resend, called per invitation. Sequential on purpose: the
+  // selection is at most one page of rows, and a burst of parallel resends is
+  // exactly the kind of thing mail rate-limiters punish.
+  const [showBulkResendConfirm, setShowBulkResendConfirm] = useState(false);
+  const [isBulkResending, setIsBulkResending] = useState(false);
+
+  const handleBulkResend = async () => {
+    if (!selectedAssessmentForTracking) return;
+    // Re-derive eligibility at send time — a status can have moved since the
+    // row was ticked, and only Invited/Expired rows may be resent.
+    const targets = trackingInvitations.filter(
+      (inv: any) => trackingSelectedIds.has(inv.id) && isBulkResendable(inv)
+    );
+    if (targets.length === 0) {
+      setShowBulkResendConfirm(false);
+      return;
+    }
+    setIsBulkResending(true);
+    let sent = 0;
+    let failedCount = 0;
+    for (const inv of targets) {
+      try {
+        await api.post(
+          `/assessments/${selectedAssessmentForTracking.id}/invitations/${inv.id}/resend`
+        );
+        sent++;
+      } catch (error) {
+        console.error(`Failed to resend invitation ${inv.id}:`, error);
+        failedCount++;
+      }
+    }
+    if (sent > 0) {
+      toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
+    }
+    if (failedCount > 0) {
+      toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
+    }
+    setTrackingSelectedIds(new Set());
+    setShowBulkResendConfirm(false);
+    setIsBulkResending(false);
+    await Promise.all([
+      loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
+      loadTrackingInvitationSummary(selectedAssessmentForTracking),
+    ]);
   };
 
   // Change email and resend for bounced invitations
@@ -3844,7 +3910,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </div>
                   <div className="min-w-0">
                     <h2 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
-                      <span className="hidden sm:inline">Invite Status Tracking</span>
+                      <span className="hidden sm:inline">Assessments - Invite Status Tracking</span>
                       <span className="sm:hidden">Invite Status</span>
                     </h2>
                     <p className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{selectedAssessmentForTracking.title}</p>
@@ -3954,6 +4020,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </span>
                   Select All ({trackingSelectableIds.length})
                 </button>
+                {/* Bulk Resend — appears once something is ticked. Count and
+                    targets are the still-eligible selection only. */}
+                {trackingSelectedIds.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkResendConfirm(true)}
+                    disabled={isBulkResending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
+                  >
+                    {isBulkResending
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Mail className="w-3.5 h-3.5" />}
+                    {isBulkResending ? 'Sending…' : `Resend (${trackingSelectedIds.size})`}
+                  </button>
+                )}
               </div>
             )}
 
@@ -4112,22 +4193,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               : 'transition-colors hover:bg-gray-50 dark:hover:bg-slate-800'}
                           >
                             {/* stopPropagation: Complete rows navigate on click —
-                                ticking a checkbox must never also open the row. */}
+                                ticking a checkbox must never also open the row.
+                                Only bulk-resendable rows (Invited/Expired) get a
+                                checkbox; the rest keep a fixed-width slot so the
+                                columns stay aligned. */}
                             <td className="py-3 pl-4 pr-0 align-top" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                role="checkbox"
-                                aria-checked={trackingSelectedIds.has(invitation.id)}
-                                aria-label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
-                                onClick={() => toggleTrackingSelectOne(invitation.id)}
-                                className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
-                                  trackingSelectedIds.has(invitation.id)
-                                    ? 'bg-brand-blue border-brand-blue'
-                                    : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
-                                }`}
-                              >
-                                {trackingSelectedIds.has(invitation.id) && <Check className="w-3 h-3 text-white" />}
-                              </button>
+                              {isBulkResendable(invitation) ? (
+                                <button
+                                  type="button"
+                                  role="checkbox"
+                                  aria-checked={trackingSelectedIds.has(invitation.id)}
+                                  aria-label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
+                                  onClick={() => toggleTrackingSelectOne(invitation.id)}
+                                  className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                                    trackingSelectedIds.has(invitation.id)
+                                      ? 'bg-brand-blue border-brand-blue'
+                                      : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
+                                  }`}
+                                >
+                                  {trackingSelectedIds.has(invitation.id) && <Check className="w-3 h-3 text-white" />}
+                                </button>
+                              ) : (
+                                <span className="inline-block w-5" />
+                              )}
                             </td>
                             <td className="py-3 px-4 align-top">
                               <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
@@ -4330,10 +4418,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               ) : (() => {
                                 const isCompleted = invitation.status === 'completed' || !!invitation.completed_at;
                                 const isBounced = invitation.status === 'bounced';
-                                // Resend retries the SAME address (good for a transient
-                                // network failure); Edit Email fixes a mistyped one (the
-                                // common cause of a "failed"/"Incorrect Email" invite).
-                                const canResend = ['sent', 'opened', 'failed'].includes(invitation.status)
+                                // Action rules by status: Invited/Expired → Resend only;
+                                // System Check ('opened') and In Progress → no menu at all;
+                                // Completed → View Results only. Edit Email survives only
+                                // where fixing the address is the point — a failed invite
+                                // (mistyped address) or a bounce.
+                                const canResend = ['sent', 'failed', 'expired'].includes(invitation.status)
+                                  && !invitation.started_at
+                                  && !invitation.completed_at;
+                                const canEditEmail = invitation.status === 'failed'
                                   && !invitation.started_at
                                   && !invitation.completed_at;
 
@@ -4371,7 +4464,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                           Resend
                                         </DropdownMenuItem>
                                       )}
-                                      {(isBounced || canResend) && (
+                                      {(isBounced || canEditEmail) && (
                                         <DropdownMenuItem
                                           onSelect={() => {
                                             setEditingEmailId(invitation.id);
@@ -4485,6 +4578,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           );
         })()}
       </ConfirmationDialog>
+
+      {/* Bulk resend confirmation — selected Invited/Expired candidates only. */}
+      <ConfirmationDialog
+        isOpen={showBulkResendConfirm}
+        onClose={() => { if (!isBulkResending) setShowBulkResendConfirm(false); }}
+        onConfirm={handleBulkResend}
+        title="Resend invitations to selected candidates?"
+        description={`A fresh invitation link will be emailed to ${trackingSelectedIds.size} selected candidate${trackingSelectedIds.size === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
+        confirmText={isBulkResending ? 'Sending…' : `Yes, resend to ${trackingSelectedIds.size}`}
+        cancelText="Cancel"
+        variant="warning"
+      />
 
       {/* Clone confirmation — creates a draft copy. Recruiter publishes
           and invites V2 candidates manually via the normal invite flow. */}

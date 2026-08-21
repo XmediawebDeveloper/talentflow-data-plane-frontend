@@ -541,11 +541,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                             </button>
                           )}
                         </div>
-                        {/* Resend / Change Email — same reach as the desktop
-                            table (any un-started invite, not just failed and
-                            bounced ones), so a recruiter on a phone isn't
-                            missing the fix-the-address path. */}
-                        {(['sent', 'opened', 'failed', 'expired', 'bounced'].includes(invitation.status)
+                        {/* Same action rules as the desktop table: Invited and
+                            Expired get Resend only; failed/bounced also keep the
+                            fix-the-address path; System Check ('opened') and
+                            In Progress rows get no action at all. */}
+                        {((['failed', 'bounced'].includes(invitation.status)
+                          || ['sent', 'expired'].includes(getEffectiveStatus(invitation)))
                           && !invitation.started_at
                           && !invitation.completed_at) && (
                           editingEmailId === invitation.id ? (
@@ -587,13 +588,17 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                                   : <Mail className="w-3 h-3" />}
                                 {resendingId === invitation.id ? 'Sending…' : 'Resend'}
                               </button>
-                              <button
-                                onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
-                                className="flex items-center gap-1 px-2 py-1 text-[10px] border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors"
-                              >
-                                <Pencil className="w-3 h-3" />
-                                Edit
-                              </button>
+                              {/* Edit Email only where fixing the address is the
+                                  point — never for plain Invited/Expired rows. */}
+                              {['failed', 'bounced'].includes(invitation.status) && (
+                                <button
+                                  onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
+                                  className="flex items-center gap-1 px-2 py-1 text-[10px] border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                  Edit
+                                </button>
+                              )}
                             </div>
                           )
                         )}
@@ -821,11 +826,11 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                                   Change Email
                                 </button>
                               )
-                            ) : (['sent', 'opened', 'failed', 'expired'].includes(invitation.status) && !invitation.started_at && !invitation.completed_at) ? (
-                              // Resend retries the SAME address (good for a transient
-                              // network failure); Edit Email lets the recruiter fix a
-                              // mistyped address before resending (the common cause of
-                              // a "failed"/"Incorrect Email" invite). Mirrors mobile.
+                            ) : (invitation.status === 'failed' && !invitation.started_at && !invitation.completed_at) ? (
+                              // Failed invites keep BOTH paths: Resend retries the SAME
+                              // address (transient network failure); Edit Email fixes a
+                              // mistyped one (the common cause of a "failed"/"Incorrect
+                              // Email" invite). Mirrors mobile.
                               editingEmailId === invitation.id ? (
                                 <div className="flex items-center gap-1.5">
                                   <input
@@ -881,6 +886,20 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                                   </button>
                                 </div>
                               )
+                            ) : (['sent', 'expired'].includes(getEffectiveStatus(invitation)) && !invitation.started_at && !invitation.completed_at) ? (
+                              // Invited / Expired — Resend only, no Edit Email. System
+                              // Check ('opened') and In Progress rows fall through to
+                              // null: no action is allowed once the candidate is in the
+                              // assessment flow.
+                              <button
+                                onClick={() => handleResendInvitation(invitation)}
+                                disabled={resendingId === invitation.id}
+                                aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
+                                className="flex items-center justify-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-60 transition-colors whitespace-nowrap"
+                              >
+                                <Mail className="w-3.5 h-3.5" />
+                                {resendingId === invitation.id ? 'Sending…' : 'Resend'}
+                              </button>
                             ) : null}
                           </td>
                         </tr>

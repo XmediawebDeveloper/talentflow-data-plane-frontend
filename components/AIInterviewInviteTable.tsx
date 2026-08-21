@@ -243,6 +243,10 @@ export interface AIInterviewInviteTableProps {
   /** Bulk selection. Omit both to render no checkbox column at all. */
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
+  /** Which rows get a checkbox. Defaults to isRevocableInvite (the AI
+   *  Interviews page's bulk-revoke rule); the Job Details tracker passes its
+   *  bulk-resend rule (Invited/Expired) instead. */
+  isSelectable?: (inv: any) => boolean;
 
   /** Row actions. Each omitted callback simply drops that action from the menu,
    *  which is how the Job Details tracker stays read-only. */
@@ -262,6 +266,7 @@ export default function AIInterviewInviteTable({
   emptyHint,
   selectedIds,
   onToggleSelect,
+  isSelectable,
   onResend,
   onEdit,
   onRevoke,
@@ -343,7 +348,7 @@ export default function AIInterviewInviteTable({
     if (!selectable) return null;
     // A fixed-width slot even when this row can't be selected, so every avatar
     // below it stays on the same left edge.
-    if (!isRevocableInvite(inv)) return <span className="inline-block w-5 flex-shrink-0" />;
+    if (!(isSelectable ?? isRevocableInvite)(inv)) return <span className="inline-block w-5 flex-shrink-0" />;
     const checked = !!selectedIds?.has(inv.id);
     return (
       <button
