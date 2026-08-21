@@ -67,18 +67,6 @@ const prettifyCode = (value?: string): string =>
     .trim()
     .replace(/\b\w/g, (c) => c.toUpperCase());
 
-const EDUCATION_LABELS: Record<string, string> = {
-  diploma: 'Diploma',
-  associate: 'Associate Degree',
-  bachelors: "Bachelor's Degree",
-  masters: "Master's Degree",
-  doctorate: 'Doctorate / PhD',
-  none: 'No formal education required',
-  others: 'Others',
-};
-const educationLabel = (value?: string): string =>
-  value ? (EDUCATION_LABELS[value.toLowerCase()] || prettifyCode(value)) : 'Not specified';
-
 const employmentTypeLabel = (value?: string): string => {
   switch (value) {
     case 'full_time': return 'Full Time';
@@ -151,10 +139,6 @@ export default function AssessmentDetailsView({
   const jdNiceToHaveSkills = jdData?.nice_to_have_skills || [];
   const jdMustHaveComments = jdData?.must_have_comments || [];
   const jdNiceToHaveComments = jdData?.nice_to_have_comments || [];
-  // education_requirements is an object ({ degree, field }); Job Details reads a
-  // pre-flattened string, so flatten it the same way here.
-  const jdEducationDegree = (jdData?.education_requirements as { degree?: string } | undefined)?.degree;
-  const jdEducationField = (jdData?.education_requirements as { field?: string } | undefined)?.field;
   const jdExperienceText = formatJobExperienceText({
     jobLevel: jdData?.job_level,
     experienceMin: jdData?.experience_min,
@@ -163,7 +147,7 @@ export default function AssessmentDetailsView({
   const hasAnyExtractedData = Boolean(
     jdMustHaveSkills.length || jdNiceToHaveSkills.length ||
     jdMustHaveComments.length || jdNiceToHaveComments.length ||
-    jdExperienceText || jdEducationDegree || jdData?.industry_type ||
+    jdExperienceText || jdData?.industry_type ||
     jdData?.employment_type || jdData?.remote_type
   );
 
@@ -2416,13 +2400,10 @@ export default function AssessmentDetailsView({
                             <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Experience</h4>
                             <p className="text-sm sm:text-base text-gray-900">{jdExperienceText || 'Not specified'}</p>
                           </div>
-                          <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                            <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Education</h4>
-                            <p className="text-sm sm:text-base text-gray-900">
-                              {educationLabel(jdEducationDegree)}
-                              {jdEducationField ? ` — ${jdEducationField}` : ''}
-                            </p>
-                          </div>
+                          {/* Education tile REMOVED 2026-08-21. Same Requirements grid
+                              as JobDetailView, same reason: education is a line inside
+                              the Must-Have / Nice-to-Have Additional Requirements shown
+                              directly above, so a tile here repeated it. */}
                           {jdData.industry_type && (
                             <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                               <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Industry Type</h4>

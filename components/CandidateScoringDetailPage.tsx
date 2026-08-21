@@ -564,18 +564,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       .trim()
       .replace(/\b\w/g, (c) => c.toUpperCase());
 
-  const educationLabelMap: Record<string, string> = {
-    diploma: 'Diploma',
-    associate: 'Associate Degree',
-    bachelors: "Bachelor's Degree",
-    masters: "Master's Degree",
-    doctorate: 'Doctorate / PhD',
-    none: 'No formal education required',
-    others: 'Others',
-  };
-  const educationLabel = (value?: string): string =>
-    value ? (educationLabelMap[value.toLowerCase()] || prettifyCode(value)) : 'Not specified';
-
   const employmentTypeLabel = (value?: string): string => {
     switch (value) {
       case 'full_time': return 'Full Time';
@@ -609,13 +597,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     if (min != null) return `${min}+ years`;
     if (max != null) return `Up to ${max} years`;
     return 'Not specified';
-  })();
-
-  const jdEducationLabel = (() => {
-    const req = jdDetails?.education_requirements;
-    if (!req) return 'Not specified';
-    const degree = typeof req === 'object' ? req.degree : req;
-    return educationLabel(degree);
   })();
 
   // Header-card values, mapped the same way the published JD page maps them.
@@ -2220,11 +2201,11 @@ Best regards`);
                           {jdExperienceBadge}
                         </span>
                       )}
-                      {jdEducationLabel !== 'Not specified' && (
-                        <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
-                          {jdEducationLabel}
-                        </span>
-                      )}
+                      {/* Education chip REMOVED 2026-08-21. Same View-JD panel as
+                          JobDetailView: education is a line inside the Must-Have /
+                          Nice-to-Have Additional Requirements shown below, so a chip
+                          here repeated it - and the scorecard on this very page graded
+                          the two copies separately, with opposite verdicts. */}
                       {jdDetails.employment_type && (
                         <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
                           {employmentTypeLabel(jdDetails.employment_type)}
@@ -2377,10 +2358,7 @@ Best regards`);
                         <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Experience</h5>
                         <p className="text-sm sm:text-base text-gray-900">{jdExperienceLabel}</p>
                       </div>
-                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
-                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Education</h5>
-                        <p className="text-sm sm:text-base text-gray-900">{jdEducationLabel}</p>
-                      </div>
+                      {/* Education tile REMOVED 2026-08-21 - see the chip note above. */}
                       {jdDetails.industry_type && (
                         <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
                           <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Industry Type</h5>
