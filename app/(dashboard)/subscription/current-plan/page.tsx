@@ -589,6 +589,31 @@ function CurrentPlanContent() {
   // Other sections are appended below the tabs; current-plan content stays visible.
   const [activeSection, setActiveSection] = useState<'current-plan' | 'usage-quotas' | 'payment-methods' | 'billing-history' | 'refund-history' | 'dispute-history' | 'unit-disputes'>('current-plan');
 
+  /* Deep link from the header's plan arrow: ?section=usage-quotas opens that
+     tab, and &focus=quota-overview scrolls to the Quota Overview card once it
+     exists. The card mounts only after the embedded Usage & Quotas page loads
+     its data, so a one-shot scrollIntoView would fire into nothing — poll
+     briefly for the element instead, and give up quietly after ~10s. */
+  useEffect(() => {
+    const section = searchParams.get('section');
+    if (section && section !== activeSection && billingLinks.some(link => link.id === section)) {
+      setActiveSection(section as typeof activeSection);
+    }
+    if (searchParams.get('focus') !== 'quota-overview') return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      const el = document.getElementById('quota-overview');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        clearInterval(timer);
+      } else if (++tries > 40) {
+        clearInterval(timer);
+      }
+    }, 250);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const [plans, setPlans] = useState<DisplayPlan[]>([]);
   const [companySettings, setCompanySettings] = useState<CompanySettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);

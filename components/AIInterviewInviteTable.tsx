@@ -3,7 +3,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   X, Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil,
-  MoreVertical, Check,
+  MoreVertical, Check, Monitor,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -139,6 +139,9 @@ const copyInterviewLink = async (inv: any) => {
 const timelineEvents = (inv: any) => {
   const out: { label: string; at: string; Icon: LucideIcon; tone: string }[] = [];
   if (inv.created_at) out.push({ label: 'Invited', at: inv.created_at, Icon: Mail, tone: 'text-brand-blue' });
+  /* Consent accepted -> the candidate reached the system check step. Same
+     milestone (and wording) the assessment tracker prints from opened_at. */
+  if (inv.consent_accepted_at) out.push({ label: 'System Check', at: inv.consent_accepted_at, Icon: Monitor, tone: 'text-brand-cyan' });
   if (inv.started_at) out.push({ label: 'Started', at: inv.started_at, Icon: Play, tone: 'text-brand-orange-deep' });
   if (inv.completed_at) out.push({ label: 'Completed', at: inv.completed_at, Icon: CheckCircle, tone: 'text-green-600' });
   if (inv.revoked_at) out.push({ label: 'Revoked', at: inv.revoked_at, Icon: Ban, tone: 'text-red-600' });
@@ -276,7 +279,10 @@ export default function AIInterviewInviteTable({
     if (isInterviewLinkLive(inv)) {
       actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInterviewLink(inv) });
     }
-    if (onViewDetails && ['completed', 'in_progress', 'terminated'].includes(inv.status)) {
+    /* View Details is completed-only — same rule as the assessment tracker:
+       only Completed / Auto Completed invites have a result to open, so
+       In Progress and Terminated rows no longer offer the action. */
+    if (onViewDetails && inv.status === 'completed') {
       actions.push({ key: 'view', label: 'View Details', Icon: Eye, run: () => onViewDetails(inv) });
     }
     if (onResend && canResendInvite(inv)) {
@@ -315,6 +321,22 @@ export default function AIInterviewInviteTable({
       });
     }
     return actions;
+  };
+
+  /* Row-level shortcut to the candidate's result. Completed invites only: every
+     other status has no result to show, so those rows stay inert rather than
+     dropping the recruiter on an empty detail view. This mirrors the "View
+     Details" menu action above — same callback, same guard on the host having
+     supplied one — so the read-only Job Details tracker (which passes no
+     onViewDetails) keeps its rows non-clickable. */
+  const canOpenDetails = (inv: any): boolean => !!onViewDetails && inv.status === 'completed';
+
+  // Enter/Space on a focused row does what a click does — the row is exposed as
+  // a button to assistive tech, so it has to answer to the button keys.
+  const onRowKeyDown = (inv: any) => (e: React.KeyboardEvent) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    onViewDetails?.(inv);
   };
 
   const SelectBox = ({ inv }: { inv: any }) => {
@@ -372,10 +394,20 @@ export default function AIInterviewInviteTable({
         {invitations.map((inv: any) => {
           const score = displayInviteScore(inv);
           const actions = rowActions(inv);
+          const openable = canOpenDetails(inv);
           return (
             <div
               key={inv.id}
-              className="p-2.5 border border-gray-100 dark:border-slate-700/60 rounded-xl bg-white dark:bg-slate-900"
+              onClick={openable ? () => onViewDetails?.(inv) : undefined}
+              onKeyDown={openable ? onRowKeyDown(inv) : undefined}
+              role={openable ? 'button' : undefined}
+              tabIndex={openable ? 0 : undefined}
+              title={openable ? 'View candidate details' : undefined}
+              className={`p-2.5 border border-gray-100 dark:border-slate-700/60 rounded-xl bg-white dark:bg-slate-900${
+                openable
+                  ? ' cursor-pointer transition-colors hover:border-brand-blue/30 hover:bg-brand-blue/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40'
+                  : ''
+              }`}
             >
               <div className="flex items-center gap-2 min-w-0 mb-1.5">
                 <SelectBox inv={inv} />
@@ -488,9 +520,22 @@ export default function AIInterviewInviteTable({
               const score = displayInviteScore(inv);
               const events = timelineEvents(inv);
               const actions = rowActions(inv);
+              const openable = canOpenDetails(inv);
 
               return (
-                <tr key={inv.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors">
+                <tr
+                  key={inv.id}
+                  onClick={openable ? () => onViewDetails?.(inv) : undefined}
+                  onKeyDown={openable ? onRowKeyDown(inv) : undefined}
+                  role={openable ? 'button' : undefined}
+                  tabIndex={openable ? 0 : undefined}
+                  title={openable ? 'View candidate details' : undefined}
+                  className={`transition-colors ${
+                    openable
+                      ? 'cursor-pointer hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40'
+                      : 'hover:bg-gray-50 dark:hover:bg-slate-800/60'
+                  }`}
+                >
                   {selectable && (
                     <td className="py-3 pl-4 pr-0 align-middle">
                       <SelectBox inv={inv} />
@@ -551,7 +596,7 @@ export default function AIInterviewInviteTable({
                     )}
                   </td>
 
-                  <td className="py-3 px-4 align-middle tf-sticky-col">
+                  <td className="py-3 px-4 align-middle tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                     {/* Radix's DropdownMenu rather than a hand-rolled absolute menu:
                         this table sits inside tf-table-shell (overflow: auto), which
                         would clip an absolutely positioned menu. Radix portals it out. */}

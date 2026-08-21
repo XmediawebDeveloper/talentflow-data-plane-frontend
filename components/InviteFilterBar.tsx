@@ -44,7 +44,6 @@ export const ASSESSMENT_INVITE_STATUS_OPTIONS: InviteStatusOption[] = [
   { value: 'failed', label: 'Invite Failed' },
   { value: 'started', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
-  { value: 'abandoned', label: 'Terminated' },
   /* 'abandoned' is the DB status; recruiters read it as "Terminated" — the
      candidate exited mid-assessment, which is not an invite failure. */
   { value: 'abandoned', label: 'Terminated' },

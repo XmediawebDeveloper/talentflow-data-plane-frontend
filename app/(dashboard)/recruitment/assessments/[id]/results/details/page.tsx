@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Clock, Loader2 } from 'lucide-react';
 import { assessmentService } from '@/lib/services';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import CandidateResultDetails from '@/components/CandidateResultDetails';
@@ -17,6 +17,11 @@ function DetailsContent() {
 
   const assessmentId = params.id as string;
   const candidateId = searchParams.get('candidate_id');
+  /* Pending mode — reached from the Track Invites popup for any non-completed
+     invite. There is no attempt to load, so the page renders an informational
+     notice instead of the result body (and instead of the "no candidate"
+     error a missing candidate_id would otherwise trigger). */
+  const isPending = searchParams.get('pending') === '1';
   // cid = human-readable candidate display ID (e.g. CID-05), passed by the results list
   const candidateDisplayId = searchParams.get('cid') || '';
   // Opened from the Assessments list's Candidate Results tab, which spans every
@@ -32,7 +37,7 @@ function DetailsContent() {
   const [error, setError] = useState<string | null>(null);
   // Reported by CandidateResultDetails once the result loads, so the deepest
   // crumb can name the candidate rather than saying "Candidate Details".
-  const [candidateName, setCandidateName] = useState<string>('');
+  const [candidateName, setCandidateName] = useState<string>(searchParams.get('candidate_name') || '');
   // The View Resume button swaps the body for the resume in place. It stays on
   // this route, so the trail has to gain the extra crumb here rather than
   // through navigation. `close` comes back from the child so the candidate
@@ -93,7 +98,7 @@ function DetailsContent() {
     router.push(`/recruitment/assessments/${assessmentId}/results`);
   };
 
-  const showRecordPagerRow = navList.length > 0 && !resumeView.viewing;
+  const showRecordPagerRow = navList.length > 0 && !resumeView.viewing && !isPending;
 
   // Fragment, not a wrapper div. PageBreadcrumb is sticky by default, but a
   // sticky element can only travel inside its parent's box — the div this used
@@ -148,6 +153,27 @@ function DetailsContent() {
       </div>
     </main>
   );
+
+  if (isPending) {
+    return wrapState(
+      <div className="flex flex-col items-center justify-center h-64 space-y-3 text-center px-4">
+        <div className="w-12 h-12 rounded-full bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+          <Clock className="w-6 h-6 text-brand-orange-deep" />
+        </div>
+        <p className="text-base font-medium text-gray-900">Results are not available yet</p>
+        <p className="text-sm text-gray-500 max-w-md">
+          The candidate has not started or completed the assessment. Results will be
+          available once the assessment is completed.
+        </p>
+        <button
+          onClick={handleBack}
+          className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+        >
+          Back to Results
+        </button>
+      </div>
+    );
+  }
 
   if (!candidateId) {
     return wrapState(
