@@ -309,6 +309,122 @@ export interface DupVerdict { dup: boolean; tier: DupTier; reason: string }
  *  extra token is a generic qualifier, which keeps the cases the guard exists for:
  *  "Java" vs "Java Programming" and "API Testing" vs "Familiarity with API
  *  testing". */
+/** Words that JOIN two skill names into one phrase, making it a LIST of skills
+ *  ("SDLC and STLC", "Phlebotomy & Venepuncture") rather than a modified single
+ *  name ("React Native", "Spring Boot"). Mirrors backend `_SKILL_BUNDLE_JOINERS`. */
+const BUNDLE_JOINERS = ['and', '&', 'or', 'plus', 'along with', 'as well as'];
+
+/** Split on conjunctions/commas that sit OUTSIDE any bracket, so an example list
+ *  inside parentheses stays intact — "Basic Programming (Java, Python)" is one
+ *  skill, not three. Mirrors backend `_split_skill_at_depth_zero`. */
+function splitSkillAtDepthZero(name: string): string[] {
+  if (!name || !name.trim()) return [];
+  // Members are plain words plus '&' — none are regex metacharacters.
+  const joiner = new RegExp('^\\s+(?:' + BUNDLE_JOINERS.join('|') + ')\\s+', 'i');
+  const parts: string[] = [];
+  let buf = '';
+  let depth = 0;
+  let i = 0;
+  while (i < name.length) {
+    const ch = name[i];
+    if ('([{'.includes(ch)) depth += 1;
+    else if (')]}'.includes(ch)) depth = Math.max(0, depth - 1);
+    if (depth === 0) {
+      if (ch === ',') {
+        parts.push(buf);
+        buf = '';
+        i += 1;
+        continue;
+      }
+      const m = joiner.exec(name.slice(i));
+      if (m) {
+        parts.push(buf);
+        buf = '';
+        i += m[0].length;
+        continue;
+      }
+    }
+    buf += ch;
+    i += 1;
+  }
+  parts.push(buf);
+  return parts.map(s => s.trim()).filter(Boolean);
+}
+
+/** Content-token sets of a bundle's members, or [] when the phrase is not a bundle.
+ *  Mirrors backend `_skill_bundle_parts`.
+ *
+ *  NEVER used to split a skill automatically: nothing in the string separates a
+ *  list from a compound noun phrase, and "Research and Development", "Health and
+ *  Safety", "Mergers and Acquisitions" and "Payroll and Benefits Administration"
+ *  are single competencies whose halves are nonsense on their own. The members are
+ *  only compared against skills the recruiter already entered separately. */
+export function skillBundleParts(name: string): Set<string>[] {
+  return skillBundleMembers(name).map(m => m.tokens);
+}
+
+/** Trim leading/trailing framing words while keeping the ORIGINAL wording — the
+ *  result is shown to the recruiter, so "Profit and Loss Analysis" must not come
+ *  back stemmed. Mirrors backend `_strip_skill_framing`. */
+export function stripSkillFraming(raw: string): string {
+  const words = (raw || '').split(/\s+/).filter(Boolean);
+  while (words.length && skillContentTokens(words[0]).size === 0) words.shift();
+  while (words.length && skillContentTokens(words[words.length - 1]).size === 0) words.pop();
+  return words.join(' ') || (raw || '').trim();
+}
+
+/** `{ name, tokens }` per bundle member, or []. Mirrors backend
+ *  `_skill_bundle_members`. */
+export function skillBundleMembers(name: string): { name: string; tokens: Set<string> }[] {
+  const raw = splitSkillAtDepthZero(name);
+  if (raw.length < 2) return [];
+  const members: { name: string; tokens: Set<string> }[] = [];
+  for (const r of raw) {
+    const toks = skillContentTokens(r);
+    if (toks.size === 0) return [];
+    const dup = members.some(
+      m => m.tokens.size === toks.size && [...m.tokens].every(t => toks.has(t)),
+    );
+    if (!dup) members.push({ name: stripSkillFraming(r), tokens: toks });
+  }
+  return members.length >= 2 ? members : [];
+}
+
+/** True when `part` is exactly one member of the list `bundle` enumerates.
+ *  Mirrors backend `_skill_is_bundle_part`.
+ *
+ *  The subset rule deliberately cannot see this: a longer name normally means a
+ *  DIFFERENT product ("React" vs "React Native"). A conjunction says the opposite —
+ *  the phrase enumerates members instead of qualifying a head noun. */
+export function skillIsBundlePart(part: string, bundle: string): boolean {
+  const pt = skillContentTokens(part);
+  if (pt.size === 0) return false;
+  const members = skillBundleMembers(bundle);
+  if (members.some(m => m.tokens.size === pt.size && [...m.tokens].every(t => pt.has(t)))) {
+    return true;
+  }
+  // SHARED TRAILING HEAD — "Knowledge of ICU and CCU protocols" splits into {icu}
+  // and {ccu, protocol}, because "protocols" is written once but belongs to both
+  // members ("SDLC and STLC processes", "manual and automated testing"). So the
+  // LAST member also matches on its head alone, provided the dropped words are a
+  // trailing run of that member's own text.
+  //
+  // WARNING-ONLY: cluster generation keeps the strict member list, so a bundle with
+  // a shared head is never DELETED in favour of its heads. Mirrors the backend.
+  if (members.length > 0) {
+    const last = members[members.length - 1];
+    const strictlySmaller = pt.size < last.tokens.size && [...pt].every(t => last.tokens.has(t));
+    if (strictlySmaller) {
+      const words = last.name.split(/\s+/).filter(Boolean);
+      for (let cut = 1; cut < words.length; cut++) {
+        const head = skillContentTokens(words.slice(0, cut).join(' '));
+        if (head.size === pt.size && [...head].every(t => pt.has(t))) return true;
+      }
+    }
+  }
+  return false;
+}
+
 export function skillDuplicateVerdict(a: string, b: string): DupVerdict {
   const no: DupVerdict = { dup: false, tier: '', reason: '' };
   if (!a || !b) return no;
@@ -343,10 +459,18 @@ export function skillDuplicateVerdict(a: string, b: string): DupVerdict {
     return { dup: true, tier: 'high', reason: 'same words in a different form or order' };
   }
   const [small, large] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
-  for (const t of small) if (!large.has(t)) return no;
-  const extra = [...large].filter(t => !small.has(t));
-  if (extra.length > 0 && extra.every(t => GENERIC_QUALIFIERS.has(t))) {
-    return { dup: true, tier: 'medium', reason: 'one is a reworded form of the other' };
+  if ([...small].every(t => large.has(t))) {
+    const extra = [...large].filter(t => !small.has(t));
+    if (extra.length > 0 && extra.every(t => GENERIC_QUALIFIERS.has(t))) {
+      return { dup: true, tier: 'medium', reason: 'one is a reworded form of the other' };
+    }
+  }
+  // BUNDLE MEMBERSHIP — one side enumerates a list that already contains the other
+  // ("SDLC" vs "Knowledge of SDLC and STLC"). Medium, never high: the recruiter may
+  // legitimately want the member broken out for its own score, and cluster
+  // generation resolves that by dropping the BUNDLE once every member is present.
+  if (skillIsBundlePart(a, b) || skillIsBundlePart(b, a)) {
+    return { dup: true, tier: 'medium', reason: 'already listed inside the other skill' };
   }
   return no;
 }

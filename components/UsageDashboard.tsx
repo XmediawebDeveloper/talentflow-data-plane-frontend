@@ -912,8 +912,10 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         )}
 
         {/* Quota Summary Cards */}
+        {/* id anchors the header plan-arrow deep link (?focus=quota-overview);
+            scroll-mt keeps the card clear of the sticky breadcrumb band. */}
         {quotaSummary && (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+          <div id="quota-overview" className="scroll-mt-24 bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
             {/* Section Header */}
             <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

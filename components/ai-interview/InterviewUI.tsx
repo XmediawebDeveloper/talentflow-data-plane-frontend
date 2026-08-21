@@ -12,7 +12,6 @@ import {
   useInterviewObjectDetection,
   useInterviewProctoringMonitor,
   InterviewProctoringWarnings,
-  ScreenRecordingBlockedModal,
   EnvironmentVerificationOverlay,
   type DetectedObjectEvent,
   type ObjectEventType,
@@ -83,14 +82,6 @@ interface InterviewUIProps {
    * chat avatar. Null/undefined (e.g. identity step skipped) → the "You" text
    * avatar is shown instead. */
   candidatePhotoUrl?: string | null;
-  /** True while the portal's in-interview vision poll can SEE a screen-recording
-   * application on the shared screen (its toolbar, REC/timer badge, recording
-   * border, or its minimised tray-icon cluster). Pauses the interview for as
-   * long as it stays true — no grace window and no termination: the candidate
-   * simply cannot proceed until the recorder is fully closed. The portal owns
-   * the detection + the popup; this prop owns the PAUSE (backend question timer
-   * cancelled, Bina silenced, Next Q disabled) and the automatic resume. */
-  screenRecorderDetected?: boolean;
 }
 
 interface Message {
@@ -526,7 +517,7 @@ const LiveAIBubbleMemo = memo(LiveAIBubble);
 const MAX_HEADSET_DISCONNECTS = 3;                               // the 3rd one terminates
 const ALLOWED_HEADSET_DISCONNECTS = MAX_HEADSET_DISCONNECTS - 1; // = 2 tolerated
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl, screenRecorderDetected = false }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl }: InterviewUIProps) {
   // ── Effective device capability ──────────────────────────────────────────
   // The portal detects this at the system-check step, but a RESUMED session (or
   // any entry path that skips system check) arrives with deviceCapability=undefined
@@ -1377,7 +1368,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // S3 multipart-upload segment index (0-based → backend part_number = idx + 1).
   // recordedChunksRef now holds only the UNFLUSHED clusters since the last
   // segment; we flush a segment once the buffer reaches RECORDING_MIN_SEGMENT_BYTES.
-  const recordingSegmentIndexRef = useRef(0);
+  // Camera-recording segment index. PERSISTED in sessionStorage (survives a
+  // page reload in the same tab) so a reconnect-triggered refresh RESUMES the
+  // segment numbering instead of restarting at 0. Restarting at 0 made the
+  // backend MPU service abort the pre-refresh multipart upload
+  // (recording_mpu_service: segment_index==0 → _abort_all_for_key_sync), which
+  // DISCARDED all pre-refresh video and left the recording un-concatenated.
+  const _recSegKey = `tf_rec_seg_cam_${token}`;
+  const recordingSegmentIndexRef = useRef<number>((() => {
+    try {
+      const v = typeof window !== 'undefined' ? window.sessionStorage.getItem(_recSegKey) : null;
+      const n = v != null ? parseInt(v, 10) : 0;
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch { return 0; }
+  })());
+  const _saveRecSeg = (next: number) => {
+    try { if (typeof window !== 'undefined') window.sessionStorage.setItem(_recSegKey, String(next)); } catch { /* ignore */ }
+  };
 
   // Avatar state controller
   const avatarState = useAvatarState();
@@ -1554,17 +1561,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // isCameraActive/isMicrophoneActive back to true automatically once the
   // device is live again — this effect just reacts to that transition.
   const MEDIA_PAUSE_GRACE_MS = 180000; // 3 minutes
-  // Screen-recorder pause state (armed by the screenRecorderDetected effect
-   // below). Declared up here so the camera/mic pause effect can check it before
-   // sending session_resume — the backend's session_paused is a single flag, so
-   // whichever pause recovers first must not un-pause the other one's hold.
-  const recorderPausedRef = useRef(false);
-  const recorderPauseStartMsRef = useRef<number | null>(null);
 
   const [isMediaPaused, setIsMediaPaused] = useState(false);
   const [mediaPauseSecondsRemaining, setMediaPauseSecondsRemaining] = useState<number | null>(null);
   const isMediaPausedRef = useRef(false);
   const mediaPauseStartMsRef = useRef<number | null>(null);
+  // True when the PINNED microphone device disappeared (e.g. wired headset
+  // unplugged). The mic MediaStreamTrack does NOT always end on unplug — when a
+  // built-in mic exists (e.g. "Microphone Array (Realtek)") the OS silently
+  // swaps to it on the same live track, so `isMicrophoneActive` stays true and
+  // the interview would keep running (Bina keeps speaking). This flag detects
+  // the device-list change directly and feeds the SAME media-pause machinery,
+  // so unplugging the mic pauses the interview like covering the camera does.
+  const [audioDeviceLost, setAudioDeviceLost] = useState(false);
+  const audioDeviceLostRef = useRef(false);
+  // The audio-input device the interview STARTED on — captured ONCE and never
+  // reassigned. `pinnedAudioDeviceIdRef` cannot be used for unplug detection
+  // because it FOLLOWS the fallback: when the headset is pulled and the answer
+  // mic reopens on the built-in device, the pin is rewritten to that built-in,
+  // so a "does the pinned device still exist?" check would always say yes. This
+  // ref stays on the ORIGINAL device so its disappearance is detectable.
+  const interviewMicDeviceIdRef = useRef<string | undefined>(undefined);
   const mediaPauseCountdownIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaPauseTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mirrors proctoringState so the setTimeout fired at ARM time can read
@@ -1657,7 +1674,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   useEffect(() => {
     if (!isConnected) return;
-    const anyDown = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive;
+    // `audioDeviceLost` covers the wired-unplug case where the mic track stays
+    // live (built-in mic silently takes over) — without it, that unplug would
+    // NOT pause. It rides the exact same pause/grace/terminate path as a camera
+    // or mic-track drop, so Bina stops and the answer clock freezes identically.
+    const anyDown = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive || audioDeviceLost;
 
     if (anyDown && !isMediaPausedRef.current) {
       // ARM: a device just went down — start the pause+grace window.
@@ -1679,12 +1700,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       pauseQuestionTimerRef.current();
 
       const reason = mediaDownReason(proctoringState.isCameraActive, proctoringState.isMicrophoneActive);
-      // Skip if a screen-recorder pause already holds the session paused —
-      // re-sending re-snapshots _paused_at_monotonic and drops the pause credit
-      // accumulated so far (symmetric with the guard in the recorder effect).
-      if (!recorderPausedRef.current) {
-        try { wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason })); } catch { /* best-effort */ }
-      }
+      try { wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason })); } catch { /* best-effort */ }
       if (!proctoringState.isCameraActive) {
         candidateAIInterviewService.reportProctorEvent(token, {
           event_type: 'camera_disabled',
@@ -1724,19 +1740,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       setIsMediaPaused(false);
       setMediaPauseSecondsRemaining(null);
 
-      // Only actually resume the backend if a screen recorder isn't ALSO holding
-      // the session paused — otherwise reconnecting a headset would silently
-      // release the recorder pause and let the interview run with the recorder up.
-      // The local per-question clock is unfrozen on the same condition, so the
-      // two stay in lockstep: still held → stay frozen.
-      if (!recorderPausedRef.current) {
-        try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
-        // Unfreeze the answer clock at exactly the value it held when the
-        // device dropped — pause/resumeQuestionTimer accumulate the paused
-        // span into questionTimerPausedMsRef, which computeQuestionRemaining
-        // subtracts, so no part of the outage counts against the candidate.
-        resumeQuestionTimerRef.current();
-      }
+      try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+      // Unfreeze the answer clock at exactly the value it held when the
+      // device dropped — pause/resumeQuestionTimer accumulate the paused
+      // span into questionTimerPausedMsRef, which computeQuestionRemaining
+      // subtracts, so no part of the outage counts against the candidate.
+      resumeQuestionTimerRef.current();
       candidateAIInterviewService.reportProctorEvent(token, {
         event_type: 'session_resumed',
         severity: 'low',
@@ -1747,72 +1756,53 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         },
       }).catch(() => { /* best-effort */ });
     }
-  }, [isConnected, proctoringState.isMicrophoneActive, proctoringState.isCameraActive, token, onTerminate, clearMediaPauseTimers, mediaDownReason]);
+  }, [isConnected, proctoringState.isMicrophoneActive, proctoringState.isCameraActive, audioDeviceLost, token, onTerminate, clearMediaPauseTimers, mediaDownReason]);
+
+  // Keep the audioDeviceLost ref mirror current for the always-on listener.
+  useEffect(() => { audioDeviceLostRef.current = audioDeviceLost; }, [audioDeviceLost]);
+
+  // Detect the PINNED microphone device disappearing / reappearing via the
+  // devicechange event (fires even when the track survives a fallback swap).
+  // Pause when the interview's mic device vanishes; resume when it returns.
+  useEffect(() => {
+    if (!isConnected) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return;
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        if (cancelled) return;
+        const inputs = devices.filter(d => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
+        // Compare against the ORIGINAL device (never the drifting pin) so a
+        // silent fallback to the built-in mic doesn't hide the unplug.
+        const orig = interviewMicDeviceIdRef.current;
+        if (!orig) return; // not captured yet — nothing to compare
+        const origExists = inputs.some(d => d.deviceId === orig);
+        if (!origExists && !audioDeviceLostRef.current) {
+          // The device the interview started on (e.g. wired headset) is gone → pause.
+          setAudioDeviceLost(true);
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'microphone_disabled',
+            severity: 'severe',
+            details: { phase: 'in_interview', reason: 'audio_device_unplugged' },
+          }).catch(() => { /* best-effort */ });
+        } else if (origExists && audioDeviceLostRef.current) {
+          // The original device is back (candidate re-plugged) → resume.
+          setAudioDeviceLost(false);
+        }
+      } catch { /* enumeration failed — leave state as-is */ }
+    };
+    navigator.mediaDevices.addEventListener('devicechange', check);
+    void check(); // catch a device already removed before this mounted
+    return () => {
+      cancelled = true;
+      navigator.mediaDevices.removeEventListener('devicechange', check);
+    };
+  }, [isConnected, token]);
 
   // Belt-and-braces cleanup on unmount so a stray timer can never fire into
   // an unmounted tree (mirrors the pattern used for other proctoring timers).
   useEffect(() => () => clearMediaPauseTimers(), [clearMediaPauseTimers]);
-
-  // ── Screen recorder detected mid-interview: pause + auto-resume ──────────
-  // The portal polls the shared-screen feed through the same vision check that
-  // gates the pre-start "hide the share bar" step, and flips
-  // `screenRecorderDetected` while a recorder is visible on the candidate's
-  // screen. Unlike the camera/mic pause above there is NO grace countdown and
-  // NO termination: the interview simply holds for as long as the recorder is
-  // up, and resumes by itself the moment the poll comes back clean (i.e. the
-  // candidate stopped AND fully closed the recorder — a recorder merely
-  // minimised to the tray still reads as detected, so stopping alone will not
-  // release the pause).
-  //
-  // `session_pause` cancels the backend question timer, snapshots the question
-  // Bina was mid-way through and kills her in-flight TTS; `session_resume`
-  // shifts question_start_time forward by the pause duration and re-speaks that
-  // question, so the candidate loses none of their answer window.
-  useEffect(() => {
-    if (!isConnected) return;
-
-    if (screenRecorderDetected && !recorderPausedRef.current) {
-      if (isClosingRef.current) return; // interview already wrapping up — don't arm
-      recorderPausedRef.current = true;
-      recorderPauseStartMsRef.current = Date.now();
-
-      // If the media pause already holds the session, the backend is paused
-      // already — re-sending would re-snapshot _paused_at_monotonic and lose the
-      // elapsed pause credit the candidate is owed on resume.
-      if (!isMediaPausedRef.current) {
-        try {
-          wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason: 'screen_recording' }));
-        } catch { /* best-effort */ }
-      }
-      candidateAIInterviewService.reportProctorEvent(token, {
-        event_type: 'screen_recording_attempt',
-        severity: 'severe',
-        details: { phase: 'in_interview', action: 'paused' },
-      }).catch(() => { /* best-effort */ });
-      console.warn('[Interview] screen recorder detected — interview paused');
-    } else if (!screenRecorderDetected && recorderPausedRef.current) {
-      const startedAt = recorderPauseStartMsRef.current;
-      const pauseDurationMs = startedAt !== null ? Math.max(0, Date.now() - startedAt) : null;
-      recorderPausedRef.current = false;
-      recorderPauseStartMsRef.current = null;
-
-      // Mirror of the guard in the media-pause effect: if the camera/mic is also
-      // down, that pause still owns the hold and its own recovery will resume.
-      if (!isMediaPausedRef.current) {
-        try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
-      }
-      candidateAIInterviewService.reportProctorEvent(token, {
-        event_type: 'session_resumed',
-        severity: 'low',
-        details: {
-          reason: 'screen_recorder_closed',
-          pause_duration_ms: pauseDurationMs,
-          pause_duration_seconds: pauseDurationMs !== null ? Math.round(pauseDurationMs / 1000) : null,
-        },
-      }).catch(() => { /* best-effort */ });
-      console.log('[Interview] screen recorder gone — interview resumed');
-    }
-  }, [screenRecorderDetected, isConnected, token]);
 
   // Fullscreen — disabled (no popup/overlay)
   // Face detection & gaze tracking (Phase 2 & 3)
@@ -3254,6 +3244,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     const sharedDeviceId = sharedTrack.getSettings?.().deviceId;
     if (sharedDeviceId) {
       pinnedAudioDeviceIdRef.current = sharedDeviceId;
+      // Capture the ORIGINAL device once (never overwrite) for unplug detection.
+      if (!interviewMicDeviceIdRef.current) interviewMicDeviceIdRef.current = sharedDeviceId;
     }
 
     const micType = classifyMicType(sharedTrack.label);
@@ -3307,6 +3299,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         const actualDeviceId = liveTrack.getSettings?.().deviceId;
         if (actualDeviceId) {
           pinnedAudioDeviceIdRef.current = actualDeviceId;
+          if (!interviewMicDeviceIdRef.current) interviewMicDeviceIdRef.current = actualDeviceId;
         }
         // Detect device type, set its profile (gain/silence/EC), and tune EC.
         const micType = classifyMicType(liveTrack.label);
@@ -5839,6 +5832,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       try {
         await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, false);
         recordingSegmentIndexRef.current = segmentIndex + 1;
+        _saveRecSeg(segmentIndex + 1);  // survive a reload → continue, not restart at 0
         console.log(`[Recording] Segment ${segmentIndex} uploaded: ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
       } catch (err: unknown) {
         // Upload failed — put the clusters back at the FRONT of the buffer so the
@@ -5922,6 +5916,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         try {
           await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, true);
           recordingSegmentIndexRef.current = segmentIndex + 1;
+          // Recording finalized — clear the persisted index so a fresh interview
+          // in the same tab starts at segment 0 again.
+          try { if (typeof window !== 'undefined') window.sessionStorage.removeItem(_recSegKey); } catch { /* ignore */ }
           console.log(`[Recording] Final upload + multipart completion succeeded${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
           return;
         } catch (err: unknown) {
@@ -6329,6 +6326,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             console.log(`[Recording ${timestamp}] Device ID captured: ${actualDeviceId}`);
             pinnedAudioDeviceIdRef.current = actualDeviceId;
           }
+          if (actualDeviceId && !interviewMicDeviceIdRef.current) interviewMicDeviceIdRef.current = actualDeviceId;
         } catch {
           setActiveMicLabel(audioTracks[0].label || "Selected microphone");
           console.log(`[Recording ${timestamp}] getSettings not supported, skipping device ID capture`);
@@ -9340,7 +9338,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       || questionTimerSeconds === null
                       || nextSkipInFlight
                       || isMediaPaused
-                      || screenRecorderDetected
                     }
                     onClick={() => {
                       if (questionTimerExpired) return;
@@ -9349,9 +9346,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       // Camera/mic disconnected (headset pulled, etc.) — the interview
                       // is paused and nothing can advance it until the device is back.
                       if (isMediaPausedRef.current) return;
-                      // Screen recorder running — the interview is paused until
-                      // the candidate closes it; nothing may advance it.
-                      if (recorderPausedRef.current) return;
                       // Re-entry guard: if another skip is still in flight (no new
                       // question_timer_started has arrived yet), ignore the click
                       // completely. This mirrors the disabled prop but covers the
@@ -9499,7 +9493,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       questionTimerExpiredRef.current = false;
                     }}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 ${
-                      questionTimerExpired || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) || isMediaPaused || screenRecorderDetected
+                      questionTimerExpired || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) || isMediaPaused
                         ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400'
                         : 'bg-white hover:bg-violet-50 border-violet-200 text-violet-700 hover:border-violet-400'
                     }`}
@@ -9671,9 +9665,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           stays the original non-blocking heads-up (transparent,
           pointer-events-none on the wrapper) so the candidate can keep
           answering by voice while the camera recovers. */}
-      {isMediaPaused && isConnected && !isClosing && (
+      {isMediaPaused && isConnected && !isClosing && (() => {
+        // Mic is "down" for the overlay when either the track dropped OR the
+        // pinned device was unplugged (track survived via a built-in fallback).
+        const _micDown = !proctoringState.isMicrophoneActive || audioDeviceLost;
+        return (
         <div className={`fixed inset-0 z-[200] flex items-center justify-center ${
-          proctoringState.isMicrophoneActive
+          !_micDown
             ? 'pointer-events-none'
             : 'pointer-events-auto bg-black/70 backdrop-blur-sm'
         }`}>
@@ -9685,18 +9683,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             </div>
             <div className="text-center">
               <h3 className="text-white font-semibold text-base mb-1">
-                {!proctoringState.isCameraActive && !proctoringState.isMicrophoneActive
+                {!proctoringState.isCameraActive && _micDown
                   ? "Camera & Microphone Disconnected"
                   : !proctoringState.isCameraActive
                   ? "Camera Disconnected"
                   : "Microphone Disconnected"}
               </h3>
               <p className="text-[#94A3B8] text-sm leading-relaxed">
-                {!proctoringState.isCameraActive && !proctoringState.isMicrophoneActive
+                {!proctoringState.isCameraActive && _micDown
                   ? "Your interview is paused. Please reconnect your camera and microphone — it will resume automatically."
                   : !proctoringState.isCameraActive
                   ? "Your interview is paused. Please reconnect your camera — it will resume automatically."
-                  : "Your interview is paused. Please reconnect your microphone — it will resume automatically."}
+                  : "Your interview is paused. Please reconnect your microphone (or headset) — it will resume automatically."}
               </p>
             </div>
             {mediaPauseSecondsRemaining !== null && (
@@ -9742,7 +9740,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             <div className="text-xs text-[#64748B]">This event has been recorded</div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Media-permission terminal block ──
           Shown the moment camera / mic permission is revoked or denied.
@@ -9812,10 +9811,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
       <InterviewProctoringWarnings />
 
-      {/* Fires the instant an in-page screen-recording attempt is refused by the
-          getDisplayMedia / desktop-getUserMedia guards in the proctoring
-          monitor. Self-subscribing — no props, no parent state. */}
-      <ScreenRecordingBlockedModal />
+      {/* The screen-recording popup is mounted by CandidateAIInterviewPortal,
+          not here: it has to cover the pre-interview steps too, and mounting it
+          in both places would show the candidate two identical dialogs. */}
 
       <EnvironmentVerificationOverlay
         active={Boolean(envVerification)}

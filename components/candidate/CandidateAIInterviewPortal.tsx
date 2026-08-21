@@ -15,7 +15,13 @@ import { InterviewEventBus } from '@/components/ai-interview/proctoring/Intervie
 import {
   beginLegitimateShare,
   endLegitimateShare,
+  registerAppOwnedStream,
+  unregisterAppOwnedStream,
+  reportScreenRecordingAttempt,
+  resetLegitimateShareState,
 } from '@/components/ai-interview/proctoring/ScreenRecordingGuard';
+import { useScreenRecordingDefense } from '@/components/ai-interview/proctoring/useScreenRecordingDefense';
+import { ScreenRecordingBlockedModal } from '@/components/ai-interview/proctoring/ScreenRecordingBlockedModal';
 
 // Pre-interview step components
 import PreInterviewLayout from '@/components/candidate/PreInterviewLayout';
@@ -68,27 +74,6 @@ const SCREEN_MIN_SEGMENT_BYTES = 5 * 1024 * 1024 + 256 * 1024; // ~5.25 MiB
 // the candidate switched to (the other tab/app/window from Alt+Tab, F11, the
 // Windows key, etc.) instead of cutting off the instant the violation fires.
 const POST_VIOLATION_RECORD_MS = 4000;
-// Consecutive positive vision verdicts required before the in-interview screen
-// recorder watch actually pauses the interview. One frame is never enough: a
-// single mis-read (a repaint caught mid-frame, a transient overlay) would freeze
-// an innocent candidate. One clean verdict clears it again — slow to accuse,
-// quick to forgive.
-const RECORDER_STREAK_TO_PAUSE = 3;
-
-// How long after the interview UI is up before the known-clean reference frame
-// is grabbed, and how often the screen is re-checked against it.
-const RECORDER_BASELINE_DELAY_MS = 5000;
-const RECORDER_POLL_INTERVAL_MS = 12000;
-
-// Nothing the watch sees in the first RECORDER_WARMUP_MS of the interview can
-// raise the notice. Entering the session must never, on its own, produce a
-// screen-recording warning: for the first half-minute the app is still painting
-// the avatar, webcam tile and controls, Chrome may still be settling its
-// share indicator, and the reference frame may not exist yet — every one of
-// which has produced a false positive. Verdicts in this window are logged only.
-// A recorder started during warm-up is still caught, just on a later tick.
-const RECORDER_WARMUP_MS = 30000;
-
 const ENTIRE_SCREEN_REQUIRED_MESSAGE = 'Please select Entire Screen. Window and Current Tab sharing are not allowed.';
 const SCREEN_SHARE_REQUIRED_MESSAGE = 'Entire Screen sharing is mandatory to continue the interview.';
 
@@ -170,10 +155,25 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export function CandidateAIInterviewPortal({ token }: Props) {
+function CandidateAIInterviewPortalInner({ token }: Props) {
   const [step, setStep] = useState<Step>('loading');
   const stepRef = useRef<Step>('loading');
   useEffect(() => { stepRef.current = step; }, [step]);
+
+  // Screen-recording defence for the WHOLE portal lifetime — deliberately not
+  // scoped to step === 'interview'. It installs the capture-API guard (the
+  // vectors a browser can actually refuse), the recorder hotkey watch and the
+  // virtual-device watch, and reports every attempt to the recruiter timeline.
+  // `suspicionAt` is its output for signals that are real but not conclusive on
+  // their own (a bare F9, recorder software found installed); the in-interview
+  // vision watch below reads it and tightens up rather than accusing on a
+  // keystroke. The candidate popup is raised by ScreenRecordingBlockedModal,
+  // mounted by the exported wrapper at the bottom of this file.
+  const recorderDefense = useScreenRecordingDefense(token);
+  // A beginLegitimateShare whose endLegitimateShare never ran (navigation or a
+  // crash between the two) would leave the capture guard permanently open for
+  // the next mount. Cheap insurance against that on the way out.
+  useEffect(() => resetLegitimateShareState, []);
   const [interview, setInterview] = useState<CandidateInterviewInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [isExpiredError, setIsExpiredError] = useState(false);
@@ -191,26 +191,6 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // consent gate. Blocks accepting until they return to fullscreen so the
   // interview can never start outside fullscreen.
   const [finalConsentFsExited, setFinalConsentFsExited] = useState(false);
-  // In-interview screen-recorder detection. True while the vision poll can see a
-  // screen-recording application on the shared screen; pauses the interview and
-  // raises the banner until the candidate fully closes the recorder.
-  const [recorderDetected, setRecorderDetected] = useState(false);
-  // The banner is dismissible (X). Dismissing hides the NOTICE only — the
-  // interview stays paused while the recorder is up. Reset on each new detection
-  // episode so a candidate who dismisses, closes the recorder, then starts a new
-  // one is warned again.
-  const [recorderNoticeDismissed, setRecorderNoticeDismissed] = useState(false);
-  // Consecutive positive vision verdicts. One frame is never enough to pause a
-  // live interview — see the poll below.
-  const recorderStreakRef = useRef(0);
-  // Known-clean reference frame of THIS candidate's screen, grabbed shortly after
-  // the interview starts. Every later poll is judged as a diff against it, so the
-  // interview UI (timer, webcam tile, circular call buttons) appears in both
-  // frames and cancels out instead of being mistaken for a recorder toolbar.
-  const recorderBaselineRef = useRef<Blob | null>(null);
-  // When the current interview session started, for the warm-up window below.
-  const recorderWatchStartedAtRef = useRef<number>(0);
-
   // "Hide the screen-share bar" gate (vision-LLM verified) shown before start.
   const [shareBarChecking, setShareBarChecking] = useState(false);
   const [shareBarError, setShareBarError] = useState<string | null>(null);
@@ -783,6 +763,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         }
       }
       // Cleanup always runs, whether or not we uploaded.
+      unregisterAppOwnedStream(screenStreamRef.current);
       screenStreamRef.current?.getTracks().forEach(t => t.stop());
       screenStreamRef.current = null;
       screenRecorderRef.current = null;
@@ -1069,6 +1050,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       (error as any).name = 'InvalidScreenSelectionError';
       throw error;
     }
+
+    // Whitelist THIS track for the MediaRecorder guard. Without it the guard —
+    // which refuses recording of any display-surface track it did not see the
+    // app obtain — would block the interview's own session recording, since the
+    // portal rebuilds a fresh MediaStream (this video track + mixed audio)
+    // before handing it to MediaRecorder.
+    registerAppOwnedStream(screenStream);
 
     return screenStream;
   }, []);
@@ -1686,163 +1674,6 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     }, 4000);
     return () => { cancelled = true; clearInterval(iv); };
   }, [step, shareBarError, shareBarChecking, startSubmitting, token, captureScreenFrame]);
-
-  // ── In-interview screen-recorder watch (Scenario 2) ────────────────────
-  // The pre-start gate (hide_share_bar) only proves the screen was clean at the
-  // moment the interview started — nothing stops the candidate launching a
-  // recorder afterwards. The app already holds a live ENTIRE-SCREEN capture (it
-  // records the session), so a vision check can run on a slow loop for the whole
-  // interview. This is the only way to see a NATIVE or third-party recorder: the
-  // getDisplayMedia patch in the proctoring monitor sees only this page's own
-  // calls, never Game Bar / OBS / QuickTime.
-  //
-  // Uses detectScreenRecorder, NOT the share-bar check. The share-bar prompt is
-  // written for the pre-start desktop and treats timers, red borders and
-  // record-shaped icons as suspicious — which is exactly what this app renders
-  // once it is fullscreen (question timer, webcam tile, circular mic/camera
-  // buttons, framework debug badge), so it flagged clean screens constantly.
-  //
-  // The fix that actually matters is the BASELINE: a reference frame of this
-  // same screen, captured seconds after the interview began (a moment the
-  // pre-start gate already proved clean). Every poll is judged as a diff against
-  // it, so our own UI sits in both images and cancels out — the model no longer
-  // has to work out which furniture is ours, it only has to spot what is new.
-  //
-  // Guards, so that entering the session can never by itself raise the notice
-  // and one bad frame can never freeze an innocent candidate:
-  //   • ONLY diff verdicts may accuse — single-image verdicts are logged and
-  //     ignored, because that is the check that kept misreading our own UI,
-  //   • nothing at all is acted on during the first RECORDER_WARMUP_MS,
-  //   • the backend discards low-confidence positives outright,
-  //   • RECORDER_STREAK_TO_PAUSE consecutive positives are required to pause,
-  //     while ONE clean verdict releases it immediately (slow to accuse, quick to
-  //     forgive) — a frame caught mid-repaint dies here, and
-  //   • any network/vision error leaves the previous verdict untouched.
-  // Net effect: the earliest the notice can appear is the warm-up plus three
-  // consecutive positive diffs — a recorder that is genuinely, persistently on
-  // screen, never the act of starting the interview.
-  //
-  // 12s cadence: fast enough to catch a recorder within a question, cheap enough
-  // to stay at ~5 vision calls/min, and light on the shared-screen track that the
-  // MediaRecorder is already encoding.
-  useEffect(() => {
-    if (step !== 'interview') return;
-    let cancelled = false;
-    let inFlight = false;
-    recorderStreakRef.current = 0;
-    recorderBaselineRef.current = null;
-    recorderWatchStartedAtRef.current = Date.now();
-
-    // Seed the reference frame. RECORDER_BASELINE_DELAY_MS after the interview
-    // UI is up: long enough for the avatar, webcam tile and controls to have
-    // painted (a half-rendered reference would make normal chrome look "new"
-    // later), short enough that it still sits inside the window the pre-start
-    // gate vouched for.
-    const captureBaseline = async () => {
-      if (cancelled || recorderBaselineRef.current) return;
-      const bt = screenStreamRef.current?.getVideoTracks?.()[0];
-      if (!screenStreamRef.current || !bt || bt.readyState !== 'live') return;
-      try {
-        const b = await captureScreenFrame();
-        if (!cancelled && b) {
-          recorderBaselineRef.current = b;
-          console.log('[RecorderWatch] baseline reference frame captured');
-        }
-      } catch { /* retried on the next tick */ }
-    };
-    const baselineTimer = window.setTimeout(captureBaseline, RECORDER_BASELINE_DELAY_MS);
-
-    const iv = setInterval(async () => {
-      if (cancelled || inFlight) return;
-      const track = screenStreamRef.current?.getVideoTracks?.()[0];
-      // No live share (candidate stopped sharing) — that has its own blocking
-      // overlay and re-share flow; don't fight it with a second notice.
-      if (!screenStreamRef.current || !track || track.readyState !== 'live') return;
-      inFlight = true;
-      try {
-        // Keep retrying the reference frame until we have one. Without it the
-        // backend can only fall back to the weaker single-image judgement, whose
-        // verdicts are never allowed to raise the notice (see below) — so a
-        // failed capture would otherwise mean no detection at all, silently.
-        if (!recorderBaselineRef.current) await captureBaseline();
-
-        const frame = await captureScreenFrame();
-        if (!frame || cancelled) return;
-        const res = await candidateAIInterviewService.detectScreenRecorder(
-          token, frame, recorderBaselineRef.current,
-        );
-        if (cancelled) return;
-
-        // ONLY a diff against the known-clean reference frame may accuse the
-        // candidate. The single-image check has to work out unaided which
-        // on-screen furniture belongs to this app, and it repeatedly got that
-        // wrong — reading our own question timer and circular mic/camera buttons
-        // as a recorder toolbar. Its verdicts are logged and otherwise ignored.
-        if (res.mode !== 'diff') {
-          if (res.recorder_detected) {
-            console.warn(
-              `[RecorderWatch] ignoring ${res.mode} positive — no reference frame yet ` +
-              `(reason: ${res.reason || 'n/a'})`,
-            );
-          }
-          return;
-        }
-
-        // Warm-up: entering the session must never by itself raise the notice.
-        const elapsed = Date.now() - recorderWatchStartedAtRef.current;
-        if (elapsed < RECORDER_WARMUP_MS) {
-          if (res.recorder_detected) {
-            console.warn(
-              `[RecorderWatch] ignoring positive ${Math.round(elapsed / 1000)}s into the ` +
-              `session — inside the ${RECORDER_WARMUP_MS / 1000}s warm-up ` +
-              `(reason: ${res.reason || 'n/a'})`,
-            );
-          }
-          return;
-        }
-
-        if (res.recorder_detected) {
-          recorderStreakRef.current += 1;
-          if (recorderStreakRef.current >= RECORDER_STREAK_TO_PAUSE) {
-            setRecorderDetected(true);
-          } else {
-            console.warn(
-              `[RecorderWatch] positive ${recorderStreakRef.current}/${RECORDER_STREAK_TO_PAUSE} ` +
-              `— not pausing yet (reason: ${res.reason || 'n/a'})`,
-            );
-          }
-        } else {
-          recorderStreakRef.current = 0;
-          setRecorderDetected(false);
-        }
-      } catch {
-        // Network/vision hiccup — leave the current verdict untouched: an error
-        // must never ARM the pause (a blip cannot freeze a clean interview) and
-        // must never RELEASE one either (a blip cannot wave a recorder through).
-        // The next tick re-evaluates in 12s.
-      } finally {
-        inFlight = false;
-      }
-    }, RECORDER_POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(iv);
-      window.clearTimeout(baselineTimer);
-      recorderBaselineRef.current = null;
-    };
-  }, [step, token, captureScreenFrame]);
-
-  // Leaving the interview (completed / terminated) clears any standing pause so
-  // a stale detection can't leak into the completion screen.
-  useEffect(() => {
-    if (step !== 'interview' && recorderDetected) setRecorderDetected(false);
-  }, [step, recorderDetected]);
-
-  // Re-arm the notice whenever detection clears, so the NEXT time a recorder is
-  // seen the banner shows again even if the candidate dismissed the last one.
-  useEffect(() => {
-    if (!recorderDetected && recorderNoticeDismissed) setRecorderNoticeDismissed(false);
-  }, [recorderDetected, recorderNoticeDismissed]);
 
   // Final in-fullscreen consent gate → actually start the interview. Runs the
   // backend start (unit consumption) only after the candidate explicitly
@@ -2772,6 +2603,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       try {
         const screenStream = await requestEntireScreenShare();
         screenStreamRef.current = screenStream;
+        // Re-enter fullscreen right after the share picker closes (still within
+        // the click gesture), mirroring the normal start flow. On a resume the
+        // page reloaded out of fullscreen, so without this the interview would
+        // run windowed after re-share. Best-effort — the fullscreen guard also
+        // re-prompts if this is refused.
+        try { await requestFullscreen(); setIsFullscreenActive(isFullscreen()); } catch { /* guard re-prompts */ }
         const recordingStream = await buildRecordingStreamWithAudio(screenStream);
         const screenMime = SCREEN_MIME_TYPES
           .find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
@@ -2825,6 +2662,41 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       }
     };
 
+    // RESUME GATE — after a reload/recovery the screen recorder is gone and we
+    // are out of fullscreen. Hold the interview HERE (do NOT mount InterviewUI,
+    // so Bina/the WebSocket/the timer/the recorders never start) until the
+    // candidate re-shares their screen. handleReshareScreen re-enters fullscreen
+    // and rebuilds the screen recorder; clearing screenReshareOnResume then
+    // mounts InterviewUI, which reconnects and resumes the current question —
+    // now WITH screen sharing + fullscreen, and nothing ran unpaused underneath.
+    if (screenReshareOnResume) {
+      return (
+        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-5">
+              <Monitor className="w-8 h-8 text-blue-600" />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Re-share your screen to continue</h2>
+            <p className="text-gray-600 mb-2 text-sm">
+              Your interview reconnected. To keep the screen recording in sync with your camera, please share your <span className="font-semibold">Entire Screen</span> again. Your interview will resume right after.
+            </p>
+            <p className="text-sm text-gray-500 mb-6">Window and Current Tab are not allowed.</p>
+            <button
+              onClick={handleReshareScreen}
+              disabled={resharing}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
+            >
+              {resharing ? (
+                <><Loader2 className="w-4 h-4 animate-spin" />Requesting Permission...</>
+              ) : (
+                <><Monitor className="w-4 h-4" />Share Entire Screen &amp; Resume</>
+              )}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <>
         <InterviewUI
@@ -2843,88 +2715,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           onTimerChange={setTimerSnapshot}
           deviceCapability={deviceCapability}
           candidatePhotoUrl={candidatePhotoUrl}
-          screenRecorderDetected={recorderDetected}
         />
-        {/* Screen recording detected DURING the interview (Scenario 2).
-            A TOP banner, not a blocking modal: the spec asks for a notice that
-            does not disrupt the interview, and the candidate must still be able
-            to see the recorder they are being asked to close (a full-screen
-            scrim hides the very taskbar icon they need to find). The interview
-            is genuinely paused underneath — InterviewUI cancelled the backend
-            question timer and silenced Bina — and resumes on its own once the
-            poll comes back clean, which happens only when the recorder is
-            CLOSED, not merely stopped.
-            The X dismisses the NOTICE only; it never resumes the interview, and
-            the banner returns on the next detection episode. */}
-        {recorderDetected && !screenShareStopped && !recorderNoticeDismissed && (
-          <div className="fixed top-0 inset-x-0 z-[9998] flex justify-center px-4 pt-4 pointer-events-none">
-            <div className="pointer-events-auto w-full max-w-2xl rounded-2xl border border-red-300 bg-white shadow-2xl shadow-black/30 overflow-hidden">
-              <div className="h-1 w-full bg-red-500" />
-              <div className="flex items-start gap-3 p-4">
-                <div className="shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                  <Monitor className="w-5 h-5 text-red-600" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-gray-900">Screen Recording Detected</p>
-                  <p className="mt-0.5 text-sm text-gray-700 leading-snug">
-                    Screen recording is not allowed. Please turn off and close the screen
-                    recorder to continue the interview.
-                  </p>
-                  <p className="mt-1.5 text-xs text-amber-700 leading-snug">
-                    Stopping the recording is not enough — close the application completely,
-                    including any icon left in the taskbar or system tray.
-                  </p>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                    <span>Your interview is paused and will resume automatically.</span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setRecorderNoticeDismissed(true)}
-                  aria-label="Dismiss this message"
-                  title="Dismiss"
-                  className="shrink-0 -mt-1 -mr-1 w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
-        {/* RESUME re-share prompt — shown after a reload/recovery when the
-            screen recorder was lost (getDisplayMedia can't restart without a
-            fresh gesture). Distinct from the "stopped sharing" violation overlay:
-            this is a recovery step, not a malpractice event. Hidden if the
-            stopped-sharing overlay is already up (that one takes precedence). */}
-        {screenReshareOnResume && !screenShareStopped && (
-          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                <Monitor className="w-8 h-8 text-blue-600" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Re-share your screen to continue</h2>
-              <p className="text-gray-600 mb-2 text-sm">
-                Your interview reconnected. To keep the screen recording in sync with your camera, please share your <span className="font-semibold">Entire Screen</span> again.
-              </p>
-              <p className="text-sm text-gray-500 mb-6">
-                Window and Current Tab are not allowed.
-              </p>
-              <button
-                onClick={handleReshareScreen}
-                disabled={resharing}
-                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
-              >
-                {resharing ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />Requesting Permission...</>
-                ) : (
-                  <><Monitor className="w-4 h-4" />Share Entire Screen</>
-                )}
-              </button>
-            </div>
-          </div>
-        )}
         {screenShareStopped && (
           <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
@@ -3272,4 +3064,23 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   }
 
   return null;
+}
+
+/**
+ * Screen-recording defence has to cover EVERY step, not just the live interview,
+ * so the popup is mounted here — as a sibling of the step-switching body above,
+ * which early-returns a different tree for each step and therefore has no single
+ * place inside it that is always rendered.
+ *
+ * The modal subscribes to ScreenRecordingGuard's attempt bus itself, so it needs
+ * no props and no shared state with the portal: whichever step is on screen when
+ * a capture is refused, the candidate sees the same dialog.
+ */
+export function CandidateAIInterviewPortal(props: Props) {
+  return (
+    <>
+      <ScreenRecordingBlockedModal />
+      <CandidateAIInterviewPortalInner {...props} />
+    </>
+  );
 }

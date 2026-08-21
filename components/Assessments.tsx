@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -158,6 +158,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [selectedAssessmentForTracking, setSelectedAssessmentForTracking] = useState<any>(null);
   const [trackingInvitations, setTrackingInvitations] = useState<any[]>([]);
   const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
+  const [isRefreshingTracking, setIsRefreshingTracking] = useState(false);
   const [invitationStats, setInvitationStats] = useState({
     total: 0,
     expired: 0,
@@ -471,6 +472,45 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     };
   };
 
+  /* Only Completed and Auto Completed invites open the Result Details page.
+     Auto Completed is a completed invite whose attempt was auto-submitted on
+     session timeout (termination_code TENANT_SESSION_TIMEOUT), so the same
+     completed_at/attempt_id check covers both. Every other status — In
+     Progress, System Check, Expired, Invited, Terminated, ... — stays on the
+     tracking popup: there is no result to show, so the row doesn't navigate. */
+  const isTrackedInviteCompleted = (invitation: any): boolean =>
+    (invitation.status === 'completed' || !!invitation.completed_at) && !!invitation.attempt_id;
+
+  const opensTrackedDetails = (invitation: any): boolean =>
+    isTrackedInviteCompleted(invitation);
+
+  const openTrackedInviteResult = (invitation: any) => {
+    if (!selectedAssessmentForTracking) return;
+    if (!opensTrackedDetails(invitation)) return;
+    const base = `/recruitment/assessments/${selectedAssessmentForTracking.id}/results/details`;
+    const cid = invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : '';
+    const name = invitation.candidate_name ? `&candidate_name=${encodeURIComponent(invitation.candidate_name)}` : '';
+    router.push(`${base}?candidate_id=${invitation.attempt_id}${cid}${name}`);
+  };
+
+  /* Bulk selection for the tracking popup — same control and semantics as the
+     AI Interviews tracker's Select All bar. Every displayed candidate is
+     selectable (this popup has no revocable-only gating), and Select All
+     targets the rows on the CURRENT page, exactly like the AI tracker. */
+  const [trackingSelectedIds, setTrackingSelectedIds] = useState<Set<string>>(new Set());
+  const trackingSelectableIds = trackingInvitations.map((inv: any) => inv.id);
+  const allTrackingSelected =
+    trackingSelectableIds.length > 0 && trackingSelectableIds.every((id: string) => trackingSelectedIds.has(id));
+  const toggleTrackingSelectAll = () =>
+    setTrackingSelectedIds(() => (allTrackingSelected ? new Set<string>() : new Set<string>(trackingSelectableIds)));
+  const toggleTrackingSelectOne = (id: string) =>
+    setTrackingSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const closeTrackInvitesModal = () => {
     setShowTrackInvitesModal(false);
     setSelectedAssessmentForTracking(null);
@@ -481,6 +521,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setTrackingFilters(EMPTY_INVITE_FILTERS);
     setEditingEmailId(null);
     setNewEmailValue('');
+    setTrackingSelectedIds(new Set());
   };
 
   const loadAssessmentsPage = async (page: number) => {
@@ -620,6 +661,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       });
     } finally {
       setIsLoadingInvitations(false);
+    }
+  };
+
+  /* Manual Refresh in the tracking popup — refetches the row list and the
+     stat-card summary in place, no page reload. Guarded so rapid clicks (or a
+     click while the popup's own load is still in flight) can't stack
+     duplicate API calls. */
+  const refreshTrackingInvitations = async () => {
+    if (!selectedAssessmentForTracking || isRefreshingTracking || isLoadingInvitations) return;
+    setIsRefreshingTracking(true);
+    try {
+      await Promise.all([
+        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
+        loadTrackingInvitationSummary(selectedAssessmentForTracking),
+      ]);
+    } finally {
+      setIsRefreshingTracking(false);
     }
   };
 
@@ -2981,10 +3039,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         appeared twice on every card. The row at the foot of the
                         card is the one kept: it lays the buttons out full width
                         and carries the fuller Share gating (revoked invites). */}
-                    <div className="mb-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="mb-3 flex items-start justify-between gap-2" onClick={(e) => e.stopPropagation()}>
                       <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                         <FileText className="w-5 h-5 text-brand-blue" />
                       </div>
+                      {/* View Versions — right corner of the card. The component
+                          hides itself on v1 JDs, so the corner stays clean. */}
+                      {assessment.jd_id && (
+                        <JDVersionHistory
+                          jdId={assessment.jd_id}
+                          version={assessment.job?.version || assessment.jd_version}
+                        />
+                      )}
                     </div>
 
                     {/* Grid Card Title */}
@@ -3031,11 +3097,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {(assessment.job?.version || assessment.jd_version) && (
                             <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.job?.version || assessment.jd_version}</span>
                           )}
-                          <JDVersionHistory
-                            jdId={assessment.jd_id}
-                            version={assessment.job?.version || assessment.jd_version}
-                            className="mt-1.5"
-                          />
                         </div>
                       )}
 
@@ -3309,11 +3370,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               {(assessment.job?.version || assessment.jd_version) && (
                                 <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.job?.version || assessment.jd_version}</span>
                               )}
-                              <JDVersionHistory
-                                jdId={assessment.jd_id}
-                                version={assessment.job?.version || assessment.jd_version}
-                                className="mt-1.5"
-                              />
                             </div>
                           )}
 
@@ -3341,7 +3397,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {/* /Assessment Info */}
 
                       {/* Actions — Share, Track Invites, Results, Menu in a straight line at the top */}
-                      <div className="flex flex-wrap gap-2 flex-shrink-0 items-start" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-col items-end gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                         {/* Action Buttons — straight line, no wrap, top-aligned */}
                         <div className="flex items-center gap-2 flex-nowrap">
                           {/* Share via Email Button — disabled for Draft (must
@@ -3602,6 +3658,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           )}
                         </div>
                         </div>
+                        {/* View Versions — right corner, directly under the
+                            action row, mirroring the Job Openings list. */}
+                        {assessment.jd_id && (
+                          <JDVersionHistory
+                            jdId={assessment.jd_id}
+                            version={assessment.job?.version || assessment.jd_version}
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3787,12 +3851,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </div>
                 </div>
               </div>
-              <button
-                onClick={closeTrackInvitesModal}
-                className="p-2 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
-               aria-label="Close">
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
+              <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+                {/* Refetches the live statuses in place — the popup stays open,
+                    the icon spins while the request runs, and the handler's
+                    guard drops repeat clicks until it settles. */}
+                <button
+                  onClick={refreshTrackingInvitations}
+                  disabled={isRefreshingTracking || isLoadingInvitations}
+                  title="Fetch the latest invite statuses"
+                  aria-label="Refresh"
+                  className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingTracking ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">{isRefreshingTracking ? 'Refreshing...' : 'Refresh'}</span>
+                </button>
+                <button
+                  onClick={closeTrackInvitesModal}
+                  className="p-2 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
+                 aria-label="Close">
+                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Stat row doubles as the status filter — same component, buckets
@@ -3800,7 +3879,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 Counts come from the API's unfiltered summary, so selecting a
                 bucket narrows the table without collapsing the other cards. */}
             <InviteStatCards
-              gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-4"
+              gridClassName="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-5 gap-1 sm:gap-2 lg:gap-4"
               activeStatus={trackingFilters.status}
               onSelect={(status) => {
                 setTrackingFilters({ ...trackingFilters, status });
@@ -3808,24 +3887,33 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               }}
               cards={[
                 { key: 'all', label: 'Total Invited', Icon: Users, value: invitationStats.total, ...INVITE_CARD_TONES.blue },
-                { key: 'expired', label: 'Invite Expired', Icon: Clock, value: invitationStats.expired, ...INVITE_CARD_TONES.orange },
-                { key: 'failed', label: 'Invite Failed', Icon: X, value: invitationStats.failed, ...INVITE_CARD_TONES.red },
+                { key: 'expired', label: 'Expired', Icon: Clock, value: invitationStats.expired, ...INVITE_CARD_TONES.orange },
                 { key: 'started', label: 'In Progress', Icon: Play, value: invitationStats.started, ...INVITE_CARD_TONES.cyan },
-                { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationStats.completed, ...INVITE_CARD_TONES.blue },
-                /* Terminated — candidate walked out mid-assessment. Its own card
-                   so these never read as "Invite Failed", which means email
-                   delivery. Mirrors the AI Interview tracker. */
-                { key: 'abandoned', label: 'Terminated', Icon: Ban, value: invitationStats.terminated, ...INVITE_CARD_TONES.red },
+                { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationStats.completed, ...INVITE_CARD_TONES.green },
                 {
                   key: 'completion-rate',
                   label: 'Completion Rate',
                   Icon: TrendingUp,
                   value: `${invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}%`,
                   filterable: false,
-                  ...INVITE_CARD_TONES.blue,
+                  ...INVITE_CARD_TONES.purple,
                 },
               ]}
             />
+
+            {/* Row clicks open Result Details only for Completed / Auto
+                Completed invites — this note tells the recruiter why the
+                other rows don't navigate anywhere. Same banner treatment as
+                the Note on the duplicate-resume dialog, in the brand blue
+                info tone. */}
+            <div className="px-2.5 sm:px-6 pt-2 sm:pt-3 flex-shrink-0">
+              <div className="flex items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
+                <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                  <span className="font-semibold">Note:</span> Results are available only for candidates with Complete status. Other candidates&rsquo; results are not available.
+                </p>
+              </div>
+            </div>
 
             <InviteFilterBar
               filters={trackingFilters}
@@ -3833,9 +3921,41 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 setTrackingFilters(nextFilters);
                 setTrackingCurrentPage(1);
               }}
-              statusOptions={ASSESSMENT_INVITE_STATUS_OPTIONS}
+              /* Invite Failed / Terminated are dropped from this popup's status
+                 dropdown (their stat cards are gone too); the shared list is
+                 filtered here so the JD-level tracker keeps its full set.
+                 "All Statuses" stays first — selecting it clears the status
+                 narrowing, i.e. every status is included again. */
+              statusOptions={ASSESSMENT_INVITE_STATUS_OPTIONS.filter(
+                (option) => !['failed', 'abandoned'].includes(option.value)
+              )}
               searchPlaceholder="Search by candidate name, email, or CID..."
             />
+
+            {/* Select All — same control, wording and placement as the AI
+                Interviews tracker's bulk-select bar. */}
+            {!isLoadingInvitations && trackingSelectableIds.length > 0 && (
+              <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={toggleTrackingSelectAll}
+                  className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+                >
+                  <span
+                    role="checkbox"
+                    aria-checked={allTrackingSelected}
+                    className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                      allTrackingSelected
+                        ? 'bg-brand-blue border-brand-blue'
+                        : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
+                    }`}
+                  >
+                    {allTrackingSelected && <Check className="w-3 h-3 text-white" />}
+                  </span>
+                  Select All ({trackingSelectableIds.length})
+                </button>
+              </div>
+            )}
 
             {/* Invitations Table / Cards */}
             {/* overflow-hidden, not overflow-auto: the shell below is the
@@ -3873,6 +3993,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <table className="w-max min-w-full">
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
+                        <th className="w-8 py-3 pl-4 pr-0" aria-label="Select" />
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
@@ -3899,34 +4020,43 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {trackingInvitations.map((invitation: any) => {
                         const getStatusBadge = (inv: any) => {
                           const s = inv.status;
-                          const base = "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ring-1";
+                          /* Base and palette copied verbatim from the AI Interviews
+                             tracker's AIInviteStatusBadge so both popups read the same. */
+                          const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
+                          /* Past its configured expiry with no terminal state or unit
+                             consumed: the invite IS expired now, regardless of what the
+                             backend last wrote. Resolved here so the cell shows only the
+                             Expired badge — never the stale pre-expiry status. */
+                          if (isInvExpired(inv)) {
+                            return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Clock className="w-3 h-3" /> Expired</span>;
+                          }
                           if (s === 'completed' || inv.completed_at) {
                             const autoCompleted = inv.termination_code === 'TENANT_SESSION_TIMEOUT';
                             return (
                               <span
-                                className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}
+                                className={`${base} bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300 ring-green-200 dark:ring-green-500/25`}
                                 title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined}
                               >
                                 <CheckCircle className="w-3 h-3" />
                                 Completed
-                                {autoCompleted && <span className="text-brand-blue/80">(Auto)</span>}
+                                {autoCompleted && <span className="text-green-600/80 dark:text-green-400/80">(Auto)</span>}
                               </span>
                             );
                           }
                           if (s === 'failed') {
-                            return <span className={`${base} bg-red-50 text-red-600 ring-red-200`}><X className="w-3 h-3" /> Invite Failed</span>;
+                            return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><X className="w-3 h-3" /> Invite Failed</span>;
                           }
                           if (s === 'bounced' || inv.bounced_at) {
-                            return <span className={`${base} bg-red-50 text-red-600 ring-red-200`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
+                            return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
                           }
                           if (s === 'expired') {
                             return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Clock className="w-3 h-3" /> Expired</span>;
                           }
                           if (s === 'abandoned') {
-                            return <span className={`${base} bg-red-50 text-red-600 ring-red-200`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
+                            return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
                           }
                           if (s === 'started' || inv.started_at) {
-                            return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Play className="w-3 h-3" /> In Progress</span>;
+                            return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`}><Play className="w-3 h-3" /> In Progress</span>;
                           }
                           if (s === 'opened' || inv.opened_at) {
                             return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`} title="Consent accepted — the candidate is on the system check step"><Monitor className="w-3 h-3" /> System Check</span>;
@@ -3934,7 +4064,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           if (s === 'sent' || inv.sent_at) {
                             return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-3 h-3" /> Invited</span>;
                           }
-                          return <span className={`${base} bg-gray-100 text-gray-600 ring-gray-200`}><Clock className="w-3 h-3" /> Pending</span>;
+                          return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`}><Clock className="w-3 h-3" /> Pending</span>;
                         };
   
                         // Show an additional "Expired" badge alongside the base status
@@ -3957,8 +4087,48 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               .toUpperCase()
                               .slice(0, 2) || '??';
   
+                        /* Only Completed / Auto Completed rows are interactive —
+                           other statuses have no Result Details to open, so the
+                           row carries no click handler, button role, or pointer
+                           cursor. */
+                        const rowOpensDetails = opensTrackedDetails(invitation);
+
                         return (
-                          <tr key={invitation.id} className="hover:bg-brand-blue/5 transition-colors">
+                          <tr
+                            key={invitation.id}
+                            onClick={rowOpensDetails ? () => openTrackedInviteResult(invitation) : undefined}
+                            onKeyDown={rowOpensDetails ? (e: React.KeyboardEvent) => {
+                              // The row is exposed as a button to assistive tech,
+                              // so it has to answer to the button keys too.
+                              if (e.key !== 'Enter' && e.key !== ' ') return;
+                              e.preventDefault();
+                              openTrackedInviteResult(invitation);
+                            } : undefined}
+                            role={rowOpensDetails ? 'button' : undefined}
+                            tabIndex={rowOpensDetails ? 0 : undefined}
+                            title={rowOpensDetails ? 'View result details' : undefined}
+                            className={rowOpensDetails
+                              ? 'transition-colors cursor-pointer hover:bg-brand-blue/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40'
+                              : 'transition-colors hover:bg-gray-50 dark:hover:bg-slate-800'}
+                          >
+                            {/* stopPropagation: Complete rows navigate on click —
+                                ticking a checkbox must never also open the row. */}
+                            <td className="py-3 pl-4 pr-0 align-top" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                type="button"
+                                role="checkbox"
+                                aria-checked={trackingSelectedIds.has(invitation.id)}
+                                aria-label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
+                                onClick={() => toggleTrackingSelectOne(invitation.id)}
+                                className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                                  trackingSelectedIds.has(invitation.id)
+                                    ? 'bg-brand-blue border-brand-blue'
+                                    : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
+                                }`}
+                              >
+                                {trackingSelectedIds.has(invitation.id) && <Check className="w-3 h-3 text-white" />}
+                              </button>
+                            </td>
                             <td className="py-3 px-4 align-top">
                               <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
                                 {invitation.candidate_display_id || '-'}
@@ -3979,26 +4149,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                             </td>
                             <td className="py-3 px-4 align-top">
-                              <div>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  {getStatusBadge(invitation)}
-                                  {isInvExpired(invitation) && (
-                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20">
-                                      <Clock className="w-3 h-3" /> Expired
-                                    </span>
-                                  )}
-                                </div>
-                                {invitation.status === 'failed' && (
-                                  <p className="text-xs text-red-600 mt-1">Incorrect Email</p>
-                                )}
-                              </div>
+                              {/* Status is the badge alone. Expiry is resolved inside
+                                  getStatusBadge, so a lapsed invite renders one Expired
+                                  badge — not its old status with a chip beside it — and
+                                  the failed row's "Incorrect Email" note now lives only
+                                  in the Edit Email flow. */}
+                              {getStatusBadge(invitation)}
                             </td>
                                 <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
                                   <div className="space-y-1">
                                     {invitation.sent_at && (
                                       <div className="flex items-center gap-2">
                                         <Mail className="w-3 h-3 text-brand-blue flex-shrink-0" />
-                                        <span>Invited: {formatIST(invitation.sent_at)}</span>
+                                        <span className="text-brand-blue">Invited: {formatIST(invitation.sent_at)}</span>
                                   </div>
                                 )}
                                 {invitation.bounced_at && (
@@ -4010,19 +4173,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {invitation.opened_at && (
                                   <div className="flex items-center gap-2">
                                     <Monitor className="w-3 h-3 text-brand-cyan flex-shrink-0" />
-                                    <span>System Check: {formatIST(invitation.opened_at)}</span>
+                                    <span className="text-brand-cyan">System Check: {formatIST(invitation.opened_at)}</span>
                                   </div>
                                 )}
                                 {invitation.started_at && (
                                   <div className="flex items-center gap-2">
                                     <Play className="w-3 h-3 text-brand-orange-deep flex-shrink-0" />
-                                    <span>Started: {formatIST(invitation.started_at)}</span>
+                                    <span className="text-brand-orange-deep">Started: {formatIST(invitation.started_at)}</span>
                                   </div>
                                 )}
                                 {invitation.completed_at && (
                                   <div className="flex items-center gap-2">
-                                    <CheckCircle className="w-3 h-3 text-brand-blue flex-shrink-0" />
-                                    <span>Completed: {formatIST(invitation.completed_at)}</span>
+                                    <CheckCircle className="w-3 h-3 text-green-600 flex-shrink-0" />
+                                    <span className="text-green-600">Completed: {formatIST(invitation.completed_at)}</span>
                                   </div>
                                 )}
                                 {invitation.terminated_at && !invitation.completed_at && (
@@ -4124,7 +4287,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 </td>
                               );
                             })()}
-                            <td className="py-3 px-4 align-top tf-sticky-col">
+                            <td className="py-3 px-4 align-top tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                               {/* Actions collapse into a kebab menu. This uses Radix's
                                   DropdownMenu rather than the hand-rolled absolute
                                   dropdown the cards above use, because this table sits
@@ -4196,11 +4359,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         // the user on the aggregate results page.
                                         <DropdownMenuItem
                                           disabled={!invitation.attempt_id}
-                                          onSelect={() => router.push(
-                                            `/recruitment/assessments/${selectedAssessmentForTracking.id}/results/details`
-                                            + `?candidate_id=${invitation.attempt_id}`
-                                            + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
-                                          )}
+                                          onSelect={() => openTrackedInviteResult(invitation)}
                                         >
                                           <Eye className="w-3.5 h-3.5" />
                                           View Results

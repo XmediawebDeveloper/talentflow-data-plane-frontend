@@ -1037,6 +1037,11 @@ const DroppableCommentsContainer = ({ category, onDrop, children }: DroppableCom
 // two fallback buckets (e.g. the old 2-3/4-7 split left 3-4 uncovered), which
 // makes bucket-matching logic fall through to its "no containing range"
 // branch and pick the wrong level for perfectly valid years like 3.5.
+// Mirrors MAX_EXPERIENCE_YEARS in the backend's openai_service.py. Keep the two in sync:
+// the recruiter is blocked here with a visible error, and extraction drops anything above
+// this there, so no path can store an impossible requirement.
+const MAX_EXPERIENCE_YEARS = 50;
+
 const FALLBACK_EXPERIENCE_LEVELS: ExperienceLevel[] = [
   { id: 1, code: 'entry', label: 'Entry Level (0-2 Years)', min_years: 0, max_years: 2, sort_order: 1, is_active: true },
   { id: 2, code: 'junior', label: 'Junior Level (2-4 Years)', min_years: 2, max_years: 4, sort_order: 2, is_active: true },
@@ -1740,8 +1745,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     return experienceLevels.find((level) => level.code === normalized);
   };
 
+  // Mirrors the backend's _fold_months_into_years(). "7 years 6 months" is ONE figure
+  // (7.5), not a 7 with a stray 6. The months must sit IMMEDIATELY after the years so an
+  // unrelated later duration is never absorbed, and only a sub-year remainder folds -
+  // "5 years, 18 months of which in leadership" is a separate duration, not a fraction.
+  const foldMonthsIntoYears = (text: string): string =>
+    text.replace(
+      /(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)\s*(?:,\s*)?(?:and\s+)?(\d{1,2})\s*(?:months?|mos?\b)/gi,
+      (whole, y: string, m: string) => {
+        const months = Number(m);
+        if (months <= 0 || months >= 12) return whole;
+        return `${Number((Number(y) + months / 12).toFixed(2))} years`;
+      },
+    );
+
   const inferExperienceRangeFromCustomValue = (value?: string | null): { experienceMin?: number; experienceMax?: number } => {
-    const normalized = value?.toLowerCase().trim() || '';
+    // Fold "N years M months" BEFORE any pattern below sees the text.
+    const normalized = foldMonthsIntoYears(value?.toLowerCase().trim() || '');
     if (!normalized) return {};
 
     // Mirrors the backend's _EXP_RANGE_RE. The optional `\+?` and unit word after the
@@ -1749,7 +1769,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // match as ONE range. Without them the match died at the first number, fell through
     // to the `plusMatch` branch below, and returned min=5 with NO max - dropping the
     // upper bound the recruiter typed. Keep in sync with the backend regex.
-    const rangeMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)?\s*(?:-|to|–)\s*(\d{1,2}(?:\.\d+)?)\s*\+?/);
+    // The unit after the SECOND number is MANDATORY, mirroring the backend's
+    // _EXP_RANGE_RE. Without it this matched any "A to B" pair: "Manage a team of 5-8
+    // people" became 5-8 years, and "12 to 24 months" became 12-24 YEARS. The unit
+    // before the connector stays optional so "5+ years to 8 years" still matches.
+    const rangeMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)?\s*(?:-|to|–)\s*(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)\b/);
     if (rangeMatch) {
       const first = Number(rangeMatch[1]);
       const second = Number(rangeMatch[2]);
@@ -1769,7 +1793,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     }
 
-    const minimumMatch = normalized.match(/(?:minimum|min\.?|at least)\s*(\d{1,2}(?:\.\d+)?)/);
+    // Unit required, mirroring the backend. Without it "minimum 6 months" matched
+    // "minimum 6" and returned SIX YEARS.
+    const minimumMatch = normalized.match(/(?:minimum|min\.?|at least)\s*(?:of\s*)?(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)\b/);
     if (minimumMatch) {
       const years = Number(minimumMatch[1]);
       if (!Number.isNaN(years)) {
@@ -1782,6 +1808,33 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const years = Number(singleMatch[1]);
       if (!Number.isNaN(years)) {
         return { experienceMin: years };
+      }
+    }
+
+    // MONTHS-ONLY fallback, mirroring the backend's _months_only_range(). Reached only
+    // when the text states no YEAR figure at all, so months can never dilute a stated
+    // year. Without this, "6 months of experience" parsed to nothing, the level was left
+    // to a guess, and the field came back as a whole band ("2 to 4 years") that the JD
+    // never asked for. Months-only requirements are normal outside office hiring:
+    // "18 months clinical" (nursing), "12 to 24 months" (apprenticeships, trades),
+    // "6 months" (hospitality, retail, warehouse).
+    const monthRange = normalized.match(/(\d{1,3})\s*(?:months?)?\s*(?:-|to|\u2013)\s*(\d{1,3})\s*months?/);
+    if (monthRange) {
+      const lo = Number(monthRange[1]) / 12;
+      const hi = Number(monthRange[2]) / 12;
+      if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
+        return {
+          experienceMin: Number(Math.min(lo, hi).toFixed(2)),
+          experienceMax: Number(Math.max(lo, hi).toFixed(2)),
+        };
+      }
+    }
+
+    const monthsOnly = normalized.match(/(\d{1,3})\s*months?/);
+    if (monthsOnly) {
+      const years = Number(monthsOnly[1]) / 12;
+      if (!Number.isNaN(years)) {
+        return { experienceMin: Number(years.toFixed(2)) };
       }
     }
 
@@ -6305,9 +6358,29 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       return Number.isNaN(n) ? null : n;
                     };
                     const commitYears = (nextFrom: string, nextTo: string) => {
+                      const fromYears = toYears(nextFrom);
+                      const toYearsValue = toYears(nextTo);
+
+                      // HARD CEILING. A career longer than MAX_EXPERIENCE_YEARS is not a
+                      // real requirement, so the recruiter is TOLD rather than silently
+                      // corrected - clamping 51 to 50 would look like their own input.
+                      // The value is not stored, so an out-of-range figure can never reach
+                      // the JD. The backend enforces the same ceiling for extracted values,
+                      // where there is no one to show an error to.
+                      const over = [fromYears, toYearsValue].find(
+                        (v) => v !== null && v > MAX_EXPERIENCE_YEARS,
+                      );
+                      if (over !== undefined && over !== null) {
+                        setValidationErrors(prev => ({
+                          ...prev,
+                          experience: `Experience cannot exceed ${MAX_EXPERIENCE_YEARS} years.`,
+                        }));
+                        return;
+                      }
+
                       const canonical = buildExperienceYearsString(
-                        toYears(nextFrom),
-                        toYears(nextTo)
+                        fromYears,
+                        toYearsValue
                       );
                       setShowCustomExperienceInput(false);
                       setExperienceYearsExplicit(nextFrom !== '' || nextTo !== '');
