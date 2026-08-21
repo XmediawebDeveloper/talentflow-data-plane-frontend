@@ -1575,6 +1575,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // so unplugging the mic pauses the interview like covering the camera does.
   const [audioDeviceLost, setAudioDeviceLost] = useState(false);
   const audioDeviceLostRef = useRef(false);
+  // The audio-input device the interview STARTED on — captured ONCE and never
+  // reassigned. `pinnedAudioDeviceIdRef` cannot be used for unplug detection
+  // because it FOLLOWS the fallback: when the headset is pulled and the answer
+  // mic reopens on the built-in device, the pin is rewritten to that built-in,
+  // so a "does the pinned device still exist?" check would always say yes. This
+  // ref stays on the ORIGINAL device so its disappearance is detectable.
+  const interviewMicDeviceIdRef = useRef<string | undefined>(undefined);
   const mediaPauseCountdownIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaPauseTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mirrors proctoringState so the setTimeout fired at ARM time can read
@@ -1766,19 +1773,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         const devices = await navigator.mediaDevices.enumerateDevices();
         if (cancelled) return;
         const inputs = devices.filter(d => d.kind === 'audioinput' && d.deviceId && d.deviceId !== 'default' && d.deviceId !== 'communications');
-        const pinned = pinnedAudioDeviceIdRef.current;
-        // Only meaningful once we've pinned the interview's mic device.
-        if (!pinned) return;
-        const pinnedExists = inputs.some(d => d.deviceId === pinned);
-        if (!pinnedExists && !audioDeviceLostRef.current) {
-          // The interview's mic (e.g. wired headset) is gone → pause.
+        // Compare against the ORIGINAL device (never the drifting pin) so a
+        // silent fallback to the built-in mic doesn't hide the unplug.
+        const orig = interviewMicDeviceIdRef.current;
+        if (!orig) return; // not captured yet — nothing to compare
+        const origExists = inputs.some(d => d.deviceId === orig);
+        if (!origExists && !audioDeviceLostRef.current) {
+          // The device the interview started on (e.g. wired headset) is gone → pause.
           setAudioDeviceLost(true);
           candidateAIInterviewService.reportProctorEvent(token, {
             event_type: 'microphone_disabled',
             severity: 'severe',
             details: { phase: 'in_interview', reason: 'audio_device_unplugged' },
           }).catch(() => { /* best-effort */ });
-        } else if (pinnedExists && audioDeviceLostRef.current) {
+        } else if (origExists && audioDeviceLostRef.current) {
           // The original device is back (candidate re-plugged) → resume.
           setAudioDeviceLost(false);
         }
@@ -3236,6 +3244,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     const sharedDeviceId = sharedTrack.getSettings?.().deviceId;
     if (sharedDeviceId) {
       pinnedAudioDeviceIdRef.current = sharedDeviceId;
+      // Capture the ORIGINAL device once (never overwrite) for unplug detection.
+      if (!interviewMicDeviceIdRef.current) interviewMicDeviceIdRef.current = sharedDeviceId;
     }
 
     const micType = classifyMicType(sharedTrack.label);
@@ -3289,6 +3299,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         const actualDeviceId = liveTrack.getSettings?.().deviceId;
         if (actualDeviceId) {
           pinnedAudioDeviceIdRef.current = actualDeviceId;
+          if (!interviewMicDeviceIdRef.current) interviewMicDeviceIdRef.current = actualDeviceId;
         }
         // Detect device type, set its profile (gain/silence/EC), and tune EC.
         const micType = classifyMicType(liveTrack.label);
@@ -6315,6 +6326,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             console.log(`[Recording ${timestamp}] Device ID captured: ${actualDeviceId}`);
             pinnedAudioDeviceIdRef.current = actualDeviceId;
           }
+          if (actualDeviceId && !interviewMicDeviceIdRef.current) interviewMicDeviceIdRef.current = actualDeviceId;
         } catch {
           setActiveMicLabel(audioTracks[0].label || "Selected microphone");
           console.log(`[Recording ${timestamp}] getSettings not supported, skipping device ID capture`);
