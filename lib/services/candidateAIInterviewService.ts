@@ -382,41 +382,6 @@ export const candidateAIInterviewService = {
     return res.json();
   },
 
-  /** Send a frame of the shared screen DURING the interview; the backend
-   *  vision-LLM says whether a separate third-party / OS screen-recording
-   *  application is visibly running.
-   *
-   *  Distinct from verifyShareBarHidden on purpose: that prompt is written for
-   *  the pre-start desktop view and treats timers, red borders and record-shaped
-   *  icons as suspicious — which is precisely what our own interview UI renders
-   *  once it is fullscreen, so reusing it mid-interview flagged innocent
-   *  candidates constantly. This endpoint's prompt starts from "our app fills
-   *  this screen, ignore it" and only reports a recorder it can positively name.
-   *  The backend already discards low-confidence positives.
-   *
-   *  Pass `baseline` — a frame captured seconds after the interview started, a
-   *  moment the pre-start gate already proved clean — to get the far more
-   *  reliable diff check instead. */
-  async detectScreenRecorder(
-    token: string,
-    blob: Blob,
-    baseline?: Blob | null,
-  ): Promise<{ recorder_detected: boolean; confidence?: string; mode?: string; reason?: string }> {
-    const fd = new FormData();
-    fd.append('file', blob, 'screen.jpg');
-    // When present, the backend switches from an absolute judgement to a DIFF
-    // against this known-clean reference frame — our own UI is in both images
-    // and cancels out, which is what stops it being mistaken for a recorder.
-    if (baseline) fd.append('baseline', baseline, 'baseline.jpg');
-    const url = `${API_BASE_URL}/candidate/ai-interview/${token}/detect-screen-recorder`;
-    const res = await fetch(url, { method: 'POST', body: fd });
-    if (!res.ok) {
-      const t = await res.text().catch(() => res.statusText);
-      throw new Error(`Recorder detect failed (${res.status}): ${t}`);
-    }
-    return res.json();
-  },
-
   async getAvailableLanguages(token: string): Promise<AvailableLanguagesResponse> {
     const response = await candidateApi.get<AvailableLanguagesResponse>(
       `/candidate/ai-interview/${token}/languages`,

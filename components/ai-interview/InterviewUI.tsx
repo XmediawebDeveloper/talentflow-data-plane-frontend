@@ -82,14 +82,6 @@ interface InterviewUIProps {
    * chat avatar. Null/undefined (e.g. identity step skipped) → the "You" text
    * avatar is shown instead. */
   candidatePhotoUrl?: string | null;
-  /** True while the portal's in-interview vision poll can SEE a screen-recording
-   * application on the shared screen (its toolbar, REC/timer badge, recording
-   * border, or its minimised tray-icon cluster). Pauses the interview for as
-   * long as it stays true — no grace window and no termination: the candidate
-   * simply cannot proceed until the recorder is fully closed. The portal owns
-   * the detection + the popup; this prop owns the PAUSE (backend question timer
-   * cancelled, Bina silenced, Next Q disabled) and the automatic resume. */
-  screenRecorderDetected?: boolean;
 }
 
 interface Message {
@@ -525,7 +517,7 @@ const LiveAIBubbleMemo = memo(LiveAIBubble);
 const MAX_HEADSET_DISCONNECTS = 3;                               // the 3rd one terminates
 const ALLOWED_HEADSET_DISCONNECTS = MAX_HEADSET_DISCONNECTS - 1; // = 2 tolerated
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl, screenRecorderDetected = false }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl }: InterviewUIProps) {
   // ── Effective device capability ──────────────────────────────────────────
   // The portal detects this at the system-check step, but a RESUMED session (or
   // any entry path that skips system check) arrives with deviceCapability=undefined
@@ -1569,12 +1561,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // isCameraActive/isMicrophoneActive back to true automatically once the
   // device is live again — this effect just reacts to that transition.
   const MEDIA_PAUSE_GRACE_MS = 180000; // 3 minutes
-  // Screen-recorder pause state (armed by the screenRecorderDetected effect
-   // below). Declared up here so the camera/mic pause effect can check it before
-   // sending session_resume — the backend's session_paused is a single flag, so
-   // whichever pause recovers first must not un-pause the other one's hold.
-  const recorderPausedRef = useRef(false);
-  const recorderPauseStartMsRef = useRef<number | null>(null);
 
   const [isMediaPaused, setIsMediaPaused] = useState(false);
   const [mediaPauseSecondsRemaining, setMediaPauseSecondsRemaining] = useState<number | null>(null);
@@ -1707,12 +1693,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       pauseQuestionTimerRef.current();
 
       const reason = mediaDownReason(proctoringState.isCameraActive, proctoringState.isMicrophoneActive);
-      // Skip if a screen-recorder pause already holds the session paused —
-      // re-sending re-snapshots _paused_at_monotonic and drops the pause credit
-      // accumulated so far (symmetric with the guard in the recorder effect).
-      if (!recorderPausedRef.current) {
-        try { wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason })); } catch { /* best-effort */ }
-      }
+      try { wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason })); } catch { /* best-effort */ }
       if (!proctoringState.isCameraActive) {
         candidateAIInterviewService.reportProctorEvent(token, {
           event_type: 'camera_disabled',
@@ -1752,19 +1733,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       setIsMediaPaused(false);
       setMediaPauseSecondsRemaining(null);
 
-      // Only actually resume the backend if a screen recorder isn't ALSO holding
-      // the session paused — otherwise reconnecting a headset would silently
-      // release the recorder pause and let the interview run with the recorder up.
-      // The local per-question clock is unfrozen on the same condition, so the
-      // two stay in lockstep: still held → stay frozen.
-      if (!recorderPausedRef.current) {
-        try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
-        // Unfreeze the answer clock at exactly the value it held when the
-        // device dropped — pause/resumeQuestionTimer accumulate the paused
-        // span into questionTimerPausedMsRef, which computeQuestionRemaining
-        // subtracts, so no part of the outage counts against the candidate.
-        resumeQuestionTimerRef.current();
-      }
+      try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+      // Unfreeze the answer clock at exactly the value it held when the
+      // device dropped — pause/resumeQuestionTimer accumulate the paused
+      // span into questionTimerPausedMsRef, which computeQuestionRemaining
+      // subtracts, so no part of the outage counts against the candidate.
+      resumeQuestionTimerRef.current();
       candidateAIInterviewService.reportProctorEvent(token, {
         event_type: 'session_resumed',
         severity: 'low',
@@ -1821,68 +1795,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Belt-and-braces cleanup on unmount so a stray timer can never fire into
   // an unmounted tree (mirrors the pattern used for other proctoring timers).
   useEffect(() => () => clearMediaPauseTimers(), [clearMediaPauseTimers]);
-
-  // ── Screen recorder detected mid-interview: pause + auto-resume ──────────
-  // The portal polls the shared-screen feed through the same vision check that
-  // gates the pre-start "hide the share bar" step, and flips
-  // `screenRecorderDetected` while a recorder is visible on the candidate's
-  // screen. Unlike the camera/mic pause above there is NO grace countdown and
-  // NO termination: the interview simply holds for as long as the recorder is
-  // up, and resumes by itself the moment the poll comes back clean (i.e. the
-  // candidate stopped AND fully closed the recorder — a recorder merely
-  // minimised to the tray still reads as detected, so stopping alone will not
-  // release the pause).
-  //
-  // `session_pause` cancels the backend question timer, snapshots the question
-  // Bina was mid-way through and kills her in-flight TTS; `session_resume`
-  // shifts question_start_time forward by the pause duration and re-speaks that
-  // question, so the candidate loses none of their answer window.
-  useEffect(() => {
-    if (!isConnected) return;
-
-    if (screenRecorderDetected && !recorderPausedRef.current) {
-      if (isClosingRef.current) return; // interview already wrapping up — don't arm
-      recorderPausedRef.current = true;
-      recorderPauseStartMsRef.current = Date.now();
-
-      // If the media pause already holds the session, the backend is paused
-      // already — re-sending would re-snapshot _paused_at_monotonic and lose the
-      // elapsed pause credit the candidate is owed on resume.
-      if (!isMediaPausedRef.current) {
-        try {
-          wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason: 'screen_recording' }));
-        } catch { /* best-effort */ }
-      }
-      // NOT reported from here. The portal's vision watch raises this episode on
-      // the shared ScreenRecordingGuard bus the moment it confirms the recorder,
-      // and useScreenRecordingDefense reports it once from there — with the
-      // vector, the model's reason and whether the check was escalated. Reporting
-      // again here put two screen_recording_attempt rows on the recruiter
-      // timeline for one recorder.
-      console.warn('[Interview] screen recorder detected — interview paused');
-    } else if (!screenRecorderDetected && recorderPausedRef.current) {
-      const startedAt = recorderPauseStartMsRef.current;
-      const pauseDurationMs = startedAt !== null ? Math.max(0, Date.now() - startedAt) : null;
-      recorderPausedRef.current = false;
-      recorderPauseStartMsRef.current = null;
-
-      // Mirror of the guard in the media-pause effect: if the camera/mic is also
-      // down, that pause still owns the hold and its own recovery will resume.
-      if (!isMediaPausedRef.current) {
-        try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
-      }
-      candidateAIInterviewService.reportProctorEvent(token, {
-        event_type: 'session_resumed',
-        severity: 'low',
-        details: {
-          reason: 'screen_recorder_closed',
-          pause_duration_ms: pauseDurationMs,
-          pause_duration_seconds: pauseDurationMs !== null ? Math.round(pauseDurationMs / 1000) : null,
-        },
-      }).catch(() => { /* best-effort */ });
-      console.log('[Interview] screen recorder gone — interview resumed');
-    }
-  }, [screenRecorderDetected, isConnected, token]);
 
   // Fullscreen — disabled (no popup/overlay)
   // Face detection & gaze tracking (Phase 2 & 3)
@@ -9414,7 +9326,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       || questionTimerSeconds === null
                       || nextSkipInFlight
                       || isMediaPaused
-                      || screenRecorderDetected
                     }
                     onClick={() => {
                       if (questionTimerExpired) return;
@@ -9423,9 +9334,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       // Camera/mic disconnected (headset pulled, etc.) — the interview
                       // is paused and nothing can advance it until the device is back.
                       if (isMediaPausedRef.current) return;
-                      // Screen recorder running — the interview is paused until
-                      // the candidate closes it; nothing may advance it.
-                      if (recorderPausedRef.current) return;
                       // Re-entry guard: if another skip is still in flight (no new
                       // question_timer_started has arrived yet), ignore the click
                       // completely. This mirrors the disabled prop but covers the
@@ -9573,7 +9481,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       questionTimerExpiredRef.current = false;
                     }}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold border transition-all duration-200 ${
-                      questionTimerExpired || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) || isMediaPaused || screenRecorderDetected
+                      questionTimerExpired || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) || isMediaPaused
                         ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400'
                         : 'bg-white hover:bg-violet-50 border-violet-200 text-violet-700 hover:border-violet-400'
                     }`}
