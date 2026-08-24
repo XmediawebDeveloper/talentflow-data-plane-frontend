@@ -2345,8 +2345,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ========== FULLSCREEN PROMPT ==========
   if (step === 'fullscreen_prompt') {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <div className={`bg-white rounded-2xl shadow-2xl w-full p-8 md:p-10 ${screenShareDeclined ? 'max-w-2xl' : 'max-w-5xl'}`}>
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
+        <div className={`bg-white rounded-2xl shadow-2xl w-full my-auto p-6 md:p-8 ${screenShareDeclined ? 'max-w-2xl' : 'max-w-7xl'}`}>
 
           {screenShareDeclined ? (
             /* ── Screen share declined — block the interview ── */
@@ -2387,18 +2387,18 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           ) : (
             /* ── Normal fullscreen prompt ── */
             <>
-              <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Monitor className="w-10 h-10 text-indigo-600" />
+              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Monitor className="w-8 h-8 text-indigo-600" />
               </div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
                 Enter Fullscreen Mode
               </h1>
-              <p className="text-gray-600 mb-6 text-center text-sm">
+              <p className="text-gray-600 mb-4 text-center text-sm">
                 The AI interview runs in fullscreen with Entire Screen sharing and is actively proctored, to ensure a focused and fair environment. Please read the rules below before you begin.
               </p>
               {/* Two-column rules: blue "Interview Rules" (left) + orange
                   "Not allowed during the interview" (right). */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5 text-left">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-left">
                 {/* LEFT — blue: what to do */}
                 <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5">
                   <p className="font-semibold text-indigo-900 mb-3 text-sm">Interview Rules:</p>
@@ -2448,7 +2448,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               )}
 
               {/* Consent checkbox — the Share button stays disabled until ticked. */}
-              <label className="flex items-start gap-3 mb-5 cursor-pointer select-none text-left">
+              <label className="flex items-start gap-3 mb-4 cursor-pointer select-none text-left">
                 <input
                   type="checkbox"
                   checked={rulesConsent}
@@ -2488,24 +2488,24 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ========== FINAL CONSENT (shown in fullscreen, right before the interview starts) ==========
   if (step === 'final_consent') {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-10">
-          {/* Prominent do-not-refresh warning — reloading here drops fullscreen
-              + screen sharing and sends the candidate back to re-share. */}
-          <div className="flex items-center justify-center gap-2 bg-red-600 text-white font-semibold text-sm md:text-base rounded-xl px-4 py-3 mb-6 text-center shadow-sm">
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-            Do not refresh this page
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <AlertTriangle className="w-8 h-8 text-amber-600" />
           </div>
-          <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <AlertTriangle className="w-10 h-10 text-amber-600" />
-          </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
             Before we begin
           </h1>
-          <p className="text-gray-600 mb-6 text-center text-sm">
+          <p className="text-gray-600 mb-2 text-center text-sm">
             You are now in fullscreen with screen sharing active. Please confirm that you understand the actions that are not allowed. Your interview begins as soon as you accept.
           </p>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6 text-left">
+          {/* Do-not-refresh warning, inline: reloading here drops fullscreen +
+              screen sharing and sends the candidate back to re-share. */}
+          <p className="text-xs font-semibold text-red-600 mb-4 text-center flex items-center justify-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            Do not refresh this page — it drops screen sharing and restarts setup.
+          </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-left">
             <p className="font-semibold text-amber-900 mb-3 text-sm flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               Not allowed during the interview
@@ -2567,33 +2567,34 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ========== HIDE SCREEN-SHARE BAR (vision-LLM verified, pre-start) ==========
   if (step === 'hide_share_bar') {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-10">
-          <div className="flex items-center justify-center gap-2 bg-red-600 text-white font-semibold text-sm md:text-base rounded-xl px-4 py-3 mb-6 text-center shadow-sm">
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-            Do not refresh this page
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Monitor className="w-8 h-8 text-blue-600" />
           </div>
-          <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Monitor className="w-10 h-10 text-blue-600" />
-          </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
             One last step — hide the sharing bar
           </h1>
-          <p className="text-gray-600 mb-6 text-center text-sm leading-relaxed">
+          <p className="text-gray-600 mb-2 text-center text-sm leading-relaxed">
             At the bottom of your screen you&apos;ll see a bar that says
             <b> &ldquo;…is sharing your screen&rdquo;</b>. Please click its
             <b> Hide</b> button so it doesn&apos;t cover the interview. Screen
             sharing stays ON — this only collapses the bar. Then press
             <b> Continue</b> and we&apos;ll verify it before starting.
           </p>
-          <p className="text-gray-500 mb-6 text-center text-xs leading-relaxed -mt-2">
+          <p className="text-gray-500 mb-2 text-center text-xs leading-relaxed">
             Also close any screen-recording software (e.g. OBS, ScreenRec,
             Bandicam, Camtasia, Game Bar) before continuing — the interview
             cannot start while one is running.
           </p>
+          {/* Do-not-refresh warning, inline (replaces the old red top bar). */}
+          <p className="text-xs font-semibold text-red-600 mb-4 text-center flex items-center justify-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            Do not refresh this page — it drops screen sharing and restarts setup.
+          </p>
 
           {/* Visual guide — a mock of the Chrome sharing bar with Hide highlighted */}
-          <div className="bg-gray-100 border border-gray-200 rounded-xl p-4 mb-6">
+          <div className="bg-gray-100 border border-gray-200 rounded-xl p-3 mb-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2 text-center">Look for this bar and click &ldquo;Hide&rdquo;</p>
             <div className="mx-auto max-w-md flex items-center gap-3 bg-white rounded-lg shadow-md border border-gray-200 px-3 py-2.5">
               <span className="w-4 h-4 rounded-sm bg-blue-500 shrink-0" />

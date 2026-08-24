@@ -1065,6 +1065,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // recording continues. The candidate either speaks again (popup closes, the
   // 15s window restarts) or clicks Submit to finalize and move on.
   const DONE_CONFIRM_SILENCE_MS = 15000; // AC2: 15 seconds
+  // How much speech the candidate must produce before the "Are you done?"
+  // popup closes. Without a gate the popup dismissed on the VAD's first
+  // qualifying audio chunk, so a cough or a nearby voice closed it and it
+  // reappeared 15s later.
+  //
+  // CUMULATIVE, not continuous: this counts TOTAL speech since the popup was
+  // raised, so ordinary thinking pauses do not wipe progress. A continuous
+  // gate at this length could strand the popup on screen forever — someone
+  // resuming as "So... the main challenge was... handling the framework"
+  // never produces 2.5s of unbroken sound, yet is plainly answering.
+  const SPEECH_RESUME_CONFIRM_MS = 2500;
+  // Total speech-like ms observed since the popup was raised. Reset when the
+  // popup is raised (fresh cycle) and when it closes — never by a pause.
+  const speechAccumMsRef = useRef(0);
+  // Previous poll timestamp, so each tick adds real elapsed time rather than
+  // assuming the interval fired exactly on schedule.
+  const speechTickAtRef = useRef<number | null>(null);
   const [midSilenceConfirm, setMidSilenceConfirm] = useState(false);
   const midSilenceConfirmRef = useRef(false);
   const setMidSilenceConfirm_ = useCallback((val: boolean) => {
@@ -7207,38 +7224,96 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   });
 
   // ── AII14: silence → "Are you done?" confirmation driver ───────────────────
-  // Polls the VAD's silenceStartRef every 200ms while the candidate's turn is
-  // open. Once silence has run CONTINUOUSLY for 15s, raise the confirmation
-  // popup. The instant the candidate speaks again the VAD resets
-  // silenceStartRef → the popup closes and the 15s window starts over (AC3).
+  // Polls the VAD's silenceStartRef while the candidate's turn is open. Once
+  // silence has run CONTINUOUSLY for 15s, raise the confirmation popup. When
+  // the candidate speaks again the popup closes and the 15s window starts over
+  // (AC3).
   //
   // Measured against DONE_CONFIRM_SILENCE_MS directly, NOT against the VAD's own
   // silence window: the story fixes this at 15s, while the VAD window is a
   // tuning value that varies per device/deployment (and no longer ends the turn
   // anyway now that the auto-advance is parked).
   //
+  // DISMISSAL REQUIRES CUMULATIVE SPEECH (SPEECH_RESUME_CONFIRM_MS, 2.5s).
+  // Each 100ms tick where the silence clock is clear adds its real elapsed time
+  // to speechAccumMsRef; the popup closes once the total crosses the threshold.
+  // Pauses stop the count but never reset it, so a candidate resuming in bursts
+  // still gets there — which a continuous gate could not guarantee.
+  //
+  // The per-tick delta is CLAMPED: a throttled/backgrounded tab can stall the
+  // interval for seconds, and an unclamped delta would credit all of that as
+  // speech and dismiss the popup instantly on the next tick.
+  //
   // AII14-PARKED: the previous version of this effect drove the 10→1 countdown
   // and is preserved verbatim in ./parked/silence-auto-advance.parked.md
   useEffect(() => {
-    if (!isRecording) { setMidSilenceConfirm_(false); setMidSilenceCountdown_(null); return; }
+    if (!isRecording) {
+      setMidSilenceConfirm_(false);
+      setMidSilenceCountdown_(null);
+      speechAccumMsRef.current = 0;
+      speechTickAtRef.current = null;
+      return;
+    }
     const id = setInterval(() => {
       if (!isRecordingRef.current || isAiSpeakingRef.current || isProcessingRef.current) {
         setMidSilenceConfirm_(false);
+        speechAccumMsRef.current = 0;
+        speechTickAtRef.current = null;
         return;
       }
+      const nowTs = Date.now();
+      // Real elapsed time since the last tick, clamped so a throttled tab
+      // cannot credit a multi-second stall as speech.
+      const dt = speechTickAtRef.current === null
+        ? 0
+        : Math.min(nowTs - speechTickAtRef.current, 500);
+      speechTickAtRef.current = nowTs;
+
       const start = silenceStartRef.current;
       if (start == null) {
-        // Candidate is speaking (VAD cleared the silence clock) — close the
-        // popup and re-arm the one-shot hold log for the NEXT pause (AC3).
-        silenceHoldLoggedRef.current = false;
-        setMidSilenceConfirm_(false);
+        // Silence clock is clear — the candidate is making speech-like sound.
+        // Only counts while the popup is actually up; speech before that is
+        // just a normal answer and must not pre-charge the next cycle.
+        if (midSilenceConfirmRef.current) {
+          speechAccumMsRef.current += dt;
+          if (speechAccumMsRef.current >= SPEECH_RESUME_CONFIRM_MS) {
+            // Enough real speech — close the popup and re-arm the one-shot
+            // hold log for the NEXT pause (AC3).
+            silenceHoldLoggedRef.current = false;
+            speechAccumMsRef.current = 0;
+            setMidSilenceConfirm_(false);
+          }
+        }
         return;
       }
-      setMidSilenceConfirm_((Date.now() - start) >= DONE_CONFIRM_SILENCE_MS);
-    }, 200);
+      // Silence again. Deliberately does NOT reset speechAccumMsRef — that is
+      // what makes the gate cumulative rather than continuous.
+      // RAISE ONLY — never lower the popup from this branch.
+      //
+      // This looked like it wanted to be a plain assignment, and that is a trap:
+      // a 200ms cough makes the VAD clear silenceStartRef and then RE-ARM it to
+      // the moment silence resumed, so `Date.now() - start` drops back to ~0. A
+      // plain assignment therefore evaluates false and dismisses the popup —
+      // straight past the SPEECH_RESUME_CONFIRM_MS gate above, which is exactly
+      // the flicker this gate exists to prevent.
+      //
+      // So the popup is monotonic once shown: it goes down ONLY via the
+      // confirmed-speech path above, Submit/Next, or the turn ending (the
+      // isAiSpeaking/isProcessing guard and the effect cleanup).
+      if ((nowTs - start) >= DONE_CONFIRM_SILENCE_MS) {
+        if (!midSilenceConfirmRef.current) {
+          // Fresh cycle — start the cumulative count from zero so leftover
+          // credit from a previous popup cannot dismiss this one instantly.
+          speechAccumMsRef.current = 0;
+        }
+        setMidSilenceConfirm_(true);
+      }
+    }, 100);
     return () => {
       clearInterval(id);
       silenceHoldLoggedRef.current = false;
+      speechAccumMsRef.current = 0;
+      speechTickAtRef.current = null;
       setMidSilenceConfirm_(false);
     };
   }, [isRecording, setMidSilenceConfirm_, setMidSilenceCountdown_, DONE_CONFIRM_SILENCE_MS]);
