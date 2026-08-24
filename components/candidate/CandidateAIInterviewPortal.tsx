@@ -619,22 +619,36 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   //   • 'interview' — the WebSocket takes over the SAME lock (same cid), so we
   //     must not double-heartbeat/release here;
   //   • terminal states ('completed'/'terminated'/'error') — which release it.
+  // Release the lease the moment the candidate reaches a terminal state (the
+  // WS already released on 'interview' end). Its own tiny effect keyed on
+  // `step` so the heartbeat effect below never has to re-subscribe on a step
+  // change. Best-effort — the 90s stale window backstops a missed release.
   useEffect(() => {
     if (!token) return;
-    const NON_LEASE_STEPS: Step[] = ['loading', 'interview', 'completed', 'terminated', 'error'];
-    if (NON_LEASE_STEPS.includes(step)) {
-      // Release the lease when the candidate reaches a terminal state (the WS
-      // already released on 'interview' end). Best-effort.
-      if (step === 'completed' || step === 'terminated' || step === 'error') {
-        candidateAIInterviewService
-          .sessionLease(token, getAiClientSessionId(token), 'release')
-          .catch(() => { /* stale-timeout backstops it */ });
-      }
-      return;
+    if (step === 'completed' || step === 'terminated' || step === 'error') {
+      candidateAIInterviewService
+        .sessionLease(token, getAiClientSessionId(token), 'release')
+        .catch(() => { /* stale-timeout backstops it */ });
     }
+  }, [step, token]);
+
+  // True only during the PRE-INTERVIEW steps that hold the lease (registration
+  // → consent → system-check → voice → share-bar). False for 'loading', the
+  // live 'interview' (the WS holds the lock then), and terminal states. Keying
+  // the heartbeat effect on this boolean — NOT on `step` — means it
+  // re-subscribes exactly ONCE when the lease phase is entered (so the first
+  // claim is immediate) and does NOT re-fire on every sub-step change (which
+  // was the request flood). It also carries no interval during non-lease steps.
+  const isLeaseStep =
+    step !== 'loading' && step !== 'interview' &&
+    step !== 'completed' && step !== 'terminated' && step !== 'error';
+
+  useEffect(() => {
+    if (!token || !isLeaseStep) return;
     const cid = getAiClientSessionId(token);
     let cancelled = false;
     const beat = async () => {
+      if (cancelled) return;
       try {
         const r = await candidateAIInterviewService.sessionLease(token, cid, 'acquire');
         if (cancelled) return;
@@ -655,10 +669,16 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         // Network error — don't block a genuine candidate on a transient failure.
       }
     };
-    beat();
-    // Heartbeat every 5s (well under the 90s stale window) so the block appears
-    // fast for a 2nd opener and the holder's lease never lapses mid-flow.
-    const iv = setInterval(beat, 5000);
+    beat();  // immediate claim the moment the lease phase is entered
+    // Heartbeat every 10s (well under the 90s stale window). PERF: this effect
+    // is keyed on [token, isLeaseStep], so the interval is created ONCE when the
+    // lease phase is entered and torn down when it ends — it does NOT re-fire on
+    // every pre-interview sub-step. Previously it was keyed on [step] AND fired
+    // an immediate beat on every re-subscribe, so each of the ~10 pre-interview
+    // step transitions spawned an extra immediate POST — a burst of ~29 rapid
+    // /session-lease calls that saturated the browser's per-host connection
+    // pool and made the page crawl. Single interval per lease phase fixes it.
+    const iv = setInterval(beat, 10000);
 
     // ── Release the lease when this page goes away ───────────────────────────
     // Without this, closing the tab/browser leaves the lease looking ALIVE (its
@@ -689,7 +709,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       window.removeEventListener('pagehide', releaseNow);
       window.removeEventListener('beforeunload', releaseNow);
     };
-  }, [step, token]);
+  }, [token, isLeaseStep]);
 
   // Tick the "available in …" countdown down locally, once per second. The
   // heartbeat only re-syncs it every 5s, which would make the number visibly
