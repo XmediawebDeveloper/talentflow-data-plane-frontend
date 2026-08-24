@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, GitBranch } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -16,7 +16,17 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { jdService, JDLineageVersion } from '@/lib/services/jdService';
+import { jdService, JDLineageVersion, JDResponse } from '@/lib/services/jdService';
+import { formatJobExperienceText } from '@/lib/utils/jobExperience';
+/* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
+   the version table sits inside an overflow-x-auto shell, which would clip an
+   absolutely positioned menu — Radix portals it out of the scroll container. */
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -179,6 +189,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
      lineage key so re-expanding is instant and never refetches. */
   const [versionLineages, setVersionLineages] = useState<Record<string, JDLineageVersion[]>>({});
   const [loadingLineages, setLoadingLineages] = useState<Set<string>>(new Set());
+  /* Full JD record per lineage version id. The lineage endpoint only carries
+     id/title/version/status/dates, but the expanded Version History table also
+     shows experience, industry, applicants and author — fetched once per
+     version when its lineage first loads. A version whose fetch fails simply
+     shows dashes in those cells; nothing is invented client-side. */
+  const [versionDetails, setVersionDetails] = useState<Record<string, JDResponse>>({});
 
   const loadLineage = async (key: string, jobId: string) => {
     if (versionLineages[key] || loadingLineages.has(key)) return;
@@ -186,6 +202,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     try {
       const lineage = await jdService.getLineageVersions(jobId);
       setVersionLineages(prev => ({ ...prev, [key]: lineage || [] }));
+      // Enrich each version with its own JD record, in parallel; every result
+      // lands as it arrives so the table fills in progressively.
+      (lineage || []).forEach((version) => {
+        jdService
+          .getById(version.id)
+          .then((full) => {
+            setVersionDetails(prev => (prev[version.id] ? prev : { ...prev, [version.id]: full }));
+          })
+          .catch(() => { /* row falls back to the lineage fields + dashes */ });
+      });
     } catch {
       // Leave it uncached so the next expand retries rather than showing an
       // empty history as if the job genuinely had one version.
@@ -1561,17 +1587,30 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 const creationMethodConfig = getCreationMethodConfig(job.creation_method);
                 const versionKey = job.job_id || job.id;
                 const versionsExpanded = expandedVersions.has(versionKey);
-                /* Only jobs with history get the control. `versionNumber` is the
-                   row's own place in the lineage — the number already on screen
-                   in the vN chip — so anything past v1 has earlier versions to
-                   show. The second test catches the case where the list returned
-                   the siblings itself and the row happens to be v1. */
+                /* Only jobs with MORE THAN ONE version get the control.
+                   `versionNumber` is the row's own place in the lineage — the
+                   number already on screen in the vN chip — so anything past v1
+                   has earlier versions to show. The second test catches the
+                   case where the list returned the siblings itself and this row
+                   happens to be v1 — counting DISTINCT version numbers, not
+                   rows: a republished JD arrives as several rows sharing the
+                   same job_id and the same v1, and a raw row count read those
+                   duplicates as "multiple versions", putting View Versions on
+                   single-version jobs. */
+                const distinctVersionCount = new Set(
+                  (allVersionGroups.get(versionKey) ?? [job]).map((sibling) => sibling.versionNumber ?? 1),
+                ).size;
                 const hasVersionHistory =
-                  (job.versionNumber ?? 1) > 1 ||
-                  (allVersionGroups.get(versionKey)?.length ?? 1) > 1;
+                  (job.versionNumber ?? 1) > 1 || distinctVersionCount > 1;
                 const lineage = versionLineages[versionKey];
                 const lineageLoading = loadingLineages.has(versionKey);
-                const jobVersions = lineage ?? [];
+                /* The row above IS the latest version — repeating it in the
+                   history would duplicate what the user is already looking at,
+                   so only previous versions are listed. The id check backstops
+                   a lineage row whose is_latest_version flag is missing. */
+                const jobVersions = (lineage ?? []).filter(
+                  (v) => !v.is_latest_version && v.id !== job.id,
+                );
 
                 return (
                   <div
@@ -1702,14 +1741,20 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         </div>
                       </div>
 
-                      {/* Actions — icon row, then the version toggle beneath it */}
-                      <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      {/* Actions — a full-height column: icon row pinned at
+                          the top, View Versions pinned at the bottom-right
+                          corner of the card. self-stretch + justify-between
+                          make the column span the row's full height (set by
+                          the job info beside it), so the button lands flush
+                          with the right edge, level with the card's last
+                          content row. */}
+                      <div className="flex flex-col items-end justify-between gap-2 self-stretch flex-shrink-0">
                       <div className="flex flex-wrap gap-2 items-start justify-end">
                         {/* Edit Button - icon only (hidden for Disabled JDs) */}
                         {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
-                            className="h-7 w-7 flex items-center justify-center bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-all"
+                            className="h-7 w-7 flex items-center justify-center bg-white text-brand-orange border border-brand-orange/40 rounded-md hover:bg-brand-orange/10 hover:border-brand-orange transition-all"
                             aria-label="Edit" title="Edit"
                           >
                             <Edit className="w-3.5 h-3.5" />
@@ -1720,7 +1765,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         {job.status.toLowerCase() !== 'draft' && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                            className="h-7 w-7 flex items-center justify-center bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-all"
+                            className="h-7 w-7 flex items-center justify-center bg-white text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all"
                             aria-label="View" title="View"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -1734,7 +1779,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                               e.stopPropagation();
                               setActiveDropdown(activeDropdown === job.id ? null : job.id);
                             }}
-                            className="h-7 w-7 flex items-center justify-center bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-all"
+                            className="h-7 w-7 flex items-center justify-center bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-all"
                           >
                             <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
                           </button>
@@ -1855,31 +1900,38 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                           )}
                         </div>
                       </div>
-                        {/* View Versions — on the row itself, directly under the
-                            icon buttons, rather than hidden inside the ⋮ menu.
-                            Shown only for jobs that have earlier versions: on a
-                            v1 job it would open onto a single entry repeating the
-                            row above it. Toggles the history tree below the card;
-                            the label flips so the control says what the next click
-                            does. stopPropagation because the card behind it opens
-                            the job. */}
+                        {/* View Versions — pinned at the bottom of the actions
+                            column, i.e. the card's bottom-right corner. Shown
+                            only for jobs that have earlier versions: on a v1
+                            job it would open onto a single entry repeating the
+                            row above it. The label flips so the control says
+                            what the next click does. Closed it's a solid
+                            brand-blue button with white text (same idiom as
+                            the Select All active state); open it flips to the
+                            brand-sky tint (plus the table shell's ring and
+                            shadow) matching the version table's header, so the
+                            active button and the panel it opened read as one
+                            unit. stopPropagation because the card behind it
+                            opens the job. */}
                         {hasVersionHistory && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleVersions(versionKey, job.id);
-                          }}
-                          aria-expanded={versionsExpanded}
-                          className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all ${
-                            versionsExpanded
-                              ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
-                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                          }`}
-                          title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                        >
-                          <GitBranch className="w-3.5 h-3.5" />
-                          {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                        </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleVersions(versionKey, job.id);
+                            }}
+                            aria-expanded={versionsExpanded}
+                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all duration-200 ${
+                              versionsExpanded
+                                ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10'
+                                : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                            }`}
+                            title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                          >
+                            {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                            {/* Chevron after the label; flips while the history
+                                is open so the button reads as a collapser. */}
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                          </button>
                         )}
                       </div>
                     </div>
@@ -1898,10 +1950,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         click on the row behind it. */}
                     {versionsExpanded && (
                       <div
-                        className="mt-3 pt-3 border-t border-gray-100 md:pl-[3.25rem]"
+                        className="mt-3 pt-3 border-t border-gray-100"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <p className="text-xs font-medium text-gray-500 mb-1">Version history</p>
+                        <div className="flex items-center gap-2 mb-2.5">
+                          <FileText className="w-4 h-4 text-brand-blue" />
+                          <p className="text-sm font-semibold text-gray-900">Version History</p>
+                        </div>
                         {lineageLoading && !lineage ? (
                           <div className="flex items-center gap-2 py-2 text-xs text-gray-500">
                             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -1910,52 +1965,339 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         ) : jobVersions.length === 0 ? (
                           <p className="py-2 text-xs text-gray-500">No other versions of this job.</p>
                         ) : (
-                          <ul>
-                            {jobVersions.map((version, index) => {
-                              const isLast = index === jobVersions.length - 1;
-                              /* Lineage rows carry the raw DB status ('published');
-                                 the status helpers here speak the Job type's
-                                 capitalised form. */
-                              const rawStatus = version.status || '';
-                              const versionStatus = getDisplayStatus(
-                                rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase(),
-                                version.current_version,
-                              );
-                              const versionStatusConfig = getStatusConfig(versionStatus);
-                              return (
-                                <li key={version.id} className="relative pl-8 py-1.5">
-                                  {/* connector: down to centre, stub across, and on
-                                      through only while rows remain */}
-                                  <span aria-hidden="true" className="absolute left-2 top-0 h-1/2 w-px bg-gray-200" />
-                                  {!isLast && (
-                                    <span aria-hidden="true" className="absolute left-2 top-1/2 bottom-0 w-px bg-gray-200" />
-                                  )}
-                                  <span aria-hidden="true" className="absolute left-2 top-1/2 w-4 h-px bg-gray-200" />
-                                  <Link
-                                    href={`/recruitment/job-details?id=${version.id}`}
-                                    className="w-full flex flex-wrap items-center gap-2 text-left rounded-lg px-2 py-1 -mx-2 hover:bg-gray-50 transition-colors"
-                                  >
-                                    <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1">
-                                      <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
-                                      v{version.version_number ?? 1}
-                                    </span>
-                                    {version.is_latest_version && (
-                                      <span className="px-2 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20">
-                                        Latest
-                                      </span>
-                                    )}
-                                    <span className={`px-2 py-0.5 rounded-full text-xs ${versionStatusConfig.bg} ${versionStatusConfig.text} border ${versionStatusConfig.border} flex items-center gap-1`}>
-                                      <div className={`w-1.5 h-1.5 rounded-full ${versionStatusConfig.dot}`}></div>
-                                      {versionStatus}
-                                    </span>
-                                    <span className="text-xs text-gray-500">
-                                      {formatLastUpdated(version.published_at || version.created_at)}
-                                    </span>
-                                  </Link>
-                                </li>
-                              );
-                            })}
-                          </ul>
+                          /* Table format mirrors the main list's columns so a
+                             version row reads like the job row above it. Every
+                             cell is real data — lineage fields plus the
+                             version's own JD record; anything still loading or
+                             unavailable shows a dash, never a placeholder. */
+                          /* Full container width: the table fills the card and
+                             distributes its columns across the available
+                             space, so there is no dead white strip on the
+                             right. The min-width keeps narrow screens
+                             scrolling inside the shell instead of crushing the
+                             columns. The brand-tinted border marks this as the
+                             ACTIVE version table — it only exists while View
+                             Versions is open. */
+                          /* One shell owns BOTH scroll axes (x on narrow
+                             screens, y past 3 rows), so header and body live
+                             in one <table> and their columns can never drift
+                             apart. The y-cap only exists when there are more
+                             than 3 versions: header (~37px) + 3 typical
+                             two-line rows (~66px each). The header row is
+                             sticky top; the Action column is sticky right;
+                             the Action HEADER is pinned on both axes so the
+                             corner never scrolls away. */
+                          <div
+                            className={`overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 ${
+                              jobVersions.length > 3 ? 'overflow-y-auto max-h-[240px] overscroll-contain' : ''
+                            }`}
+                          >
+                            <table className="w-full min-w-[960px] text-left">
+                              <thead>
+                                {/* Header tint: bg-brand-sky (light sky blue).
+                                    To revert to the peach, swap bg-brand-sky
+                                    back to bg-brand-peach — it is on every th
+                                    below, NOT on the tr: a sticky th only
+                                    carries a background painted on the cell
+                                    itself, and a bg-less th lets body text
+                                    show through (the mobile header-overlap
+                                    bug). The bottom hairline is an inset
+                                    shadow, not border-b — collapsed-table
+                                    borders detach from sticky cells and would
+                                    scroll away with the body. Each column
+                                    declares a min width so the auto layout
+                                    can't crush headings into each other on
+                                    narrow screens. */}
+                                <tr>
+                                  {[
+                                    { label: 'Version', minW: 'min-w-[72px]' },
+                                    { label: 'Job Title', minW: 'min-w-[160px]' },
+                                    { label: 'Status', minW: 'min-w-[110px]' },
+                                    { label: 'Experience / Industry', minW: 'min-w-[150px]' },
+                                    { label: 'Location', minW: 'min-w-[120px]' },
+                                    { label: 'Work Mode / Type', minW: 'min-w-[130px]' },
+                                    { label: 'Posted On / By', minW: 'min-w-[130px]' },
+                                    { label: 'Last Updated', minW: 'min-w-[110px]' },
+                                    { label: 'Applicants', minW: 'min-w-[90px]' },
+                                    { label: 'Action', minW: 'min-w-[64px]' },
+                                  ].map(({ label, minW }) => (
+                                    <th
+                                      key={label}
+                                      /* z order, back to front: body cells
+                                         (auto) < sticky Action td (5) <
+                                         sticky header (7) < Action corner (8)
+                                         — so rows slide under the header and
+                                         the header slides under nothing. */
+                                      className={`sticky top-0 py-2.5 px-3 text-xs font-bold text-gray-900 whitespace-nowrap bg-brand-sky ${minW} ${
+                                        label === 'Action'
+                                          ? 'right-0 z-[8] shadow-[inset_0_-1px_0_#e5e7eb,-1px_0_0_0_#e5e7eb]'
+                                          : 'z-[7] shadow-[inset_0_-1px_0_#e5e7eb]'
+                                      }`}
+                                    >
+                                      {label}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200">
+                                {jobVersions.map((version) => {
+                                  /* Lineage rows carry the raw DB status ('published');
+                                     the status helpers here speak the Job type's
+                                     capitalised form. */
+                                  const rawStatus = version.status || '';
+                                  const versionStatus = getDisplayStatus(
+                                    rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase(),
+                                    version.current_version,
+                                  );
+                                  const versionStatusConfig = getStatusConfig(versionStatus);
+                                  /* A Job-shaped stand-in pointed at THIS
+                                     version's id, so the ⋮ menu below reuses
+                                     the exact same handlers the latest-version
+                                     row's menu calls — no duplicate logic. The
+                                     plain capitalised status (not the display
+                                     label, which can read "Republished")
+                                     drives the same per-status gates. */
+                                  const versionPlainStatus = rawStatus
+                                    ? rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase()
+                                    : job.status;
+                                  const versionJob: Job = {
+                                    ...job,
+                                    id: version.id,
+                                    title: version.title || job.title,
+                                    status: versionPlainStatus as Job['status'],
+                                    currentVersion: version.current_version ?? job.currentVersion,
+                                    versionNumber: version.version_number,
+                                  };
+                                  const detail = versionDetails[version.id];
+                                  const experienceText = detail
+                                    ? formatJobExperienceText({
+                                        jobLevel: detail.job_level || detail.experience_level,
+                                        experienceMin: detail.experience_min,
+                                        experienceMax: detail.experience_max,
+                                      })
+                                    : '';
+                                  const postedOn = version.published_at || detail?.published_at || version.created_at || detail?.created_at;
+                                  const lastUpdated = detail?.updated_at || version.published_at || version.created_at;
+                                  /* NO transform on the row itself: a
+                                     transformed <tr> becomes the containing
+                                     block for its cells, which silently kills
+                                     position:sticky on the pinned Action cell.
+                                     The hover pop lives on the Job Title text
+                                     instead (group-hover below). */
+                                  return (
+                                    <tr
+                                      key={version.id}
+                                      className="group transition-colors duration-200 ease-out hover:bg-brand-blue/[0.03]"
+                                    >
+                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                        <span className="inline-flex items-center gap-1.5">
+                                          <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20">
+                                            v{version.version_number ?? 1}
+                                          </span>
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 px-3 text-sm text-gray-900 max-w-[220px] overflow-hidden align-middle" title={version.title || detail?.title || ''}>
+                                        {/* The "job role" pops on row hover — a
+                                            gentle scale from the left edge with
+                                            a smooth transition. Scoped to this
+                                            span so the sticky Action column is
+                                            unaffected. */}
+                                        <span className="inline-block max-w-full truncate transform-gpu transition-transform duration-200 ease-out origin-left group-hover:scale-105">
+                                          {version.title || detail?.title || '—'}
+                                        </span>
+                                      </td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                        <div className="flex flex-col items-start gap-1">
+                                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${versionStatusConfig.bg} ${versionStatusConfig.text} border ${versionStatusConfig.border}`}>
+                                            <span className={`w-1.5 h-1.5 rounded-full ${versionStatusConfig.dot}`} />
+                                            {versionStatus}
+                                          </span>
+                                          {/* AI / Manual — same badge the job rows
+                                              carry, from this version's own record.
+                                              Rendered only once the detail fetch
+                                              lands so a loading row doesn't claim
+                                              "Manual" by default. */}
+                                          {detail && (() => {
+                                            const methodConfig = getCreationMethodConfig(detail.creation_method);
+                                            return (
+                                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${methodConfig.bg} ${methodConfig.text} border ${methodConfig.border}`}>
+                                                <span className={`w-1.5 h-1.5 rounded-full ${methodConfig.dot}`} />
+                                                {methodConfig.label}
+                                              </span>
+                                            );
+                                          })()}
+                                        </div>
+                                      </td>
+                                      {/* Experience / Industry — one column,
+                                          stacked, same space-saving treatment
+                                          as Posted On / By below. Industry is
+                                          run through the same formatter as the
+                                          job rows so it never shows the raw
+                                          snake_case value. */}
+                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                        <div className="text-sm text-gray-700">
+                                          {experienceText || '—'}
+                                        </div>
+                                        <div className="text-xs text-gray-500 max-w-[180px] truncate" title={detail?.industry_type ? formatIndustryType(detail.industry_type) : ''}>
+                                          {detail?.industry_type ? formatIndustryType(detail.industry_type) : '—'}
+                                        </div>
+                                      </td>
+                                      {/* Location — this version's own record;
+                                          single field first, else the cities
+                                          from the locations list. */}
+                                      {(() => {
+                                        const locationText =
+                                          detail?.location
+                                          || (detail?.locations || []).map((loc: any) => loc?.city).filter(Boolean).join(', ');
+                                        return (
+                                          <td className="py-2.5 px-3 text-sm text-gray-700 whitespace-nowrap max-w-[160px] truncate align-middle" title={locationText || ''}>
+                                            {locationText || '—'}
+                                          </td>
+                                        );
+                                      })()}
+                                      {/* Work Mode / Type — stacked: employment
+                                          type over remote mode, from this
+                                          version's own record. A missing half
+                                          simply drops out; nothing is invented. */}
+                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                        <div className="text-sm text-gray-700">
+                                          {detail?.employment_type ? formatEmploymentType(detail.employment_type) : '—'}
+                                        </div>
+                                        {detail?.remote_type && (
+                                          <div className="text-xs text-gray-500">
+                                            {formatEmploymentType(detail.remote_type)}
+                                          </div>
+                                        )}
+                                      </td>
+                                      {/* Posted On / By — one column, date over
+                                          author, so the table stays narrower
+                                          without dropping either fact. */}
+                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                        <div className="text-sm text-gray-700">
+                                          {postedOn ? formatISTDate(postedOn) : '—'}
+                                        </div>
+                                        <div className="text-xs text-gray-500 max-w-[160px] truncate" title={detail?.created_by_name || ''}>
+                                          {detail?.created_by_name || '—'}
+                                        </div>
+                                      </td>
+                                      <td className="py-2.5 px-3 text-sm text-gray-700 whitespace-nowrap align-middle">
+                                        {lastUpdated ? formatISTDate(lastUpdated) : '—'}
+                                      </td>
+                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                        <span className="inline-flex items-center gap-1.5 text-sm text-gray-700">
+                                          <Users className="w-4 h-4 text-gray-400" />
+                                          {detail?.applicants_count ?? '—'}
+                                        </span>
+                                      </td>
+                                      {/* Action — pinned right so it stays
+                                          reachable while the table scrolls
+                                          sideways. Opaque background (plus a
+                                          solid hover tint matching the row's
+                                          translucent one) so content sliding
+                                          underneath never shows through; the
+                                          left hairline makes it read as
+                                          floating over the scrolling cells. */}
+                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] bg-white group-hover:bg-[#f8f9fc] shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200">
+                                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                          <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                              <button
+                                                className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors"
+                                                title="More actions"
+                                                aria-label="More actions"
+                                              >
+                                                <MoreVertical className="w-4 h-4" />
+                                              </button>
+                                            </DropdownMenuTrigger>
+                                            {/* Same options, gates and handlers
+                                                as the latest-version row's ⋮
+                                                menu, driven by versionJob so
+                                                every action targets this
+                                                version's own id. */}
+                                            <DropdownMenuContent align="end" className="w-52">
+                                              <DropdownMenuItem asChild>
+                                                <Link href={`/recruitment/job-details?id=${version.id}`}>
+                                                  <Eye className="w-4 h-4" />
+                                                  View Details
+                                                </Link>
+                                              </DropdownMenuItem>
+                                              {/* View Applicants - Hide for Draft */}
+                                              {versionJob.status.toLowerCase() !== 'draft' && (
+                                                <DropdownMenuItem onSelect={() => (onViewApplicants || onViewJob)(versionJob)}>
+                                                  <Users className="w-4 h-4" />
+                                                  View Applicants
+                                                </DropdownMenuItem>
+                                              )}
+                                              {/* Quick Actions — same gates as the latest-version menu */}
+                                              {onAIMatch && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
+                                                <DropdownMenuItem onSelect={() => onAIMatch(versionJob)}>
+                                                  <Brain className="w-4 h-4" />
+                                                  AI Talent Match
+                                                </DropdownMenuItem>
+                                              )}
+                                              {onScoreResumes && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
+                                                <DropdownMenuItem onSelect={() => onScoreResumes(versionJob)}>
+                                                  <Target className="w-4 h-4" />
+                                                  Score Resumes
+                                                </DropdownMenuItem>
+                                              )}
+                                              {/* Disable Job for Published */}
+                                              {versionJob.status === 'Published' && onDisableJob && (
+                                                <DropdownMenuItem
+                                                  onSelect={() => onDisableJob(versionJob)}
+                                                  className="text-orange-700 focus:text-orange-700"
+                                                >
+                                                  <Ban className="w-4 h-4" />
+                                                  Disable Job
+                                                </DropdownMenuItem>
+                                              )}
+                                              {/* Re-enable JD for Disabled */}
+                                              {versionJob.status === 'Disabled' && onRepublishJob && (
+                                                <DropdownMenuItem
+                                                  onSelect={() => onRepublishJob(versionJob)}
+                                                  className="text-green-700 focus:text-green-700"
+                                                >
+                                                  <CheckCircle2 className="w-4 h-4" />
+                                                  Re-enable JD
+                                                </DropdownMenuItem>
+                                              )}
+                                              {/* Archive Job */}
+                                              {versionJob.status !== 'Archived' && onArchiveJob && (
+                                                <DropdownMenuItem onSelect={() => onArchiveJob(versionJob)}>
+                                                  <Archive className="w-4 h-4" />
+                                                  Archive Job
+                                                </DropdownMenuItem>
+                                              )}
+                                              {/* Unarchive Job */}
+                                              {versionJob.status === 'Archived' && onUnarchiveJob && (
+                                                <DropdownMenuItem
+                                                  onSelect={() => onUnarchiveJob(versionJob)}
+                                                  className="text-green-700 focus:text-green-700"
+                                                >
+                                                  <RefreshCw className="w-4 h-4" />
+                                                  Unarchive Job
+                                                </DropdownMenuItem>
+                                              )}
+                                              {/* Delete Job */}
+                                              {onDeleteJob && (
+                                                <DropdownMenuItem
+                                                  onSelect={() => onDeleteJob(versionJob)}
+                                                  className="text-red-600 focus:text-red-600"
+                                                >
+                                                  <Trash2 className="w-4 h-4" />
+                                                  Delete Job
+                                                </DropdownMenuItem>
+                                              )}
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
                         )}
                       </div>
                     )}

@@ -252,6 +252,10 @@
   /* Orange family (accent / warning brand) */
   --brand-orange: #ed881c;
   --brand-orange-deep: #d76011;
+  /* Soft peach — reusable table-header background (bg-brand-peach) */
+  --brand-peach: #f9d0a4;
+  /* Light sky blue — alternative table-header background (bg-brand-sky) */
+  --brand-sky: #e0f2fe;
 
   /* ── Marketing palette (public pages) ───────────────────────────────────
      The marketing pages can't reuse bg-white / text-brand-blue: the dark-mode
@@ -498,6 +502,8 @@
   --color-brand-teal: var(--brand-teal);
   --color-brand-orange: var(--brand-orange);
   --color-brand-orange-deep: var(--brand-orange-deep);
+  --color-brand-peach: var(--brand-peach);
+  --color-brand-sky: var(--brand-sky);
 
   /* Marketing palette utilities — bg-mkt-surface, text-mkt-ink,
      border-mkt-accent, bg-mkt-amber/10, and so on. Alpha modifiers work
@@ -1634,6 +1640,68 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
 }
 .dark .card-hover:hover {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+}
+
+/* Compact glass surface for dashboard/header cards. */
+.liquid-glass-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(203, 213, 225, 0.78);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 18px rgba(15, 23, 42, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: saturate(160%) blur(18px);
+  backdrop-filter: saturate(160%) blur(18px);
+}
+.liquid-glass-card > * {
+  position: relative;
+  z-index: 1;
+}
+.liquid-glass-card::before,
+.liquid-glass-card::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+.liquid-glass-card::before {
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), transparent 46%);
+  opacity: 0.85;
+}
+.liquid-glass-card::after {
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0;
+  height: 1px;
+  background: rgba(15, 23, 42, 0.04);
+}
+.liquid-glass-card:hover {
+  border-color: rgba(148, 163, 184, 0.8);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.05),
+    0 10px 22px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+.liquid-glass-card:active {
+  background: rgba(248, 250, 252, 0.88);
+}
+.dark .liquid-glass-card {
+  border-color: rgba(71, 85, 105, 0.7);
+  background: rgba(15, 23, 42, 0.62);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.28),
+    0 8px 18px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.dark .liquid-glass-card::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 48%);
+}
+.dark .liquid-glass-card::after {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* ── Section header row (title + inline action) ──────────────

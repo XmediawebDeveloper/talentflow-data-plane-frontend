@@ -1,4 +1,5 @@
-import { ArrowUpRight, Bell, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Moon, Sun } from 'lucide-react';
+import { ArrowUpRight, Bell, Calendar, ChevronDown, ClipboardList, Coins, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Moon, Sun } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
@@ -521,12 +522,16 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     return { remaining: totalRemaining, limit: totalLimit, used: totalUsed };
   };
 
-  // Labels for each quota key shown in the plan dropdown
-  const quotaLabels: Record<string, string> = {
-    RU: 'Resume Storage',
-    RS: 'Resume Scoring',
-    AS: 'Assessments',
-    AIU: 'AI Interviews',
+  // Label, module icon and brand tint for each quota key shown in the plan
+  // dropdown. Icons match the sidebar's modules (FolderOpen = My Resumes,
+  // FileSearch = Resume Scoring, ClipboardList = Assessments, Video = AI
+  // Interviews); tints come from the brand palette so each row keeps its own
+  // identity without leaving the design system.
+  const quotaMeta: Record<string, { label: string; icon: LucideIcon; tile: string; bar: string; left: string }> = {
+    RU: { label: 'Resume Storage', icon: FolderOpen, tile: 'bg-brand-blue/10 text-brand-blue', bar: 'bg-brand-blue', left: 'text-brand-blue' },
+    RS: { label: 'Resume Scoring', icon: FileSearch, tile: 'bg-brand-teal/10 text-brand-teal', bar: 'bg-brand-teal', left: 'text-brand-teal' },
+    AS: { label: 'Assessments', icon: ClipboardList, tile: 'bg-brand-orange/10 text-brand-orange-deep', bar: 'bg-brand-orange', left: 'text-brand-orange-deep' },
+    AIU: { label: 'AI Interviews', icon: Video, tile: 'bg-brand-cyan/10 text-brand-cyan', bar: 'bg-brand-cyan', left: 'text-brand-cyan' },
   };
 
   const totalUnits = calculateTotalUnits();
@@ -550,6 +555,30 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const isPendingStatus = tenantStatus === 'PENDING' || tenantStatus === 'SUSPENDED' || tenantStatus === 'LOCKED';
   const isExpiredSubscription = ['expired', 'inactive'].includes((quotaData?.subscription_status || '').toLowerCase());
 
+  // Plan meta line for the dropdown header: billing cadence, renewal date and
+  // days left. Every piece is optional — a segment that has no data simply
+  // doesn't render rather than showing a placeholder.
+  const rawBillingPeriod = quotaData?.plan_info?.billing_period;
+  const planPeriodLabel = quotaData?.is_trial
+    ? 'Trial plan'
+    : rawBillingPeriod
+    ? `${rawBillingPeriod.charAt(0).toUpperCase()}${rawBillingPeriod.slice(1).toLowerCase()} plan`
+    : null;
+  const renewalSource = quotaData?.plan_expiry_date
+    || quotaData?.billing_period?.end
+    || quotaData?.trial_end_date
+    || quotaData?.trial_info?.trial_end_date;
+  const renewalDate = renewalSource ? new Date(renewalSource) : null;
+  const renewalValid = !!(renewalDate && !isNaN(renewalDate.getTime()));
+  const renewalLabel = renewalValid
+    ? renewalDate!.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+  const planDaysLeft = renewalValid
+    ? Math.max(0, Math.ceil((renewalDate!.getTime() - Date.now()) / 86400000))
+    : quotaData?.is_trial
+    ? quotaData?.trial_info?.days_remaining ?? null
+    : null;
+
   const roleLabels: Record<string, string> = {
     tenant_admin: 'Owner',
     admin: 'Admin',
@@ -565,7 +594,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
   return (
     <header className="h-14 sm:h-16 lg:h-[72px] bg-white border-b border-gray-200">
-      <div className="mx-auto flex h-full w-full max-w-[1400px] items-center justify-between px-4 md:px-8">
+      <div className="mx-auto flex h-full w-full max-w-[1400px] items-center justify-between px-3 sm:px-4 md:px-8">
       {/* Hamburger Menu Button - Only on Mobile */}
       {onMenuClick && (
         <button
@@ -582,14 +611,14 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
       )}
 
       {/* Brand logo — shown in the header so the dashboard route (where the sidebar is hidden) still has a brand mark. */}
-      <Link href="/dashboard" prefetch={false} aria-label="TalentFlow home" className="flex items-center mr-3 sm:mr-4 lg:mr-6 shrink-0">
+      <Link href="/dashboard" prefetch={false} aria-label="TalentFlow home" className="flex items-center mr-2 sm:mr-4 lg:mr-6 shrink-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={brandLogo.src}
           alt="TalentFlow"
           width={brandLogo.width}
           height={brandLogo.height}
-          className="h-8 sm:h-10 lg:h-12 w-auto"
+          className="h-7 sm:h-10 lg:h-12 w-auto"
         />
       </Link>
 
@@ -599,7 +628,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
       {/* Spacer for mobile to push icons to the right */}
       <div className="flex-1 lg:hidden" />
 
-      <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 lg:ml-8">
+      <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 lg:ml-8">
         {/* FIX-010: Keyboard Shortcuts Button with Tooltip - Hidden on mobile */}
         {onOpenShortcuts && (
           <Tooltip content="Keyboard Shortcuts (Cmd/Ctrl + /)" position="bottom">
@@ -627,26 +656,28 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
         {/* Plan & Unit Balance Display - Clickable to show breakdown dropdown */}
         {hasQuotaPermission && (
-          <div className="relative hidden md:block">
+          <div className="relative">
             <button
               onClick={() => {
                 setShowPlanMenu(!showPlanMenu);
                 setShowNotifications(false);
                 setShowUserMenu(false);
               }}
-              className="flex items-center gap-1.5 lg:gap-2 px-2 lg:px-2.5 py-1 lg:py-1.5 bg-white border border-gray-200 rounded-lg hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
+              className="liquid-glass-card group flex min-h-[36px] sm:min-h-[44px] items-center gap-1.5 lg:gap-2 rounded-lg px-1.5 py-1 sm:px-2 sm:py-1.5 lg:px-2.5 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/25"
             >
-              <div className="w-6 h-6 lg:w-7 lg:h-7 bg-brand-blue/10 rounded-md flex items-center justify-center">
-                <CreditCard className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-brand-blue" />
+              <div className="w-6 h-6 rounded-md border border-brand-blue/10 bg-brand-blue/[0.07] shadow-sm shadow-brand-blue/5 flex items-center justify-center">
+                <CreditCard className="w-3.5 h-3.5 text-brand-blue" strokeWidth={2.15} />
               </div>
-              <div className="flex flex-col min-w-0 text-left">
-                <span className="text-[11px] lg:text-xs font-semibold text-gray-900 truncate max-w-[80px] lg:max-w-[110px] leading-tight" title={loadingQuota ? 'Loading...' : planName}>
+              {/* Name + units hide on the smallest screens — the pill collapses
+                  to icon + chevron so the header row still fits. */}
+              <div className="hidden sm:flex flex-col min-w-0 text-left">
+                <span className="text-[11px] lg:text-xs font-semibold text-slate-950 dark:text-slate-50 truncate max-w-[90px] md:max-w-[130px] lg:max-w-[170px] leading-tight" title={loadingQuota ? 'Loading...' : planName}>
                   {loadingQuota ? 'Loading...' : planName}
                 </span>
                 {!loadingQuota && !quotaError && !isPendingStatus && !isExpiredSubscription && (
                   <div className="flex items-center gap-1 leading-tight">
-                    <span className="text-[11px] lg:text-xs font-bold text-gray-700">{totalUnits.remaining.toLocaleString()}</span>
-                    <span className="text-[9px] lg:text-[10px] text-gray-500">units left</span>
+                    <span className="text-[11px] lg:text-xs font-bold text-brand-blue tabular-nums">{totalUnits.remaining.toLocaleString()}</span>
+                    <span className="text-[9px] lg:text-[10px] text-gray-500 dark:text-slate-400">units left</span>
                   </div>
                 )}
                 {isPendingStatus && (
@@ -656,7 +687,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 )}
               </div>
               {!loadingQuota && !quotaError && !isPendingStatus && !isExpiredSubscription && totalUnits.limit > 0 && (
-                <div className="w-10 lg:w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="hidden sm:block w-10 lg:w-12 h-1.5 rounded-full bg-slate-200/80 dark:bg-slate-700/80 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${
                       usagePercentage > 90 ? 'bg-red-500' :
@@ -666,7 +697,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   />
                 </div>
               )}
-              <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${showPlanMenu ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform group-hover:text-slate-500 dark:text-slate-500 ${showPlanMenu ? 'rotate-180' : ''}`} />
             </button>
 
             {showPlanMenu && !isExpiredSubscription && (
@@ -680,104 +711,162 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     (page dropdowns peak at z-50) and stays under the layout's
                     global modals, which start at z-[88]. */}
                 <div className="fixed inset-0 z-[80]" onClick={() => setShowPlanMenu(false)} />
-                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-[85]">
-                  {/* Header */}
-                  <div className="px-4 py-3 bg-brand-blue text-white flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <h3 className="font-medium flex items-center gap-2 text-sm">
-                        <CreditCard className="w-4 h-4" />
-                        {planName}
-                      </h3>
-                      <p className="text-xs text-white/80 mt-0.5">Unit balance breakdown</p>
+                {/* Phones AND small tablets get a fixed, full-width sheet under
+                    the header: the pill sits ~180px in from the right edge, so
+                    a 520px panel anchored to it would run off the left of any
+                    viewport narrower than ~768px. Only md+ anchors to the pill. */}
+                <div className="fixed left-3 right-3 top-[4.25rem] md:absolute md:left-auto md:right-0 md:top-full md:mt-2 md:w-[420px] md:max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-5rem)] overflow-y-auto bg-white rounded-xl shadow-xl border border-gray-200 z-[85]">
+                  {/* Plan header — name, cadence/renewal meta, Upgrade plan.
+                      flex-wrap lets the button drop below the meta line on
+                      narrow phones instead of crushing the plan name. */}
+                  {/* No flex-wrap here: the meta line wraps INSIDE the left
+                      block, so the Upgrade button stays pinned to the right
+                      corner instead of dropping below the plan name. */}
+                  <div className="px-2.5 py-2 sm:px-3.5 sm:py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 border-b border-gray-100">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-brand-blue text-white ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex items-center justify-center flex-shrink-0">
+                        <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-xs sm:text-[13px] font-bold text-gray-900 truncate">{planName}</h3>
+                        <div className="flex items-center gap-1 flex-wrap text-[10px] text-gray-500 mt-0.5">
+                          {planPeriodLabel && (
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-gray-400" />
+                              {planPeriodLabel}
+                            </span>
+                          )}
+                          {renewalLabel && (
+                            <>
+                              {planPeriodLabel && <span className="text-gray-300">•</span>}
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3 text-gray-400" />
+                                {quotaData?.is_trial ? 'Ends on' : 'Renews on'} {renewalLabel}
+                              </span>
+                            </>
+                          )}
+                          {planDaysLeft != null && (
+                            <>
+                              {(planPeriodLabel || renewalLabel) && <span className="text-gray-300">•</span>}
+                              <span className="text-green-600 font-medium">{planDaysLeft} days left</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    {/* Same deep link as the arrow on the trigger: Current Plan →
-                        Usage & Quotas, scrolled to Quota Overview. */}
                     <button
                       onClick={() => {
                         setShowPlanMenu(false);
-                        router.push('/subscription/current-plan?section=usage-quotas&focus=quota-overview');
+                        router.push('/subscription/current-plan');
                       }}
-                      aria-label="Open Quota Overview"
-                      title="Open Quota Overview"
-                      className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/15 transition-colors flex-shrink-0"
+                      className="w-full sm:w-auto flex items-center justify-center gap-1 px-2 py-1 text-[10px] sm:text-[11px] font-semibold text-brand-blue bg-white border border-brand-blue/40 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/60 transition-colors flex-shrink-0 whitespace-nowrap"
                     >
-                      <ArrowUpRight className="w-4 h-4" />
+                      Upgrade plan
+                      <ArrowUpRight className="w-3 h-3" />
                     </button>
                   </div>
 
-                  {/* Quota rows */}
-                  <div className="p-3 space-y-2">
+                  {/* Unit balance breakdown */}
+                  <div className="px-3 pt-2 text-[10px] font-semibold tracking-wider text-gray-500 uppercase">
+                    Unit Balance Breakdown
+                  </div>
+                  <div className="px-3 divide-y divide-gray-100">
                     {quotaData?.quotas && (['RU', 'RS', 'AS', 'AIU'] as const).map(key => {
                       const quota = quotaData.quotas![key];
                       if (!quota) return null;
+                      const meta = quotaMeta[key];
+                      const RowIcon = meta.icon;
                       const isUnlimited = !!(quota as any).is_unlimited;
                       const remaining = isUnlimited ? null : ((quota.total_remaining as number) || 0);
                       const limit = isUnlimited ? null : ((quota.subscription?.limit as number || 0) + (quota.addon?.total_purchased || 0));
                       const used = (limit != null && remaining != null) ? limit - remaining : 0;
                       const pct = limit && limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
                       return (
-                        <div key={key} className="flex flex-col gap-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-600">{quotaLabels[key]}</span>
-                            <span className="text-xs font-semibold text-gray-800">
-                              {isUnlimited ? (
-                                <span className="text-green-600">Unlimited</span>
-                              ) : (
-                                <span className="flex items-center gap-1.5">
-                                  <span className="text-gray-500 font-normal">{used.toLocaleString()} used</span>
-                                  <span className="text-gray-300">·</span>
-                                  <span className="text-gray-800">Left {(remaining ?? 0).toLocaleString()}</span>
-                                </span>
-                              )}
-                            </span>
+                        <div key={key} className="py-2 sm:py-2.5 flex items-center gap-2">
+                          <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.tile}`}>
+                            <RowIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
-                          {!isUnlimited && limit && limit > 0 && (
-                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-[width] ${pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-yellow-500' : 'bg-gray-500'}`}
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs sm:text-[13px] font-semibold text-gray-900 truncate">{meta.label}</div>
+                            {!isUnlimited && limit != null && limit > 0 && (
+                              <div className="mt-1 h-1.5 max-w-[140px] bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-[width] ${meta.bar}`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          {isUnlimited ? (
+                            <span className="text-[11px] sm:text-xs font-semibold text-green-600">Unlimited</span>
+                          ) : (
+                            <>
+                              <span className="text-[11px] sm:text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                                {used.toLocaleString()} used
+                              </span>
+                              <span className="w-px h-4 bg-gray-200 flex-shrink-0" />
+                              <span className={`text-[11px] sm:text-xs font-bold tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right ${meta.left}`}>
+                                Left {(remaining ?? 0).toLocaleString()}
+                              </span>
+                            </>
                           )}
                         </div>
                       );
                     })}
+                  </div>
 
-                    {/* Total */}
-                    {!loadingQuota && !quotaError && totalUnits.limit > 0 && (
-                      <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-gray-700">Total Remaining</span>
-                        <span className="text-sm font-bold text-gray-900">{totalUnits.remaining.toLocaleString()}</span>
-                      </div>
-                    )}
-
-                    {/* Users limit — excluded from total */}
-                    {quotaData?.quotas?.max_seats && (() => {
-                      const seats = quotaData.quotas!.max_seats!;
-                      const isUnlimited = !!(seats as any).is_unlimited;
-                      const remaining = isUnlimited ? null : ((seats.total_remaining as number) || 0);
-                      const limit = isUnlimited ? null : ((seats.subscription?.limit as number || 0) + (seats.addon?.total_purchased || 0));
-                      const used = (limit != null && remaining != null) ? limit - remaining : 0;
-                      return (
-                        <div className="pt-2 border-t border-dashed border-gray-200 flex flex-col gap-0.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-500 font-medium">Users</span>
-                            <span className="text-xs font-semibold text-gray-600">
-                              {isUnlimited ? (
-                                <span className="text-green-600">Unlimited</span>
-                              ) : (
-                                <span className="flex items-center gap-1.5">
-                                  <span className="text-gray-500 font-normal">{used.toLocaleString()} used</span>
-                                  <span className="text-gray-300">·</span>
-                                  <span className="text-gray-600">Left {(remaining ?? 0).toLocaleString()}</span>
-                                </span>
-                              )}
-                            </span>
+                  {/* Users limit — seats are not units, so they sit in their own
+                      card below the breakdown rather than among the unit rows. */}
+                  {quotaData?.quotas?.max_seats && (() => {
+                    const seats = quotaData.quotas!.max_seats!;
+                    const isUnlimited = !!(seats as any).is_unlimited;
+                    const remaining = isUnlimited ? null : ((seats.total_remaining as number) || 0);
+                    const limit = isUnlimited ? null : ((seats.subscription?.limit as number || 0) + (seats.addon?.total_purchased || 0));
+                    const used = (limit != null && remaining != null) ? limit - remaining : 0;
+                    return (
+                      <div className="mx-3 mt-1.5 rounded-lg bg-brand-blue/5 border border-brand-blue/10 px-2.5 py-2 sm:px-3 sm:py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-200/70 text-gray-600 flex items-center justify-center flex-shrink-0">
+                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
-                          <span className="text-[10px] italic text-gray-400">Excluded from the above total</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs sm:text-[13px] font-semibold text-gray-900">Users</div>
+                          </div>
+                          {isUnlimited ? (
+                            <span className="text-[11px] sm:text-xs font-semibold text-green-600">Unlimited</span>
+                          ) : (
+                            <>
+                              <span className="text-[11px] sm:text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                                {used.toLocaleString()} used
+                              </span>
+                              <span className="w-px h-4 bg-gray-300 flex-shrink-0" />
+                              <span className="text-[11px] sm:text-xs font-bold text-gray-900 tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right">
+                                Left {(remaining ?? 0).toLocaleString()}
+                              </span>
+                            </>
+                          )}
                         </div>
-                      );
-                    })()}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Add-ons banner — deep-links to Usage & Quotas, where the
+                      add-on purchase flow lives. */}
+                  <div className="mx-3 my-2.5 rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-2 sm:px-3 sm:py-2.5 flex flex-wrap items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
+                      <Info className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="flex-1 min-w-0 text-xs sm:text-[13px] font-medium text-gray-900">Need extra units right away?</span>
+                    <button
+                      onClick={() => {
+                        setShowPlanMenu(false);
+                        router.push('/subscription/current-plan?section=usage-quotas');
+                      }}
+                      className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] sm:text-xs font-semibold bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex-shrink-0"
+                    >
+                      Purchase Add-ons
+                      <ShoppingCart className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               </>
@@ -794,7 +883,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 setShowPlanMenu(false);
                 setShowUserMenu(false);
               }}
-              className="relative p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+              className="relative p-1.5 sm:p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
               aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
             >
               <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -962,7 +1051,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
         <Tooltip content={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'} position="bottom">
           <button
             onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-            className="p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+            className="p-1.5 sm:p-2 text-gray-500 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
             aria-label="Toggle dark mode"
           >
             {resolvedTheme === 'dark'
@@ -980,7 +1069,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
               setShowUserMenu(!showUserMenu);
               setShowPlanMenu(false);
             }}
-            className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 hover:bg-brand-blue/5 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 transition-colors"
+            className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 hover:bg-brand-blue/5 rounded-lg px-1.5 sm:px-3 py-1 sm:py-2 transition-colors"
           >
             <div className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full bg-brand-blue text-white flex items-center justify-center">
               <span className="text-xs sm:text-sm">{(user.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}</span>

@@ -1777,14 +1777,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       (whole, y: string, m: string) => {
         const months = Number(m);
         if (months <= 0 || months >= 12) return whole;
-        return `${Number((Number(y) + months / 12).toFixed(2))} years`;
+        return `${Number((Number(y) + months / 12).toFixed(1))} years`;
       },
     );
 
     // Only a genuine range separator is accepted ("to", "-", en/em dash) and never
     // "and" - "2 years and 6 months" is ONE figure, already folded above, so letting
     // "and" through would turn it into a nonsensical 2-to-0.5 range.
-    const toYearsText = (n: number) => Number((n / 12).toFixed(2));
+    // ONE decimal place, matching the DECIMAL(4,1) column and the backend's
+    // _months_to_years(). At 2 decimals the frontend produced 0.25 for "3 months"
+    // while the column can only hold 0.3, so the value changed under the recruiter
+    // on save-and-reload. Keep in sync with _MONTHS_YEARS_DECIMALS in the backend.
+    const toYearsText = (n: number) => Number((n / 12).toFixed(1));
     out = out.replace(
       /(\d{1,3})\s*(?:months?|mos?)\s*(?:-|–|—|to)\s*(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)/gi,
       (_whole, mo: string, yr: string) => `${toYearsText(Number(mo))} to ${Number(yr)} years`,
@@ -1863,8 +1867,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const hi = Number(monthRange[2]) / 12;
       if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
         return {
-          experienceMin: Number(Math.min(lo, hi).toFixed(2)),
-          experienceMax: Number(Math.max(lo, hi).toFixed(2)),
+          experienceMin: Number(Math.min(lo, hi).toFixed(1)),
+          experienceMax: Number(Math.max(lo, hi).toFixed(1)),
         };
       }
     }
@@ -1873,7 +1877,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (monthsOnly) {
       const years = Number(monthsOnly[1]) / 12;
       if (!Number.isNaN(years)) {
-        return { experienceMin: Number(years.toFixed(2)) };
+        return { experienceMin: Number(years.toFixed(1)) };
       }
     }
 
