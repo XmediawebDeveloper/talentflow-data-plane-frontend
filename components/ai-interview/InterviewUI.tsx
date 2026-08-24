@@ -1859,7 +1859,40 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             details: { phase: 'in_interview', reason: 'audio_device_unplugged', trigger },
           }).catch(() => { /* best-effort */ });
         } else if (!lost && audioDeviceLostRef.current) {
+          // enumerateDevices() listing the original device again is NOT proof
+          // it's usable — Windows can disable a mic at the OS level while
+          // Chrome keeps it listed (and the track just goes to muted, or a
+          // fresh getUserMedia() still throws). Confirm a REAL stream can be
+          // opened on the exact original device before clearing the pause.
+          // Probe stream is stopped immediately either way — never touches
+          // mediaStreamRef (the app's actual recording stream).
+          const origId = interviewMicDeviceIdRef.current;
+          console.log(`[MIC][RESUME] resume check started deviceId=${origId ?? 'unknown'} trigger=${trigger}`);
+          let usable = true;
+          let probeStream: MediaStream | null = null;
+          if (origId) {
+            try {
+              probeStream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: origId } } });
+              const probeTrack = probeStream.getAudioTracks()[0];
+              usable = Boolean(probeTrack && probeTrack.readyState === 'live' && !probeTrack.muted);
+              console.log(`[MIC][RESUME] microphone validation result=${usable} readyState=${probeTrack?.readyState} muted=${probeTrack?.muted}`);
+            } catch (err: any) {
+              usable = false;
+              console.warn(`[MIC][GUM] error name=${err?.name} message=${err?.message} deviceId=${origId}`);
+            } finally {
+              probeStream?.getTracks().forEach(t => t.stop());
+            }
+          }
+          if (cancelled) return;
+          if (!usable) {
+            // Stay paused — enumerateDevices() says it's back but a real
+            // stream can't be opened yet (still OS-disabled, still settling
+            // after re-enable, etc). Next poll tick / devicechange retries.
+            console.log(`[MIC][RESUME] not usable yet (trigger=${trigger}) — remaining paused`);
+            return;
+          }
           console.log(`[INTERVIEW-DEBUG] Audio device restored (trigger=${trigger}) — resuming interview`);
+          console.log(`[MIC][RESUME] INTERVIEW_RESUMED deviceId=${origId ?? 'unknown'}`);
           setAudioDeviceLost(false);
         }
       } catch (e) {
