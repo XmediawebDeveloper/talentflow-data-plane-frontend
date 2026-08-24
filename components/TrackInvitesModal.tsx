@@ -633,7 +633,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                       {invitations.some(inv => inv.assessment_coding_enabled) && (
                         <th className="text-center py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Coding Score</th>
                       )}
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Actions</th>
+                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap tf-sticky-col">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -760,7 +760,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                               })()}
                             </td>
                           )}
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap tf-sticky-col">
                             {/* Action rules mirror the assessment-level
                                 popup so a recruiter sees the same controls
                                 from either entry point: View Results when

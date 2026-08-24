@@ -510,7 +510,7 @@ export default function BulkScoringProgressModal({
                       <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Scored Date &amp; Time</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Result</th>
-                      {onRetryFailed && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Actions</th>}
+                      {onRetryFailed && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700 tf-sticky-col">Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -571,7 +571,7 @@ export default function BulkScoringProgressModal({
                           {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>}
                         </td>
                         {onRetryFailed && (
-                          <td className="py-3 px-4 whitespace-nowrap">
+                          <td className="py-3 px-4 whitespace-nowrap tf-sticky-col">
                             {item.status === 'Failed' ? (
                               <button
                                 onClick={() => handleRetry(item)}

@@ -2,8 +2,8 @@
 
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
-import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
 import { Resume, Folder } from '@/lib/types/types';
@@ -18,6 +18,16 @@ import ResumeVersionsModal from './ResumeVersionsModal';
 import ShareResumeModal from './ShareResumeModal';
 import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
+
+/* Action menu item styling — copied verbatim from the Job Openings page's
+   three-dot menu (JobsListing.tsx) so both menus read as one component:
+   gray-700 text, hover:bg-gray-50, px-3/py-2 rows, sharp corners, and a
+   scale-on-hover label. Orange/red variants mirror that same menu's
+   Disable Job / Delete Job treatment for Archive and Delete here. */
+const resumeActionMenuItemClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50';
+const resumeActionMenuItemOrangeClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50';
+const resumeActionMenuItemRedClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50';
+const resumeActionMenuLabelClass = 'inline-block origin-left transition-transform duration-150 ease-out group-hover:scale-[0.97]';
 
 // Drag item type for resumes
 const RESUME_DRAG_TYPE = 'RESUME';
@@ -75,6 +85,7 @@ function DraggableResumeRow({ resume, selectedResumes, children, className, onVi
       className={`${className} ${isDragging ? 'opacity-50' : ''} ${
         isOver ? 'ring-2 ring-inset ring-brand-blue/60' : ''
       } ${onViewDetails ? 'cursor-pointer' : ''}`}
+      data-row-selected={selectedResumes.includes(resume.id)}
       onClick={onViewDetails ? () => onViewDetails(resume) : undefined}
     >
       {/* Drag handle — pinned with the tick column, same solid background.
@@ -198,8 +209,7 @@ export default function ResumeTable({
   emptyState,
 }: ResumeTableProps) {
   const router = useRouter();
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number; openUp: boolean }>({ top: 0, right: 0, openUp: false });
+  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
   /** Set while the version history is being fetched for the Files column. */
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
@@ -212,6 +222,18 @@ export default function ResumeTable({
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showAddTagsModal, setShowAddTagsModal] = useState(false);
   const [selectedResumeForAction, setSelectedResumeForAction] = useState<Resume | null>(null);
+
+  // Same outside-click close behavior as the Job Openings three-dot menu.
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (openActionMenu) {
+        setOpenActionMenu(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openActionMenu]);
 
   /* Custom row order. Only ids are kept — the rows themselves come from the
      parent on every fetch — and ids the saved order doesn't mention keep their
@@ -454,7 +476,7 @@ export default function ResumeTable({
             <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
               Files
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle">
+            <th className="w-[76px] min-w-[76px] max-w-[76px] px-3 py-3 text-right text-xs text-gray-900 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">
               Actions
             </th>
           </tr>
@@ -625,8 +647,12 @@ export default function ResumeTable({
                   </span>
                 </button>
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center gap-2">
+              <td
+                className="w-[76px] min-w-[76px] max-w-[76px] px-3 py-2.5 align-middle whitespace-nowrap tf-sticky-col"
+                style={openActionMenu === resume.id ? { zIndex: 9999 } : undefined}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-end gap-1">
                   {selectionMode ? (
                     <button
                       onClick={() => {
@@ -642,142 +668,126 @@ export default function ResumeTable({
                     </button>
                   ) : (
                     <>
-                      <button
-                        onClick={() => onQuickView(resume)}
-                        className="p-1.5 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded transition-colors"
-                        aria-label="Preview Resume" title="Preview Resume"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {onApplyToJob && (
-                        <button
-                          onClick={() => handleApplyToJob(resume)}
-                          className="p-1.5 text-brand-blue hover:bg-brand-blue/10 rounded transition-colors"
-                          aria-label="Apply to Job" title="Apply to Job"
-                        >
-                          <Briefcase className="w-4 h-4" />
-                        </button>
-                      )}
-                      {canDownload && (
-                        <button
-                          onClick={async () => {
-                            try {
-                              toast.loading('Downloading resume...', { id: 'download' });
-                              const blob = await resumeService.download(resume.id);
-                              const url = window.URL.createObjectURL(blob);
-                              const a = document.createElement('a');
-                              a.href = url;
-                              // Use original filename to preserve file extension (pdf, doc, docx, rtf, txt, etc.)
-                              a.download = resume.fileName || `${resume.name || 'resume'}.${resume.fileType || 'pdf'}`;
-                              document.body.appendChild(a);
-                              a.click();
-                              window.URL.revokeObjectURL(url);
-                              document.body.removeChild(a);
-                              toast.success('Resume downloaded', { id: 'download' });
-                            } catch (error) {
-                              console.error('Download failed:', error);
-                              toast.error('Failed to download resume', { id: 'download' });
-                            }
-                          }}
-                          className="p-1.5 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue rounded transition-colors"
-                          title="Download Resume"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                      )}
                       <div className="relative">
                         <button
                           onClick={(e) => {
-                            if (activeMenu === resume.id) {
-                              setActiveMenu(null);
-                              return;
-                            }
-                            const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                            const spaceBelow = window.innerHeight - rect.bottom;
-                            const openUp = spaceBelow < 280;
-                            setMenuPosition({
-                              top: openUp ? rect.top : rect.bottom + 4,
-                              right: window.innerWidth - rect.right,
-                              openUp,
-                            });
-                            setActiveMenu(resume.id);
+                            e.stopPropagation();
+                            setOpenActionMenu(openActionMenu === resume.id ? null : resume.id);
                           }}
-                          className="p-1.5 text-gray-700 hover:bg-slate-100 hover:text-gray-900 rounded transition-colors"
-                          title="More Options"
+                          className="h-7 w-7 flex items-center justify-center bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-all"
                         >
-                          <MoreHorizontal className="w-4 h-4" />
+                          <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
                         </button>
-                        {activeMenu === resume.id && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-[100]"
-                              onClick={() => setActiveMenu(null)}
-                            />
-                            <div
-                              className="fixed w-56 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-[101]"
-                              style={menuPosition.openUp
-                                ? { bottom: window.innerHeight - menuPosition.top, right: menuPosition.right }
-                                : { top: menuPosition.top, right: menuPosition.right }
-                              }
+                        {openActionMenu === resume.id && (
+                          <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[9999]">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onQuickView(resume);
+                                setOpenActionMenu(null);
+                              }}
+                              className={resumeActionMenuItemClass}
                             >
-                              {canShare && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openShareModal(resume);
-                                    setActiveMenu(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-3 transition-colors"
-                                >
-                                  <Share2 className="w-4 h-4 text-green-600" />
-                                  Share Resume
-                                </button>
-                              )}
-                              {canTag && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedResumeForAction(resume);
-                                    setShowAddTagsModal(true);
-                                    setActiveMenu(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-3 transition-colors"
-                                >
-                                  <Tag className="w-4 h-4 text-cyan-600" />
-                                  Add Tags
-                                </button>
-                              )}
-                              {!!onArchive && (canShare || canTag) && <div className="border-t border-gray-100 my-1"></div>}
-                              {!!onArchive && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedResumeForAction(resume);
-                                    setShowArchiveModal(true);
-                                    setActiveMenu(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 text-sm flex items-center gap-3 text-gray-700 hover:bg-brand-orange/5 hover:text-brand-orange-deep transition-colors"
-                                >
-                                  <Archive className="w-4 h-4 text-brand-orange" />
-                                  Archive Resume
-                                </button>
-                              )}
-                              {!!onDelete && <div className="border-t border-gray-100 my-1"></div>}
-                              {onDelete && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDelete?.(resume.id);
-                                    setActiveMenu(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2 text-sm flex items-center gap-3 text-red-600 hover:bg-red-50"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Delete Resume
-                                </button>
-                              )}
-                            </div>
-                          </>
+                              <Eye className="w-4 h-4" />
+                              <span className={resumeActionMenuLabelClass}>Preview Resume</span>
+                            </button>
+                            {onApplyToJob && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleApplyToJob(resume);
+                                  setOpenActionMenu(null);
+                                }}
+                                className={resumeActionMenuItemClass}
+                              >
+                                <Briefcase className="w-4 h-4" />
+                                <span className={resumeActionMenuLabelClass}>Apply to Job</span>
+                              </button>
+                            )}
+                            {canDownload && (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  setOpenActionMenu(null);
+                                  try {
+                                    toast.loading('Downloading resume...', { id: 'download' });
+                                    const blob = await resumeService.download(resume.id);
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    // Use original filename to preserve file extension (pdf, doc, docx, rtf, txt, etc.)
+                                    a.download = resume.fileName || `${resume.name || 'resume'}.${resume.fileType || 'pdf'}`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    window.URL.revokeObjectURL(url);
+                                    document.body.removeChild(a);
+                                    toast.success('Resume downloaded', { id: 'download' });
+                                  } catch (error) {
+                                    console.error('Download failed:', error);
+                                    toast.error('Failed to download resume', { id: 'download' });
+                                  }
+                                }}
+                                className={resumeActionMenuItemClass}
+                              >
+                                <Download className="w-4 h-4" />
+                                <span className={resumeActionMenuLabelClass}>Download Resume</span>
+                              </button>
+                            )}
+                            {canShare && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openShareModal(resume);
+                                  setOpenActionMenu(null);
+                                }}
+                                className={resumeActionMenuItemClass}
+                              >
+                                <Share2 className="w-4 h-4" />
+                                <span className={resumeActionMenuLabelClass}>Share Resume</span>
+                              </button>
+                            )}
+                            {canTag && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedResumeForAction(resume);
+                                  setShowAddTagsModal(true);
+                                  setOpenActionMenu(null);
+                                }}
+                                className={resumeActionMenuItemClass}
+                              >
+                                <Tag className="w-4 h-4" />
+                                <span className={resumeActionMenuLabelClass}>Add Tags</span>
+                              </button>
+                            )}
+                            {!!onArchive && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedResumeForAction(resume);
+                                  setShowArchiveModal(true);
+                                  setOpenActionMenu(null);
+                                }}
+                                className={resumeActionMenuItemOrangeClass}
+                              >
+                                <Archive className="w-4 h-4" />
+                                <span className={resumeActionMenuLabelClass}>Archive Resume</span>
+                              </button>
+                            )}
+                            {onDelete && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDelete?.(resume.id);
+                                  setOpenActionMenu(null);
+                                }}
+                                className={resumeActionMenuItemRedClass}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                <span className={resumeActionMenuLabelClass}>Delete Resume</span>
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </>

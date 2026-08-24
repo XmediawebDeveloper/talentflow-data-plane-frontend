@@ -307,7 +307,7 @@ export default function AIInterviewCandidateResults() {
                     <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Started At</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Completed At</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>
-                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Actions</th>
+                    <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -403,7 +403,7 @@ export default function AIInterviewCandidateResults() {
                             <span className="text-gray-400">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
                           <button
                             onClick={(e) => { e.stopPropagation(); openSession(row); }}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"

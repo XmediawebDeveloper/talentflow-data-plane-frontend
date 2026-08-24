@@ -620,7 +620,7 @@ export default function JobOpeningsPage() {
                   <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Applicants</th>
                   <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Created</th>
-                  <th className="text-right px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className="text-right px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider tf-sticky-col">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -653,7 +653,7 @@ export default function JobOpeningsPage() {
                     <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-500 hidden lg:table-cell">
                       {formatISTDate(job.created_at)}
                     </td>
-                    <td className="px-2 sm:px-6 py-3 sm:py-4 text-right">
+                    <td className="px-2 sm:px-6 py-3 sm:py-4 text-right tf-sticky-col">
                       <div className="flex items-center justify-end gap-0.5 sm:gap-2">
                         {/* Edit Button */}
                         <button

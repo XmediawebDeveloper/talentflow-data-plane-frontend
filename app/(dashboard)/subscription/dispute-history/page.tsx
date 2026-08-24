@@ -557,7 +557,7 @@ export default function DisputeHistoryPage() {
                     <th className="px-4 py-4 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[180px]">Reason</th>
                     <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[110px]">Amount</th>
                     <th className="px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[120px]">Status</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[140px]">Actions</th>
+                    <th className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500 w-[140px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -597,7 +597,7 @@ export default function DisputeHistoryPage() {
                           {dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-right">
+                      <td className="px-4 py-4 text-right tf-sticky-col">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => setSelectedDispute(dispute)}

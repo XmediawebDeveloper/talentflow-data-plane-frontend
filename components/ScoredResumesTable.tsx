@@ -1,4 +1,4 @@
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, Target, Share2, Paperclip, FileText } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, Target, Share2, Paperclip, FileText, MoreVertical, Award } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
@@ -15,6 +15,22 @@ import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+/* Action menu item styling — cloned from the Job Openings page's three-dot
+   menu (JobsListing.tsx: gray-700 text, hover:bg-gray-50, px-4/py-2.5 rows,
+   sharp corners, a scale-on-hover label) so both menus read as one component
+   even though this table's overflow-x-auto shell needs Radix's portal rather
+   than that page's hand-rolled absolute dropdown. The `!` overrides beat the
+   dropdown-menu primitive's own default item styling (accent bg, rounded-sm,
+   muted-foreground icons). */
+const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700 [&_svg]:!text-current';
+const scoredResumesMenuLabelClass = 'inline-block origin-left transition-transform duration-150 ease-out group-hover:scale-[0.97] group-focus:scale-[0.97] group-data-[highlighted]:scale-[0.97]';
 
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
@@ -31,7 +47,6 @@ const DEFAULT_COLUMNS = [
   { id: 'scoredDate', label: 'Scored Date', enabled: true },
   { id: 'version', label: 'Version', enabled: true },
   { id: 'scoredBy', label: 'Scored By', enabled: true },
-  { id: 'tenantName', label: 'Tenant Name', enabled: true },  // Add tenant column
 ];
 
 interface ScoredResume {
@@ -75,9 +90,6 @@ interface ScoredResume {
   // For global view
   jobTitle?: string;
   jdId?: string;
-  // Tenant info
-  tenantName?: string;
-  tenantId?: string;
 }
 
 interface ScoredResumesTableProps {
@@ -121,7 +133,7 @@ export default function ScoredResumesTable({
   bulkActions,
   onScoreResumes
 }: ScoredResumesTableProps) {
-  const { tenant, isTenantAdmin, user, hasPermissionCode } = useAuth();  // Get tenant info from auth context
+  const { isTenantAdmin, user, hasPermissionCode } = useAuth();  // Get tenant info from auth context
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
@@ -139,6 +151,10 @@ export default function ScoredResumesTable({
      name, type and size are read from the resume record when the dialog opens. */
   const [shareFile, setShareFile] = useState<{ name: string; type: string; sizeKb?: number } | null>(null);
   const [isSharePreviewOpen, setIsSharePreviewOpen] = useState(false);
+  /* Scorecard side of the same dialog — the resume and the scorecard are the
+     two files this page can send, so the eye beside each opens that one. */
+  const [scorecardPreviewUrl, setScorecardPreviewUrl] = useState<string | null>(null);
+  const [loadingScorecardPreview, setLoadingScorecardPreview] = useState(false);
 
   const openShareModal = async (resume: ScoredResume) => {
     const resumeId = resume.resumeId;
@@ -190,6 +206,31 @@ Best regards`);
     setShareMessage('');
     setShareFile(null);
     setIsSharePreviewOpen(false);
+    closeScorecardPreview();
+  };
+
+  /* Read the scorecard without leaving the dialog — the eye beside the resume
+     does the same for the resume, so both attachments open in place. */
+  const handlePreviewScorecard = async () => {
+    if (!shareCandidate || loadingScorecardPreview) return;
+    setLoadingScorecardPreview(true);
+    try {
+      const rawBlob = await scoringService.downloadScorecard(shareCandidate.id);
+      const blob = new Blob([rawBlob], { type: 'application/pdf' });
+      setScorecardPreviewUrl(window.URL.createObjectURL(blob));
+    } catch (error) {
+      console.error('Error previewing scorecard:', error);
+      toast.error('Failed to open the scorecard. Please try again.');
+    } finally {
+      setLoadingScorecardPreview(false);
+    }
+  };
+
+  const closeScorecardPreview = () => {
+    setScorecardPreviewUrl((prev) => {
+      if (prev) window.URL.revokeObjectURL(prev);
+      return null;
+    });
   };
 
   const handleSendShareEmail = async () => {
@@ -324,18 +365,8 @@ Best regards`);
 
   const enabledColumns = availableColumns.filter(col => col.enabled);
 
-  // Add tenant name to all resumes (from auth context)
-  // Remove "Organization: " prefix if present
-  const cleanTenantName = tenant?.name?.replace(/^Organization:\s*/i, '') || 'N/A';
-
-  const resumesWithTenant = resumes.map(resume => ({
-    ...resume,
-    tenantName: cleanTenantName,
-    tenantId: tenant?.id
-  }));
-
   // Filtering logic
-  const filteredResumes = resumesWithTenant.filter(resume => {
+  const filteredResumes = resumes.filter(resume => {
     // Search filter
     const matchesSearch =
       resume.candidateName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -457,8 +488,6 @@ Best regards`);
         return formatIST(resume.scoredDate);
       case 'scoredBy':
         return resume.scoredBy || '';
-      case 'tenantName':
-        return resume.tenantName || '';
       default:
         return '';
     }
@@ -889,7 +918,7 @@ Best regards`);
         <table className="w-full min-w-[1100px] table-auto">
           <thead>
             <tr className="border-b border-gray-200">
-              <th className="text-left py-3 px-4 w-12 align-middle">
+              <th className="text-left py-3 px-4 w-12 align-middle tf-sticky-col-left">
                 <button onClick={handleSelectAll} className="p-1 hover:bg-gray-100 rounded">
                   {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
                     <CheckSquare className="w-4 h-4 text-gray-800" />
@@ -904,7 +933,7 @@ Best regards`);
                 </th>
               ))}
               <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle">Assessment</th>
-              <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle">Actions</th>
+              <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle tf-sticky-col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -916,7 +945,7 @@ Best regards`);
                   index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
                 }`}
               >
-                <td className="py-3 px-4 align-middle">
+                <td className="py-3 px-4 align-middle tf-sticky-col-left">
                   <button
                     onClick={() => handleSelectResume(resume.id)}
                     className="p-1 hover:bg-gray-200 rounded"
@@ -1083,13 +1112,6 @@ Best regards`);
                       </td>
                     );
                   }
-                  if (col.id === 'tenantName') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="text-sm text-gray-600">{resume.tenantName || 'N/A'}</div>
-                      </td>
-                    );
-                  }
                   return null;
                 })}
 
@@ -1142,35 +1164,48 @@ Best regards`);
                 </td>
 
                 {/* Actions Column */}
-                <td className="py-3 px-4 align-middle whitespace-nowrap">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onViewCandidate) {
-                          onViewCandidate(resume);
-                        }
-                      }}
-                      className="px-3 py-1.5 text-xs text-white bg-gray-800 hover:bg-gray-900 rounded-md transition-colors flex items-center gap-1.5"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      View
-                    </button>
-                    {/* Only scores that still point at a resume can be shared. */}
-                    {canShareResume && resume.resumeId && (
+                <td className="py-3 px-4 align-middle whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openShareModal(resume);
-                        }}
-                        className="px-3 py-1.5 text-xs text-gray-700 border border-gray-300 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors flex items-center gap-1.5"
-                        title="Share resume"
+                        aria-label="Actions"
+                        title="Actions"
+                        className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
                       >
-                        <Share2 className="w-3.5 h-3.5" />
-                        Share
+                        <MoreVertical className="w-4 h-4 text-gray-600" />
                       </button>
-                    )}
-                  </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-52 !rounded-lg !border !border-gray-200 !bg-white !py-1 !px-0 !shadow-xl"
+                    >
+                      <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => onViewCandidate && onViewCandidate(resume)}>
+                        <Eye className="w-4 h-4" />
+                        <span className={scoredResumesMenuLabelClass}>View Results</span>
+                      </DropdownMenuItem>
+                      {/* Only scores that still point at a resume can be shared. */}
+                      {canShareResume && resume.resumeId && (
+                        <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => openShareModal(resume)}>
+                          <Share2 className="w-4 h-4" />
+                          <span className={scoredResumesMenuLabelClass}>Share via Email</span>
+                        </DropdownMenuItem>
+                      )}
+                      {canExport && (
+                        <DropdownMenuItem
+                          className={scoredResumesMenuItemClass}
+                          disabled={downloadingId === resume.id}
+                          onSelect={() => handleDownloadScorecard(resume.id)}
+                        >
+                          {downloadingId === resume.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                          <span className={scoredResumesMenuLabelClass}>Download Scorecard</span>
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </td>
               </tr>
             ))}
@@ -1437,34 +1472,69 @@ Best regards`);
               </div>
 
               <div className="space-y-4">
+                {/* Both files this dialog can send, side by side: the resume
+                    itself and the scorecard for this job. */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Attachment</label>
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 bg-gray-50">
-                    <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                      <FileText className="w-4 h-4 text-brand-blue" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      {/* Until the resume record answers, the file's name is
-                          not known — the candidate is, so lead with that. */}
-                      <div className="text-sm font-medium text-gray-900 truncate" title={shareFile?.name}>
-                        {shareFile ? shareFile.name : 'Loading resume file…'}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
+                  <div className="flex flex-col sm:flex-row items-stretch gap-3">
+                    <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 min-w-0 flex-1">
+                      <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                        <FileText className="w-4 h-4 text-brand-blue" />
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {shareCandidate.candidateName}
-                        {shareFile?.type && <> &middot; {shareFile.type}</>}
-                        {shareFile?.sizeKb ? <> &middot; {Math.round(shareFile.sizeKb)} KB</> : null}
+                      <div className="min-w-0 flex-1">
+                        {/* Until the resume record answers, the file's name is
+                            not known — the candidate is, so lead with that. */}
+                        <div className="text-sm font-medium text-gray-900 truncate" title={shareFile?.name}>
+                          {shareFile ? shareFile.name : 'Loading resume file…'}
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          Resume
+                          {shareFile?.type && <> &middot; {shareFile.type}</>}
+                          {shareFile?.sizeKb ? <> &middot; {Math.round(shareFile.sizeKb)} KB</> : null}
+                        </div>
                       </div>
+                      <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <button
+                        type="button"
+                        onClick={() => setIsSharePreviewOpen(true)}
+                        className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors"
+                        aria-label={`View ${shareCandidate.candidateName}'s resume`}
+                        title="View resume"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                     </div>
-                    <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                    <button
-                      type="button"
-                      onClick={() => setIsSharePreviewOpen(true)}
-                      className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors"
-                      aria-label={`View ${shareCandidate.candidateName}'s resume`}
-                      title="View resume"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
+
+                    {/* The scorecard PDF, built on demand — same download
+                        the row's ⋮ menu offers. */}
+                    <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 min-w-0 flex-1">
+                      <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
+                        <Award className="w-4 h-4 text-brand-cyan" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className="text-sm font-medium text-gray-900 truncate"
+                          title={`Scorecard - ${shareCandidate.candidateName}.pdf`}
+                        >
+                          Scorecard - {shareCandidate.candidateName}.pdf
+                        </div>
+                        <div className="text-xs text-gray-500 truncate">
+                          Scorecard &middot; PDF
+                          {shareCandidate.scorePercentage != null && <> &middot; {shareCandidate.scorePercentage}%</>}
+                        </div>
+                      </div>
+                      <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <button
+                        type="button"
+                        onClick={handlePreviewScorecard}
+                        disabled={loadingScorecardPreview}
+                        className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
+                        aria-label={`View ${shareCandidate.candidateName}'s scorecard`}
+                        title="View scorecard"
+                      >
+                        {loadingScorecardPreview ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -1543,6 +1613,49 @@ Best regards`);
           subtitle={shareFile?.name}
           onClose={() => setIsSharePreviewOpen(false)}
         />
+      )}
+
+      {/* The scorecard, read in place. z-[60] puts it over the share
+          dialog, the same level the resume preview uses. */}
+      {scorecardPreviewUrl && shareCandidate && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                  <Eye className="w-5 h-5 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">Scorecard</h2>
+                  <p className="text-sm text-gray-500 truncate">
+                    {shareCandidate.candidateName}
+                    {shareCandidate.scorePercentage != null && <> &middot; {shareCandidate.scorePercentage}%</>}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => handleDownloadScorecard(shareCandidate.id)}
+                  disabled={downloadingId === shareCandidate.id}
+                  className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm cursor-pointer disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">Download</span>
+                </button>
+                <button
+                  onClick={closeScorecardPreview}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 min-h-0">
+              <iframe src={scorecardPreviewUrl} title="Scorecard preview" className="w-full h-full" />
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Bulk Invite Modal */}
