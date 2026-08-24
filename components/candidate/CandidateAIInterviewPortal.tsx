@@ -195,6 +195,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   const [shareBarChecking, setShareBarChecking] = useState(false);
   const [shareBarError, setShareBarError] = useState<string | null>(null);
   const [shareBarAttempts, setShareBarAttempts] = useState(0);
+  // The on-page mock of the Chrome sharing bar (the "look for this bar" guide).
+  // It is hidden during the entire-screen frame capture so the vision check
+  // never mistakes OUR illustration for the real sharing bar (false positive).
+  const shareBarMockRef = useRef<HTMLDivElement>(null);
   // Pre-interview single-active-session lease: true when another browser/device
   // already holds this interview link (blocks the second person from system
   // check onward). See the lease heartbeat effect.
@@ -1527,28 +1531,46 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     const stream = screenStreamRef.current;
     const track = stream?.getVideoTracks?.()[0];
     if (!stream || !track || track.readyState !== 'live') return null;
-    const video = document.createElement('video');
-    video.muted = true;
-    (video as HTMLVideoElement).playsInline = true;
-    video.srcObject = stream;
-    try { await video.play(); } catch { /* ignore */ }
-    await new Promise<void>((resolve) => {
-      if (video.videoWidth && video.readyState >= 2) return resolve();
-      const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
-      video.addEventListener('loadeddata', on);
-      window.setTimeout(resolve, 1500);
-    });
-    const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
-    const scale = Math.min(1, 1600 / vw);
-    const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = cw; canvas.height = ch;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) { try { video.pause(); } catch { /* ignore */ } video.srcObject = null; return null; }
-    ctx.drawImage(video, 0, 0, cw, ch);
-    try { video.pause(); } catch { /* ignore */ }
-    video.srcObject = null;
-    return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7));
+    // Hide our own on-page reference mock of the sharing bar BEFORE grabbing the
+    // frame. The capture is of the WHOLE screen, which includes this page — and
+    // that page shows a realistic mock ("This site is sharing your screen · Stop
+    // sharing · Hide"). Left visible, the vision model sees OUR illustration and
+    // reports the real bar as "still visible" even when the candidate has hidden
+    // it — a false positive that traps them on this step. We hide it, wait for
+    // the screen-capture pipeline to reflect the change, capture, then restore.
+    const mock = shareBarMockRef.current;
+    const prevVisibility = mock ? mock.style.visibility : '';
+    if (mock) mock.style.visibility = 'hidden';
+    try {
+      // Let the compositor + screen-capture stream drop the now-hidden mock
+      // (a few frames of latency); imperceptible during the "Checking…" state.
+      if (mock) await new Promise<void>((r) => window.setTimeout(r, 250));
+      const video = document.createElement('video');
+      video.muted = true;
+      (video as HTMLVideoElement).playsInline = true;
+      video.srcObject = stream;
+      try { await video.play(); } catch { /* ignore */ }
+      await new Promise<void>((resolve) => {
+        if (video.videoWidth && video.readyState >= 2) return resolve();
+        const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
+        video.addEventListener('loadeddata', on);
+        window.setTimeout(resolve, 1500);
+      });
+      const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+      const scale = Math.min(1, 1600 / vw);
+      const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { try { video.pause(); } catch { /* ignore */ } video.srcObject = null; return null; }
+      ctx.drawImage(video, 0, 0, cw, ch);
+      try { video.pause(); } catch { /* ignore */ }
+      video.srcObject = null;
+      return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7));
+    } finally {
+      // Always restore the guide, whether capture succeeded, returned null, or threw.
+      if (mock) mock.style.visibility = prevVisibility;
+    }
   }, []);
 
   // Consume a unit + start the backend interview, then enter the interview UI.
@@ -2593,8 +2615,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             Do not refresh this page — it drops screen sharing and restarts setup.
           </p>
 
-          {/* Visual guide — a mock of the Chrome sharing bar with Hide highlighted */}
-          <div className="bg-gray-100 border border-gray-200 rounded-xl p-3 mb-4">
+          {/* Visual guide — a mock of the Chrome sharing bar with Hide highlighted.
+              Hidden during the vision-check frame capture (shareBarMockRef) so it
+              is never mistaken for the real bar. */}
+          <div ref={shareBarMockRef} className="bg-gray-100 border border-gray-200 rounded-xl p-3 mb-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2 text-center">Look for this bar and click &ldquo;Hide&rdquo;</p>
             <div className="mx-auto max-w-md flex items-center gap-3 bg-white rounded-lg shadow-md border border-gray-200 px-3 py-2.5">
               <span className="w-4 h-4 rounded-sm bg-blue-500 shrink-0" />
