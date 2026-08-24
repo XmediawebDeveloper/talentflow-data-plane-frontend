@@ -1582,6 +1582,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const proctoringStateRef = useRef(proctoringState);
   useEffect(() => { proctoringStateRef.current = proctoringState; }, [proctoringState]);
 
+  // Seed interviewMicDeviceIdRef from the proctoring stream's own baseline
+  // device id the instant it's known. getDedicatedRecordingAudioStream /
+  // getSharedRecordingAudioStream (below) only set this ref lazily, on the
+  // candidate's FIRST answer recording — so without this seed, a mic pulled
+  // any time before that (e.g. while Bina is still asking the first
+  // question) leaves `orig` undefined and both activeTrackSwapped() and
+  // origMissingFromList() unconditionally return false ("can't judge —
+  // present"), so the unplug is silently never detected.
+  useEffect(() => {
+    if (initialMicDeviceId && !interviewMicDeviceIdRef.current) {
+      interviewMicDeviceIdRef.current = initialMicDeviceId;
+    }
+  }, [initialMicDeviceId]);
+
   // Ref mirrors of pause/resumeQuestionTimer. Those are declared FAR below this
   // effect, so naming them directly in its dependency array would evaluate the
   // binding during render, before the `const` initializes (TDZ crash). Both are
@@ -1789,7 +1803,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     const activeTrackSwapped = (): boolean => {
       const orig = interviewMicDeviceIdRef.current;
       if (!orig) return false;
-      const t = mediaStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live');
+      // mediaStreamRef only holds a live track WHILE an answer is actively
+      // recording (startRecordingInternal sets it, stop clears it) — outside
+      // that window (e.g. while Bina is speaking) it's empty, so this signal
+      // would go dark for most of the interview. webcamStreamRef holds the
+      // proctoring stream acquired once at interview start and kept live
+      // throughout, so fall back to it whenever no recording is in flight.
+      const t = mediaStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live')
+        ?? webcamStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live');
       if (!t) return false;
       const cur = t.getSettings?.().deviceId;
       return Boolean(cur && cur !== 'default' && cur !== 'communications' && cur !== orig);
@@ -1811,8 +1832,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
     const check = async (trigger: string) => {
       try {
-        const liveTrack = mediaStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live');
-        const anyTrack = mediaStreamRef.current?.getAudioTracks?.()[0];
+        // Same recording-stream-first, webcam-stream-fallback order as
+        // activeTrackSwapped() above, so this diagnostic snapshot reflects
+        // the track that signal actually inspected instead of always
+        // reading "no-track" whenever no answer is currently being recorded.
+        const liveTrack = mediaStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live')
+          ?? webcamStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live');
+        const anyTrack = mediaStreamRef.current?.getAudioTracks?.()[0] ?? webcamStreamRef.current?.getAudioTracks?.()[0];
         const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [] as MediaDeviceInfo[]);
         const audioInputs = devices.filter(d => d.kind === 'audioinput');
         const swapped = activeTrackSwapped();
