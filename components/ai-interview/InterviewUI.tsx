@@ -1472,30 +1472,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     return candidateAIInterviewService.reportProctorEvent(t, event);
   }, []);
 
-  // Tried by the proctoring monitor BEFORE it ever reports the mic disabled —
-  // e.g. a laptop's built-in mic taking over the instant an external headset
-  // is unplugged. reacquireAudio() asks for "the current default input" with
-  // no deviceId pin, so once the OS re-defaults away from the dead headset
-  // this naturally picks up whatever mic is now available. On success this is
-  // entirely invisible to the candidate — no popup, no pause, no strike
-  // counted against the 2-disconnect limit — but still logged (low severity)
-  // so the recruiter has an audit trail of the swap.
-  const attemptSilentMicFallback = useCallback(async (): Promise<boolean> => {
-    const ok = (await webcamRef.current?.reacquireAudio()) ?? false;
-    if (ok) {
-      candidateAIInterviewService.reportProctorEvent(token, {
-        event_type: 'microphone_disabled',
-        severity: 'low',
-        details: {
-          phase: 'in_interview',
-          reason: 'auto_fallback_switch',
-          note: 'Microphone device dropped and was automatically switched to another available device (e.g. built-in mic) with no interruption to the candidate.',
-        },
-      }).catch(() => { /* best-effort */ });
-    }
-    return ok;
-  }, [token]);
-
   const { state: proctoringState, emitEvent, flushEvents, initialMicDeviceId } = useInterviewProctoringMonitor({
     token,
     stream: webcamStream,
@@ -1504,7 +1480,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
     reportEvent: reportProctorEvent,
-    attemptSilentMicFallback,
     // Suppress voice_detected while Bina is speaking (TTS echo), while we are
     // actively recording the candidate's answer, OR during the between-question
     // "Hold On — get ready" transition (isProcessing). All three are expected /
@@ -1620,6 +1595,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // definitions — see the assignment effect there.
   const pauseQuestionTimerRef = useRef<() => void>(() => {});
   const resumeQuestionTimerRef = useRef<() => void>(() => {});
+  // Same TDZ reason as above — stopVisemeLoop is declared far below. Lets the
+  // pause-arm branch immediately silence the avatar instead of leaving it
+  // animating/"speaking" in the background while the interview is paused.
+  const stopVisemeLoopRef = useRef<() => void>(() => {});
 
   const clearMediaPauseTimers = useCallback(() => {
     if (mediaPauseCountdownIdRef.current) { clearInterval(mediaPauseCountdownIdRef.current); mediaPauseCountdownIdRef.current = null; }
@@ -1714,6 +1693,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       setIsMediaPaused(true);
       mediaPauseStartMsRef.current = Date.now();
       setMediaPauseSecondsRemaining(Math.ceil(MEDIA_PAUSE_GRACE_MS / 1000));
+      // Strict mic requirement: nothing may keep running in the background
+      // while paused. Silence the avatar immediately (no more lip-sync/
+      // "speaking" animation), drop any still-queued TTS audio so nothing
+      // further plays out, and stop any in-progress answer recording.
+      stopVisemeLoopRef.current();
+      audioQueueRef.current = [];
+      isPlayingRef.current = false;
+      try { stopRecordingSilentRef.current(); } catch { /* ignore */ }
       // Freeze the per-question answer clock the instant the device drops.
       // The backend cancels its own auto-skip task on session_pause and shifts
       // question_start_time forward on resume, but it never re-sends a
@@ -3983,6 +3970,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       visemeRafRef.current = null;
     }
   }, []);
+  useEffect(() => {
+    stopVisemeLoopRef.current = stopVisemeLoop;
+  }, [stopVisemeLoop]);
 
   // ── Gapless scheduled audio playback ────────────────────────────────────────
   // Instead of onended → playNextBuffer (which has JS-event-loop gaps = clicks),
@@ -9825,7 +9815,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   ? "Your interview is paused. Please reconnect your camera and microphone — it will resume automatically."
                   : !proctoringState.isCameraActive
                   ? "Your interview is paused. Please reconnect your camera — it will resume automatically."
-                  : "Your interview is paused. Please reconnect your microphone (or headset) — it will resume automatically."}
+                  : "Microphone disconnected. Please connect your microphone to continue the interview — it will resume automatically."}
               </p>
             </div>
             {mediaPauseSecondsRemaining !== null && (
