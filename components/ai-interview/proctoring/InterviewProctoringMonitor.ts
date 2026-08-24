@@ -1231,6 +1231,12 @@ export function useInterviewProctoringMonitor({
     emitEvent,           // For external callers (face detection, etc.)
     setReducedFrequency, // For load shedding from InterviewUI
     flushEvents: flushBackendQueue, // Explicit pre-completion flush — call before interview ends
+    // The mic device the interview started on (captured once, see
+    // initialMicDeviceIdRef above). Lets a caller's recovery loop target
+    // THIS specific device when reacquiring, instead of whatever the OS
+    // currently calls "default" — which is what let a headset replug go
+    // undetected forever (see setupTrackMonitoring's device-swap comment).
+    initialMicDeviceId: initialMicDeviceIdRef.current,
   };
 }
 

@@ -1479,7 +1479,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     return ok;
   }, [token]);
 
-  const { state: proctoringState, emitEvent, flushEvents } = useInterviewProctoringMonitor({
+  const { state: proctoringState, emitEvent, flushEvents, initialMicDeviceId } = useInterviewProctoringMonitor({
     token,
     stream: webcamStream,
     enabled: isConnected,
@@ -1529,8 +1529,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (cancelled) return;
       let ok = false;
       try {
+        // Target the device the interview STARTED on so a replugged headset
+        // is recognized as "restored" (initialMicDeviceIdRef's own device-
+        // swap check requires an EXACT match) instead of silently landing on
+        // whatever the OS calls "default" — which never satisfies that
+        // check and left the pause stuck forever even after the candidate
+        // plugged the same headset back in.
         ok = (micOnly
-          ? await webcamRef.current?.reacquireAudio()
+          ? await webcamRef.current?.reacquireAudio(initialMicDeviceId ?? undefined)
           : await webcamRef.current?.reacquire()) ?? false;
       } catch {
         /* device still unavailable — keep polling */
@@ -1542,7 +1548,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }
     }, 2500);
     return () => { cancelled = true; clearInterval(id); };
-  }, [isConnected, proctoringState.isCameraActive, proctoringState.isMicrophoneActive]);
+  }, [isConnected, proctoringState.isCameraActive, proctoringState.isMicrophoneActive, initialMicDeviceId]);
 
   // ── Camera/mic disconnect: pause + 3-minute grace, then terminate ──────────
   // ANY device loss — camera, mic (headset included, via
@@ -1772,7 +1778,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // counts as an unplug — guards against a transient enumerate that omits it,
     // and against a stale captured id that never actually matched a listed
     // device (which would otherwise false-fire for a no-headset candidate).
-    let origConfirmedPresent = false;
+    // Seed this from interviewMicDeviceIdRef itself when it's already set:
+    // that ref is ONLY ever populated from a track that was actually LIVE at
+    // capture time (see getDedicatedRecordingAudioStream/getSharedRecording-
+    // AudioStream), so presence was already confirmed once. Without this,
+    // every WS reconnect (isConnected is a dependency below, and reconnects
+    // are routine — keepalive pings, network blips) tears down and rebuilds
+    // this effect, resetting the flag to false — so a headphone pulled
+    // before the next fresh poll landed was silently ignored (never counted
+    // as missing), even though the device really was gone.
+    let origConfirmedPresent = Boolean(interviewMicDeviceIdRef.current);
 
     // SIGNAL A — the ACTIVE answer-mic track is now on a DIFFERENT device than
     // the interview started on. This is the reliable signal for a wired unplug

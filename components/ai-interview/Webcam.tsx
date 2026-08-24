@@ -35,7 +35,11 @@ export interface WebcamRef {
   // healthy camera to transiently mute/re-negotiate and trip a false
   // "Camera Disabled". Resolves true when a fresh live audio track was
   // obtained and swapped in.
-  reacquireAudio: () => Promise<boolean>;
+  // Pass `deviceId` to target a SPECIFIC input (e.g. the original headset
+  // once it's reconnected) instead of whatever the OS currently calls
+  // "default" — falls back to the unconstrained default request if that
+  // exact device can't be opened. Omit for the old default-only behavior.
+  reacquireAudio: (deviceId?: string) => Promise<boolean>;
 }
 
 export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
@@ -137,18 +141,28 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
   // undisturbed. Mirrors the same "swap in place" approach InterviewUI's
   // handleTracksReplaced uses for the recording graph, applied here to the
   // stream object itself.
-  const reacquireAudio = useCallback(async (): Promise<boolean> => {
+  const reacquireAudio = useCallback(async (deviceId?: string): Promise<boolean> => {
     const current = streamRef.current;
     if (!current) return false;
+    const baseAudio = {
+      channelCount: { ideal: 1 },
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    };
     try {
-      const audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: { ideal: 1 },
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      let audioStream: MediaStream;
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: deviceId ? { ...baseAudio, deviceId: { exact: deviceId } } : baseAudio,
+        });
+      } catch (err) {
+        // Requested device may have gone away again between the caller's
+        // presence check and this call — fall back to whatever the OS
+        // currently calls "default" rather than failing the whole reacquire.
+        if (!deviceId) throw err;
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: baseAudio });
+      }
       const newAudioTrack = audioStream.getAudioTracks()[0];
       if (!newAudioTrack) return false;
 
@@ -181,7 +195,7 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
   useImperativeHandle(ref, () => ({
     getVideoElement: () => videoRef.current,
     reacquire: () => startWebcam(),
-    reacquireAudio: () => reacquireAudio(),
+    reacquireAudio: (deviceId?: string) => reacquireAudio(deviceId),
   }), [startWebcam, reacquireAudio]);
 
   useEffect(() => {
