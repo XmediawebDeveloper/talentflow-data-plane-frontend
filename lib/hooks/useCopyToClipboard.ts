@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { toast } from '../components/ui/enhanced-toast';
+import { toast } from '@/components/ui/enhanced-toast';
 
 /**
  * Hook for copying text to clipboard with visual feedback
