@@ -413,10 +413,18 @@ export interface QuestionEvaluation {
     summary?: string;
     strengths?: string[];
     improvements?: string[];
+    // Must stay structurally compatible with assessmentService.QuestionEvaluation's
+    // marks_breakdown - values of that type are passed to helpers typed against this one.
+    // That type carries `output` and a numeric `total_marks`; `total_marks: number`
+    // conflicted with the old value-only index signature, so the signature now admits
+    // `number` too. Named keys below keep their precise types (TS prefers an explicit
+    // property over the index signature), and every consumer reads named keys only.
     marks_breakdown?: {
       syntax?: { earned: number; total: number; status?: string; reason?: string };
       execution?: { earned: number; total: number; status?: string; reason?: string };
-      [key: string]: { earned: number; total: number; status?: string; reason?: string } | undefined;
+      output?: { earned: number; total: number; status?: string; reason?: string };
+      total_marks?: number;
+      [key: string]: { earned: number; total: number; status?: string; reason?: string } | number | undefined;
     };
     [key: string]: any;
   };

@@ -602,7 +602,7 @@ export default function ResumeViewPage() {
     professionalSummary: r.professional_summary,
     technicalSkills: r.technical_skills,
     softSkills: r.soft_skills,
-    educationDetails: r.education?.map((edu: any) => ({
+    educationDetails: (r.education as any[])?.map((edu: any) => ({
       degree: edu.degree || '',
       field: edu.field || '',
       school: edu.school || edu.institution || '',
@@ -611,7 +611,7 @@ export default function ResumeViewPage() {
       gpa: edu.gpa || '',
       honors: edu.honors || '',
     })),
-    experienceDetails: r.experience?.map((exp: any) => ({
+    experienceDetails: (r.experience as any[])?.map((exp: any) => ({
       title: exp.title || exp.position || '',
       company: exp.company || '',
       location: exp.location || '',

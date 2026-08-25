@@ -38,7 +38,10 @@ export default function SearchFilterBar({
     setTempFilters(filters);
   }, [filters]);
 
-  const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
+    // `filters` is typed `any`, but Object.entries widens each value to `unknown`,
+    // so the property reads below (.min/.max/.start/.end) failed to compile. The
+    // explicit tuple annotation restores the `any` these values already had.
+  const activeFilterCount = Object.entries(filters).filter(([key, value]: [string, any]) => {
     if (key === 'skills' && Array.isArray(value)) return value.length > 0;
     if (key === 'experienceRange') return value && (value.min !== undefined || value.max !== undefined);
     if (key === 'uploadDateRange') return value && (value.start || value.end);
