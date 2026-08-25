@@ -387,9 +387,46 @@ function buildClustersFromConfig(
     .join(' ')
     .toLowerCase();
 
+  // ── Per-skill delivery flags from `question_skill_map` (AUTHORITATIVE) ────
+  //  Each entry carries `not_delivered`, set by the backend when the row came
+  //  from `_append_undelivered_plan_slots` (a planned question the interview
+  //  never reached). This is the exact structure the Question Analysis tab
+  //  renders, so keying coverage off it makes the two tabs agree BY
+  //  CONSTRUCTION instead of by two independent reconstructions of "which
+  //  slots were delivered" that can — and did — disagree.
+  //
+  //  A skill counts as delivered if ANY entry for it was delivered: Sanity
+  //  Testing is asked on delivered Q5 AND recovered onto un-reached Q9, and the
+  //  delivered occurrence is what matters.
+  const qsmDelivered = new Set<string>();
+  const qsmSeen = new Set<string>();
+  for (const entries of Object.values((eval_?.question_skill_map || {}) as Record<string, any>)) {
+    if (!Array.isArray(entries)) continue;
+    for (const e of entries) {
+      const k = String(e?.skill || '').toLowerCase().trim();
+      if (!k) continue;
+      const c = compactSkillKey(e?.skill);
+      qsmSeen.add(k); if (c) qsmSeen.add(c);
+      if (!e?.not_delivered) { qsmDelivered.add(k); if (c) qsmDelivered.add(c); }
+    }
+  }
+
   const lookupAsked = (sname: string, score010: number): boolean => {
     const sl = sname.toLowerCase().trim();
     const sc = compactSkillKey(sname);
+    // ── Signal 0 (AUTHORITATIVE): question_skill_map delivery flags ───────
+    // Decides BOTH ways when it knows the skill — a skill it lists only under
+    // un-delivered questions is definitively Not Covered, so this must return
+    // false rather than fall through to the plan below. Signal 1 reconstructs
+    // delivered slots by taking plan rows in PLAN ORDER capped at the delivered
+    // count, which credited the wrong slots here: plan Q4 (UAT + Selenium Grid
+    // + Azure Storage) was counted as delivered while the backend had matched
+    // by skill overlap and treated Q4 as un-reached — the very skills Question
+    // Analysis prints as "Not Delivered" showed up Covered.
+    if (qsmSeen.has(sl) || qsmSeen.has(sc)) {
+      return qsmDelivered.has(sl) || qsmDelivered.has(sc);
+    }
+
 
     // ── Signal 1 (PRIMARY): the Question Distribution plan ────────────────
     // `special_instructions.mth/nth_question_skill_map` — the same DB-backed
