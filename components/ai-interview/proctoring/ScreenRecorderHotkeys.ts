@@ -90,12 +90,17 @@ export const RECORDER_HOTKEYS: RecorderHotkey[] = [
     platforms: ['windows'], confidence: 'high',
     match: (e) => e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && key(e) === 'e',
   },
-  {
-    id: 'amd_instant_replay',
-    label: 'AMD Adrenalin Instant Replay (Ctrl+Shift+R)',
-    platforms: ['windows'], confidence: 'high',
-    match: (e) => e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey && key(e) === 'r',
-  },
+  // NOTE: AMD Adrenalin "Instant Replay" save is Ctrl+Shift+R by default —
+  // which is ALSO the universal browser HARD-RELOAD shortcut. We deliberately do
+  // NOT flag it: it collides completely with an action ordinary candidates press
+  // all the time (a false "Screen Recording Not Allowed" block + severe
+  // violation for someone who just reloaded the page — observed in the wild,
+  // often after the page felt slow). Detecting the SAVE hotkey buys almost no
+  // security anyway: Instant Replay records continuously in the background
+  // whether or not this key is pressed, and AMD's actual presence is caught by
+  // the virtual-device / audio-loopback watch instead. Leaving it unmatched also
+  // lets Ctrl+Shift+R behave like F5 / Ctrl+R — a normal reload the resume flow
+  // already handles — rather than being preventDefault-blocked. (2026-08-24)
 
   // ── Windows: third-party recorders with unambiguous defaults ─────────────
   {

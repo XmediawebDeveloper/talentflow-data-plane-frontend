@@ -195,6 +195,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   const [shareBarChecking, setShareBarChecking] = useState(false);
   const [shareBarError, setShareBarError] = useState<string | null>(null);
   const [shareBarAttempts, setShareBarAttempts] = useState(0);
+  // The on-page mock of the Chrome sharing bar (the "look for this bar" guide).
+  // It is hidden during the entire-screen frame capture so the vision check
+  // never mistakes OUR illustration for the real sharing bar (false positive).
+  const shareBarMockRef = useRef<HTMLDivElement>(null);
   // Pre-interview single-active-session lease: true when another browser/device
   // already holds this interview link (blocks the second person from system
   // check onward). See the lease heartbeat effect.
@@ -619,22 +623,36 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   //   • 'interview' — the WebSocket takes over the SAME lock (same cid), so we
   //     must not double-heartbeat/release here;
   //   • terminal states ('completed'/'terminated'/'error') — which release it.
+  // Release the lease the moment the candidate reaches a terminal state (the
+  // WS already released on 'interview' end). Its own tiny effect keyed on
+  // `step` so the heartbeat effect below never has to re-subscribe on a step
+  // change. Best-effort — the 90s stale window backstops a missed release.
   useEffect(() => {
     if (!token) return;
-    const NON_LEASE_STEPS: Step[] = ['loading', 'interview', 'completed', 'terminated', 'error'];
-    if (NON_LEASE_STEPS.includes(step)) {
-      // Release the lease when the candidate reaches a terminal state (the WS
-      // already released on 'interview' end). Best-effort.
-      if (step === 'completed' || step === 'terminated' || step === 'error') {
-        candidateAIInterviewService
-          .sessionLease(token, getAiClientSessionId(token), 'release')
-          .catch(() => { /* stale-timeout backstops it */ });
-      }
-      return;
+    if (step === 'completed' || step === 'terminated' || step === 'error') {
+      candidateAIInterviewService
+        .sessionLease(token, getAiClientSessionId(token), 'release')
+        .catch(() => { /* stale-timeout backstops it */ });
     }
+  }, [step, token]);
+
+  // True only during the PRE-INTERVIEW steps that hold the lease (registration
+  // → consent → system-check → voice → share-bar). False for 'loading', the
+  // live 'interview' (the WS holds the lock then), and terminal states. Keying
+  // the heartbeat effect on this boolean — NOT on `step` — means it
+  // re-subscribes exactly ONCE when the lease phase is entered (so the first
+  // claim is immediate) and does NOT re-fire on every sub-step change (which
+  // was the request flood). It also carries no interval during non-lease steps.
+  const isLeaseStep =
+    step !== 'loading' && step !== 'interview' &&
+    step !== 'completed' && step !== 'terminated' && step !== 'error';
+
+  useEffect(() => {
+    if (!token || !isLeaseStep) return;
     const cid = getAiClientSessionId(token);
     let cancelled = false;
     const beat = async () => {
+      if (cancelled) return;
       try {
         const r = await candidateAIInterviewService.sessionLease(token, cid, 'acquire');
         if (cancelled) return;
@@ -655,10 +673,16 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         // Network error — don't block a genuine candidate on a transient failure.
       }
     };
-    beat();
-    // Heartbeat every 5s (well under the 90s stale window) so the block appears
-    // fast for a 2nd opener and the holder's lease never lapses mid-flow.
-    const iv = setInterval(beat, 5000);
+    beat();  // immediate claim the moment the lease phase is entered
+    // Heartbeat every 10s (well under the 90s stale window). PERF: this effect
+    // is keyed on [token, isLeaseStep], so the interval is created ONCE when the
+    // lease phase is entered and torn down when it ends — it does NOT re-fire on
+    // every pre-interview sub-step. Previously it was keyed on [step] AND fired
+    // an immediate beat on every re-subscribe, so each of the ~10 pre-interview
+    // step transitions spawned an extra immediate POST — a burst of ~29 rapid
+    // /session-lease calls that saturated the browser's per-host connection
+    // pool and made the page crawl. Single interval per lease phase fixes it.
+    const iv = setInterval(beat, 10000);
 
     // ── Release the lease when this page goes away ───────────────────────────
     // Without this, closing the tab/browser leaves the lease looking ALIVE (its
@@ -689,7 +713,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       window.removeEventListener('pagehide', releaseNow);
       window.removeEventListener('beforeunload', releaseNow);
     };
-  }, [step, token]);
+  }, [token, isLeaseStep]);
 
   // Tick the "available in …" countdown down locally, once per second. The
   // heartbeat only re-syncs it every 5s, which would make the number visibly
@@ -1507,28 +1531,46 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     const stream = screenStreamRef.current;
     const track = stream?.getVideoTracks?.()[0];
     if (!stream || !track || track.readyState !== 'live') return null;
-    const video = document.createElement('video');
-    video.muted = true;
-    (video as HTMLVideoElement).playsInline = true;
-    video.srcObject = stream;
-    try { await video.play(); } catch { /* ignore */ }
-    await new Promise<void>((resolve) => {
-      if (video.videoWidth && video.readyState >= 2) return resolve();
-      const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
-      video.addEventListener('loadeddata', on);
-      window.setTimeout(resolve, 1500);
-    });
-    const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
-    const scale = Math.min(1, 1600 / vw);
-    const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = cw; canvas.height = ch;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) { try { video.pause(); } catch { /* ignore */ } video.srcObject = null; return null; }
-    ctx.drawImage(video, 0, 0, cw, ch);
-    try { video.pause(); } catch { /* ignore */ }
-    video.srcObject = null;
-    return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7));
+    // Hide our own on-page reference mock of the sharing bar BEFORE grabbing the
+    // frame. The capture is of the WHOLE screen, which includes this page — and
+    // that page shows a realistic mock ("This site is sharing your screen · Stop
+    // sharing · Hide"). Left visible, the vision model sees OUR illustration and
+    // reports the real bar as "still visible" even when the candidate has hidden
+    // it — a false positive that traps them on this step. We hide it, wait for
+    // the screen-capture pipeline to reflect the change, capture, then restore.
+    const mock = shareBarMockRef.current;
+    const prevVisibility = mock ? mock.style.visibility : '';
+    if (mock) mock.style.visibility = 'hidden';
+    try {
+      // Let the compositor + screen-capture stream drop the now-hidden mock
+      // (a few frames of latency); imperceptible during the "Checking…" state.
+      if (mock) await new Promise<void>((r) => window.setTimeout(r, 250));
+      const video = document.createElement('video');
+      video.muted = true;
+      (video as HTMLVideoElement).playsInline = true;
+      video.srcObject = stream;
+      try { await video.play(); } catch { /* ignore */ }
+      await new Promise<void>((resolve) => {
+        if (video.videoWidth && video.readyState >= 2) return resolve();
+        const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
+        video.addEventListener('loadeddata', on);
+        window.setTimeout(resolve, 1500);
+      });
+      const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+      const scale = Math.min(1, 1600 / vw);
+      const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = cw; canvas.height = ch;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { try { video.pause(); } catch { /* ignore */ } video.srcObject = null; return null; }
+      ctx.drawImage(video, 0, 0, cw, ch);
+      try { video.pause(); } catch { /* ignore */ }
+      video.srcObject = null;
+      return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7));
+    } finally {
+      // Always restore the guide, whether capture succeeded, returned null, or threw.
+      if (mock) mock.style.visibility = prevVisibility;
+    }
   }, []);
 
   // Consume a unit + start the backend interview, then enter the interview UI.
@@ -2325,8 +2367,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ========== FULLSCREEN PROMPT ==========
   if (step === 'fullscreen_prompt') {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <div className={`bg-white rounded-2xl shadow-2xl w-full p-8 md:p-10 ${screenShareDeclined ? 'max-w-2xl' : 'max-w-5xl'}`}>
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
+        <div className={`bg-white rounded-2xl shadow-2xl w-full my-auto p-6 md:p-8 ${screenShareDeclined ? 'max-w-2xl' : 'max-w-7xl'}`}>
 
           {screenShareDeclined ? (
             /* ── Screen share declined — block the interview ── */
@@ -2367,18 +2409,18 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           ) : (
             /* ── Normal fullscreen prompt ── */
             <>
-              <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Monitor className="w-10 h-10 text-indigo-600" />
+              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Monitor className="w-8 h-8 text-indigo-600" />
               </div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
                 Enter Fullscreen Mode
               </h1>
-              <p className="text-gray-600 mb-6 text-center text-sm">
+              <p className="text-gray-600 mb-4 text-center text-sm">
                 The AI interview runs in fullscreen with Entire Screen sharing and is actively proctored, to ensure a focused and fair environment. Please read the rules below before you begin.
               </p>
               {/* Two-column rules: blue "Interview Rules" (left) + orange
                   "Not allowed during the interview" (right). */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5 text-left">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-left">
                 {/* LEFT — blue: what to do */}
                 <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5">
                   <p className="font-semibold text-indigo-900 mb-3 text-sm">Interview Rules:</p>
@@ -2428,7 +2470,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               )}
 
               {/* Consent checkbox — the Share button stays disabled until ticked. */}
-              <label className="flex items-start gap-3 mb-5 cursor-pointer select-none text-left">
+              <label className="flex items-start gap-3 mb-4 cursor-pointer select-none text-left">
                 <input
                   type="checkbox"
                   checked={rulesConsent}
@@ -2468,24 +2510,24 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ========== FINAL CONSENT (shown in fullscreen, right before the interview starts) ==========
   if (step === 'final_consent') {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-10">
-          {/* Prominent do-not-refresh warning — reloading here drops fullscreen
-              + screen sharing and sends the candidate back to re-share. */}
-          <div className="flex items-center justify-center gap-2 bg-red-600 text-white font-semibold text-sm md:text-base rounded-xl px-4 py-3 mb-6 text-center shadow-sm">
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-            Do not refresh this page
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
+          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <AlertTriangle className="w-8 h-8 text-amber-600" />
           </div>
-          <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <AlertTriangle className="w-10 h-10 text-amber-600" />
-          </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
             Before we begin
           </h1>
-          <p className="text-gray-600 mb-6 text-center text-sm">
+          <p className="text-gray-600 mb-2 text-center text-sm">
             You are now in fullscreen with screen sharing active. Please confirm that you understand the actions that are not allowed. Your interview begins as soon as you accept.
           </p>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-6 text-left">
+          {/* Do-not-refresh warning, inline: reloading here drops fullscreen +
+              screen sharing and sends the candidate back to re-share. */}
+          <p className="text-xs font-semibold text-red-600 mb-4 text-center flex items-center justify-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            Do not refresh this page — it drops screen sharing and restarts setup.
+          </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-left">
             <p className="font-semibold text-amber-900 mb-3 text-sm flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               Not allowed during the interview
@@ -2547,33 +2589,36 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ========== HIDE SCREEN-SHARE BAR (vision-LLM verified, pre-start) ==========
   if (step === 'hide_share_bar') {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-10">
-          <div className="flex items-center justify-center gap-2 bg-red-600 text-white font-semibold text-sm md:text-base rounded-xl px-4 py-3 mb-6 text-center shadow-sm">
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-            Do not refresh this page
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <Monitor className="w-8 h-8 text-blue-600" />
           </div>
-          <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Monitor className="w-10 h-10 text-blue-600" />
-          </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
             One last step — hide the sharing bar
           </h1>
-          <p className="text-gray-600 mb-6 text-center text-sm leading-relaxed">
+          <p className="text-gray-600 mb-2 text-center text-sm leading-relaxed">
             At the bottom of your screen you&apos;ll see a bar that says
             <b> &ldquo;…is sharing your screen&rdquo;</b>. Please click its
             <b> Hide</b> button so it doesn&apos;t cover the interview. Screen
             sharing stays ON — this only collapses the bar. Then press
             <b> Continue</b> and we&apos;ll verify it before starting.
           </p>
-          <p className="text-gray-500 mb-6 text-center text-xs leading-relaxed -mt-2">
+          <p className="text-gray-500 mb-2 text-center text-xs leading-relaxed">
             Also close any screen-recording software (e.g. OBS, ScreenRec,
             Bandicam, Camtasia, Game Bar) before continuing — the interview
             cannot start while one is running.
           </p>
+          {/* Do-not-refresh warning, inline (replaces the old red top bar). */}
+          <p className="text-xs font-semibold text-red-600 mb-4 text-center flex items-center justify-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            Do not refresh this page — it drops screen sharing and restarts setup.
+          </p>
 
-          {/* Visual guide — a mock of the Chrome sharing bar with Hide highlighted */}
-          <div className="bg-gray-100 border border-gray-200 rounded-xl p-4 mb-6">
+          {/* Visual guide — a mock of the Chrome sharing bar with Hide highlighted.
+              Hidden during the vision-check frame capture (shareBarMockRef) so it
+              is never mistaken for the real bar. */}
+          <div ref={shareBarMockRef} className="bg-gray-100 border border-gray-200 rounded-xl p-3 mb-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2 text-center">Look for this bar and click &ldquo;Hide&rdquo;</p>
             <div className="mx-auto max-w-md flex items-center gap-3 bg-white rounded-lg shadow-md border border-gray-200 px-3 py-2.5">
               <span className="w-4 h-4 rounded-sm bg-blue-500 shrink-0" />

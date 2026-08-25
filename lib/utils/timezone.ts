@@ -9,6 +9,12 @@
 export const INDIA_TIMEZONE = 'Asia/Kolkata';
 export const IST_OFFSET_HOURS = 5;
 export const IST_OFFSET_MINUTES = 30;
+/** IST offset in milliseconds. Referenced by getCurrentIST()/addISTOffset() below,
+ *  which used it without it ever being declared - so calling either threw a
+ *  ReferenceError at runtime. Derived from the two constants above rather than
+ *  hardcoded, so the three can never disagree. */
+export const IST_OFFSET_MS =
+  (IST_OFFSET_HOURS * 60 + IST_OFFSET_MINUTES) * 60 * 1000;
 
 /**
  * Format date/time in IST (UTC+5:30)

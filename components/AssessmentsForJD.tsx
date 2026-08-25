@@ -32,7 +32,11 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { assessmentService } from '@/lib/services';
 import { toast } from 'sonner';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
-import { formatDateTimeIST, formatDateOnlyIST } from '@/lib/utils/dateUtils';
+// dateUtils exports neither of these names. formatDateTimeIST was imported but never
+// used; formatDateOnlyIST is used below and resolved to undefined at runtime, so the
+// call crashed. formatISTDate is dateUtils' own date-only formatter and is what the
+// rest of the app uses for exactly this.
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import VersionBadge from './VersionBadge';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 
@@ -385,7 +389,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-500">
-                          {formatDateOnlyIST(assessment.created_at)}
+                          {formatISTDate(assessment.created_at)}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">

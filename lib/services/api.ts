@@ -563,7 +563,10 @@ api.interceptors.response.use(
 // Exported so layout.tsx listener uses the SAME guard — prevents duplicate hard reloads
 let paymentRedirectInProgress = false;
 
-export const redirectToPaymentPage = (tenant_id: string, plan_id: string) => {
+// plan_id is `string | number` because PaymentPendingDetail.plan_id is a number and
+// both call sites pass it straight through. encodePlanId() below already accepts
+// either, so this only corrects the declared type - no conversion is added.
+export const redirectToPaymentPage = (tenant_id: string, plan_id: string | number) => {
   if (!paymentRedirectInProgress && typeof window !== 'undefined' && !window.location.pathname.includes('/complete-payment')) {
     paymentRedirectInProgress = true;
     const t = encodeParam(tenant_id);

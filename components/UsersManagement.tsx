@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { UserCog, Plus, Search, Edit2, Trash2, X, Mail, Calendar, Loader2, Eye, Shield, Lock, Check } from 'lucide-react';
 import { User, UserRole } from '@/lib/types/tenant';
-import { userService, ApiUser, UserPermissions } from '../services/userService';
+import { userService, ApiUser, UserPermissions } from '@/lib/services/userService';
 import rbacService from '@/lib/services/rbacService';
 import { Permission, RoleListItem } from '@/lib/types/rbac';
 import { toast } from 'sonner';
@@ -14,20 +14,24 @@ interface UsersManagementProps {
   tenantId?: string;
 }
 
-const roleLabels: Record<UserRole, string> = {
+// Partial: these maps deliberately cover only the roles this screen displays, not
+// every member of UserRole. Record<> demanded all of them; a missing key already
+// returned undefined at runtime, so this describes existing behaviour rather than
+// changing it.
+const roleLabels: Partial<Record<UserRole, string>> = {
   tenant_admin: 'Owner',
   recruiter: 'Recruiter',
   viewer: 'Viewer',
 };
 
-const roleBadgeColors: Record<UserRole, string> = {
+const roleBadgeColors: Partial<Record<UserRole, string>> = {
   tenant_admin: 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white',
   recruiter: 'bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50',
   viewer: 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300',
 };
 
 // ✅ GRANULAR PERMISSION LABELS: Removed all "manage" labels, using only granular CRUD
-const permissionLabels: Record<keyof UserPermissions, string> = {
+const permissionLabels: Partial<Record<keyof UserPermissions, string>> = {
   // JD Permissions
   can_view_jd: 'View JD',
   can_create_jd: 'Create JD',
@@ -131,7 +135,10 @@ const DEFAULT_MINIMUM_PERMISSIONS: Array<keyof UserPermissions> = [
 const RECRUITER_REQUIRED_PERMISSIONS: Array<keyof UserPermissions> = DEFAULT_MINIMUM_PERMISSIONS;
 
 // ✅ GRANULAR PERMISSIONS: Permission dependencies (auto-enable related permissions)
-const PERMISSION_DEPENDENCIES: Record<keyof UserPermissions, Array<keyof UserPermissions>> = {
+// Partial: only permissions that HAVE dependencies are listed. Record<> demanded an
+// entry for every permission; a lookup for one with no dependencies already returned
+// undefined at runtime and is handled as such below.
+const PERMISSION_DEPENDENCIES: Partial<Record<keyof UserPermissions, Array<keyof UserPermissions>>> = {
   // Resume dependencies
   can_upload_resumes: ['can_view_resumes'],           // Upload requires view
   can_create_resumes: ['can_view_resumes'],           // Create requires view
@@ -356,7 +363,12 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
 
   const loadRbacRoles = async () => {
     try {
-      const roles = await rbacService.getRoles();
+      // getRoles() resolves to { roles, total }, not an array. Calling .filter() on the
+      // wrapper threw a TypeError that the empty catch below swallowed, so the role cards
+      // ALWAYS fell back to the static list. Reading .roles is what the code intended;
+      // note this makes the fetched roles actually load, which is a behaviour change the
+      // type error was hiding.
+      const { roles } = await rbacService.getRoles();
       setRbacRoles(roles.filter((r: RoleListItem) => ['viewer', 'recruiter', 'admin'].includes(r.code)));
     } catch {
       // fail silently — role cards fall back to static list
@@ -401,7 +413,9 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
   // ✅ PERMISSION FIX: Check if a permission is required for a role
   const isPermissionRequired = (
     permission: keyof UserPermissions,
-    role: UserRole
+    // `string`, not UserRole: roles are dynamic from RBAC now, so ApiUser.role is a
+    // plain string. The body compares against known role names, which works unchanged.
+    role: string
   ): boolean => {
     if (role === 'recruiter') {
       return RECRUITER_REQUIRED_PERMISSIONS.includes(permission);
@@ -413,7 +427,8 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
   const handlePermissionToggle = (
     permission: keyof UserPermissions,
     currentPermissions: UserPermissions,
-    role: UserRole,
+    // `string` for the same reason as isPermissionRequired above: RBAC roles are dynamic.
+    role: string,
     onUpdate: (permissions: UserPermissions) => void
   ) => {
     // Check if permission is required for role
