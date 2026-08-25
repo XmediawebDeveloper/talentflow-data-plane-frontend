@@ -2671,12 +2671,24 @@ export function buildDashboardData(params: {
       const updatedSkills: Skill[] = cluster.skills.map(sk => {
         const qaScore = qaSkillScore.get((sk.name || '').toLowerCase().trim());
         if (typeof qaScore !== 'number') return sk;
-        // A positive score means the skill has REAL evidence somewhere in the
-        // interview — including a skill whose own question was never asked but
-        // that the candidate demonstrated in another answer (recovery). Mark it
-        // `asked` so Cluster Coverage shows it Covered/Demonstrated rather than
-        // "Not Covered" (a recovered score alone is invisible there otherwise).
-        return { ...sk, score: qaScore, asked: sk.asked || qaScore > 0 };
+        // Take the SCORE only — never the `asked` flag. A positive score can
+        // come from RECOVERY: `_append_undelivered_plan_slots` emits a row for
+        // every planned question the interview never reached, and each of its
+        // skills is scored by whole-interview recovery ("Recovered from Q3").
+        // That is real evidence, but it is NOT coverage — no question probing
+        // that skill was ever delivered to the candidate.
+        //
+        // `sk.asked` is already the delivered-only truth (buildClustersFromConfig
+        // resolves it from the Question Distribution plan restricted to DELIVERED
+        // slots, the backend's skill_assessed_map, and at-ask-time assigned_skills
+        // on delivered history rows — all three skip `not_asked` padding). ORing
+        // in `qaScore > 0` overrode that and marked every recovered skill Covered:
+        // an interview that delivered 5 of 10 MHS questions reported 23/24 skills
+        // (96%) covered, with only the one recovered-at-0 skill (ISTQB) left as
+        // Not Covered. Undelivered questions belong in Question Analysis — where
+        // they show as "Not Delivered" with their mapped skills and score
+        // rationale — not in the coverage counts.
+        return { ...sk, score: qaScore };
       });
       const scoredSkills = updatedSkills.filter(sk => sk.score > 0);
       const newClusterScore = scoredSkills.length > 0
