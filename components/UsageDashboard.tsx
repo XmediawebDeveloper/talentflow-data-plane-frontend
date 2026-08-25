@@ -28,6 +28,9 @@ interface Addon {
   currency?: string;
   billing_unit?: string;
   credit_amount?: number;
+  // Seat purchases carry credit_type ("max_seats") - see routers/addons.py, where it
+  // is an alternative to addon_id. Forwarded below as addon_credit_type.
+  credit_type?: string;
   quota_type?: string;
   min_quantity?: number;
   max_quantity?: number;

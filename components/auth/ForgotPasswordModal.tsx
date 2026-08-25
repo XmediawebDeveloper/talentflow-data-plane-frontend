@@ -339,7 +339,10 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                   {otpCode.map((digit, index) => (
                     <input
                       key={index}
-                      ref={(el) => (otpRefs.current[index] = el)}
+                      /* Block body so the callback returns undefined. React 19 treats a
+                         ref callback's return value as a cleanup function, and the concise
+                         arrow returned the assigned element. */
+                      ref={(el) => { otpRefs.current[index] = el; }}
                       type="text"
                       inputMode="numeric"
                       maxLength={1}

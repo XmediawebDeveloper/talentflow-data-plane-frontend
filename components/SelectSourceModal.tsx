@@ -1451,7 +1451,9 @@ export default function SelectSourceModal({
         <UploadModal
           /* The UI-shaped folders (count/parentId), same conversion the
              table uses — this was previously handed the raw API shape. */
-          folders={tableFolders}
+          /* resumeService.Folder (resume_count) vs types.Folder (count) - two shapes,
+             same name. Cast only; the same array is passed. */
+          folders={tableFolders as any}
           tenant={tenant}
           uploadSection="my-resumes"
           targetFolder={selectedFolder !== 'all' ? selectedFolder : undefined}

@@ -412,7 +412,9 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
 
           {activeTab === 'scoretable' && (
             <DetailedScorecardTab
-              resume={resume}
+              /* Two distinct local ScoredResumeDetail types share this name; they differ
+                 only in `education` (string | any[] here vs string there). Cast only. */
+              resume={resume as any}
               jobTitle={jobTitle}
               getScoreColor={getScoreColor}
               getScoreBgColor={getScoreBgColor}

@@ -18,6 +18,20 @@ interface ScoredResumeData {
   jobTitle: string;
   scoredAt: Date;
   source: 'my-resumes' | 'database';
+  // JD metadata forwarded to <ResumeScoringPage />. This local copy of the interface had
+  // drifted from the one in components/ResumeScoringPage.tsx, which declares all of these;
+  // the object literal below has always passed them.
+  jdStatus?: string;
+  jdJobId?: string;
+  jdCreationMethod?: string;
+  jdCurrentVersion?: number;
+  jdDepartment?: string;
+  jdIndustryType?: string;
+  jdEmploymentType?: string;
+  jdRemoteType?: string;
+  jdLocation?: string;
+  jdPublishedAt?: string;
+  jdCreatedByName?: string;
   totalScored: number;
   scoredResumes: any[];
 }
@@ -391,11 +405,16 @@ export default function ResumeScoringRoute() {
         // Convert score to display format - use backend match_status as source of truth
         const matchScore = Math.round(item.overall_score || 0);
         let matchStatus = 'No Match';
-        if (item.match_status === 'exact_match' || item.match_status === 'Exact Match') {
+        // Read once as a plain string: match_status is a snake_case union on the API type,
+        // but these branches also accept already-display-formatted values ('Exact Match').
+        // Comparing the union directly made those arms "unintentional" and narrowed the
+        // union further on each else-if. Kept as the author's defensive handling.
+        const rawMatchStatus = item.match_status as string;
+        if (rawMatchStatus === 'exact_match' || rawMatchStatus === 'Exact Match') {
           matchStatus = 'Exact Match';
-        } else if (item.match_status === 'partial_match' || item.match_status === 'Partial Match') {
+        } else if (rawMatchStatus === 'partial_match' || rawMatchStatus === 'Partial Match') {
           matchStatus = 'Partial Match';
-        } else if (item.match_status === 'no_match' || item.match_status === 'No Match') {
+        } else if (rawMatchStatus === 'no_match' || rawMatchStatus === 'No Match') {
           matchStatus = 'No Match';
         } else if (matchScore >= 70) {
           // Fallback: score-based only when backend doesn't provide match_status

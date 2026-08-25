@@ -2518,6 +2518,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       {/* AI Match Modal */}
       {showAIMatchModal && selectedJobForAIMatch && (
         <AITalentMatchProgressPanel
+          // jobId is required and feeds aiMatchService.run(jobId, ...); it was never
+          // passed, so the match ran with undefined.
+          jobId={selectedJobForAIMatch.id}
           jobTitle={selectedJobForAIMatch.title}
           onComplete={(results) => {
             console.log('AI Match completed with results:', results);

@@ -547,7 +547,10 @@ async function exportUsersCSV(teams: TeamUsageSummary[], fromDate: string, toDat
           m.user_email ?? '',
           rs, as_, aiu, ru,
           rs + ru,
-          m.last_active ?? '',
+          // was `m.last_active`, which does not exist on TeamMemberUsage - the backend
+          // emits `last_activity` (routers/unit_pool.py) and line ~272 above already
+          // reads that. The `?? ''` masked it, so this CSV column exported blank.
+          m.last_activity ?? '',
         ]);
       }
     } catch {

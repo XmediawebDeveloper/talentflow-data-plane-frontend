@@ -30,7 +30,14 @@ export interface SSEConnectedEvent {
   type: 'connected';
 }
 
-export type SSEEvent = SSEChunkEvent | SSETitleEvent | SSECompleteEvent | SSEErrorEvent | SSEConnectedEvent;
+/** Emitted when text streaming finishes, before param extraction. The backend yields
+ *  this (routers/job_descriptions.py) and SSECallbacks already declares onTextComplete;
+ *  only this variant was missing from the union, so the switch case was unreachable. */
+export interface SSETextCompleteEvent {
+  type: 'text_complete';
+}
+
+export type SSEEvent = SSEChunkEvent | SSETitleEvent | SSECompleteEvent | SSEErrorEvent | SSEConnectedEvent | SSETextCompleteEvent;
 
 export interface SSECallbacks {
   onChunk?: (content: string) => void;

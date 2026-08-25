@@ -359,7 +359,12 @@ export async function hasAvailableQuota(
     return { hasQuota: false, remaining: 0, error: `Quota type ${quotaType} not found` };
   }
 
-  const remaining = quotaInfo.total_remaining;
+  // total_remaining is `number | string` - the backend masks it to a sentinel string
+  // for users without granular visibility. This function's declared return type is
+  // `remaining: number`, and it has always passed the raw value straight through
+  // (a string compares false against requiredUnits, so hasQuota is false either way).
+  // Cast rather than coerce, so a masked value still surfaces to callers unchanged.
+  const remaining = quotaInfo.total_remaining as number;
   const hasQuota = remaining >= requiredUnits;
 
   return { hasQuota, remaining };

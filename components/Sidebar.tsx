@@ -33,6 +33,7 @@ import {
   DollarSign,
   MessageCircle
 } from 'lucide-react';
+import type { IconComponent } from '@/lib/types/icon';
 import { useState, useMemo } from 'react';
 import { User, Tenant, UserRole, FeatureFlags } from '@/lib/types/tenant';
 
@@ -46,7 +47,7 @@ interface SidebarProps {
 interface NavItem {
   id: string;
   label: string;
-  icon: React.ElementType;
+  icon: IconComponent;
   permission?: string;
   feature?: keyof FeatureFlags;
   adminOnly?: boolean;

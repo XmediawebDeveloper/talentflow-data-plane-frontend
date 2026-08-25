@@ -335,7 +335,7 @@ export default function Settings() {
             <div className="hidden lg:block mt-4 p-3 rounded-lg bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/5">
               <div className="text-[10px] font-semibold text-brand-blue uppercase tracking-wider mb-1">Role</div>
               <div className="text-sm text-gray-900 dark:text-slate-50 font-semibold">{user?.role || 'Recruiter'}</div>
-              <div className="text-xs text-gray-600 dark:text-slate-400 mt-1">Access Level: {user?.role === 'admin' || user?.role === 'tenant_admin' ? 'Admin' : 'Standard'}</div>
+              <div className="text-xs text-gray-600 dark:text-slate-400 mt-1">Access Level: {(user?.role as string) === 'admin' || user?.role === 'tenant_admin' ? 'Admin' : 'Standard'}</div>
             </div>
           </div>
         </div>

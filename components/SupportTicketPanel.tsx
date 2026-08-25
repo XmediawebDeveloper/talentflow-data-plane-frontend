@@ -170,8 +170,9 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
       return;
     }
 
-    toast.success({
-      title: 'Support Ticket Submitted!',
+    // sonner's API is toast.success(message, options) - passing a single object made the
+    // object itself the message, so the confirmation never rendered as intended.
+    toast.success('Support Ticket Submitted!', {
       description: `Ticket #TF-2024-${String(tickets.length + 1).padStart(3, '0')} created. We'll respond within 24 hours.`,
     });
 

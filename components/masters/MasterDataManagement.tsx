@@ -28,8 +28,10 @@ interface BaseItem {
   label: string;
   sort_order: number;
   is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  // Optional to match the master-data service types (ExperienceLevel / EducationLevel
+  // declare these optional), whose values are passed to the helpers typed against this.
+  created_at?: string;
+  updated_at?: string;
 }
 
 const typeConfig = {

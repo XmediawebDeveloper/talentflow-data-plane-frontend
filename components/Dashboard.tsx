@@ -30,6 +30,7 @@ import {
   Activity,
   XCircle
 } from 'lucide-react';
+import type { IconComponent } from '@/lib/types/icon';
 import { useState, useEffect, useCallback } from 'react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { assessmentService } from '@/lib/services';
@@ -250,7 +251,7 @@ export default function Dashboard({
   };
 
   // Helper function to get action icon
-  const getActionIcon = (action: string): React.ElementType => {
+  const getActionIcon = (action: string): IconComponent => {
     const actionLower = (action || '').toLowerCase();
     if (actionLower.includes('login')) return LogIn;
     if (actionLower.includes('logout')) return LogOut;

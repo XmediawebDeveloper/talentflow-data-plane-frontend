@@ -99,7 +99,13 @@ export function EvalReportCombined({
   const coverage = (clusters: typeof mustHaveClusters) => {
     const total = clusters.reduce((n, c) => n + c.skills.length, 0);
     const covered = clusters.reduce((n, c) => n + c.skills.filter(s => s.asked).length, 0);
-    const demonstrated = clusters.reduce((n, c) => n + c.skills.filter(s => s.score >= 5).length, 0);
+    // Gate on `asked` exactly as CoverageV2.isDemonstrated does. A recovered
+    // score (the candidate showed the skill in some OTHER answer, while this
+    // skill's own question was never delivered) is evidence but not coverage,
+    // so it must not inflate this count either — otherwise the report and the
+    // Cluster Coverage tab disagree, which is what this shared definition is
+    // here to prevent.
+    const demonstrated = clusters.reduce((n, c) => n + c.skills.filter(s => s.asked && s.score >= 5).length, 0);
     const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
     return { total, covered, demonstrated, pct, clusters: clusters.length };
   };

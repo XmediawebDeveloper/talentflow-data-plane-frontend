@@ -3198,10 +3198,42 @@ export default function MyResumesPage() {
     }
   };
 
+  // Return type mirrors UploadModalProps['onUpload'] (components/UploadModal.tsx). This
+  // local annotation had drifted narrower than both what the body actually returns
+  // (resumeId / candidateName) and what the modal declares (the richer existingResume).
   const handleUploadResumes = async (files: File[], folderId?: string): Promise<{
     success: boolean;
     error?: string;
-    existingResume?: { id: string; candidateName: string; uploadedAt?: string };
+    resumeId?: string;
+    candidateName?: string;
+    existingResume?: {
+      id: string;
+      candidateName: string;
+      uploadedAt?: string;
+      email?: string;
+      currentTitle?: string;
+      folderName?: string;
+      version?: number;
+    };
+    duplicateData?: {
+      file: File;
+      existingResume: {
+        id: string;
+        candidate_name: string;
+        email: string;
+        folder_name?: string;
+        folder_path?: string;
+        upload_date: string;
+        file_size: number;
+        file_name: string;
+        version: number;
+        // sent by the my-resumes duplicate path alongside `version`
+        version_count?: number;
+      };
+      contentDifferences: string[];
+      isDuplicate: boolean;
+      targetFolderId?: string;
+    };
   }> => {
     setUploadStartedThisSession(true);
 
@@ -3582,7 +3614,7 @@ export default function MyResumesPage() {
     professionalSummary: r.professional_summary,
     technicalSkills: r.technical_skills,
     softSkills: r.soft_skills,
-    educationDetails: r.education?.map((edu: any) => ({
+    educationDetails: (r.education as any[])?.map((edu: any) => ({
       degree: edu.degree || '',
       school: edu.school || edu.institution || '',
       location: edu.location || '',
@@ -3590,7 +3622,7 @@ export default function MyResumesPage() {
       gpa: edu.gpa || '',
       honors: edu.honors || '',
     })),
-    experienceDetails: r.experience?.map((exp: any) => ({
+    experienceDetails: (r.experience as any[])?.map((exp: any) => ({
       title: exp.title || exp.position || '',
       company: exp.company || '',
       location: exp.location || '',

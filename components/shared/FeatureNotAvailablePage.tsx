@@ -14,10 +14,11 @@ import {
   Lock,
   ArrowRight,
 } from 'lucide-react';
+import type { IconComponent } from '@/lib/types/icon';
 import Link from 'next/link';
 import { PlanFeatureKey, PLAN_FEATURE_METADATA } from '@/lib/types/planFeatures';
 
-const ICON_MAP: Record<string, React.ElementType> = {
+const ICON_MAP: Record<string, IconComponent> = {
   Users,
   Upload,
   Target,

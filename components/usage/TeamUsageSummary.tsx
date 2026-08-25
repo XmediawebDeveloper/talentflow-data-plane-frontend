@@ -72,11 +72,21 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
         setSingleTeamUsage(data);
       } else if (isTenantAdmin) {
         // Owner: Fetch all teams
-        const data = await teamService.getAllTeamsUsage(selectedDays);
+        // NOTE: selectedDays is a NUMBER of days (30/60/...), but this service takes
+        // (fromDate?: string, toDate?: string) and puts it in `start_date`. So the
+        // request currently sends start_date=30 rather than days=30, and the range
+        // selector does not filter as intended. Cast only - fixing it would change
+        // what the API receives, which is a behaviour change, not a type fix.
+        const data = await teamService.getAllTeamsUsage(selectedDays as unknown as string);
         setAllTeamsUsage(data);
       } else if (!isBillingManager) {
         // Standard User/Viewer: Fetch my teams
-        const data = await teamService.getMyTeamsUsage(selectedDays);
+        // NOTE: selectedDays is a NUMBER of days (30/60/...), but this service takes
+        // (fromDate?: string, toDate?: string) and puts it in `start_date`. So the
+        // request currently sends start_date=30 rather than days=30, and the range
+        // selector does not filter as intended. Cast only - fixing it would change
+        // what the API receives, which is a behaviour change, not a type fix.
+        const data = await teamService.getMyTeamsUsage(selectedDays as unknown as string);
         setMyTeamsUsage(data);
       }
     } catch (err: any) {

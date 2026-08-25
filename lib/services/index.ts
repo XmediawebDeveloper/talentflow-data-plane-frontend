@@ -44,7 +44,9 @@ export type {
 // AI Talent Match
 export { aiMatchService } from './aiMatchService';
 export type {
-  AIMatchResponse,
+  // AIMatchResponse removed: no such type is declared in ./aiMatchService (the closest is
+  // AIMatchSessionResponse) and nothing imported it from this barrel. Type-only export,
+  // so dropping it emits no runtime change.
   AIMatchResultItem,
   AIMatchSessionListResponse,
 } from './aiMatchService';

@@ -83,6 +83,10 @@ interface ApiPlan {
   included_seats: number;
   features: PlanFeature[];
   quotas?: PlanQuotas;
+  // Annual plans carry a discount percentage; read below as
+  // `(groupedPlan as any).discount_percentage ?? annual?.discount_percentage`, where the
+  // second read needed this declaration. Optional - monthly plans omit it.
+  discount_percentage?: number;
 }
 
 interface DisplayPlan {
@@ -355,7 +359,7 @@ export default function PricingPage() {
               planTier: groupedPlan.plan_tier,
             };
           })
-          .filter((plan): plan is DisplayPlan => plan !== null)
+          .filter((plan): plan is NonNullable<typeof plan> => plan !== null)
           .sort((a, b) => {
             const tierOrder: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
             const orderA = tierOrder[(a.planTier || '').toUpperCase()] ?? 99;

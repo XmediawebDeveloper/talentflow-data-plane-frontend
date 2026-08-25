@@ -1141,7 +1141,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // broadband noise / low hum / music. Surfaced in the dev overlay + key logs
   // so the VOICE_BAND_MIN_RATIO threshold can be calibrated from real audio.
   const _dbgVoiceRatioRef = useRef(1);
-  const freqBufRef = useRef<Uint8Array | null>(null);
+  // Uint8Array<ArrayBuffer>, not bare Uint8Array: since TS 5.7 typed arrays are generic
+  // over their buffer and default to ArrayBufferLike, which getByteFrequencyData rejects.
+  const freqBufRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   // drag state — all in refs so dragging never triggers re-render
   const _dbgDragRef = useRef({ dragging: false, ox: 0, oy: 0 });
 
@@ -1357,6 +1359,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // NEW tracks instead of leaving mediaRecorderRef silently recording from
   // tracks Webcam.tsx is about to .stop(). See handleTracksReplaced below.
   const recordStreamRef = useRef<MediaStream | null>(null);
+  // Canvas relay that gives the recorder a video track immune to camera
+  // reacquires (see handleVideoReady). Timer drives the draw loop; the track
+  // is kept so it can be stopped on unmount.
+  const recordRelayTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordVideoRelayTrackRef = useRef<MediaStreamTrack | null>(null);
   const recordingDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const recordingBoostRef = useRef<GainNode | null>(null);
   const recordingMicSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -1509,7 +1516,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // can't disturb an otherwise-healthy camera (see reacquireAudio's own
     // comment in Webcam.tsx for why the combined reacquire() could).
     // Anything involving the camera keeps using the combined reacquire().
-    const micOnly = !proctoringState.isMicrophoneActive && proctoringState.isCameraActive;
+    //
+    // The decision is made from the TRACK, not from proctoringState's camera
+    // flag: a video track can be reported inactive while still being perfectly
+    // alive (Chrome transiently MUTES it while renegotiating the capture
+    // session after an audio device is unplugged). Escalating that to a full
+    // reacquire() mints a brand-new video track, and swapping that into the
+    // live recorder's stream destroys the stored recording outright — see
+    // handleTracksReplaced. Only a genuinely dead/absent video track justifies
+    // rebuilding the camera.
+    const videoTrackAlive = webcamStreamRef.current
+      ?.getVideoTracks?.().some(t => t.readyState === 'live') ?? false;
+    const micOnly = videoTrackAlive;
     let cancelled = false;
     const id = setInterval(async () => {
       if (cancelled) return;
@@ -1607,6 +1625,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // pause-arm branch immediately silence the avatar instead of leaving it
   // animating/"speaking" in the background while the interview is paused.
   const stopVisemeLoopRef = useRef<() => void>(() => {});
+  // Same TDZ reason again. stopVisemeLoop only stops the LIP-SYNC animation —
+  // Bina's actual audio lives in TalkingHead's AudioWorklet, which keeps
+  // playing its whole buffered queue unless streamStop() is called. This
+  // mirror gives the pause-arm branch the real "cut her off now" action.
+  const hardStopBinaRef = useRef<() => void>(() => {});
 
   const clearMediaPauseTimers = useCallback(() => {
     if (mediaPauseCountdownIdRef.current) { clearInterval(mediaPauseCountdownIdRef.current); mediaPauseCountdownIdRef.current = null; }
@@ -1685,8 +1708,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // drop must never turn a partial answer into a submitted one.
       stopVisemeLoopRef.current();
       audioQueueRef.current = [];
-      isPlayingRef.current = false;
-      console.log('[INTERVIEW-DEBUG][PAUSE] BINA SPEECH PAUSED — viseme loop stopped, queued audio cleared');
+      // audioQueueRef is a COUNTER only (see its declaration) and isPlayingRef
+      // is a flag TalkingHead never reads — clearing them silenced nothing.
+      // Bina kept speaking out of the worklet's own buffer and the question
+      // text kept streaming in behind the blurred overlay. hardStopBina stops
+      // the worklet, the token reveal and the turn-scoped playback state for
+      // real. The backend cancels its in-flight pipeline on session_pause and
+      // re-speaks this same finalized question on session_resume
+      // (tts_pause_interrupted_question), so discarding what is in flight here
+      // loses nothing.
+      hardStopBinaRef.current();
+      console.log('[INTERVIEW-DEBUG][PAUSE] BINA SPEECH PAUSED — worklet stopped, token reveal stopped, queued audio cleared');
       try { abortRecordingForSkipRef.current(); } catch { /* ignore */ }
       console.log('[INTERVIEW-DEBUG][PAUSE] CANDIDATE RECORDING STOPPED (no submission)');
       // Freeze the per-question answer clock the instant the device drops.
@@ -1759,6 +1791,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // subtracts, so no part of the outage counts against the candidate.
       resumeQuestionTimerRef.current();
       console.log('[INTERVIEW-DEBUG][PAUSE] TIMER RESUMED, BINA SPEECH/RECORDING ALLOWED AGAIN');
+      // Recording itself does NOT come back on its own: the ARM branch above
+      // calls abortRecordingForSkipRef.current() to kill any in-flight answer
+      // capture, and nothing else watches this pause→resume transition to
+      // restart it. Without this, a disconnect mid-answer left the candidate
+      // stuck — timer/Bina/stream all "resumed" but no mic was ever reopened
+      // to capture the rest of their answer, until the backend's own
+      // question-timer timeout eventually auto-skipped the question. Same
+      // guard as the one-shot device-change retry above: only fire into an
+      // open candidate turn, never over Bina still speaking or mid-processing.
+      setTimeout(() => {
+        if (
+          isRecordingRef.current === false &&
+          wsRef.current?.readyState === WebSocket.OPEN &&
+          !isAiSpeakingRef.current &&
+          !isProcessingRef.current &&
+          !isMutedRef.current &&
+          !isFaceBlockedRef.current
+        ) {
+          console.log('[INTERVIEW-DEBUG][PAUSE] Restarting candidate recording after resume');
+          startRecordingInternalRef.current();
+        }
+      }, 100);
       candidateAIInterviewService.reportProctorEvent(token, {
         event_type: 'session_resumed',
         severity: 'low',
@@ -2048,6 +2102,48 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (stream) {
       webcamStreamRef.current = stream;
 
+      // ── Stable VIDEO leg for the recorder ────────────────────────────────
+      // The MediaRecorder must own a video track that OUTLIVES every camera
+      // reacquire. A raw getUserMedia track does not: reacquire() mints a new
+      // one and stops the old, and swapping tracks on the recorder's own
+      // MediaStream trips the MediaStream Recording spec's hard rule — the UA
+      // must stop recording, DISCARD everything already gathered, fire
+      // InvalidModificationError and go inactive. With no restart path that
+      // silently lost the whole candidate recording (BUG25).
+      //
+      // So relay through a canvas fed by the SAME <video> element the preview
+      // uses. Webcam.tsx keeps that element pointed at whichever camera is
+      // live, so the relay follows device swaps with no track change at all —
+      // exactly how the audio leg already survives them (its track comes from
+      // an AudioContext destination; only the source node is rewired).
+      //
+      // If the camera really does go away, the last frame simply freezes and
+      // the recording keeps running, instead of dying outright.
+      const RELAY_FPS = 15; // low-tier CPU headroom; the encoder targets 200 Kbps anyway
+      let stableVideoTrack: MediaStreamTrack | null = null;
+      try {
+        const relayCanvas = document.createElement('canvas');
+        relayCanvas.width = video.videoWidth || 640;
+        relayCanvas.height = video.videoHeight || 480;
+        const relayCtx = relayCanvas.getContext('2d', { alpha: false });
+        if (relayCtx) {
+          if (recordRelayTimerRef.current) clearInterval(recordRelayTimerRef.current);
+          recordRelayTimerRef.current = setInterval(() => {
+            // readyState >= HAVE_CURRENT_DATA — anything less has no frame to
+            // draw (mid-reacquire), so we simply hold the previous one.
+            if (video.readyState >= 2) {
+              try { relayCtx.drawImage(video, 0, 0, relayCanvas.width, relayCanvas.height); } catch { /* frame skipped */ }
+            }
+          }, Math.round(1000 / RELAY_FPS));
+          stableVideoTrack = relayCanvas.captureStream(RELAY_FPS).getVideoTracks()[0] ?? null;
+        }
+      } catch (e) {
+        console.warn('[Recording] Canvas video relay unavailable — recording the raw camera track (dies on reacquire):', e);
+      }
+      // Fall back to the raw track only if the relay could not be built.
+      const videoLeg = stableVideoTrack ? [stableVideoTrack] : stream.getVideoTracks();
+      recordVideoRelayTrackRef.current = stableVideoTrack;
+
       // ── Build the RECORDING audio mix: boosted candidate mic + Bina's clean
       // TTS tap. Mirrors the screen-recording mix in CandidateAIInterviewPortal
       // so both saved views have the same two-voice balance.
@@ -2064,8 +2160,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // hollow half-cancelled residue where she spoke. Trimmed to 0.75 so the
       // boosted candidate sits at a comparable level instead of under her.
       //
-      // If Web Audio setup fails for any reason we record the raw stream unchanged.
-      let recordStream: MediaStream = stream;
+      // If Web Audio setup fails for any reason we record the raw audio, but
+      // still through the stable video leg when one was built.
+      const rawAudioFallbackStream = (): MediaStream =>
+        stableVideoTrack ? new MediaStream([...videoLeg, ...stream.getAudioTracks()]) : stream;
+      let recordStream: MediaStream = rawAudioFallbackStream();
       try {
         const aTracks = stream.getAudioTracks();
         if (aTracks.length > 0) {
@@ -2103,7 +2202,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           }
 
           recordStream = new MediaStream([
-            ...stream.getVideoTracks(),
+            ...videoLeg,
             ...dest.stream.getAudioTracks(),
           ]);
           // Keep the mix graph reachable so handleTracksReplaced can rewire a
@@ -2118,11 +2217,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }
       } catch (e) {
         console.warn('[Recording] audio mix setup failed — recording raw audio:', e);
-        recordStream = stream;
+        recordStream = rawAudioFallbackStream();
       }
-      // Reachable by handleTracksReplaced regardless of which path above ran —
-      // in the fallback case this IS `stream` itself (same object Webcam.tsx
-      // will reacquire against), so swapping tracks on it in place is safe.
+      // Reachable by handleTracksReplaced regardless of which path above ran.
+      // NOTE: its track set must never be mutated while the recorder is live —
+      // that is precisely what used to destroy the recording (see the stable
+      // video leg above and handleTracksReplaced below).
       recordStreamRef.current = recordStream;
 
       const RECORDER_OPTIONS: MediaRecorderOptions = {
@@ -2153,6 +2253,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         recordedChunksRef.current = [];
         recorder.ondataavailable = (e) => {
           if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+        };
+        // The recorder dying used to be completely silent: the 30 s checkpoint
+        // no-ops on a non-'recording' state and the final upload ships an empty
+        // part, so a lost recording only surfaced when a recruiter opened it.
+        // Log it, flag it on the proctor timeline, and salvage whatever the UA
+        // left us (nothing at all in the InvalidModificationError case — hence
+        // the stable video leg that prevents it in the first place).
+        recorder.onerror = (e: Event) => {
+          const name = (e as unknown as { error?: { name?: string } }).error?.name ?? 'unknown';
+          console.error(`[Recording] MediaRecorder error (${name}) — recorder state=${recorder.state}; recording will not continue`);
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'recording_failed',
+            severity: 'high',
+            details: { error: name, segment_index: recordingSegmentIndexRef.current },
+          }).catch(() => { /* best-effort */ });
+          uploadCheckpointRef.current().catch(() => { /* best-effort salvage */ });
         };
         recorder.start(5000); // 5-second chunks — fewer objects, same result
         mediaRecorderRef.current = recorder;
@@ -2214,14 +2330,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     const rs = recordStreamRef.current;
     if (!rs) return;
 
-    // Video always passes through recordStream directly (both the mixed-audio
-    // path and the raw fallback wrap the raw video track unchanged) — swap it
-    // there regardless of which audio path is active.
-    const newVideoTrack = newStream.getVideoTracks()[0];
-    if (newVideoTrack) {
-      rs.getVideoTracks().forEach((t) => { if (t !== newVideoTrack) rs.removeTrack(t); });
-      if (!rs.getVideoTracks().includes(newVideoTrack)) rs.addTrack(newVideoTrack);
-    }
+    // Video needs NO swap. recordStream carries the canvas relay track built in
+    // handleVideoReady, which is fed by the <video> element and therefore
+    // already follows the new camera track by itself. This is deliberate:
+    // adding/removing a track on a stream a MediaRecorder is recording forces
+    // the UA to stop, DISCARD everything gathered so far and go inactive
+    // (InvalidModificationError) — which is exactly how the stored recording
+    // used to be lost the moment a device was reacquired. Never mutate `rs`.
+    //
+    // (If the relay could not be built, recordStream holds the raw camera track
+    // and that footage freezes at the reacquire — degraded, but the recording
+    // survives, which the swap did not allow.)
 
     const newAudioTrack = newStream.getAudioTracks()[0];
     if (!newAudioTrack) return;
@@ -2248,9 +2367,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }
     } else {
       // No Web Audio mix (setup failed at record-start) — recordStream carries
-      // the raw audio track directly, so swap it there instead.
-      rs.getAudioTracks().forEach((t) => { if (t !== newAudioTrack) rs.removeTrack(t); });
-      if (!rs.getAudioTracks().includes(newAudioTrack)) rs.addTrack(newAudioTrack);
+      // the raw audio track directly. Swapping it here would destroy the
+      // recorder for the same spec reason as the video swap above, so accept
+      // silent audio from this point rather than losing the entire recording.
+      // The mix path is the normal case; this branch only runs when AudioContext
+      // setup already failed.
+      console.warn('[Recording] No audio mix graph — mic swap not applied (mutating the live recorder stream would destroy the recording)');
     }
   }, []);
 
@@ -3587,6 +3709,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // audio — so the chat-message transition is bound to audio end, not to
   // text-reveal completion.
   const startRevealingTokens = useCallback(() => {
+    // Never start (or restart) the reveal while the interview is paused for a
+    // camera/mic disconnect — the question would stream in behind the blocking
+    // overlay while Bina is silent. The resume re-speak starts it again.
+    if (isMediaPausedRef.current) return;
     if (revealTimerRef.current) {
       clearInterval(revealTimerRef.current);
     }
@@ -4064,6 +4190,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // playback is complete and it's time to start recording.
 
   const queueAudio = useCallback((pcmData: ArrayBuffer) => {
+    // Paused for a camera/mic disconnect — this chunk is being dropped by the
+    // ws.onmessage gate, so it must not stamp playback anchors or flip
+    // isAiSpeaking back on either.
+    if (isMediaPausedRef.current) return;
     // TalkingHead handles audio playback (gain:1) + lip sync.
     // Accumulate turn audio duration so the audio_end fallback timeout is
     // proportional to how long Bina actually spoke (not a fixed 3 s).
@@ -4088,6 +4218,43 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }
     }
   }, [avatarState, startRevealingTokens]);
+
+  // Cut Bina off IMMEDIATELY — audio, lip-sync state and on-screen text.
+  //
+  // Used by the camera/mic pause arm. Mirrors the `interrupted` WS handler's
+  // playback teardown, plus the text-stream teardown that handler does not
+  // need (an `interrupted` is always followed by a fresh speaking_started that
+  // resets the reveal; a media pause is not — the reveal interval would just
+  // keep painting the question behind the blocking overlay).
+  //
+  // streamStop() is the load-bearing call: TalkingHead buffers PCM inside an
+  // AudioWorklet, so a pause that only clears queues/flags leaves several
+  // seconds of Bina still audible.
+  const hardStopBinaPlayback = useCallback(() => {
+    talkingHeadRef.current?.streamStop();
+    isPlayingRef.current = false;
+    isAiSpeakingRef.current = false;
+    setIsAiSpeaking(false);
+    setIsProcessing(false);
+    isProcessingRef.current = false;
+    avatarState.onAiStopSpeaking();
+    // Turn-scoped playback state — re-armed by the resume re-speak's own
+    // speaking_started, so clearing it here cannot leak into the next turn.
+    pendingStreamStartRef.current = null;
+    pendingBuffersRef.current = 0;
+    audioEndReceivedRef.current = false;
+    if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+    if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
+    // Stop the token reveal and drop the buffered question text. The backend
+    // re-speaks the same finalized question on resume, which repopulates both.
+    if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
+    tokenBufferRef.current = "";
+    currentAiTextRef.current = "";
+    revealedCharsRef.current = 0;
+    setCurrentAiText("");
+  }, [avatarState]);
+
+  useEffect(() => { hardStopBinaRef.current = hardStopBinaPlayback; }, [hardStopBinaPlayback]);
 
   // WebSocket handlers
   const handleMessage = useCallback((data: InterviewSocketMessage) => {
@@ -7721,6 +7888,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // Use refs so handlers always call the latest version without reconnecting
     ws.onmessage = (event) => {
       if (event.data instanceof ArrayBuffer) {
+        // Interview is paused (camera/mic disconnected). The backend cancels
+        // its pipeline on session_pause, but chunks already in flight would
+        // still land here and restart the worklet the pause just stopped —
+        // Bina would resume speaking behind the blocking overlay. Drop them;
+        // the interrupted question is re-spoken in full on resume.
+        if (isMediaPausedRef.current) return;
         console.log(`[WS ${new Date().toISOString()}] Audio chunk received: size=${event.data.byteLength} bytes`);
         // CRITICAL: call our bookkeeping (queueAudio + trackPlaybackChunk)
         // BEFORE streamAudio. TalkingHead's streamAudio transfers/detaches the
@@ -7918,6 +8091,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       try { recordingContextRef.current?.close(); } catch {}
       recordingContextRef.current = null;
       teardownRecordingMedia();
+      // Stop the canvas video relay LAST — uploadRecording above already called
+      // recorder.stop() synchronously, so everything the recorder captured is
+      // safely on its way out before the relay's track goes away.
+      if (recordRelayTimerRef.current) { clearInterval(recordRelayTimerRef.current); recordRelayTimerRef.current = null; }
+      try { recordVideoRelayTrackRef.current?.stop(); } catch { /* ignore */ }
+      recordVideoRelayTrackRef.current = null;
     };
   }, [teardownRecordingMedia]);
 

@@ -159,6 +159,10 @@ interface BatchProgressItem {
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
   score?: number;
   matchStatus?: string;
+  // snake_case alias: the read site does `item.matchStatus || item.match_status`, a
+  // defensive fallback for raw (untransformed) API payloads. Declared so that read
+  // compiles; nothing about the fallback changes.
+  match_status?: string;
   errorMessage?: string;
 }
 
@@ -1853,6 +1857,9 @@ export default function ResumeScoringPage({
                     const allProgressData = scoredHistory.flatMap(item =>
                       item.scoredResumes.map(resume => ({
                         id: resume.id,
+                        // required by ScoringProgressItem and used by the modal's Retry
+                        // action; it was omitted, so retry had no resume to re-score.
+                        resumeId: resume.resumeId || resume.id,
                         candidateName: resume.candidateName || resume.name || 'Unknown',
                         jobTitle: item.jobTitle,
                         jobId: item.jobId,
@@ -2955,7 +2962,12 @@ export default function ResumeScoringPage({
           jobTitle={selectedJobData.title}
           myResumes={myResumes}
           databaseResumes={databaseResumes}
-          folders={folders}
+          /* This page's local Folder is { id, name, resumeCount }, while the modal's
+             FolderType wants { id, name, count, parentId }. The shapes genuinely
+             differ, so the modal's count/parentId reads see undefined for folders
+             opened from here - pre-existing behaviour, left as-is deliberately.
+             Cast only, so nothing about what is passed changes. */
+          folders={folders as unknown as React.ComponentProps<typeof ResumeSelectionModal>['folders']}
           availableUnits={availableUnits}
           error={selectionError}
           onClearError={() => setSelectionError(null)}

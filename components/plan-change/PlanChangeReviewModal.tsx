@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { IconComponent } from '@/lib/types/icon';
 import {
   X, Check, AlertTriangle, Loader2, ArrowRight,
   TrendingUp, TrendingDown, Minus, Plus, DollarSign,
@@ -11,7 +12,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import type { PlanChangeSummary } from '@/lib/types/planChanges';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 
-const changeTypeLabels: Record<string, { title: string; icon: React.ElementType; color: string }> = {
+const changeTypeLabels: Record<string, { title: string; icon: IconComponent; color: string }> = {
   price_increase: { title: 'Price Change', icon: DollarSign, color: 'text-amber-600' },
   quota_decrease: { title: 'Quota Adjustment', icon: Gauge, color: 'text-orange-600' },
   feature_removal: { title: 'Feature Changes', icon: Zap, color: 'text-red-600' },
