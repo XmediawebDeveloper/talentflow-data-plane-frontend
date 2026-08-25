@@ -2313,7 +2313,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Timeline</th>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Completed</th>
                               <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Duration</th>
-                              <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Actions</th>
+                              <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Actions</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -2417,7 +2417,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       {formatTimeSpent(result.time_spent_seconds)}
                                     </div>
                                   </td>
-                                  <td className="px-2 sm:px-4 py-4 align-middle" onClick={(e) => e.stopPropagation()}>
+                                  <td className="px-2 sm:px-4 py-4 align-middle tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex items-center justify-center">
                                       <button
                                         onClick={() => openCandidateResult(result, pageItems)}
@@ -4074,7 +4074,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <table className="w-max min-w-full">
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
-                        <th className="w-8 py-3 pl-4 pr-0" aria-label="Select" />
+                        <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
@@ -4197,7 +4197,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 Only bulk-resendable rows (Invited/Expired) get a
                                 checkbox; the rest keep a fixed-width slot so the
                                 columns stay aligned. */}
-                            <td className="py-3 pl-4 pr-0 align-top" onClick={(e) => e.stopPropagation()}>
+                            <td className="py-3 pl-4 pr-0 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                               {isBulkResendable(invitation) ? (
                                 <button
                                   type="button"

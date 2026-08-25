@@ -49,7 +49,12 @@ function JobDetailsContent() {
   const [job, setJob] = useState<ExtendedJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [rawJdData, setRawJdData] = useState<JDResponse | null>(null);
-  const [allJDIds, setAllJDIds] = useState<string[]>([]);
+  // One entry per Job (lineage), not per version — Prev/Next below steps
+  // through this list, so it must never contain a job's older versions as
+  // separate entries. `id` is the representative version to open (the
+  // highest version_number in the lineage), matching JobsListing's own
+  // groupByLineage representative-selection logic.
+  const [jobNavList, setJobNavList] = useState<{ key: string; id: string }[]>([]);
   const [showDisableModal, setShowDisableModal] = useState(false);
   const [jobToDisable, setJobToDisable] = useState<Job | null>(null);
   /* Set when Edit is refused: the modules holding the JD, plus whatever reason
@@ -66,16 +71,35 @@ function JobDetailsContent() {
 
   useEffect(() => {
     const fetchAllPublished = async () => {
-      const ids: string[] = [];
+      const items: JDResponse[] = [];
       let page = 1;
       while (true) {
         const res = await jdService.list({ status: 'published', page_size: 100, page });
-        const items = res.items ?? [];
-        ids.push(...items.map((j: JDResponse) => j.id));
-        if (ids.length >= res.total || items.length < 100) break;
+        const pageItems = res.items ?? [];
+        items.push(...pageItems);
+        if (items.length >= res.total || pageItems.length < 100) break;
         page++;
       }
-      setAllJDIds(ids);
+
+      // Collapse every version down to one entry per Job lineage — keyed on
+      // the human-readable job_id, same key JobsListing groups on, falling
+      // back to the version's own id for the rare row without one. Within a
+      // group, the representative is the highest version_number, so Next/Prev
+      // always lands on a job's latest version rather than any earlier one.
+      const groups = new Map<string, JDResponse[]>();
+      for (const item of items) {
+        const key = item.job_id || item.id;
+        const bucket = groups.get(key);
+        if (bucket) bucket.push(item);
+        else groups.set(key, [item]);
+      }
+      groups.forEach((bucket) =>
+        bucket.sort((a, b) => ((b as any).version_number ?? 1) - ((a as any).version_number ?? 1))
+      );
+
+      setJobNavList(
+        Array.from(groups.entries(), ([key, bucket]) => ({ key, id: bucket[0].id }))
+      );
     };
     fetchAllPublished().catch(() => {});
   }, []);
@@ -359,6 +383,18 @@ function JobDetailsContent() {
     );
   }
 
+  // Find the current Job's position by lineage key, not by this version's own
+  // id — an older version selected from the dropdown still belongs to the
+  // same Job, and Prev/Next must move to the neighboring Job either way, not
+  // to a sibling version of this one.
+  const currentLineageKey = job.job_id || jobId || '';
+  const jobNavCurrentIndex = jobNavList.findIndex((entry) => entry.key === currentLineageKey);
+  const jobNavPrevId = jobNavCurrentIndex > 0 ? jobNavList[jobNavCurrentIndex - 1].id : null;
+  const jobNavNextId =
+    jobNavCurrentIndex >= 0 && jobNavCurrentIndex < jobNavList.length - 1
+      ? jobNavList[jobNavCurrentIndex + 1].id
+      : null;
+
   const breadcrumbItems = fromAiInterview
     ? [
         { label: 'Dashboard', href: '/dashboard' },
@@ -461,10 +497,10 @@ function JobDetailsContent() {
         user={user}
         tenant={tenant}
         breadcrumbItems={breadcrumbItems}
-        prevId={allJDIds.indexOf(jobId ?? '') > 0 ? allJDIds[allJDIds.indexOf(jobId ?? '') - 1] : null}
-        nextId={allJDIds.indexOf(jobId ?? '') >= 0 && allJDIds.indexOf(jobId ?? '') < allJDIds.length - 1 ? allJDIds[allJDIds.indexOf(jobId ?? '') + 1] : null}
-        currentIndex={allJDIds.indexOf(jobId ?? '')}
-        totalCount={allJDIds.length}
+        prevId={jobNavPrevId}
+        nextId={jobNavNextId}
+        currentIndex={jobNavCurrentIndex}
+        totalCount={jobNavList.length}
       />
     </div>
   );

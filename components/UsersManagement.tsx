@@ -903,7 +903,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
                     Last Login
                   </th>
-                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">
+                  <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -976,7 +976,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                         {user.last_login && user.last_login !== '-' ? formatISTDate(user.last_login) : '-'}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 tf-sticky-col">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => {

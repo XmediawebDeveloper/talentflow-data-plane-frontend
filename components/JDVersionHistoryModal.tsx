@@ -1,44 +1,82 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye, Download } from 'lucide-react';
-import { jdService, JDVersion, JDVersionHistoryResponse } from '@/lib/services/jdService';
+import { useCallback, useEffect, useState } from 'react';
+import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye, Download, Calendar } from 'lucide-react';
+import { jdService, JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
 
 interface JDVersionHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   jdId: string;
   jdTitle: string;
-  /**
-   * Open straight into this version's detail view instead of the version list.
-   * Set when the caller already picked a version — the header badge dropdown
-   * lists them, so landing back on a list would repeat the choice just made.
-   */
   initialVersionNumber?: number;
 }
 
-// Function to compute diff and return lines with diff info
-function computeDiff(oldText: string, newText: string): { text: string; isNew: boolean }[] {
-  const oldLines = oldText.split('\n');
-  const newLines = newText.split('\n');
-  const oldSet = new Set(oldLines.map(line => line.trim()).filter(line => line.length > 0));
-
-  return newLines.map(line => {
-    const trimmedLine = line.trim();
-    // If the line is empty or exists in old version, it's not new
-    if (trimmedLine.length === 0 || oldSet.has(trimmedLine)) {
-      return { text: line, isNew: false };
-    }
-    return { text: line, isNew: true };
-  });
+interface JDHistoryVersion {
+  id: string;
+  job_id?: string;
+  version_number: number;
+  title: string;
+  description: string;
+  status?: string;
+  is_latest_version?: boolean;
+  published_at?: string;
+  created_at?: string;
+  created_by_name?: string;
+  department?: string;
+  employment_type?: string;
+  remote_type?: string;
+  industry_type?: string;
 }
 
+const formatVersionDate = (value?: string) => value ? formatIST(value) : 'Date not available';
+
+const statusLabel = (status?: string) =>
+  (status || 'unknown')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const versionDate = (version: JDHistoryVersion) => version.published_at || version.created_at || '';
+
+const buildCompareText = (version: JDHistoryVersion) => {
+  const lines = [
+    `Title: ${version.title || 'Untitled JD'}`,
+    version.job_id ? `Job ID: ${version.job_id}` : '',
+    version.status ? `Status: ${statusLabel(version.status)}` : '',
+    version.department ? `Department: ${version.department}` : '',
+    version.industry_type ? `Industry: ${version.industry_type}` : '',
+    version.employment_type ? `Employment Type: ${version.employment_type}` : '',
+    version.remote_type ? `Work Mode: ${version.remote_type}` : '',
+    '',
+    'Job Description:',
+    version.description || '',
+  ];
+
+  return lines.filter((line, index) => line || index === 7).join('\n');
+};
+
+const mapVersion = (lineageVersion: JDLineageVersion, detail?: JDResponse): JDHistoryVersion => ({
+  id: lineageVersion.id,
+  job_id: detail?.job_id || lineageVersion.job_id,
+  version_number: lineageVersion.version_number || 1,
+  title: detail?.title || lineageVersion.title || 'Untitled JD',
+  description: detail?.description || '',
+  status: detail?.status || lineageVersion.status,
+  is_latest_version: lineageVersion.is_latest_version,
+  published_at: detail?.published_at || lineageVersion.published_at,
+  created_at: detail?.created_at || lineageVersion.created_at,
+  created_by_name: detail?.created_by_name,
+  department: detail?.department,
+  employment_type: detail?.employment_type,
+  remote_type: detail?.remote_type,
+  industry_type: detail?.industry_type,
+});
 
 export default function JDVersionHistoryModal({
   isOpen,
@@ -47,112 +85,118 @@ export default function JDVersionHistoryModal({
   jdTitle,
   initialVersionNumber,
 }: JDVersionHistoryModalProps) {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [versionHistory, setVersionHistory] = useState<JDVersionHistoryResponse | null>(null);
-  const [selectedVersion, setSelectedVersion] = useState<JDVersion | null>(null);
-  const [previousVersion, setPreviousVersion] = useState<JDVersion | null>(null);
+  const [versions, setVersions] = useState<JDHistoryVersion[]>([]);
+  const [selectedVersion, setSelectedVersion] = useState<JDHistoryVersion | null>(null);
+  const [compareChecked, setCompareChecked] = useState<string[]>([]);
+  const [comparePair, setComparePair] = useState<{ older: CompareVersion; newer: CompareVersion } | null>(null);
 
-  useEffect(() => {
-    if (isOpen && jdId) {
-      fetchVersionHistory();
-    }
-  }, [isOpen, jdId]);
-
-  // Reset selected version when modal closes
-  useEffect(() => {
-    if (!isOpen) {
-      setSelectedVersion(null);
-      setPreviousVersion(null);
-    }
-  }, [isOpen]);
-
-  const fetchVersionHistory = async () => {
+  const fetchVersionHistory = useCallback(async () => {
     setLoading(true);
+    setSelectedVersion(null);
+    setCompareChecked([]);
+    setComparePair(null);
     try {
-      // Show the whole VERSION LINEAGE (v1, v2, ... — each is its own JD), not
-      // the per-row republish snapshots. Each row links to that version's own
-      // detail page.
       const lineage = await jdService.getLineageVersions(jdId);
-      const mapped = {
-        current_version: lineage.length
-          ? Math.max(...lineage.map((v) => v.version_number || 1))
-          : 1,
-        total: lineage.length,
-        versions: lineage.map((v) => ({
-          id: v.id,
-          version_number: v.version_number,
-          title: v.title,
-          status: v.status,
-          published_at: v.published_at || v.created_at || '',
-          published_by_name: undefined,
-        })),
-      } as unknown as JDVersionHistoryResponse;
-      setVersionHistory(mapped);
+      const lineageItems = lineage.length
+        ? lineage
+        : [{
+            id: jdId,
+            title: jdTitle,
+            version_number: initialVersionNumber || 1,
+            is_latest_version: true,
+            status: 'published',
+          } as JDLineageVersion];
+
+      const uniqueItems = Array.from(
+        new Map(lineageItems.map((item) => [item.id, item])).values()
+      );
+
+      const hydratedVersions = await Promise.all(
+        uniqueItems.map(async (lineageVersion) => {
+          try {
+            const detail = await jdService.getById(lineageVersion.id);
+            return mapVersion(lineageVersion, detail);
+          } catch (error) {
+            console.warn('Failed to load JD version detail:', lineageVersion.id, error);
+            return mapVersion(lineageVersion);
+          }
+        })
+      );
+
+      const sortedVersions = hydratedVersions.sort(
+        (a, b) => (b.version_number || 1) - (a.version_number || 1)
+      );
+
+      setVersions(sortedVersions);
+      if (initialVersionNumber != null) {
+        setSelectedVersion(
+          sortedVersions.find((version) => version.version_number === initialVersionNumber) || null
+        );
+      }
     } catch (error) {
-      console.error('Failed to fetch version lineage:', error);
+      console.error('Failed to fetch JD version lineage:', error);
       toast.error('Failed to load version history');
+      setVersions([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [initialVersionNumber, jdId, jdTitle]);
 
-  const getRelativeTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-    return `${Math.floor(diffDays / 365)} years ago`;
-  };
-
-  const handleVersionClick = (version: JDVersion) => {
-    // Each version is its own JD — open its full detail page (own tabs/results).
-    if (!version?.id) return;
-    onClose();
-    router.push(`/recruitment/job-details?id=${version.id}`);
-  };
-
-  // Land on the version the caller picked, once the list has arrived. Back
-  // still returns to the full list, so nothing is unreachable.
   useEffect(() => {
-    if (!isOpen || initialVersionNumber == null || !versionHistory) return;
-    const index = versionHistory.versions.findIndex(
-      (v) => v.version_number === initialVersionNumber
-    );
-    if (index >= 0) handleVersionClick(versionHistory.versions[index]);
-  }, [isOpen, initialVersionNumber, versionHistory]);
+    if (!isOpen || !jdId) return;
+    const timer = window.setTimeout(() => {
+      void fetchVersionHistory();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchVersionHistory, isOpen, jdId]);
 
-  const handleBack = () => {
+  const closeModal = () => {
     setSelectedVersion(null);
-    setPreviousVersion(null);
+    setCompareChecked([]);
+    setComparePair(null);
+    onClose();
   };
 
-  // Compute diff when viewing a version
-  const diffLines = useMemo(() => {
-    if (!selectedVersion) return null;
-    if (!previousVersion) {
-      // First version - no diff, just show all lines as normal
-      return selectedVersion.description.split('\n').map(line => ({ text: line, isNew: false }));
-    }
-    return computeDiff(previousVersion.description, selectedVersion.description);
-  }, [selectedVersion, previousVersion]);
+  const toggleCompareCheck = (versionId: string) => {
+    setCompareChecked((prev) => {
+      if (prev.includes(versionId)) return prev.filter((id) => id !== versionId);
+      return prev.length >= 2 ? [prev[1], versionId] : [...prev, versionId];
+    });
+  };
 
-  // Download JD as text file
-  const handleDownload = () => {
-    if (!selectedVersion) return;
+  const openComparison = (a: JDHistoryVersion, b: JDHistoryVersion) => {
+    const [older, newer] = (a.version_number || 0) <= (b.version_number || 0) ? [a, b] : [b, a];
+    setComparePair({
+      older: {
+        version: older.version_number,
+        label: `Version ${older.version_number}.0`,
+        name: `${older.title} - ${formatVersionDate(versionDate(older))}`,
+        text: older.description || '',
+      },
+      newer: {
+        version: newer.version_number,
+        label: `Version ${newer.version_number}.0`,
+        name: `${newer.title} - ${formatVersionDate(versionDate(newer))}`,
+        text: newer.description || '',
+      },
+    });
+  };
 
-    const content = `${selectedVersion.title}\n\n${selectedVersion.description}`;
-    const blob = new Blob([content], { type: 'text/plain' });
+  const compareSelected = () => {
+    if (compareChecked.length !== 2) return;
+    const a = versions.find((version) => version.id === compareChecked[0]);
+    const b = versions.find((version) => version.id === compareChecked[1]);
+    if (a && b) openComparison(a, b);
+  };
+
+  const handleDownload = (version: JDHistoryVersion) => {
+    const content = buildCompareText(version);
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${selectedVersion.title.replace(/[^a-z0-9]/gi, '_')}_v${selectedVersion.version_number}.txt`;
+    a.download = `${version.title.replace(/[^a-z0-9]/gi, '_')}_v${version.version_number}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -162,242 +206,292 @@ export default function JDVersionHistoryModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" onClick={onClose}>
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6" onClick={closeModal}>
       <div
-        className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col"
+        className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
-          <div className="flex items-center gap-3">
+        <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
+          <div className="flex items-center gap-3 min-w-0">
             {selectedVersion ? (
               <button
-                onClick={handleBack}
+                type="button"
+                onClick={() => setSelectedVersion(null)}
                 className="p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+                aria-label="Back to version list"
               >
                 <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
               </button>
             ) : (
-              <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
-                <History className="w-5 h-5 text-brand-blue" />
+              <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+                <History className="w-4 h-4 text-brand-blue" />
               </div>
             )}
-            <div>
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
-                {selectedVersion ? `Version ${selectedVersion.version_number}.0` : 'Version History'}
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
-                {selectedVersion
-                  ? `Published ${formatIST(selectedVersion.published_at)}`
-                  : `${jdTitle} - ${versionHistory?.total || 0} version${(versionHistory?.total || 0) !== 1 ? 's' : ''}`
-                }
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                  {selectedVersion ? `Version ${selectedVersion.version_number}.0` : 'Version History'}
+                </h2>
+                {!selectedVersion && versions.length > 0 && (
+                  <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                    {versions.length} version{versions.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-gray-600 dark:text-slate-400 truncate">
+                {selectedVersion ? selectedVersion.title : jdTitle}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-500 dark:text-slate-500 hover:text-brand-blue rounded-lg hover:bg-brand-blue/5 transition-colors"
-           aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {!selectedVersion && versions.length > 1 && (
+              <button
+                type="button"
+                onClick={compareSelected}
+                disabled={compareChecked.length !== 2}
+                className={`hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                  compareChecked.length === 2
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2'
+                    : 'bg-slate-100 dark:bg-slate-800 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {compareChecked.length === 2 ? 'Compare selected' : 'Select 2 versions to compare'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={closeModal}
+              className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {!selectedVersion && versions.length > 0 && (
+          <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 text-xs text-gray-600 dark:text-slate-400">
+            <History className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
+            <span>
+              All available JD versions are shown. Tick any two versions to compare them.
+            </span>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {loading ? (
-            <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-              <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-              <span className="ml-3 text-gray-600 dark:text-slate-400">Loading version history...</span>
+            <div className="flex flex-col items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
+              <Loader2 className="w-8 h-8 text-gray-400 dark:text-slate-500 animate-spin mb-3" />
+              <p className="text-gray-600 dark:text-slate-400">Loading versions...</p>
             </div>
           ) : selectedVersion ? (
-            /* Version Detail View */
-            <div>
-              {/* Version Info Bar with Download Button */}
-              <div className="flex items-center justify-between mb-6 p-4 bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl">
-                <div className="flex items-center gap-4">
-                  <span className="px-3 py-1.5 bg-brand-blue text-white rounded-lg text-sm font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <span className="px-3 py-1.5 bg-brand-blue text-white rounded-lg text-sm font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     v{selectedVersion.version_number}.0
                   </span>
-                  <div className="text-sm text-gray-600 dark:text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <User className="w-4 h-4" />
-                      {selectedVersion.published_by_name || 'Unknown'}
-                    </span>
-                  </div>
-                  {previousVersion && (
-                    <span className="text-xs bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue px-2 py-0.5 rounded">
-                      New content highlighted in blue
+                  {selectedVersion.is_latest_version && (
+                    <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs font-medium">
+                      Latest
                     </span>
                   )}
+                  <span className="text-xs text-gray-600 dark:text-slate-400 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" />
+                    {formatVersionDate(versionDate(selectedVersion))}
+                  </span>
+                  <span className="text-xs text-gray-600 dark:text-slate-400">
+                    {statusLabel(selectedVersion.status)}
+                  </span>
                 </div>
                 <button
-                  onClick={handleDownload}
-                  className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors font-medium"
+                  type="button"
+                  onClick={() => handleDownload(selectedVersion)}
+                  className="flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors font-medium"
                 >
                   <Download className="w-4 h-4" />
                   Download
                 </button>
               </div>
 
-              {/* Job Title */}
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-6">{selectedVersion.title}</h3>
-
-              {/* Job Description with proper markdown rendering and blue highlighting */}
-              <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
-                {(() => {
-                  const isV1 = selectedVersion.version_number === 1;
-                  const currentDesc = selectedVersion.description || '';
-                  const prevDesc = previousVersion?.description || '';
-
-                  // For v1 or no previous version, render without highlighting
-                  if (isV1 || !prevDesc) {
-                    return (
-                      <div className="prose prose-sm max-w-none text-gray-700 dark:text-slate-300 leading-relaxed markdown-content">
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{currentDesc}</ReactMarkdown>
-                      </div>
-                    );
-                  }
-
-                  // For v2+, use ReactMarkdown with custom components for diff highlighting
-                  const stripMarkdown = (line: string): string => {
-                    return line
-                      .replace(/^#{1,6}\s+/, '')
-                      .replace(/\*\*(.*?)\*\*/g, '$1')
-                      .replace(/\*(.*?)\*/g, '$1')
-                      .replace(/^[-*+]\s+/, '')
-                      .replace(/^\d+\.\s+/, '')
-                      .trim();
-                  };
-
-                  const prevLinesSet = new Set(
-                    prevDesc.split('\n')
-                      .map((l: string) => stripMarkdown(l))
-                      .filter((l: string) => l.length > 0)
-                  );
-
-                  const getTextContent = (children: any): string => {
-                    if (typeof children === 'string') return children;
-                    if (typeof children === 'number') return String(children);
-                    if (Array.isArray(children)) return children.map(getTextContent).join('');
-                    if (children && typeof children === 'object' && children.props) {
-                      return getTextContent(children.props.children);
-                    }
-                    return '';
-                  };
-
-                  const isNewContent = (children: any): boolean => {
-                    const text = getTextContent(children).trim();
-                    return text.length > 0 && !prevLinesSet.has(text);
-                  };
-
-                  const highlightClass = 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue px-2 rounded';
-
-                  const diffComponents = {
-                    h1: ({ node, children, ...props }: any) => (
-                      <h1 className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</h1>
-                    ),
-                    h2: ({ node, children, ...props }: any) => (
-                      <h2 className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</h2>
-                    ),
-                    h3: ({ node, children, ...props }: any) => (
-                      <h3 className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</h3>
-                    ),
-                    p: ({ node, children, ...props }: any) => (
-                      <p className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</p>
-                    ),
-                    li: ({ node, children, ...props }: any) => (
-                      <li className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</li>
-                    ),
-                  };
-
-                  return (
-                    <div className="prose prose-sm max-w-none text-gray-700 dark:text-slate-300 leading-relaxed markdown-content">
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={diffComponents}>{currentDesc}</ReactMarkdown>
-                    </div>
-                  );
-                })()}
+              <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-2">
+                  {selectedVersion.title}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-600 dark:text-slate-400 mb-4">
+                  {selectedVersion.job_id && <span>Job ID: {selectedVersion.job_id}</span>}
+                  {selectedVersion.department && <span>Department: {selectedVersion.department}</span>}
+                  {selectedVersion.industry_type && <span>Industry: {selectedVersion.industry_type}</span>}
+                  {selectedVersion.created_by_name && <span>By {selectedVersion.created_by_name}</span>}
+                </div>
+                <div className="h-px bg-gray-200 dark:bg-slate-700 mb-4" />
+                {selectedVersion.description ? (
+                  <div className="prose prose-sm max-w-none text-gray-700 dark:text-slate-300 leading-relaxed markdown-content">
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                      {selectedVersion.description}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 dark:text-slate-500 italic">
+                    No job description content recorded for this version.
+                  </p>
+                )}
               </div>
             </div>
-          ) : !versionHistory || versionHistory.versions.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-slate-500 text-lg">No version history available</p>
-              <p className="text-gray-400 dark:text-slate-500 text-sm mt-2">
-                Versions are created when you publish the job description
-              </p>
-            </div>
-          ) : (
-            /* Version List View */
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {versionHistory.versions.map((version, index) => {
-                const isLatest = index === 0;
+          ) : versions.length > 0 ? (
+            <div className="space-y-3">
+              {versions.map((version, index) => {
+                const isLatest = version.is_latest_version || index === 0;
+                const isCurrentPage = version.id === jdId;
+                const previousVersion = index < versions.length - 1 ? versions[index + 1] : null;
 
                 return (
-                  <button
+                  <div
                     key={version.id}
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleVersionClick(version);
-                    }}
-                    className={`bg-white dark:bg-slate-900 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 cursor-pointer transition-all hover:shadow-md text-left w-full ${
-                      isLatest
-                        ? 'border-brand-blue/20 bg-brand-blue/5 hover:border-brand-blue/30'
-                        : 'border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/30'
+                    className={`border rounded-lg p-4 transition-all ${
+                      isCurrentPage
+                        ? 'bg-brand-blue/[0.06] border-brand-blue/40 ring-1 ring-brand-blue/15'
+                        : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700'
                     }`}
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <span className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${
-                          isLatest
-                            ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                            : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300'
-                        }`}>
-                          v{version.version_number}.0
-                        </span>
-                        {isLatest && (
-                          <span className="px-2 py-0.5 bg-brand-cyan/10 ring-1 ring-brand-cyan/20 text-brand-cyan rounded-full text-xs font-medium">
-                            Current
-                          </span>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {versions.length > 1 && (
+                          <input
+                            type="checkbox"
+                            checked={compareChecked.includes(version.id)}
+                            onChange={() => toggleCompareCheck(version.id)}
+                            className="h-4 w-4 shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                            aria-label={`Select version ${version.version_number} to compare`}
+                          />
                         )}
+                        <div className={`w-10 h-10 shrink-0 rounded-lg flex items-center justify-center ${
+                          isLatest
+                            ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15'
+                            : 'bg-gray-100 dark:bg-slate-800 ring-1 ring-gray-200/60'
+                        }`}>
+                          <FileText className={`w-5 h-5 ${isLatest ? 'text-brand-blue' : 'text-gray-500 dark:text-slate-400'}`} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-brand-blue">
+                              Version {version.version_number}
+                            </span>
+                            {isLatest && (
+                              <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs font-medium">
+                                Latest
+                              </span>
+                            )}
+                            {isCurrentPage && (
+                              <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 rounded text-xs font-medium">
+                                Current page
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 dark:text-slate-400 truncate">{version.title}</p>
+                          <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400 mt-1 flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              {formatVersionDate(versionDate(version))}
+                            </span>
+                            <span>{statusLabel(version.status)}</span>
+                            {version.created_by_name && (
+                              <span className="flex items-center gap-1">
+                                <User className="w-3.5 h-3.5" />
+                                {version.created_by_name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <Eye className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {previousVersion ? (
+                          <button
+                            type="button"
+                            onClick={() => openComparison(previousVersion, version)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-slate-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
+                            title="Compare with the previous version"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">View Changes</span>
+                          </button>
+                        ) : (
+                          <span className="hidden sm:inline text-xs italic text-gray-400 dark:text-slate-500">First version</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedVersion(version)}
+                          className="p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                          aria-label={`View version ${version.version_number}`}
+                          title="View JD"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-
-                    <h3 className="font-medium text-gray-900 dark:text-slate-50 mb-2 line-clamp-1">{version.title}</h3>
-
-                    <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-slate-500">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
-                        {getRelativeTime(version.published_at)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <User className="w-3.5 h-3.5" />
-                        {version.published_by_name || 'Unknown'}
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-gray-400 dark:text-slate-500 mt-2">
-                      {formatIST(version.published_at)}
-                    </p>
-                  </button>
+                  </div>
                 );
               })}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                <FileText className="w-8 h-8 text-gray-400 dark:text-slate-500" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Versions Found</h3>
+              <p className="text-sm text-gray-500 dark:text-slate-500 text-center">
+                No version history available for this job description.
+              </p>
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex-shrink-0 flex items-center justify-end px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
-          <button
-            onClick={selectedVersion ? handleBack : onClose}
-            className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
-          >
-            {selectedVersion ? 'Back to List' : 'Close'}
-          </button>
+        <div className="border-t border-gray-200 dark:border-slate-700 px-6 py-4 bg-gray-50 dark:bg-slate-800/50">
+          <div className="flex justify-between items-center gap-3">
+            <p className="text-sm text-gray-600 dark:text-slate-400">
+              {selectedVersion
+                ? `Viewing version ${selectedVersion.version_number}`
+                : compareChecked.length > 0
+                  ? `${compareChecked.length} of 2 selected to compare`
+                  : `${versions.length} version${versions.length !== 1 ? 's' : ''}`}
+            </p>
+            <div className="flex items-center gap-2">
+              {!selectedVersion && versions.length > 1 && (
+                <button
+                  type="button"
+                  onClick={compareSelected}
+                  disabled={compareChecked.length !== 2}
+                  className="sm:hidden inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white disabled:bg-slate-200 disabled:text-gray-400"
+                >
+                  Compare
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={selectedVersion ? () => setSelectedVersion(null) : closeModal}
+                className="px-4 py-2 bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-700 transition-colors font-medium text-sm"
+              >
+                {selectedVersion ? 'Back to List' : 'Close'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
+      {comparePair && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <VersionCompareModal
+            older={comparePair.older}
+            newer={comparePair.newer}
+            contentFormat="markdown"
+            onClose={() => {
+              setComparePair(null);
+              setCompareChecked([]);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
