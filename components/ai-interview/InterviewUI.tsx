@@ -1759,6 +1759,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // subtracts, so no part of the outage counts against the candidate.
       resumeQuestionTimerRef.current();
       console.log('[INTERVIEW-DEBUG][PAUSE] TIMER RESUMED, BINA SPEECH/RECORDING ALLOWED AGAIN');
+      // Recording itself does NOT come back on its own: the ARM branch above
+      // calls abortRecordingForSkipRef.current() to kill any in-flight answer
+      // capture, and nothing else watches this pause→resume transition to
+      // restart it. Without this, a disconnect mid-answer left the candidate
+      // stuck — timer/Bina/stream all "resumed" but no mic was ever reopened
+      // to capture the rest of their answer, until the backend's own
+      // question-timer timeout eventually auto-skipped the question. Same
+      // guard as the one-shot device-change retry above: only fire into an
+      // open candidate turn, never over Bina still speaking or mid-processing.
+      setTimeout(() => {
+        if (
+          isRecordingRef.current === false &&
+          wsRef.current?.readyState === WebSocket.OPEN &&
+          !isAiSpeakingRef.current &&
+          !isProcessingRef.current &&
+          !isMutedRef.current &&
+          !isFaceBlockedRef.current
+        ) {
+          console.log('[INTERVIEW-DEBUG][PAUSE] Restarting candidate recording after resume');
+          startRecordingInternalRef.current();
+        }
+      }, 100);
       candidateAIInterviewService.reportProctorEvent(token, {
         event_type: 'session_resumed',
         severity: 'low',
