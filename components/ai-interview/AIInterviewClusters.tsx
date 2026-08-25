@@ -3141,7 +3141,10 @@ export default function AIInterviewClusters() {
                 {/* Hide regenerate when flexible mode clusters are finalized */}
                 {!(isFlexible && isFinalized) && (
                   <button
-                    onClick={handleGenerateClusters}
+                    /* Wrapped: as a bare handler React passes the MouseEvent as `opts`,
+                       and destructuring forceExpand off it yields undefined -> false, the
+                       same result as calling with no argument. */
+                    onClick={() => handleGenerateClusters()}
                     disabled={generating || saving}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >

@@ -278,7 +278,9 @@ export async function recordPcm16(
 
   const pcm16 = floatToInt16(down);
   return {
-    blob: new Blob([pcm16.buffer], { type: 'application/octet-stream' }),
+    // `.buffer` is ArrayBufferLike (could be a SharedArrayBuffer per the type), which is
+    // not a BlobPart. It is always a plain ArrayBuffer here - floatToInt16 allocates it.
+    blob: new Blob([pcm16.buffer as ArrayBuffer], { type: 'application/octet-stream' }),
     sampleRate: TARGET_RATE,
     noiseFloor,
     durationSec: down.length / TARGET_RATE,

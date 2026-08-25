@@ -1084,6 +1084,22 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                               const raw = (config as any)?.special_instructions;
                               if (!raw) return null;
                               const s = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                              // FIX 3 (2026-08-25): PREFER the deterministic per-question
+                              // map the interview actually runs on and that the Question
+                              // Analysis tab scores against (mth/nth_question_skill_map)
+                              // over the pre-augment skill_distribution. The two can
+                              // diverge when the saved distribution failed backend
+                              // validation and was recomputed — leaving this popover
+                              // showing a plan the interview never used (the popover-vs-
+                              // Question-Analysis contradiction). The question_skill_map
+                              // is authoritative; skill_distribution is the fallback.
+                              // Rows share the same shape, so sdToRowDetails works on both.
+                              if (s?.mth_question_skill_map?.length || s?.nth_question_skill_map?.length) {
+                                return {
+                                  mth_questions: s.mth_question_skill_map || [],
+                                  nth_questions: s.nth_question_skill_map || [],
+                                };
+                              }
                               return s?.skill_distribution || null;
                             } catch { return null; }
                           })();

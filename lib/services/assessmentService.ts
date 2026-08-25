@@ -4,13 +4,26 @@
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
 
+// A configured HR topic: either a plain topic label or a full question object.
+// Mirrors the backend's `List[Any]` (app/schemas/assessment.py).
+export type HRTopic = string | {
+  text: string;
+  type: 'Text' | 'Yes/No';
+  time: number;
+  correct_answer?: any;
+};
+
 export interface AssessmentCreate {
   jd_id: string;
   title: string;
   description?: string;
   hr_enabled?: boolean;
   hr_percentage?: number;
-  hr_topics?: string[];
+  /** Either plain topic strings or full question objects ({ text, type, time,
+   *  correct_answer }) - the backend schema is `List[Any]` and documents both
+   *  shapes (app/schemas/assessment.py). AssessmentCreation.tsx has always sent the
+   *  object form, which this `string[]` declaration rejected. */
+  hr_topics?: HRTopic[];
   technical_enabled?: boolean;
   technical_percentage?: number;
   technical_topics?: string[];
@@ -26,7 +39,11 @@ export interface AssessmentUpdate {
   duration_minutes?: number;
   hr_enabled?: boolean;
   hr_percentage?: number;
-  hr_topics?: string[];
+  /** Either plain topic strings or full question objects ({ text, type, time,
+   *  correct_answer }) - the backend schema is `List[Any]` and documents both
+   *  shapes (app/schemas/assessment.py). AssessmentCreation.tsx has always sent the
+   *  object form, which this `string[]` declaration rejected. */
+  hr_topics?: HRTopic[];
   technical_enabled?: boolean;
   technical_percentage?: number;
   technical_topics?: string[];
@@ -53,7 +70,11 @@ export interface AssessmentResponse {
   duration_minutes: number;
   hr_enabled: boolean;
   hr_percentage: number;
-  hr_topics: string[];
+  /** Either plain topic strings or full question objects ({ text, type, time,
+   *  correct_answer }) - the backend schema is `List[Any]` and documents both
+   *  shapes (app/schemas/assessment.py). AssessmentCreation.tsx has always sent the
+   *  object form, which this `string[]` declaration rejected. */
+  hr_topics: HRTopic[];
   technical_enabled: boolean;
   technical_percentage: number;
   technical_topics: string[];

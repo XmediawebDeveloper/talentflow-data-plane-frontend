@@ -77,6 +77,14 @@ interface ScoredResume {
   aiSummary?: string;
   strengths?: string[];
   gaps?: string[];
+  // Skill lists carried through from the resume converters (technical_skills ->
+  // technicalSkills etc.). JobDetailView's onViewCandidate reads them as a fallback
+  // chain (matchedSkills || technicalSkills || skills); all optional because which
+  // ones are present depends on the endpoint the row came from.
+  matchedSkills?: string[];
+  missingSkills?: string[];
+  technicalSkills?: string[];
+  skills?: string[];
   matchReason?: string;
   scoreBreakdown?: {
     skillsMatch: number;

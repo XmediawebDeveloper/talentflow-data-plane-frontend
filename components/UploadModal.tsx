@@ -30,16 +30,25 @@ interface FileValidationError {
   fileName: string;
   error: string;
   type: 'format' | 'size' | 'storage' | 'virus' | 'limit' | 'duplicate';
+  // Producers (my-resumes/page.tsx, ResumeSelectionModal) populate these alongside
+    // id/candidateName; they were simply never declared, so the reads below failed.
+    // Optional because not every duplicate-detection path fills all of them.
   existingResume?: {
     id: string;
     candidateName: string;
     uploadedAt?: string;
+    email?: string;
+    currentTitle?: string;
+    folderName?: string;
+    version?: number;
   };
 }
 
 interface UploadModalProps {
   folders: Folder[];
-  tenant: Tenant | null; // Pass tenant for validation
+  // Optional: resume-database/page.tsx has no tenant and has never passed one. Every
+  // read below is `tenant?.…` with a fallback, so absence was already handled.
+  tenant?: Tenant | null; // Pass tenant for validation
   uploadSection?: 'my-resumes' | 'internal-db'; // Which section is uploading
   onClose: () => void;
   onUpload: (files: File[], folderId?: string) => Promise<{
@@ -51,6 +60,10 @@ interface UploadModalProps {
       id: string;
       candidateName: string;
       uploadedAt?: string;
+      email?: string;
+      currentTitle?: string;
+      folderName?: string;
+      version?: number;
     };
     duplicateData?: {
       file: File;
@@ -64,6 +77,8 @@ interface UploadModalProps {
         file_size: number;
         file_name: string;
         version: number;
+        // sent by the my-resumes duplicate path alongside `version`
+        version_count?: number;
       };
       contentDifferences: string[];
       isDuplicate: boolean;

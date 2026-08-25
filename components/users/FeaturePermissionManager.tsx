@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import type { IconComponent } from '@/lib/types/icon';
 import {
   X,
   Loader2,
@@ -62,7 +63,7 @@ interface FeatureState {
 }
 
 // Category icons
-const CATEGORY_ICONS: Record<string, React.ElementType> = {
+const CATEGORY_ICONS: Record<string, IconComponent> = {
   'Resume Management': FileText,
   'AI Features': Zap,
   'Job Descriptions': Briefcase,

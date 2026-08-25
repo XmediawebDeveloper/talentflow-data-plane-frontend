@@ -223,6 +223,12 @@ export interface User {
   // UI control flags (for role-based UI rendering)
   can_upgrade_plan?: boolean;
   can_manage_billing?: boolean;
+  // NOTE: read by Dashboard.tsx and Header.tsx to gate admin-only blocks. The backend
+  // does supply it (dependencies.py), but mapApiUserToUser in AuthProvider does NOT
+  // currently copy it onto this object, so it is undefined at runtime and those blocks
+  // never render. Declared here to fix the compile error WITHOUT changing that - wiring
+  // it up in the mapper would start rendering those sections, which is a behaviour change.
+  is_tenant_admin?: boolean;
   // Tenant info
   tenantName?: string;
   // Tenant status info (for suspension/expiry display)

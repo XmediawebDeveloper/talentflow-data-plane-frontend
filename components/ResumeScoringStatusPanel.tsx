@@ -52,6 +52,9 @@ interface ScoringResume {
   strengths?: string[];
   gaps?: string[];
   scoreBreakdown?: ScoreBreakdownItem[];
+  // Set at line ~248 of this file from the API's criteria_scores; read back at ~355
+  // and ~384. Declared so those reads compile.
+  criteriaScores?: Record<string, any>;
   essentialScore?: number;
   nonEssentialScore?: number;
   // Candidate info from API

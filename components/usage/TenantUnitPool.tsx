@@ -26,6 +26,7 @@ import {
   FileSpreadsheet,
   FileText,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -48,7 +49,10 @@ interface TenantUnitPoolProps {
 }
 
 // Icons for each unit type
-const UNIT_TYPE_ICONS: Record<UnitType, React.ElementType> = {
+// LucideIcon, not React.ElementType: in React 19's types ElementType is a union wide
+// enough that resolving props against it collapses to `never`, so <Icon className=...>
+// failed to compile. Every value here is a lucide icon.
+const UNIT_TYPE_ICONS: Record<UnitType, LucideIcon> = {
   RS: Target,
   AS: ClipboardCheck,
   AIU: Video,

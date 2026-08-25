@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import type { IconComponent } from '@/lib/types/icon';
 import {
   Loader2,
   Target,
@@ -31,7 +32,7 @@ import {
 } from '@/lib/services/unitPoolService';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
-const UNIT_TYPE_ICONS: Record<UnitType, React.ElementType> = {
+const UNIT_TYPE_ICONS: Record<UnitType, IconComponent> = {
   RS: Target,
   AS: ClipboardCheck,
   AIU: Video,

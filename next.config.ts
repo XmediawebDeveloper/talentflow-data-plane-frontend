@@ -1,5 +1,9 @@
 import type { NextConfig } from "next";
-import webpack from "webpack";
+// `webpack` is NOT a direct dependency of this project - Next.js ships its own copy at
+// next/dist/compiled/webpack and aliases the bare specifier when loading this config, so
+// the top-level `import webpack from "webpack"` worked at runtime but had no types.
+// The webpack instance is instead taken from the config callback context below, which is
+// the documented Next.js API and the very same instance.
 
 const nextConfig: NextConfig = {
   // Standalone output: emits .next/standalone with a self-contained server.js —
@@ -57,7 +61,7 @@ const nextConfig: NextConfig = {
     ],
   },
 
-  webpack(config, { isServer }) {
+  webpack(config, { isServer, webpack }) {
     // Allow .mjs ESM files from node_modules (TalkingHead uses ESM modules)
     config.module.rules.push({
       test: /\.mjs$/,

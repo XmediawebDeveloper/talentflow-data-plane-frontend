@@ -1585,7 +1585,10 @@ Best regards`);
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
               </div>
               <div className="space-y-2">
-                {resume.achievements.map((achievement: string, index: number) => (
+                {/* param is not just `string`: the render below branches on the object form
+                    (achievement.description / .name), and the source field is typed
+                    `any[]`. Annotating it `string` narrowed the else-branch to `never`. */}
+                {resume.achievements.map((achievement: string | { description?: string; name?: string }, index: number) => (
                   <div key={index} className="flex items-start gap-2 text-gray-700">
                     <ChevronRight className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
                     <span>{typeof achievement === 'string' ? achievement : achievement.description || achievement.name}</span>
@@ -1632,9 +1635,9 @@ Best regards`);
                 <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Hobbies & Interests</h3>
               </div>
               <div className="flex flex-wrap gap-2">
-                {resume.hobbies.map((hobby: string, index: number) => (
+                {resume.hobbies.map((hobby: string | { name?: string }, index: number) => (
                   <span key={index} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue rounded-lg text-sm ring-1 ring-brand-blue/20">
-                    {typeof hobby === 'string' ? hobby : hobby.name || hobby}
+                    {typeof hobby === 'string' ? hobby : ((hobby.name || hobby) as React.ReactNode)}
                   </span>
                 ))}
               </div>
@@ -1723,7 +1726,10 @@ Best regards`);
                 </span>
                 {resume.versions.length > 1 && (
                   <button
-                    onClick={openCompareModal}
+                    /* Wrapped: as a bare handler React passes the MouseEvent as `leftId`.
+                       `rightId` stays undefined either way, so the leftId && rightId guard
+                       is false and both forms reach the compareChecked branch. */
+                    onClick={() => openCompareModal()}
                     disabled={compareChecked.length !== 2}
                     className={`ml-auto px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                       compareChecked.length === 2

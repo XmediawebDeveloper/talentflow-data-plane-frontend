@@ -342,7 +342,16 @@ export default function ResumeDatabasePage() {
     setDeleteConfirm({ ids });
   };
 
-  const handleUploadResumes = async (files: File[], folderId?: string) => {
+  // Returns a result because UploadModal's onUpload contract is
+  // Promise<{ success: boolean; ... }> and handleValidateAndUpload reads
+  // result.existingResume. This returned void, so that read threw and fell into the
+  // modal's catch - meaning a successful upload showed this page's success toast AND
+  // the modal's "Upload failed" toast. This page reports its own outcome via toasts
+  // and closes the modal itself, so { success: true } keeps the modal silent.
+  const handleUploadResumes = async (
+    files: File[],
+    folderId?: string,
+  ): Promise<{ success: boolean; error?: string }> => {
     setIsUploadModalOpen(false);
 
     // For single file, use single upload endpoint
@@ -355,7 +364,7 @@ export default function ResumeDatabasePage() {
       } catch (error) {
         handleQuotaError(error, router, `Failed to upload ${files[0].name}`);
       }
-      return;
+      return { success: true };
     }
 
     // For multiple files, use bulk upload with async processing
@@ -1220,7 +1229,12 @@ export default function ResumeDatabasePage() {
       {/* Version History Modal */}
       {showVersionHistory && selectedResumeForVersion && (
         <VersionHistoryModal
-          resume={selectedResumeForVersion}
+          // VersionHistoryModal takes candidateName + versions, not a whole resume.
+          // Passing `resume` meant `versions` was undefined and the modal rendered an
+          // empty history - even though handleShowVersionHistory had already fetched
+          // and attached them.
+          candidateName={selectedResumeForVersion.candidateName}
+          versions={selectedResumeForVersion.versions}
           onClose={() => {
             setShowVersionHistory(false);
             setSelectedResumeForVersion(null);

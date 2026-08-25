@@ -19,6 +19,9 @@ interface ScoreBreakdownItem {
   requirement?: string;
   eligible?: boolean;
   is_summary?: boolean;
+  // Marks a criterion the backend treats as essential (routers/resume_scoring.py
+  // sets it per criterion, e.g. must_have_skills: True). Read below but never declared.
+  is_essential?: boolean;
   percentage?: number;
   raw_percentage?: number;
   key?: string;
@@ -260,7 +263,9 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     return 'bg-red-100 border-red-300 text-red-700';
   };
 
-  const getEligibleStatus = (rating: number): { status: string; icon: JSX.Element; color: string } => {
+  // React 19 moved the JSX namespace under React (@types/react 19 no longer declares a
+  // global one), so bare `JSX.Element` no longer resolves.
+  const getEligibleStatus = (rating: number): { status: string; icon: React.JSX.Element; color: string } => {
     if (rating >= 7) {
       return {
         status: 'Eligible',

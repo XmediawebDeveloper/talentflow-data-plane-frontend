@@ -93,7 +93,9 @@ const ROMANIZED_TAMIL_MARKERS = new Set([
 ]);
 
 function looksRomanizedTamil(text: string): boolean {
-  const words = text.toLowerCase().match(/[a-z]+/g) ?? [];
+  // Annotated: `match() ?? []` infers `RegExpMatchArray | never[]`, and on the never[]
+  // branch the .filter callbacks below get `word: never`, so `word.length` failed.
+  const words: string[] = text.toLowerCase().match(/[a-z]+/g) ?? [];
   if (words.length < 2) return false;
   // Long answers (>40 words) are English interview responses — English vocabulary
   // naturally contains words ending in Tamil-like suffixes (formula, Kerala,

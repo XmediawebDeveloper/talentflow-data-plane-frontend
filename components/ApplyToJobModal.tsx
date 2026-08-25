@@ -1,11 +1,12 @@
 import { X, Search, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, MapPin, User, Monitor, Laptop, Home, Sparkles, PenLine, Loader2, Ban } from 'lucide-react';
+import type { IconComponent } from '@/lib/types/icon';
 import { useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import SelectedCandidatesPanel, { versionInfo, type VersionChoice } from './SelectedCandidatesPanel';
 
 // Work mode configuration
-const workModeConfig: Record<string, { label: string; icon: React.ElementType; bgColor: string; textColor: string }> = {
+const workModeConfig: Record<string, { label: string; icon: IconComponent; bgColor: string; textColor: string }> = {
   onsite: { label: 'On-site', icon: Monitor, bgColor: 'bg-blue-50', textColor: 'text-blue-700' },
   hybrid: { label: 'Hybrid', icon: Laptop, bgColor: 'bg-purple-50', textColor: 'text-purple-700' },
   remote: { label: 'Remote', icon: Home, bgColor: 'bg-green-50', textColor: 'text-green-700' },

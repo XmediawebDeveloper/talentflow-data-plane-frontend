@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Users, UserPlus, UserMinus, Pencil, Trash2, Clock, ChevronLeft, ChevronRight, History, Loader2 } from 'lucide-react';
+import type { IconComponent } from '@/lib/types/icon';
 import teamService, { TeamHistoryEntry } from '@/lib/services/teamService';
 import { formatIST } from '@/lib/utils/dateUtils';
 
 const PAGE_SIZE = 20;
 
-const EVENT_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
+const EVENT_CONFIG: Record<string, { label: string; icon: IconComponent; color: string; bg: string }> = {
   TEAM_CREATED: { label: 'Team Created', icon: Users, color: 'text-brand-teal', bg: 'bg-brand-teal/10' },
   TEAM_UPDATED: { label: 'Team Updated', icon: Pencil, color: 'text-brand-blue', bg: 'bg-brand-blue/10' },
   TEAM_DELETED: { label: 'Team Deleted', icon: Trash2, color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10' },

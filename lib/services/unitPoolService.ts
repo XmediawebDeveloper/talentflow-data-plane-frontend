@@ -15,6 +15,12 @@ export const UNIT_TYPE_NAMES: Record<UnitType, string> = {
 };
 
 // Response types
+// Unit types that can appear on a LEDGER entry. Wider than UnitType (which keys the
+// pool records, and only RS/AS/AIU have pools): the backend also writes system
+// entries such as max_seats for seat licenses (routers/addons.py) and treats
+// RU/max_seats as valid alongside the pool types (routers/disputes.py).
+export type LedgerUnitType = UnitType | 'RU' | 'max_seats';
+
 export interface UnitPoolStatus {
   id: string | null;
   unit_type: UnitType;
@@ -22,7 +28,11 @@ export interface UnitPoolStatus {
   total_allocated: number;
   total_consumed: number;
   total_adjusted: number;
-  available_units: number;
+  /** Normally a number, but the backend masks this to the string "*** RESTRICTED ***"
+   *  for users without granular visibility (middleware/unit_visibility.py). Callers
+   *  already guard with `typeof available_units === 'string'`; that check narrowed to
+   *  `never` while this was declared number-only. */
+  available_units: number | string;
   usage_percentage: number;
   billing_cycle_start: string | null;
   billing_cycle_end: string | null;
@@ -49,7 +59,7 @@ export type ConsumptionStatus =
 
 export interface ConsumptionLogEntry {
   id: string;
-  unit_type: UnitType;
+  unit_type: LedgerUnitType;
   units_consumed: number;
   status: ConsumptionStatus;
   user_id: string;
@@ -712,8 +722,11 @@ export const unitPoolService = {
 };
 
 // Helper functions
-export function getUnitTypeName(unitType: UnitType): string {
-  return UNIT_TYPE_NAMES[unitType] || unitType;
+export function getUnitTypeName(unitType: LedgerUnitType): string {
+  // Accepts LedgerUnitType (not just UnitType) because ledger rows carry system entries
+  // like max_seats. The existing `|| unitType` fallback already covers names not in the
+  // map, so behaviour is unchanged - only the signature was too narrow.
+  return UNIT_TYPE_NAMES[unitType as UnitType] || unitType;
 }
 
 export function formatUsagePercentage(pool: UnitPoolStatus): string {
