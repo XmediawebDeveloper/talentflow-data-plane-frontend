@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
@@ -18,6 +19,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { jdService, JDLineageVersion, JDResponse } from '@/lib/services/jdService';
+import { scoringService } from '@/lib/services/scoringService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
@@ -30,13 +32,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const viewVersionsMenuItemClass = 'group text-gray-700 hover:bg-gray-50 hover:text-gray-700 focus:!bg-gray-50 focus:!text-gray-700 data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-slate-100 dark:focus:!bg-slate-800 dark:focus:!text-slate-100 dark:data-[highlighted]:!bg-slate-800 dark:data-[highlighted]:!text-slate-100 [&_svg]:!text-current';
+const viewVersionsMenuItemClass = 'group text-gray-700 hover:bg-gray-50 hover:text-gray-700 focus:!bg-gray-50 focus:!text-gray-700 data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-slate-100 dark:focus:!bg-slate-800 dark:focus:!text-slate-100 dark:data-[highlighted]:!bg-slate-800 dark:data-[highlighted]:!text-slate-100';
 const viewVersionsMenuItemOrangeClass = 'group text-orange-700 hover:bg-orange-50 hover:text-orange-700 focus:!bg-orange-50 focus:!text-orange-700 data-[highlighted]:!bg-orange-50 data-[highlighted]:!text-orange-700 dark:text-orange-300 dark:hover:bg-orange-950/30 dark:hover:text-orange-200 dark:focus:!bg-orange-950/30 dark:focus:!text-orange-200 dark:data-[highlighted]:!bg-orange-950/30 dark:data-[highlighted]:!text-orange-200 [&_svg]:!text-current';
 const viewVersionsMenuItemGreenClass = 'group text-green-700 hover:bg-green-50 hover:text-green-700 focus:!bg-green-50 focus:!text-green-700 data-[highlighted]:!bg-green-50 data-[highlighted]:!text-green-700 dark:text-green-300 dark:hover:bg-green-950/30 dark:hover:text-green-200 dark:focus:!bg-green-950/30 dark:focus:!text-green-200 dark:data-[highlighted]:!bg-green-950/30 dark:data-[highlighted]:!text-green-200 [&_svg]:!text-current';
 const viewVersionsMenuItemRedClass = 'group text-red-600 hover:bg-red-50 hover:text-red-600 focus:!bg-red-50 focus:!text-red-600 data-[highlighted]:!bg-red-50 data-[highlighted]:!text-red-600 dark:text-red-300 dark:hover:bg-red-950/30 dark:hover:text-red-200 dark:focus:!bg-red-950/30 dark:focus:!text-red-200 dark:data-[highlighted]:!bg-red-950/30 dark:data-[highlighted]:!text-red-200 [&_svg]:!text-current';
-const viewVersionsMenuLabelClass = 'inline-block origin-left transition-transform duration-150 ease-out group-hover:scale-[0.98] group-focus:scale-[0.98] group-data-[highlighted]:scale-[0.98]';
-const normalJobMenuLabelClass = 'inline-block origin-left transition-transform duration-150 ease-out group-hover:scale-[0.97]';
-
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
 const formatEmploymentType = (type: string | undefined): string => {
@@ -206,6 +205,30 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
      shows dashes in those cells; nothing is invented client-side. */
   const [versionDetails, setVersionDetails] = useState<Record<string, JDResponse>>({});
 
+  /* Applicants per lineage version — the number of resumes actually scored
+     against THAT version.
+
+     The JD record's own `applicants_count` comes back as 0 on version rows, so
+     the column read 0 even for versions with scores against them. Every
+     version is its own JD id, and `/scoring/jd/{id}` is already the endpoint
+     the Scored Resumes tab lists from, so its `total` is the real count for
+     that version and no other. `page_size: 1` keeps this to a count query —
+     only `total` is read, never the rows. */
+  const [versionApplicants, setVersionApplicants] = useState<Record<string, number>>({});
+
+  /* Deliberately not cached the way the JD record above is: scoring a resume
+     changes this number, so it is re-counted every time the panel is opened.
+     A failure leaves the entry unset, so the cell keeps its dash instead of
+     showing a zero that would read as "nobody applied". */
+  const refreshVersionApplicants = async (versionId: string) => {
+    try {
+      const scored = await scoringService.getJDScoredResumes(versionId, { page_size: 1 });
+      setVersionApplicants(prev => ({ ...prev, [versionId]: scored?.total ?? 0 }));
+    } catch {
+      /* keep whatever was there; the cell falls back to a dash */
+    }
+  };
+
   const loadLineage = async (key: string, jobId: string) => {
     if (versionLineages[key] || loadingLineages.has(key)) return;
     setLoadingLineages(prev => new Set(prev).add(key));
@@ -221,6 +244,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             setVersionDetails(prev => (prev[version.id] ? prev : { ...prev, [version.id]: full }));
           })
           .catch(() => { /* row falls back to the lineage fields + dashes */ });
+
+        void refreshVersionApplicants(version.id);
       });
     } catch {
       // Leave it uncached so the next expand retries rather than showing an
@@ -242,7 +267,15 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       else next.add(key);
       return next;
     });
-    if (!expandedVersions.has(key)) void loadLineage(key, jobId);
+    if (!expandedVersions.has(key)) {
+      void loadLineage(key, jobId);
+      /* `loadLineage` bails out once a lineage is cached, which would leave
+         the applicant counts frozen at whatever they were the first time the
+         panel was opened. Re-count the cached versions here so reopening the
+         panel picks up resumes scored in between. */
+      const cached = versionLineages[key];
+      if (cached?.length) cached.forEach(v => void refreshVersionApplicants(v.id));
+    }
   };
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAIMatchModal, setShowAIMatchModal] = useState(false);
@@ -1496,8 +1529,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <Users className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>View Applicants</span>
+                                  <Users className="w-4 h-4 text-menu-icon-secondary" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
                                 </button>
                               )}
                               {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
@@ -1509,8 +1542,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <Brain className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>AI Talent Match</span>
+                                  <Brain className="w-4 h-4 text-menu-icon-ai" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
                                 </button>
                               )}
                               {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
@@ -1522,8 +1555,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <Target className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Score Resumes</span>
+                                  <Target className="w-4 h-4 text-menu-icon-score" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                 </button>
                               )}
                               {/* Disable Job for Published */}
@@ -1537,7 +1570,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-orange-700 hover:bg-orange-50"
                                 >
                                   <Ban className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Disable Job</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
                                 </button>
                               )}
                               {/* Re-enable JD for Disabled */}
@@ -1551,7 +1584,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Re-enable JD</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
                                 </button>
                               )}
                               {/* Archive Job */}
@@ -1564,8 +1597,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <Archive className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Archive Job</span>
+                                  <Archive className="w-4 h-4 text-menu-icon-archive" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
                                 </button>
                               )}
                               {/* Unarchive Job */}
@@ -1579,7 +1612,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
                                 >
                                   <RefreshCw className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Unarchive Job</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
                                 </button>
                               )}
                               {/* Delete Job */}
@@ -1593,7 +1626,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
                                 >
                                   <Trash2 className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Delete Job</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
                                 </button>
                               )}
                             </div>
@@ -1822,8 +1855,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <Users className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>View Applicants</span>
+                                  <Users className="w-4 h-4 text-menu-icon-secondary" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
                                 </button>
                               )}
                               {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
@@ -1835,8 +1868,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <Brain className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>AI Talent Match</span>
+                                  <Brain className="w-4 h-4 text-menu-icon-ai" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
                                 </button>
                               )}
                               {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
@@ -1848,8 +1881,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <Target className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Score Resumes</span>
+                                  <Target className="w-4 h-4 text-menu-icon-score" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                 </button>
                               )}
                               {/* Disable Job for Published */}
@@ -1863,7 +1896,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
                                 >
                                   <Ban className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Disable Job</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
                                 </button>
                               )}
                               {/* Re-enable JD for Disabled */}
@@ -1877,7 +1910,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Re-enable JD</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
                                 </button>
                               )}
                               {/* Archive Job */}
@@ -1890,8 +1923,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <Archive className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Archive Job</span>
+                                  <Archive className="w-4 h-4 text-menu-icon-archive" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
                                 </button>
                               )}
                               {/* Unarchive Job */}
@@ -1905,7 +1938,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
                                 >
                                   <RefreshCw className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Unarchive Job</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
                                 </button>
                               )}
                               {/* Delete Job */}
@@ -1919,7 +1952,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                                 >
                                   <Trash2 className="w-4 h-4" />
-                                  <span className={normalJobMenuLabelClass}>Delete Job</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
                                 </button>
                               )}
                             </div>
@@ -2218,7 +2251,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                       <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                                         <span className="inline-flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300">
                                           <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                                          {detail?.applicants_count ?? '—'}
+                                          {/* Resumes scored against this
+                                              version. Dash only while the
+                                              count is still in flight (or if
+                                              it failed) — a real zero prints
+                                              as 0. */}
+                                          {versionApplicants[version.id] ?? '—'}
                                         </span>
                                       </td>
                                       {/* Action — pinned right so it stays
@@ -2252,21 +2290,21 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                               {/* View Applicants - Hide for Draft */}
                                               {versionJob.status.toLowerCase() !== 'draft' && (
                                                 <DropdownMenuItem onSelect={() => (onViewApplicants || onViewJob)(versionJob)} className={viewVersionsMenuItemClass}>
-                                                  <Users className="w-4 h-4" />
-                                                  <span className={viewVersionsMenuLabelClass}>View Applicants</span>
+                                                  <Users className="w-4 h-4 text-menu-icon-secondary" />
+                                                  <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Quick Actions — same gates as the latest-version menu */}
                                               {onAIMatch && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
                                                 <DropdownMenuItem onSelect={() => requestAIMatch(versionJob)} className={viewVersionsMenuItemClass}>
-                                                  <Brain className="w-4 h-4" />
-                                                  <span className={viewVersionsMenuLabelClass}>AI Talent Match</span>
+                                                  <Brain className="w-4 h-4 text-menu-icon-ai" />
+                                                  <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {onScoreResumes && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
                                                 <DropdownMenuItem onSelect={() => onScoreResumes(versionJob)} className={viewVersionsMenuItemClass}>
-                                                  <Target className="w-4 h-4" />
-                                                  <span className={viewVersionsMenuLabelClass}>Score Resumes</span>
+                                                  <Target className="w-4 h-4 text-menu-icon-score" />
+                                                  <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Disable Job for Published */}
@@ -2276,7 +2314,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                                   className={viewVersionsMenuItemOrangeClass}
                                                 >
                                                   <Ban className="w-4 h-4" />
-                                                  <span className={viewVersionsMenuLabelClass}>Disable Job</span>
+                                                  <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Re-enable JD for Disabled */}
@@ -2286,14 +2324,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                                   className={viewVersionsMenuItemGreenClass}
                                                 >
                                                   <CheckCircle2 className="w-4 h-4" />
-                                                  <span className={viewVersionsMenuLabelClass}>Re-enable JD</span>
+                                                  <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Archive Job */}
                                               {versionJob.status !== 'Archived' && onArchiveJob && (
                                                 <DropdownMenuItem onSelect={() => onArchiveJob(versionJob)} className={viewVersionsMenuItemClass}>
-                                                  <Archive className="w-4 h-4" />
-                                                  <span className={viewVersionsMenuLabelClass}>Archive Job</span>
+                                                  <Archive className="w-4 h-4 text-menu-icon-archive" />
+                                                  <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Unarchive Job */}
@@ -2303,7 +2341,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                                   className={viewVersionsMenuItemGreenClass}
                                                 >
                                                   <RefreshCw className="w-4 h-4" />
-                                                  <span className={viewVersionsMenuLabelClass}>Unarchive Job</span>
+                                                  <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Delete Job */}
@@ -2313,7 +2351,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                                   className={viewVersionsMenuItemRedClass}
                                                 >
                                                   <Trash2 className="w-4 h-4" />
-                                                  <span className={viewVersionsMenuLabelClass}>Delete Job</span>
+                                                  <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
                                                 </DropdownMenuItem>
                                               )}
                                             </DropdownMenuContent>

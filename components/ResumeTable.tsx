@@ -7,6 +7,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
 import { Resume, Folder } from '@/lib/types/types';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
@@ -25,12 +26,14 @@ import { resumeService } from '@/lib/services/resumeService';
    scale-on-hover label. Orange/red variants mirror that same menu's
    Disable Job / Delete Job treatment for Archive and Delete here. */
 const resumeActionMenuItemClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50';
-const resumeActionMenuItemOrangeClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50';
 const resumeActionMenuItemRedClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50';
-const resumeActionMenuLabelClass = 'inline-block origin-left transition-transform duration-150 ease-out group-hover:scale-[0.97]';
-
 // Drag item type for resumes
 const RESUME_DRAG_TYPE = 'RESUME';
+
+/* Room the ⋮ menu needs below its trigger before it flips upward instead.
+   Sized for the tallest the menu gets — seven options plus its padding — so a
+   full menu on a last row still clears the pagination bar. */
+const ACTION_MENU_MIN_SPACE = 330;
 
 interface DragItem {
   id: string;
@@ -149,6 +152,15 @@ interface ResumeTableProps {
    *  the empty state (My Resumes) pass their own illustrated version; every
    *  other caller keeps the default. */
   emptyState?: React.ReactNode;
+  /** Extra classes for the outer wrapper. A dialog hands the table its own
+   *  flex row and needs `flex-1 min-h-0 flex flex-col` here so the scroll
+   *  shell below can fill exactly that space. Defaults to the page layout. */
+  containerClassName?: string;
+  /** Extra classes for the scrolling table shell. Pair
+   *  `tf-table-shell--fill flex-1 min-h-0` with `containerClassName` inside a
+   *  dialog: `.tf-table-shell`'s own `min-height: 400px` would otherwise push
+   *  the shell past the dialog body and float its scrollbar over the footer. */
+  tableShellClassName?: string;
 }
 
 // Helper function to highlight matching text
@@ -207,9 +219,14 @@ export default function ResumeTable({
   getFolderName,
   showEmptyAction = true,
   emptyState,
+  containerClassName = 'flex-1',
+  tableShellClassName = '',
 }: ResumeTableProps) {
   const router = useRouter();
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
+  /* Whether the open ⋮ menu opens upward. Decided when it opens, from the
+     trigger's distance to the bottom of the viewport. */
+  const [actionMenuDropUp, setActionMenuDropUp] = useState(false);
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
   /** Set while the version history is being fetched for the Files column. */
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
@@ -307,6 +324,19 @@ export default function ResumeTable({
     endIndex,
   } = usePagination({ items: orderedResumes, initialItemsPerPage: 25 });
 
+  /* Keep the current page inside the row set. `usePagination` holds the page
+     number on its own and never re-clamps it when `items` shrinks, so
+     narrowing the list from underneath it — picking a smaller folder, typing
+     a search — would leave the page pointing past the end and render an empty
+     table with no way back except the pager. No effect when the parent
+     paginates server-side. */
+  useEffect(() => {
+    if (!disablePagination && currentPage > 1 && currentPage > totalPages) {
+      goToPage(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disablePagination, currentPage, totalPages]);
+
   // When pagination is disabled (server-side pagination), render all passed items
   const paginatedItems = disablePagination ? orderedResumes : paginatedItemsFromHook;
 
@@ -348,25 +378,6 @@ export default function ResumeTable({
     setSelectedResumeForAction(null);
   };
 
-  /* Straight to the Apply to Job dialog, the way ticking one row and pressing
-     Score Resume behaves. The candidate goes in on its latest version and the
-     eye in that dialog's Candidates Selected panel is where another version is
-     read and picked — a version step of its own here made the same action look
-     like two different flows depending on where it was started. */
-  const handleApplyToJob = (resume: Resume) => {
-    // Block archived resumes - check isArchived flag, folder prop, or resume's own folderId
-    const isArchived = resume.isArchived === true
-      || isArchivedFolder
-      || (archivedFolderId !== undefined && resume.folderId === archivedFolderId);
-
-    if (isArchived) {
-      toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
-      return;
-    }
-
-    onApplyToJob?.(resume);
-  };
-
   if (resumes.length === 0) {
     if (emptyState) return <>{emptyState}</>;
     return (
@@ -387,14 +398,14 @@ export default function ResumeTable({
   }
 
   return (
-    <div className="flex-1">
+    <div className={containerClassName}>
       {/* FIX-008: Desktop Table View - hidden on mobile */}
       {/* The header only sticks against a container that actually scrolls
           vertically. This div was `overflow-x-auto` with no height cap, so it
           grew to fit every row and never scrolled — `sticky top-0` had nothing
           to stick to, and the header scrolled away with the page. Capping the
           height makes the rows scroll inside it and pins the header. */}
-      <div className="hidden md:block overflow-auto min-h-[320px] max-h-[calc(100dvh-24rem)] tf-table-shell">
+      <div className={`hidden md:block overflow-auto min-h-[320px] max-h-[calc(100dvh-24rem)] tf-table-shell ${tableShellClassName}`}>
         <table className="w-full min-w-[1200px] table-auto">
         {/* Background goes on the cells, not just <thead>: with separate cell
             backgrounds the rows would otherwise show through as they pass under. */}
@@ -672,14 +683,38 @@ export default function ResumeTable({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setOpenActionMenu(openActionMenu === resume.id ? null : resume.id);
+                            const willOpen = openActionMenu !== resume.id;
+                            if (willOpen) {
+                              /* Flip the menu upward when there isn't room for
+                                 it below the trigger. On the last rows a
+                                 downward menu ran past the table and was cut
+                                 off by the scroll shell, colliding with the
+                                 horizontal scrollbar and the pagination bar.
+
+                                 Measured against the scroll shell, not the
+                                 viewport: the shell is what clips the menu, and
+                                 its bottom edge usually sits well above the
+                                 bottom of the window. */
+                              const trigger = e.currentTarget as HTMLElement;
+                              const rect = trigger.getBoundingClientRect();
+                              const shell = trigger.closest('.tf-table-shell');
+                              const clipBottom = shell
+                                ? shell.getBoundingClientRect().bottom
+                                : window.innerHeight;
+                              setActionMenuDropUp(
+                                Math.min(clipBottom, window.innerHeight) - rect.bottom < ACTION_MENU_MIN_SPACE,
+                              );
+                            }
+                            setOpenActionMenu(willOpen ? resume.id : null);
                           }}
                           className="h-7 w-7 flex items-center justify-center bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-all"
                         >
                           <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
                         </button>
                         {openActionMenu === resume.id && (
-                          <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[9999]">
+                          <div className={`absolute right-0 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[9999] ${
+                            actionMenuDropUp ? 'bottom-full mb-1' : 'top-full mt-1'
+                          }`}>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -688,22 +723,13 @@ export default function ResumeTable({
                               }}
                               className={resumeActionMenuItemClass}
                             >
-                              <Eye className="w-4 h-4" />
-                              <span className={resumeActionMenuLabelClass}>Preview Resume</span>
+                              <Eye className="w-4 h-4 text-menu-icon-view" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                             </button>
-                            {onApplyToJob && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleApplyToJob(resume);
-                                  setOpenActionMenu(null);
-                                }}
-                                className={resumeActionMenuItemClass}
-                              >
-                                <Briefcase className="w-4 h-4" />
-                                <span className={resumeActionMenuLabelClass}>Apply to Job</span>
-                              </button>
-                            )}
+                            {/* Apply to Job is deliberately absent from this
+                                menu. The action still exists on the mobile
+                                card and in the bulk actions bar; it was
+                                dropped from the ⋮ list only. */}
                             {canDownload && (
                               <button
                                 onClick={async (e) => {
@@ -729,8 +755,8 @@ export default function ResumeTable({
                                 }}
                                 className={resumeActionMenuItemClass}
                               >
-                                <Download className="w-4 h-4" />
-                                <span className={resumeActionMenuLabelClass}>Download Resume</span>
+                                <Download className="w-4 h-4 text-menu-icon-download" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Download Resume</span>
                               </button>
                             )}
                             {canShare && (
@@ -742,8 +768,8 @@ export default function ResumeTable({
                                 }}
                                 className={resumeActionMenuItemClass}
                               >
-                                <Share2 className="w-4 h-4" />
-                                <span className={resumeActionMenuLabelClass}>Share Resume</span>
+                                <Share2 className="w-4 h-4 text-menu-icon-share" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Share Resume</span>
                               </button>
                             )}
                             {canTag && (
@@ -756,8 +782,8 @@ export default function ResumeTable({
                                 }}
                                 className={resumeActionMenuItemClass}
                               >
-                                <Tag className="w-4 h-4" />
-                                <span className={resumeActionMenuLabelClass}>Add Tags</span>
+                                <Tag className="w-4 h-4 text-menu-icon-edit" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Add Tags</span>
                               </button>
                             )}
                             {!!onArchive && (
@@ -768,10 +794,10 @@ export default function ResumeTable({
                                   setShowArchiveModal(true);
                                   setOpenActionMenu(null);
                                 }}
-                                className={resumeActionMenuItemOrangeClass}
+                                className={resumeActionMenuItemClass}
                               >
-                                <Archive className="w-4 h-4" />
-                                <span className={resumeActionMenuLabelClass}>Archive Resume</span>
+                                <Archive className="w-4 h-4 text-menu-icon-archive" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Archive Resume</span>
                               </button>
                             )}
                             {onDelete && (
@@ -784,7 +810,7 @@ export default function ResumeTable({
                                 className={resumeActionMenuItemRedClass}
                               >
                                 <Trash2 className="w-4 h-4" />
-                                <span className={resumeActionMenuLabelClass}>Delete Resume</span>
+                                <span className={MENU_ITEM_SCALE_CLASS}>Delete Resume</span>
                               </button>
                             )}
                           </div>
@@ -866,15 +892,8 @@ export default function ResumeTable({
                 <Eye className="w-4 h-4" />
                 View
               </button>
-              {onApplyToJob && (
-                <button
-                  onClick={() => handleApplyToJob(resume)}
-                  className="flex-1 px-3 py-2 text-sm text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all flex items-center justify-center gap-1 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-                >
-                  <Briefcase className="w-4 h-4" />
-                  Apply
-                </button>
-              )}
+              {/* Apply to Job was dropped here too, to match the desktop ⋮
+                  menu — the action lives in the bulk actions bar. */}
             </div>
           </div>
         ))}

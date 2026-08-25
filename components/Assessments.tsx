@@ -2,6 +2,7 @@
 
 import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -49,6 +50,7 @@ import JDVersionHistory from '@/components/JDVersionHistory';
 const INVITATIONS_PAGE_SIZE = 10;
 /** Batch size when pulling every assessment for a browser-side filter. */
 const FULL_SET_BATCH_SIZE = 100;
+const assessmentDropdownMenuItemClass = 'group';
 interface AssessmentsProps {
   jobs: Job[];
   onOpenCandidateView?: () => void;
@@ -104,6 +106,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // The open ⋮ dropdown. Only one exists at a time (grid and list views never
   // render together), so a single ref covers both.
   const openMenuRef = useRef<HTMLDivElement | null>(null);
+  // Flip the ⋮ dropdown upward when there isn't enough room below the
+  // trigger (rows near the bottom of the list), same rule AIInterview.tsx
+  // uses — otherwise a menu with several items overlaps the row underneath.
+  const [menuDropUp, setMenuDropUp] = useState(false);
 
   /**
    * Dismiss the ⋮ menu on any interaction outside it.
@@ -3270,11 +3276,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         data-assessment-menu-trigger
                         onClick={(e) => {
                           e.stopPropagation();
-                          setOpenMenuId(openMenuId === assessment.id ? null : assessment.id);
+                          const willOpen = openMenuId !== assessment.id;
+                          if (willOpen) {
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            setMenuDropUp(window.innerHeight - rect.bottom < 280);
+                          }
+                          setOpenMenuId(willOpen ? assessment.id : null);
                         }}
-                        className="p-1.5 text-gray-500 hover:bg-slate-100 hover:text-gray-700 rounded transition-colors"
+                        className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all"
                       >
-                        <MoreVertical className="w-4 h-4" />
+                        <MoreVertical className="w-4 h-4 text-gray-600" />
                       </button>
                     </div>
 
@@ -3283,7 +3294,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <>
                         <div
                           ref={openMenuRef}
-                          className="absolute right-0 sm:right-4 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70dvh] overflow-y-auto"
+                          className={`absolute right-0 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999] max-h-[70dvh] overflow-y-auto ${
+                            menuDropUp ? 'bottom-full mb-1' : 'top-full mt-1'
+                          }`}
                         >
                           {/* Draft assessments hide Activate/Archive — drafts go
                               through the configure-page Publish button, and an
@@ -3291,10 +3304,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {canUpdateAssessment && assessment.status !== 'Active' && assessment.status !== 'Draft' && (
                             <button
                               onClick={() => handleActivateAssessment(assessment.id)}
-                              className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
+                              className="group w-full px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 flex items-center gap-2 transition-colors"
                             >
-                              <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                              Activate
+                              <Play className="w-4 h-4 text-menu-icon-activate flex-shrink-0" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Activate</span>
                             </button>
                           )}
                           {assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
@@ -3308,14 +3321,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             }}
                             disabled={!canDeleteAssessment}
                             title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : ''}
-                            className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
+                            className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 ${
                               !canDeleteAssessment
                                 ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
+                                : 'text-gray-700 hover:bg-gray-50'
                             }`}
                           >
-                            <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                            Archive
+                            <Archive className="w-4 h-4 text-menu-icon-archive flex-shrink-0" />
+                            <span className={MENU_ITEM_SCALE_CLASS}>Archive</span>
                           </button>
                           )}
                           {assessment.status !== 'Archived' && (hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
@@ -3337,14 +3350,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 }}
                                 disabled={isDisabled}
                                 title={disabledReason}
-                                className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
+                                className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 ${
                                   isDisabled
                                     ? 'text-gray-400 cursor-not-allowed opacity-60'
                                     : 'text-red-600 hover:bg-red-50'
                                 }`}
                               >
-                                <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                Delete
+                                <Trash2 className="w-4 h-4 flex-shrink-0" />
+                                <span className={MENU_ITEM_SCALE_CLASS}>Delete</span>
                               </button>
                             );
                           })()}
@@ -3549,11 +3562,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               data-assessment-menu-trigger
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setOpenMenuId(openMenuId === assessment.id ? null : assessment.id);
+                                const willOpen = openMenuId !== assessment.id;
+                                if (willOpen) {
+                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                  setMenuDropUp(window.innerHeight - rect.bottom < 280);
+                                }
+                                setOpenMenuId(willOpen ? assessment.id : null);
                               }}
-                              className="p-1.5 text-gray-500 dark:text-slate-500 hover:bg-slate-100 hover:text-gray-700 rounded transition-colors"
+                              className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all"
                             >
-                              <MoreVertical className="w-4 h-4" />
+                              <MoreVertical className="w-4 h-4 text-gray-600" />
                             </button>
 
                           {/* Dropdown Menu */}
@@ -3561,7 +3579,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <>
                               <div
                                 ref={openMenuRef}
-                                className="absolute right-0 top-full mt-2 w-44 sm:w-52 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 sm:py-1.5 z-20 max-h-[70dvh] overflow-y-auto"
+                                className={`absolute right-0 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999] max-h-[70dvh] overflow-y-auto ${
+                                  menuDropUp ? 'bottom-full mb-1' : 'top-full mt-1'
+                                }`}
                               >
                                 {assessment.status !== 'Archived' && canCreateAssessment && (() => {
                                   // Gating computed FRONT-END so it works regardless of
@@ -3606,14 +3626,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       }}
                                       disabled={buttonDisabled}
                                       title={disabledReason || undefined}
-                                      className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 transition-colors ${
+                                      className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 transition-colors ${
                                         buttonDisabled
                                           ? 'text-gray-400 cursor-not-allowed'
-                                          : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
+                                          : 'text-gray-700 hover:bg-gray-50'
                                       }`}
                                     >
-                                      <Copy className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${buttonDisabled ? 'text-gray-300' : 'text-gray-600'}`} />
-                                      Duplicate
+                                      <Copy className={`w-4 h-4 flex-shrink-0 ${buttonDisabled ? 'text-gray-300' : 'text-menu-icon-download'}`} />
+                                      <span className={MENU_ITEM_SCALE_CLASS}>Duplicate</span>
                                     </button>
                                   );
                                 })()}
@@ -3640,14 +3660,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       }}
                                       disabled={revokeDisabled}
                                       title={revokeReason}
-                                      className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 transition-colors ${
+                                      className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 transition-colors ${
                                         revokeDisabled
                                           ? 'text-gray-400 cursor-not-allowed'
                                           : 'text-red-700 hover:bg-red-50'
                                       }`}
                                     >
-                                      <Ban className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${revokeDisabled ? 'text-gray-300' : ''}`} />
-                                      Revoke pending invites
+                                      <Ban className={`w-4 h-4 flex-shrink-0 ${revokeDisabled ? 'text-gray-300' : ''}`} />
+                                      <span className={MENU_ITEM_SCALE_CLASS}>Revoke pending invites</span>
                                     </button>
                                   );
                                 })()}
@@ -3659,10 +3679,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {canUpdateAssessment && assessment.status !== 'Active' && assessment.status !== 'Draft' && (
                                   <button
                                     onClick={() => handleActivateAssessment(assessment.id)}
-                                    className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue flex items-center gap-2 sm:gap-2.5 transition-colors"
+                                    className="group w-full px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 flex items-center gap-2 transition-colors"
                                   >
-                                    <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                                    Activate
+                                    <Play className="w-4 h-4 text-menu-icon-activate flex-shrink-0" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>Activate</span>
                                   </button>
                                 )}
                                 {assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
@@ -3676,14 +3696,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   }}
                                   disabled={!canDeleteAssessment}
                                   title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : ''}
-                                  className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
+                                  className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 ${
                                     !canDeleteAssessment
                                       ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                      : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
+                                      : 'text-gray-700 hover:bg-gray-50'
                                   }`}
                                 >
-                                  <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                                  Archive
+                                  <Archive className="w-4 h-4 text-menu-icon-archive flex-shrink-0" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Archive</span>
                                 </button>
                                 )}
                                 {assessment.status !== 'Archived' && (
@@ -3708,14 +3728,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       }}
                                       disabled={isDisabled}
                                       title={disabledReason}
-                                      className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
+                                      className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 ${
                                         isDisabled
                                           ? 'text-gray-400 cursor-not-allowed opacity-60'
                                           : 'text-red-600 hover:bg-red-50'
                                       }`}
                                     >
-                                      <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                      Delete
+                                      <Trash2 className="w-4 h-4 flex-shrink-0" />
+                                      <span className={MENU_ITEM_SCALE_CLASS}>Delete</span>
                                     </button>
                                   );
                                 })()}
@@ -4451,28 +4471,30 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         // invitation: disabled, so we never silently drop
                                         // the user on the aggregate results page.
                                         <DropdownMenuItem
+                                          className={assessmentDropdownMenuItemClass}
                                           disabled={!invitation.attempt_id}
                                           onSelect={() => openTrackedInviteResult(invitation)}
                                         >
-                                          <Eye className="w-3.5 h-3.5" />
-                                          View Results
+                                          <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
+                                          <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
                                         </DropdownMenuItem>
                                       )}
                                       {canResend && (
-                                        <DropdownMenuItem onSelect={() => setResendTargetInvitation(invitation)}>
-                                          <Mail className="w-3.5 h-3.5" />
-                                          Resend
+                                        <DropdownMenuItem className={assessmentDropdownMenuItemClass} onSelect={() => setResendTargetInvitation(invitation)}>
+                                          <Mail className="w-3.5 h-3.5 text-menu-icon-share" />
+                                          <span className={MENU_ITEM_SCALE_CLASS}>Resend</span>
                                         </DropdownMenuItem>
                                       )}
                                       {(isBounced || canEditEmail) && (
                                         <DropdownMenuItem
+                                          className={assessmentDropdownMenuItemClass}
                                           onSelect={() => {
                                             setEditingEmailId(invitation.id);
                                             setNewEmailValue(invitation.candidate_email);
                                           }}
                                         >
-                                          <Pencil className="w-3.5 h-3.5" />
-                                          {isBounced ? 'Change Email' : 'Edit Email'}
+                                          <Pencil className="w-3.5 h-3.5 text-menu-icon-edit" />
+                                          <span className={MENU_ITEM_SCALE_CLASS}>{isBounced ? 'Change Email' : 'Edit Email'}</span>
                                         </DropdownMenuItem>
                                       )}
                                     </DropdownMenuContent>

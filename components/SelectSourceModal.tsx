@@ -1,9 +1,17 @@
 'use client';
 
-import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, Mail, Phone, Briefcase, MapPin, Calendar, Target, ArrowLeft, FolderOpen, ChevronRight, ChevronDown, Folder, Clock, CheckCircle2, XCircle, User, Timer, Minus, RotateCcw, Upload } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, Briefcase, MapPin, Target, Upload } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { resumeService, folderService, Resume, Folder as FolderType } from '@/lib/services/resumeService';
+import type { Folder as TableFolder } from '@/lib/types/types';
+import ResumeTable from './ResumeTable';
+import FolderTree from './FolderTree';
+import NoResumesEmptyState from '@/components/resumes/NoResumesEmptyState';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { convertApiResumeToRow, convertApiFolderToTree } from '@/lib/utils/resumeMappers';
 import { scoringService } from '@/lib/services/scoringService';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -14,11 +22,10 @@ import SkillsList from '@/components/ui/SkillsList';
 import UploadModal from './UploadModal';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 
-// Folder-tree pane sizing. Min keeps the row chrome (checkbox + chevron +
-// folder icon + count badge) legible; max stops the pane from crowding out the
-// resume list inside a max-w-6xl dialog.
+// Folder-tree pane sizing. Kept in step with FolderTree's own clamp
+// (200–400px) so a width restored from storage is one the tree will honour.
 const FOLDER_PANE_MIN = 200;
-const FOLDER_PANE_MAX = 520;
+const FOLDER_PANE_MAX = 400;
 const FOLDER_PANE_DEFAULT = 280;
 const FOLDER_PANE_STORAGE_KEY = 'selectSourceModal:folderPaneWidth';
 
@@ -58,6 +65,14 @@ export default function SelectSourceModal({
   // Check if user has upload permission (matches My Resumes page RBAC check)
   const canUploadResumes = isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
 
+  /* Row-action permissions — the same expressions the My Resumes page uses to
+     gate its ⋮ menu, so the popup offers a user exactly the actions that page
+     would. */
+  const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update');
+  const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
+  const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
+  const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
+
   // State
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
   const [resumes, setResumes] = useState<Resume[]>([]);
@@ -67,80 +82,35 @@ export default function SelectSourceModal({
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
-  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+
+  /* Totals behind each tab's badge. Both are fetched up front so the inactive
+     tab shows a real number instead of a placeholder, and each is refreshed
+     from the list response whenever its own tab reloads. `null` means "not
+     known yet" — the badge stays blank rather than claiming zero. */
+  const [tabCounts, setTabCounts] = useState<{ myResumes: number | null; internalDb: number | null }>({
+    myResumes: null,
+    internalDb: null,
+  });
 
   // Folder-tree sidebar width. Was a fixed w-56 (224px), which left deep folder
   // names only ~45px after the indent + checkbox + chevron + icon, so they were
   // truncated to a couple of characters. Now user-resizable and remembered.
   const [sidebarWidth, setSidebarWidth] = useState<number>(FOLDER_PANE_DEFAULT);
-  const sidebarWidthRef = useRef<number>(FOLDER_PANE_DEFAULT);
-  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
 
   useEffect(() => {
     try {
       const saved = Number(localStorage.getItem(FOLDER_PANE_STORAGE_KEY));
       if (Number.isFinite(saved) && saved >= FOLDER_PANE_MIN && saved <= FOLDER_PANE_MAX) {
         setSidebarWidth(saved);
-        sidebarWidthRef.current = saved;
       }
     } catch { /* ignore unavailable storage */ }
   }, []);
 
-  const persistSidebarWidth = (width: number) => {
+  /* FolderTree owns the drag handle, the keyboard resize and the
+     double-click-to-reset; this just records where the user left it. */
+  const handleSidebarWidthChange = (width: number) => {
+    setSidebarWidth(width);
     try { localStorage.setItem(FOLDER_PANE_STORAGE_KEY, String(width)); } catch { /* ignore */ }
-  };
-
-  // Drag the divider between the folder pane and the resume list. Pointer events
-  // cover mouse + touch + pen with one handler.
-  const handleSidebarResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = sidebarWidthRef.current;
-    setIsResizingSidebar(true);
-
-    const onMove = (ev: PointerEvent) => {
-      const next = Math.min(
-        FOLDER_PANE_MAX,
-        Math.max(FOLDER_PANE_MIN, startWidth + (ev.clientX - startX)),
-      );
-      sidebarWidthRef.current = next;
-      setSidebarWidth(next);
-    };
-    const onUp = () => {
-      setIsResizingSidebar(false);
-      document.removeEventListener('pointermove', onMove);
-      document.removeEventListener('pointerup', onUp);
-      document.removeEventListener('pointercancel', onUp);
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
-      persistSidebarWidth(sidebarWidthRef.current);
-    };
-
-    // Kill text selection while dragging, otherwise the folder labels highlight.
-    document.body.style.userSelect = 'none';
-    // Pin the resize cursor for the whole drag. Without this the pointer leaves
-    // the 6px handle on the first move and picks up whatever cursor is under it
-    // (I-beam over the folder labels), so the drag looks like it dropped.
-    document.body.style.cursor = 'col-resize';
-    document.addEventListener('pointermove', onMove);
-    document.addEventListener('pointerup', onUp);
-    // Pointer cancellation (touch interrupted, window blur) must clean up too,
-    // or the cursor and text-selection lock stick after the drag ends.
-    document.addEventListener('pointercancel', onUp);
-  };
-
-  // Safety net: if the modal unmounts mid-drag, the pointerup that would have
-  // restored these never reaches us and the page is left uncursored/unselectable.
-  useEffect(() => () => {
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-  }, []);
-
-  // Double-click the divider to snap back to the default width.
-  const handleSidebarResizeReset = () => {
-    sidebarWidthRef.current = FOLDER_PANE_DEFAULT;
-    setSidebarWidth(FOLDER_PANE_DEFAULT);
-    persistSidebarWidth(FOLDER_PANE_DEFAULT);
   };
 
   // Progress modal state
@@ -188,13 +158,31 @@ export default function SelectSourceModal({
     fetchData();
   }, [activeTab]);
 
-  // Auto-expand all folders when they load
-  useEffect(() => {
-    if (folders.length > 0) {
-      const allFolderIds = folders.map(f => f.id);
-      setExpandedFolders(allFolderIds);
+  /* Both tab totals, up front. `page_size: 1` keeps this to a count query —
+     only `total` is read. Runs once on mount; each tab's own load keeps its
+     number current afterwards, and upload/archive/delete call it again. */
+  const refreshTabCounts = async () => {
+    try {
+      const [mine, internal] = await Promise.all([
+        resumeService.list({ source: 'my-resumes', page_size: 1, include_archived: true }),
+        hasInternalDBAccess
+          ? resumeService.list({ source: 'internal-db', page_size: 1, include_archived: true })
+          : Promise.resolve(null),
+      ]);
+      setTabCounts({
+        myResumes: mine?.total ?? 0,
+        internalDb: internal ? internal.total ?? 0 : null,
+      });
+    } catch {
+      /* Leave whatever we already had — a failed count must not blank the
+         badges or block the list the user came here for. */
     }
-  }, [folders]);
+  };
+
+  useEffect(() => {
+    refreshTabCounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasInternalDBAccess]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -206,6 +194,14 @@ export default function SelectSourceModal({
         include_archived: true
       });
       setResumes(resumeResponse.items || []);
+
+      /* The list we just loaded is the freshest count this tab has. */
+      const loadedTotal = resumeResponse.total ?? (resumeResponse.items || []).length;
+      setTabCounts(prev =>
+        activeTab === 'my-resumes'
+          ? { ...prev, myResumes: loadedTotal }
+          : { ...prev, internalDb: loadedTotal },
+      );
 
       // Fetch folders only for my-resumes tab
       if (activeTab === 'my-resumes') {
@@ -297,6 +293,132 @@ export default function SelectSourceModal({
   };
 
   const filteredResumes = getFilteredResumes();
+
+  /* ── My Resumes tab: the real My Resumes table ───────────────────────────
+     The tab renders `ResumeTable` — the same component the My Resumes page
+     uses — rather than a modal-only list, so the columns, widths, sticky
+     header/Actions column, borders, hover and selected states all come from
+     one implementation and cannot drift. These memos put the API rows and
+     folders into the shape that component reads (see lib/utils/resumeMappers). */
+  const tableRows = useMemo(
+    () => filteredResumes.map(convertApiResumeToRow),
+    [filteredResumes],
+  );
+
+  const tableFolders = useMemo<TableFolder[]>(
+    () => folders.map(convertApiFolderToTree),
+    [folders],
+  );
+
+  /* The nested shape `FolderTree` renders from. This modal keeps `folders`
+     flat (it filters resumes by a single id), but the tree draws its
+     hierarchy from `children`, so re-link parents to children here and
+     prepend the virtual "All Resumes" fixture the My Resumes page also adds. */
+  const folderTree = useMemo<TableFolder[]>(() => {
+    const nodes = new Map<string, TableFolder>();
+    folders.forEach(f => {
+      nodes.set(f.id, {
+        id: f.id,
+        name: f.name,
+        count: f.resume_count || 0,
+        parentId: f.parent_id,
+        children: [],
+      });
+    });
+    const roots: TableFolder[] = [];
+    nodes.forEach(node => {
+      const parent = node.parentId ? nodes.get(node.parentId) : undefined;
+      if (parent) parent.children!.push(node);
+      else roots.push(node);
+    });
+    return [
+      { id: 'all', name: 'All Resumes', count: resumes.length, children: [] },
+      ...roots,
+    ];
+  }, [folders, resumes.length]);
+
+  /* Folder name per row — the My Resumes page adds this column only in the
+     aggregated "All Resumes" view, where rows come from many folders. */
+  const getResumeFolderName = useMemo(() => {
+    const byId = new Map(folders.map(f => [f.id, f.name]));
+    return (folderId?: string) => (folderId ? byId.get(folderId) : undefined);
+  }, [folders]);
+
+  /* The My Resumes page's own empty state, with the same rules: a search or a
+     filter in play means "no matches" (the table keeps its own copy), and the
+     Archived Resumes folder gets the bare illustration — nothing is ever
+     uploaded straight into it, so it earns no "add a resume" copy or button. */
+  const renderNoResumesEmptyState = (folderId?: string) => {
+    const isArchivedResumesFolder =
+      !!folderId && folders.some(f => f.name === 'Archived Resumes' && !f.parent_id && f.id === folderId);
+    const canAdd = canUploadResumes && !isArchivedResumesFolder;
+
+    return (
+      <NoResumesEmptyState
+        description={
+          isArchivedResumesFolder
+            ? ''
+            : canUploadResumes
+              ? 'No resumes are available in this folder yet. Add a resume to get started.'
+              : 'No resumes are available in this folder yet.'
+        }
+        onAction={canAdd ? () => setShowUploadModal(true) : undefined}
+      />
+    );
+  };
+
+  /* Select-all adapter. `ResumeTable` reports the desired state; the archived
+     guard and the "keep picks made in other folders" rule are the modal's own
+     and are preserved exactly as the previous list had them. */
+  const handleTableSelectAll = (selected: boolean) => {
+    const selectedFolderData = folders.find(f => f.id === selectedFolder);
+    const isArchivedFolder = selectedFolderData?.name?.toLowerCase().includes('archived') || false;
+    if (isArchivedFolder) {
+      toast.error('Archived resumes cannot be scored. Please select an active resume.');
+      return;
+    }
+    const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
+    if (visibleIds.length === 0) return;
+    setSelectedResumes(prev =>
+      selected
+        ? Array.from(new Set([...prev, ...visibleIds]))
+        : prev.filter(id => !visibleIds.includes(id)),
+    );
+  };
+
+  /* Row actions. `ResumeTable` runs Download / Share / Add Tags entirely on
+     its own and confirms Archive in its own modal, so only Delete needs a
+     confirmation of its own here — the table calls `onDelete` straight away.
+     Both refresh the list and drop the row from the current selection so the
+     scoring set can never point at something that no longer exists. */
+  const [deleteResumeTarget, setDeleteResumeTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const handleArchiveResume = async (resumeId: string) => {
+    try {
+      await resumeService.archive(resumeId, true);
+      setSelectedResumes(prev => prev.filter(id => id !== resumeId));
+      toast.success('Resume archived');
+      await fetchData();
+      refreshTabCounts();
+    } catch (error: any) {
+      toast.error(`Failed to archive resume: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
+    }
+  };
+
+  const handleConfirmDeleteResume = async () => {
+    if (!deleteResumeTarget) return;
+    const { id } = deleteResumeTarget;
+    setDeleteResumeTarget(null);
+    try {
+      await resumeService.delete(id);
+      setSelectedResumes(prev => prev.filter(rid => rid !== id));
+      toast.success('Resume deleted');
+      await fetchData();
+      refreshTabCounts();
+    } catch (error: any) {
+      toast.error(`Failed to delete resume: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
+    }
+  };
 
   // Toggle resume selection
   const handleToggleResume = (resumeId: string) => {
@@ -714,6 +836,7 @@ export default function SelectSourceModal({
 
     // Refresh the list to include the new resume
     await fetchData();
+    refreshTabCounts();
 
     // Auto-select the uploaded resume
     setSelectedResumes(prev => {
@@ -727,255 +850,12 @@ export default function SelectSourceModal({
     toast.success(`Resume uploaded! "${candidateName}" is now selected. Add more or click "Score Resumes" to continue.`);
   };
 
-  // Toggle folder expansion
-  const toggleFolder = (id: string) => {
-    setExpandedFolders(prev =>
-      prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
-    );
-  };
-
-  // Get resume count for folder
-  const getResumeCount = (folderId: string) => {
-    if (folderId === 'all') return resumes.length;
-    return resumes.filter(r => r.folder_id === folderId).length;
-  };
-
-  // Recursively collect a folder's own ID and all descendant folder IDs.
-  // Used so ticking a parent folder cascades selection to subfolders.
-  const collectDescendantFolderIds = (folderId: string): string[] => {
-    const result = [folderId];
-    const queue = [folderId];
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      for (const f of folders) {
-        if (f.parent_id === current) {
-          result.push(f.id);
-          queue.push(f.id);
-        }
-      }
-    }
-    return result;
-  };
-
-  // Selectable (non-archived) resume IDs in a given folder *and all its
-  // descendants*. "all" = every resume the user can score across all folders.
-  const getFolderResumeIds = (folderId: string): string[] => {
-    const archivedFolder = folders.find(f => f.name?.toLowerCase().includes('archived'));
-    const isArchivedTarget = folderId !== 'all'
-      && (folders.find(f => f.id === folderId)?.name?.toLowerCase().includes('archived') ?? false);
-    if (isArchivedTarget) return [];
-
-    let pool: Resume[];
-    if (folderId === 'all') {
-      pool = resumes.filter(r => {
-        if (r.is_archived === true) return false;
-        if (archivedFolder && r.folder_id === archivedFolder.id) return false;
-        return true;
-      });
-    } else {
-      const branchFolderIds = new Set(collectDescendantFolderIds(folderId));
-      const target = folders.find(f => f.id === folderId);
-      const isRoot = target?.name?.toLowerCase() === 'root';
-
-      pool = resumes.filter(r => {
-        if (r.is_archived === true) return false;
-        if (archivedFolder && !branchFolderIds.has(archivedFolder.id)
-            && r.folder_id === archivedFolder.id) return false;
-        if (isRoot && (!r.folder_id || branchFolderIds.has(r.folder_id))) return true;
-        return r.folder_id ? branchFolderIds.has(r.folder_id) : false;
-      });
-    }
-    return pool.map(r => r.id);
-  };
-
-  const getFolderSelectionState = (folderId: string): 'none' | 'partial' | 'all' => {
-    const ids = getFolderResumeIds(folderId);
-    if (ids.length === 0) return 'none';
-    const selectedCount = ids.filter(id => selectedResumes.includes(id)).length;
-    if (selectedCount === 0) return 'none';
-    if (selectedCount === ids.length) return 'all';
-    return 'partial';
-  };
-
-  const getFolderSelectedCount = (folderId: string): number => {
-    const ids = getFolderResumeIds(folderId);
-    return ids.filter(id => selectedResumes.includes(id)).length;
-  };
-
-  // Toggle the entire folder (and its descendants) in/out of selection,
-  // preserving picks in OTHER folders. Auto-expands on select so user sees
-  // the cascade.
-  const toggleFolderSelection = (folderId: string) => {
-    const folderIds = getFolderResumeIds(folderId);
-    if (folderIds.length === 0) return;
-    const state = getFolderSelectionState(folderId);
-    setSelectedResumes(prev => {
-      if (state === 'all') {
-        return prev.filter(id => !folderIds.includes(id));
-      }
-      const next = new Set(prev);
-      folderIds.forEach(id => next.add(id));
-      return Array.from(next);
-    });
-    if (state !== 'all' && folderId !== 'all') {
-      const descendants = collectDescendantFolderIds(folderId);
-      const toExpand = descendants.filter(id => folders.some(f => f.parent_id === id));
-      if (toExpand.length > 0) {
-        setExpandedFolders(prev => Array.from(new Set([...prev, ...toExpand])));
-      }
-    }
-  };
-
-  // Render folder tree
-  const renderFolderTree = (parentId?: string, level: number = 0) => {
-    // Find root folder first
-    const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && (!f.parent_id || f.parent_id === null));
-    const rootId = rootFolder?.id;
-
-    // If no parentId specified, show top-level folders (including root)
-    let childFolders: typeof folders;
-    if (parentId === undefined) {
-      if (rootId) {
-        // Show root folder first, then any other truly top-level folders (no parent, not root)
-        childFolders = folders.filter(f =>
-          (f.name.toLowerCase() === 'root' && (!f.parent_id || f.parent_id === null)) ||
-          (!f.parent_id || f.parent_id === null || f.parent_id === '')
-        );
-        // Put root first
-        childFolders = [
-          ...childFolders.filter(f => f.id === rootId),
-          ...childFolders.filter(f => f.id !== rootId),
-        ];
-      } else {
-        childFolders = folders.filter(f => !f.parent_id || f.parent_id === null || f.parent_id === '');
-      }
-    } else {
-      // Show children of specified parent
-      childFolders = folders.filter(f => f.parent_id === parentId);
-    }
-
-    console.log('[SelectSourceModal] renderFolderTree - parentId:', parentId, 'rootId:', rootId, 'folders.length:', folders.length, 'childFolders:', childFolders.length);
-    console.log('[SelectSourceModal] childFolders names:', childFolders.map(f => f.name));
-
-    return childFolders.map(folder => {
-      const isExpanded = expandedFolders.includes(folder.id);
-      const isSelected = selectedFolder === folder.id;
-      const hasChildren = folders.some(f => f.parent_id === folder.id);
-      const count = getResumeCount(folder.id);
-      const selectionState = getFolderSelectionState(folder.id);
-      const selectedInFolder = getFolderSelectedCount(folder.id);
-      const isArchivedFolder = folder.name?.toLowerCase().includes('archived');
-
-      return (
-        <div key={folder.id}>
-          <button
-            onClick={() => setSelectedFolder(folder.id)}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm group ${
-              isSelected
-                ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue font-medium'
-                : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
-            }`}
-            style={{ paddingLeft: `${level * 12 + 12}px` }}
-            title={folder.name}
-          >
-            {/* Folder selection checkbox: adds/removes ALL of this folder's
-                (and descendants') resumes from selection, without changing the
-                active folder filter. */}
-            {!isArchivedFolder ? (
-              <span
-                role="checkbox"
-                aria-checked={selectionState === 'all'}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFolderSelection(folder.id);
-                }}
-                className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
-                title={
-                  selectionState === 'all'
-                    ? `Deselect all ${count} resumes in this folder`
-                    : `Select all ${count} resumes in this folder`
-                }
-              >
-                {selectionState === 'all' ? (
-                  <CheckSquare className="w-4 h-4 text-blue-600" />
-                ) : selectionState === 'partial' ? (
-                  <MinusSquare className="w-4 h-4 text-blue-600" />
-                ) : (
-                  <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                )}
-              </span>
-            ) : (
-              <div className="w-4 flex-shrink-0" />
-            )}
-
-            {hasChildren && (
-              // Must not be a <button>: the whole folder row is already a
-              // <button>, and nesting them is invalid HTML that breaks
-              // hydration. Same span+role approach as the checkbox above.
-              <span
-                role="button"
-                tabIndex={0}
-                aria-expanded={isExpanded}
-                aria-label={isExpanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFolder(folder.id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleFolder(folder.id);
-                  }
-                }}
-                className="flex-shrink-0 cursor-pointer p-0.5 hover:bg-gray-200 dark:hover:bg-slate-700 rounded"
-              >
-                {isExpanded ? (
-                  <ChevronDown className="w-4 h-4" />
-                ) : (
-                  <ChevronRight className="w-4 h-4" />
-                )}
-              </span>
-            )}
-            {!hasChildren && <div className="w-5 flex-shrink-0" />}
-            {isExpanded ? (
-              <FolderOpen className="w-4 h-4 flex-shrink-0" />
-            ) : (
-              <Folder className="w-4 h-4 flex-shrink-0" />
-            )}
-            {/* Wraps rather than truncates: a folder name is never hidden, at any
-                nesting depth or pane width. min-w-0 lets it shrink inside the flex
-                row instead of shoving the count badges out. */}
-            <span className="flex-1 min-w-0 text-left break-words">{folder.name}</span>
-            {selectedInFolder > 0 && (
-              <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                {selectedInFolder} sel
-              </span>
-            )}
-            <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full ${
-              isSelected
-                ? 'bg-brand-blue/15 text-brand-blue'
-                : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-            }`}>
-              {count}
-            </span>
-          </button>
-          {isExpanded && hasChildren && (
-            <div>
-              {renderFolderTree(folder.id, level + 1)}
-            </div>
-          )}
-        </div>
-      );
-    });
-  };
-
   return (
     // While the progress popup is minimized this component stays mounted (it owns
     // progressItems and the restore callback) but its overlay must not block the
     // page — hide it rather than unmounting, so "expand" can bring it straight back.
     <div className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm ${isBulkProgressMinimized ? 'hidden' : 'flex'} items-center justify-center z-50 p-3 sm:p-6`}>
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-6xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-[94vw] 2xl:max-w-[1680px] h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex items-start gap-2 sm:gap-4 min-w-0">
@@ -1019,7 +899,7 @@ export default function SelectSourceModal({
                   ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
-                {activeTab === 'my-resumes' ? resumes.length : '...'}
+                {tabCounts.myResumes ?? ''}
               </span>
             </button>
             {/* Only show Internal Database tab if user has permission */}
@@ -1040,124 +920,47 @@ export default function SelectSourceModal({
                     ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
                     : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                 }`}>
-                  {activeTab === 'internal-db' ? resumes.length : '...'}
+                  {tabCounts.internalDb ?? ''}
                 </span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Content Area */}
+        {/* Content Area.
+
+            Wrapped in `DndProvider` because BOTH shared components call
+            react-dnd hooks unconditionally — FolderTree's folder rows are drop
+            targets and ResumeTable's rows are drag sources — and the
+            job-details page has no provider of its own. Nothing is actually
+            draggable here (the table is rendered with `draggable={false}`);
+            the provider only satisfies the hooks. */}
+        <DndProvider backend={HTML5Backend}>
         <div className="flex flex-1 overflow-hidden">
-          {/* Left Sidebar - Folder Tree (Only for My Resumes) - hidden on mobile */}
+          {/* Left Sidebar — the My Resumes page's own FolderTree, so the
+              hierarchy, System Folders / My Folders grouping, labels, icons,
+              colours, spacing and selected state are identical to that page
+              rather than a second implementation of them.
+
+              Browse-only: here a folder filters the list, and folder
+              management stays on the My Resumes page where it belongs. */}
           {activeTab === 'my-resumes' && (
-            <>
-            <div
-              className="hidden lg:block border-r border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 overflow-y-auto flex-shrink-0"
-              style={{ width: `${sidebarWidth}px` }}
-            >
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-3 px-3">
-                  <h3 className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase">Folders</h3>
-                  {sidebarWidth !== FOLDER_PANE_DEFAULT && (
-                    <button
-                      onClick={handleSidebarResizeReset}
-                      className="text-[10px] text-gray-400 dark:text-slate-500 hover:text-brand-blue transition-colors cursor-pointer"
-                      title="Reset folder pane width"
-                    >
-                      Reset
-                    </button>
-                  )}
-                </div>
-
-                {/* All Resumes */}
-                {(() => {
-                  const allState = getFolderSelectionState('all');
-                  const allSelectedCount = getFolderSelectedCount('all');
-                  return (
-                    <button
-                      onClick={() => setSelectedFolder('all')}
-                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm mb-2 ${
-                        selectedFolder === 'all'
-                          ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue font-medium'
-                          : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'
-                      }`}
-                    >
-                      {/* Master checkbox: select/deselect every non-archived resume */}
-                      <span
-                        role="checkbox"
-                        aria-checked={allState === 'all'}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFolderSelection('all');
-                        }}
-                        className="flex-shrink-0 cursor-pointer p-0.5 -ml-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
-                        title={
-                          allState === 'all'
-                            ? 'Deselect all resumes'
-                            : 'Select all resumes across all folders'
-                        }
-                      >
-                        {allState === 'all' ? (
-                          <CheckSquare className="w-4 h-4 text-blue-600" />
-                        ) : allState === 'partial' ? (
-                          <MinusSquare className="w-4 h-4 text-blue-600" />
-                        ) : (
-                          <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                        )}
-                      </span>
-                      <FolderOpen className="w-4 h-4 flex-shrink-0" />
-                      <span className="flex-1 min-w-0 text-left break-words">All Resumes</span>
-                      {allSelectedCount > 0 && (
-                        <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                          {allSelectedCount} sel
-                        </span>
-                      )}
-                      <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full ${
-                        selectedFolder === 'all'
-                          ? 'bg-brand-blue/15 text-brand-blue'
-                          : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
-                      }`}>
-                        {resumes.length}
-                      </span>
-                    </button>
-                  );
-                })()}
-
-                {/* Folder Tree */}
-                {folders.length > 0 ? (
-                  <div className="space-y-1">
-                    {renderFolderTree(undefined, 0)}
-                  </div>
-                ) : (
-                  <div className="px-3 py-4 text-xs text-gray-500 dark:text-slate-500 text-center">
-                    <p className="mb-2">No folders yet</p>
-                    <p className="text-gray-400 dark:text-slate-500">Create folders from My Resumes page</p>
-                  </div>
-                )}
-              </div>
+            /* `flex` (not `block`) so the panel stretches to the row's height —
+               FolderTree lays its content out with `md:absolute md:inset-0`
+               and would otherwise collapse to its 360px floor. */
+            <div className="hidden lg:flex flex-shrink-0">
+              <FolderTree
+                folders={folderTree}
+                selectedFolder={selectedFolder}
+                onSelectFolder={setSelectedFolder}
+                resumes={[]}
+                width={sidebarWidth}
+                onWidthChange={handleSidebarWidthChange}
+                readOnly
+              />
             </div>
-
-            {/* Drag handle — resize the folder pane; double-click resets it. */}
-            <div
-              onPointerDown={handleSidebarResizeStart}
-              onDoubleClick={handleSidebarResizeReset}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize folder panel"
-              title="Drag to resize · double-click to reset"
-              className={`hidden lg:flex w-1.5 flex-shrink-0 cursor-col-resize items-center justify-center border-r transition-colors ${
-                isResizingSidebar
-                  ? 'bg-brand-blue/20 border-brand-blue/40'
-                  : 'bg-transparent border-transparent hover:bg-brand-blue/10'
-              }`}
-            >
-              <span className={`h-8 w-0.5 rounded-full transition-colors ${
-                isResizingSidebar ? 'bg-brand-blue' : 'bg-gray-300 dark:bg-slate-700'
-              }`} />
-            </div>
-            </>
           )}
+
 
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
@@ -1171,7 +974,7 @@ export default function SelectSourceModal({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search by name, email, skills..."
-                    className="w-full pl-10 pr-4 py-2 sm:py-2.5 border border-gray-200 dark:border-slate-700 rounded-lg text-black text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="w-full h-10 pl-10 pr-4 border border-gray-300 dark:border-slate-700 rounded-lg text-sm bg-gray-50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-800 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent transition-colors"
                   />
                 </div>
                 <div className="flex items-center gap-2 sm:gap-4">
@@ -1228,20 +1031,107 @@ export default function SelectSourceModal({
               </div>
             </div>
 
-            {/* Resume List */}
-            {/* Column layout: the table header is a fixed row and only the list
-                below it scrolls. Previously everything scrolled together and the
-                header relied on `sticky top-0 z-10`, which the rows painted over. */}
-            <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-6">
+            {/* Resume List. My Resumes renders the shared table, which brings
+                its own scroll shell and spacing — the padding here is for the
+                Internal Database list, whose header is a fixed row above its
+                own scrolling body. */}
+            <div className={`flex-1 min-h-0 flex flex-col ${activeTab === 'my-resumes' ? '' : 'p-3 sm:p-6'}`}>
               {loading ? (
                 <div className="flex items-center justify-center py-10 sm:py-16 tf-loader-center tf-loader-center--compact">
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
                   <span className="ml-2 sm:ml-3 text-xs sm:text-base text-gray-600 dark:text-slate-400">Loading resumes...</span>
                 </div>
-              ) : filteredResumes.length > 0 ? (
+              ) : activeTab === 'internal-db' && filteredResumes.length === 0 ? (
+                <div className="text-center py-10 sm:py-16">
+                  <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300 dark:text-slate-500" />
+                  <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Resumes Found</h3>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
+                    {searchTerm
+                      ? 'No resumes match your search. Try different keywords.'
+                      : 'No resumes available in the internal database.'}
+                  </p>
+                </div>
+              ) : activeTab === 'my-resumes' ? (
+                /* The My Resumes page's own table, embedded. Everything visual
+                   — column set and order, widths, sticky header, sticky
+                   Actions column, separators, hover and selected states,
+                   checkbox styling, scroll shell — comes from that one
+                   component, so the popup follows the page automatically. */
+                  <ResumeTable
+                    resumes={tableRows}
+                    selectedResumes={selectedResumes}
+                    onSelectResume={handleToggleResume}
+                    onSelectAll={handleTableSelectAll}
+                    /* Clicking a row picks the applicant, as this list has
+                       always done — the page uses this hook to navigate, but
+                       navigating away from a half-made selection is not what
+                       this popup wants. */
+                    onViewDetails={(resume) => handleToggleResume(resume.id)}
+                    /* Opened from the ⋮ menu's Preview; a new tab keeps the
+                       popup and its current selection intact. */
+                    onQuickView={(resume) =>
+                      window.open(`/recruitment/resume-view/${resume.id}`, '_blank', 'noopener,noreferrer')
+                    }
+                    /* The rest of the My Resumes ⋮ menu, gated by the same
+                       permissions that page uses. Download, Share and Add Tags
+                       are self-contained in the table; Archive and Delete run
+                       through the handlers above. */
+                    onArchive={canArchiveMyResumes ? handleArchiveResume : undefined}
+                    onDelete={
+                      canDeleteMyResumes
+                        ? (id) => {
+                            const row = resumes.find(r => r.id === id);
+                            setDeleteResumeTarget({
+                              id,
+                              name: row?.candidate_name || row?.file_name || 'this resume',
+                            });
+                          }
+                        : undefined
+                    }
+                    canShare={canShareMyResumes}
+                    canTag={canUpdateMyResumes}
+                    archivedFolderId={folders.find(f => f.name === 'Archived Resumes' && !f.parent_id)?.id}
+                    folders={tableFolders}
+                    highlightQuery={searchTerm}
+                    draggable={false}
+                    /* Paginated, not one long scroll. `ResumeTable`'s built-in
+                       pagination renders the same `components/Pagination`
+                       the My Resumes page uses, with the same props — so the
+                       count line, page buttons, per-page picker, disabled
+                       states and hover/focus styling all match that page
+                       without a second implementation here. Selection is held
+                       by resume id, so ticks survive a page change. */
+                    /* Left at its default (true), as on My Resumes, so the
+                       Download Resume entry appears. */
+                    canDownload
+                    /* Fill the modal body and scroll inside it. Without this
+                       the shell keeps `.tf-table-shell`'s 400px floor / vh cap
+                       — taller than the space left under the header and tabs —
+                       so its scrollbars ended up floating over the footer
+                       buttons instead of staying in the table. */
+                    containerClassName="flex-1 min-h-0 flex flex-col"
+                    tableShellClassName="tf-table-shell--fill flex-1 min-h-0"
+                    showEmptyAction={false}
+                    /* Same call the My Resumes page makes: its illustrated
+                       empty state for a genuinely empty folder, and the
+                       table's own "no matches" copy while a search is
+                       narrowing the list. */
+                    emptyState={
+                      searchTerm.trim()
+                        ? undefined
+                        : renderNoResumesEmptyState(selectedFolder === 'all' ? undefined : selectedFolder)
+                    }
+                    isArchivedFolder={
+                      folders.find(f => f.id === selectedFolder)?.name?.toLowerCase().includes('archived') || false
+                    }
+                    /* Same rule as the My Resumes page: the folder column
+                       only earns its place in the aggregated view. */
+                    getFolderName={selectedFolder === 'all' ? getResumeFolderName : undefined}
+                  />
+              ) : (
                 <div className="flex flex-col min-h-0 flex-1">
                   {/* Desktop Table Header - hidden on mobile */}
-                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 mb-2 bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 rounded-lg text-xs font-medium text-gray-600 dark:text-slate-400 uppercase flex-shrink-0">
+                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 dark:bg-slate-950 border-b border-gray-200 dark:border-slate-700/60 text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider flex-shrink-0">
                     <div className="col-span-1 flex items-center justify-center">
                       {(() => {
                         const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
@@ -1249,18 +1139,16 @@ export default function SelectSourceModal({
                         const allVisibleSelected = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
                         const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
                         return (
-                      <button
-                        onClick={handleSelectAll}
-                        className="p-1 hover:bg-gray-200 dark:hover:bg-slate-700 rounded"
-                      >
-                        {allVisibleSelected ? (
-                          <CheckSquare className="w-4 h-4 text-brand-blue" />
-                        ) : someVisibleSelected ? (
-                          <MinusSquare className="w-4 h-4 text-blue-600" />
-                        ) : (
-                          <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                        )}
-                      </button>
+                          <input
+                            type="checkbox"
+                            checked={allVisibleSelected}
+                            ref={input => {
+                              if (input) input.indeterminate = someVisibleSelected;
+                            }}
+                            onChange={handleSelectAll}
+                            className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                            aria-label={allVisibleSelected ? 'Deselect all visible resumes' : 'Select all visible resumes'}
+                          />
                         );
                       })()}
                     </div>
@@ -1271,8 +1159,10 @@ export default function SelectSourceModal({
                     <div className="col-span-2">Skills</div>
                   </div>
 
-                  {/* Resume Items — the scrolling region (the "tbody") */}
-                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
+                  {/* Resume Items — the scrolling region (the "tbody"). Mobile
+                      cards keep a visible gap between them; the desktop table
+                      rows instead share a border like a real table body. */}
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2 md:space-y-0 md:divide-y md:divide-gray-200 dark:md:divide-slate-700/60">
                   {filteredResumes.map((resume) => {
                     const isSelected = selectedResumes.includes(resume.id);
                     const selectedFolderData = folders.find(f => f.id === selectedFolder);
@@ -1347,14 +1237,17 @@ export default function SelectSourceModal({
                           </div>
                         </div>
 
-                        {/* Desktop Table Row */}
+                        {/* Desktop Table Row — flat divide-y row, matching the
+                            My Resumes table (ResumeTable.tsx): no per-row card
+                            border/radius, a light brand-blue tint for the
+                            selected/hover states instead. */}
                         <div
-                          className={`hidden md:grid grid-cols-12 gap-4 p-4 border-2 rounded-lg transition-all items-center ${
+                          className={`hidden md:grid grid-cols-12 gap-4 px-4 py-3 items-center transition-colors ${
                             isArchived
-                              ? 'border-brand-orange/20 bg-brand-orange/5 ring-1 ring-brand-orange/20 opacity-60 cursor-not-allowed'
+                              ? 'bg-brand-orange/5 opacity-60 cursor-not-allowed'
                               : isSelected
-                                ? 'border-brand-blue/40 bg-brand-blue/5 ring-1 ring-brand-blue/15 shadow-sm cursor-pointer'
-                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-gray-300 dark:hover:border-slate-700 hover:shadow-sm cursor-pointer'
+                                ? 'bg-brand-blue/10 ring-1 ring-inset ring-brand-blue/20 cursor-pointer'
+                                : 'bg-white dark:bg-slate-900 hover:bg-brand-blue/5 cursor-pointer'
                           }`}
                           onClick={() => {
                             if (isArchived) {
@@ -1365,53 +1258,41 @@ export default function SelectSourceModal({
                           }}
                         >
                           {/* Checkbox */}
-                          <div className="col-span-1 flex items-center justify-center">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
+                          <div className="col-span-1 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              disabled={isArchived}
+                              onChange={() => {
                                 if (isArchived) {
                                   toast.error('Archived resumes cannot be scored. Please select an active resume.');
                                   return;
                                 }
                                 handleToggleResume(resume.id);
                               }}
-                              disabled={isArchived}
-                              className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {isSelected ? (
-                                <CheckSquare className="w-5 h-5 text-brand-blue" />
-                              ) : (
-                                <Square className="w-5 h-5 text-gray-400 dark:text-slate-500" />
-                              )}
-                            </button>
+                              className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 disabled:cursor-not-allowed disabled:opacity-50"
+                            />
                           </div>
 
                           {/* Candidate Name */}
-                          <div className="col-span-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-brand-blue flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
-                                {(resume.candidate_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                          <div className="col-span-3 min-w-0">
+                            <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{resume.candidate_name || 'Unknown'}</div>
+                            {isArchived && (
+                              <span className="inline-flex items-center gap-1 text-xs text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded mt-0.5">
+                                Archived
+                              </span>
+                            )}
+                            {resume.location && (
+                              <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 mt-0.5">
+                                <MapPin className="w-3 h-3" />
+                                {resume.location}
                               </div>
-                              <div className="min-w-0">
-                                <div className="font-medium text-gray-900 dark:text-slate-50 truncate">{resume.candidate_name || 'Unknown'}</div>
-                                {isArchived && (
-                                  <span className="inline-flex items-center gap-1 text-xs text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded mt-0.5">
-                                    Archived
-                                  </span>
-                                )}
-                                {resume.location && (
-                                  <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 mt-0.5">
-                                    <MapPin className="w-3 h-3" />
-                                    {resume.location}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                            )}
                           </div>
 
                           {/* Current Role */}
                           <div className="col-span-2">
-                            <div className="text-sm text-gray-900 dark:text-slate-50">{resume.current_title || 'N/A'}</div>
+                            <div className="text-sm text-gray-700 dark:text-slate-300">{resume.current_title || 'N/A'}</div>
                             {resume.current_company && (
                               <div className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{resume.current_company}</div>
                             )}
@@ -1420,32 +1301,23 @@ export default function SelectSourceModal({
                           {/* Contact */}
                           <div className="col-span-2">
                             {resume.email && (
-                              <div className="flex items-center gap-1.5 mb-1">
-                                <Mail className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                                <span className="text-xs text-gray-600 dark:text-slate-400 truncate">{resume.email}</span>
-                              </div>
+                              <div className="text-xs text-gray-700 dark:text-slate-300 truncate">{resume.email}</div>
                             )}
                             {resume.phone && (
-                              <div className="flex items-center gap-1.5">
-                                <Phone className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                                <span className="text-xs text-gray-600 dark:text-slate-400">{resume.phone}</span>
-                              </div>
+                              <div className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{resume.phone}</div>
+                            )}
+                            {!resume.email && !resume.phone && (
+                              <span className="text-xs text-gray-400 dark:text-slate-500">-</span>
                             )}
                           </div>
 
                           {/* Experience */}
                           <div className="col-span-2">
-                            <div className="flex items-center gap-1.5">
-                              <Briefcase className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span className="text-sm text-gray-700 dark:text-slate-300">
-                                {resume.experience_years ? `${resume.experience_years} years` : 'N/A'}
-                              </span>
+                            <div className="text-sm text-gray-700 dark:text-slate-300">
+                              {resume.experience_years ? `${resume.experience_years} years` : 'N/A'}
                             </div>
                             {resume.notice_period && (
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <Calendar className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                                <span className="text-xs text-gray-500 dark:text-slate-500">{resume.notice_period}</span>
-                              </div>
+                              <div className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{resume.notice_period}</div>
                             )}
                           </div>
 
@@ -1460,7 +1332,7 @@ export default function SelectSourceModal({
                                 />
                               </div>
                             ) : (
-                              <span className="text-xs text-gray-400 dark:text-slate-500">No skills listed</span>
+                              <span className="text-xs text-gray-400 dark:text-slate-500">-</span>
                             )}
                           </div>
                         </div>
@@ -1469,22 +1341,11 @@ export default function SelectSourceModal({
                   })}
                   </div>
                 </div>
-              ) : (
-                <div className="text-center py-10 sm:py-16">
-                  <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300 dark:text-slate-500" />
-                  <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Resumes Found</h3>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
-                    {searchTerm
-                      ? 'No resumes match your search. Try different keywords.'
-                      : activeTab === 'my-resumes'
-                      ? 'Upload resumes to My Resumes to get started.'
-                      : 'No resumes available in the internal database.'}
-                  </p>
-                </div>
               )}
             </div>
           </div>
         </div>
+        </DndProvider>
 
         {/* Footer */}
         <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-3 flex-shrink-0">
@@ -1588,7 +1449,9 @@ export default function SelectSourceModal({
           so we leave it unset and let the modal default to root. */}
       {showUploadModal && (
         <UploadModal
-          folders={folders}
+          /* The UI-shaped folders (count/parentId), same conversion the
+             table uses — this was previously handed the raw API shape. */
+          folders={tableFolders}
           tenant={tenant}
           uploadSection="my-resumes"
           targetFolder={selectedFolder !== 'all' ? selectedFolder : undefined}
@@ -1599,6 +1462,19 @@ export default function SelectSourceModal({
           onScoreResume={handleAutoSelectAfterUpload}
         />
       )}
+
+      {/* Delete confirmation for the table's ⋮ menu. The table fires
+          `onDelete` immediately (unlike Archive, which it confirms itself),
+          so the guard has to live here. */}
+      <ConfirmationDialog
+        isOpen={!!deleteResumeTarget}
+        onClose={() => setDeleteResumeTarget(null)}
+        onConfirm={handleConfirmDeleteResume}
+        title="Delete resume?"
+        description={`"${deleteResumeTarget?.name ?? ''}" will be permanently deleted. This cannot be undone.`}
+        confirmText="Delete"
+        variant="danger"
+      />
     </div>
   );
 }
