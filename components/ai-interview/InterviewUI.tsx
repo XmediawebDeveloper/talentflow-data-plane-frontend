@@ -851,18 +851,49 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // stale closure over the state variable itself would never see updates.
   const envVerificationRef = useRef<typeof envVerification>(null);
   useEffect(() => { envVerificationRef.current = envVerification; }, [envVerification]);
-  // Guards environment-verification resume (session_resume send + clearing
-  // envVerification) so a WS "submitted" message and a poll tick that both
-  // observe the same submission can't each fire session_resume/duplicate the
-  // resume action.
+  // Guards the resume UI transition (clearing envVerification + stopping the
+  // status-poll loop below) so a WS "submitted" message and a poll tick that
+  // both observe the same submission can't each restart that teardown.
+  // Does NOT guard the session_resume SEND itself — see resumeRetryRef.
   const envVerificationResumedRef = useRef(false);
+  // A single session_resume send has no delivery guarantee (a real incident:
+  // one was sent here, then didn't reach the backend for ~3 minutes — nothing
+  // resent it because envVerificationResumedRef had already latched, so the
+  // interview just sat paused with no recovery). Retry on a short interval
+  // instead of firing once; the backend treats a session_resume after it's
+  // already resumed as a no-op (see ai_interview_ws.py's own idempotency
+  // guard), so resending is safe.
+  const resumeRetryIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const resumeEnvVerification = useCallback(() => {
     if (envVerificationResumedRef.current) return;
     envVerificationResumedRef.current = true;
     setEnvVerification(null);
-    try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+    const send = () => { try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* retried below */ } };
+    send();
+    let attempts = 1;
+    resumeRetryIntervalRef.current = setInterval(() => {
+      attempts += 1;
+      if (attempts > 20) { // ~1 minute of retries at 3s apart
+        if (resumeRetryIntervalRef.current) clearInterval(resumeRetryIntervalRef.current);
+        resumeRetryIntervalRef.current = null;
+        return;
+      }
+      send();
+    }, 3000);
   }, []);
+
+  // Stop retrying the instant the backend actually confirms the interview is
+  // moving again (e.g. the next question starts) — no point still resending
+  // session_resume once it's visibly worked. Any WS message handler that
+  // observes forward progress after a resume should call this.
+  const stopResumeRetries = useCallback(() => {
+    if (resumeRetryIntervalRef.current) {
+      clearInterval(resumeRetryIntervalRef.current);
+      resumeRetryIntervalRef.current = null;
+    }
+  }, []);
+  useEffect(() => () => { if (resumeRetryIntervalRef.current) clearInterval(resumeRetryIntervalRef.current); }, []);
 
   // Fallback reconciliation against the backend's authoritative status —
   // covers a WS push (opened/recording_started/submitted) that never
@@ -4855,6 +4886,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         break;
       case "speaking_started":
         console.log(`[WS ${timestamp}] Speaking started`);
+        // Bina talking again is proof any pending session_resume retry landed
+        // — stop resending it (see resumeEnvVerification/stopResumeRetries).
+        stopResumeRetries();
         // Bina is speaking again — abort any in-progress pre-turn "get ready"
         // countdown and any pending mic-open timer (they belong to a turn that
         // is no longer opening) + the mid-speech silence countdown.
