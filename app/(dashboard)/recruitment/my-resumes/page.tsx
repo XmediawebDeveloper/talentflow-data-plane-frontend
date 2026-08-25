@@ -41,6 +41,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder, FolderDeletionInfo } from '@/lib/services/resumeService';
+import { convertApiResumeToRow, convertApiFolderToTree } from '@/lib/utils/resumeMappers';
 import { jdService } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services';
@@ -1809,77 +1810,13 @@ export default function MyResumesPage() {
         folderService.list().catch(() => []),
       ]);
 
-      // Convert API Resume to component Resume type
-      const convertedResumes: Resume[] = resumeResponse.items.map((r: ApiResume) => ({
-        id: r.id,
-        name: r.candidate_name || r.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',
-        email: r.email || 'No email',
-        phone: r.phone || 'No phone',
-        title: r.current_title || 'N/A',
-        experience: r.experience_years ? `${r.experience_years} years` : 'N/A',
-        education: r.education?.[0]?.degree || 'N/A',
-        location: r.location || 'N/A',
-        skills: r.skills || [],
-        source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
-        folderId: r.folder_id || '',
-        uploadDate: r.created_at,
-        attachments: r.version_count || r.version || 1,
-        uploadedBy: r.uploaded_by_name || 'Unknown',
-        currentCompany: r.current_company,
-        previousCompany: r.previous_company,
-        noticePeriod: r.notice_period,
-        lastUpdated: r.updated_at,
-        // Extended fields for detailed view
-        professionalSummary: r.professional_summary,
-        technicalSkills: r.technical_skills,
-        softSkills: r.soft_skills,
-        educationDetails: (r.education as any[])?.map((edu: any) => ({
-          degree: edu.degree || '',
-          school: edu.school || edu.institution || '',
-          location: edu.location || '',
-          year: edu.year || edu.graduation_year || '',
-          gpa: edu.gpa || '',
-          honors: edu.honors || '',
-        })),
-        experienceDetails: (r.experience as any[])?.map((exp: any) => ({
-          title: exp.title || exp.position || '',
-          company: exp.company || '',
-          location: exp.location || '',
-          startDate: exp.start_date || '',
-          endDate: exp.end_date || 'Present',
-          duration: exp.duration || '',
-          description: exp.description || '',
-          achievements: exp.achievements || exp.responsibilities || [],
-        })),
-        certifications: r.certifications?.map((cert: any) => ({
-          name: cert.name || cert.title || '',
-          issuer: cert.issuer || cert.organization || '',
-          date: cert.date || cert.issued_date || '',
-          credentialId: cert.credential_id || cert.credentialId || '',
-        })),
-        languages: r.languages?.map((lang: any) => ({
-          name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),
-          proficiency: typeof lang === 'string' ? 'Fluent' : (lang.proficiency || lang.level || 'Fluent'),
-        })),
-        fileName: r.file_name, // Original file name with extension
-        fileType: r.file_type, // File type (pdf, doc, docx)
-        // Version info
-        version: r.version || 1,
-        versionCount: r.version_count || 1,
-        // Archive status
-        isArchived: r.is_archived || false,
-        archivedAt: r.archived_at,
-      }));
+      // Convert API Resume to component Resume type. Shared with the
+      // job-details "Select Applicants to Score" popup so both render the
+      // same columns from the same mapping.
+      const convertedResumes: Resume[] = resumeResponse.items.map(convertApiResumeToRow);
 
       // Convert API Folder to component Folder type
-      const convertApiFolder = (f: ApiFolder): FolderType => ({
-        id: f.id,
-        name: f.name,
-        count: f.resume_count || 0,
-        parentId: f.parent_id,
-        children: f.children?.map(convertApiFolder),
-      });
-      let apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
+      let apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolderToTree);
 
       // Ensure "root" folder always exists (default folder for uploads)
       const hasRootFolder = apiFolders.some(f => f.name.toLowerCase() === 'root' && !f.parentId);
@@ -3742,16 +3679,26 @@ export default function MyResumesPage() {
      the honest answer, so the table keeps its own copy. */
   const listControlsActive = !!appliedSearchQuery.trim() || activeResumeFilterCount > 0;
 
-  const renderNoResumesEmptyState = (folderId?: string) => (
-    <NoResumesEmptyState
-      description={
-        canUploadMyResumes
-          ? 'No resumes are available in this folder yet. Add a resume to get started.'
-          : 'No resumes are available in this folder yet.'
-      }
-      onAction={canUploadMyResumes ? () => openUploadToFolder(folderId) : undefined}
-    />
-  );
+  const renderNoResumesEmptyState = (folderId?: string) => {
+    // The Archived Resumes folder is a dead end for uploads — resumes only
+    // land there via archiving, never a direct upload — so it gets the bare
+    // illustration/title with no "add a resume" copy or button.
+    const isArchivedResumesFolder =
+      !!folderId && folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === folderId);
+
+    return (
+      <NoResumesEmptyState
+        description={
+          isArchivedResumesFolder
+            ? ''
+            : canUploadMyResumes
+              ? 'No resumes are available in this folder yet. Add a resume to get started.'
+              : 'No resumes are available in this folder yet.'
+        }
+        onAction={isArchivedResumesFolder || !canUploadMyResumes ? undefined : () => openUploadToFolder(folderId)}
+      />
+    );
+  };
 
   /* Display path of the folder the refused upload was aimed at, for the
      "New Resume (Uploading)" card in the duplicate dialog. `pendingUploadFolderId`
