@@ -674,6 +674,15 @@ export function useInterviewProctoringMonitor({
   const TRACK_MUTE_DEBOUNCE_MS = 3000;
   const cameraMuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const micMuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Wall-clock of the first poll tick that saw the video track muted, or null
+  // when it is healthy. The onmute EVENT path above debounces via
+  // cameraMuteTimerRef, but the periodic health poll below used to report a
+  // muted video track INSTANTLY — and Chrome/Windows transiently mutes a live
+  // video track while it renegotiates the capture session after an AUDIO
+  // device (e.g. a wired headset) is unplugged. That instant report flagged a
+  // camera nobody had touched, which in turn made InterviewUI's device
+  // recovery escalate a mic-only unplug into a full camera+mic reacquire.
+  const videoMutedSinceRef = useRef<number | null>(null);
 
   const reportCameraDisabled = useCallback((reason: string) => {
     if (cameraDisabledRef.current) return;
@@ -773,13 +782,22 @@ export function useInterviewProctoringMonitor({
         reportCameraDisabled('no_track');
       } else {
         const vt = vTracks[0];
-        if (vt.readyState === 'ended' || vt.muted || !vt.enabled) {
-          reportCameraDisabled(
-            vt.readyState === 'ended' ? 'readystate_ended'
-            : vt.muted ? 'track_muted_poll'
-            : 'track_disabled'
-          );
+        if (vt.readyState === 'ended' || !vt.enabled) {
+          // Permanent death or an explicit disable — report immediately, as
+          // before. Neither state is something a device renegotiation causes.
+          videoMutedSinceRef.current = null;
+          reportCameraDisabled(vt.readyState === 'ended' ? 'readystate_ended' : 'track_disabled');
+        } else if (vt.muted) {
+          // Live but muted: require the mute to PERSIST for the same window the
+          // onmute event path uses (see videoMutedSinceRef's comment). Neither
+          // disabled nor restored is reported inside the window — the current
+          // state simply holds.
+          if (videoMutedSinceRef.current === null) videoMutedSinceRef.current = Date.now();
+          if (Date.now() - videoMutedSinceRef.current >= TRACK_MUTE_DEBOUNCE_MS) {
+            reportCameraDisabled('track_muted_poll');
+          }
         } else {
+          videoMutedSinceRef.current = null;
           reportCameraRestored();
         }
       }

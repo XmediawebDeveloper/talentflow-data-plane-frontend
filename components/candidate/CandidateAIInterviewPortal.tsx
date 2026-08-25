@@ -314,6 +314,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   const recordingMicSrcRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const recordingMicChainRef = useRef<GainNode | null>(null);
   const recordingMicDeviceIdRef = useRef<string | undefined>(undefined);
+  // Pending self-heal retry for a mic leg whose track ended (headset unplugged).
+  const recordingMicRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Face & voice verification — callbacks emit events via InterviewEventBus
   const faceVerification = useInterviewFaceVerification({
@@ -913,6 +915,33 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         recordingMicSrcRef.current = src;
         recordingMicStreamRef.current = micStream;
         recordingMicDeviceIdRef.current = track.getSettings?.().deviceId;
+        // Self-heal: reopen this leg the moment its track dies. InterviewUI only
+        // retargets when it opens an ANSWER mic, and no answer turn happens
+        // while the interview is paused for the disconnect — so without this the
+        // mix stayed silent for the whole outage and for the rest of the
+        // interview, which is how a saved recording ended up with Bina audible
+        // and the candidate missing.
+        track.onended = () => {
+          console.warn('[Portal] Recording mic track ended — reopening the mix leg');
+          if (recordingMicRetryTimerRef.current) {
+            clearTimeout(recordingMicRetryTimerRef.current);
+            recordingMicRetryTimerRef.current = null;
+          }
+          let attempts = 0;
+          const retry = () => {
+            const ctx = recordingAudioCtxRef.current;
+            if (!ctx || ctx.state === 'closed' || !recordingMicChainRef.current) return;
+            // Prefer whatever device the interview has pinned by now; the OS
+            // default is used when it is unknown (openRecordingMic's own
+            // fallback covers a pinned device that is still gone).
+            const wanted = (window as any).__interviewMicDeviceId as string | undefined;
+            void openRecordingMic(wanted).then(ok => {
+              if (ok || ++attempts >= 30) return;   // ~1 min of replug grace
+              recordingMicRetryTimerRef.current = setTimeout(retry, 2000);
+            });
+          };
+          retry();
+        };
         console.log('[Portal] Recording mic connected', {
           label: track.label || 'unknown',
           deviceId: recordingMicDeviceIdRef.current || 'unknown',
@@ -936,7 +965,14 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
    */
   const retargetRecordingMic = useCallback(async (deviceId?: string) => {
     if (!deviceId) return;
-    if (deviceId === recordingMicDeviceIdRef.current) return;
+    // A matching deviceId is NOT proof the leg is healthy. Unplugging and
+    // replugging the SAME headset gives back the SAME deviceId while the old
+    // track is dead and its source node feeds silence into the mix, so this
+    // early return used to leave the candidate permanently inaudible in the
+    // saved recording. Only skip when the current leg is genuinely still live.
+    const legLive = recordingMicStreamRef.current
+      ?.getAudioTracks().some(t => t.readyState === 'live') ?? false;
+    if (deviceId === recordingMicDeviceIdRef.current && legLive) return;
     if (!recordingAudioCtxRef.current || !recordingMicChainRef.current) return;
     await openRecordingMic(deviceId);
     // openRecordingMic reads only refs, so a stable identity here is safe.
@@ -969,6 +1005,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
    */
   const buildRecordingStreamWithAudio = async (screenStream: MediaStream): Promise<MediaStream> => {
     // Tear down mix context from a previous recording or re-share (keeps Bina's dest alive)
+    if (recordingMicRetryTimerRef.current) {
+      clearTimeout(recordingMicRetryTimerRef.current);
+      recordingMicRetryTimerRef.current = null;
+    }
+    recordingMicStreamRef.current?.getAudioTracks().forEach(t => { t.onended = null; });
     recordingMicStreamRef.current?.getTracks().forEach(t => t.stop());
     recordingMicStreamRef.current = null;
     recordingMicSrcRef.current = null;
