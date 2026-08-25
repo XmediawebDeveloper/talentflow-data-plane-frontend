@@ -142,6 +142,17 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   // unrecoverable failure (expired link, empty/corrupt recording) where
   // retrying the same request can't help and the candidate must rescan.
   const [canRetryUpload, setCanRetryUpload] = useState(false);
+  // Verification-link expiry, mirrored from the laptop's own countdown (see
+  // EnvironmentVerificationOverlay) so the candidate still sees a "time
+  // remaining" indicator on their phone once the laptop swaps its QR/timer
+  // card for the full-screen challenge color (which has no room for it).
+  const [linkExpiresAt, setLinkExpiresAt] = useState<string | null>(null);
+  const [linkSecondsRemaining, setLinkSecondsRemaining] = useState<number | null>(null);
+  // Mirrors `phase` for the expiry-tick interval below, which needs the
+  // CURRENT phase without itself being re-created every phase change (it's
+  // set up once per linkExpiresAt, not once per render).
+  const phaseRef = useRef<Phase>('loading');
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
   // Two SEPARATE 5s countdowns (resets at the phase switch), not one
   // continuous 10s countdown — matches the spec's own wording ("start 5 secs
   // timer" for phase 1, "another 5 secs timer" for phase 2).
@@ -533,8 +544,11 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     let cancelled = false;
     (async () => {
       try {
-        await verifyApi.get(`/candidate/environment-verify/${token}`);
-        if (!cancelled) setPhase('instructions');
+        const res = await verifyApi.get(`/candidate/environment-verify/${token}`);
+        if (!cancelled) {
+          if (res.data?.expires_at) setLinkExpiresAt(res.data.expires_at);
+          setPhase('instructions');
+        }
       } catch (err: unknown) {
         if (cancelled) return;
         const status = axios.isAxiosError(err) ? err.response?.status : undefined;
@@ -549,6 +563,44 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     })();
     return () => { cancelled = true; };
   }, [token]);
+
+  // Live countdown to the verification link's expiry, ticked purely
+  // client-side from expiresAt vs Date.now() — same approach as the laptop's
+  // EnvironmentVerificationOverlay, so no extra backend polling is needed.
+  useEffect(() => {
+    if (!linkExpiresAt) return;
+    const expiresAtMs = new Date(linkExpiresAt).getTime();
+    // `let`, not `const` — `tick()` runs synchronously once (below) before
+    // `interval` is assigned, and can itself reach the remaining<=0 branch
+    // on that very first call (e.g. this effect mounting after the link was
+    // already expired), so `interval` must exist (as undefined) by then.
+    let interval: ReturnType<typeof setInterval> | undefined;
+    const tick = () => {
+      const remaining = Math.max(0, Math.round((expiresAtMs - Date.now()) / 1000));
+      setLinkSecondsRemaining(remaining);
+      if (remaining <= 0) {
+        const currentPhase = phaseRef.current;
+        // Never during an active recording (only ~10s total — let it finish
+        // rather than yanking the camera away mid-capture) or once the
+        // candidate is already uploading/done/on another terminal screen.
+        const recorderState = recorderRef.current?.state;
+        const activelyRecording = recorderState === 'recording' || recorderState === 'paused';
+        const terminal = ['loading', 'expired', 'error', 'uploading', 'done'].includes(currentPhase);
+        if (!activelyRecording && !terminal) {
+          if (interval) clearInterval(interval);
+          stopAlignmentLoop();
+          stopVoiceMonitoring();
+          streamRef.current?.getTracks().forEach(t => t.stop());
+          setErrorMessage('This verification link has expired. Please go back to your laptop and scan the QR code again.');
+          setCanRetryUpload(false);
+          setPhase('expired');
+        }
+      }
+    };
+    tick();
+    interval = setInterval(tick, 1000);
+    return () => { if (interval) clearInterval(interval); };
+  }, [linkExpiresAt]);
 
   // Guards against starting this lifecycle more than once — covers React
   // StrictMode's double-invoke in dev, rapid double-taps on Next, and any
@@ -804,8 +856,18 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     }
   };
 
+  const showLinkTimer = linkSecondsRemaining !== null
+    && !['loading', 'expired', 'error', 'done'].includes(phase);
+
   return (
     <div className="min-h-[100dvh] bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center">
+      {showLinkTimer && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[400] text-xs font-mono text-brand-blue border border-brand-blue/20 rounded-lg bg-[#0F1929]/90 backdrop-blur px-3 py-1.5 shadow-lg shadow-black/30">
+          {String(Math.floor((linkSecondsRemaining ?? 0) / 60)).padStart(2, '0')}:
+          {String((linkSecondsRemaining ?? 0) % 60).padStart(2, '0')} remaining
+        </div>
+      )}
+
       {phase === 'loading' && <p className="text-[#94a3b8]">Loading verification…</p>}
 
       {(phase === 'expired' || phase === 'error') && (
@@ -845,22 +907,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               <div className="flex-1">
                 <p>
                   <strong className="text-white">Next 5 seconds</strong> — slowly move your phone from
-                  left to right, then right to left back to center, capturing your workspace,
-                  surrounding area, and any nearby devices. Move slowly and keep the phone steady —
-                  no sudden movements.
+                  left to right, then right to left back to center. Move slowly and keep the phone
+                  steady — no sudden movements.
                 </p>
                 <div className="mt-2 flex items-center gap-1.5 px-2">
                   <span className="text-xl inline-block animate-[tf-instr-curve_1.6s_ease-in-out_infinite_alternate]">📱</span>
                   <span className="text-[11px] text-[#94a3b8]">left → right → left</span>
                 </div>
               </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue/20 text-brand-blue text-xs font-bold flex items-center justify-center mt-0.5">3</span>
-              <p>
-                <strong className="text-white">After recording</strong> — review your video and tap
-                Upload to submit it.
-              </p>
             </div>
           </div>
           <button
@@ -907,11 +961,23 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             playsInline
             className="w-full aspect-video rounded-xl bg-black object-cover"
           />
+          {(phase === 'aligning' || phase === 'recording_screen') && (
+            <div
+              className={`absolute inset-[10%] rounded-lg border-2 pointer-events-none transition-colors duration-300 ${
+                phase === 'recording_screen' || canRecord ? 'border-green-400' : 'border-white/80'
+              }`}
+            >
+              <span className="absolute -top-0.5 -left-0.5 w-5 h-5 border-t-2 border-l-2 border-inherit rounded-tl-md" />
+              <span className="absolute -top-0.5 -right-0.5 w-5 h-5 border-t-2 border-r-2 border-inherit rounded-tr-md" />
+              <span className="absolute -bottom-0.5 -left-0.5 w-5 h-5 border-b-2 border-l-2 border-inherit rounded-bl-md" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 border-b-2 border-r-2 border-inherit rounded-br-md" />
+            </div>
+          )}
           {phase === 'aligning' && !canRecord && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 rounded-xl px-4 text-center">
               <span className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
               <p className="text-sm font-medium text-white">Align your phone with your laptop screen…</p>
-              <p className="text-xs text-[#cbd5e1]">Center it, hold steady, and make sure the whole screen is in view.</p>
+              <p className="text-xs text-[#cbd5e1]">Fit your laptop screen inside the outline below.</p>
             </div>
           )}
           {phase === 'pan_instructions' && (
