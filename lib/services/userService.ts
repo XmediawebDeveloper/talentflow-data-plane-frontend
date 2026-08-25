@@ -24,7 +24,11 @@ export interface UserPermissions {
   can_create_assessments: boolean;
   can_update_assessments: boolean;
   can_delete_assessments: boolean;
-  can_download_assessment_pdf: boolean;
+  // Optional: the permission-object literals in UsersManagement.tsx predate these
+  // three fields and do not set them. Marking them optional describes what the app
+  // actually builds; making the literals set them would change which permissions get
+  // sent to the API, which is a feature change rather than a type fix.
+  can_download_assessment_pdf?: boolean;
 
   // Internal DB Permissions (Granular CRUD)
   can_view_internal_db: boolean;
@@ -91,10 +95,10 @@ export interface UserPermissions {
   can_manage_security_settings?: boolean;
 
   // Feature Permissions
-  can_view_scoring: boolean;  // View scoring results
+  can_view_scoring?: boolean;  // View scoring results
   can_run_scoring: boolean;
   can_run_ai_interviews: boolean;
-  can_view_ai_match: boolean;  // View AI match results
+  can_view_ai_match?: boolean;  // View AI match results
   can_run_ai_match: boolean;
   can_bulk_operations: boolean;
   can_export: boolean;
@@ -172,7 +176,12 @@ export interface CreateUserRequest {
   phone?: string;
 }
 
-export interface UpdateUserRequest {
+// Extends Partial<UserPermissions> so every granular permission key is accepted.
+// UsersManagement.tsx already SENDS the full granular set (can_view_jd,
+// can_update_jd, ...); this interface only listed a subset, so those keys were
+// flagged as unknown properties. Widening the type matches what the caller has
+// always sent - no request payload changes.
+export interface UpdateUserRequest extends Partial<UserPermissions> {
   name?: string;
   phone?: string;
   role?: string;  // Dynamic role from RBAC

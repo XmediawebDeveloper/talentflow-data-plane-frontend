@@ -57,7 +57,8 @@ export interface JDCreate {
   industry_mandatory?: boolean;
   location_mandatory?: boolean;
   experience_level?: 'entry' | 'junior' | 'mid' | 'senior' | 'architect' | 'management';
-  job_level?: string;
+  // job_level is already declared above with the identical type; the repeat was a
+  // duplicate-identifier error, not a second field.
 }
 
 export interface JDResponse extends JDCreate {

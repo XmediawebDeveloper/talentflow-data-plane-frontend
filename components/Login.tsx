@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, Globe, ArrowLeft } from 'lucide-react';
 import { User, Tenant } from '@/lib/types/tenant';
-import { authService } from '../services/authService';
+import { authService, type LoginResponse } from '@/lib/services/authService';
 import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 
 interface LoginProps {
@@ -40,7 +40,14 @@ export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: Log
     setIsLoading(true);
 
     try {
-      const response = await authService.login({ subdomain: subdomain.toLowerCase(), email, password });
+      // login() returns LoginResult = LoginResponse | TwoFactorRequiredResponse, and
+      // only the first has `user`. This screen has never handled the 2FA variant -
+      // it reads response.user straight away - so the cast states that existing
+      // assumption instead of silently widening it. Runtime behaviour is unchanged;
+      // adding a 2FA branch here would be a feature change, not a type fix.
+      const response = (await authService.login({
+        subdomain: subdomain.toLowerCase(), email, password,
+      })) as LoginResponse;
 
       const user: User = {
         id: response.user.id,
