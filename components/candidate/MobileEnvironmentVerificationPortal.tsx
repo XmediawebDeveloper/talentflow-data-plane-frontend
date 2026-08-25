@@ -862,9 +862,12 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   return (
     <div className="min-h-[100dvh] bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center">
       {showLinkTimer && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[400] text-xs font-mono text-brand-blue border border-brand-blue/20 rounded-lg bg-[#0F1929]/90 backdrop-blur px-3 py-1.5 shadow-lg shadow-black/30">
-          {String(Math.floor((linkSecondsRemaining ?? 0) / 60)).padStart(2, '0')}:
-          {String((linkSecondsRemaining ?? 0) % 60).padStart(2, '0')} remaining
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[400] flex flex-col items-center gap-1 rounded-xl border border-amber-400/30 bg-[#0F1929]/95 backdrop-blur px-6 py-3 shadow-lg shadow-black/30">
+          <span className="font-mono font-bold text-3xl tracking-wider text-amber-400 tabular-nums">
+            {String(Math.floor((linkSecondsRemaining ?? 0) / 60)).padStart(2, '0')}:
+            {String((linkSecondsRemaining ?? 0) % 60).padStart(2, '0')}
+          </span>
+          <span className="text-[11px] text-[#94a3b8]">Link will expire when the timer ends</span>
         </div>
       )}
 
@@ -888,14 +891,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
 
       {phase === 'instructions' && (
         <div className="max-w-sm space-y-5">
-          <h1 className="text-lg font-semibold">Environment Verification</h1>
-          <div className="text-sm text-[#cbd5e1] leading-relaxed text-left space-y-4 bg-white/5 rounded-xl p-4 border border-white/10">
+          <h1 className="text-2xl font-semibold">Environment Verification</h1>
+          <div className="text-base text-[#cbd5e1] leading-relaxed text-left space-y-4 bg-white/5 rounded-xl p-4 border border-white/10">
             <p>
               You'll record a <strong className="text-white">10-second video</strong> in{' '}
               <strong className="text-white">landscape mode</strong>, in two steps:
             </p>
             <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue/20 text-brand-blue text-xs font-bold flex items-center justify-center mt-0.5">1</span>
+              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-brand-blue/20 text-brand-blue text-sm font-bold flex items-center justify-center mt-0.5">1</span>
               <p>
                 <strong className="text-white">First 5 seconds</strong> — focus your camera on your
                 laptop screen/display. It will show a changing color and a unique ID; keep it
@@ -903,7 +906,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               </p>
             </div>
             <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue/20 text-brand-blue text-xs font-bold flex items-center justify-center mt-0.5">2</span>
+              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-brand-blue/20 text-brand-blue text-sm font-bold flex items-center justify-center mt-0.5">2</span>
               <div className="flex-1">
                 <p>
                   <strong className="text-white">Next 5 seconds</strong> — slowly move your phone from
@@ -961,23 +964,11 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             playsInline
             className="w-full aspect-video rounded-xl bg-black object-cover"
           />
-          {(phase === 'aligning' || phase === 'recording_screen') && (
-            <div
-              className={`absolute inset-[10%] rounded-lg border-2 pointer-events-none transition-colors duration-300 ${
-                phase === 'recording_screen' || canRecord ? 'border-green-400' : 'border-white/80'
-              }`}
-            >
-              <span className="absolute -top-0.5 -left-0.5 w-5 h-5 border-t-2 border-l-2 border-inherit rounded-tl-md" />
-              <span className="absolute -top-0.5 -right-0.5 w-5 h-5 border-t-2 border-r-2 border-inherit rounded-tr-md" />
-              <span className="absolute -bottom-0.5 -left-0.5 w-5 h-5 border-b-2 border-l-2 border-inherit rounded-bl-md" />
-              <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 border-b-2 border-r-2 border-inherit rounded-br-md" />
-            </div>
-          )}
           {phase === 'aligning' && !canRecord && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 rounded-xl px-4 text-center">
               <span className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
               <p className="text-sm font-medium text-white">Align your phone with your laptop screen…</p>
-              <p className="text-xs text-[#cbd5e1]">Fit your laptop screen inside the outline below.</p>
+              <p className="text-xs text-[#cbd5e1]">Center it, hold steady, and make sure the whole screen is in view.</p>
             </div>
           )}
           {phase === 'pan_instructions' && (
