@@ -623,7 +623,7 @@ export default function InternalTicketAdmin() {
                         <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Status</th>
                         <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Assigned</th>
                         <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Updated</th>
-                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600">Actions</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-600 tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -667,7 +667,7 @@ export default function InternalTicketAdmin() {
                             <td className="px-6 py-4">
                               <span className="text-sm text-gray-600">{formatISTDate(ticket.updated_at)}</span>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="px-6 py-4 tf-sticky-col">
                               <button
                                 onClick={() => {
                                   setSelectedTicket(ticket);

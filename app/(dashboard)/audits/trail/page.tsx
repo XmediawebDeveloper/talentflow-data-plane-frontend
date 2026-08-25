@@ -1268,7 +1268,7 @@ export default function AuditTrailPage() {
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Duration</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Refund Flag</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Units</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1373,7 +1373,7 @@ export default function AuditTrailPage() {
                             <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap tf-sticky-col">
                           <button
                             onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors"

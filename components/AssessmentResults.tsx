@@ -1469,7 +1469,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             <table className="w-full min-w-[2040px] table-fixed [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_td]:align-middle">
               <thead className="bg-slate-50 border-b border-gray-100">
                 <tr>
-                  <th className={`px-4 py-3 w-10 ${stickyHeaderClass}`}>
+                  <th className={`px-4 py-3 w-10 tf-sticky-col-left ${stickyHeaderClass}`}>
                     <input
                       type="checkbox"
                       checked={selectedRows.length === paginatedCandidates.length && paginatedCandidates.length > 0}
@@ -1573,7 +1573,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   {isColumnEnabled('duration') && (
                     <th className={`w-28 text-center px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Duration</th>
                   )}
-                  <th className={`w-32 text-center px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Actions</th>
+                  <th className={`w-32 text-center px-4 py-3 text-xs text-gray-600 tf-sticky-col ${stickyHeaderClass}`}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1601,9 +1601,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <tr
                       key={candidate.id}
                       onClick={() => viewCandidateDetails(candidate)}
+                      data-row-selected={selectedRows.includes(candidate.id)}
                       className={`hover:bg-brand-blue/5 transition-colors cursor-pointer ${selectedRows.includes(candidate.id) ? 'bg-brand-blue/5' : ''}`}
                     >
-                      <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-4 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedRows.includes(candidate.id)}
@@ -1743,7 +1744,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                         </td>
                       )}
-                      <td className="px-2 sm:px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-2 sm:px-4 py-4 tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
                           <button
                             onClick={() => viewCandidateDetails(candidate)}

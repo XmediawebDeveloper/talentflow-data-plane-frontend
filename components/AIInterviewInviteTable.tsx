@@ -508,7 +508,7 @@ export default function AIInterviewInviteTable({
         <table className="w-max min-w-full">
           <thead>
             <tr className="border-b border-gray-200 dark:border-slate-700">
-              {selectable && <th className="w-8 py-3 pl-4 pr-0" aria-label="Select" />}
+              {selectable && <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
@@ -542,7 +542,7 @@ export default function AIInterviewInviteTable({
                   }`}
                 >
                   {selectable && (
-                    <td className="py-3 pl-4 pr-0 align-middle">
+                    <td className="py-3 pl-4 pr-0 align-middle tf-sticky-col-left">
                       <SelectBox inv={inv} />
                     </td>
                   )}

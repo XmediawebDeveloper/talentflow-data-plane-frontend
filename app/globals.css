@@ -1822,15 +1822,23 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
   white-space: normal;
 }
 
-/* Right-pinned column, for the Actions cell. These tables are auto-layout and
-   wider than the dialog, so the row scrolls sideways and the actions were the
-   first thing to slide out of reach.
+/* ── Sticky Select-All / Actions columns — project-wide, reusable ──────
+   Add `tf-sticky-col` to a right-pinned Actions <th>/<td>, or
+   `tf-sticky-col-left` to a left-pinned Select-All <th>/<td>, on ANY table,
+   anywhere. Deliberately NOT scoped to `.tf-table-shell`: that class also
+   pulls in a sticky header, min/max-height and custom scrollbars, which is
+   a separate, opt-in shell some tables want and others don't. The sticky
+   COLUMN behavior here must not force that on a table that never asked for
+   it — it just pins the one column, inside whatever scroll container
+   (`.tf-table-shell`, `.table-responsive`, a plain `overflow-x-auto` div, or
+   none, if the table never overflows) the table already uses.
 
-   Same caveat as the sticky thead above: a sticky cell paints no background of
-   its own, so it needs an opaque one or the row scrolls visibly through it.
-   Unlayered, like the rules above, so it beats the Tailwind utilities already
-   on these cells. */
-.tf-table-shell .tf-sticky-col {
+   A sticky cell paints no background of its own, so each needs an opaque
+   one or the row scrolls visibly through it. Unlayered, like the rest of
+   this file's structural table rules, so it beats the Tailwind utilities
+   (`@layer utilities`) already sitting on these cells regardless of the
+   utilities' own specificity. */
+.tf-sticky-col {
   position: sticky;
   right: 0;
   z-index: 5;
@@ -1839,24 +1847,67 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
      the content sliding under it, rather than as an ordinary last column. */
   box-shadow: -1px 0 0 0 var(--border);
 }
-.dark .tf-table-shell .tf-sticky-col {
-  background-color: oklch(0.208 0.042 265.755); /* slate-900, matches thead */
+.dark .tf-sticky-col {
+  background-color: oklch(0.208 0.042 265.755); /* slate-900, matches dark card surfaces */
+}
+.tf-sticky-col-left {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background-color: #ffffff;
+  /* Hairline on the trailing edge, mirroring tf-sticky-col's leading one. */
+  box-shadow: 1px 0 0 0 var(--border);
+}
+.dark .tf-sticky-col-left {
+  background-color: oklch(0.208 0.042 265.755);
 }
 
-/* The header's own pinned cell has to clear the body's pinned cells, which
-   already sit above the normal ones. thead is z-10, body sticky cells z-5. */
-.tf-table-shell thead th.tf-sticky-col {
+/* A sticky <thead>'s own pinned cell has to clear the body's pinned cells,
+   which already sit above the ordinary ones (z-5) — 11 comfortably beats
+   both that and the z-10 a sticky header commonly carries (e.g.
+   `.tf-table-shell thead`), whether or not this particular table's header
+   is sticky at all. */
+thead th.tf-sticky-col,
+thead th.tf-sticky-col-left {
   z-index: 11;
 }
 
 /* The opaque background above would otherwise swallow the row hover tint, so
    the pinned cell repaints it — an opaque version of the `hover:bg-brand-blue/5`
    the rows carry, since a translucent one would let content show through. */
-.tf-table-shell tbody tr:hover .tf-sticky-col {
+tbody tr:hover > .tf-sticky-col,
+tbody tr:hover > .tf-sticky-col-left {
   background-color: color-mix(in srgb, var(--brand-blue) 5%, #ffffff);
 }
-.dark .tf-table-shell tbody tr:hover .tf-sticky-col {
+.dark tbody tr:hover > .tf-sticky-col,
+.dark tbody tr:hover > .tf-sticky-col-left {
   background-color: color-mix(in srgb, var(--brand-blue) 5%, oklch(0.208 0.042 265.755));
+}
+
+/* A selected row tints its whole background (checked checkbox, a picked
+   candidate, …) beyond just :hover — same "opaque or the row shows through"
+   problem as hover above, so the pinned cells need their own opaque repaint
+   of that tint too. Keyed off a data attribute rather than the row's own
+   background class: each table names that tint differently
+   (bg-blue-50, bg-brand-blue/5, …), so a shared attribute is the one hook
+   every table can set without fighting the others' class names. Declared
+   after the hover rules so hovering a selected row still shows hover
+   feedback instead of being masked by the stronger selected tint. */
+tbody tr[data-row-selected="true"] > .tf-sticky-col,
+tbody tr[data-row-selected="true"] > .tf-sticky-col-left {
+  background-color: color-mix(in srgb, var(--brand-blue) 8%, #ffffff);
+}
+.dark tbody tr[data-row-selected="true"] > .tf-sticky-col,
+.dark tbody tr[data-row-selected="true"] > .tf-sticky-col-left {
+  background-color: color-mix(in srgb, var(--brand-blue) 8%, oklch(0.208 0.042 265.755));
+}
+tbody tr[data-row-selected="true"]:hover > .tf-sticky-col,
+tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
+  background-color: color-mix(in srgb, var(--brand-blue) 12%, #ffffff);
+}
+.dark tbody tr[data-row-selected="true"]:hover > .tf-sticky-col,
+.dark tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
+  background-color: color-mix(in srgb, var(--brand-blue) 12%, oklch(0.208 0.042 265.755));
 }
 
 /* Compact shell — for tables inside a dialog. Keeps the sticky header and the

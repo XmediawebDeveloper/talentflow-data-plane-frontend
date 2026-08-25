@@ -14,6 +14,8 @@ import SkillsList from '@/components/ui/SkillsList';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import ConfirmationDialog from './ConfirmationDialog';
 import ResumeUploadModal from './ResumeUploadModal';
+import ResumeVersionsModal from './ResumeVersionsModal';
+import { resumeService } from '@/lib/services/resumeService';
 import ResumeScoring from './ResumeScoring';
 import JobApplicants from './JobApplicants';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -21,7 +23,6 @@ import InviteToAssessmentModal from './InviteToAssessmentModal';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import SelectSourceModal from './SelectSourceModal';
 import AssessmentResultsTable from './AssessmentResultsTable';
-import VersionHistoryModal from './VersionHistoryModal';
 import JDVersionHistoryModal from './JDVersionHistoryModal';
 import ResumeDetailView from './ResumeDetailView';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
@@ -45,7 +46,6 @@ import { toast } from 'sonner';
 import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import { buildUnifiedDiff, buildDiffSidePairs } from '@/lib/utils/textDiff';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 
@@ -633,49 +633,18 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     setShowAssessmentPicker(false);
     openShareWithAssessments(chosen);
   };
-  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showSelectSourceModal, setShowSelectSourceModal] = useState(false);
   const [showJDHistory, setShowJDHistory] = useState(false);
-  const [jdHistory, setJdHistory] = useState<any[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [selectedHistoryVersion, setSelectedHistoryVersion] = useState<any>(null);
-  // JD version comparison, mirroring the resume-view page: tick two versions in
-  // the history timeline, then diff them old-vs-new. Holds history-item ids in
-  // click order; the third tick evicts the oldest so the pair keeps moving
-  // rather than making the user untick something first.
-  const [jdCompareChecked, setJdCompareChecked] = useState<string[]>([]);
-  const [showJDCompare, setShowJDCompare] = useState(false);
-  const [jdCompareViewMode, setJdCompareViewMode] = useState<'side-by-side' | 'unified'>('side-by-side');
-
-  const handleJDCompareCheck = (itemId: string) => {
-    setJdCompareChecked((prev) => {
-      if (prev.includes(itemId)) return prev.filter((id) => id !== itemId);
-      if (prev.length >= 2) return [prev[1], itemId];
-      return [...prev, itemId];
-    });
-  };
-
-  // Resolve the ticked pair into older/newer by version number, so the left
-  // panel is always the earlier JD regardless of which box was ticked first.
-  const jdComparePair = (() => {
-    if (jdCompareChecked.length !== 2) return null;
-    const a = jdHistory.find((h: any) => h.id === jdCompareChecked[0]);
-    const b = jdHistory.find((h: any) => h.id === jdCompareChecked[1]);
-    if (!a || !b) return null;
-    const versionOf = (h: any) => h?.version?.version_number ?? 0;
-    return versionOf(a) <= versionOf(b) ? { older: a, newer: b } : { older: b, newer: a };
-  })();
-  // Version badge dropdown. The badge used to jump straight into the full
-  // history modal; listing the versions under it lets a recruiter see what
-  // exists — and pick one — without opening a modal to find out.
   const [showVersionMenu, setShowVersionMenu] = useState(false);
   const [versionMenuLoading, setVersionMenuLoading] = useState(false);
-  // Lineage versions (each is its own JD id/detail page) for the version switcher.
+  const [versionMenuLoaded, setVersionMenuLoaded] = useState(false);
+  const [versionMenuError, setVersionMenuError] = useState<string | null>(null);
   const [lineageVersions, setLineageVersions] = useState<JDLineageVersion[]>([]);
-  // Which version the modal should open on, set by picking one in the dropdown.
-  const [versionMenuSelection, setVersionMenuSelection] = useState<number | undefined>(undefined);
   const versionMenuRef = useRef<HTMLDivElement>(null);
-  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const sortedLineageVersions = useMemo(
+    () => [...lineageVersions].sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1)),
+    [lineageVersions]
+  );
   // Collapsible "Extracted Data Summary" (mirrors the Step 2/Review summary dropdown)
   const [showExtractedSummary, setShowExtractedSummary] = useState(false);
 
@@ -1160,14 +1129,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialAction, job?.id]);
 
-
-  // Fetch JD History when modal opens
-  useEffect(() => {
-    if (showJDHistory && job.id) {
-      fetchJDHistory();
-    }
-  }, [showJDHistory, job.id]);
-
   // Fetch scored resumes on component mount
   useEffect(() => {
     if (job.id) {
@@ -1188,75 +1149,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       fetchAiMatchData();
     }
   }, [job.id, hasPlanFeature]);
-
-
-  // Fetched on first open and then kept: the badge sits in the header of a page
-  // recruiters land on constantly, so this must not cost a request per click.
-  const toggleVersionMenu = async () => {
-    const opening = !showVersionMenu;
-    setShowVersionMenu(opening);
-    if (!opening || lineageVersions.length > 0 || versionMenuLoading) return;
-    setVersionMenuLoading(true);
-    try {
-      // Load the LINEAGE (each version is its own JD id/detail page), not the
-      // republish snapshot history.
-      const data = await jdService.getLineageVersions(job.id);
-      setLineageVersions(data || []);
-    } catch (error) {
-      console.error('Failed to load JD lineage versions:', error);
-      setLineageVersions([]);
-    } finally {
-      setVersionMenuLoading(false);
-    }
-  };
-
-  const fetchJDHistory = async () => {
-    setLoadingHistory(true);
-    try {
-      const versionData = await jdService.getVersionHistory(job.id);
-
-      // Convert version history to JD history events
-      const historyEvents = versionData.versions.map((version, index) => {
-        const isLatest = index === 0;
-        const isRepublished = version.version_number > 1;
-        // Use IST time from backend if available (already in IST), otherwise convert UTC to IST
-        const istTimestamp = version.published_at_ist
-          ? formatISTDateTime(version.published_at_ist)
-          : formatToIST(version.published_at);
-
-        // Show "Republished" for versions > 1, "Published" for version 1
-        const actionText = isRepublished
-          ? `Republished (v${version.version_number}.0)`
-          : `Published (v${version.version_number}.0)`;
-
-        const descriptionText = isLatest
-          ? (isRepublished ? 'Current republished version' : 'Current published version')
-          : (isRepublished ? `Version ${version.version_number} republished after edit` : `Version ${version.version_number} published`);
-
-        return {
-          id: version.id,
-          action: actionText,
-          description: descriptionText,
-          performedBy: version.published_by_name || 'Unknown User',
-          performedByRole: version.published_by_role || 'Team Member',
-          timestamp: istTimestamp,
-          date: istTimestamp.split(',')[0],
-          icon: isRepublished ? 'refresh' : 'check-circle',
-          color: isRepublished ? 'blue' : 'green',
-          version: version,
-          isRepublished: isRepublished,
-        };
-      });
-
-      setJdHistory(historyEvents);
-    } catch (error) {
-      console.error('Failed to fetch JD history:', error);
-      setJdHistory([]);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
-
   // Fetch scored resumes from API
   const fetchScoredResumes = async () => {
     setLoadingScoredResumes(true);
@@ -1286,6 +1178,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         return {
           id: item.id,
           resume_id: item.resume_id || '',
+          resumeId: item.resume_id || '',
           candidateName: item.candidate_name || 'Unknown',
           email: item.candidate_email || '',
           phone: item.phone || '',
@@ -1538,6 +1431,33 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const [aiInterviewResultsScrollRequest, setAiInterviewResultsScrollRequest] = useState(0);
   const [scoredResumesMatchFilter, setScoredResumesMatchFilter] = useState<ScoredResumesMatchFilter>('all');
 
+  const toggleVersionMenu = async () => {
+    const opening = !showVersionMenu;
+    setShowVersionMenu(opening);
+    if (!opening || versionMenuLoaded || versionMenuLoading) return;
+
+    setVersionMenuLoading(true);
+    setVersionMenuError(null);
+    try {
+      const data = await jdService.getLineageVersions(job.id);
+      setLineageVersions(data || []);
+      setVersionMenuLoaded(true);
+    } catch (error) {
+      console.error('Failed to load JD lineage versions:', error);
+      setLineageVersions([]);
+      setVersionMenuError('Could not load versions');
+    } finally {
+      setVersionMenuLoading(false);
+    }
+  };
+
+  const handleVersionSelect = (version: JDLineageVersion) => {
+    setShowVersionMenu(false);
+    if (version.id === job.id) return;
+
+    router.push(`/recruitment/job-details?id=${version.id}`);
+  };
+
   const handleShowOverview = () => {
     setActiveTab('overview');
     setOverviewScrollRequest((request) => request + 1);
@@ -1589,15 +1509,23 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       }
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowVersionMenu(false);
+      }
+    };
+
     const handleShowApplicants = () => {
       setShowApplicantsView(true);
     };
 
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
     window.addEventListener('showApplicants' as any, handleShowApplicants);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('showApplicants' as any, handleShowApplicants);
     };
   }, []);
@@ -2262,18 +2190,16 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 <span>By {job.postedBy || 'Unknown'}</span>
                 <span className="text-gray-300">•</span>
 
-                {/* Version Badge — opens a dropdown of every published version.
-                    Picking one opens it in the history modal; the last entry
-                    still reaches the full history the badge used to open. */}
+                {/* Version Badge */}
                 {job.versionNumber && job.versionNumber > 0 ? (
                   <div className="relative" ref={versionMenuRef}>
                     <button
+                      type="button"
                       onClick={toggleVersionMenu}
                       className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium hover:bg-purple-700 transition-colors"
-                      aria-label="View version history"
+                      aria-label={`Select job version, currently v${job.versionNumber}.0`}
                       aria-haspopup="menu"
                       aria-expanded={showVersionMenu}
-                      title="View version history"
                     >
                       v{job.versionNumber}.0
                       <ChevronDown className={`w-3 h-3 transition-transform ${showVersionMenu ? 'rotate-180' : ''}`} />
@@ -2282,52 +2208,51 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     {showVersionMenu && (
                       <div
                         role="menu"
-                        className="absolute left-0 top-full mt-2 w-64 max-h-72 overflow-y-auto bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 z-50"
+                        aria-label="Available job versions"
+                        className="absolute left-0 top-full mt-2 w-56 max-h-72 overflow-y-auto bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 z-50"
                       >
                         {versionMenuLoading ? (
                           <div className="flex items-center gap-2 px-3 py-3 text-xs text-gray-500 dark:text-slate-400">
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             Loading versions...
                           </div>
-                        ) : lineageVersions.length === 0 ? (
+                        ) : versionMenuError ? (
+                          <div className="px-3 py-3 text-xs text-red-600 dark:text-red-400">
+                            {versionMenuError}
+                          </div>
+                        ) : sortedLineageVersions.length === 0 ? (
                           <div className="px-3 py-3 text-xs text-gray-500 dark:text-slate-400">
-                            No other versions yet
+                            No versions available
                           </div>
                         ) : (
-                          lineageVersions.map((version) => {
-                            const isCurrentPage = version.id === job.id;
+                          sortedLineageVersions.map((version) => {
+                            const isCurrentVersion = version.id === job.id;
                             return (
                               <button
                                 key={version.id}
+                                type="button"
                                 role="menuitem"
-                                disabled={isCurrentPage}
-                                onClick={() => {
-                                  setShowVersionMenu(false);
-                                  if (isCurrentPage) return;
-                                  // Open the WHOLE detail page of that version (its own
-                                  // results/tabs), not a content-diff popup.
-                                  router.push(`/recruitment/job-details?id=${version.id}`);
-                                }}
-                                className={`w-full px-3 py-2 text-left transition-colors ${isCurrentPage ? 'bg-brand-blue/5 cursor-default' : 'hover:bg-brand-blue/5'}`}
+                                disabled={isCurrentVersion}
+                                onClick={() => handleVersionSelect(version)}
+                                className={`w-full px-3 py-2 text-left transition-colors ${isCurrentVersion ? 'bg-brand-blue/5 cursor-default' : 'hover:bg-brand-blue/5'}`}
                               >
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-xs font-semibold text-gray-900 dark:text-slate-100">
-                                    v{version.version_number}.0
+                                    v{version.version_number ?? 1}.0
                                   </span>
                                   <div className="flex items-center gap-1">
                                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
                                       {version.status}
                                     </span>
-                                    {isCurrentPage && (
+                                    {isCurrentVersion ? (
                                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
-                                        Viewing
+                                        Selected
                                       </span>
-                                    )}
-                                    {version.is_latest_version && !isCurrentPage && (
+                                    ) : version.is_latest_version ? (
                                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
                                         Latest
                                       </span>
-                                    )}
+                                    ) : null}
                                   </div>
                                 </div>
                                 <div className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
@@ -2338,20 +2263,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                             );
                           })
                         )}
-
-                        <div className="border-t border-gray-100 dark:border-slate-700 my-1" />
-                        <button
-                          role="menuitem"
-                          onClick={() => {
-                            setShowVersionMenu(false);
-                            setVersionMenuSelection(undefined);
-                            setShowVersionHistory(true);
-                          }}
-                          className="w-full px-3 py-2 text-left text-xs font-medium text-brand-blue hover:bg-brand-blue/5 transition-colors flex items-center gap-2"
-                        >
-                          <History className="w-3.5 h-3.5" />
-                          View change history (this version)
-                        </button>
                       </div>
                     )}
                   </div>
@@ -3767,637 +3678,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         />
       )}
 
-      {/* Version History Modal */}
       <JDVersionHistoryModal
-        isOpen={showVersionHistory}
-        onClose={() => {
-          setShowVersionHistory(false);
-          // Cleared on close, or reopening from the badge would jump back to
-          // the version picked last time instead of the list.
-          setVersionMenuSelection(undefined);
-        }}
+        isOpen={showJDHistory}
+        onClose={() => setShowJDHistory(false)}
         jdId={job.id}
         jdTitle={job.title}
-        initialVersionNumber={versionMenuSelection}
       />
-
-      {/* JD History Modal */}
-      {showJDHistory && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="bg-gray-800 px-4 py-3 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2 min-w-0">
-                {selectedHistoryVersion ? (
-                  <button
-                    onClick={() => setSelectedHistoryVersion(null)}
-                    className="h-8 w-8 bg-white/20 rounded-lg flex items-center justify-center hover:bg-white/30 transition-colors flex-shrink-0"
-                  >
-                    <ArrowLeft className="w-4 h-4 text-white" />
-                  </button>
-                ) : (
-                  <div className="h-8 w-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <History className="w-4 h-4 text-white" />
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <h2 className="text-base sm:text-lg font-semibold text-white truncate">
-                    {selectedHistoryVersion ? `Version ${selectedHistoryVersion.version.version_number}.0` : 'Job Description History'}
-                  </h2>
-                  <p className="text-xs text-gray-300 truncate">{job.title}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowJDHistory(false);
-                  setSelectedHistoryVersion(null);
-                  setJdCompareChecked([]);
-                }}
-                className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-white/20 transition-colors flex-shrink-0"
-               aria-label="Close">
-                <X className="w-4 h-4 text-white" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-4 sm:p-5 overflow-y-auto flex-1">
-              {loadingHistory ? (
-                <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-                  <Loader2 className="h-8 w-8 text-gray-600 dark:text-slate-400 animate-spin" />
-                  <span className="ml-3 text-gray-600 dark:text-slate-400">Loading history...</span>
-                </div>
-              ) : selectedHistoryVersion ? (
-                /* Version Detail View */
-                <div>
-                  {/* Version Info Bar with Download Button */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <span className="px-2.5 py-1 bg-gray-900 text-white rounded-lg text-xs font-semibold">
-                        v{selectedHistoryVersion.version.version_number}.0
-                      </span>
-                      <div className="text-xs text-gray-600 dark:text-slate-400">
-                        <span className="flex items-center gap-1">
-                          <UserIcon className="w-3.5 h-3.5" />
-                          {selectedHistoryVersion.performedBy}
-                        </span>
-                      </div>
-                      <span className="text-xs text-gray-500 dark:text-slate-500">{selectedHistoryVersion.timestamp}</span>
-                      {selectedHistoryVersion.version.version_number > 1 && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                          New content highlighted in blue
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      disabled={downloadingPDF}
-                      onClick={async () => {
-                        if (downloadingPDF) return;
-                        setDownloadingPDF(true);
-
-                        const jdContent = selectedHistoryVersion.version.description || '';
-                        const title = selectedHistoryVersion.version.title || job.title;
-                        const version = selectedHistoryVersion.version.version_number;
-
-                        // Create HTML content for PDF
-                        const htmlContent = `
-                          <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 800px; line-height: 1.6;">
-                            <h1 style="color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 5px;">${title}</h1>
-                            <p style="color: #6b7280; font-size: 14px; margin-bottom: 24px;">Version ${version}.0 | Generated on ${formatISTDate(new Date().toISOString())}</p>
-                            <div style="color: #4b5563;">
-                              ${jdContent
-                                .replace(/^### (.*$)/gm, '<h3 style="color: #4b5563; margin-top: 20px; font-size: 16px;">$1</h3>')
-                                .replace(/^## (.*$)/gm, '<h2 style="color: #374151; margin-top: 24px; font-size: 18px;">$1</h2>')
-                                .replace(/^# (.*$)/gm, '<h1 style="color: #1f2937; font-size: 22px;">$1</h1>')
-                                .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #1f2937;">$1</strong>')
-                                .replace(/^\- (.*$)/gm, '<li style="margin: 4px 0;">$1</li>')
-                                .replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul style="padding-left: 24px; margin: 8px 0;">$&</ul>')
-                                .replace(/\n\n/g, '</p><p style="margin: 8px 0;">')
-                                .replace(/\n/g, '<br>')}
-                            </div>
-                          </div>
-                        `;
-
-                        // Create a temporary div to render the content
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = htmlContent;
-                        document.body.appendChild(tempDiv);
-
-                        try {
-                          // Dynamically import html2pdf
-                          const html2pdf = (await import('html2pdf.js')).default;
-
-                          await html2pdf().set({
-                            margin: 10,
-                            filename: `${title.replace(/[^a-zA-Z0-9]/g, '_')}_v${version}.pdf`,
-                            image: { type: 'jpeg', quality: 0.98 },
-                            html2canvas: { scale: 2 },
-                            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                          }).from(tempDiv).save();
-                        } catch (error) {
-                          console.error('PDF generation failed:', error);
-                          toast.error('Failed to generate PDF. Please try again.');
-                        } finally {
-                          document.body.removeChild(tempDiv);
-                          setDownloadingPDF(false);
-                        }
-                      }}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${downloadingPDF ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-                    >
-                      {downloadingPDF ? (
-                        <>
-                          <svg className="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Download className="w-4 h-4" />
-                          Download PDF
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Job Title + Description - same layout as Overview tab */}
-                  <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700">
-                    <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3">
-                      {selectedHistoryVersion.version.title}
-                    </h2>
-                    <div className="h-px bg-gray-200 dark:bg-slate-700 mb-3"></div>
-
-                  {(() => {
-                      const currentIndex = jdHistory.findIndex((h: any) => h.id === selectedHistoryVersion.id);
-                      const prevVersion = currentIndex < jdHistory.length - 1 ? jdHistory[currentIndex + 1] : null;
-                      const isV1 = selectedHistoryVersion.version.version_number === 1;
-                      const currentDesc = selectedHistoryVersion.version.description || '';
-                      const prevDesc = prevVersion?.version?.description || '';
-
-                      // For v1 or no changes, just render normally
-                      if (isV1 || !prevDesc) {
-                        return (
-                          <div className="markdown-content prose prose-sm max-w-none text-gray-700 dark:text-slate-300">
-                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{currentDesc}</ReactMarkdown>
-                          </div>
-                        );
-                      }
-
-                      // For v2+, use ReactMarkdown with custom components for diff highlighting
-                      const stripMarkdown = (line: string): string => {
-                        return line
-                          .replace(/^#{1,6}\s+/, '')
-                          .replace(/\*\*(.*?)\*\*/g, '$1')
-                          .replace(/\*(.*?)\*/g, '$1')
-                          .replace(/^[-*+]\s+/, '')
-                          .replace(/^\d+\.\s+/, '')
-                          .trim();
-                      };
-
-                      const prevLinesSet = new Set(
-                        prevDesc.split('\n')
-                          .map((l: string) => stripMarkdown(l))
-                          .filter((l: string) => l.length > 0)
-                      );
-
-                      const getTextContent = (children: any): string => {
-                        if (typeof children === 'string') return children;
-                        if (typeof children === 'number') return String(children);
-                        if (Array.isArray(children)) return children.map(getTextContent).join('');
-                        if (children && typeof children === 'object' && children.props) {
-                          return getTextContent(children.props.children);
-                        }
-                        return '';
-                      };
-
-                      const isNewContent = (children: any): boolean => {
-                        const text = getTextContent(children).trim();
-                        return text.length > 0 && !prevLinesSet.has(text);
-                      };
-
-                      const highlightClass = 'bg-blue-100 text-blue-800 px-2 rounded';
-
-                      const diffComponents = {
-                        h1: ({ node, children, ...props }: any) => (
-                          <h1 className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</h1>
-                        ),
-                        h2: ({ node, children, ...props }: any) => (
-                          <h2 className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</h2>
-                        ),
-                        h3: ({ node, children, ...props }: any) => (
-                          <h3 className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</h3>
-                        ),
-                        p: ({ node, children, ...props }: any) => (
-                          <p className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</p>
-                        ),
-                        li: ({ node, children, ...props }: any) => (
-                          <li className={isNewContent(children) ? highlightClass : ''} {...props}>{children}</li>
-                        ),
-                      };
-
-                      return (
-                        <div className="prose prose-sm max-w-none text-gray-700 dark:text-slate-300 leading-relaxed markdown-content">
-                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={diffComponents}>{currentDesc}</ReactMarkdown>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-              ) : jdHistory.length === 0 ? (
-                <div className="text-center py-10">
-                  <History className="w-12 h-12 text-gray-300 dark:text-slate-500 mx-auto mb-3" />
-                  <p className="text-gray-500 dark:text-slate-500 text-base">No version history available</p>
-                  <p className="text-gray-400 dark:text-slate-500 text-sm mt-2">
-                    Versions are created when you publish the job description
-                  </p>
-                </div>
-              ) : (
-                <>
-              <div className="mb-4 flex flex-wrap items-center gap-2 justify-between">
-                <p className="text-sm text-gray-600 dark:text-slate-400">
-                  {jdHistory.length > 1
-                    ? 'Complete timeline of all published versions — tick two to compare them'
-                    : 'Complete timeline of all published versions'}
-                </p>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 px-3 py-1 rounded-full font-medium">
-                    {jdHistory.length} Version{jdHistory.length !== 1 ? 's' : ''}
-                  </span>
-                  {jdHistory.length > 1 && (
-                    <button
-                      onClick={() => setShowJDCompare(true)}
-                      disabled={jdCompareChecked.length !== 2}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                        jdCompareChecked.length === 2
-                          ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                          : 'bg-slate-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                      }`}
-                    >
-                      {jdCompareChecked.length === 2
-                        ? 'Compare Selected'
-                        : jdCompareChecked.length === 1
-                          ? 'Select 1 more to compare'
-                          : 'Select 2 versions to compare'}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Timeline */}
-              <div className="relative">
-                {/* Vertical Line */}
-                <div className="absolute left-[18px] sm:left-6 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-slate-700"></div>
-
-                {/* Timeline Items */}
-                <div className="space-y-6">
-                  {jdHistory.map((item, index) => {
-                    const isFirst = index === 0;
-                    const isLast = index === jdHistory.length - 1;
-
-                    // Icon mapping
-                    const IconComponent = {
-                      'file-plus': FileText,
-                      'edit': Edit,
-                      'check-circle': CheckCircle,
-                      'x-circle': XCircle,
-                      'refresh': RefreshCw,
-                    }[item.icon] || History;
-
-                    // Color mapping - All grey theme
-                    const colorClasses = 'bg-gray-600 border-gray-700';
-                    const bgColorClasses = 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700 hover:border-gray-400 dark:hover:border-slate-600 cursor-pointer';
-                    const textColorClasses = 'text-gray-900 dark:text-slate-50';
-
-                    return (
-                      <div key={item.id} className="relative flex gap-3 sm:gap-4">
-                        {/* Timeline Icon */}
-                        <div className="relative flex-shrink-0">
-                          <div className={`h-9 w-9 rounded-full border-4 border-white ${colorClasses} flex items-center justify-center shadow-lg z-10 relative`}>
-                            <IconComponent className="w-4 h-4 text-white" />
-                          </div>
-                          {isFirst && (
-                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-gray-700 rounded-full border-2 border-white"></div>
-                          )}
-                        </div>
-
-                        {/* Content Card - Now Clickable */}
-                        <div className={`flex-1 pb-5 ${!isLast ? '' : 'pb-0'} flex items-start gap-2.5`}>
-                          {/* Compare tick — a sibling of the card button, not a
-                              child: a checkbox nested inside a <button> is
-                              invalid and the card's click would swallow it. */}
-                          {jdHistory.length > 1 && (
-                            <label
-                              className="mt-4 shrink-0 flex items-center cursor-pointer"
-                              title={`Select v${item.version?.version_number}.0 to compare`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={jdCompareChecked.includes(item.id)}
-                                onChange={() => handleJDCompareCheck(item.id)}
-                                className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 cursor-pointer"
-                              />
-                            </label>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setSelectedHistoryVersion(item)}
-                            className={`flex-1 min-w-0 text-left rounded-lg border-2 ${bgColorClasses} p-3 sm:p-4 shadow-sm hover:shadow-md transition-all`}
-                          >
-                            {/* Action Header */}
-                            <div className="flex items-start justify-between mb-2 gap-2">
-                              <div className="min-w-0">
-                                <h3 className={`font-semibold ${textColorClasses} text-sm sm:text-base mb-1`}>
-                                  {item.action}
-                                </h3>
-                                <p className="text-sm text-gray-700 dark:text-slate-300 mb-2">
-                                  {item.description}
-                                </p>
-                              </div>
-                              <span className="text-xs bg-gray-200 dark:bg-slate-800 text-gray-800 dark:text-slate-100 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
-                                {item.date}
-                              </span>
-                            </div>
-
-                            {/* Performed By Info */}
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-2 border-t border-gray-200 dark:border-slate-700">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <div className="h-7 w-7 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
-                                  <UserIcon className="w-3.5 h-3.5 text-white" />
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-medium text-gray-900 dark:text-slate-50 truncate">{item.performedBy}</p>
-                                  <p className="text-xs text-gray-600 dark:text-slate-400">{item.performedByRole}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 pl-9 sm:pl-0">
-                                <Clock className="w-3 h-3" />
-                                <span className="truncate">{item.timestamp}</span>
-                              </div>
-                            </div>
-
-                            {/* Click hint */}
-                            <div className="mt-3 pt-2 border-t border-gray-200 dark:border-slate-700 flex items-center justify-center gap-2 text-gray-500 dark:text-slate-500">
-                              <Eye className="w-3.5 h-3.5" />
-                              <span className="text-xs">Click to view full JD</span>
-                            </div>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-                </>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="bg-gray-50 dark:bg-slate-800/50 px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 border-t border-gray-200 dark:border-slate-700 shrink-0">
-              <p className="text-xs text-gray-600 dark:text-slate-400">
-                {selectedHistoryVersion ? `Viewing version ${selectedHistoryVersion.version.version_number}.0` : 'Showing complete history from creation to present'}
-              </p>
-              <button
-                onClick={() => {
-                  setShowJDHistory(false);
-                  setSelectedHistoryVersion(null);
-                  setJdCompareChecked([]);
-                }}
-                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm text-sm w-full sm:w-auto text-center"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* JD Version Comparison — same shape as the resume-view page's version
-          compare: older on the left in red, newer on the right in green, with a
-          unified fallback. Stacks above the history modal, which stays mounted
-          underneath so closing this returns to the timeline. */}
-      {showJDCompare && jdComparePair && (() => {
-        const { older, newer } = jdComparePair;
-        const olderText = older.version?.description || '';
-        const newerText = newer.version?.description || '';
-        const diff = buildUnifiedDiff(olderText, newerText);
-        const sidePairs = buildDiffSidePairs(diff.lines);
-
-        const closeCompare = () => {
-          setShowJDCompare(false);
-          setJdCompareChecked([]);
-        };
-
-        // JD descriptions are markdown, so heading level is stated outright by
-        // the leading #s — no need for the resume view's guesswork against a
-        // list of known section names.
-        const headingDepth = (text: string) => (text.match(/^(#{1,6})\s/)?.[1].length ?? 0);
-        const stripMarks = (text: string) =>
-          text.replace(/^#{1,6}\s+/, '').replace(/\*\*(.*?)\*\*/g, '$1').trim();
-
-        const renderLine = (
-          line: { text: string; type: 'added' | 'removed' | 'unchanged' } | null,
-          idx: number,
-          side: 'left' | 'right',
-        ) => {
-          // Blank spacer keeping the two columns aligned across an uneven edit.
-          if (!line) return <div key={idx} className="h-7 bg-gray-50 dark:bg-slate-800/40" />;
-
-          const trimmed = line.text.trim();
-          if (!trimmed) return <div key={idx} className="h-3" />;
-
-          let tone = 'text-gray-800 dark:text-slate-200';
-          let marker = '';
-          if (line.type === 'removed' && side === 'left') {
-            tone = 'text-red-800';
-            marker = 'bg-red-50 border-l-4 border-red-400 pl-2';
-          } else if (line.type === 'added' && side === 'right') {
-            tone = 'text-green-800';
-            marker = 'bg-green-50 border-l-4 border-green-400 pl-2';
-          }
-
-          const depth = headingDepth(trimmed);
-          const body = stripMarks(trimmed);
-
-          if (depth > 0) {
-            return (
-              <h3 key={idx} className={`text-xs font-bold mt-4 mb-1.5 pb-1 border-b border-gray-300 dark:border-slate-700 uppercase tracking-wide ${marker} ${tone}`}>
-                {body}
-              </h3>
-            );
-          }
-
-          const isBullet = /^[-*+•]\s/.test(trimmed);
-          return (
-            <p key={idx} className={`text-xs leading-relaxed mb-0.5 py-0.5 ${isBullet ? 'pl-3' : ''} ${marker} ${tone}`}>
-              {body}
-            </p>
-          );
-        };
-
-        return (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-            <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full ${jdCompareViewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85dvh] flex flex-col overflow-hidden transition-all duration-300`}>
-              {/* Header */}
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 flex-shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                    <History className="w-5 h-5 text-white" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
-                      Version Comparison
-                    </h2>
-                    <p className="text-sm text-gray-500 dark:text-slate-400 truncate">
-                      Version {older.version?.version_number}.0 vs Version {newer.version?.version_number}.0
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
-                    <button
-                      onClick={() => setJdCompareViewMode('side-by-side')}
-                      className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
-                        jdCompareViewMode === 'side-by-side'
-                          ? 'bg-white dark:bg-slate-900 text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15'
-                          : 'text-gray-500 dark:text-slate-400 hover:text-brand-blue'
-                      }`}
-                    >
-                      Side by Side
-                    </button>
-                    <button
-                      onClick={() => setJdCompareViewMode('unified')}
-                      className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
-                        jdCompareViewMode === 'unified'
-                          ? 'bg-white dark:bg-slate-900 text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15'
-                          : 'text-gray-500 dark:text-slate-400 hover:text-brand-blue'
-                      }`}
-                    >
-                      Unified
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-full text-green-700">
-                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                      +{diff.addedCount}
-                    </span>
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 border border-red-200 rounded-full text-red-700">
-                      <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                      −{diff.removedCount}
-                    </span>
-                  </div>
-                  <button
-                    onClick={closeCompare}
-                    className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                    aria-label="Close"
-                  >
-                    <X className="w-5 h-5 text-gray-500 dark:text-slate-400" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-slate-950">
-                {!olderText && !newerText ? (
-                  <div className="text-center text-gray-500 dark:text-slate-400 py-12">
-                    <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-600" />
-                    <p>No description recorded on either version.</p>
-                  </div>
-                ) : diff.addedCount === 0 && diff.removedCount === 0 ? (
-                  <div className="text-center text-gray-500 dark:text-slate-400 py-12">
-                    <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-400" />
-                    <p className="font-medium">No changes detected</p>
-                    <p className="text-sm mt-1">Content is identical between these versions.</p>
-                  </div>
-                ) : jdCompareViewMode === 'side-by-side' ? (
-                  <div className="flex h-full gap-0">
-                    {/* Older */}
-                    <div className="flex-1 flex flex-col border-r border-gray-300 dark:border-slate-700 min-w-0">
-                      <div className="px-4 py-2.5 bg-red-50 border-b border-gray-200 flex-shrink-0">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 bg-red-400 rounded-full"></span>
-                          <span className="text-sm font-semibold text-red-800">Version {older.version?.version_number}.0</span>
-                          <span className="text-xs text-red-600 ml-1">(older)</span>
-                        </div>
-                        <p className="text-xs text-red-600 mt-0.5 truncate">{older.version?.title || job.title}</p>
-                      </div>
-                      <div className="flex-1 overflow-y-auto p-4">
-                        <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-5">
-                          {sidePairs.map((pair, idx) => renderLine(pair.left, idx, 'left'))}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Newer */}
-                    <div className="flex-1 flex flex-col min-w-0">
-                      <div className="px-4 py-2.5 bg-green-50 border-b border-gray-200 flex-shrink-0">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-                          <span className="text-sm font-semibold text-green-800">Version {newer.version?.version_number}.0</span>
-                          <span className="text-xs text-green-600 ml-1">(newer)</span>
-                        </div>
-                        <p className="text-xs text-green-600 mt-0.5 truncate">{newer.version?.title || job.title}</p>
-                      </div>
-                      <div className="flex-1 overflow-y-auto p-4">
-                        <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-5">
-                          {sidePairs.map((pair, idx) => renderLine(pair.right, idx, 'right'))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* Unified */
-                  <div className="h-full overflow-y-auto p-4 sm:p-6">
-                    <div className="bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-gray-200 dark:border-slate-700 p-6 sm:p-8 max-w-3xl mx-auto">
-                      {diff.lines.map((line, idx) => {
-                        const trimmed = line.text.trim();
-                        if (!trimmed) return <div key={idx} className="h-3" />;
-
-                        const marker = line.type === 'added'
-                          ? 'bg-green-100 border-l-4 border-green-500 pl-3'
-                          : line.type === 'removed'
-                            ? 'bg-red-50 border-l-4 border-red-400 pl-3 line-through opacity-70'
-                            : '';
-                        const tone = line.type === 'added'
-                          ? 'text-green-900'
-                          : line.type === 'removed'
-                            ? 'text-red-700'
-                            : 'text-gray-800 dark:text-slate-200';
-
-                        const depth = headingDepth(trimmed);
-                        const body = stripMarks(trimmed);
-
-                        if (depth > 0) {
-                          return (
-                            <h3 key={idx} className={`text-base font-bold mt-5 mb-2 pb-1 border-b border-gray-300 dark:border-slate-700 uppercase tracking-wide rounded ${marker} ${tone}`}>
-                              {body}
-                            </h3>
-                          );
-                        }
-
-                        const isBullet = /^[-*+•]\s/.test(trimmed);
-                        return (
-                          <p key={idx} className={`text-sm leading-relaxed mb-0.5 rounded ${isBullet ? 'pl-4' : ''} ${marker} ${tone}`}>
-                            {body}
-                          </p>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div className="flex items-center justify-end px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex-shrink-0">
-                <button
-                  onClick={closeCompare}
-                  className="px-5 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* Resume Detail View Modal */}
       {viewingResume && (
@@ -4530,6 +3816,58 @@ function AIMatchTabContent({
   const [filterExperienceMin, setFilterExperienceMin] = useState<number | ''>('');
   const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
   const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
+
+  // Attachments column → Version History popup. Same fetch-and-fallback
+  // pattern as the standalone AI Talent Match page's handleAttachmentsClick:
+  // real versions when the API has them, else a single synthetic "version 1"
+  // built from the candidate's own row so the popup never shows empty for a
+  // resume that predates version tracking.
+  const [selectedVersionsCandidate, setSelectedVersionsCandidate] = useState<MatchedCandidate | null>(null);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [realVersionsData, setRealVersionsData] = useState<any[]>([]);
+
+  const handleAttachmentsClick = async (candidate: MatchedCandidate) => {
+    if (!candidate.resumeId) {
+      toast.error('Resume ID not found');
+      return;
+    }
+
+    setSelectedVersionsCandidate(candidate);
+    setLoadingVersions(true);
+    setRealVersionsData([]);
+
+    try {
+      const response = await resumeService.getVersions(candidate.resumeId);
+      let versions = Array.isArray(response) ? response : [];
+
+      if (versions.length === 0) {
+        versions = [{
+          id: candidate.resumeId,
+          version: 1,
+          file_name: `${candidate.name.replace(/\s+/g, '_')}_Resume.pdf`,
+          created_at: candidate.uploadDate || new Date().toISOString(),
+          uploaded_by_name: candidate.uploadedByName || 'System',
+          file_size_kb: null,
+        }];
+      } else {
+        versions.sort((a: any, b: any) => (b.version || 0) - (a.version || 0));
+      }
+
+      setRealVersionsData(versions);
+    } catch (error) {
+      console.error('[Attachments] Failed to fetch resume versions:', error);
+      setRealVersionsData([{
+        id: candidate.resumeId,
+        version: 1,
+        file_name: `${candidate.name.replace(/\s+/g, '_')}_Resume.pdf`,
+        created_at: candidate.uploadDate || new Date().toISOString(),
+        uploaded_by_name: candidate.uploadedByName || 'System',
+        file_size_kb: null,
+      }]);
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
 
   const scoredResumeIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
 
@@ -4717,7 +4055,7 @@ function AIMatchTabContent({
           <table className="w-full min-w-[1450px] table-auto">
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
-                <th className="px-4 py-3 w-10 align-middle">
+                <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left">
                   <input
                     type="checkbox"
                     checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedIds.has(c.resumeId))}
@@ -4734,8 +4072,8 @@ function AIMatchTabContent({
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Experience</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded By</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Uploaded Date</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Attachments</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle">Scored Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Attachments</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -4755,6 +4093,7 @@ function AIMatchTabContent({
                   return (
                     <tr
                       key={candidate.resumeId}
+                      data-row-selected={selectedIds.has(candidate.resumeId)}
                       className={`hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer ${selectedIds.has(candidate.resumeId) ? 'bg-blue-50 dark:bg-slate-800/50' : ''}`}
                       onClick={() => {
                         if (onViewCandidate) {
@@ -4766,7 +4105,7 @@ function AIMatchTabContent({
                         }
                       }}
                     >
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-3 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedIds.has(candidate.resumeId)}
@@ -4820,12 +4159,6 @@ function AIMatchTabContent({
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.experience || '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{uploadDate}</td>
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <button className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium">
-                          <Paperclip className="w-3.5 h-3.5" />
-                          {candidate.attachmentCount ?? 1}
-                        </button>
-                      </td>
                       <td className="px-4 py-3">
                         {isScored ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
@@ -4839,6 +4172,15 @@ function AIMatchTabContent({
                           </span>
                         )}
                       </td>
+                      <td className="px-4 py-3 tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => handleAttachmentsClick(candidate)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" />
+                          {candidate.attachmentCount ?? 1}
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -4847,6 +4189,20 @@ function AIMatchTabContent({
           </table>
         </div>
       </div>
+
+      {/* Version History popup — same component and behavior as the
+          standalone AI Talent Match page and the My Resumes list. */}
+      {selectedVersionsCandidate && (
+        <ResumeVersionsModal
+          candidate={selectedVersionsCandidate}
+          versions={realVersionsData}
+          loading={loadingVersions}
+          onClose={() => {
+            setSelectedVersionsCandidate(null);
+            setRealVersionsData([]);
+          }}
+        />
+      )}
     </div>
   );
 }

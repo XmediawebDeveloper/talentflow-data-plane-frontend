@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import { X, History, FileText, Check } from 'lucide-react';
 import { buildUnifiedDiff, buildDiffSidePairs, type DiffLine } from '@/lib/utils/textDiff';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 
 export interface CompareVersion {
   /** Version number as shown to the user ("Version 2"). */
@@ -25,6 +28,8 @@ interface VersionCompareModalProps {
   title?: string;
   /** Line under the title. Defaults to "Version X vs Version Y". */
   subtitle?: string;
+  /** JD descriptions are markdown; render them with the same markdown path as the individual version view. */
+  contentFormat?: 'plain' | 'markdown';
 }
 
 /** Lines we treat as résumé section headings, so the diff keeps the document's
@@ -57,17 +62,56 @@ const isSectionHeader = (trimmed: string) => {
  * that side's changes tinted; or unified, one column with additions and
  * removals inline.
  */
-export default function VersionCompareModal({ older, newer, onClose, title, subtitle }: VersionCompareModalProps) {
+export default function VersionCompareModal({ older, newer, onClose, title, subtitle, contentFormat = 'plain' }: VersionCompareModalProps) {
   const olderLabel = older.label || `Version ${older.version || '?'}`;
   const newerLabel = newer.label || `Version ${newer.version || '?'}`;
   const [viewMode, setViewMode] = useState<'side-by-side' | 'unified'>('side-by-side');
+  const shouldRenderMarkdown = contentFormat === 'markdown';
 
   const olderText = older.text || '';
   const newerText = newer.text || '';
   const diff = buildUnifiedDiff(olderText, newerText);
   const sidePairs = buildDiffSidePairs(diff.lines);
 
+  const diffHighlightClass = (line: DiffLine, side: 'left' | 'right' | 'unified') => {
+    if (line.type === 'removed' && (side === 'left' || side === 'unified')) {
+      return 'bg-red-50 border-l-4 border-red-400 pl-3 rounded';
+    }
+    if (line.type === 'added' && (side === 'right' || side === 'unified')) {
+      return 'bg-green-50 border-l-4 border-green-500 pl-3 rounded';
+    }
+    return '';
+  };
+
+  const renderMarkdownDiffLine = (
+    line: DiffLine | null,
+    idx: number,
+    side: 'left' | 'right' | 'unified',
+  ) => {
+    if (!line) {
+      return <div key={idx} className="h-7 bg-gray-50" />;
+    }
+
+    const trimmed = line.text.trim();
+    if (!trimmed) return <div key={idx} className="h-3" />;
+
+    return (
+      <div
+        key={idx}
+        className={`markdown-content prose prose-sm max-w-none text-gray-700 leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 ${diffHighlightClass(line, side)}`}
+      >
+        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+          {trimmed}
+        </ReactMarkdown>
+      </div>
+    );
+  };
+
   const renderDiffLine = (line: DiffLine | null, idx: number, side: 'left' | 'right') => {
+    if (shouldRenderMarkdown) {
+      return renderMarkdownDiffLine(line, idx, side);
+    }
+
     // A gap opposite an inserted/removed line, so both columns stay in step.
     if (!line) {
       return <div key={idx} className="h-7 bg-gray-50" />;
@@ -223,7 +267,9 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
             /* Unified */
             <div className="h-full overflow-y-auto p-6">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-3xl mx-auto">
-                {diff.lines.map((line, idx) => {
+                {shouldRenderMarkdown ? diff.lines.map((line, idx) => (
+                  renderMarkdownDiffLine(line, idx, 'unified')
+                )) : diff.lines.map((line, idx) => {
                   const trimmed = line.text.trim();
                   if (!trimmed) return <div key={idx} className="h-3" />;
 

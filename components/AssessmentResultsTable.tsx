@@ -752,7 +752,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           <table className="w-full [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/60">
-                <th className="text-left py-3 px-4 w-12">
+                <th className="text-left py-3 px-4 w-12 tf-sticky-col-left">
                   <button onClick={handleSelectAll} className="p-1 hover:bg-brand-blue/5 rounded">
                     {selectedResults.length === filteredResults.length && filteredResults.length > 0 ? (
                       <CheckSquare className="w-4 h-4 text-brand-blue" />
@@ -769,7 +769,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     {col.label}
                   </th>
                 ))}
-                <th className="text-left py-3 px-4 text-xs text-gray-600">Actions</th>
+                <th className="text-left py-3 px-4 text-xs text-gray-600 tf-sticky-col">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -789,6 +789,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 filteredResults.map((result, index) => (
                   <React.Fragment key={result.id}>
                     <tr
+                      data-row-selected={selectedResults.includes(result.id)}
                       className={`border-b border-gray-100 hover:bg-brand-blue/5 transition-colors ${
                         index % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'
                       } ${selectedResults.includes(result.id) ? 'bg-brand-blue/5' : ''} ${getResultStatus(result) !== 'Pending' && onViewResultDetail ? 'cursor-pointer' : ''}`}
@@ -797,7 +798,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         onViewResultDetail(result, jobTitle);
                       }}
                     >
-                      <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 px-4 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => handleSelectResult(result.id)}
                           className="p-1 hover:bg-brand-blue/10 rounded"
@@ -1018,7 +1019,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       {/* Actions — restored to always-visible old-code behavior
                           (View Details + Download PDF) so the column is never
                           empty for Pending rows or users without download perms. */}
-                      <td className="px-2 sm:px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-2 sm:px-4 py-4 tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
                           <button
                             onClick={() => {
