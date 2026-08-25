@@ -1739,7 +1739,7 @@ export default function AITalentMatchPage({
           <table className="w-full min-w-[1450px] table-auto">
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
-                <th className="w-12 px-4 py-3 align-middle">
+                <th className="w-12 px-4 py-3 align-middle tf-sticky-col-left">
                   <input
                     type="checkbox"
                     checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedCandidates.includes(c.id))}
@@ -1795,6 +1795,7 @@ export default function AITalentMatchPage({
               {paginatedCandidates.map((candidate, index) => (
                 <tr
                   key={candidate.id}
+                  data-row-selected={selectedCandidates.includes(candidate.id)}
                   className={`hover:bg-brand-blue/[0.03] transition-colors cursor-pointer ${
                     selectedCandidates.includes(candidate.id) ? 'bg-brand-blue/5' : ''
                   }`}
@@ -1812,7 +1813,7 @@ export default function AITalentMatchPage({
                     }
                   }}
                 >
-                  <td className="px-4 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
+                  <td className="px-4 py-3 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedCandidates.includes(candidate.id)}
@@ -3390,7 +3391,7 @@ export default function AITalentMatchPage({
             <table className="w-full min-w-[1450px]">
               <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
-                  <th className="w-12 px-4 py-3">
+                  <th className="w-12 px-4 py-3 tf-sticky-col-left">
                     <input
                       type="checkbox"
                       checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedCandidates.includes(c.id))}
@@ -3446,6 +3447,7 @@ export default function AITalentMatchPage({
                 {paginatedCandidates.map((candidate, index) => (
                   <tr
                     key={candidate.id}
+                    data-row-selected={selectedCandidates.includes(candidate.id)}
                     className={`hover:bg-brand-blue/[0.03] transition-colors cursor-pointer ${
                       selectedCandidates.includes(candidate.id) ? 'bg-brand-blue/5' : ''
                     }`}
@@ -3466,7 +3468,7 @@ export default function AITalentMatchPage({
                       }
                     }}
                   >
-                    <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-4 py-4 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selectedCandidates.includes(candidate.id)}

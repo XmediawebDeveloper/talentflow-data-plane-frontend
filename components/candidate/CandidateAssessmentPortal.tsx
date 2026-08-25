@@ -137,6 +137,9 @@ interface CandidateAssessmentPortalProps {
   role?: string;
 }
 
+/** How often the assessment session heartbeat is sent — see startHeartbeatWorker. */
+const HEARTBEAT_INTERVAL_MS = 10000;
+
 const getHRCompletedKey = (token: string) => `assessment_hr_completed_${token}`;
 
 const markHRCompleted = (token: string) => {
@@ -315,12 +318,22 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // subtracted that time from the reported duration. A worker timer keeps
   // firing at full cadence even while the tab is hidden, so heartbeats keep
   // arriving and the server keeps seeing the candidate as active.
+  //
+  // Cadence: HEARTBEAT_INTERVAL_MS. This used to be 3 s — 20 POSTs a minute per
+  // candidate, each one a tenant connection checkout plus several queries. Under
+  // a handful of concurrent assessments that traffic starved the connection pool
+  // and slowed every other candidate request the worker was serving, including
+  // someone else's System Check. Nothing needs the faster rate: the visible
+  // countdown is driven by a local 1 s wall-clock timer in AssessmentInterface
+  // (the heartbeat only reconciles it against the server), the row write is
+  // already floored at HEARTBEAT_DB_WRITE_INTERVAL_SECONDS = 10 s server-side,
+  // and the backend no longer pauses on heartbeat silence.
   const startHeartbeatWorker = useCallback((onTick: () => void) => {
     stopHeartbeatWorker(); // idempotent — never run two tickers at once
     if (typeof Worker !== 'undefined') {
       try {
         const workerSource =
-          "let t=setInterval(function(){postMessage('tick');},3000);" +
+          `let t=setInterval(function(){postMessage('tick');},${HEARTBEAT_INTERVAL_MS});` +
           "self.onmessage=function(e){if(e&&e.data==='stop'){clearInterval(t);}};";
         const blob = new Blob([workerSource], { type: 'application/javascript' });
         const url = URL.createObjectURL(blob);
@@ -335,7 +348,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
     // Fallback: main-thread interval. Still throttled in background tabs, but
     // the backend no longer pauses on heartbeat silence, so this is safe.
-    heartbeatRef.current = setInterval(onTick, 3000);
+    heartbeatRef.current = setInterval(onTick, HEARTBEAT_INTERVAL_MS);
   }, [stopHeartbeatWorker]);
 
   const reportAssessmentShellViolation = useCallback((

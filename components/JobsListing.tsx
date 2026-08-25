@@ -4,6 +4,7 @@ import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, U
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -18,6 +19,7 @@ import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { jdService, JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
    absolutely positioned menu — Radix portals it out of the scroll container. */
@@ -27,6 +29,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+const viewVersionsMenuItemClass = 'group text-gray-700 hover:bg-gray-50 hover:text-gray-700 focus:!bg-gray-50 focus:!text-gray-700 data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-slate-100 dark:focus:!bg-slate-800 dark:focus:!text-slate-100 dark:data-[highlighted]:!bg-slate-800 dark:data-[highlighted]:!text-slate-100 [&_svg]:!text-current';
+const viewVersionsMenuItemOrangeClass = 'group text-orange-700 hover:bg-orange-50 hover:text-orange-700 focus:!bg-orange-50 focus:!text-orange-700 data-[highlighted]:!bg-orange-50 data-[highlighted]:!text-orange-700 dark:text-orange-300 dark:hover:bg-orange-950/30 dark:hover:text-orange-200 dark:focus:!bg-orange-950/30 dark:focus:!text-orange-200 dark:data-[highlighted]:!bg-orange-950/30 dark:data-[highlighted]:!text-orange-200 [&_svg]:!text-current';
+const viewVersionsMenuItemGreenClass = 'group text-green-700 hover:bg-green-50 hover:text-green-700 focus:!bg-green-50 focus:!text-green-700 data-[highlighted]:!bg-green-50 data-[highlighted]:!text-green-700 dark:text-green-300 dark:hover:bg-green-950/30 dark:hover:text-green-200 dark:focus:!bg-green-950/30 dark:focus:!text-green-200 dark:data-[highlighted]:!bg-green-950/30 dark:data-[highlighted]:!text-green-200 [&_svg]:!text-current';
+const viewVersionsMenuItemRedClass = 'group text-red-600 hover:bg-red-50 hover:text-red-600 focus:!bg-red-50 focus:!text-red-600 data-[highlighted]:!bg-red-50 data-[highlighted]:!text-red-600 dark:text-red-300 dark:hover:bg-red-950/30 dark:hover:text-red-200 dark:focus:!bg-red-950/30 dark:focus:!text-red-200 dark:data-[highlighted]:!bg-red-950/30 dark:data-[highlighted]:!text-red-200 [&_svg]:!text-current';
+const viewVersionsMenuLabelClass = 'inline-block origin-left transition-transform duration-150 ease-out group-hover:scale-[0.98] group-focus:scale-[0.98] group-data-[highlighted]:scale-[0.98]';
+const normalJobMenuLabelClass = 'inline-block origin-left transition-transform duration-150 ease-out group-hover:scale-[0.97]';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -115,6 +124,7 @@ interface JobsListingProps {
 
 export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, masterDataLinks }: JobsListingProps) {
   const dialog = useGlobalDialog();
+  const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJd ?? false);
   const canDeleteJd = isTenantAdmin || (user?.permissions?.canDeleteJd ?? false);
@@ -237,6 +247,24 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAIMatchModal, setShowAIMatchModal] = useState(false);
   const [selectedJobForAIMatch, setSelectedJobForAIMatch] = useState<Job | null>(null);
+  /* AI Talent Match trigger from the three-dot menu asks first, same
+     ConfirmationDialog / copy / Yes-No pattern as the Job Details page's own
+     AI Talent Match confirm — set here, proceeds into the existing
+     onAIMatch(job) navigation only on Yes. */
+  const [aiMatchConfirmJob, setAiMatchConfirmJob] = useState<Job | null>(null);
+  // Closing the three-dot menu and opening the confirm live in one function so
+  // they always land in the same state update/paint — every trigger (grid row,
+  // list row, expanded version row) goes through this, so the menu can never
+  // be caught mid-close while the popup is still mounting.
+  const requestAIMatch = (job: Job) => {
+    setActiveDropdown(null);
+    setAiMatchConfirmJob(job);
+  };
+  const confirmAIMatch = () => {
+    const job = aiMatchConfirmJob;
+    setAiMatchConfirmJob(null);
+    if (job) onAIMatch?.(job);
+  };
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   
 
@@ -1466,10 +1494,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     (onViewApplicants || onViewJob)(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Users className="w-4 h-4" />
-                                  View Applicants
+                                  <span className={normalJobMenuLabelClass}>View Applicants</span>
                                 </button>
                               )}
                               {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
@@ -1477,13 +1505,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onAIMatch(job);
-                                    setActiveDropdown(null);
+                                    requestAIMatch(job);
                                   }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Brain className="w-4 h-4" />
-                                  AI Talent Match
+                                  <span className={normalJobMenuLabelClass}>AI Talent Match</span>
                                 </button>
                               )}
                               {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
@@ -1493,10 +1520,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onScoreResumes(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Target className="w-4 h-4" />
-                                  Score Resumes
+                                  <span className={normalJobMenuLabelClass}>Score Resumes</span>
                                 </button>
                               )}
                               {/* Disable Job for Published */}
@@ -1507,10 +1534,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onDisableJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-orange-700 hover:bg-orange-50"
+                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-orange-700 hover:bg-orange-50"
                                 >
                                   <Ban className="w-4 h-4" />
-                                  Disable Job
+                                  <span className={normalJobMenuLabelClass}>Disable Job</span>
                                 </button>
                               )}
                               {/* Re-enable JD for Disabled */}
@@ -1521,10 +1548,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onRepublishJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
+                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
-                                  Re-enable JD
+                                  <span className={normalJobMenuLabelClass}>Re-enable JD</span>
                                 </button>
                               )}
                               {/* Archive Job */}
@@ -1535,10 +1562,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onArchiveJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Archive className="w-4 h-4" />
-                                  Archive Job
+                                  <span className={normalJobMenuLabelClass}>Archive Job</span>
                                 </button>
                               )}
                               {/* Unarchive Job */}
@@ -1549,10 +1576,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onUnarchiveJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
+                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
                                 >
                                   <RefreshCw className="w-4 h-4" />
-                                  Unarchive Job
+                                  <span className={normalJobMenuLabelClass}>Unarchive Job</span>
                                 </button>
                               )}
                               {/* Delete Job */}
@@ -1563,10 +1590,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onDeleteJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
                                 >
                                   <Trash2 className="w-4 h-4" />
-                                  Delete Job
+                                  <span className={normalJobMenuLabelClass}>Delete Job</span>
                                 </button>
                               )}
                             </div>
@@ -1793,10 +1820,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     (onViewApplicants || onViewJob)(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Users className="w-4 h-4" />
-                                  View Applicants
+                                  <span className={normalJobMenuLabelClass}>View Applicants</span>
                                 </button>
                               )}
                               {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
@@ -1804,13 +1831,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onAIMatch(job);
-                                    setActiveDropdown(null);
+                                    requestAIMatch(job);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Brain className="w-4 h-4" />
-                                  AI Talent Match
+                                  <span className={normalJobMenuLabelClass}>AI Talent Match</span>
                                 </button>
                               )}
                               {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
@@ -1820,10 +1846,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onScoreResumes(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Target className="w-4 h-4" />
-                                  Score Resumes
+                                  <span className={normalJobMenuLabelClass}>Score Resumes</span>
                                 </button>
                               )}
                               {/* Disable Job for Published */}
@@ -1834,10 +1860,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onDisableJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
                                 >
                                   <Ban className="w-4 h-4" />
-                                  Disable Job
+                                  <span className={normalJobMenuLabelClass}>Disable Job</span>
                                 </button>
                               )}
                               {/* Re-enable JD for Disabled */}
@@ -1848,10 +1874,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onRepublishJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
-                                  Re-enable JD
+                                  <span className={normalJobMenuLabelClass}>Re-enable JD</span>
                                 </button>
                               )}
                               {/* Archive Job */}
@@ -1862,10 +1888,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onArchiveJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
                                   <Archive className="w-4 h-4" />
-                                  Archive Job
+                                  <span className={normalJobMenuLabelClass}>Archive Job</span>
                                 </button>
                               )}
                               {/* Unarchive Job */}
@@ -1876,10 +1902,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onUnarchiveJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
                                 >
                                   <RefreshCw className="w-4 h-4" />
-                                  Unarchive Job
+                                  <span className={normalJobMenuLabelClass}>Unarchive Job</span>
                                 </button>
                               )}
                               {/* Delete Job */}
@@ -1890,10 +1916,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onDeleteJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                                 >
                                   <Trash2 className="w-4 h-4" />
-                                  Delete Job
+                                  <span className={normalJobMenuLabelClass}>Delete Job</span>
                                 </button>
                               )}
                             </div>
@@ -1922,8 +1948,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             aria-expanded={versionsExpanded}
                             className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all duration-200 ${
                               versionsExpanded
-                                ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10'
-                                : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                                ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50 dark:ring-brand-blue/30 dark:shadow-black/20 dark:hover:bg-slate-700'
+                                : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2 dark:bg-brand-blue dark:text-white dark:border-brand-blue dark:hover:bg-brand-blue-2'
                             }`}
                             title={versionsExpanded ? 'Hide version history' : 'View version history'}
                           >
@@ -1950,20 +1976,20 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         click on the row behind it. */}
                     {versionsExpanded && (
                       <div
-                        className="mt-3 pt-3 border-t border-gray-100"
+                        className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex items-center gap-2 mb-2.5">
                           <FileText className="w-4 h-4 text-brand-blue" />
-                          <p className="text-sm font-semibold text-gray-900">Version History</p>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Version History</p>
                         </div>
                         {lineageLoading && !lineage ? (
-                          <div className="flex items-center gap-2 py-2 text-xs text-gray-500">
+                          <div className="flex items-center gap-2 py-2 text-xs text-gray-500 dark:text-slate-400">
                             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
                             Loading versions...
                           </div>
                         ) : jobVersions.length === 0 ? (
-                          <p className="py-2 text-xs text-gray-500">No other versions of this job.</p>
+                          <p className="py-2 text-xs text-gray-500 dark:text-slate-400">No other versions of this job.</p>
                         ) : (
                           /* Table format mirrors the main list's columns so a
                              version row reads like the job row above it. Every
@@ -1988,7 +2014,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                              the Action HEADER is pinned on both axes so the
                              corner never scrolls away. */
                           <div
-                            className={`overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 ${
+                            className={`overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20 ${
                               jobVersions.length > 3 ? 'overflow-y-auto max-h-[240px] overscroll-contain' : ''
                             }`}
                           >
@@ -2028,10 +2054,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                          sticky header (7) < Action corner (8)
                                          — so rows slide under the header and
                                          the header slides under nothing. */
-                                      className={`sticky top-0 py-2.5 px-3 text-xs font-bold text-gray-900 whitespace-nowrap bg-brand-sky ${minW} ${
+                                      className={`sticky top-0 py-2.5 px-3 text-xs font-bold text-gray-900 whitespace-nowrap bg-brand-sky dark:bg-slate-800 dark:text-slate-100 ${minW} ${
                                         label === 'Action'
-                                          ? 'right-0 z-[8] shadow-[inset_0_-1px_0_#e5e7eb,-1px_0_0_0_#e5e7eb]'
-                                          : 'z-[7] shadow-[inset_0_-1px_0_#e5e7eb]'
+                                          ? 'right-0 z-[8] shadow-[inset_0_-1px_0_#e5e7eb,-1px_0_0_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155,-1px_0_0_0_#334155]'
+                                          : 'z-[7] shadow-[inset_0_-1px_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155]'
                                       }`}
                                     >
                                       {label}
@@ -2039,7 +2065,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   ))}
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-gray-200">
+                              <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
                                 {jobVersions.map((version) => {
                                   /* Lineage rows carry the raw DB status ('published');
                                      the status helpers here speak the Job type's
@@ -2087,24 +2113,30 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   return (
                                     <tr
                                       key={version.id}
-                                      className="group transition-colors duration-200 ease-out hover:bg-brand-blue/[0.03]"
+                                      className="group cursor-pointer transition-colors duration-200 ease-out hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08]"
+                                      onClick={() => router.push(`/recruitment/job-details?id=${version.id}`)}
                                     >
                                       <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                                         <span className="inline-flex items-center gap-1.5">
-                                          <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20">
+                                          <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                                             v{version.version_number ?? 1}
                                           </span>
                                         </span>
                                       </td>
-                                      <td className="py-2.5 px-3 text-sm text-gray-900 max-w-[220px] overflow-hidden align-middle" title={version.title || detail?.title || ''}>
+                                      <td className="p-0 text-sm text-gray-900 dark:text-slate-100 max-w-[220px] overflow-hidden align-middle" title={version.title || detail?.title || ''}>
                                         {/* The "job role" pops on row hover — a
                                             gentle scale from the left edge with
                                             a smooth transition. Scoped to this
                                             span so the sticky Action column is
                                             unaffected. */}
-                                        <span className="inline-block max-w-full truncate transform-gpu transition-transform duration-200 ease-out origin-left group-hover:scale-105">
-                                          {version.title || detail?.title || '—'}
-                                        </span>
+                                        <Link
+                                          href={`/recruitment/job-details?id=${version.id}`}
+                                          className="block h-full w-full py-2.5 px-3 hover:text-brand-blue hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
+                                        >
+                                          <span className="inline-block max-w-full truncate transform-gpu transition-transform duration-200 ease-out origin-left group-hover:scale-105">
+                                            {version.title || detail?.title || '—'}
+                                          </span>
+                                        </Link>
                                       </td>
                                       <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                                         <div className="flex flex-col items-start gap-1">
@@ -2135,10 +2167,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                           job rows so it never shows the raw
                                           snake_case value. */}
                                       <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                        <div className="text-sm text-gray-700">
+                                        <div className="text-sm text-gray-700 dark:text-slate-300">
                                           {experienceText || '—'}
                                         </div>
-                                        <div className="text-xs text-gray-500 max-w-[180px] truncate" title={detail?.industry_type ? formatIndustryType(detail.industry_type) : ''}>
+                                        <div className="text-xs text-gray-500 dark:text-slate-400 max-w-[180px] truncate" title={detail?.industry_type ? formatIndustryType(detail.industry_type) : ''}>
                                           {detail?.industry_type ? formatIndustryType(detail.industry_type) : '—'}
                                         </div>
                                       </td>
@@ -2150,7 +2182,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                           detail?.location
                                           || (detail?.locations || []).map((loc: any) => loc?.city).filter(Boolean).join(', ');
                                         return (
-                                          <td className="py-2.5 px-3 text-sm text-gray-700 whitespace-nowrap max-w-[160px] truncate align-middle" title={locationText || ''}>
+                                          <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap max-w-[160px] truncate align-middle" title={locationText || ''}>
                                             {locationText || '—'}
                                           </td>
                                         );
@@ -2160,11 +2192,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                           version's own record. A missing half
                                           simply drops out; nothing is invented. */}
                                       <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                        <div className="text-sm text-gray-700">
+                                        <div className="text-sm text-gray-700 dark:text-slate-300">
                                           {detail?.employment_type ? formatEmploymentType(detail.employment_type) : '—'}
                                         </div>
                                         {detail?.remote_type && (
-                                          <div className="text-xs text-gray-500">
+                                          <div className="text-xs text-gray-500 dark:text-slate-400">
                                             {formatEmploymentType(detail.remote_type)}
                                           </div>
                                         )}
@@ -2173,19 +2205,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                           author, so the table stays narrower
                                           without dropping either fact. */}
                                       <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                        <div className="text-sm text-gray-700">
+                                        <div className="text-sm text-gray-700 dark:text-slate-300">
                                           {postedOn ? formatISTDate(postedOn) : '—'}
                                         </div>
-                                        <div className="text-xs text-gray-500 max-w-[160px] truncate" title={detail?.created_by_name || ''}>
+                                        <div className="text-xs text-gray-500 dark:text-slate-400 max-w-[160px] truncate" title={detail?.created_by_name || ''}>
                                           {detail?.created_by_name || '—'}
                                         </div>
                                       </td>
-                                      <td className="py-2.5 px-3 text-sm text-gray-700 whitespace-nowrap align-middle">
+                                      <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
                                         {lastUpdated ? formatISTDate(lastUpdated) : '—'}
                                       </td>
                                       <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                        <span className="inline-flex items-center gap-1.5 text-sm text-gray-700">
-                                          <Users className="w-4 h-4 text-gray-400" />
+                                        <span className="inline-flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300">
+                                          <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                                           {detail?.applicants_count ?? '—'}
                                         </span>
                                       </td>
@@ -2197,95 +2229,91 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                           underneath never shows through; the
                                           left hairline makes it read as
                                           floating over the scrolling cells. */}
-                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] bg-white group-hover:bg-[#f8f9fc] shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200">
+                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] bg-white group-hover:bg-[#f8f9fc] shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:bg-slate-900 dark:group-hover:bg-slate-800 dark:shadow-[-1px_0_0_0_#334155]">
                                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                           <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                               <button
-                                                className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors"
+                                                className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
                                                 title="More actions"
                                                 aria-label="More actions"
                                               >
                                                 <MoreVertical className="w-4 h-4" />
                                               </button>
                                             </DropdownMenuTrigger>
-                                            {/* Same options, gates and handlers
+                                            {/* Same action options, gates and handlers
                                                 as the latest-version row's ⋮
-                                                menu, driven by versionJob so
-                                                every action targets this
+                                                menu, except View Details lives
+                                                on the Job Role link in this
+                                                table. versionJob keeps every
+                                                remaining action scoped to this
                                                 version's own id. */}
                                             <DropdownMenuContent align="end" className="w-52">
-                                              <DropdownMenuItem asChild>
-                                                <Link href={`/recruitment/job-details?id=${version.id}`}>
-                                                  <Eye className="w-4 h-4" />
-                                                  View Details
-                                                </Link>
-                                              </DropdownMenuItem>
                                               {/* View Applicants - Hide for Draft */}
                                               {versionJob.status.toLowerCase() !== 'draft' && (
-                                                <DropdownMenuItem onSelect={() => (onViewApplicants || onViewJob)(versionJob)}>
+                                                <DropdownMenuItem onSelect={() => (onViewApplicants || onViewJob)(versionJob)} className={viewVersionsMenuItemClass}>
                                                   <Users className="w-4 h-4" />
-                                                  View Applicants
+                                                  <span className={viewVersionsMenuLabelClass}>View Applicants</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Quick Actions — same gates as the latest-version menu */}
                                               {onAIMatch && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
-                                                <DropdownMenuItem onSelect={() => onAIMatch(versionJob)}>
+                                                <DropdownMenuItem onSelect={() => requestAIMatch(versionJob)} className={viewVersionsMenuItemClass}>
                                                   <Brain className="w-4 h-4" />
-                                                  AI Talent Match
+                                                  <span className={viewVersionsMenuLabelClass}>AI Talent Match</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {onScoreResumes && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
-                                                <DropdownMenuItem onSelect={() => onScoreResumes(versionJob)}>
+                                                <DropdownMenuItem onSelect={() => onScoreResumes(versionJob)} className={viewVersionsMenuItemClass}>
                                                   <Target className="w-4 h-4" />
-                                                  Score Resumes
+                                                  <span className={viewVersionsMenuLabelClass}>Score Resumes</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Disable Job for Published */}
                                               {versionJob.status === 'Published' && onDisableJob && (
                                                 <DropdownMenuItem
                                                   onSelect={() => onDisableJob(versionJob)}
-                                                  className="text-orange-700 focus:text-orange-700"
+                                                  className={viewVersionsMenuItemOrangeClass}
                                                 >
                                                   <Ban className="w-4 h-4" />
-                                                  Disable Job
+                                                  <span className={viewVersionsMenuLabelClass}>Disable Job</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Re-enable JD for Disabled */}
                                               {versionJob.status === 'Disabled' && onRepublishJob && (
                                                 <DropdownMenuItem
                                                   onSelect={() => onRepublishJob(versionJob)}
-                                                  className="text-green-700 focus:text-green-700"
+                                                  className={viewVersionsMenuItemGreenClass}
                                                 >
                                                   <CheckCircle2 className="w-4 h-4" />
-                                                  Re-enable JD
+                                                  <span className={viewVersionsMenuLabelClass}>Re-enable JD</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Archive Job */}
                                               {versionJob.status !== 'Archived' && onArchiveJob && (
-                                                <DropdownMenuItem onSelect={() => onArchiveJob(versionJob)}>
+                                                <DropdownMenuItem onSelect={() => onArchiveJob(versionJob)} className={viewVersionsMenuItemClass}>
                                                   <Archive className="w-4 h-4" />
-                                                  Archive Job
+                                                  <span className={viewVersionsMenuLabelClass}>Archive Job</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Unarchive Job */}
                                               {versionJob.status === 'Archived' && onUnarchiveJob && (
                                                 <DropdownMenuItem
                                                   onSelect={() => onUnarchiveJob(versionJob)}
-                                                  className="text-green-700 focus:text-green-700"
+                                                  className={viewVersionsMenuItemGreenClass}
                                                 >
                                                   <RefreshCw className="w-4 h-4" />
-                                                  Unarchive Job
+                                                  <span className={viewVersionsMenuLabelClass}>Unarchive Job</span>
                                                 </DropdownMenuItem>
                                               )}
                                               {/* Delete Job */}
                                               {onDeleteJob && (
                                                 <DropdownMenuItem
                                                   onSelect={() => onDeleteJob(versionJob)}
-                                                  className="text-red-600 focus:text-red-600"
+                                                  className={viewVersionsMenuItemRedClass}
                                                 >
                                                   <Trash2 className="w-4 h-4" />
-                                                  Delete Job
+                                                  <span className={viewVersionsMenuLabelClass}>Delete Job</span>
                                                 </DropdownMenuItem>
                                               )}
                                             </DropdownMenuContent>
@@ -2433,6 +2461,21 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
         )}
       </div>
       </div>
+
+      {/* Confirm before running AI Talent Match — same copy, layout and
+          Yes/No behavior as the Job Details page's AI Talent Match confirm.
+          No is the do-nothing path: closing this never calls onAIMatch. */}
+      <ConfirmationDialog
+        isOpen={!!aiMatchConfirmJob}
+        type="info"
+        icon={FileText}
+        title="Find matching candidates from the Resume Database?"
+        message={`AI Talent Match will scan your resume database against "${aiMatchConfirmJob?.title}" and rank the closest candidates.`}
+        confirmText="Yes"
+        cancelText="No"
+        onConfirm={confirmAIMatch}
+        onCancel={() => setAiMatchConfirmJob(null)}
+      />
 
       {/* AI Match Modal */}
       {showAIMatchModal && selectedJobForAIMatch && (

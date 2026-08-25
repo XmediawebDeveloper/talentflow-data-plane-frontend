@@ -1833,7 +1833,7 @@ export default function MyResumesPage() {
         professionalSummary: r.professional_summary,
         technicalSkills: r.technical_skills,
         softSkills: r.soft_skills,
-        educationDetails: r.education?.map((edu: any) => ({
+        educationDetails: (r.education as any[])?.map((edu: any) => ({
           degree: edu.degree || '',
           school: edu.school || edu.institution || '',
           location: edu.location || '',
@@ -1841,7 +1841,7 @@ export default function MyResumesPage() {
           gpa: edu.gpa || '',
           honors: edu.honors || '',
         })),
-        experienceDetails: r.experience?.map((exp: any) => ({
+        experienceDetails: (r.experience as any[])?.map((exp: any) => ({
           title: exp.title || exp.position || '',
           company: exp.company || '',
           location: exp.location || '',
@@ -3645,7 +3645,7 @@ export default function MyResumesPage() {
     professionalSummary: r.professional_summary,
     technicalSkills: r.technical_skills,
     softSkills: r.soft_skills,
-    educationDetails: r.education?.map((edu: any) => ({
+    educationDetails: (r.education as any[])?.map((edu: any) => ({
       degree: edu.degree || '',
       school: edu.school || edu.institution || '',
       location: edu.location || '',
@@ -3653,7 +3653,7 @@ export default function MyResumesPage() {
       gpa: edu.gpa || '',
       honors: edu.honors || '',
     })),
-    experienceDetails: r.experience?.map((exp: any) => ({
+    experienceDetails: (r.experience as any[])?.map((exp: any) => ({
       title: exp.title || exp.position || '',
       company: exp.company || '',
       location: exp.location || '',

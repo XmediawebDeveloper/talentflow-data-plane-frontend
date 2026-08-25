@@ -187,6 +187,14 @@ export interface User {
   tenant_admin_email?: string;
   // Invite flow: if true, user must set a permanent password before accessing the dashboard
   must_reset_password?: boolean;
+  // RBAC: flat permission codes the API returns alongside the `permissions` object.
+  // Read by mapApiUserToUser in AuthProvider.
+  permission_codes?: string[];
+  // Pending-payment redirect fields the API returns; AuthProvider and Login both branch
+  // on these to send the user to /complete-payment. Declared here because they were
+  // already being read off this object at runtime.
+  pending_payment?: boolean;
+  pending_payment_redirect?: string;
 }
 
 export interface LoginResponse {

@@ -5,9 +5,14 @@
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
 
 export interface Resume {
+  // NOTE: tenant_id / uploaded_by / file_name / version / version_count /
+  // certifications are optional because this interface doubles as the type for the
+  // camelCase UI view-models the recruitment pages build (see lib/types/types.ts,
+  // which re-exports it). Those view-models never carry these backend-only fields.
+  // Responses from the API itself always populate them.
   id: string;
-  tenant_id: string;
-  uploaded_by: string;
+  tenant_id?: string;
+  uploaded_by?: string;
   uploaded_by_name?: string;
   folder_id?: string;
   folder_name?: string;
@@ -30,13 +35,13 @@ export interface Resume {
   experience: any[] | string;
   experience_details?: any[];
   experience_years?: number;
-  certifications: any[];
+  certifications?: any[];
   languages?: any[];
   location?: string;
   notice_period?: string;
   professional_summary?: string;
   extracted_text?: string;  // Full extracted content from resume
-  file_name: string;
+  file_name?: string;
   file_size?: number;  // In bytes
   file_size_kb?: number;
   file_type?: string;
@@ -46,16 +51,16 @@ export interface Resume {
    * Both are accepted here so the shared `Resume` type covers transitional code.
    */
   source: 'manual_upload' | 'bulk_upload' | 'api_import' | 'ai_match' | 'Manual' | 'TalentFlow';
-  version: number;
-  version_count: number;  // Total versions for this candidate
+  version?: number;
+  version_count?: number;  // Total versions for this candidate
   versions?: ResumeVersion[];   // Inline version history (populated by detail endpoints)
-  is_duplicate: boolean;
+  is_duplicate?: boolean;
   is_archived?: boolean;  // Whether resume is archived
   archived_at?: string;  // When resume was archived
   // Team assignment (recruiter id) — surfaced on internal-DB and my-resumes lists
   assigned_to?: string;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
   // Additional sections (snake_case from backend)
   projects?: any[];
   publications?: any[];
@@ -201,6 +206,12 @@ export interface UploadBatchResponse {
   duplicates: number;
   versions: number;
   errors: number;
+  // Items cancelled by the user (batch cancel or per-file cancel). The backend has
+  // tracked this since the add_cancelled_to_resume_upload_batches migration and returns
+  // it from both batch endpoints (routers/resumes.py); it was simply never declared here,
+  // so the three read sites in my-resumes/page.tsx failed to compile. Optional because
+  // batches created before that migration predate the column.
+  cancelled?: number;
   status: string;
   items: UploadItemStatus[];
   created_at: string;

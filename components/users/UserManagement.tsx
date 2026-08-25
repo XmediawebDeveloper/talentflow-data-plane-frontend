@@ -2291,7 +2291,7 @@ export default function UserManagement() {
                   <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
                     Last Login
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -2400,7 +2400,7 @@ export default function UserManagement() {
                         {formatIST(user.last_login)}
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
                       <div className="flex items-center justify-center gap-1 sm:gap-2">
                         {/* Feature Permissions button - HIDDEN for now as requested */}
                         {/* {user.role.toLowerCase() !== 'tenant_admin' && (

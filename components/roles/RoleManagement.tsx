@@ -594,7 +594,7 @@ export default function RoleManagement() {
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Permissions</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Users</th>
                           <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500">Priority</th>
-                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right">Actions</th>
+                          <th className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-gray-500 dark:text-slate-500 text-right tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -641,7 +641,7 @@ export default function RoleManagement() {
                             <td className="px-6 py-5">
                               <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.priority}</span>
                             </td>
-                            <td className="px-6 py-5">
+                            <td className="px-6 py-5 tf-sticky-col">
                               <div className="flex items-center justify-end gap-2">
                                 <button
                                   onClick={() => handleViewPermissions(role)}
