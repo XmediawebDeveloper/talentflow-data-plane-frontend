@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import type { IconComponent } from '@/lib/types/icon';
 import {
   X,
   Loader2,
@@ -40,7 +41,7 @@ interface UnitAdjustmentModalProps {
 type AdjustmentMode = 'add' | 'deduct' | 'set';
 
 // Icons for each unit type
-const UNIT_TYPE_ICONS: Record<UnitType, React.ElementType> = {
+const UNIT_TYPE_ICONS: Record<UnitType, IconComponent> = {
   RS: Target,
   AS: ClipboardCheck,
   AIU: Video,
@@ -150,8 +151,11 @@ export default function UnitAdjustmentModal({
     mode === 'set'
       ? amount
       : mode === 'add'
-      ? (selectedPool?.available_units || 0) + amount
-      : (selectedPool?.available_units || 0) - amount;
+      // available_units is `number | string` (the backend masks it to a sentinel string
+      // for users without granular visibility). This modal is billing-manager only, so it
+      // always sees the numeric form; cast to keep the arithmetic identical.
+      ? ((selectedPool?.available_units as number) || 0) + amount
+      : ((selectedPool?.available_units as number) || 0) - amount;
 
   if (!isOpen) return null;
 

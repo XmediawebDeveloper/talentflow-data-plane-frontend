@@ -1141,7 +1141,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // broadband noise / low hum / music. Surfaced in the dev overlay + key logs
   // so the VOICE_BAND_MIN_RATIO threshold can be calibrated from real audio.
   const _dbgVoiceRatioRef = useRef(1);
-  const freqBufRef = useRef<Uint8Array | null>(null);
+  // Uint8Array<ArrayBuffer>, not bare Uint8Array: since TS 5.7 typed arrays are generic
+  // over their buffer and default to ArrayBufferLike, which getByteFrequencyData rejects.
+  const freqBufRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   // drag state — all in refs so dragging never triggers re-render
   const _dbgDragRef = useRef({ dragging: false, ox: 0, oy: 0 });
 

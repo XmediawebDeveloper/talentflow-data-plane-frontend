@@ -1,6 +1,7 @@
 'use client';
 
 import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, Lock } from 'lucide-react';
+import type { HRTopic } from '@/lib/services/assessmentService';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -82,7 +83,10 @@ interface AssessmentCreationProps {
 interface SectionConfig {
   name: 'HR' | 'Technical' | 'Coding';
   percentage: number;
-  topics: string[];
+  // The HR section carries full question objects here, Technical/Coding carry plain
+  // topic labels - mirroring assessmentService.HRTopic and the backend's List[Any]
+  // (app/schemas/assessment.py). Declared `string[]` before, which the HR branch broke.
+  topics: HRTopic[];
   enabled: boolean;
 }
 
@@ -437,7 +441,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         .map((q: any) => ({
           id: q.id,
           text: q.question_text,
-          type: q.answer_type === 'yes_no' ? 'Yes/No' : 'Text',
+          type: (q.answer_type === 'yes_no' ? 'Yes/No' : 'Text') as 'Yes/No' | 'Text',
           time: q.answer_type === 'yes_no' ? 1 : 3,
           correct_answer: q.correct_answer || undefined,
           is_active: q.is_active ?? true,
@@ -1625,10 +1629,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         }).filter(Boolean),
         technical_enabled: technicalSection?.enabled || false,
         technical_percentage: technicalSection?.enabled ? technicalSection.percentage : 0,
-        technical_topics: technicalSection?.topics || [],
+        // Technical/Coding sections hold plain topic labels (only HR holds question
+        // objects) - see the SectionConfig.topics note above.
+        technical_topics: (technicalSection?.topics || []) as string[],
         coding_enabled: codingSection?.enabled || false,
         coding_percentage: codingSection?.enabled ? codingSection.percentage : 0,
-        coding_topics: codingSection?.topics || [],
+        // Technical/Coding sections hold plain topic labels (only HR holds question
+        // objects) - see the SectionConfig.topics note above.
+        coding_topics: (codingSection?.topics || []) as string[],
         coding_languages: selectedCodingLanguages,
         proctoring_enabled: proctoringEnabled,
       };
@@ -1762,10 +1770,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         technical_enabled: technicalSection?.enabled || false,
         technical_percentage: technicalSection?.enabled ? technicalSection.percentage : 0,
-        technical_topics: technicalSection?.topics || [],
+        // Technical/Coding sections hold plain topic labels (only HR holds question
+        // objects) - see the SectionConfig.topics note above.
+        technical_topics: (technicalSection?.topics || []) as string[],
         coding_enabled: codingSection?.enabled || false,
         coding_percentage: codingSection?.enabled ? codingSection.percentage : 0,
-        coding_topics: codingSection?.topics || [],
+        // Technical/Coding sections hold plain topic labels (only HR holds question
+        // objects) - see the SectionConfig.topics note above.
+        coding_topics: (codingSection?.topics || []) as string[],
         coding_languages: selectedCodingLanguages,
         proctoring_enabled: proctoringEnabled,
       };
@@ -1828,10 +1840,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   
           technical_enabled: technicalSection?.enabled || false,
           technical_percentage: technicalSection?.enabled ? technicalSection.percentage : 0,
-          technical_topics: technicalSection?.topics || [],
+          // Technical/Coding sections hold plain topic labels (only HR holds question
+        // objects) - see the SectionConfig.topics note above.
+        technical_topics: (technicalSection?.topics || []) as string[],
           coding_enabled: codingSection?.enabled || false,
           coding_percentage: codingSection?.enabled ? codingSection.percentage : 0,
-          coding_topics: codingSection?.topics || [],
+          // Technical/Coding sections hold plain topic labels (only HR holds question
+        // objects) - see the SectionConfig.topics note above.
+        coding_topics: (codingSection?.topics || []) as string[],
           coding_languages: selectedCodingLanguages,
           proctoring_enabled: proctoringEnabled,
         };

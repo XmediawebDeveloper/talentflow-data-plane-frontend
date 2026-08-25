@@ -46,7 +46,11 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
     if (!resumes || resumes.length === 0 || effectiveJobs.length === 0) {
       return [];
     }
-    resumes.forEach(resume => {
+    // `resumes` is declared `Resume[] | any[]`; iterating the union narrowed the
+    // callback param to the Resume branch, which lacks the upload-flow fields read
+    // below (score / scorePercentage / skills / gaps). Annotating to the any branch
+    // the prop already allows - no runtime change.
+    resumes.forEach((resume: any) => {
       effectiveJobs.forEach(job => {
         // Use existing score from resume if available (from upload flow)
         const existingScore = resume.score || resume.scorePercentage;

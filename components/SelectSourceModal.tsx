@@ -1588,7 +1588,9 @@ export default function SelectSourceModal({
           so we leave it unset and let the modal default to root. */}
       {showUploadModal && (
         <UploadModal
-          folders={folders}
+          /* resumeService.Folder (resume_count) vs types.Folder (count) - two shapes,
+             same name. Cast only; the same array is passed. */
+          folders={folders as any}
           tenant={tenant}
           uploadSection="my-resumes"
           targetFolder={selectedFolder !== 'all' ? selectedFolder : undefined}

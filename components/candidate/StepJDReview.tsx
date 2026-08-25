@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import type { IconComponent } from '@/lib/types/icon';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -131,7 +132,7 @@ export default function StepJDReview({
   }
 
   // Collect quick info items (only non-null)
-  const quickInfo: Array<{ icon: React.ElementType; label: string; value: string }> = [];
+  const quickInfo: Array<{ icon: IconComponent; label: string; value: string }> = [];
   if (jdDepartment) quickInfo.push({ icon: Building2, label: 'Department', value: jdDepartment });
   if (jdLocation) quickInfo.push({ icon: MapPin, label: 'Location', value: jdLocation });
   if (jdIndustryType) quickInfo.push({ icon: Globe, label: 'Industry', value: formatLabel(jdIndustryType) });

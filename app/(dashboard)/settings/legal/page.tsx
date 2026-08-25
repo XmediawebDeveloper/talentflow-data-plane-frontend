@@ -3,6 +3,7 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useState, useEffect } from 'react';
 import { ScrollText, CheckCircle, Loader2, AlertCircle, Eye, X, FileText, Shield, Cookie, Sparkles } from 'lucide-react';
+import type { IconComponent } from '@/lib/types/icon';
 import { termsService } from '@/lib/services/termsService';
 import type { DocumentType } from '@/lib/services/termsService';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -16,7 +17,7 @@ const TITLE_TO_DOCUMENT_TYPE: Record<string, DocumentType> = {
   'Cookies Policy': 'COOKIES_POLICY',
 };
 
-const DOCUMENT_TYPE_ICON: Record<DocumentType, React.ElementType> = {
+const DOCUMENT_TYPE_ICON: Record<DocumentType, IconComponent> = {
   TERMS_AND_CONDITIONS: FileText,
   PRIVACY_POLICY: Shield,
   COOKIES_POLICY: Cookie,

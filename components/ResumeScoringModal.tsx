@@ -129,7 +129,9 @@ export default function ResumeScoringModal({
             </div>
 
             <div className="ml-11 space-y-2 max-h-64 overflow-y-auto">
-              {jobs.filter(job => job.status === 'Published' || job.status === 'Active').map(job => (
+              {/* 'Active' is not in Job['status'] (Published|Draft|Closed|Archived|Disabled) so this arm is always false at runtime;
+                  kept as the author's defensive fallback and cast rather than deleted. */}
+              {jobs.filter(job => job.status === 'Published' || (job.status as string) === 'Active').map(job => (
                 <button
                   key={job.id}
                   onClick={() => {
@@ -160,7 +162,7 @@ export default function ResumeScoringModal({
                         </span>
                         <span className="flex items-center gap-1">
                           <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-slate-500 rounded-full"></span>
-                          {job.type || job.employmentType || 'Full-time'}
+                          {(job as { type?: string }).type || job.employmentType || 'Full-time'}
                         </span>
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan rounded">
                           {job.status}
@@ -174,7 +176,7 @@ export default function ResumeScoringModal({
                 </button>
               ))}
 
-              {jobs.filter(job => job.status === 'Published' || job.status === 'Active').length === 0 && (
+              {jobs.filter(job => job.status === 'Published' || (job.status as string) === 'Active').length === 0 && (
                 <div className="text-center py-8 text-gray-500 dark:text-slate-500">
                   <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
                   <p className="text-sm">No active jobs available for scoring.</p>

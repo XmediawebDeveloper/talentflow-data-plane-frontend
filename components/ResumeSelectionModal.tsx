@@ -13,6 +13,9 @@ interface VersionSelection {
   resumeId: string;
   versionId: string;
   candidateName?: string;
+  // Defensive fallback alias: ResumeScoringPage reads `v.resumeId || v.id` for payloads
+  // that carry the plain `id` instead. Optional - resumeId is the canonical field.
+  id?: string;
 }
 
 interface ResumeSelectionModalProps {

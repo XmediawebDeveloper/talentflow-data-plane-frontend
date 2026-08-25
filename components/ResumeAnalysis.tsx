@@ -28,7 +28,10 @@ interface ScoringCategory {
   maxScore: number;
   weight: number;
   icon: any;
-  color: string;
+  // Optional: the 'Cultural Fit' entry below omits it, so the class names built from
+  // it (`bg-${category.color}-50`) already render with undefined for that row. Adding a
+  // colour instead would change what is displayed.
+  color?: string;
   details: {
     criterion: string;
     score: number;

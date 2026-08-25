@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { X, FileText, AlertTriangle, Loader2, LogOut, Check, Shield, Cookie } from 'lucide-react';
+import type { IconComponent } from '@/lib/types/icon';
 import { useTerms } from '@/components/providers/TermsProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { getLoginUrl } from '@/lib/services/authService';
@@ -9,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import type { DocumentType } from '@/lib/services/termsService';
 
-const DOC_META: Record<DocumentType, { label: string; checkboxText: string; Icon: React.ElementType }> = {
+const DOC_META: Record<DocumentType, { label: string; checkboxText: string; Icon: IconComponent }> = {
   TERMS_AND_CONDITIONS: {
     label: 'Terms & Conditions',
     checkboxText: 'I have read and understand the Terms & Conditions',

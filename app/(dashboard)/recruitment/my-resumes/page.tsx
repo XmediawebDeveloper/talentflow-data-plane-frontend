@@ -3261,10 +3261,42 @@ export default function MyResumesPage() {
     }
   };
 
+  // Return type mirrors UploadModalProps['onUpload'] (components/UploadModal.tsx). This
+  // local annotation had drifted narrower than both what the body actually returns
+  // (resumeId / candidateName) and what the modal declares (the richer existingResume).
   const handleUploadResumes = async (files: File[], folderId?: string): Promise<{
     success: boolean;
     error?: string;
-    existingResume?: { id: string; candidateName: string; uploadedAt?: string };
+    resumeId?: string;
+    candidateName?: string;
+    existingResume?: {
+      id: string;
+      candidateName: string;
+      uploadedAt?: string;
+      email?: string;
+      currentTitle?: string;
+      folderName?: string;
+      version?: number;
+    };
+    duplicateData?: {
+      file: File;
+      existingResume: {
+        id: string;
+        candidate_name: string;
+        email: string;
+        folder_name?: string;
+        folder_path?: string;
+        upload_date: string;
+        file_size: number;
+        file_name: string;
+        version: number;
+        // sent by the my-resumes duplicate path alongside `version`
+        version_count?: number;
+      };
+      contentDifferences: string[];
+      isDuplicate: boolean;
+      targetFolderId?: string;
+    };
   }> => {
     setUploadStartedThisSession(true);
 

@@ -70,6 +70,12 @@ export interface ScoringResponse {
   // Skill gap analysis fields
   matched_skills?: string[];
   missing_skills?: string[];
+  // camelCase aliases. Call sites read these as defensive fallbacks
+  // (`item.resume_id || item.resumeId`) for payloads that arrive already transformed.
+  // snake_case above stays the canonical form; these are optional and additive.
+  resumeId?: string;
+  matchedSkills?: string[];
+  missingSkills?: string[];
   // Async / failed-scoring state
   status?: 'pending' | 'in_progress' | 'completed' | 'failed';
   error_message?: string;

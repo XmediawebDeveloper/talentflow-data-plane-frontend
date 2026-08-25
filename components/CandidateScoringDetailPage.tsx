@@ -480,11 +480,18 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     return Math.min(100, Math.max(0, Math.round(base + variation)));
   };
 
+  // scoreBreakdown is `object | any[]` (see its declaration above); these four reads want
+  // the object form. Narrowing once here is exactly equivalent to the previous `?.` reads:
+  // on the array branch `arr.overallFit` and `undefined?.overallFit` both yield undefined.
+  const scoreBreakdownObj = Array.isArray(fullResumeData.scoreBreakdown)
+    ? undefined
+    : fullResumeData.scoreBreakdown;
+
   const detailedScores = {
-    titleMatch: fullResumeData.scoreBreakdown?.overallFit || fullResumeData.scorePercentage,
-    experienceMatch: fullResumeData.scoreBreakdown?.experienceMatch || generateVariedScore(fullResumeData.scorePercentage, 20),
-    skillsMatch: fullResumeData.scoreBreakdown?.skillsMatch || generateVariedScore(fullResumeData.scorePercentage, 16),
-    educationMatch: fullResumeData.scoreBreakdown?.educationMatch || generateVariedScore(fullResumeData.scorePercentage, 24),
+    titleMatch: scoreBreakdownObj?.overallFit || fullResumeData.scorePercentage,
+    experienceMatch: scoreBreakdownObj?.experienceMatch || generateVariedScore(fullResumeData.scorePercentage, 20),
+    skillsMatch: scoreBreakdownObj?.skillsMatch || generateVariedScore(fullResumeData.scorePercentage, 16),
+    educationMatch: scoreBreakdownObj?.educationMatch || generateVariedScore(fullResumeData.scorePercentage, 24),
     locationMatch: generateVariedScore(fullResumeData.scorePercentage, 12),
   };
 
@@ -1362,11 +1369,14 @@ Best regards`);
                 scoredBy: fullResumeData.scoredBy,
                 detailedScores: detailedScores,
                 certifications: resume.certifications,
-                education: resume.education,
+                // `education` is `string | EducationDetail[]`; this child prop takes the
+                // string form. Cast only - the value passed is unchanged.
+                education: resume.education as string,
                 location: resume.location,
                 title: resume.title,
                 // Pass API data for accurate scoring display
-                scoreBreakdown: fullResumeData.scoreBreakdown,
+                // child prop takes the array branch of the union; value unchanged.
+                scoreBreakdown: fullResumeData.scoreBreakdown as any,
                 criteriaScores: fullResumeData.criteriaScores,
               }}
               jobTitle={jobTitle}

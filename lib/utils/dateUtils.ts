@@ -12,6 +12,12 @@
  */
 
 /**
+ * NOTE: these formatters accept `Date` as well as `string` - parseIST below has always
+ * had an explicit `instanceof Date` branch, so callers passing a Date already worked at
+ * runtime; only these signatures were too narrow.
+ */
+
+/**
  * Parse a backend datetime string as IST.
  * If the string has no timezone suffix, treats it as IST (+05:30).
  */
@@ -30,7 +36,7 @@ export function parseIST(dateString: unknown): Date {
  * Format a backend datetime string as "5 Mar 2026, 02:30 PM" (IST).
  * Returns 'N/A' for null/undefined/invalid.
  */
-export function formatIST(dateString: string | null | undefined): string {
+export function formatIST(dateString: string | Date | null | undefined): string {
   if (!dateString) return 'N/A';
   const date = parseIST(dateString);
   if (isNaN(date.getTime())) return 'N/A';
@@ -52,7 +58,7 @@ export function formatIST(dateString: string | null | undefined): string {
  * assessment Start/Submission timeline) so recruiters can see precise timing.
  * Returns 'N/A' for null/undefined/invalid.
  */
-export function formatISTWithSeconds(dateString: string | null | undefined): string {
+export function formatISTWithSeconds(dateString: string | Date | null | undefined): string {
   if (!dateString) return 'N/A';
   const date = parseIST(dateString);
   if (isNaN(date.getTime())) return 'N/A';
@@ -72,7 +78,7 @@ export function formatISTWithSeconds(dateString: string | null | undefined): str
 /**
  * Format a backend datetime string as date only: "5 Mar 2026" (IST).
  */
-export function formatISTDate(dateString: string | null | undefined): string {
+export function formatISTDate(dateString: string | Date | null | undefined): string {
   if (!dateString) return 'N/A';
   const date = parseIST(dateString);
   if (isNaN(date.getTime())) return 'N/A';
@@ -88,7 +94,7 @@ export function formatISTDate(dateString: string | null | undefined): string {
 /**
  * Format a backend datetime string as time only: "02:30 PM" (IST).
  */
-export function formatISTTime(dateString: string | null | undefined): string {
+export function formatISTTime(dateString: string | Date | null | undefined): string {
   if (!dateString) return 'N/A';
   const date = parseIST(dateString);
   if (isNaN(date.getTime())) return 'N/A';
@@ -105,7 +111,7 @@ export function formatISTTime(dateString: string | null | undefined): string {
  * Format a backend datetime string as relative time: "today", "1 day ago", "3 days ago".
  * Falls back to formatISTDate for dates older than 30 days.
  */
-export function formatISTRelative(dateString: string | null | undefined): string {
+export function formatISTRelative(dateString: string | Date | null | undefined): string {
   if (!dateString) return 'N/A';
   const date = parseIST(dateString);
   if (isNaN(date.getTime())) return 'N/A';

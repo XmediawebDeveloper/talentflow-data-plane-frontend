@@ -387,9 +387,46 @@ function buildClustersFromConfig(
     .join(' ')
     .toLowerCase();
 
+  // ── Per-skill delivery flags from `question_skill_map` (AUTHORITATIVE) ────
+  //  Each entry carries `not_delivered`, set by the backend when the row came
+  //  from `_append_undelivered_plan_slots` (a planned question the interview
+  //  never reached). This is the exact structure the Question Analysis tab
+  //  renders, so keying coverage off it makes the two tabs agree BY
+  //  CONSTRUCTION instead of by two independent reconstructions of "which
+  //  slots were delivered" that can — and did — disagree.
+  //
+  //  A skill counts as delivered if ANY entry for it was delivered: Sanity
+  //  Testing is asked on delivered Q5 AND recovered onto un-reached Q9, and the
+  //  delivered occurrence is what matters.
+  const qsmDelivered = new Set<string>();
+  const qsmSeen = new Set<string>();
+  for (const entries of Object.values((eval_?.question_skill_map || {}) as Record<string, any>)) {
+    if (!Array.isArray(entries)) continue;
+    for (const e of entries) {
+      const k = String(e?.skill || '').toLowerCase().trim();
+      if (!k) continue;
+      const c = compactSkillKey(e?.skill);
+      qsmSeen.add(k); if (c) qsmSeen.add(c);
+      if (!e?.not_delivered) { qsmDelivered.add(k); if (c) qsmDelivered.add(c); }
+    }
+  }
+
   const lookupAsked = (sname: string, score010: number): boolean => {
     const sl = sname.toLowerCase().trim();
     const sc = compactSkillKey(sname);
+    // ── Signal 0 (AUTHORITATIVE): question_skill_map delivery flags ───────
+    // Decides BOTH ways when it knows the skill — a skill it lists only under
+    // un-delivered questions is definitively Not Covered, so this must return
+    // false rather than fall through to the plan below. Signal 1 reconstructs
+    // delivered slots by taking plan rows in PLAN ORDER capped at the delivered
+    // count, which credited the wrong slots here: plan Q4 (UAT + Selenium Grid
+    // + Azure Storage) was counted as delivered while the backend had matched
+    // by skill overlap and treated Q4 as un-reached — the very skills Question
+    // Analysis prints as "Not Delivered" showed up Covered.
+    if (qsmSeen.has(sl) || qsmSeen.has(sc)) {
+      return qsmDelivered.has(sl) || qsmDelivered.has(sc);
+    }
+
 
     // ── Signal 1 (PRIMARY): the Question Distribution plan ────────────────
     // `special_instructions.mth/nth_question_skill_map` — the same DB-backed
@@ -2671,12 +2708,24 @@ export function buildDashboardData(params: {
       const updatedSkills: Skill[] = cluster.skills.map(sk => {
         const qaScore = qaSkillScore.get((sk.name || '').toLowerCase().trim());
         if (typeof qaScore !== 'number') return sk;
-        // A positive score means the skill has REAL evidence somewhere in the
-        // interview — including a skill whose own question was never asked but
-        // that the candidate demonstrated in another answer (recovery). Mark it
-        // `asked` so Cluster Coverage shows it Covered/Demonstrated rather than
-        // "Not Covered" (a recovered score alone is invisible there otherwise).
-        return { ...sk, score: qaScore, asked: sk.asked || qaScore > 0 };
+        // Take the SCORE only — never the `asked` flag. A positive score can
+        // come from RECOVERY: `_append_undelivered_plan_slots` emits a row for
+        // every planned question the interview never reached, and each of its
+        // skills is scored by whole-interview recovery ("Recovered from Q3").
+        // That is real evidence, but it is NOT coverage — no question probing
+        // that skill was ever delivered to the candidate.
+        //
+        // `sk.asked` is already the delivered-only truth (buildClustersFromConfig
+        // resolves it from the Question Distribution plan restricted to DELIVERED
+        // slots, the backend's skill_assessed_map, and at-ask-time assigned_skills
+        // on delivered history rows — all three skip `not_asked` padding). ORing
+        // in `qaScore > 0` overrode that and marked every recovered skill Covered:
+        // an interview that delivered 5 of 10 MHS questions reported 23/24 skills
+        // (96%) covered, with only the one recovered-at-0 skill (ISTQB) left as
+        // Not Covered. Undelivered questions belong in Question Analysis — where
+        // they show as "Not Delivered" with their mapped skills and score
+        // rationale — not in the coverage counts.
+        return { ...sk, score: qaScore };
       });
       const scoredSkills = updatedSkills.filter(sk => sk.score > 0);
       const newClusterScore = scoredSkills.length > 0
