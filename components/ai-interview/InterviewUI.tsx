@@ -511,12 +511,6 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
 });
 const LiveAIBubbleMemo = memo(LiveAIBubble);
 
-// Headset (microphone) disconnect allowance — see the effect that uses these.
-// Removing the headset mid-interview is tolerated twice; the 3rd disconnect
-// terminates the interview immediately, with no pause or grace window.
-const MAX_HEADSET_DISCONNECTS = 3;                               // the 3rd one terminates
-const ALLOWED_HEADSET_DISCONNECTS = MAX_HEADSET_DISCONNECTS - 1; // = 2 tolerated
-
 export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl }: InterviewUIProps) {
   // ── Effective device capability ──────────────────────────────────────────
   // The portal detects this at the system-check step, but a RESUMED session (or
@@ -1472,30 +1466,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     return candidateAIInterviewService.reportProctorEvent(t, event);
   }, []);
 
-  // Tried by the proctoring monitor BEFORE it ever reports the mic disabled —
-  // e.g. a laptop's built-in mic taking over the instant an external headset
-  // is unplugged. reacquireAudio() asks for "the current default input" with
-  // no deviceId pin, so once the OS re-defaults away from the dead headset
-  // this naturally picks up whatever mic is now available. On success this is
-  // entirely invisible to the candidate — no popup, no pause, no strike
-  // counted against the 2-disconnect limit — but still logged (low severity)
-  // so the recruiter has an audit trail of the swap.
-  const attemptSilentMicFallback = useCallback(async (): Promise<boolean> => {
-    const ok = (await webcamRef.current?.reacquireAudio()) ?? false;
-    if (ok) {
-      candidateAIInterviewService.reportProctorEvent(token, {
-        event_type: 'microphone_disabled',
-        severity: 'low',
-        details: {
-          phase: 'in_interview',
-          reason: 'auto_fallback_switch',
-          note: 'Microphone device dropped and was automatically switched to another available device (e.g. built-in mic) with no interruption to the candidate.',
-        },
-      }).catch(() => { /* best-effort */ });
-    }
-    return ok;
-  }, [token]);
-
   const { state: proctoringState, emitEvent, flushEvents, initialMicDeviceId } = useInterviewProctoringMonitor({
     token,
     stream: webcamStream,
@@ -1504,7 +1474,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
     reportEvent: reportProctorEvent,
-    attemptSilentMicFallback,
     // Suppress voice_detected while Bina is speaking (TTS echo), while we are
     // actively recording the candidate's answer, OR during the between-question
     // "Hold On — get ready" transition (isProcessing). All three are expected /
@@ -1620,6 +1589,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // definitions — see the assignment effect there.
   const pauseQuestionTimerRef = useRef<() => void>(() => {});
   const resumeQuestionTimerRef = useRef<() => void>(() => {});
+  // Same TDZ reason as above — stopVisemeLoop is declared far below. Lets the
+  // pause-arm branch immediately silence the avatar instead of leaving it
+  // animating/"speaking" in the background while the interview is paused.
+  const stopVisemeLoopRef = useRef<() => void>(() => {});
 
   const clearMediaPauseTimers = useCallback(() => {
     if (mediaPauseCountdownIdRef.current) { clearInterval(mediaPauseCountdownIdRef.current); mediaPauseCountdownIdRef.current = null; }
@@ -1632,27 +1605,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     return !camOk ? 'camera_disconnected' : 'microphone_disconnected';
   }, []);
 
-  // ── Headset (microphone) disconnect allowance: 2 strikes, 3rd ends it ─────
-  // Product rule: removing the headset mid-interview is tolerated TWICE — each
-  // of those gets the normal pause + 3-minute grace window below. The THIRD
-  // disconnect terminates the interview immediately: no pause, no countdown,
-  // no chance to reconnect.
-  //
-  // Counted per EPISODE — one true → false transition of isMicrophoneActive —
-  // so a single unplug that stays down for minutes counts once, and a
-  // reconnect + unplug counts twice. Deliberately kept OUT of the pause
-  // effect's ARM branch: that branch only fires when nothing was already
-  // paused, so a headset pulled while the pause was already armed for the
-  // CAMERA would never be counted there. This effect is declared BEFORE the
-  // pause effect so on the third strike its refs are already set when the
-  // pause effect runs in the same commit — which is what makes the pause
-  // effect skip arming (see its `headsetLimitReachedRef` guard).
-  //
-  // This effect also owns the `microphone_disabled` proctor event for the same
-  // coverage reason; the pause effect only reports the camera one.
-  const [headsetDisconnectCount, setHeadsetDisconnectCount] = useState(0);
+  // ── Headset (microphone) disconnect tracking — no strike limit ───────────
+  // Every microphone disconnect gets the SAME pause/resume treatment,
+  // however many times it happens in the interview — there is no 3rd-strike
+  // termination. This effect still counts episodes (one true → false
+  // transition of isMicrophoneActive) purely as audit data on the proctor
+  // event (disconnect_count) — the count no longer gates anything or renders
+  // anywhere — and still owns reporting `microphone_disabled` for the same
+  // coverage reason as before (the pause effect only reports the camera one).
   const headsetDisconnectCountRef = useRef(0);
-  const headsetLimitReachedRef = useRef(false);
   // Tracks the PREVIOUS mic state so we count transitions, not renders.
   const micWasActiveRef = useRef(true);
 
@@ -1661,12 +1622,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (proctoringState.isMicrophoneActive) { micWasActiveRef.current = true; return; }
     if (!micWasActiveRef.current) return;         // same episode, already counted
     micWasActiveRef.current = false;
-    if (isClosingRef.current || headsetLimitReachedRef.current) return;
+    if (isClosingRef.current) return;
 
     const count = headsetDisconnectCountRef.current + 1;
     headsetDisconnectCountRef.current = count;
-    setHeadsetDisconnectCount(count);
-    const limitExceeded = count >= MAX_HEADSET_DISCONNECTS;
 
     candidateAIInterviewService.reportProctorEvent(token, {
       event_type: 'microphone_disabled',
@@ -1675,25 +1634,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         phase: 'in_interview',
         reason: 'headset_disconnected',
         disconnect_count: count,
-        allowed_disconnects: ALLOWED_HEADSET_DISCONNECTS,
-        limit_exceeded: limitExceeded,
-        grace_period_ms: limitExceeded ? 0 : MEDIA_PAUSE_GRACE_MS,
       },
     }).catch(() => { /* best-effort */ });
-
-    if (!limitExceeded) return;
-
-    // Third strike — tear down any pause already running (e.g. the camera
-    // armed it moments ago) so no stray countdown/timeout survives, then
-    // terminate through the same path as every other proctoring termination.
-    headsetLimitReachedRef.current = true;
-    clearMediaPauseTimers();
-    isMediaPausedRef.current = false;
-    setIsMediaPaused(false);
-    setMediaPauseSecondsRemaining(null);
-    mediaPauseStartMsRef.current = null;
-    onTerminate?.('headset_disconnected_limit');
-  }, [isConnected, proctoringState.isMicrophoneActive, token, onTerminate, clearMediaPauseTimers]);
+  }, [isConnected, proctoringState.isMicrophoneActive, token]);
 
   useEffect(() => {
     if (!isConnected) return;
@@ -1706,14 +1649,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (anyDown && !isMediaPausedRef.current) {
       // ARM: a device just went down — start the pause+grace window.
       if (isClosingRef.current) return; // interview already wrapping up — don't arm
-      // Third headset disconnect: the effect above already terminated in this
-      // same commit, so there is nothing to pause for — arming here would show
-      // a countdown overlay on top of a dead session.
-      if (headsetLimitReachedRef.current) return;
       isMediaPausedRef.current = true;
       setIsMediaPaused(true);
       mediaPauseStartMsRef.current = Date.now();
-      setMediaPauseSecondsRemaining(Math.ceil(MEDIA_PAUSE_GRACE_MS / 1000));
+      // Camera loss keeps its existing, independent 3-minute grace-then-
+      // terminate rule (untouched). A MIC-only pause must never auto-
+      // terminate on a timeout — no countdown-to-end is shown or scheduled
+      // for that case; it just stays paused until the mic is genuinely
+      // reconnected, however long that takes.
+      const cameraIsDown = !proctoringState.isCameraActive;
+      setMediaPauseSecondsRemaining(cameraIsDown ? Math.ceil(MEDIA_PAUSE_GRACE_MS / 1000) : null);
+      const armReason = mediaDownReason(proctoringState.isCameraActive, proctoringState.isMicrophoneActive);
+      console.warn(`[INTERVIEW-DEBUG][PAUSE] INTERVIEW PAUSED — reason=${armReason} isCameraActive=${proctoringState.isCameraActive} isMicrophoneActive=${proctoringState.isMicrophoneActive} audioDeviceLost=${audioDeviceLost}`);
+      // Strict mic requirement: nothing may keep running in the background
+      // while paused. Silence the avatar immediately (no more lip-sync/
+      // "speaking" animation), drop any still-queued TTS audio so nothing
+      // further plays out, and stop any in-progress answer recording —
+      // WITHOUT submitting it. abortRecordingForSkip does local cleanup only
+      // (no end_turn, no transcript submission), unlike stopRecordingSilent
+      // which would send whatever was captured so far for processing. A mic
+      // drop must never turn a partial answer into a submitted one.
+      stopVisemeLoopRef.current();
+      audioQueueRef.current = [];
+      isPlayingRef.current = false;
+      console.log('[INTERVIEW-DEBUG][PAUSE] BINA SPEECH PAUSED — viseme loop stopped, queued audio cleared');
+      try { abortRecordingForSkipRef.current(); } catch { /* ignore */ }
+      console.log('[INTERVIEW-DEBUG][PAUSE] CANDIDATE RECORDING STOPPED (no submission)');
       // Freeze the per-question answer clock the instant the device drops.
       // The backend cancels its own auto-skip task on session_pause and shifts
       // question_start_time forward on resume, but it never re-sends a
@@ -1721,9 +1682,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // draining behind the overlay and the candidate returns to a shorter
       // (or already-expired) answer window. Idempotent.
       pauseQuestionTimerRef.current();
+      console.log('[INTERVIEW-DEBUG][PAUSE] TIMER STOPPED');
 
       const reason = mediaDownReason(proctoringState.isCameraActive, proctoringState.isMicrophoneActive);
-      try { wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason })); } catch { /* best-effort */ }
+      try {
+        wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason }));
+        console.log(`[INTERVIEW-DEBUG][PAUSE] LIVE STREAM PAUSED — session_pause sent (reason=${reason})`);
+      } catch { /* best-effort */ }
       if (!proctoringState.isCameraActive) {
         candidateAIInterviewService.reportProctorEvent(token, {
           event_type: 'camera_disabled',
@@ -1736,21 +1701,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // happen while this pause is already armed for the camera).
 
       clearMediaPauseTimers();
-      mediaPauseCountdownIdRef.current = setInterval(() => {
-        const startedAt = mediaPauseStartMsRef.current;
-        if (startedAt === null) return;
-        const left = Math.max(0, Math.ceil((MEDIA_PAUSE_GRACE_MS - (Date.now() - startedAt)) / 1000));
-        setMediaPauseSecondsRemaining(left);
-      }, 200);
-      mediaPauseTimeoutIdRef.current = setTimeout(() => {
-        clearMediaPauseTimers();
-        // Still down after the full grace window — terminate, mirroring the
-        // "left the interview screen" termination path in the parent portal.
-        // Reads CURRENT state (not the state at arm time) since the set of
-        // down devices may have changed during the 3 minutes.
-        const cur = proctoringStateRef.current;
-        onTerminate?.(`${mediaDownReason(cur.isCameraActive, cur.isMicrophoneActive)}_timeout`);
-      }, MEDIA_PAUSE_GRACE_MS);
+      if (cameraIsDown) {
+        mediaPauseCountdownIdRef.current = setInterval(() => {
+          const startedAt = mediaPauseStartMsRef.current;
+          if (startedAt === null) return;
+          const left = Math.max(0, Math.ceil((MEDIA_PAUSE_GRACE_MS - (Date.now() - startedAt)) / 1000));
+          setMediaPauseSecondsRemaining(left);
+        }, 200);
+        mediaPauseTimeoutIdRef.current = setTimeout(() => {
+          clearMediaPauseTimers();
+          // Still down after the full grace window — terminate, mirroring the
+          // "left the interview screen" termination path in the parent portal.
+          // Reads CURRENT state (not the state at arm time): only terminate
+          // if the CAMERA is still the problem — that's the independent,
+          // pre-existing rule this timeout exists for. If the camera has
+          // recovered and only the mic remains down, do NOT terminate.
+          const cur = proctoringStateRef.current;
+          if (!cur.isCameraActive) {
+            onTerminate?.(`${mediaDownReason(cur.isCameraActive, cur.isMicrophoneActive)}_timeout`);
+          }
+        }, MEDIA_PAUSE_GRACE_MS);
+      }
     } else if (!anyDown && isMediaPausedRef.current) {
       // RECOVERED within the window (both camera and mic — the ORIGINAL mic
       // device by deviceId — are live again) — tear down the pause and
@@ -1762,13 +1733,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       isMediaPausedRef.current = false;
       setIsMediaPaused(false);
       setMediaPauseSecondsRemaining(null);
+      console.warn(`[INTERVIEW-DEBUG][PAUSE] INTERVIEW RESUMED — pauseDurationMs=${pauseDurationMs} isCameraActive=${proctoringState.isCameraActive} isMicrophoneActive=${proctoringState.isMicrophoneActive} audioDeviceLost=${audioDeviceLost}`);
 
-      try { wsRef.current?.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+      try {
+        wsRef.current?.send(JSON.stringify({ type: 'session_resume' }));
+        console.log('[INTERVIEW-DEBUG][PAUSE] LIVE STREAM RESUMED — session_resume sent');
+      } catch { /* best-effort */ }
       // Unfreeze the answer clock at exactly the value it held when the
       // device dropped — pause/resumeQuestionTimer accumulate the paused
       // span into questionTimerPausedMsRef, which computeQuestionRemaining
       // subtracts, so no part of the outage counts against the candidate.
       resumeQuestionTimerRef.current();
+      console.log('[INTERVIEW-DEBUG][PAUSE] TIMER RESUMED, BINA SPEECH/RECORDING ALLOWED AGAIN');
       candidateAIInterviewService.reportProctorEvent(token, {
         event_type: 'session_resumed',
         severity: 'low',
@@ -1835,16 +1811,45 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
     const check = async (trigger: string) => {
       try {
+        const liveTrack = mediaStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live');
+        const anyTrack = mediaStreamRef.current?.getAudioTracks?.()[0];
+        const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [] as MediaDeviceInfo[]);
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
         const swapped = activeTrackSwapped();
         const missing = swapped ? true : await origMissingFromList();
         if (cancelled) return;
         const lost = swapped || missing;
+        // Full diagnostic snapshot on every check — poll tick AND devicechange
+        // event — so a real disconnect test's mic.log shows exactly what the
+        // detection logic saw at each moment, instead of only the moments it
+        // decided to act.
+        console.log('[INTERVIEW-DEBUG][MIC-DIAG]', JSON.stringify({
+          trigger,
+          originalDeviceId: interviewMicDeviceIdRef.current ?? null,
+          currentLiveTrackDeviceId: liveTrack?.getSettings?.().deviceId ?? null,
+          trackReadyState: anyTrack?.readyState ?? 'no-track',
+          trackMuted: anyTrack?.muted ?? null,
+          enumeratedAudioInputs: audioInputs.map(d => ({ deviceId: d.deviceId, label: d.label || '(no label)' })),
+          origConfirmedPresent,
+          swapped,
+          missing,
+          lost,
+          audioDeviceLostState: audioDeviceLostRef.current,
+        }));
         if (lost && !audioDeviceLostRef.current) {
           if (!swapped) {
-            // Device-list signal can flicker → re-confirm after 700ms.
-            await new Promise(r => setTimeout(r, 700));
+            // Device-list signal can flicker → re-confirm briefly. Kept short
+            // (not removed) — a real recording showed ~3s between the OS
+            // reporting the mic gone and this pause actually engaging, which
+            // came from this delay stacked with the poll interval below;
+            // still non-zero so a one-tick enumerate glitch can't
+            // false-pause a candidate who never touched their mic.
+            await new Promise(r => setTimeout(r, 300));
             if (cancelled) return;
-            if (!activeTrackSwapped() && !(await origMissingFromList())) return;
+            if (!activeTrackSwapped() && !(await origMissingFromList())) {
+              console.log(`[INTERVIEW-DEBUG][MIC-DIAG] recheck cleared trigger=${trigger} — treating as flicker, NOT pausing`);
+              return;
+            }
           }
           console.warn(`[INTERVIEW-DEBUG] Audio device lost (trigger=${trigger}, swapped=${swapped}) — pausing interview (orig=${interviewMicDeviceIdRef.current})`);
           setAudioDeviceLost(true);
@@ -1854,17 +1859,55 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             details: { phase: 'in_interview', reason: 'audio_device_unplugged', trigger },
           }).catch(() => { /* best-effort */ });
         } else if (!lost && audioDeviceLostRef.current) {
+          // enumerateDevices() listing the original device again is NOT proof
+          // it's usable — Windows can disable a mic at the OS level while
+          // Chrome keeps it listed (and the track just goes to muted, or a
+          // fresh getUserMedia() still throws). Confirm a REAL stream can be
+          // opened on the exact original device before clearing the pause.
+          // Probe stream is stopped immediately either way — never touches
+          // mediaStreamRef (the app's actual recording stream).
+          const origId = interviewMicDeviceIdRef.current;
+          console.log(`[MIC][RESUME] resume check started deviceId=${origId ?? 'unknown'} trigger=${trigger}`);
+          let usable = true;
+          let probeStream: MediaStream | null = null;
+          if (origId) {
+            try {
+              probeStream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: origId } } });
+              const probeTrack = probeStream.getAudioTracks()[0];
+              usable = Boolean(probeTrack && probeTrack.readyState === 'live' && !probeTrack.muted);
+              console.log(`[MIC][RESUME] microphone validation result=${usable} readyState=${probeTrack?.readyState} muted=${probeTrack?.muted}`);
+            } catch (err: any) {
+              usable = false;
+              console.warn(`[MIC][GUM] error name=${err?.name} message=${err?.message} deviceId=${origId}`);
+            } finally {
+              probeStream?.getTracks().forEach(t => t.stop());
+            }
+          }
+          if (cancelled) return;
+          if (!usable) {
+            // Stay paused — enumerateDevices() says it's back but a real
+            // stream can't be opened yet (still OS-disabled, still settling
+            // after re-enable, etc). Next poll tick / devicechange retries.
+            console.log(`[MIC][RESUME] not usable yet (trigger=${trigger}) — remaining paused`);
+            return;
+          }
           console.log(`[INTERVIEW-DEBUG] Audio device restored (trigger=${trigger}) — resuming interview`);
+          console.log(`[MIC][RESUME] INTERVIEW_RESUMED deviceId=${origId ?? 'unknown'}`);
           setAudioDeviceLost(false);
         }
-      } catch (e) { /* enumeration failed — leave state as-is */ }
+      } catch (e) {
+        console.warn(`[INTERVIEW-DEBUG][MIC-DIAG] check() threw (trigger=${trigger})`, e);
+      }
     };
     const onDeviceChange = () => { void check('devicechange'); };
     navigator.mediaDevices.addEventListener('devicechange', onDeviceChange);
     // Poll as well: devicechange does not fire on a silent same-track swap, and
     // an unplugged jack may stay enumerated — the active-track deviceId check
     // catches those. Mirrors how fullscreen relies on a reliable recurring signal.
-    const pollId = setInterval(() => { void check('poll'); }, 1500);
+    // 500ms (was 1500ms) — enumerateDevices() is cheap, and the slower value
+    // was directly responsible for part of the ~3s gap seen in a real test
+    // between the OS reporting the mic gone and the pause actually engaging.
+    const pollId = setInterval(() => { void check('poll'); }, 500);
     void check('mount'); // baseline + catch an already-removed device
     return () => {
       cancelled = true;
@@ -3983,6 +4026,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       visemeRafRef.current = null;
     }
   }, []);
+  useEffect(() => {
+    stopVisemeLoopRef.current = stopVisemeLoop;
+  }, [stopVisemeLoop]);
 
   // ── Gapless scheduled audio playback ────────────────────────────────────────
   // Instead of onended → playNextBuffer (which has JS-event-loop gaps = clicks),
@@ -9825,7 +9871,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   ? "Your interview is paused. Please reconnect your camera and microphone — it will resume automatically."
                   : !proctoringState.isCameraActive
                   ? "Your interview is paused. Please reconnect your camera — it will resume automatically."
-                  : "Your interview is paused. Please reconnect your microphone (or headset) — it will resume automatically."}
+                  : "Microphone disconnected. Please connect your microphone to continue the interview — it will resume automatically."}
               </p>
             </div>
             {mediaPauseSecondsRemaining !== null && (
@@ -9840,31 +9886,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 </span>
                 <span className="block text-[10px] text-red-300/80 mt-1">
                   Reconnect it now to continue without interruption
-                </span>
-              </div>
-            )}
-            {/* Headset strike counter — only while the MIC is the device that's
-                down, since the 2-disconnect allowance is a headset rule. Spells
-                out how many reconnects are left so the final one is never a
-                surprise: on the last allowed disconnect this is the candidate's
-                only warning that the next unplug ends the interview outright. */}
-            {!proctoringState.isMicrophoneActive && headsetDisconnectCount > 0 && (
-              <div className={`w-full rounded-xl border px-4 py-3 text-center ${
-                headsetDisconnectCount >= ALLOWED_HEADSET_DISCONNECTS
-                  ? 'border-red-400/40 bg-red-500/10'
-                  : 'border-amber-400/40 bg-amber-500/10'
-              }`}>
-                <span className={`block text-[11px] font-semibold uppercase tracking-wider mb-1 ${
-                  headsetDisconnectCount >= ALLOWED_HEADSET_DISCONNECTS ? 'text-red-200' : 'text-amber-200'
-                }`}>
-                  Microphone disconnect {headsetDisconnectCount} of {ALLOWED_HEADSET_DISCONNECTS}
-                </span>
-                <span className={`block text-xs leading-relaxed ${
-                  headsetDisconnectCount >= ALLOWED_HEADSET_DISCONNECTS ? 'text-red-300/90' : 'text-amber-300/90'
-                }`}>
-                  {headsetDisconnectCount >= ALLOWED_HEADSET_DISCONNECTS
-                    ? 'Final warning — disconnecting your microphone again will end the interview immediately.'
-                    : `You may disconnect your microphone ${ALLOWED_HEADSET_DISCONNECTS - headsetDisconnectCount} more time. After that the interview ends immediately.`}
                 </span>
               </div>
             )}
