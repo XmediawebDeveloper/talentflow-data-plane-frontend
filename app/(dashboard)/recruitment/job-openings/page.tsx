@@ -11,7 +11,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
-import { formatJobExperienceText } from '@/lib/utils/jobExperience';
+import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
@@ -178,39 +178,11 @@ export default function JobOpeningsPage() {
         page_size: JD_BATCH_SIZE,
       };
 
-      // Convert API JD to component Job type
-      const convertedJobs: Job[] = response.items.map((jd: any) => ({
-        id: jd.id,
-        job_id: jd.job_id,  // Human-readable ID like JD-001
-        title: jd.title || 'Untitled',
-        status: mapStatus(jd.status),
-        location: jd.location || '',
-        daysActive: calculateDaysActive(jd.created_at),
-        requiredMatch: jd.required_match || 70,
-        department: jd.department,
-        industry_type: jd.industry_type,
-        experience: formatJobExperienceText({
-          jobLevel: jd.job_level || jd.experience_level,
-          experienceMin: jd.experience_min,
-          experienceMax: jd.experience_max,
-        }),
-        experience_min: jd.experience_min,
-        experience_max: jd.experience_max,
-        applicants: jd.applicants_count || 0,
-        description: jd.description,
-        skills: jd.skills || [],
-        postedDate: jd.created_at,
-        postedBy: jd.created_by_name || jd.created_by,
-        employmentType: jd.employment_type,
-        workMode: jd.remote_type, // onsite, hybrid, remote
-        created_at: jd.created_at, // For accurate sorting
-        updated_at: jd.updated_at, // For last updated display
-        creation_stage: jd.creation_stage, // For draft JDs
-        creation_method: jd.creation_method, // AI or Manual
-        currentVersion: jd.current_version, // republish counter → drives "Republished" label
-        versionNumber: (jd as any).version_number ?? 1, // lineage version → v1/v2 badge (same JD-ID)
-        experience_level: jd.job_level || jd.experience_level,
-      }));
+      /* One mapping for every surface that lists JDs — this page and the
+         Apply to Job dialog both build their rows with it, so neither can end
+         up missing a field the other shows (publish count, lineage version,
+         experience). */
+      const convertedJobs: Job[] = response.items.map(mapJDToJob);
 
       setJobs(convertedJobs);
     } catch (error) {
@@ -231,14 +203,6 @@ export default function JobOpeningsPage() {
       'disabled': 'Disabled',
     };
     return statusMap[status?.toLowerCase()] || 'Draft';
-  };
-
-  const calculateDaysActive = (createdAt: string): number => {
-    if (!createdAt) return 0;
-    const created = new Date(createdAt);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - created.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
   const handleCreateNew = () => {

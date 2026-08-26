@@ -1,62 +1,52 @@
-import { X, Search, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, MapPin, User, Monitor, Laptop, Home, Sparkles, PenLine, Loader2, Ban } from 'lucide-react';
-import type { IconComponent } from '@/lib/types/icon';
-import { useState } from 'react';
+'use client';
+
+import { X, Search, CheckCircle, Briefcase, Loader2, Eye, ChevronDown, RefreshCw } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
-import { formatISTDate } from '@/lib/utils/dateUtils';
-import SelectedCandidatesPanel, { versionInfo, type VersionChoice } from './SelectedCandidatesPanel';
+import { jdService } from '@/lib/services/jdService';
+import {
+  getPublishedJobs,
+  groupByLineage,
+  lineageKey,
+  mapJDToJob,
+  sortJobs,
+} from '@/lib/utils/jobOpeningDisplay';
+import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
+import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
+import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
+import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
+import ListPagination from './ListPagination';
+import SelectedCandidatesPanel from './SelectedCandidatesPanel';
 
-// Work mode configuration
-const workModeConfig: Record<string, { label: string; icon: IconComponent; bgColor: string; textColor: string }> = {
-  onsite: { label: 'On-site', icon: Monitor, bgColor: 'bg-blue-50', textColor: 'text-blue-700' },
-  hybrid: { label: 'Hybrid', icon: Laptop, bgColor: 'bg-purple-50', textColor: 'text-purple-700' },
-  remote: { label: 'Remote', icon: Home, bgColor: 'bg-green-50', textColor: 'text-green-700' },
-};
-
-// Format employment type
-const formatEmploymentType = (type: string | undefined): string => {
-  if (!type) return '';
-  return type
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-};
-
-// Format relative time
-const formatRelativeTime = (dateStr: string | undefined): string => {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 60) return `${diffMins} minutes ago`;
-  if (diffHours < 24) return `${diffHours} hours ago`;
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return formatISTDate(dateStr);
-};
-
+/** Same page size the Job Openings page reads the JD list in. */
+const JD_BATCH_SIZE = 100;
+/** Same rows-per-page the Job Openings list starts on. */
+const DEFAULT_ITEMS_PER_PAGE = 10;
 /**
- * Only a published job can receive candidates. Everything else is still listed
- * — a recruiter looking for a job they know exists shouldn't be told it isn't
- * there — but greyed out, with the reason attached.
+ * One radio group across the whole dialog — the job cards AND every Version
+ * History row inside them. Exactly one JD version can be picked, and the
+ * browser enforces it alongside the state.
  */
-const eligibilityFor = (job: Job): { eligible: boolean; reason?: string } => {
-  const status = String(job.status || '').toLowerCase();
-  if (status === 'published') return { eligible: true };
-  if (status === 'draft') return { eligible: false, reason: 'Draft job — publish it before applying candidates' };
-  if (status === 'archived') return { eligible: false, reason: 'Archived job — restore it to apply candidates' };
-  if (status === 'disabled') return { eligible: false, reason: 'This job is disabled and cannot take new applicants' };
-  if (status === 'closed' || status === 'filled') return { eligible: false, reason: 'This job is closed to new applicants' };
-  return { eligible: false, reason: `Only published jobs can receive candidates (currently ${job.status || 'unknown'})` };
-};
+const JOB_RADIO_GROUP = 'apply-to-job-selection';
 
 interface ApplyToJobModalProps {
   resumes: Resume[];
-  jobs: Job[];
+  /**
+   * Jobs the host already had. Shown immediately so the list isn't empty on
+   * open, then replaced by this dialog's own fetch — the same request, mapping
+   * and ordering the Job Openings page uses, so the list here matches that page
+   * field for field rather than whatever subset a host happened to map.
+   */
+  jobs?: Job[];
   onClose: () => void;
-  onApply: (resumeIds: string[], jobIds: string[]) => void;
+  /**
+   * The picked candidates and job. The third argument hands back the selected
+   * Job records themselves: this dialog now reads the job list from the API
+   * rather than from the host, so a host that needs the object (a title for a
+   * toast, a job to hand to a progress panel) can no longer be sure to find it
+   * in whatever list it passed in.
+   */
+  onApply: (resumeIds: string[], jobIds: string[], selectedJobRecords?: Job[]) => void;
   mode?: 'apply' | 'assessment' | 'scoring' | 'match';
   title?: string; // New: Custom title
   description?: string; // New: Custom description
@@ -96,8 +86,81 @@ export default function ApplyToJobModal({
   const isScoringMode = mode === 'scoring';
   const isMatchMode = mode === 'match';
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
+  /* The one JD version the candidates go to.
+     Held as the record itself rather than an id, because the pick can now be an
+     older version chosen from a job's Version History, and those versions are
+     not in the list below — the history fetches them from its own endpoint.
+     `lineage` records which job's card the pick belongs to, so that card reads
+     as selected whichever of its versions was picked. */
+  const [selection, setSelection] = useState<{ job: Job; lineage: string } | null>(null);
   const [isApplying, setIsApplying] = useState(false);
+
+  /* The job list, read the way the Job Openings page reads it: `source:
+     'my-jds'`, in pages of 100, mapped through the shared mapper. Every host
+     used to hand in its own partially-mapped list, which is why the publish
+     count, the lineage version and the experience line were missing here. The
+     host's list still seeds the state so the dialog opens with content.
+
+     EVERY VERSION, unfiltered — deliberately. Asking the endpoint for
+     `status: 'published'` instead looks like the cheaper way to get a published
+     list, and it is wrong: it strips a lineage's draft v3 before the versions
+     can be collapsed, so the published v2 stands in as the latest and the job
+     counts as published here while the Job Openings page — which sees the v3 —
+     calls it a draft. That was the 226-vs-223 gap. The published test belongs
+     AFTER the collapse, in `getPublishedJobs`, on the full list. */
+  const [fetchedJobs, setFetchedJobs] = useState<Job[] | null>(null);
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [jobsError, setJobsError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      setLoadingJobs(true);
+      setJobsError(null);
+      try {
+        const firstPage = await jdService.list({ page: 1, page_size: JD_BATCH_SIZE, source: 'my-jds' });
+        const items = [...firstPage.items];
+        const totalPages = Math.max(
+          firstPage.total_pages || Math.ceil(firstPage.total / JD_BATCH_SIZE),
+          1,
+        );
+        for (let page = 2; page <= totalPages; page += 1) {
+          const nextPage = await jdService.list({ page, page_size: JD_BATCH_SIZE, source: 'my-jds' });
+          items.push(...nextPage.items);
+        }
+        if (cancelled) return;
+        setFetchedJobs(items.map(mapJDToJob));
+      } catch (error) {
+        if (cancelled) return;
+        console.error('[ApplyToJobModal] Failed to load job openings:', error);
+        // Keep whatever the host handed in rather than emptying the list — the
+        // recruiter can still pick from it while the retry is offered.
+        setJobsError('Could not load job openings.');
+      } finally {
+        if (!cancelled) setLoadingJobs(false);
+      }
+    };
+
+    void load();
+    return () => { cancelled = true; };
+  }, [reloadToken]);
+
+  /* Version history — the same hook and endpoints behind the Job Openings
+     page's own "View Versions", so the history opened from this dialog is the
+     history that page shows. */
+  const versionLineage = useJobVersionLineage();
+
+  /* The eye on a job row opens the Job Details page's Version History popup
+     over this dialog — literally that component, so the cards, badges,
+     Published/Republished labels, compare and per-version JD view are the same
+     ones that page shows. It fetches its own lineage, so all this has to hold
+     is which job was asked for.
+
+     The "View Versions" table below is untouched: it stays the place where a
+     version is PICKED for the candidates. This is the place a version is READ. */
+  const [versionHistoryFor, setVersionHistoryFor] = useState<Job | null>(null);
 
   /* Candidate list state. Everything handed in starts ticked — the user
      already chose these on the previous screen — and unticking here is how you
@@ -118,8 +181,6 @@ export default function ApplyToJobModal({
   const [versionChoice, setVersionChoice] = useState<Record<string, { id: string; number: number; total: number }>>({});
 
   const submittedIdFor = (resume: Resume) => versionChoice[resume.id]?.id || resume.id;
-  /** Single-resume candidate being read, without leaving this dialog. */
-  const [previewResume, setPreviewResume] = useState<{ id: string; title: string; subtitle?: string } | null>(null);
 
   /* Every job is listed; the search narrows it. Matching only `job.title`
      meant a JD number typed in full returned nothing — the number lives on
@@ -136,7 +197,8 @@ export default function ApplyToJobModal({
 
   const matchesSearch = (job: Job) => {
     if (!jobSearch) return true;
-    const j = job as any;
+    // Hosts hand in rows carrying the JD number under several names.
+    const j = job as Job & Record<string, unknown>;
     return [
       job.title,
       j.job_id,
@@ -159,27 +221,64 @@ export default function ApplyToJobModal({
       });
   };
 
-  const filteredJobs = jobs.filter(matchesSearch);
+  /* Every version, as fetched — what the lineage grouping needs to know which
+     version of a job is the latest one. Also what the "View Versions" test
+     below counts, exactly as the Job Openings list counts it. */
+  const allVersions = useMemo(() => fetchedJobs ?? jobs ?? [], [fetchedJobs, jobs]);
+  const versionGroups = useMemo(() => groupByLineage(allVersions), [allVersions]);
 
-  /* Eligible jobs lead. Without this the selectable ones can sit below a run of
-     greyed-out drafts, which reads as "nothing here can be picked". */
-  const sortedJobs = [...filteredJobs].sort((a, b) => {
-    const aOk = eligibilityFor(a).eligible ? 0 : 1;
-    const bOk = eligibilityFor(b).eligible ? 0 : 1;
-    return aOk - bOk;
-  });
-  const eligibleCount = filteredJobs.filter(j => eligibilityFor(j).eligible).length;
+  /* The selectable jobs, and the number reported above them: one row per
+     lineage, the latest version representing it, kept only where that latest
+     version is Published. `getPublishedJobs` is the same call behind the Job
+     Openings page's Published stat card, over the same request — so the count
+     in this dialog is that card's count, not a second opinion.
+
+     Applied BEFORE the search, so a query can never promote an older version to
+     stand in for its lineage. */
+  const publishedJobs = useMemo(() => getPublishedJobs(allVersions), [allVersions]);
+
+  const filteredJobs = useMemo(
+    () => publishedJobs.filter(matchesSearch),
+    // matchesSearch closes over the query, which is the only thing that changes it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [publishedJobs, jobSearch, jobSearchCompact],
+  );
+
+  /* Newest first — the Job Openings list's own default sort. Every row is a
+     published job, so there is no eligible-first partition to make. */
+  const sortedJobs = useMemo(() => sortJobs(filteredJobs, 'date', 'desc'), [filteredJobs]);
+
+  /* Pagination — same shape and page size as the Job Openings list. The page
+     is stored WITH the search it belongs to, so a new query starts back at page
+     one by comparison rather than by an effect that resets it a render later
+     (which would flash one page of the wrong rows). */
+  const [pageState, setPageState] = useState({ query: '', page: 1 });
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
+  const listRef = useRef<HTMLDivElement>(null);
+  const currentPage = pageState.query === jobSearch ? pageState.page : 1;
+  const setCurrentPage = (page: number) => setPageState({ query: jobSearch, page });
+
+  const totalPages = Math.max(1, Math.ceil(sortedJobs.length / itemsPerPage));
+  // A shrinking result set (a new search, a narrower list) can leave the
+  // current page past the end; clamp on read so the rows never come back empty
+  // while the page number still points somewhere.
+  const safePage = Math.min(currentPage, totalPages);
+  const currentJobs = sortedJobs.slice((safePage - 1) * itemsPerPage, safePage * itemsPerPage);
 
   /* One role at a time. Candidates are applied to a single job, so picking a
      second would be ambiguous rather than useful — the other rows go inert
-     until the current pick is cleared or swapped by clicking it again. */
-  const selectedJobId = selectedJobs[0] || null;
+     until the current pick is cleared or swapped by clicking it again. The pick
+     survives paging and searching, since it is held outside the list. */
+  const selectedJobId = selection?.job.id ?? null;
+  const selectionOnThisPage = !!selection && currentJobs.some(job => lineageKey(job) === selection.lineage);
 
-  const toggleJob = (jobId: string) => {
-    setSelectedJobs(prev => (prev[0] === jobId ? [] : [jobId]));
+  /* Pick a version — the card's own radio passes the latest, the Version
+     History rows pass an older one. Clicking the picked one lets go of it. */
+  const pickVersion = (job: Job, lineage: string) => {
+    setSelection(prev => (prev?.job.id === job.id ? null : { job, lineage }));
   };
 
-  const canSubmit = !!selectedJobId && includedResumes.length > 0;
+  const canSubmit = !!selection && includedResumes.length > 0;
 
   const handleApply = async () => {
     if (canSubmit) {
@@ -188,17 +287,25 @@ export default function ApplyToJobModal({
       // latest unless one was picked from the version list).
       const resumeIds = includedResumes.map(submittedIdFor);
 
+      /* The picked version's own id is what the candidates are applied to —
+         a version IS a JD record with its own id, so an older version chosen
+         from the history is submitted as itself, not as its lineage's latest. */
+      const picked = selection!.job;
+
       // Simulate API call
       setTimeout(() => {
-        onApply(resumeIds, selectedJobs);
+        onApply(resumeIds, [picked.id], [picked]);
         setIsApplying(false);
       }, 800);
     }
   };
 
   return (
+    <>
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      {/* Wider than a plain picker: the rows carry the Job Openings list's own
+          fields, and the version history table underneath them needs the room. */}
+      <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-6xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -220,7 +327,7 @@ export default function ApplyToJobModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div ref={listRef} className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Candidates Selected — shared with every other flow that acts
               on a set of candidates, so they all read the same. */}
           <SelectedCandidatesPanel
@@ -253,15 +360,25 @@ export default function ApplyToJobModal({
             <div className="flex items-center justify-between gap-2 mb-3">
               <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
                 Select a Job Opening
-                {filteredJobs.length > 0 && (
+                {/* The published-job count — the Job Openings page's own
+                    derivation, via getPublishedJobs. No total beside it and
+                    nothing hardcoded. It follows the search, so it always
+                    describes exactly what is listed. */}
+                {sortedJobs.length > 0 && (
                   <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
-                    {eligibleCount} of {filteredJobs.length} available
+                    &mdash; {sortedJobs.length} available
+                  </span>
+                )}
+                {loadingJobs && (
+                  <span className="ml-2 inline-flex items-center gap-1 font-normal text-gray-500 dark:text-slate-400">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Loading jobs...
                   </span>
                 )}
               </label>
-              {selectedJobId && (
+              {selection && (
                 <button
-                  onClick={() => setSelectedJobs([])}
+                  onClick={() => setSelection(null)}
                   className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
                 >
                   Clear Selection
@@ -269,189 +386,248 @@ export default function ApplyToJobModal({
               )}
             </div>
 
-            {sortedJobs.length > 0 ? (
-              <div className="space-y-2 sm:space-y-3 max-h-96 overflow-y-auto pr-1">
-                {sortedJobs.map(job => {
+            {/* The pick survives paging and searching, so say what it is when it
+                isn't on screen — otherwise a selected-but-elsewhere job reads as
+                no selection at all. */}
+            {selection && !selectionOnThisPage && (
+              <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/5 px-3 py-2 text-xs text-gray-700 dark:text-slate-300">
+                <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                <span>
+                  Selected: <span className="font-medium">
+                    {selection.job.job_id ? `${selection.job.job_id} · ` : ''}{selection.job.title}
+                    {' '}(v{selection.job.versionNumber ?? 1})
+                  </span>
+                  {' '}(on another page)
+                </span>
+              </div>
+            )}
+
+            {jobsError && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-200">
+                <span>{jobsError} {publishedJobs.length > 0 ? 'Showing the jobs already loaded.' : ''}</span>
+                <button
+                  onClick={() => setReloadToken(t => t + 1)}
+                  className="inline-flex items-center gap-1 font-medium text-amber-900 hover:underline dark:text-amber-100"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {currentJobs.length > 0 ? (
+              <div className="space-y-2 sm:space-y-3">
+                {currentJobs.map(job => {
+                  const versionKey = lineageKey(job);
+                  const versionsExpanded = versionLineage.isExpanded(versionKey);
+                  /* Two states, not one: `isSelected` is "this card's own
+                     latest version is the pick" (the card radio), while
+                     `lineageSelected` is "some version of this job is the pick"
+                     — which is what makes the card read as chosen when the pick
+                     came from its Version History. */
                   const isSelected = selectedJobId === job.id;
-                  const { eligible, reason: eligibilityReason } = eligibilityFor(job);
+                  const lineageSelected = selection?.lineage === versionKey;
+                  const selectedVersionOfThisJob = lineageSelected && !isSelected ? selection!.job : null;
                   /* One role at a time: once a job is picked the others go
                      inert, so "apply these candidates to that job" can't turn
-                     into two answers. Clicking the picked one lets go of it. */
-                  const blockedByOtherPick = eligible && !!selectedJobId && !isSelected;
-                  const selectable = eligible && !blockedByOtherPick;
+                     into two answers. Clicking the picked one lets go of it.
+                     This is now the ONLY thing that can block a row — every
+                     job in the list is published, so status never does. */
+                  const blockedByOtherPick = !!selection && !lineageSelected;
+                  const selectable = !blockedByOtherPick;
                   const reason = blockedByOtherPick
                     ? 'Only one job can be applied at a time — clear the current selection to choose this one'
-                    : eligibilityReason;
-                  const workMode = workModeConfig[(job as any).workMode?.toLowerCase() || (job as any).remote_type?.toLowerCase()] || null;
-                  const WorkModeIcon = workMode?.icon;
+                    : undefined;
 
-                  // Get status badge
-                  const getStatusBadge = (status: string) => {
-                    const configs: Record<string, { bg: string; text: string; dot: string }> = {
-                      draft: { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-500' },
-                      published: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
-                      Published: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
-                      archived: { bg: 'bg-gray-50 dark:bg-slate-800/50', text: 'text-gray-600 dark:text-slate-400', dot: 'bg-gray-400' },
-                      disabled: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-400' },
-                    };
-                    const config = configs[status] || configs.draft;
-                    return (
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`}></span>
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                      </span>
-                    );
-                  };
-
-                  // Get creation method badge
-                  const getCreationMethodBadge = (creationMethod: string) => {
-                    const isAI = creationMethod === 'ai_generated' || creationMethod === 'ai';
-                    return (
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                        isAI ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
-                      }`}>
-                        {isAI ? <Sparkles className="w-3 h-3" /> : <PenLine className="w-3 h-3" />}
-                        {isAI ? 'AI' : 'Manual'}
-                      </span>
-                    );
-                  };
+                  /* Only jobs with MORE THAN ONE version get the control — the
+                     same test the Job Openings list applies, counting DISTINCT
+                     version numbers rather than rows (a republished JD arrives
+                     as several rows sharing one job_id and one v1). */
+                  const distinctVersionCount = new Set(
+                    (versionGroups.get(versionKey) ?? [job]).map(sibling => sibling.versionNumber ?? 1),
+                  ).size;
+                  const hasVersionHistory = (job.versionNumber ?? 1) > 1 || distinctVersionCount > 1;
 
                   return (
-                    <label
+                    <div
                       key={job.id}
-                      /* Rows the user can't pick — wrong status, or another
-                         job already chosen — stay visible but inert, with the
-                         reason on the row and in the title attribute. */
-                      title={selectable || isSelected ? undefined : reason}
-                      aria-disabled={!selectable && !isSelected}
-                      className={`block rounded-lg border-2 p-3 sm:p-4 transition-all ${
-                        !selectable && !isSelected
-                          ? 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 opacity-60 cursor-not-allowed'
-                          : isSelected
-                            ? 'bg-brand-blue/5 border-brand-blue/40 shadow-sm shadow-brand-blue/10 cursor-pointer'
-                            : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03] cursor-pointer'
+                      /* A row the user can't pick — another job is already
+                         chosen — stays visible but inert, with the reason in
+                         the title attribute. */
+                      title={selectable ? undefined : reason}
+                      aria-disabled={!selectable}
+                      className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${
+                        !selectable
+                          ? 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 opacity-60'
+                          : lineageSelected
+                            ? 'bg-brand-blue/5 border-brand-blue/40 shadow-sm shadow-brand-blue/10'
+                            : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                       }`}
                     >
                       <div className="flex items-start gap-2 sm:gap-4">
-                        {/* A radio, because exactly one job is applied to. */}
-                        <input
-                          type="radio"
-                          name="apply-to-job-selection"
-                          checked={isSelected}
-                          disabled={!selectable && !isSelected}
-                          onChange={() => (selectable || isSelected) && toggleJob(job.id)}
-                          onClick={() => isSelected && toggleJob(job.id)}
-                          className="w-4 h-4 mt-1 text-brand-blue border-gray-300 dark:border-slate-700 focus:ring-brand-blue/40 flex-shrink-0 disabled:cursor-not-allowed"
-                        />
+                        {/* A radio, because exactly one job is applied to.
+                            Wrapped in its own label rather than the whole card:
+                            the card now carries links and a versions toggle,
+                            and a label around those would swallow their
+                            clicks. */}
+                        <label
+                          className={`flex items-center pt-1 ${selectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                          title={selectable ? `Apply to the latest version (v${job.versionNumber ?? 1})` : undefined}
+                        >
+                          <input
+                            type="radio"
+                            name={JOB_RADIO_GROUP}
+                            checked={isSelected}
+                            disabled={!selectable}
+                            onChange={() => selectable && pickVersion(job, versionKey)}
+                            onClick={() => isSelected && pickVersion(job, versionKey)}
+                            className="w-4 h-4 text-brand-blue border-gray-300 dark:border-slate-700 focus:ring-brand-blue/40 flex-shrink-0 disabled:cursor-not-allowed"
+                          />
+                          <span className="sr-only">Select {job.title}</span>
+                        </label>
+
                         <div className="flex-1 min-w-0">
-                          {/* Row 1: Job ID, Title, Status, Creation Method */}
-                          <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
-                            {/* Job ID Badge */}
-                            {(job as any).job_id && (
-                              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-blue-100 text-blue-700 rounded-md text-xs sm:text-sm font-medium border border-blue-200">
-                                {(job as any).job_id}
-                              </span>
-                            )}
-                            {/* Title */}
-                            <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">{job.title}</h3>
-                            {/* Status Badge */}
-                            {getStatusBadge(job.status)}
-                            {/* Creation Method Badge */}
-                            {(job as any).creation_method && getCreationMethodBadge((job as any).creation_method)}
-                            {/* Selected indicator */}
-                            {isSelected && eligible && (
-                              <CheckCircle className="w-5 h-5 text-brand-blue ml-auto flex-shrink-0" />
-                            )}
+                          {/* The job opening exactly as the Job Openings list
+                              renders it — same fields in the same places.
+
+                              `metaSingleLine` is the one layout difference:
+                              experience / posted / author / last updated /
+                              applicants stay on one horizontal row here instead
+                              of wrapping onto two.
+
+                              Clicking the headline picks the job, so the whole
+                              block is a target without a <label> wrapping the
+                              controls beside it. */}
+                          <div
+                            onClick={() => selectable && pickVersion(job, versionKey)}
+                            className={selectable ? 'cursor-pointer' : 'cursor-not-allowed'}
+                          >
+                            <JobOpeningSummary
+                              job={job}
+                              metaSingleLine
+                              trailingBadges={
+                                lineageSelected ? (
+                                  <CheckCircle className="w-5 h-5 text-brand-blue ml-auto flex-shrink-0" />
+                                ) : null
+                              }
+                            />
                           </div>
 
-                          {/* Why this one can't be picked */}
-                          {!selectable && !isSelected && reason && (
-                            <p className="flex items-center gap-1.5 mb-2 text-xs text-gray-600 dark:text-slate-400">
-                              <Ban className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
-                              {reason}
+                          {/* The headline above describes the LATEST version, so
+                              when the pick is an older one, name it — otherwise
+                              a highlighted card would imply the candidates are
+                              going to the version on display. */}
+                          {selectedVersionOfThisJob && (
+                            <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-brand-blue/10 px-2 py-1 text-xs font-medium text-brand-blue">
+                              <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                              Applying to v{selectedVersionOfThisJob.versionNumber ?? 1}, chosen from Version History
                             </p>
                           )}
-
-                          {/* Row 2: Industry, Location, Employment Type, Work Mode */}
-                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-2 flex-wrap">
-                            {/* Industry/Department */}
-                            {((job as any).industry_type || (job as any).department) && (
-                              <span className="flex items-center gap-1">
-                                <Building2 className="w-4 h-4" />
-                                {(job as any).industry_type || (job as any).department}
-                              </span>
-                            )}
-                            {/* Location */}
-                            {job.location && (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="w-4 h-4" />
-                                {job.location}
-                              </span>
-                            )}
-                            {/* Employment Type */}
-                            {((job as any).employmentType || (job as any).employment_type) && (
-                              <span className="flex items-center gap-1">
-                                <Briefcase className="w-4 h-4" />
-                                {formatEmploymentType((job as any).employmentType || (job as any).employment_type)}
-                              </span>
-                            )}
-                            {/* Work Mode */}
-                            {workMode && WorkModeIcon && (
-                              <span className={`flex items-center gap-1 px-2 py-0.5 rounded ${workMode.bgColor} ${workMode.textColor}`}>
-                                <WorkModeIcon className="w-3 h-3" />
-                                {workMode.label}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Row 3: Posted Date, Posted By, Last Updated */}
-                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-2 sm:mb-3 flex-wrap">
-                            {/* Posted Date */}
-                            {((job as any).postedDate || (job as any).published_at) && (
-                              <span className="flex items-center gap-1">
-                                <Calendar className="w-4 h-4" />
-                                Posted {formatISTDate((job as any).postedDate || (job as any).published_at)}
-                              </span>
-                            )}
-                            {/* Posted By / Created By */}
-                            {((job as any).postedBy || (job as any).created_by_name) && (
-                              <span className="flex items-center gap-1">
-                                <User className="w-4 h-4" />
-                                By {(job as any).postedBy || (job as any).created_by_name}
-                              </span>
-                            )}
-                            {/* Last Updated */}
-                            {(job as any).updated_at && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-4 h-4" />
-                                Last Updated: {formatRelativeTime((job as any).updated_at)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Row 4: Applicants */}
-                          <div className="flex items-center gap-2 text-xs sm:text-sm">
-                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500" />
-                            <span className="text-gray-700 dark:text-slate-300">{job.applicants || (job as any).applicants_count || 0} applicants</span>
-                          </div>
                         </div>
+
+                        {/* The eye on the latest version opens the Version
+                            History popup — a button, not a link, so nothing
+                            navigates and the candidates and the pick survive.
+                            Unconditional, unlike the View Versions button below:
+                            a single-version job opens here too, and the popup
+                            shows that one version. */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setVersionHistoryFor(job);
+                          }}
+                          className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                          aria-label="View version history"
+                          title="View version history"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                    </label>
+
+                      {/* View Versions — the card's bottom-right corner, on its
+                          own single horizontal row so it clears the details
+                          above it whatever they wrap to. */}
+                      {hasVersionHistory && (
+                        <div className="mt-3 flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              versionLineage.toggle(versionKey, job.id);
+                            }}
+                            aria-expanded={versionsExpanded}
+                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
+                              versionsExpanded
+                                ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50'
+                                : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                            }`}
+                            title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                          >
+                            {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Version history, expanded in place — the same panel
+                          the Job Openings list opens, minus the action menu
+                          (nothing here changes a JD). Titles open in a new tab
+                          so the dialog isn't thrown away mid-selection. */}
+                      {versionsExpanded && (
+                        <JobVersionHistoryPanel
+                          job={job}
+                          versions={versionLineage.lineages[versionKey]}
+                          loading={versionLineage.isLoading(versionKey)}
+                          versionDetails={versionLineage.versionDetails}
+                          versionApplicants={versionLineage.versionApplicants}
+                          openInNewTab
+                          /* The rows are things you TICK here, so the title's
+                             hover scale comes off — on a selectable row that
+                             little movement reads as the control twitching. */
+                          staticRows
+                          /* No renderAction, so the panel drops its Action
+                             column here — nothing in this dialog acts on a
+                             version. What it gets instead is a Select radio per
+                             row, sharing the job rows' radio group so picking a
+                             version releases whatever else was chosen. */
+                          onSelectVersion={(versionJob) => pickVersion(versionJob, versionKey)}
+                          selectedVersionId={selectedJobId}
+                          /* A card that is inert because another job is picked
+                             keeps its version radios inert too, or expanding it
+                             would offer a back door around the one-at-a-time
+                             rule the card itself enforces. */
+                          selectionDisabled={!selectable}
+                          selectionDisabledReason={reason}
+                          radioGroupName={JOB_RADIO_GROUP}
+                        />
+                      )}
+                    </div>
                   );
                 })}
               </div>
             ) : (
               <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
-                <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
-                <p className="text-xs sm:text-sm">
-                  {searchQuery ? 'No jobs found matching your search' : 'No jobs available'}
-                </p>
+                {loadingJobs ? (
+                  <>
+                    <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-brand-blue" />
+                    <p className="text-xs sm:text-sm">Loading job openings...</p>
+                  </>
+                ) : (
+                  <>
+                    <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
+                    <p className="text-xs sm:text-sm">
+                      {searchQuery ? 'No published jobs found matching your search' : 'No published jobs available'}
+                    </p>
+                  </>
+                )}
               </div>
             )}
+
           </div>
 
           {/* Info Box */}
-          {selectedJobId && (
+          {selection && (
             <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gradient-to-r from-gray-50 to-gray-50 dark:from-slate-800/50 dark:to-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="flex items-start gap-2 sm:gap-3">
                 <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
@@ -488,12 +664,46 @@ export default function ApplyToJobModal({
           )}
         </div>
 
+        {/* Pagination — the shared control, so page sizes, the page-number run
+            and the "Showing X to Y of N" line all behave as they do on the Job
+            Openings list. Clicking a page scrolls the rows above back to the
+            top.
+
+            Its own band OUTSIDE the scrolling body, between the rows and the
+            footer, so it is always visible and can never be overlapped by a row
+            — which a sticky bar inside the scroller was: `position: sticky`
+            pins the bottom MARGIN edge, so the negative margin used to bleed it
+            into the body's padding parked it short of the bottom with the next
+            row showing underneath.
+
+            `compact` is the shared control's smaller build — shorter select
+            and page buttons, smaller labels, no card chrome — so it reads as
+            part of the dialog like the footer beneath it rather than a card
+            floating in a band. Off everywhere else, so no other list changes.
+
+            Rendered only past the same row count ListPagination itself draws
+            at, so it never becomes an empty band. */}
+        {sortedJobs.length > 5 && (
+          <div className="flex-shrink-0 border-t border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 px-3 sm:px-5 py-1.5">
+            <ListPagination
+              compact
+              currentPage={safePage}
+              itemsPerPage={itemsPerPage}
+              totalItems={sortedJobs.length}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={setItemsPerPage}
+              itemLabel="published jobs"
+              scrollContainerRef={listRef}
+            />
+          </div>
+        )}
+
         {/* Footer */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
           <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
             {includedResumes.length === 0
               ? 'Select at least one candidate to continue'
-              : !selectedJobId
+              : !selection
                 ? 'Select one job to continue'
                 : (
                   <span className="flex items-center gap-1.5">
@@ -537,8 +747,21 @@ export default function ApplyToJobModal({
             </button>
           </div>
         </div>
+
       </div>
 
     </div>
+
+    {/* The Job Details page's Version History popup, unchanged and unwrapped —
+        one implementation, so the two surfaces cannot drift apart. */}
+    {versionHistoryFor && (
+      <JDVersionHistoryModal
+        isOpen
+        onClose={() => setVersionHistoryFor(null)}
+        jdId={versionHistoryFor.id}
+        jdTitle={versionHistoryFor.title}
+      />
+    )}
+    </>
   );
 }

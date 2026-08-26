@@ -1,0 +1,293 @@
+/**
+ * Job-opening display logic, shared by every surface that lists JDs.
+ *
+ * The Job Openings page is the reference listing. Anything else that shows the
+ * same jobs — the Apply to Job / Score Resume dialog most of all — imports from
+ * here rather than re-deriving a label or a badge colour, so a change to how a
+ * job reads on that page reaches the other surfaces with it.
+ *
+ * Everything in this module is pure: formatting, badge tokens, the API → Job
+ * mapping, lineage collapsing and the list sort. No fetching, no React.
+ */
+
+import type { Job } from '@/lib/types/types';
+import type { JDResponse } from '@/lib/services/jdService';
+import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
+import { formatJobExperienceText } from '@/lib/utils/jobExperience';
+
+/** "full_time" → "Full Time". A dash when there is nothing to format. */
+export const formatEmploymentType = (type: string | undefined): string => {
+  if (!type) return '-';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+/** "information_technology" → "Information Technology". */
+export const formatIndustryType = (type: string | undefined): string => {
+  if (!type) return '-';
+  return type
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+/**
+ * Within 24 hours: "31 mins ago" / "3 hours ago". Older than that: the date.
+ * Server times are UTC, so they go through the IST parser first.
+ */
+export const formatLastUpdated = (dateString: string | undefined): string => {
+  if (!dateString) return '-';
+
+  const istDate = parseIST(dateString);
+  const now = new Date();
+
+  const diffInSeconds = Math.floor((now.getTime() - istDate.getTime()) / 1000);
+  const diffInHours = Math.floor(diffInSeconds / 3600);
+
+  if (diffInHours >= 0 && diffInHours < 24) {
+    if (diffInHours === 0) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      if (minutes < 1) return 'Just now';
+      return `${minutes} ${minutes === 1 ? 'min' : 'mins'} ago`;
+    }
+    return `${diffInHours} ${diffInHours === 1 ? 'hour' : 'hours'} ago`;
+  }
+
+  return formatISTDate(dateString);
+};
+
+/**
+ * Display status — a published JD on its 2nd publish or later reads
+ * "Republished". Driven by `current_version`, the JD's publish counter.
+ */
+export const getDisplayStatus = (status: string, currentVersion?: number): string => {
+  if (status === 'Published' && currentVersion && currentVersion > 1) {
+    return 'Republished';
+  }
+  return status;
+};
+
+export interface BadgeTokens {
+  bg: string;
+  text: string;
+  border: string;
+  dot: string;
+}
+
+export const getStatusConfig = (status: string): BadgeTokens => {
+  switch (status) {
+    case 'Published':
+      return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500' };
+    case 'Republished':
+      return { bg: 'bg-brand-blue/10', text: 'text-brand-blue', border: 'border-brand-blue/20', dot: 'bg-brand-blue' };
+    case 'Draft':
+      return { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', border: 'border-brand-orange/20', dot: 'bg-brand-orange' };
+    case 'Closed':
+      return { bg: 'bg-gray-50', text: 'text-gray-600', border: 'border-gray-200', dot: 'bg-gray-400' };
+    case 'Disabled':
+      return { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200', dot: 'bg-red-500' };
+    case 'Archived':
+      return { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200', dot: 'bg-gray-400' };
+    default:
+      return { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200', dot: 'bg-gray-500' };
+  }
+};
+
+export const getCreationMethodConfig = (method: string | undefined): BadgeTokens & { label: string } => {
+  if (method === 'ai_generated') {
+    return {
+      bg: 'bg-brand-blue-2/10',
+      text: 'text-brand-blue-2',
+      border: 'border-brand-blue-2/20',
+      dot: 'bg-brand-blue-2',
+      label: 'AI',
+    };
+  }
+  return {
+    bg: 'bg-brand-cyan/10',
+    text: 'text-brand-cyan',
+    border: 'border-brand-cyan/20',
+    dot: 'bg-brand-cyan',
+    label: 'Manual',
+  };
+};
+
+export const calculateDaysActive = (createdAt: string | undefined): number => {
+  if (!createdAt) return 0;
+  const created = new Date(createdAt);
+  const now = new Date();
+  return Math.ceil(Math.abs(now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+};
+
+export const mapJDStatus = (status: string): Job['status'] => {
+  const statusMap: Record<string, Job['status']> = {
+    published: 'Published',
+    active: 'Published',
+    draft: 'Draft',
+    closed: 'Closed',
+    archived: 'Archived',
+    disabled: 'Disabled',
+  };
+  return statusMap[status?.toLowerCase()] || 'Draft';
+};
+
+/**
+ * One JD row as the list endpoints return it. JDResponse plus the few fields
+ * the API sends that its type does not declare — the lineage version above
+ * all, which is what the vN badge reads.
+ */
+export type JDListRow = JDResponse & {
+  version_number?: number;
+  required_match?: number;
+  skills?: string[];
+};
+
+/**
+ * One API JD row → the `Job` the listing renders.
+ *
+ * This is the Job Openings page's own mapping, lifted here so the Apply to Job
+ * dialog builds its rows from exactly the same fields. Every host used to keep
+ * its own partial copy, and the fields each one forgot (publish count, lineage
+ * version, experience) were precisely the ones missing from its list.
+ */
+export const mapJDToJob = (jd: JDListRow): Job => ({
+  id: jd.id,
+  job_id: jd.job_id, // Human-readable ID like JD-001
+  title: jd.title || 'Untitled',
+  status: mapJDStatus(jd.status),
+  location: jd.location || (jd.locations || []).map((loc) => loc?.city).filter(Boolean).join(', ') || '',
+  daysActive: calculateDaysActive(jd.created_at),
+  requiredMatch: jd.required_match || 70,
+  department: jd.department,
+  industry_type: jd.industry_type,
+  experience: formatJobExperienceText({
+    jobLevel: jd.job_level || jd.experience_level,
+    experienceMin: jd.experience_min,
+    experienceMax: jd.experience_max,
+  }),
+  experience_min: jd.experience_min,
+  experience_max: jd.experience_max,
+  applicants: jd.applicants_count || 0,
+  description: jd.description,
+  skills: jd.skills || jd.must_have_skills || [],
+  postedDate: jd.created_at,
+  postedBy: jd.created_by_name || jd.created_by,
+  employmentType: jd.employment_type,
+  workMode: jd.remote_type, // onsite, hybrid, remote
+  created_at: jd.created_at, // For accurate sorting
+  updated_at: jd.updated_at, // For last updated display
+  creation_stage: jd.creation_stage, // For draft JDs
+  creation_method: jd.creation_method, // AI or Manual
+  currentVersion: jd.current_version, // publish count → drives the "Republished" label
+  versionNumber: jd.version_number ?? 1, // lineage version → v1/v2 badge (same JD-ID)
+  experience_level: jd.job_level || jd.experience_level,
+});
+
+/**
+ * Lineage key — what the versions of one job share. Rows without a job_id
+ * (drafts that never got one) fall back to their own id and stay individual.
+ */
+export const lineageKey = (job: Job): string => job.job_id || job.id;
+
+/**
+ * Newest version of a lineage first: highest `version_number`, then most
+ * recently created.
+ *
+ * The date is the tie-break, not decoration. When the list endpoint omits
+ * `version_number` every row in the lineage falls back to 1, the numeric
+ * comparison ties, and "latest" would quietly become whatever order the API
+ * happened to return — enough to flip a job's representative between a draft
+ * and a published version from one load to the next, and with it the published
+ * count derived below.
+ */
+const byLatestVersion = (a: Job, b: Job): number => {
+  const versionDelta = (b.versionNumber ?? 1) - (a.versionNumber ?? 1);
+  if (versionDelta !== 0) return versionDelta;
+  const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+  const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+  return bTime - aTime;
+};
+
+/**
+ * Group rows by lineage, newest version first inside each bucket, so `[0]` is
+ * the row that represents the job. "Newest" is read from the data (see
+ * `byLatestVersion`), never assumed to be first or last in the response.
+ */
+export const groupByLineage = (list: Job[]): Map<string, Job[]> => {
+  const groups = new Map<string, Job[]>();
+  for (const job of list) {
+    const key = lineageKey(job);
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(job);
+    else groups.set(key, [job]);
+  }
+  groups.forEach(bucket => bucket.sort(byLatestVersion));
+  return groups;
+};
+
+/** One row per job — the lineage representative of each group. */
+export const collapseToLatestVersions = (list: Job[]): Job[] =>
+  Array.from(groupByLineage(list).values(), bucket => bucket[0]);
+
+/**
+ * The published jobs in a list of JD versions — THE definition, used by the
+ * Job Openings page's Published stat card and by the Apply to Job dialog's
+ * "N available" line and its selectable list.
+ *
+ * A job counts as published when the LATEST version of its lineage is
+ * published. Not "has a published version somewhere": a job whose v3 is a
+ * draft over a published v2 is being re-drafted, and the page treats it as a
+ * draft. That distinction is the whole reason the two places disagreed — the
+ * dialog used to ask the API for `status: 'published'`, which stripped the v3
+ * before the lineage could be collapsed, so the v2 stood in as the latest and
+ * the job was counted here but not there.
+ *
+ * Therefore: pass the FULL, unfiltered version list. Filtering by status
+ * upstream of this call makes it answer the other question.
+ */
+export const getPublishedJobs = (allVersions: Job[]): Job[] =>
+  collapseToLatestVersions(allVersions).filter(job => job.status === 'Published');
+
+export type JobSortBy = 'date' | 'applicants' | 'title' | 'status' | 'industry';
+export type JobSortOrder = 'asc' | 'desc';
+
+/** The listing's sort. 'desc' inverts the natural order (newest/largest first). */
+export const sortJobs = (list: Job[], sortBy: JobSortBy, sortOrder: JobSortOrder): Job[] =>
+  [...list].sort((a, b) => {
+    let comparison = 0;
+
+    switch (sortBy) {
+      case 'date': {
+        // created_at if available, falling back to postedDate.
+        const dateA = a.created_at ? new Date(a.created_at).getTime() : (a.postedDate ? new Date(a.postedDate).getTime() : 0);
+        const dateB = b.created_at ? new Date(b.created_at).getTime() : (b.postedDate ? new Date(b.postedDate).getTime() : 0);
+        comparison = dateA - dateB; // ascending; 'desc' flips it to newest first
+        break;
+      }
+      case 'applicants':
+        comparison = (a.applicants || 0) - (b.applicants || 0);
+        break;
+      case 'title':
+        comparison = a.title.localeCompare(b.title);
+        break;
+      case 'status':
+        comparison = a.status.localeCompare(b.status);
+        break;
+      case 'industry': {
+        // Case-insensitive, with jobs that have no industry always last.
+        const indA = (a.industry_type || '').trim().toLowerCase();
+        const indB = (b.industry_type || '').trim().toLowerCase();
+        if (!indA && indB) return 1;
+        if (indA && !indB) return -1;
+        if (!indA && !indB) return 0;
+        comparison = indA.localeCompare(indB);
+        break;
+      }
+      default:
+        comparison = 0;
+    }
+
+    return sortOrder === 'desc' ? -comparison : comparison;
+  });
