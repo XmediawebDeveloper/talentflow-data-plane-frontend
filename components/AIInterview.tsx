@@ -2723,7 +2723,11 @@ export default function AIInterview() {
         variant="warning"
       >
         {resendInviteTarget && (() => {
-          const createdMs = resendInviteTarget.created_at ? new Date(resendInviteTarget.created_at).getTime() : NaN;
+          /* Anchor on the last send, mirroring the backend: on a second resend
+             created_at would make the window "expiry minus creation" and the
+             preview would promise a longer validity than the server grants. */
+          const sentAnchor = resendInviteTarget.invitation_sent_at || resendInviteTarget.created_at;
+          const createdMs = sentAnchor ? new Date(sentAnchor).getTime() : NaN;
           const expiresMs = resendInviteTarget.expires_at ? new Date(resendInviteTarget.expires_at).getTime() : NaN;
           let durationMs = 24 * 60 * 60 * 1000;
           if (Number.isFinite(createdMs) && Number.isFinite(expiresMs) && expiresMs > createdMs) {

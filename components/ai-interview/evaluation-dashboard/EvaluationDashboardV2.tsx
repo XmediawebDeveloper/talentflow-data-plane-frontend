@@ -431,12 +431,20 @@ export function QuestionsView({ data }: { data: DashboardData }) {
   const nhScored = nhQs.filter(q => !q.isUnscored);
   const mhDenom = Math.max(data.plannedCounts?.mustHave || 0, mhScored.length);
   const nhDenom = Math.max(data.plannedCounts?.niceToHave || 0, nhScored.length);
-  const mhScore = mhDenom > 0
+  // Use the AUTHORITATIVE backend section score (data.scores.*) — the exact
+  // value that drives the Match Score, Pass/Fail and the Evaluation Report — so
+  // this card cannot drift from those surfaces. Recomputing sum(qScore)/denom
+  // on the frontend summed already-rounded per-question scores and produced a
+  // ±0.1 mismatch (e.g. card 2.10 vs report/Match-Score 2.00). Fall back to the
+  // local recompute only when the backend value is missing (old evals).
+  const _mhRecompute = mhDenom > 0
     ? Math.round((mhScored.reduce((s, q) => s + q.questionScore, 0) / mhDenom) * 10) / 10
     : 0;
-  const nhScore = nhDenom > 0
+  const _nhRecompute = nhDenom > 0
     ? Math.round((nhScored.reduce((s, q) => s + q.questionScore, 0) / nhDenom) * 10) / 10
     : 0;
+  const mhScore = (typeof data.scores?.mustHave === 'number') ? data.scores.mustHave : _mhRecompute;
+  const nhScore = (typeof data.scores?.niceToHave === 'number') ? data.scores.niceToHave : _nhRecompute;
   const mhPass = mhScore >= MHS_THRESHOLD;
 
   // Per-Q card renderer (extracted so the grouped-by-section rendering

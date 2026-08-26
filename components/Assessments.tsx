@@ -4622,7 +4622,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         title="Duplicate assessment?"
         description={
           cloneTargetAssessment
-            ? `A draft copy of "${stripVersionFromTitle(cloneTargetAssessment.title || '')}" will be created. You can edit it before publishing.`
+            ? `A draft copy of "${stripVersionFromTitle(cloneTargetAssessment.title || '')}" will be created as the next version`
+              + `${cloneTargetAssessment.short_id ? ` of ${cloneTargetAssessment.short_id}` : ''}`
+              + `, keeping the same assessment ID. You can edit it before publishing.`
             : ''
         }
         confirmText={isCloning ? 'Duplicating…' : 'Duplicate'}

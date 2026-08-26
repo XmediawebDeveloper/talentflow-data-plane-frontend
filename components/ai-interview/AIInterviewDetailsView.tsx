@@ -1875,8 +1875,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     !(a.candidate_email || '').toLowerCase().includes(q)) return false;
               }
               if (inviteDateFrom || inviteDateTo) {
-                if (!a.created_at) return false;
-                const d = parseIST(a.created_at);
+                /* Filter on the same moment the row prints as "Invited" — the
+                   last send, falling back to created_at on pre-column rows. */
+                const invitedAt = a.invitation_sent_at || a.created_at;
+                if (!invitedAt) return false;
+                const d = parseIST(invitedAt);
                 if (inviteDateFrom && d < new Date(`${inviteDateFrom}T00:00:00`)) return false;
                 if (inviteDateTo && d > new Date(`${inviteDateTo}T23:59:59`)) return false;
               }
@@ -2049,10 +2052,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             })()}
 
                             <div className="hidden sm:flex items-center gap-3 text-[10px] text-gray-400">
-                              {a.created_at && (
+                              {(a.invitation_sent_at || a.created_at) && (
                                 <span className="flex items-center gap-1" title="Invited">
                                   <Mail className="w-3 h-3 text-brand-blue" />
-                                  {formatIST(a.created_at)}
+                                  {formatIST(a.invitation_sent_at || a.created_at)}
                                 </span>
                               )}
                               {a.started_at && (
