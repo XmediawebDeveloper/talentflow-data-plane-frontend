@@ -257,6 +257,29 @@
   /* Light sky blue — alternative table-header background (bg-brand-sky) */
   --brand-sky: #e0f2fe;
 
+  /* ── Three-dot (⋮) action-menu icon tokens ──────────────────────────
+     One semantic color per action "family" used across every ⋮ menu in the
+     app (Job Openings, Resumes, Scored Resumes, Assessments, AI Interviews).
+     These alias the brand palette above rather than duplicating its hex
+     values, so retuning a menu icon's color never touches the general brand
+     tokens used elsewhere (buttons, badges, chips, marketing...) — change one
+     line here and every ⋮ menu's icon of that kind updates together. */
+  --menu-icon-view: var(--brand-blue);
+  --menu-icon-secondary: var(--brand-blue-2);
+  --menu-icon-download: var(--brand-cyan);
+  --menu-icon-share: var(--brand-teal);
+  --menu-icon-edit: var(--brand-orange-deep);
+  --menu-icon-archive: var(--brand-orange);
+  --menu-icon-activate: #15803d;
+  --menu-icon-ai: var(--brand-cyan);
+  --menu-icon-score: var(--brand-teal);
+
+  /* Tint for native form controls (checkbox / radio). The app ships no
+     forms plugin, so these stay browser-drawn and only `accent-color` can
+     colour them. Light mode keeps the browser default — see the .dark
+     override further down for the dark-mode value. */
+  --control-accent: var(--brand-blue);
+
   /* ── Marketing palette (public pages) ───────────────────────────────────
      The marketing pages can't reuse bg-white / text-brand-blue: the dark-mode
      compatibility layer near the bottom of this file repaints those utilities
@@ -504,6 +527,18 @@
   --color-brand-orange-deep: var(--brand-orange-deep);
   --color-brand-peach: var(--brand-peach);
   --color-brand-sky: var(--brand-sky);
+
+  /* Three-dot (⋮) menu icon utilities — text-menu-icon-view,
+     text-menu-icon-archive, etc. See the token definitions in :root above. */
+  --color-menu-icon-view: var(--menu-icon-view);
+  --color-menu-icon-secondary: var(--menu-icon-secondary);
+  --color-menu-icon-download: var(--menu-icon-download);
+  --color-menu-icon-share: var(--menu-icon-share);
+  --color-menu-icon-edit: var(--menu-icon-edit);
+  --color-menu-icon-archive: var(--menu-icon-archive);
+  --color-menu-icon-activate: var(--menu-icon-activate);
+  --color-menu-icon-ai: var(--menu-icon-ai);
+  --color-menu-icon-score: var(--menu-icon-score);
 
   /* Marketing palette utilities — bg-mkt-surface, text-mkt-ink,
      border-mkt-accent, bg-mkt-amber/10, and so on. Alpha modifiers work
@@ -869,6 +904,72 @@ a:focus:not(:focus-visible) {
   border-color: var(--border);
 }
 .dark input::placeholder { color: var(--text-muted); }
+
+/* Checkboxes are excluded from the rule above — they are browser-drawn
+   controls, not boxes that background/border can paint. Left native they show
+   as a bright white square that dominates a dark table (worst on the
+   select-all column, where one sits on every row).
+
+   `color-scheme: dark` is already set on `.dark` and the engine still paints
+   them white here, and `accent-color` only reaches the checked fill, so
+   neither is enough on its own. `appearance: none` takes the control away
+   from the engine entirely and we draw all four states ourselves from the
+   existing theme tokens. Dark-mode only — light mode keeps the native
+   control exactly as it is today.
+
+   Sized in px to match the native 13px box, so rows do not shift height
+   between themes. */
+.dark input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border: 1px solid var(--border-dark);
+  border-radius: 3px;
+  background-color: var(--input-background);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 10px 10px;
+  cursor: pointer;
+  transition: background-color 120ms ease-out, border-color 120ms ease-out;
+}
+
+.dark input[type="checkbox"]:hover:not(:disabled) {
+  border-color: var(--control-accent);
+}
+
+.dark input[type="checkbox"]:checked,
+.dark input[type="checkbox"]:indeterminate {
+  background-color: var(--control-accent);
+  border-color: var(--control-accent);
+}
+
+/* White tick / dash, inlined so the control needs no network request. */
+.dark input[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8.5l3.5 3.5L13 4.5'/%3E%3C/svg%3E");
+}
+
+.dark input[type="checkbox"]:indeterminate {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M4 8h8'/%3E%3C/svg%3E");
+}
+
+.dark input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Radios keep the native control; only their tint needs lifting. */
+.dark input[type="radio"] {
+  accent-color: var(--control-accent);
+}
+
+/* The brand blue at :root is a dark ink chosen for white surfaces; on a dark
+   row it reads as near-black. Same lift the rest of the dark brand family
+   gets — keep in step with `.dark .bg-brand-blue` below. */
+.dark {
+  --control-accent: #2563eb;
+}
 .dark textarea {
   background-color: var(--input-background);
   color: var(--text-primary);
@@ -1140,6 +1241,18 @@ a:focus:not(:focus-visible) {
 .dark .text-brand-teal        { color: #5eead4; }
 .dark .text-brand-orange      { color: #fdba74; }
 .dark .text-brand-orange-deep { color: #fdba74; }
+
+/* Three-dot (⋮) menu icon tokens — same lift as their brand-family aliases
+   above, kept in sync with --menu-icon-* in :root. */
+.dark .text-menu-icon-view      { color: #93c5fd; }
+.dark .text-menu-icon-secondary { color: #a5c4fb; }
+.dark .text-menu-icon-download  { color: #67e8f9; }
+.dark .text-menu-icon-share     { color: #5eead4; }
+.dark .text-menu-icon-edit      { color: #fdba74; }
+.dark .text-menu-icon-archive   { color: #fdba74; }
+.dark .text-menu-icon-activate  { color: #4ade80; }
+.dark .text-menu-icon-ai        { color: #67e8f9; }
+.dark .text-menu-icon-score     { color: #5eead4; }
 
 /* Hover text */
 .dark .hover\:text-brand-blue:hover        { color: #bfdbfe; }

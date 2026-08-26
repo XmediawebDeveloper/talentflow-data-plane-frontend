@@ -39,10 +39,14 @@ export default function NoResumesEmptyState({
       </h3>
 
       {/* max-w keeps the copy breaking into the two balanced lines the design
-          calls for instead of one long measure on wide screens. */}
-      <p className="mt-2.5 max-w-sm text-sm leading-relaxed text-gray-500 sm:text-base">
-        {description}
-      </p>
+          calls for instead of one long measure on wide screens. An explicit
+          empty string (the Archived Resumes folder) drops the paragraph
+          entirely rather than leaving a blank line. */}
+      {description && (
+        <p className="mt-2.5 max-w-sm text-sm leading-relaxed text-gray-500 sm:text-base">
+          {description}
+        </p>
+      )}
 
       {onAction && (
         <button

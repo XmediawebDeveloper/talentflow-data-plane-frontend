@@ -729,6 +729,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // quick action, so the recruiter never leaves this page to invite candidates.
   const [shareAIInterviewConfig, setShareAIInterviewConfig] = useState<AIInterviewResponse | null>(null);
   const [resolvingInviteConfig, setResolvingInviteConfig] = useState(false);
+  /* Candidate seeded into "Send AI Interview via Email" when the invite is
+     started from a Scored Resumes row, so the recruiter lands on a filled
+     form instead of retyping the name and email they just looked at. Null for
+     the page-level Invite button, which opens the form empty as before. */
+  const [aiInterviewInviteSeed, setAiInterviewInviteSeed] = useState<
+    { name: string; email: string; resumeId?: string }[] | null
+  >(null);
   // AI Interview Results tab. The config is fetched lazily on first open rather
   // than on mount — resolving it pages through the tenant's configs, which
   // isn't worth doing on every Job Details load for a tab most visits skip.
@@ -882,8 +889,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(job.id)}&from=job-details`);
   };
 
-  const handleInviteAIInterview = async () => {
+  /* `seed` pre-fills the invite form's candidate list. The page-level Invite
+     button passes nothing and gets the empty form; a Scored Resumes row passes
+     that candidate. Everything after the lookup is identical either way, so
+     both entry points resolve the same config and open the same modal. */
+  const handleInviteAIInterview = async (
+    seed?: { name: string; email: string; resumeId?: string }[],
+  ) => {
     if (resolvingInviteConfig) return;
+    setAiInterviewInviteSeed(seed ?? null);
     setResolvingInviteConfig(true);
     try {
       // The invite modal needs the live config for this JD. Resolving it here
@@ -2016,7 +2030,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const aiInterviewInviteAction =
     permissions.canShareAIInterviews && hasPlanFeature('ai_interview') ? (
       <button
-        onClick={handleInviteAIInterview}
+        /* Wrapped so the click event isn't passed through as the candidate
+           seed — this entry point opens the form empty. */
+        onClick={() => handleInviteAIInterview()}
         disabled={!features.ai_interview || job.status === 'Disabled' || resolvingInviteConfig || !hasLiveAIInterview}
         title={
           !features.ai_interview
@@ -3233,6 +3249,15 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               onScoreResumes={
                 canScoreResumesFromTab ? () => setShowSelectSourceModal(true) : undefined
               }
+              /* Row-level "Invite → AI Interview". Same resolve-then-share
+                 path as this page's own Invite button, seeded with the row's
+                 candidate. Omitted when the viewer can't share, so the option
+                 simply isn't offered. */
+              onInviteAIInterview={
+                permissions.canShareAIInterviews && hasPlanFeature('ai_interview') && features.ai_interview && job.status !== 'Disabled'
+                  ? (candidate) => handleInviteAIInterview([candidate])
+                  : undefined
+              }
               onViewCandidate={(resume) => {
                 // Pass resume directly - data already formatted by fetchScoredResumes
                 // CandidateScoringDetailPage handles the same format as ResumeScoringPage
@@ -3772,8 +3797,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {shareAIInterviewConfig && (
         <ShareAIInterviewModal
           isOpen={!!shareAIInterviewConfig}
-          onClose={() => setShareAIInterviewConfig(null)}
+          onClose={() => { setShareAIInterviewConfig(null); setAiInterviewInviteSeed(null); }}
           config={shareAIInterviewConfig}
+          initialCandidates={aiInterviewInviteSeed ?? undefined}
           onInviteSent={() => {
             setAiInterviewCount((prev) => Math.max(prev + 1, 1));
             toast.success('AI interview invitation sent');

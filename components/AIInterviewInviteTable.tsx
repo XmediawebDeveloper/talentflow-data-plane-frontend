@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -230,6 +231,10 @@ interface RowAction {
   title?: string;
   destructive?: boolean;
   busy?: boolean;
+  /** Icon-only color for the desktop ⋮ menu — one of the shared menu-icon-*
+   *  tokens (globals.css). Omitted for destructive actions, which the
+   *  DropdownMenuItem `variant="destructive"` prop already colors. */
+  iconClassName?: string;
 }
 
 export interface AIInterviewInviteTableProps {
@@ -282,13 +287,13 @@ export default function AIInterviewInviteTable({
     const actions: RowAction[] = [];
 
     if (isInterviewLinkLive(inv)) {
-      actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInterviewLink(inv) });
+      actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInterviewLink(inv), iconClassName: 'text-menu-icon-download' });
     }
     /* View Details is completed-only — same rule as the assessment tracker:
        only Completed / Auto Completed invites have a result to open, so
        In Progress and Terminated rows no longer offer the action. */
     if (onViewDetails && inv.status === 'completed') {
-      actions.push({ key: 'view', label: 'View Details', Icon: Eye, run: () => onViewDetails(inv) });
+      actions.push({ key: 'view', label: 'View Details', Icon: Eye, run: () => onViewDetails(inv), iconClassName: 'text-menu-icon-view' });
     }
     if (onResend && canResendInvite(inv)) {
       actions.push({
@@ -299,6 +304,7 @@ export default function AIInterviewInviteTable({
         title: 'Revoke old link and send a new invitation',
         busy: resendingId === inv.id,
         disabled: resendingId === inv.id,
+        iconClassName: 'text-menu-icon-share',
       });
     }
     if (onEdit && canEditOrRevoke(inv)) {
@@ -311,6 +317,7 @@ export default function AIInterviewInviteTable({
         // to, so it stays disabled until the invitation is revoked.
         disabled: inv.status !== 'revoked',
         title: inv.status === 'revoked' ? 'Edit candidate details' : 'Revoke this invitation first to edit it',
+        iconClassName: 'text-menu-icon-edit',
       });
     }
     if (onRevoke && canEditOrRevoke(inv)) {
@@ -619,15 +626,20 @@ export default function AIInterviewInviteTable({
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44">
-                          {actions.map(({ key, label, Icon, run, disabled, destructive, busy }) => (
+                          {actions.map(({ key, label, Icon, run, disabled, destructive, busy, iconClassName }) => (
                             <DropdownMenuItem
                               key={key}
+                              className="group"
                               disabled={disabled}
                               variant={destructive ? 'destructive' : 'default'}
                               onSelect={run}
                             >
-                              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Icon className="w-3.5 h-3.5" />}
-                              {label}
+                              {busy ? (
+                                <Loader2 className={`w-3.5 h-3.5 animate-spin ${iconClassName || ''}`} />
+                              ) : (
+                                <Icon className={`w-3.5 h-3.5 ${iconClassName || ''}`} />
+                              )}
+                              <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
                             </DropdownMenuItem>
                           ))}
                         </DropdownMenuContent>

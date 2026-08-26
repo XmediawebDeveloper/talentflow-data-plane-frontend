@@ -2,6 +2,7 @@
 
 import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban, XCircle, Check, Info, RefreshCw } from 'lucide-react';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -1773,40 +1774,40 @@ export default function AIInterview() {
                                 }
                                 setOpenMenuId(willOpen ? config.id : null);
                               }}
-                              className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-700 rounded-lg transition-colors"
+                              className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all"
                               aria-label="More actions"
                             >
-                              <MoreVertical className="w-4 h-4" />
+                              <MoreVertical className="w-4 h-4 text-gray-600" />
                             </button>
                             {openMenuId === config.id && (
                               <div
                                 onClick={(e) => e.stopPropagation()}
-                                className={`absolute right-0 w-52 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 rounded-lg shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 max-h-[70dvh] overflow-y-auto p-1 ${
-                                menuDropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+                                className={`absolute right-0 w-52 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 rounded-lg shadow-xl z-[9999] max-h-[70dvh] overflow-y-auto py-1 ${
+                                menuDropUp ? 'bottom-full mb-1' : 'top-full mt-1'
                               }`}>
                                 <button
                                   onClick={() => { router.push(`/recruitment/ai-interviews/${config.id}`); setOpenMenuId(null); }}
-                                  className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 transition-colors"
                                 >
-                                  <Eye className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-slate-500" />
-                                  View Details
+                                  <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
                                 </button>
                                 {config.status === 'published' && canInviteAIInterviews && (
                                   <button
                                     onClick={() => { setShareConfig(config); setOpenMenuId(null); }}
-                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+                                    className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 transition-colors"
                                   >
-                                    <Send className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-slate-500" />
-                                    Share / Invite
+                                    <Send className="w-4 h-4 flex-shrink-0 text-menu-icon-share" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>Share / Invite</span>
                                   </button>
                                 )}
                                 {config.status === 'published' && canInviteAIInterviews && (
                                   <button
                                     onClick={() => handleViewInvitations(config)}
-                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+                                    className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 transition-colors"
                                   >
-                                    <Users className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-slate-500" />
-                                    View Invitations
+                                    <Users className="w-4 h-4 flex-shrink-0 text-menu-icon-secondary" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>View Invitations</span>
                                   </button>
                                 )}
                                 {(canArchiveAIInterviews || canDeleteAIInterviews) && (
@@ -1815,19 +1816,19 @@ export default function AIInterview() {
                                 {config.status !== 'archived' && canArchiveAIInterviews && (
                                   <button
                                     onClick={() => handleArchiveConfig(config)}
-                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+                                    className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 transition-colors"
                                   >
-                                    <Archive className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-slate-500" />
-                                    Archive
+                                    <Archive className="w-4 h-4 flex-shrink-0 text-menu-icon-archive" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>Archive</span>
                                   </button>
                                 )}
                                 {config.status === 'archived' && canArchiveAIInterviews && (
                                   <button
                                     onClick={() => handleUnarchiveConfig(config)}
-                                    className="w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+                                    className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 transition-colors"
                                   >
-                                    <ArchiveRestore className="w-4 h-4 flex-shrink-0 text-gray-400 dark:text-slate-500" />
-                                    Unarchive
+                                    <ArchiveRestore className="w-4 h-4 flex-shrink-0 text-menu-icon-archive" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>Unarchive</span>
                                   </button>
                                 )}
                                 {canDeleteAIInterviews && (
@@ -1835,14 +1836,14 @@ export default function AIInterview() {
                                     onClick={() => handleDeleteConfig(config)}
                                     disabled={!!config.invitations_count && config.invitations_count > 0}
                                     title={config.invitations_count && config.invitations_count > 0 ? 'Cannot delete — candidates have already started this interview' : ''}
-                                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 text-xs font-medium rounded-lg ${
+                                    className={`group w-full flex items-center gap-2 px-4 py-2.5 text-sm ${
                                       config.invitations_count && config.invitations_count > 0
                                         ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
                                         : 'text-red-600 hover:bg-red-50'
                                     } transition-colors`}
                                   >
                                     <Trash2 className="w-4 h-4 flex-shrink-0" />
-                                    Delete
+                                    <span className={MENU_ITEM_SCALE_CLASS}>Delete</span>
                                   </button>
                                 )}
                               </div>
