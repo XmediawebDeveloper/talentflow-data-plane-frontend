@@ -1959,9 +1959,30 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // to the lowest master level's years; a COMPLEX JD (many skills/tools) is left
   // BLANK so the recruiter fills From/To manually after extraction.
   const EXPERIENCE_COMPLEX_SKILL_THRESHOLD = 6;
+
+  /**
+   * Does the job title name a seniority grade at all?
+   *
+   * Only asked to decide whether the lowest-level default below is safe. The backend
+   * (infer_experience_level_from_title) owns the real mapping and returns an EMPTY level
+   * for a title whose signals disagree - "Senior Construction Manager" is both senior
+   * and management, so it refuses to pick and leaves the field for the recruiter. That
+   * empty answer would otherwise land here and be filled with Entry Level (0-2 years),
+   * turning "we could not tell" into the most junior band on the list - a worse guess
+   * than the one the backend just declined to make.
+   *
+   * Deliberately a coarse "is any grade mentioned" test, NOT a copy of the backend's
+   * table: it never has to say WHICH grade, so it cannot drift into disagreeing with it.
+   */
+  const TITLE_MENTIONS_SENIORITY =
+    /(?:senior|sr\.?|lead|principal|staff|chief|head|director|manager|supervisor|foreman|matron|architect|mid[\s-]?level|intermediate|experienced|junior|jr\.?|associate|assistant|intern|trainee|apprentice|graduate|fresher|entry[\s-]?level|vice\s+president|managing\s+director)/i;
+
   const applyExperienceFallback = (mapped: string, skillCount: number): string => {
     if (mapped) return mapped;
     if (skillCount >= EXPERIENCE_COMPLEX_SKILL_THRESHOLD) return '';
+    // The title states a grade but nothing upstream could settle which one. Leave it
+    // blank for the recruiter rather than defaulting a "Senior ... Manager" to 0-2.
+    if (TITLE_MENTIONS_SENIORITY.test(jobTitle || '')) return '';
     const levels = experienceLevels || [];
     if (!levels.length) return '';
     const lowest = [...levels].sort((a, b) => (a.min_years ?? 0) - (b.min_years ?? 0))[0];
