@@ -153,12 +153,32 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   // set up once per linkExpiresAt, not once per render).
   const phaseRef = useRef<Phase>('loading');
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+
+  // ── Landscape-orientation gate ──
+  // Blocks progress through instructions/permission/aligning/recording while
+  // the phone is held in portrait — recording itself doesn't check
+  // orientation (MediaRecorder just captures whatever the camera sees), so
+  // without this a candidate could complete the whole flow in portrait,
+  // contrary to the spec's explicit "record in landscape mode" instruction.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(orientation: portrait)');
+    const update = () => setIsPortrait(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
   // Two SEPARATE 5s countdowns (resets at the phase switch), not one
   // continuous 10s countdown — matches the spec's own wording ("start 5 secs
   // timer" for phase 1, "another 5 secs timer" for phase 2).
   const [recordingCountdown, setRecordingCountdown] = useState(5);
   // Drives Record button visibility ONLY — see ALIGN_* constants above.
   const [canRecord, setCanRecord] = useState(false);
+  // Gates the whole instructions→recording flow on landscape orientation
+  // (spec requires the verification video be recorded in landscape). Tracked
+  // via matchMedia rather than window.orientation (deprecated/non-standard)
+  // so it also follows foldables/tablets correctly.
+  const [isPortrait, setIsPortrait] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -859,6 +879,12 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   const showLinkTimer = linkSecondsRemaining !== null
     && !['loading', 'expired', 'error', 'done'].includes(phase);
 
+  // Phases where orientation doesn't matter: nothing left to capture (or
+  // nothing capturable yet) — terminal/error screens, and post-recording
+  // review/upload where forcing a rotation back would only be annoying.
+  const orientationGateActive = isPortrait
+    && !['loading', 'expired', 'error', 'permission_denied', 'ready_to_submit', 'uploading', 'done'].includes(phase);
+
   return (
     <div className="min-h-[100dvh] bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center">
       {showLinkTimer && (
@@ -868,6 +894,22 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             {String((linkSecondsRemaining ?? 0) % 60).padStart(2, '0')}
           </span>
           <span className="text-[11px] text-[#94a3b8]">Link will expire when the timer ends</span>
+        </div>
+      )}
+
+      {orientationGateActive && (
+        <div className="fixed inset-0 z-[500] bg-[#0F1929] flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <span className="text-5xl inline-block animate-[tf-rotate-device_1.6s_ease-in-out_infinite]">📱</span>
+          <h1 className="text-lg font-semibold">Rotate your phone to landscape</h1>
+          <p className="text-sm text-[#94a3b8] max-w-xs">
+            Environment verification must be recorded in landscape mode. Turn your phone sideways to continue.
+          </p>
+          <style>{`
+            @keyframes tf-rotate-device {
+              0%, 100% { transform: rotate(0deg); }
+              50% { transform: rotate(90deg); }
+            }
+          `}</style>
         </div>
       )}
 
@@ -909,9 +951,15 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               <span className="flex-shrink-0 w-7 h-7 rounded-full bg-brand-blue/20 text-brand-blue text-sm font-bold flex items-center justify-center mt-0.5">2</span>
               <div className="flex-1">
                 <p>
-                  <strong className="text-white">Next 5 seconds</strong> — slowly move your phone from
-                  left to right, then right to left back to center. Move slowly and keep the phone
-                  steady — no sudden movements.
+                  <strong className="text-white">Next 5 seconds</strong> — slowly move your phone, keeping
+                  your laptop screen in view, to capture your workspace and surroundings:
+                </p>
+                <ul className="mt-1.5 ml-1 space-y-1">
+                  <li className="flex items-center gap-1.5"><span className="text-brand-blue">•</span> Left to Right</li>
+                  <li className="flex items-center gap-1.5"><span className="text-brand-blue">•</span> Right to Left</li>
+                </ul>
+                <p className="mt-1.5 text-[13px] text-[#94a3b8]">
+                  Move slowly and keep the phone steady — no sudden movements.
                 </p>
                 <div className="mt-2 flex items-center gap-1.5 px-2">
                   <span className="text-xl inline-block animate-[tf-instr-curve_1.6s_ease-in-out_infinite_alternate]">📱</span>
@@ -975,7 +1023,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 rounded-xl px-4 overflow-hidden">
               <span className="text-5xl inline-block animate-[tf-phone-curve_1.8s_ease-in-out_infinite_alternate]">📱</span>
               <p className="text-sm font-medium text-white text-center">
-                Slowly turn the mobile from left to right and right to left — capture your workspace, surrounding area, and any nearby devices.
+                Slowly turn the mobile from left to right and right to left, keeping your laptop screen visible while you capture your workspace, surrounding area, and any nearby devices.
               </p>
               <style>{`
                 @keyframes tf-phone-curve {
@@ -1039,7 +1087,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             <p className="text-sm leading-relaxed">
               {phase === 'recording_screen'
                 ? 'Focus your camera on your laptop screen/display. Keep it centered and hold steady — do not move yet.'
-                : 'Slowly turn the mobile from left to right and right to left, capturing your workspace, surrounding area, and any nearby devices.'}
+                : 'Slowly turn the mobile from left to right and right to left, keeping your laptop screen visible while capturing your workspace, surrounding area, and any nearby devices.'}
             </p>
           </>
         )}
