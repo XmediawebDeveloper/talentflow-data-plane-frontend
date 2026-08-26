@@ -1093,7 +1093,13 @@ export default function StepSystemCheck({
       const run = async () => {
         if (faceLoopGenRef.current !== generation || !mountedRef.current) return;
         let elapsedMs = 0;
-        if (!faceApiBusyRef.current && video.readyState >= 2) {
+        // Skip the actual inference while a voice recording is in flight — the
+        // CPU/WebGL face-detection tick blocks the main thread for a few
+        // hundred ms, which starves the setInterval driving the voice
+        // progress bar (see startVoiceEnroll) and makes it visibly stall then
+        // jump every ~FACE_POLL_MIN_MS. Keep rescheduling at the same cadence
+        // so face monitoring resumes on its own the moment recording ends.
+        if (!faceApiBusyRef.current && video.readyState >= 2 && voiceEnrollStatusRef.current !== 'recording') {
           faceApiBusyRef.current = true;
           const startedAt = performance.now();
           try { await tick(); } catch { /* skip frame */ }
