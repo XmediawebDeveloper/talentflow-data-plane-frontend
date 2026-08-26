@@ -3011,16 +3011,25 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           )}
                           {((v.flagged_items && v.flagged_items.length > 0) || (v.voice_activity_offsets_ms && v.voice_activity_offsets_ms.length > 0)) && (() => {
                             // Voice-activity offsets are a deterministic client-side VAD signal
-                            // (energy + zero-crossing-rate, not vision-LLM judged) — surfaced here
-                            // as synthetic flagged_items-shaped rows so they flow through the exact
-                            // same table/seek/frame-matching pipeline as the AI-detected items below,
-                            // rather than a separate disconnected UI section.
-                            const voiceItems = (v.voice_activity_offsets_ms || []).map((ms) => ({
+                            // (energy + zero-crossing-rate, not vision-LLM judged). The backend now
+                            // writes these into the row's own `flagged_items` (and factors them into
+                            // result_severity) at analysis time — see
+                            // `_voice_activity_to_flagged_items` in environment_verification_tasks.py.
+                            // This client-side synthesis is now only a FALLBACK for verifications
+                            // analyzed before that backend change shipped (their stored flagged_items
+                            // has no voice entries even though voice_activity_offsets_ms is present) —
+                            // skip it whenever the backend has already included a voice entry, to avoid
+                            // rendering the same detected speech as two separate rows.
+                            const backendAlreadyHasVoiceItems = (v.flagged_items || []).some(
+                              (it) => typeof it?.label === 'string' && it.label.toLowerCase().includes('voice')
+                            );
+                            const voiceItems = backendAlreadyHasVoiceItems ? [] : (v.voice_activity_offsets_ms || []).map((ms) => ({
                               label: 'Voice/speech detected',
                               confidence: 'medium',
                               location: null,
                               approx_timestamp: `~${(ms / 1000).toFixed(1)}s`,
                               phase: ms < 5000 ? 'display' : 'pan',
+                              reason: null,
                             }));
                             const items = [...(v.flagged_items || []), ...voiceItems];
                             // Parse the first number out of approx_timestamp (e.g. "~6.2s-8.1s",
@@ -3111,7 +3120,16 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                                 : phase === 'pan'
                                 ? 'during the panning phase (5s-10s)'
                                 : '';
-                              const description = `Detected${location ? ` in the ${location}` : ''}${phaseDescription ? ` ${phaseDescription}` : ''}.`;
+                              // Prefer the AI's own per-item reason (added so each violation
+                              // carries its own specific explanation, not just the one shared
+                              // overall ai_summary) — fall back to a synthesized sentence for
+                              // records analyzed before this field existed, or for the
+                              // synthetic voice/corner-check entries that don't set it.
+                              const reason = typeof item.reason === 'string' && item.reason.trim()
+                                ? item.reason.trim()
+                                : null;
+                              const description = reason
+                                ?? `Detected${location ? ` in the ${location}` : ''}${phaseDescription ? ` ${phaseDescription}` : ''}.`;
                               const severity = severityForConfidence(confidence);
                               const matchedFrames = framesForRange(parseApproxRange(approxTimestamp));
                               return { item, i, label, confidence, location, approxTimestamp, phase, seekSeconds, absoluteTs, description, severity, matchedFrames };
