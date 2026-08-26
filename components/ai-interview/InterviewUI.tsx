@@ -1550,44 +1550,59 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (!isConnected) return;
     const disabled = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive;
     if (!disabled) return;
-    // Mic-only failure (camera still fine) uses the audio-only reacquire path
-    // — it never requests or touches the video track, so a headset dropping
-    // can't disturb an otherwise-healthy camera (see reacquireAudio's own
-    // comment in Webcam.tsx for why the combined reacquire() could).
-    // Anything involving the camera keeps using the combined reacquire().
+    // Camera and microphone are recovered INDEPENDENTLY, each with a request
+    // that names only its own device.
     //
-    // The decision is made from the TRACK, not from proctoringState's camera
-    // flag: a video track can be reported inactive while still being perfectly
-    // alive (Chrome transiently MUTES it while renegotiating the capture
-    // session after an audio device is unplugged). Escalating that to a full
-    // reacquire() mints a brand-new video track, and swapping that into the
-    // live recorder's stream destroys the stored recording outright — see
-    // handleTracksReplaced. Only a genuinely dead/absent video track justifies
-    // rebuilding the camera.
-    const videoTrackAlive = webcamStreamRef.current
-      ?.getVideoTracks?.().some(t => t.readyState === 'live') ?? false;
-    const micOnly = videoTrackAlive;
+    // The combined reacquire() asks getUserMedia for video AND audio in one
+    // call, which is all-or-nothing. On a machine with no built-in camera and
+    // no built-in mic (both are peripherals), unplugging both and replugging
+    // only ONE left that single call still failing on the other's constraint —
+    // so a replugged camera stayed dark until the headset came back too, and
+    // vice versa. Splitting them lets each device come back the moment its own
+    // hardware returns.
+    //
+    // Each side is also decided from the TRACK, not from proctoringState: a
+    // video track can be reported inactive while still perfectly alive (Chrome
+    // transiently MUTES it while renegotiating after an audio device change).
+    // Re-acquiring a healthy camera would mint a new video track for nothing,
+    // so only a genuinely dead/absent one is rebuilt.
     let cancelled = false;
     const id = setInterval(async () => {
       if (cancelled) return;
-      let ok = false;
-      try {
-        // Target the device the interview STARTED on so a replugged headset
-        // is recognized as "restored" (initialMicDeviceIdRef's own device-
-        // swap check requires an EXACT match) instead of silently landing on
-        // whatever the OS calls "default" — which never satisfies that
-        // check and left the pause stuck forever even after the candidate
-        // plugged the same headset back in.
-        ok = (micOnly
-          ? await webcamRef.current?.reacquireAudio(initialMicDeviceId ?? undefined)
-          : await webcamRef.current?.reacquire()) ?? false;
-      } catch {
-        /* device still unavailable — keep polling */
+      const videoAlive = webcamStreamRef.current
+        ?.getVideoTracks?.().some(t => t.readyState === 'live') ?? false;
+      const audioAlive = webcamStreamRef.current
+        ?.getAudioTracks?.().some(t => t.readyState === 'live') ?? false;
+
+      if (!videoAlive) {
+        try {
+          if (await webcamRef.current?.reacquireVideo()) {
+            console.log('[InterviewUI] Device recovery: CAMERA re-acquired independently');
+          }
+        } catch { /* camera still unavailable — keep polling */ }
       }
-      if (ok) {
+
+      if (!audioAlive || !proctoringState.isMicrophoneActive) {
+        try {
+          // Target the device the interview STARTED on so a replugged headset
+          // is recognized as "restored" (the deviceId-swap check requires an
+          // EXACT match) instead of silently landing on whatever the OS calls
+          // "default" — which never satisfies that check and left the pause
+          // stuck forever even after the candidate replugged the same headset.
+          if (await webcamRef.current?.reacquireAudio(initialMicDeviceId ?? undefined)) {
+            console.log('[InterviewUI] Device recovery: MICROPHONE re-acquired independently');
+          }
+        } catch { /* mic still unavailable — keep polling */ }
+      }
+
+      // Stop only once BOTH sides are genuinely healthy. The old loop exited on
+      // the first success, which on a two-device outage abandoned the polling
+      // while the second device was still missing.
+      const cur = proctoringStateRef.current;
+      if (cur.isCameraActive && cur.isMicrophoneActive) {
         cancelled = true;
         clearInterval(id);
-        console.log('[InterviewUI] Device recovery: re-acquired media stream — overlay will clear');
+        console.log('[InterviewUI] Device recovery: all media restored — overlay will clear');
       }
     }, 2500);
     return () => { cancelled = true; clearInterval(id); };
@@ -10371,9 +10386,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // Mic is "down" for the overlay when either the track dropped OR the
         // pinned device was unplugged (track survived via a built-in fallback).
         const _micDown = !proctoringState.isMicrophoneActive || audioDeviceLost;
+        // A CAMERA drop blocks exactly like a mic drop. The scrim used to be
+        // gated on _micDown alone, so a camera-only disconnect rendered a
+        // transparent, click-through overlay — the interview looked like it was
+        // still running underneath (live preview visible, page clickable) while
+        // it was actually paused and counting down to termination.
+        const _blocking = _micDown || !proctoringState.isCameraActive;
         return (
         <div className={`fixed inset-0 z-[200] flex items-center justify-center ${
-          !_micDown
+          !_blocking
             ? 'pointer-events-none'
             : 'pointer-events-auto bg-black/70 backdrop-blur-sm'
         }`}>

@@ -40,6 +40,16 @@ export interface WebcamRef {
   // "default" — falls back to the unconstrained default request if that
   // exact device can't be opened. Omit for the old default-only behavior.
   reacquireAudio: (deviceId?: string) => Promise<boolean>;
+  // Re-acquire ONLY the camera — the mirror image of reacquireAudio, used when
+  // it's specifically the CAMERA that dropped. Never requests audio, so it can
+  // restore the camera on a machine that currently has NO working microphone.
+  //
+  // This matters because reacquire() asks for video AND audio in ONE
+  // getUserMedia call, which is all-or-nothing: on a machine with no built-in
+  // devices, unplugging both peripherals and replugging only the camera left
+  // that call still failing on the audio constraint, so the camera stayed dark
+  // until the headset came back too.
+  reacquireVideo: () => Promise<boolean>;
 }
 
 export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
@@ -199,12 +209,65 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
     }
   }, [onStream, onTracksReplaced]);
 
+  // Re-acquire ONLY the video track and swap it into the EXISTING stream object
+  // in place. The audio side is never requested, so this works on a machine
+  // whose only microphone is currently unplugged — which is the entire point:
+  // the combined reacquire() cannot restore the camera while the mic is missing.
+  const reacquireVideo = useCallback(async (): Promise<boolean> => {
+    const current = streamRef.current;
+    if (!current) return false;
+    try {
+      const videoStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+      });
+      const newVideoTrack = videoStream.getVideoTracks()[0];
+      if (!newVideoTrack) return false;
+
+      // Same virtual-camera gate as the full acquire — a device swapped in
+      // mid-interview must be screened exactly like the original.
+      const camCheck = checkVirtualCamera(newVideoTrack);
+      if (camCheck.flagged) {
+        videoStream.getTracks().forEach((t) => t.stop());
+        setError(virtualCameraMessage(camCheck.label));
+        return false;
+      }
+
+      const oldVideoTracks = current.getVideoTracks();
+      oldVideoTracks.forEach((t) => current.removeTrack(t));
+      current.addTrack(newVideoTrack);
+
+      // Repaint the preview. Unlike the audio path, the element genuinely needs
+      // the new track wired up, and re-assigning srcObject is the reliable way
+      // to make the element pick up a swapped video track.
+      if (videoRef.current) {
+        videoRef.current.srcObject = current;
+        videoRef.current.play().then(() => setIsActive(true)).catch(() => { /* retried next tick */ });
+      }
+
+      onTracksReplaced?.(current);
+      oldVideoTracks.forEach((t) => t.stop());
+
+      // Hand consumers a NEW stream identity so the proctoring monitor's effect
+      // re-runs and re-attaches onended/onmute to the NEW video track. Without
+      // this it keeps watching the ENDED old track and isCameraActive never
+      // recovers, so the overlay would stay up over a working camera.
+      onStream?.(new MediaStream([newVideoTrack, ...current.getAudioTracks()]));
+
+      setError(null);
+      return true;
+    } catch (err) {
+      console.error("❌ Webcam video reacquire error:", err);
+      return false;
+    }
+  }, [onStream, onTracksReplaced]);
+
   // Expose video element + reacquire() (device-recovery) via ref.
   useImperativeHandle(ref, () => ({
     getVideoElement: () => videoRef.current,
     reacquire: () => startWebcam(),
     reacquireAudio: (deviceId?: string) => reacquireAudio(deviceId),
-  }), [startWebcam, reacquireAudio]);
+    reacquireVideo: () => reacquireVideo(),
+  }), [startWebcam, reacquireAudio, reacquireVideo]);
 
   useEffect(() => {
     startWebcam();

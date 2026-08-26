@@ -17,6 +17,23 @@ const QUOTA_LABELS: Record<string, string> = {
   storage_gb: 'Storage (GB)',
 };
 
+/**
+ * Compact summary of a pending plan change, shown on the suspended-account block.
+ *
+ * The field names here MUST match PlanChangeSummary in lib/types/planChanges.ts:
+ * `old` / `new` / `key`. This component previously read `old_price`, `new_price`,
+ * `quota_type`, `old_limit` and `new_limit`, none of which exist on the payload, so
+ * `summary.price_change.old_price.toLocaleString()` threw
+ * "Cannot read properties of undefined" and blanked the block, while the quota rows
+ * rendered a bare arrow with no label and no numbers. It went unnoticed because
+ * next.config.ts sets `typescript: { ignoreBuildErrors: true }` and this component
+ * only mounts for a tenant suspended mid plan-change.
+ *
+ * PlanChangeReviewModal renders the same PlanChangeSummary correctly - treat it as the
+ * reference for this shape, including the `?? 0` below: price_change.old / .new are
+ * `number | null`, and .toLocaleString() on a null throws just as it did on undefined.
+ * quota_changes entries are plain numbers, so they need no such guard.
+ */
 function ChangeSummaryInline({ summary }: { summary: PlanChangeSummary }) {
   return (
     <div className="space-y-3">
@@ -24,7 +41,7 @@ function ChangeSummaryInline({ summary }: { summary: PlanChangeSummary }) {
         <div className="flex items-center gap-2 text-sm">
           <span className="text-orange-600 font-medium">Price:</span>
           <span className="text-gray-700">
-            ₹{summary.price_change.old_price.toLocaleString()} → ₹{summary.price_change.new_price.toLocaleString()}
+            ₹{(summary.price_change.old ?? 0).toLocaleString()} → ₹{(summary.price_change.new ?? 0).toLocaleString()}
           </span>
         </div>
       )}
@@ -35,10 +52,10 @@ function ChangeSummaryInline({ summary }: { summary: PlanChangeSummary }) {
           {summary.quota_changes.map((change, i) => (
             <div key={i} className="flex items-center gap-2 text-sm pl-4">
               <span className="text-gray-600">
-                {QUOTA_LABELS[change.quota_type] || change.quota_type}:
+                {QUOTA_LABELS[change.key] || change.key}:
               </span>
               <span className="text-gray-700">
-                {change.old_limit} → {change.new_limit}
+                {change.old} → {change.new}
               </span>
             </div>
           ))}
