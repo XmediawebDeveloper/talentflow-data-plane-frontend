@@ -1423,10 +1423,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   // Preview the new expiry the backend will produce. Mirrors backend logic:
-  // reuses the original invitation's configured duration (expires_at - created_at).
+  // reuses the original invitation's configured duration, measured from the LAST
+  // send (expires_at - sent_at). Anchoring on created_at would promise a longer
+  // window than the server grants on a second resend, since created_at never moves.
   const computeResendExpiryPreview = (invitation: any): { dateLabel: string; durationLabel: string } | null => {
     if (!invitation) return null;
-    const createdMs = invitation.created_at ? new Date(invitation.created_at).getTime() : NaN;
+    const sentAnchor = invitation.sent_at || invitation.created_at;
+    const createdMs = sentAnchor ? new Date(sentAnchor).getTime() : NaN;
     const expiresMs = invitation.expires_at ? new Date(invitation.expires_at).getTime() : NaN;
     let durationMs = 24 * 60 * 60 * 1000; // default 1 day
     if (Number.isFinite(createdMs) && Number.isFinite(expiresMs) && expiresMs > createdMs) {
