@@ -147,8 +147,12 @@ export const EVENT_META: Record<string, EventMeta> = {
   // Device — camera / mic
   face_missing:           { category: 'device', label: 'Face not visible' },
   camera_obstructed:      { category: 'device', label: 'Camera blocked or too dark' },
-  camera_disabled:        { category: 'device', label: 'Camera turned off' },
-  microphone_disabled:    { category: 'device', label: 'Microphone turned off' },
+  // Label says "disconnected" because in practice these fire far more often for
+  // an unplugged USB camera / headset than for a deliberate switch-off; the
+  // per-record wording in describeViolation() distinguishes the two from
+  // details.reason, and labelOfViolation() adds the repeat count.
+  camera_disabled:        { category: 'device', label: 'Camera disconnected' },
+  microphone_disabled:    { category: 'device', label: 'Microphone disconnected' },
 
   // Capture / exfiltration
   copy_attempt:             { category: 'capture', label: 'Copied text' },
@@ -228,6 +232,12 @@ export function labelOfViolation(v: ViolationRecord): string {
       return `${objectDisplayLabel(d.object_class)} in view`;
     }
   }
+  // Device drops carry their occurrence number, so a repeated unplug reads as a
+  // pattern on the row itself instead of looking like one isolated mishap.
+  if (v.event_type === 'camera_disabled' || v.event_type === 'microphone_disabled') {
+    const n = typeof d.disconnect_count === 'number' ? d.disconnect_count : null;
+    if (n != null && n > 1) return `${labelOf(v.event_type)} (${n}×)`;
+  }
   return labelOf(v.event_type);
 }
 
@@ -291,7 +301,26 @@ export interface ViolationSummary {
   /** true when a mobile phone was confirmed on camera. */
   phoneSeen: boolean;
   terminated: boolean;
+  /**
+   * How many times a camera or microphone was disconnected during the
+   * interview. One unplug is a normal accident (a knocked cable, a dead USB
+   * port); repeated unplugs are a pattern worth a recruiter's attention,
+   * because pausing the interview is the one thing a candidate can do to buy
+   * themselves unmonitored time.
+   */
+  deviceDisconnects: number;
+  /** true once deviceDisconnects exceeds REPEAT_DISCONNECT_THRESHOLD. */
+  repeatDeviceDisconnects: boolean;
 }
+
+/**
+ * Disconnect count above which repeated unplugging stops being treated as bad
+ * luck and is surfaced as a serious, deliberate-looking pattern.
+ */
+export const REPEAT_DISCONNECT_THRESHOLD = 3;
+
+/** Device drops that represent a camera/mic going away mid-interview. */
+const DEVICE_DISCONNECT_TYPES = new Set<string>(['camera_disabled', 'microphone_disabled']);
 
 const SOMEONE_ELSE_SERIOUS = new Set<string>([
   'multiple_voices', 'voice_identity_changed', 'face_identity_changed', 'multiple_faces',
@@ -301,12 +330,13 @@ export function summarizeViolations(violations: ViolationRecord[]): ViolationSum
   const s: ViolationSummary = {
     raw: violations.length, advisory: 0, counted: 0,
     serious: 0, moderate: 0, minor: 0, someoneElse: false, phoneSeen: false,
-    terminated: false,
+    terminated: false, deviceDisconnects: 0, repeatDeviceDisconnects: false,
   };
   for (const v of violations) {
     if (v.event_type === 'interview_terminated') s.terminated = true;
     if (SOMEONE_ELSE_SERIOUS.has(v.event_type)) s.someoneElse = true;
     if (v.event_type === 'phone_detected') s.phoneSeen = true;
+    if (DEVICE_DISCONNECT_TYPES.has(v.event_type)) s.deviceDisconnects += 1;
     const rs = recruiterSeverity(v);
     if (rs === 'advisory') { s.advisory += 1; continue; }
     s.counted += 1;
@@ -314,6 +344,7 @@ export function summarizeViolations(violations: ViolationRecord[]): ViolationSum
     else if (rs === 'moderate') s.moderate += 1;
     else s.minor += 1;
   }
+  s.repeatDeviceDisconnects = s.deviceDisconnects > REPEAT_DISCONNECT_THRESHOLD;
   return s;
 }
 
@@ -478,9 +509,37 @@ export function describeViolation(v: ViolationRecord): string {
     case 'face_missing':
       return 'No face was detected by the camera.';
     case 'camera_disabled':
-      return 'The camera was switched off.';
-    case 'microphone_disabled':
-      return 'The microphone was switched off.';
+    case 'microphone_disabled': {
+      // details: { reason, disconnect_count, grace_period_ms }
+      const device = v.event_type === 'camera_disabled' ? 'camera' : 'microphone';
+      const reason = typeof d.reason === 'string' ? d.reason : '';
+      // An UNPLUG is physically different from the device being switched off or
+      // permission being revoked, and a recruiter reading the timeline needs to
+      // know which — one is a cable, the other is a deliberate action.
+      const unplugged =
+        reason === 'camera_disconnected' ||
+        reason === 'headset_disconnected' ||
+        reason === 'audio_device_unplugged';
+      const n = num(d.disconnect_count);
+      const parts: string[] = [
+        unplugged
+          ? `The ${device} was disconnected (unplugged) during the interview.`
+          : `The ${device} was switched off.`,
+      ];
+      if (n != null && n > 1) {
+        parts.push(` This is disconnect #${n} in this interview.`);
+      }
+      if (n != null && n > REPEAT_DISCONNECT_THRESHOLD) {
+        // The point a recruiter actually needs: pausing the interview is the
+        // one lever a candidate has for buying unmonitored time, so a repeated
+        // pattern is worth reviewing even though each drop looks accidental.
+        parts.push(
+          ` Repeated disconnects (more than ${REPEAT_DISCONNECT_THRESHOLD}) are unusual —` +
+          ` each one pauses the interview, so review the recording around these points.`,
+        );
+      }
+      return parts.join('');
+    }
     case 'interview_terminated': {
       const msg = typeof d.message === 'string' && d.message ? d.message : '';
       const reason = typeof d.reason === 'string' ? d.reason : '';

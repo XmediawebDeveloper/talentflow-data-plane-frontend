@@ -1746,6 +1746,41 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }).catch(() => { /* best-effort */ });
   }, [isConnected, proctoringState.isMicrophoneActive, token]);
 
+  // ── Camera disconnect tracking ──────────────────────────────────────────
+  // Exact mirror of the microphone effect above, for the same reason: the
+  // Integrity Check tab needs EVERY camera drop on the timeline with its
+  // occurrence number, so a recruiter can see "unplugged 4 times" rather than a
+  // single undifferentiated "camera turned off".
+  //
+  // This lives in its own effect rather than in the pause-arm branch because
+  // the arm fires only ONCE per pause episode — a camera that drops while the
+  // interview is already paused for the mic would never have been reported at
+  // all.
+  const cameraDisconnectCountRef = useRef(0);
+  const camWasActiveRef = useRef(true);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    if (proctoringState.isCameraActive) { camWasActiveRef.current = true; return; }
+    if (!camWasActiveRef.current) return;        // same episode, already counted
+    camWasActiveRef.current = false;
+    if (isClosingRef.current) return;
+
+    const count = cameraDisconnectCountRef.current + 1;
+    cameraDisconnectCountRef.current = count;
+
+    candidateAIInterviewService.reportProctorEvent(token, {
+      event_type: 'camera_disabled',
+      severity: 'severe',
+      details: {
+        phase: 'in_interview',
+        reason: 'camera_disconnected',
+        disconnect_count: count,
+        grace_period_ms: MEDIA_PAUSE_GRACE_MS,
+      },
+    }).catch(() => { /* best-effort */ });
+  }, [isConnected, proctoringState.isCameraActive, token]);
+
   useEffect(() => {
     if (!isConnected) return;
     // `audioDeviceLost` covers the wired-unplug case where the mic track stays
@@ -1820,13 +1855,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason }));
         console.log(`[INTERVIEW-DEBUG][PAUSE] LIVE STREAM PAUSED — session_pause sent (reason=${reason})`);
       } catch { /* best-effort */ }
-      if (!proctoringState.isCameraActive) {
-        candidateAIInterviewService.reportProctorEvent(token, {
-          event_type: 'camera_disabled',
-          severity: 'severe',
-          details: { phase: 'in_interview', grace_period_ms: MEDIA_PAUSE_GRACE_MS },
-        }).catch(() => { /* best-effort */ });
-      }
+      // NOTE: `camera_disabled` and `microphone_disabled` are BOTH reported by
+      // their own dedicated transition effects above, not here — this arm fires
+      // once per pause episode, so a second device dropping mid-pause would
+      // never have been recorded. (The camera report used to live here, which
+      // is exactly why a camera drop during a mic pause went unlogged.)
       // NOTE: the `microphone_disabled` event is reported by the headset
       // allowance effect above (it sees every mic drop, including ones that
       // happen while this pause is already armed for the camera).
@@ -2600,10 +2633,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // skip this chunk — the wall-clock fallback in whenTrackedPlaybackEnds
     // will kick in.
     if (ctx.state !== 'running') {
-      ctx.resume().catch(() => { /* ignore */ });
-      // resume() can flip state to 'running' synchronously in some browsers;
-      // re-read through AudioContextState to defeat TS's earlier narrowing.
-      if ((ctx.state as AudioContextState) !== 'running') return;
+      // A FROZEN turn suspends this context ON PURPOSE (device disconnect).
+      // Resuming here is what let Bina carry on talking behind the blocking
+      // overlay: chunks keep arriving during the outage (the backend no longer
+      // cancels her pipeline on session_pause, precisely so the turn can be
+      // completed on resume), and every one of them hit this line and undid the
+      // freeze. Never resume while frozen — resumeBinaPlayback owns that.
+      //
+      // Scheduling below still works on a suspended context: currentTime is
+      // frozen, so these silent mirror buffers queue in order and play from the
+      // thaw, keeping playbackScheduledEndAtRef correct across the outage.
+      if (!binaFrozenRef.current) {
+        ctx.resume().catch(() => { /* ignore */ });
+        // resume() can flip state to 'running' synchronously in some browsers;
+        // re-read through AudioContextState to defeat TS's earlier narrowing.
+        if ((ctx.state as AudioContextState) !== 'running') return;
+      }
     }
     try {
       const sampleCount = pcmData.byteLength / 2; // Int16 = 2 bytes/sample
@@ -2899,6 +2944,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // older "repeat time counts against the candidate" behavior.) We do NOT
       // auto-clear the pause each tick anymore — the pause is sticky until an
       // explicit resume.
+      // HARD freeze while a camera/mic disconnect is being ridden out. The
+      // arithmetic pause (questionTimerPausedAtRef, subtracted by
+      // computeQuestionRemaining) is the primary mechanism, but it is only as
+      // good as every path that stamps and clears that ref — a single missed
+      // stamp and the answer clock drains behind the overlay while the
+      // candidate is plugging their headset back in. Gating the tick itself on
+      // the pause flag makes the freeze unconditional: no path can advance the
+      // displayed clock during an outage. Also keeps questionTimerLastTickMsRef
+      // fresh so the stuck-timer watchdog below doesn't see a false stall.
+      if (isMediaPausedRef.current) {
+        questionTimerLastTickMsRef.current = performance.now();
+        return;
+      }
       const remaining = computeQuestionRemaining();
       if (remaining === null) return;
       setQuestionTimerSeconds(remaining);
@@ -3022,6 +3080,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         && !questionTimerExpiredRef.current
         && !isAiSpeakingRef.current
         && !isProcessingRef.current
+        && !isMediaPausedRef.current  // camera/mic outage — the clock is frozen
+                                      // deliberately; "not ticking" is the
+                                      // CORRECT state, so restarting it here
+                                      // would resume the candidate's answer
+                                      // window mid-disconnect.
         && !isFullscreenExitedRef.current
         && !repeatFreezeRef.current   // Repeat re-speak in progress — timer is
                                       // intentionally frozen; do NOT auto-restart
@@ -6850,6 +6913,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const startRecordingInternal = async () => {
     const timestamp = new Date().toISOString();
     console.log(`[Recording ${timestamp}] startRecordingInternal called: isAiSpeaking=${isAiSpeakingRef.current}, isProcessing=${isProcessingRef.current}, isRecording=${isRecordingRef.current}, isFaceBlocked=${isFaceBlockedRef.current}`);
+    // NEVER reopen the mic during a camera/mic outage. The pause arm releases
+    // it deliberately (holdRecordingForOutage), but several timers and
+    // callbacks can call this from a stale closure — a pre-turn countdown, the
+    // playback-ended handler, the post-resume watchdog — and any one of them
+    // firing mid-outage restarts "Your turn" recording behind the blocking
+    // overlay, capturing nothing while the device is unplugged. The resume
+    // branch is the only thing allowed to reopen it.
+    if (isMediaPausedRef.current) {
+      console.log(`[Recording ${timestamp}] startRecordingInternal blocked — interview paused for a device disconnect`);
+      return;
+    }
     // Use refs — NOT state values — because this function is called from stale
     // closures (useCallback, setTimeout) where isAiSpeaking/isProcessing are stale.
     if (isAiSpeakingRef.current || isProcessingRef.current || isRecordingRef.current) {
