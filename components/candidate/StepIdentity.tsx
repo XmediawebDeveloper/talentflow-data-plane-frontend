@@ -31,7 +31,7 @@ export default function StepIdentity({
   onVerify,
   submitting = false,
 }: StepIdentityProps) {
-  const [phase, setPhase] = useState<'form' | 'photo_ready' | 'countdown' | 'captured'>('form');
+  const [phase, setPhase] = useState<'form' | 'photo_ready' | 'countdown' | 'verifying' | 'captured'>('form');
   const [name, setName] = useState(candidateName);
   const [email, setEmail] = useState(candidateEmail);
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
@@ -60,8 +60,10 @@ export default function StepIdentity({
   const streamRef = useRef<MediaStream | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Loaded face-api.js module + options — used only for the photo-capture face
-  // COUNT check (0 / 1 / >1).
-  const faceApiRef = useRef<{ module: any; options: any } | null>(null);
+  // COUNT check (0 / 1 / >1). `options` (inputSize 224) is the accurate,
+  // one-shot capture-time check; `liveOptions` (inputSize 128) is the fast
+  // variant for the continuous framing poll — see ensureFaceApiFallback.
+  const faceApiRef = useRef<{ module: any; options: any; liveOptions: any } | null>(null);
   const faceApiLoadPromiseRef = useRef<Promise<typeof faceApiRef.current> | null>(null);
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -142,7 +144,27 @@ export default function StepIdentity({
           }
           const loaded = {
             module: fa,
-            options: new fa.TinyFaceDetectorOptions({ scoreThreshold: 0.4 }),
+            // inputSize is the dominant cost lever, NOT the source canvas
+            // resolution: TinyFaceDetector resizes its input to a square of
+            // ~inputSize before running the network, so detection time is
+            // roughly the same whether the source canvas is 240px or full
+            // webcam resolution (measured: ~540ms either way at inputSize
+            // 224 on this CPU backend, pinned off WebGL — see
+            // face-api-loader.ts — for crash stability). Cutting inputSize
+            // 224 → 128 cut measured detection time ~3.8x (≈695ms → ≈181ms)
+            // with no change in face count on test frames.
+            //
+            // `options` (224): the one-shot post-countdown check in
+            // capturePhoto() — this is the authoritative accept/reject gate
+            // for the saved photo, so it keeps the more careful inputSize.
+            // `liveOptions` (128): the ~600ms live framing poll in
+            // detectFaceInfo() — this only drives UI hints (oval color /
+            // "center your face" text), re-checked every tick, so trading a
+            // little precision for ~3.8x less time-per-tick is the right
+            // call — a continuous poll is far more sensitive to per-call cost
+            // than a single one-off check.
+            options: new fa.TinyFaceDetectorOptions({ scoreThreshold: 0.4, inputSize: 224 }),
+            liveOptions: new fa.TinyFaceDetectorOptions({ scoreThreshold: 0.4, inputSize: 128 }),
           };
           faceApiRef.current = loaded;
           return loaded;
@@ -166,7 +188,7 @@ export default function StepIdentity({
   // when no detector is available (→ callers HARD-BLOCK). Works on any canvas so
   // we can verify BOTH the live preview and the exact captured still image.
   const detectFaceInfoFromCanvas = useCallback(
-    async (canvas: HTMLCanvasElement): Promise<{ count: number; region: FaceRegion | null } | null> => {
+    async (canvas: HTMLCanvasElement, useLiveOptions = false): Promise<{ count: number; region: FaceRegion | null } | null> => {
       const largest = (boxes: FaceRegion[]): FaceRegion | null => {
         let best: FaceRegion | null = null;
         let bestArea = 0;
@@ -183,8 +205,8 @@ export default function StepIdentity({
       await ensureFaceApiFallback();
       if (faceApiRef.current) {
         try {
-          const { module: fa, options } = faceApiRef.current;
-          const detections = await fa.detectAllFaces(canvas, options);
+          const { module: fa, options, liveOptions } = faceApiRef.current;
+          const detections = await fa.detectAllFaces(canvas, useLiveOptions ? liveOptions : options);
           const boxes: FaceRegion[] = detections.map((d: any) => {
             const box = d.box || d.detection?.box || {};
             return { x: box.x ?? 0, y: box.y ?? 0, width: box.width ?? 0, height: box.height ?? 0 };
@@ -211,18 +233,31 @@ export default function StepIdentity({
     [ensureFaceApiFallback]
   );
 
-  // Live detector: snapshot the current video frame to the working canvas and
-  // detect on it (used by the framing/photo_ready poll).
+  // Detached (never mounted) canvas used ONLY by the live framing poll —
+  // separate from `canvasRef` (full webcam resolution, used for the actual
+  // capture) for two reasons: (1) downscaling here is what actually cuts the
+  // CPU-backend TF.js inference cost per tick — drawing/reading a full
+  // 720p-ish frame every poll was the bulk of the per-tick cost, independent
+  // of the detector's own inputSize option; (2) it can no longer race with
+  // capturePhoto() writing to canvasRef when the countdown finishes.
+  const liveDetectCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const LIVE_DETECT_MAX_WIDTH = 240;
+
+  // Live detector: snapshot the current video frame, downscaled, and detect on
+  // it (used by the framing/photo_ready poll). assessCandidateFaceVisibility
+  // works in ratios of frame size, so downscaling doesn't affect accuracy.
   const detectFaceInfo = useCallback(async (): Promise<{ count: number; region: FaceRegion | null } | null> => {
     const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState < 2) return null;
+    if (!video || video.readyState < 2 || !video.videoWidth) return null;
+    if (!liveDetectCanvasRef.current) liveDetectCanvasRef.current = document.createElement('canvas');
+    const canvas = liveDetectCanvasRef.current;
+    const scale = video.videoWidth > LIVE_DETECT_MAX_WIDTH ? LIVE_DETECT_MAX_WIDTH / video.videoWidth : 1;
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return null;
-    canvas.width = video.videoWidth || 320;
-    canvas.height = video.videoHeight || 240;
-    ctx.drawImage(video, 0, 0);
-    return detectFaceInfoFromCanvas(canvas);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return detectFaceInfoFromCanvas(canvas, /* useLiveOptions */ true);
   }, [detectFaceInfoFromCanvas]);
 
   const startCamera = useCallback(async () => {
@@ -239,7 +274,7 @@ export default function StepIdentity({
   }, [phase, startCamera]);
 
   // Live face check while the candidate frames themselves (photo_ready only).
-  // Polls ~every 700ms and drives `liveFaceStatus`, which gates the Capture
+  // Polls ~every 400ms and drives `liveFaceStatus`, which gates the Capture
   // button: it's enabled ONLY with exactly one face correctly placed in the
   // oval — no face, multiple faces, or an off-oval face keeps it disabled.
   useEffect(() => {
@@ -249,6 +284,14 @@ export default function StepIdentity({
     let timer: ReturnType<typeof setTimeout> | null = null;
     const tick = async () => {
       if (cancelled) return;
+      // Skip detection entirely while the tab isn't visible — the candidate
+      // can't be framing themselves in a background tab, and CPU-backend TF.js
+      // inference is expensive enough that running it unattended is pure waste
+      // (and competes with whatever the foreground tab is doing).
+      if (typeof document !== 'undefined' && document.hidden) {
+        if (!cancelled) timer = setTimeout(tick, 1000);
+        return;
+      }
       // Don't run detection — or show any "no face" / "unavailable" warning —
       // until the camera has actually produced frames. getUserMedia + video.play()
       // take a moment; before that the video is black/empty and would falsely
@@ -283,7 +326,12 @@ export default function StepIdentity({
             } else if (info.count > 1) {
               setLiveFaceStatus('multiple');
             } else {
-              const cvs = canvasRef.current;
+              // Must use liveDetectCanvasRef's dimensions here, not canvasRef's —
+              // info.region's box coordinates are in the downscaled live-detect
+              // canvas's coordinate space (see detectFaceInfo above), and
+              // assessCandidateFaceVisibility needs matching frame dimensions to
+              // compute correct area/center ratios.
+              const cvs = liveDetectCanvasRef.current;
               const assess = cvs
                 ? assessCandidateFaceVisibility(info.region, cvs.width, cvs.height)
                 : { visible: true, reason: 'ok' as const };
@@ -293,9 +341,12 @@ export default function StepIdentity({
         } catch { /* transient detector error — keep prior status */ }
         finally { liveDetectBusyRef.current = false; }
       }
-      // Poll a bit faster (~450ms) so the framing feedback feels live — the
-      // warning clears promptly once the candidate uncovers / re-centers.
-      if (!cancelled) timer = setTimeout(tick, 450);
+      // ~400ms poll: with liveOptions (inputSize 128) each detection call now
+      // measures ~180ms on the CPU backend (down from ~540-700ms at inputSize
+      // 224 — see ensureFaceApiFallback), so a 400ms cadence still leaves the
+      // main thread idle more than half the time, while framing feedback
+      // (oval color / hint text) clears promptly once the candidate re-centers.
+      if (!cancelled) timer = setTimeout(tick, 400);
     };
     tick();
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
@@ -308,6 +359,14 @@ export default function StepIdentity({
   useEffect(() => {
     if (liveFaceStatus === 'ok') setFaceError(null);
   }, [liveFaceStatus]);
+
+  // Detached canvas for the post-countdown face check — same reasoning as
+  // liveDetectCanvasRef above: detecting on the full-resolution still is what
+  // froze the countdown on "1" / "Capturing Photo…" for several seconds with
+  // no repaint (CPU-backend TF.js inference blocks the main thread while it
+  // runs, so React can't paint the 'verifying' phase until it's done).
+  const captureCheckCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const CAPTURE_CHECK_MAX_WIDTH = 320;
 
   const capturePhoto = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -324,7 +383,18 @@ export default function StepIdentity({
     // is clearly visible and correctly placed inside the oval. If any check
     // fails we do NOT save the photo; we return to photo_ready so the candidate
     // fixes it and retries. (info=null → no detector → HARD-BLOCK.)
-    const info = await detectFaceInfoFromCanvas(canvas);
+    // Detect on a downscaled COPY of the still (see captureCheckCanvasRef) —
+    // `canvas` itself stays full resolution below for the actual saved photo.
+    if (!captureCheckCanvasRef.current) captureCheckCanvasRef.current = document.createElement('canvas');
+    const checkCanvas = captureCheckCanvasRef.current;
+    const checkScale = canvas.width > CAPTURE_CHECK_MAX_WIDTH ? CAPTURE_CHECK_MAX_WIDTH / canvas.width : 1;
+    checkCanvas.width = Math.max(1, Math.round(canvas.width * checkScale));
+    checkCanvas.height = Math.max(1, Math.round(canvas.height * checkScale));
+    const checkCtx = checkCanvas.getContext('2d', { willReadFrequently: true });
+    checkCtx?.drawImage(canvas, 0, 0, checkCanvas.width, checkCanvas.height);
+    const detectionCanvas = checkCtx ? checkCanvas : canvas;
+
+    const info = await detectFaceInfoFromCanvas(detectionCanvas);
     if (info === null) {
       setFaceError('Face detection is unavailable — reload the page or use Chrome/Edge to continue.');
       setPhase('photo_ready');
@@ -342,7 +412,9 @@ export default function StepIdentity({
         return;
       }
       // Exactly one face — require it to be properly sized/centered in the oval.
-      const assess = assessCandidateFaceVisibility(info.region, canvas.width, canvas.height);
+      // Must use detectionCanvas's dimensions (matches info.region's coordinate
+      // space), not the full-res `canvas`.
+      const assess = assessCandidateFaceVisibility(info.region, detectionCanvas.width, detectionCanvas.height);
       if (!assess.visible) {
         setFaceError(
           assess.reason === 'face_too_small'
@@ -357,6 +429,13 @@ export default function StepIdentity({
     }
     setFaceError(null);
 
+    // JPEG, not PNG: the backend already assumes JPEG end-to-end (hardcodes
+    // `data:image/jpeg;base64,...` for the OpenAI Vision face check and names
+    // the upload identity.jpg). A full-resolution webcam frame as PNG is often
+    // 5-10x larger than an equivalent-quality JPEG, and OpenAI's `detail: "low"`
+    // downsamples internally anyway — so the extra PNG bytes buy nothing but
+    // slower upload (client → backend) and slower base64 transit (backend →
+    // OpenAI), which is what made "Continue" feel like it hung for 3-5s.
     canvas.toBlob(blob => {
       if (blob) {
         setPhotoBlob(blob);
@@ -365,7 +444,7 @@ export default function StepIdentity({
         streamRef.current?.getTracks().forEach(t => t.stop());
         streamRef.current = null;
       }
-    }, 'image/png');
+    }, 'image/jpeg', 0.92);
   }, [detectFaceInfoFromCanvas]);
 
   const handleFormSubmit = useCallback(() => {
@@ -385,6 +464,10 @@ export default function StepIdentity({
       if (count <= 0) {
         clearInterval(countdownRef.current!);
         countdownRef.current = null;
+        // Face-check on the captured frame runs on the TF.js CPU backend and can
+        // take a few seconds — show an honest "Verifying…" state instead of
+        // leaving the countdown frozen on "1" for that whole time.
+        setPhase('verifying');
         await capturePhoto();
       } else {
         setCountdown(count);
@@ -710,13 +793,14 @@ export default function StepIdentity({
               {phase !== 'captured' && !cameraError && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className={`w-36 h-44 md:w-44 md:h-52 rounded-[50%] border-[3px] transition-all duration-300 ${
-                    phase === 'countdown' ? 'border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.4)]' :
+                    phase === 'countdown' || phase === 'verifying' ? 'border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.4)]' :
                     phase === 'photo_ready' && liveFaceStatus === 'ok' ? 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.45)]' :
                     phase === 'photo_ready' && (liveFaceStatus === 'multiple' || liveFaceStatus === 'none') ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.45)]' :
                     'border-white/50'
                   }`} />
                   <p className="absolute bottom-12 text-xs text-white/90 font-medium text-center px-4">
                     {phase === 'countdown' ? 'Hold still…'
+                      : phase === 'verifying' ? 'Verifying your photo…'
                       : liveFaceStatus === 'checking' ? 'Starting camera…'
                       : liveFaceStatus === 'multiple' ? 'Multiple people detected — only you should be visible'
                       : liveFaceStatus === 'none' ? 'No face detected — center your face in the oval'
@@ -732,6 +816,16 @@ export default function StepIdentity({
                 <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
                   <span className="text-7xl font-bold text-white drop-shadow-lg">{countdown}</span>
                   <span className="text-sm text-gray-300 mt-2">Hold still…</span>
+                </div>
+              )}
+
+              {/* Verifying overlay — the face-check on the captured frame can take
+                  a couple seconds; show a spinner instead of leaving the last
+                  countdown digit frozen on screen with no feedback. */}
+              {phase === 'verifying' && (
+                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
+                  <Loader2 className="w-10 h-10 text-white animate-spin" />
+                  <span className="text-sm text-gray-300 mt-3">Verifying photo…</span>
                 </div>
               )}
 
@@ -810,7 +904,7 @@ export default function StepIdentity({
                           onClick={handleStartCapture}
                           disabled={cameraError || !captureReady}
                           title={!captureReady ? blockedMsg : undefined}
-                          className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
+                          className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-800 active:bg-gray-700 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 text-sm shadow-sm"
                         >
                           {faceError ? 'Retake Photo' : 'Capture Photo →'}
                         </button>
@@ -818,6 +912,14 @@ export default function StepIdentity({
                     );
                   })()}
                 </>
+              )}
+
+              {phase === 'verifying' && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
+                  <Loader2 className="w-8 h-8 text-yellow-600 mx-auto mb-2 animate-spin" />
+                  <h4 className="text-sm font-semibold text-yellow-900">Verifying Photo…</h4>
+                  <p className="text-xs text-yellow-800 mt-1">Checking that your face is clearly visible</p>
+                </div>
               )}
 
               {phase === 'countdown' && (
