@@ -879,14 +879,18 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   const showLinkTimer = linkSecondsRemaining !== null
     && !['loading', 'expired', 'error', 'done'].includes(phase);
 
-  // Phases where orientation doesn't matter: nothing left to capture (or
-  // nothing capturable yet) — terminal/error screens, and post-recording
-  // review/upload where forcing a rotation back would only be annoying.
+  // Phases where orientation doesn't matter: the read-only instructions/
+  // permission screens (let the candidate read comfortably in portrait,
+  // their natural hold, before ever asking them to rotate), terminal/error
+  // screens, and post-recording review/upload where forcing a rotation back
+  // would only be annoying. Landscape is only actually required once the
+  // camera is live (aligning through recording) — the only phases that
+  // capture anything.
   const orientationGateActive = isPortrait
-    && !['loading', 'expired', 'error', 'permission_denied', 'ready_to_submit', 'uploading', 'done'].includes(phase);
+    && !['loading', 'expired', 'error', 'permission_denied', 'instructions', 'requesting_permission', 'ready_to_submit', 'uploading', 'done'].includes(phase);
 
   return (
-    <div className="min-h-[100dvh] bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center">
+    <div className="min-h-[100dvh] bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center overflow-y-auto">
       {showLinkTimer && (
         <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[400] flex flex-col items-center gap-1 rounded-xl border border-amber-400/30 bg-[#0F1929]/95 backdrop-blur px-6 py-3 shadow-lg shadow-black/30">
           <span className="font-mono font-bold text-3xl tracking-wider text-amber-400 tabular-nums">
@@ -1100,14 +1104,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           </div>
           <h1 className="text-lg font-semibold">Recording complete</h1>
           <p className="text-sm text-[#94a3b8]">
-            Your 10-second verification video is ready. Tap Upload to submit it and resume your interview.
+            Your 10-second verification video is ready. Tap Submit to send it and resume your interview.
           </p>
           <button
             type="button"
             onClick={handleSubmit}
             className="w-full py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
           >
-            Upload
+            Submit
           </button>
         </div>
       )}
