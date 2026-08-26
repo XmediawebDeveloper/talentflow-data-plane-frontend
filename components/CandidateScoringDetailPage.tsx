@@ -7,6 +7,7 @@ import ShareAssessmentModal from './ShareAssessmentModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
 import { useState, useEffect, useRef } from 'react';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import ReactMarkdown from 'react-markdown';
@@ -107,6 +108,16 @@ interface CandidateScoringDetailPageProps {
    * `onClick` to switch views instead of an `href` to the route already shown.
    */
   breadcrumbItems?: BreadcrumbCrumb[];
+  /**
+   * Whether the JD this candidate was scored against has a published
+   * assessment / a live AI interview to invite them to. Passed by hosts that
+   * already know — Job Details resolves both for its own Send Invite buttons,
+   * so handing them down keeps this page's Invite menu on exactly the same
+   * answer as the Scored Resumes row it was opened from. Omitted elsewhere
+   * (Resume Scoring), where this page resolves them itself.
+   */
+  assessmentConfigured?: boolean;
+  aiInterviewConfigured?: boolean;
 }
 
 /**
@@ -127,7 +138,7 @@ function byNewestVersion(a: any, b: any): number {
   return bTime - aTime;
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, assessmentConfigured, aiInterviewConfigured }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
@@ -150,10 +161,33 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     if (!user.permissions) return false;
     return user.permissions[permission as keyof typeof user.permissions] === true;
   };
-  const canInviteAssessment = hasPermission('canCreateAssessments') && hasPlanFeature('assessment');
-  const canInviteAIInterview =
+  const mayInviteAssessment = hasPermission('canCreateAssessments') && hasPlanFeature('assessment');
+  const mayInviteAIInterview =
     (hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews')) && hasPlanFeature('ai_interview');
-  const canInvite = canInviteAssessment || canInviteAIInterview;
+  const canInvite = mayInviteAssessment || mayInviteAIInterview;
+
+  /* What this JD can actually invite to. Job Details hands both flags down —
+     its Assessment / AI Interview sections read the same two — so this page and
+     the Scored Resumes row it was opened from are never out of step. From
+     Resume Scoring, where no host tracks it, the hook resolves it from the JD
+     itself using the same definition. Each side is only looked up when the
+     viewer could use it at all. */
+  const inviteTargets = useJobInviteTargets(jobId, {
+    assessmentConfigured,
+    aiInterviewConfigured,
+    assessmentEnabled: mayInviteAssessment,
+    aiInterviewEnabled: mayInviteAIInterview,
+  });
+  // With no JD to check (the global scoring view's cross-job rows) there is
+  // nothing to gate on, so the entries keep their permission-only behaviour and
+  // the existing handlers report what's missing after the click.
+  const canInviteAssessment =
+    mayInviteAssessment && (!inviteTargets.known || inviteTargets.assessmentConfigured);
+  const canInviteAIInterview =
+    mayInviteAIInterview && (!inviteTargets.known || inviteTargets.aiInterviewConfigured);
+  // Neither target exists → the Invite button itself is disabled rather than
+  // opening a menu whose every entry dead-ends in "create one first".
+  const inviteDisabled = !canInviteAssessment && !canInviteAIInterview;
 
   const [showInviteMenu, setShowInviteMenu] = useState(false);
   const inviteMenuRef = useRef<HTMLDivElement>(null);
@@ -1063,10 +1097,11 @@ Best regards`);
                 <div className="relative" ref={inviteMenuRef}>
                   <button
                     onClick={() => setShowInviteMenu(!showInviteMenu)}
-                    disabled={!!loadingInvite}
+                    disabled={!!loadingInvite || inviteDisabled}
+                    title={inviteDisabled ? 'No published assessment or AI interview for this job yet' : undefined}
                     aria-haspopup="menu"
                     aria-expanded={showInviteMenu}
-                    className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium text-white bg-brand-blue rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                    className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium text-white bg-brand-blue rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:bg-brand-blue"
                   >
                     {loadingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
                     Invite
@@ -1078,11 +1113,17 @@ Best regards`);
                       role="menu"
                       className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
                     >
-                      {canInviteAssessment && (
+                      {/* Each entry stays visible for anyone permitted to use
+                          it and goes disabled when this JD has nothing to
+                          invite to, so the next step is discoverable and the
+                          tooltip can name what's blocking it. */}
+                      {mayInviteAssessment && (
                         <button
                           role="menuitem"
                           onClick={handleInviteForAssessment}
-                          className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors"
+                          disabled={!canInviteAssessment}
+                          title={!canInviteAssessment ? 'No published assessment for this job yet' : undefined}
+                          className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                         >
                           <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                             <Mail className="w-4 h-4 text-brand-blue" />
@@ -1092,11 +1133,13 @@ Best regards`);
                           </span>
                         </button>
                       )}
-                      {canInviteAIInterview && (
+                      {mayInviteAIInterview && (
                         <button
                           role="menuitem"
                           onClick={handleInviteForAIInterview}
-                          className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors"
+                          disabled={!canInviteAIInterview}
+                          title={!canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
+                          className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                         >
                           <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
                             <Sparkles className="w-4 h-4 text-brand-cyan" />

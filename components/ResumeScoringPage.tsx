@@ -25,6 +25,7 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import JDVersionHistory from '@/components/JDVersionHistory';
 
 const formatEmploymentType = (type: string | undefined): string => {
@@ -251,6 +252,14 @@ export default function ResumeScoringPage({
   // Track if we've already handled the initialJdId to prevent re-triggering
   const [initialJdHandled, setInitialJdHandled] = useState(false);
   const [selectedCandidateForView, setSelectedCandidateForView] = useState<any | null>(null);
+  /* Whether the JD being viewed has a published assessment to invite to — the
+     one gate the Invite controls on this page need, since only assessment
+     invites are offered here (AI Interview invites live on the JD page). The
+     candidate detail page opened from this table reads the same value, so the
+     table and the detail view can never disagree about what's invitable. */
+  const jdInviteTargets = useJobInviteTargets(selectedHistoryItem?.jobId, {
+    aiInterviewEnabled: false,
+  });
   const [selectedJob, setSelectedJob] = useState('');
   const [resumeSource, setResumeSource] = useState<'my-resumes' | 'internal-database' | null>(null);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -1386,6 +1395,10 @@ export default function ResumeScoringPage({
         resume={selectedCandidateForView}
         jobTitle={selectedHistoryItem.jobTitle}
         jobId={selectedHistoryItem.jobId}
+        /* Same answer the table above used, so the Invite button here matches
+           the row it was opened from. The AI Interview side isn't resolved on
+           this page, so it's left for the detail view to look up itself. */
+        assessmentConfigured={jdInviteTargets.known ? jdInviteTargets.assessmentConfigured : undefined}
         currentIndex={_currentIdx >= 0 ? _currentIdx : undefined}
         totalCount={_scoredList.length}
         onPrev={_currentIdx > 0 ? () => _goToCandidate(_scoredList[_currentIdx - 1]) : undefined}
@@ -1574,6 +1587,9 @@ export default function ResumeScoringPage({
           jobId={selectedHistoryItem.jobId}
           bulkActions={bulkScorecardAction}
           availableUnits={availableASUnits ?? 10}
+          /* Nothing published on this JD → nothing to invite to, so the row's
+             Invite goes disabled rather than opening a menu that dead-ends. */
+          assessmentConfigured={jdInviteTargets.known ? jdInviteTargets.assessmentConfigured : undefined}
           onViewCandidate={(resume) => {
             setSelectedCandidateForView(resume);
             setViewMode('candidateView');

@@ -25,6 +25,14 @@ interface JDHistoryVersion {
   title: string;
   description: string;
   status?: string;
+  /* Republish signals, carried per version so the status label describes what
+     was actually done to THIS version. `current_version` is the version's own
+     publish counter (2 or more means it went live through a Republish);
+     `republish_count` / `republished_at` are the backend's explicit record of
+     the same action, and any one of them alone is enough. */
+  current_version?: number;
+  republish_count?: number;
+  republished_at?: string | null;
   is_latest_version?: boolean;
   published_at?: string;
   created_at?: string;
@@ -42,13 +50,39 @@ const statusLabel = (status?: string) =>
     .replace(/[_-]+/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
+/**
+ * Did this version go live through a Republish rather than a first publish?
+ *
+ * Read from the version's own record, not from whether it happens to be the
+ * latest: an older version that was republished stays Republished in the
+ * history, and a newly published latest version reads Published.
+ *
+ * Any one of the three signals is enough — `current_version` is the counter the
+ * rest of the app derives its "Republished" label from, and republish_count /
+ * republished_at are the backend's explicit record of the action, for records
+ * where that counter is not returned.
+ */
+const wasRepublished = (version: JDHistoryVersion): boolean =>
+  (version.current_version ?? 1) > 1
+  || (version.republish_count ?? 0) > 0
+  || !!version.republished_at;
+
+/**
+ * The status as this popup shows it: a published version that was republished
+ * reads "Republished". Every other status is the record's own, prettified.
+ */
+const versionStatusLabel = (version: JDHistoryVersion): string => {
+  const label = statusLabel(version.status);
+  return label === 'Published' && wasRepublished(version) ? 'Republished' : label;
+};
+
 const versionDate = (version: JDHistoryVersion) => version.published_at || version.created_at || '';
 
 const buildCompareText = (version: JDHistoryVersion) => {
   const lines = [
     `Title: ${version.title || 'Untitled JD'}`,
     version.job_id ? `Job ID: ${version.job_id}` : '',
-    version.status ? `Status: ${statusLabel(version.status)}` : '',
+    version.status ? `Status: ${versionStatusLabel(version)}` : '',
     version.department ? `Department: ${version.department}` : '',
     version.industry_type ? `Industry: ${version.industry_type}` : '',
     version.employment_type ? `Employment Type: ${version.employment_type}` : '',
@@ -68,6 +102,9 @@ const mapVersion = (lineageVersion: JDLineageVersion, detail?: JDResponse): JDHi
   title: detail?.title || lineageVersion.title || 'Untitled JD',
   description: detail?.description || '',
   status: detail?.status || lineageVersion.status,
+  current_version: detail?.current_version ?? lineageVersion.current_version,
+  republish_count: detail?.republish_count,
+  republished_at: detail?.republished_at,
   is_latest_version: lineageVersion.is_latest_version,
   published_at: detail?.published_at || lineageVersion.published_at,
   created_at: detail?.created_at || lineageVersion.created_at,
@@ -301,7 +338,7 @@ export default function JDVersionHistoryModal({
                     {formatVersionDate(versionDate(selectedVersion))}
                   </span>
                   <span className="text-xs text-gray-600 dark:text-slate-400">
-                    {statusLabel(selectedVersion.status)}
+                    {versionStatusLabel(selectedVersion)}
                   </span>
                 </div>
                 <button
@@ -394,7 +431,7 @@ export default function JDVersionHistoryModal({
                               <Clock className="w-3.5 h-3.5" />
                               {formatVersionDate(versionDate(version))}
                             </span>
-                            <span>{statusLabel(version.status)}</span>
+                            <span>{versionStatusLabel(version)}</span>
                             {version.created_by_name && (
                               <span className="flex items-center gap-1">
                                 <User className="w-3.5 h-3.5" />

@@ -9,7 +9,22 @@ import { Job } from '@/lib/types/types';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
-import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
+import { formatISTDate } from '@/lib/utils/dateUtils';
+import {
+  collapseToLatestVersions,
+  formatEmploymentType,
+  formatIndustryType,
+  formatLastUpdated,
+  getCreationMethodConfig,
+  getDisplayStatus,
+  getPublishedJobs,
+  getStatusConfig,
+  groupByLineage,
+  sortJobs,
+} from '@/lib/utils/jobOpeningDisplay';
+import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
+import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
+import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
@@ -18,9 +33,6 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { jdService, JDLineageVersion, JDResponse } from '@/lib/services/jdService';
-import { scoringService } from '@/lib/services/scoringService';
-import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
@@ -36,53 +48,9 @@ const viewVersionsMenuItemClass = 'group text-gray-700 hover:bg-gray-50 hover:te
 const viewVersionsMenuItemOrangeClass = 'group text-orange-700 hover:bg-orange-50 hover:text-orange-700 focus:!bg-orange-50 focus:!text-orange-700 data-[highlighted]:!bg-orange-50 data-[highlighted]:!text-orange-700 dark:text-orange-300 dark:hover:bg-orange-950/30 dark:hover:text-orange-200 dark:focus:!bg-orange-950/30 dark:focus:!text-orange-200 dark:data-[highlighted]:!bg-orange-950/30 dark:data-[highlighted]:!text-orange-200 [&_svg]:!text-current';
 const viewVersionsMenuItemGreenClass = 'group text-green-700 hover:bg-green-50 hover:text-green-700 focus:!bg-green-50 focus:!text-green-700 data-[highlighted]:!bg-green-50 data-[highlighted]:!text-green-700 dark:text-green-300 dark:hover:bg-green-950/30 dark:hover:text-green-200 dark:focus:!bg-green-950/30 dark:focus:!text-green-200 dark:data-[highlighted]:!bg-green-950/30 dark:data-[highlighted]:!text-green-200 [&_svg]:!text-current';
 const viewVersionsMenuItemRedClass = 'group text-red-600 hover:bg-red-50 hover:text-red-600 focus:!bg-red-50 focus:!text-red-600 data-[highlighted]:!bg-red-50 data-[highlighted]:!text-red-600 dark:text-red-300 dark:hover:bg-red-950/30 dark:hover:text-red-200 dark:focus:!bg-red-950/30 dark:focus:!text-red-200 dark:data-[highlighted]:!bg-red-950/30 dark:data-[highlighted]:!text-red-200 [&_svg]:!text-current';
-// Utility function to format employment type for display
-// Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
-const formatEmploymentType = (type: string | undefined): string => {
-  if (!type) return '-';
-  return type
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-};
-
-// Utility function to format industry type for display
-// Converts "information_technology" -> "Information Technology", "oil_gas" -> "Oil Gas", etc.
-const formatIndustryType = (type: string | undefined): string => {
-  if (!type) return '-';
-  return type
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-};
-
-// Utility function to format last updated time
-// Within 24 hours: show "X hours ago"
-// More than 24 hours: show actual date
-// Server returns UTC time, add 5:30 hours for IST
-const formatLastUpdated = (dateString: string | undefined): string => {
-  if (!dateString) return '-';
-
-  const istDate = parseIST(dateString);
-
-  const now = new Date();
-
-  const diffInSeconds = Math.floor((now.getTime() - istDate.getTime()) / 1000);
-  const diffInHours = Math.floor(diffInSeconds / 3600);
-
-  // Within 24 hours - show hours ago
-  if (diffInHours >= 0 && diffInHours < 24) {
-    if (diffInHours === 0) {
-      const minutes = Math.floor(diffInSeconds / 60);
-      if (minutes < 1) return 'Just now';
-      return `${minutes} ${minutes === 1 ? 'min' : 'mins'} ago`;
-    }
-    return `${diffInHours} ${diffInHours === 1 ? 'hour' : 'hours'} ago`;
-  }
-
-  // More than 24 hours - show actual date
-  return formatISTDate(dateString);
-};
+/* Formatting, badge tokens, lineage grouping and the list sort all live in
+   lib/utils/jobOpeningDisplay — this page is the reference listing, and the
+   Apply to Job dialog renders the same jobs from the same helpers. */
 
 interface JobsListingProps {
   jobs: Job[];
@@ -186,97 +154,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  /* Jobs whose version history is expanded in place, keyed by lineage (job_id,
-     or the row's own id when it has none). A Set so several can be open at
-     once — collapsing one must not close the rest. */
-  const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
-  /* Lineage per expanded job, from GET /jd/{id}/lineage — the authoritative
-     answer to "what versions does this job have". Deliberately NOT derived from
-     the rows on screen: whether the list returns every version or only the
-     latest is the list endpoint's business, and gating the feature on that made
-     the action disappear whenever the list returned one row per job. Cached by
-     lineage key so re-expanding is instant and never refetches. */
-  const [versionLineages, setVersionLineages] = useState<Record<string, JDLineageVersion[]>>({});
-  const [loadingLineages, setLoadingLineages] = useState<Set<string>>(new Set());
-  /* Full JD record per lineage version id. The lineage endpoint only carries
-     id/title/version/status/dates, but the expanded Version History table also
-     shows experience, industry, applicants and author — fetched once per
-     version when its lineage first loads. A version whose fetch fails simply
-     shows dashes in those cells; nothing is invented client-side. */
-  const [versionDetails, setVersionDetails] = useState<Record<string, JDResponse>>({});
+  /* Version history — expand state, lineage, per-version JD records and
+     applicant counts, all from the shared hook so the Apply to Job dialog opens
+     the same history from the same endpoints. */
+  const versionLineage = useJobVersionLineage();
+  const toggleVersions = versionLineage.toggle;
 
-  /* Applicants per lineage version — the number of resumes actually scored
-     against THAT version.
-
-     The JD record's own `applicants_count` comes back as 0 on version rows, so
-     the column read 0 even for versions with scores against them. Every
-     version is its own JD id, and `/scoring/jd/{id}` is already the endpoint
-     the Scored Resumes tab lists from, so its `total` is the real count for
-     that version and no other. `page_size: 1` keeps this to a count query —
-     only `total` is read, never the rows. */
-  const [versionApplicants, setVersionApplicants] = useState<Record<string, number>>({});
-
-  /* Deliberately not cached the way the JD record above is: scoring a resume
-     changes this number, so it is re-counted every time the panel is opened.
-     A failure leaves the entry unset, so the cell keeps its dash instead of
-     showing a zero that would read as "nobody applied". */
-  const refreshVersionApplicants = async (versionId: string) => {
-    try {
-      const scored = await scoringService.getJDScoredResumes(versionId, { page_size: 1 });
-      setVersionApplicants(prev => ({ ...prev, [versionId]: scored?.total ?? 0 }));
-    } catch {
-      /* keep whatever was there; the cell falls back to a dash */
-    }
-  };
-
-  const loadLineage = async (key: string, jobId: string) => {
-    if (versionLineages[key] || loadingLineages.has(key)) return;
-    setLoadingLineages(prev => new Set(prev).add(key));
-    try {
-      const lineage = await jdService.getLineageVersions(jobId);
-      setVersionLineages(prev => ({ ...prev, [key]: lineage || [] }));
-      // Enrich each version with its own JD record, in parallel; every result
-      // lands as it arrives so the table fills in progressively.
-      (lineage || []).forEach((version) => {
-        jdService
-          .getById(version.id)
-          .then((full) => {
-            setVersionDetails(prev => (prev[version.id] ? prev : { ...prev, [version.id]: full }));
-          })
-          .catch(() => { /* row falls back to the lineage fields + dashes */ });
-
-        void refreshVersionApplicants(version.id);
-      });
-    } catch {
-      // Leave it uncached so the next expand retries rather than showing an
-      // empty history as if the job genuinely had one version.
-      setVersionLineages(prev => ({ ...prev, [key]: [] }));
-    } finally {
-      setLoadingLineages(prev => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
-    }
-  };
-
-  const toggleVersions = (key: string, jobId: string) => {
-    setExpandedVersions(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-    if (!expandedVersions.has(key)) {
-      void loadLineage(key, jobId);
-      /* `loadLineage` bails out once a lineage is cached, which would leave
-         the applicant counts frozen at whatever they were the first time the
-         panel was opened. Re-count the cached versions here so reopening the
-         panel picks up resumes scored in between. */
-      const cached = versionLineages[key];
-      if (cached?.length) cached.forEach(v => void refreshVersionApplicants(v.id));
-    }
-  };
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAIMatchModal, setShowAIMatchModal] = useState(false);
   const [selectedJobForAIMatch, setSelectedJobForAIMatch] = useState<Job | null>(null);
@@ -526,22 +409,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
      (drafts that never got an ID) fall back to their own id and so stay
      individual. "Latest" is the highest version_number present — read from the
      data, never assumed to be first or last in the response. */
-  const lineageKey = (job: Job) => job.job_id || job.id;
-
-  const groupByLineage = (list: Job[]) => {
-    const groups = new Map<string, Job[]>();
-    for (const job of list) {
-      const key = lineageKey(job);
-      const bucket = groups.get(key);
-      if (bucket) bucket.push(job);
-      else groups.set(key, [job]);
-    }
-    // Newest first inside each group, so [0] is the one that represents it.
-    groups.forEach(bucket => bucket.sort((a, b) => (b.versionNumber ?? 1) - (a.versionNumber ?? 1)));
-    return groups;
-  };
-
-  const dedupedJobs = Array.from(groupByLineage(filteredJobs).values(), bucket => bucket[0]);
+  const dedupedJobs = collapseToLatestVersions(filteredJobs);
 
   /* Grouped over the WHOLE list, not the filtered one, so the counts below
      describe the library rather than the current filter. The expanded history
@@ -554,43 +422,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const distinctJobs = Array.from(allVersionGroups.values(), bucket => bucket[0]);
 
   // Apply sorting to filtered jobs
-  const sortedJobs = [...dedupedJobs].sort((a, b) => {
-    let comparison = 0;
-
-    switch (sortBy) {
-      case 'date':
-        // Use created_at if available, fallback to postedDate
-        const dateA = a.created_at ? new Date(a.created_at).getTime() : (a.postedDate ? new Date(a.postedDate).getTime() : 0);
-        const dateB = b.created_at ? new Date(b.created_at).getTime() : (b.postedDate ? new Date(b.postedDate).getTime() : 0);
-        comparison = dateA - dateB; // Natural ascending (oldest first), desc will flip to newest first
-        break;
-      case 'applicants':
-        comparison = (a.applicants || 0) - (b.applicants || 0); // Natural ascending
-        break;
-      case 'title':
-        comparison = a.title.localeCompare(b.title);
-        break;
-      case 'status':
-        comparison = a.status.localeCompare(b.status);
-        break;
-      case 'industry':
-        // Case-insensitive industry sort, empty industries always at end
-        const indA = (a.industry_type || '').trim().toLowerCase();
-        const indB = (b.industry_type || '').trim().toLowerCase();
-        // Empty industries always go to end
-        if (!indA && indB) return 1;
-        if (indA && !indB) return -1;
-        if (!indA && !indB) return 0;
-        // Both have values - normal comparison respects sortOrder
-        comparison = indA.localeCompare(indB);
-        break;
-      default:
-        comparison = 0;
-    }
-
-    // 'desc' inverts the comparison (largest/newest first), 'asc' keeps natural order
-    return sortOrder === 'desc' ? -comparison : comparison;
-  });
+  const sortedJobs = sortJobs(dedupedJobs, sortBy, sortOrder);
 
   // Debug: Log sorted jobs order - show first 5 with their departments
   console.log('Sorted by:', sortBy, 'Order:', sortOrder);
@@ -724,86 +556,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     return () => document.removeEventListener('click', handleClickOutside);
   }, [activeDropdown]);
 
-  // Get display status - show "Republished" if published and version > 1
-  const getDisplayStatus = (status: string, currentVersion?: number) => {
-    if (status === 'Published' && currentVersion && currentVersion > 1) {
-      return 'Republished';
-    }
-    return status;
-  };
-
-  const getStatusConfig = (status: string) => {
-    switch (status) {
-      case 'Published':
-        return {
-          bg: 'bg-green-50',
-          text: 'text-green-700',
-          border: 'border-green-200',
-          dot: 'bg-green-500'
-        };
-      case 'Republished':
-        return {
-          bg: 'bg-brand-blue/10',
-          text: 'text-brand-blue',
-          border: 'border-brand-blue/20',
-          dot: 'bg-brand-blue'
-        };
-      case 'Draft':
-        return {
-          bg: 'bg-brand-orange/10',
-          text: 'text-brand-orange-deep',
-          border: 'border-brand-orange/20',
-          dot: 'bg-brand-orange'
-        };
-      case 'Closed':
-        return {
-          bg: 'bg-gray-50',
-          text: 'text-gray-600',
-          border: 'border-gray-200',
-          dot: 'bg-gray-400'
-        };
-      case 'Disabled':
-        return {
-          bg: 'bg-red-50',
-          text: 'text-red-600',
-          border: 'border-red-200',
-          dot: 'bg-red-500'
-        };
-      case 'Archived':
-        return {
-          bg: 'bg-gray-50',
-          text: 'text-gray-500',
-          border: 'border-gray-200',
-          dot: 'bg-gray-400'
-        };
-      default:
-        return {
-          bg: 'bg-gray-50',
-          text: 'text-gray-700',
-          border: 'border-gray-200',
-          dot: 'bg-gray-500'
-        };
-    }
-  };
-
-  const getCreationMethodConfig = (method: string | undefined) => {
-    if (method === 'ai_generated') {
-      return {
-        bg: 'bg-brand-blue-2/10',
-        text: 'text-brand-blue-2',
-        border: 'border-brand-blue-2/20',
-        dot: 'bg-brand-blue-2',
-        label: 'AI'
-      };
-    }
-    return {
-      bg: 'bg-brand-cyan/10',
-      text: 'text-brand-cyan',
-      border: 'border-brand-cyan/20',
-      dot: 'bg-brand-cyan',
-      label: 'Manual'
-    };
-  };
 
   // Get unique values for filters
   const uniqueLocations = Array.from(new Set(jobs.map(job => job.location)));
@@ -814,10 +566,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   // Calculate stats
   /* Counted over `distinctJobs`, not raw `jobs` — one entry per job, matching
      the list. Counting versions made the cards read higher than the rows
-     underneath them the moment anything was republished. */
+     underneath them the moment anything was republished.
+
+     Published goes through the shared `getPublishedJobs`, which is the same
+     call the Apply to Job dialog counts and lists from — so that dialog cannot
+     report a different number of published jobs from this card. */
   const stats = {
     total: distinctJobs.length,
-    published: distinctJobs.filter(j => j.status === 'Published').length,
+    published: getPublishedJobs(jobs).length,
     draft: distinctJobs.filter(j => j.status === 'Draft').length,
     closed: distinctJobs.filter(j => j.status === 'Closed').length,
     archived: distinctJobs.filter(j => j.status === 'Archived').length,
@@ -1642,11 +1398,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             // List View
             <div className="space-y-3">
               {currentJobs.map(job => {
-                const displayStatus = getDisplayStatus(job.status, job.currentVersion);
-                const statusConfig = getStatusConfig(displayStatus);
-                const creationMethodConfig = getCreationMethodConfig(job.creation_method);
                 const versionKey = job.job_id || job.id;
-                const versionsExpanded = expandedVersions.has(versionKey);
+                const versionsExpanded = versionLineage.isExpanded(versionKey);
                 /* Only jobs with MORE THAN ONE version get the control.
                    `versionNumber` is the row's own place in the lineage — the
                    number already on screen in the vN chip — so anything past v1
@@ -1662,15 +1415,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 ).size;
                 const hasVersionHistory =
                   (job.versionNumber ?? 1) > 1 || distinctVersionCount > 1;
-                const lineage = versionLineages[versionKey];
-                const lineageLoading = loadingLineages.has(versionKey);
-                /* The row above IS the latest version — repeating it in the
-                   history would duplicate what the user is already looking at,
-                   so only previous versions are listed. The id check backstops
-                   a lineage row whose is_latest_version flag is missing. */
-                const jobVersions = (lineage ?? []).filter(
-                  (v) => !v.is_latest_version && v.id !== job.id,
-                );
 
                 return (
                   <div
@@ -1695,110 +1439,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         </div>
                       </div>
 
-                      {/* Job Info */}
+                      {/* Job Info — the shared job-opening summary, so the
+                          Apply to Job dialog's list renders the identical set
+                          of fields from the identical helpers. */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          {job.job_id && (
-                            <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20 flex-shrink-0">
-                              {job.job_id}
-                            </span>
-                          )}
-                          <h3 className="text-sm sm:text-base font-medium text-gray-900 truncate">
-                            {job.title}
-                          </h3>
-                          <span className={`px-2 py-0.5 rounded-full text-xs ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-1.5 flex-shrink-0`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}></div>
-                            {displayStatus}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-full text-xs ${creationMethodConfig.bg} ${creationMethodConfig.text} border ${creationMethodConfig.border} flex items-center gap-1.5 flex-shrink-0`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${creationMethodConfig.dot}`}></div>
-                            {creationMethodConfig.label}
-                          </span>
-                          {job.versionNumber && job.versionNumber >= 1 && (
-                            <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0">
-                              <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
-                              v{job.versionNumber}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Primary Info Row 1 - Company / Role / Location / Employment */}
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 mb-1.5">
-                          {job.department && (
-                            <span className="flex items-center gap-1.5">
-                              <Briefcase className="w-4 h-4 text-gray-400" />
-                              {job.department}
-                            </span>
-                          )}
-                          <span className="flex items-center gap-1.5">
-                            <Building2 className="w-4 h-4 text-gray-400" />
-                            {formatIndustryType(job.industry_type)}
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <MapPin className="w-4 h-4 text-gray-400" />
-                            {job.location && job.location.trim() ? job.location : '-'}
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <Briefcase className="w-4 h-4 text-gray-400" />
-                            {formatEmploymentType(job.employmentType)}
-                          </span>
-                          {(job as any).workMode && (
-                            <span className="flex items-center gap-1.5">
-                              <Users className="w-4 h-4 text-gray-400" />
-                              <span className="capitalize">{(job as any).workMode}</span>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Primary Info Row 2 - Experience / Dates / Posted By / Applicants */}
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 mb-2">
-                          {job.experience && (
-                            <span className="flex items-center gap-1.5">
-                              <TrendingUp className="w-4 h-4 text-gray-400" />
-                              {job.experience}
-                            </span>
-                          )}
-                          {job.postedDate && (
-                            <span className="flex items-center gap-1.5">
-                              <Calendar className="w-4 h-4 text-gray-400" />
-                              Posted {formatISTDate(job.postedDate)}
-                            </span>
-                          )}
-                          {job.postedBy && (
-                            <span className="flex items-center gap-1.5">
-                              <User className="w-4 h-4 text-gray-400" />
-                              By {job.postedBy}
-                            </span>
-                          )}
-                          {job.updated_at && (
-                            <span className="flex items-center gap-1.5">
-                              <Clock className="w-4 h-4 text-gray-400" />
-                              Last Updated: {formatLastUpdated(job.updated_at)}
-                            </span>
-                          )}
-                          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 rounded-lg">
-                            <Users className="w-4 h-4 text-gray-400" />
-                            {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
-                          </span>
-                        </div>
-
-                        {/* Additional Info Row - Salary & Skills */}
-                        <div className="flex items-center flex-wrap gap-2">
-                          {(job as any).salary && (
-                            <div className="flex items-center gap-1.5 px-3 py-1 bg-green-50 rounded-lg text-sm">
-                              <DollarSign className="w-4 h-4 text-green-600" />
-                              <span className="text-green-700">{(job as any).salary}</span>
-                            </div>
-                          )}
-                          {((job as any).mustHaveSkills?.length > 0 || (job as any).niceToHaveSkills?.length > 0) && (
-                            <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 rounded-lg text-sm">
-                              <Target className="w-4 h-4 text-gray-700" />
-                              <span className="text-gray-700">
-                                {(job as any).mustHaveSkills?.length || 0} required + {(job as any).niceToHaveSkills?.length || 0} preferred
-                              </span>
-                            </div>
-                          )}
-                        </div>
+                        <JobOpeningSummary job={job} />
                       </div>
 
                       {/* Actions — a full-height column: icon row pinned at
@@ -1997,374 +1642,102 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
                     {/* ── Version history, expanded in place ───────────────
                         Same card, below the latest version, so the list never
-                        gains a second entry for the same job. The connector is
-                        drawn per row rather than as one spine: each row owns a
-                        vertical segment down to its own centre plus a stub, and
-                        the last row omits the segment below centre, which is
-                        what turns the run into a tree that closes off instead
-                        of a line dangling past the final version.
+                        gains a second entry for the same job.
+
+                        The panel itself is shared with the Apply to Job dialog
+                        — same columns, same lineage endpoints. Only the Action
+                        cell differs, and it is passed in: the ⋮ menu below runs
+                        this page's own handlers against a Job pointed at the
+                        version's id.
 
                         Click is stopped here — the card itself opens the job,
                         and a click meant for a version must not be read as a
                         click on the row behind it. */}
                     {versionsExpanded && (
-                      <div
-                        className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="flex items-center gap-2 mb-2.5">
-                          <FileText className="w-4 h-4 text-brand-blue" />
-                          <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Version History</p>
-                        </div>
-                        {lineageLoading && !lineage ? (
-                          <div className="flex items-center gap-2 py-2 text-xs text-gray-500 dark:text-slate-400">
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            Loading versions...
-                          </div>
-                        ) : jobVersions.length === 0 ? (
-                          <p className="py-2 text-xs text-gray-500 dark:text-slate-400">No other versions of this job.</p>
-                        ) : (
-                          /* Table format mirrors the main list's columns so a
-                             version row reads like the job row above it. Every
-                             cell is real data — lineage fields plus the
-                             version's own JD record; anything still loading or
-                             unavailable shows a dash, never a placeholder. */
-                          /* Full container width: the table fills the card and
-                             distributes its columns across the available
-                             space, so there is no dead white strip on the
-                             right. The min-width keeps narrow screens
-                             scrolling inside the shell instead of crushing the
-                             columns. The brand-tinted border marks this as the
-                             ACTIVE version table — it only exists while View
-                             Versions is open. */
-                          /* One shell owns BOTH scroll axes (x on narrow
-                             screens, y past 3 rows), so header and body live
-                             in one <table> and their columns can never drift
-                             apart. The y-cap only exists when there are more
-                             than 3 versions: header (~37px) + 3 typical
-                             two-line rows (~66px each). The header row is
-                             sticky top; the Action column is sticky right;
-                             the Action HEADER is pinned on both axes so the
-                             corner never scrolls away. */
-                          <div
-                            className={`overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20 ${
-                              jobVersions.length > 3 ? 'overflow-y-auto max-h-[240px] overscroll-contain' : ''
-                            }`}
-                          >
-                            <table className="w-full min-w-[960px] text-left">
-                              <thead>
-                                {/* Header tint: bg-brand-sky (light sky blue).
-                                    To revert to the peach, swap bg-brand-sky
-                                    back to bg-brand-peach — it is on every th
-                                    below, NOT on the tr: a sticky th only
-                                    carries a background painted on the cell
-                                    itself, and a bg-less th lets body text
-                                    show through (the mobile header-overlap
-                                    bug). The bottom hairline is an inset
-                                    shadow, not border-b — collapsed-table
-                                    borders detach from sticky cells and would
-                                    scroll away with the body. Each column
-                                    declares a min width so the auto layout
-                                    can't crush headings into each other on
-                                    narrow screens. */}
-                                <tr>
-                                  {[
-                                    { label: 'Version', minW: 'min-w-[72px]' },
-                                    { label: 'Job Title', minW: 'min-w-[160px]' },
-                                    { label: 'Status', minW: 'min-w-[110px]' },
-                                    { label: 'Experience / Industry', minW: 'min-w-[150px]' },
-                                    { label: 'Location', minW: 'min-w-[120px]' },
-                                    { label: 'Work Mode / Type', minW: 'min-w-[130px]' },
-                                    { label: 'Posted On / By', minW: 'min-w-[130px]' },
-                                    { label: 'Last Updated', minW: 'min-w-[110px]' },
-                                    { label: 'Applicants', minW: 'min-w-[90px]' },
-                                    { label: 'Action', minW: 'min-w-[64px]' },
-                                  ].map(({ label, minW }) => (
-                                    <th
-                                      key={label}
-                                      /* z order, back to front: body cells
-                                         (auto) < sticky Action td (5) <
-                                         sticky header (7) < Action corner (8)
-                                         — so rows slide under the header and
-                                         the header slides under nothing. */
-                                      className={`sticky top-0 py-2.5 px-3 text-xs font-bold text-gray-900 whitespace-nowrap bg-brand-sky dark:bg-slate-800 dark:text-slate-100 ${minW} ${
-                                        label === 'Action'
-                                          ? 'right-0 z-[8] shadow-[inset_0_-1px_0_#e5e7eb,-1px_0_0_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155,-1px_0_0_0_#334155]'
-                                          : 'z-[7] shadow-[inset_0_-1px_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155]'
-                                      }`}
-                                    >
-                                      {label}
-                                    </th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-                                {jobVersions.map((version) => {
-                                  /* Lineage rows carry the raw DB status ('published');
-                                     the status helpers here speak the Job type's
-                                     capitalised form. */
-                                  const rawStatus = version.status || '';
-                                  const versionStatus = getDisplayStatus(
-                                    rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase(),
-                                    version.current_version,
-                                  );
-                                  const versionStatusConfig = getStatusConfig(versionStatus);
-                                  /* A Job-shaped stand-in pointed at THIS
-                                     version's id, so the ⋮ menu below reuses
-                                     the exact same handlers the latest-version
-                                     row's menu calls — no duplicate logic. The
-                                     plain capitalised status (not the display
-                                     label, which can read "Republished")
-                                     drives the same per-status gates. */
-                                  const versionPlainStatus = rawStatus
-                                    ? rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase()
-                                    : job.status;
-                                  const versionJob: Job = {
-                                    ...job,
-                                    id: version.id,
-                                    title: version.title || job.title,
-                                    status: versionPlainStatus as Job['status'],
-                                    currentVersion: version.current_version ?? job.currentVersion,
-                                    versionNumber: version.version_number,
-                                  };
-                                  const detail = versionDetails[version.id];
-                                  const experienceText = detail
-                                    ? formatJobExperienceText({
-                                        jobLevel: detail.job_level || detail.experience_level,
-                                        experienceMin: detail.experience_min,
-                                        experienceMax: detail.experience_max,
-                                      })
-                                    : '';
-                                  const postedOn = version.published_at || detail?.published_at || version.created_at || detail?.created_at;
-                                  const lastUpdated = detail?.updated_at || version.published_at || version.created_at;
-                                  /* NO transform on the row itself: a
-                                     transformed <tr> becomes the containing
-                                     block for its cells, which silently kills
-                                     position:sticky on the pinned Action cell.
-                                     The hover pop lives on the Job Title text
-                                     instead (group-hover below). */
-                                  return (
-                                    <tr
-                                      key={version.id}
-                                      className="group cursor-pointer transition-colors duration-200 ease-out hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08]"
-                                      onClick={() => router.push(`/recruitment/job-details?id=${version.id}`)}
-                                    >
-                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                        <span className="inline-flex items-center gap-1.5">
-                                          <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
-                                            v{version.version_number ?? 1}
-                                          </span>
-                                        </span>
-                                      </td>
-                                      <td className="p-0 text-sm text-gray-900 dark:text-slate-100 max-w-[220px] overflow-hidden align-middle" title={version.title || detail?.title || ''}>
-                                        {/* The "job role" pops on row hover — a
-                                            gentle scale from the left edge with
-                                            a smooth transition. Scoped to this
-                                            span so the sticky Action column is
-                                            unaffected. */}
-                                        <Link
-                                          href={`/recruitment/job-details?id=${version.id}`}
-                                          className="block h-full w-full py-2.5 px-3 hover:text-brand-blue hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
-                                        >
-                                          <span className="inline-block max-w-full truncate transform-gpu transition-transform duration-200 ease-out origin-left group-hover:scale-105">
-                                            {version.title || detail?.title || '—'}
-                                          </span>
-                                        </Link>
-                                      </td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                        <div className="flex flex-col items-start gap-1">
-                                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${versionStatusConfig.bg} ${versionStatusConfig.text} border ${versionStatusConfig.border}`}>
-                                            <span className={`w-1.5 h-1.5 rounded-full ${versionStatusConfig.dot}`} />
-                                            {versionStatus}
-                                          </span>
-                                          {/* AI / Manual — same badge the job rows
-                                              carry, from this version's own record.
-                                              Rendered only once the detail fetch
-                                              lands so a loading row doesn't claim
-                                              "Manual" by default. */}
-                                          {detail && (() => {
-                                            const methodConfig = getCreationMethodConfig(detail.creation_method);
-                                            return (
-                                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${methodConfig.bg} ${methodConfig.text} border ${methodConfig.border}`}>
-                                                <span className={`w-1.5 h-1.5 rounded-full ${methodConfig.dot}`} />
-                                                {methodConfig.label}
-                                              </span>
-                                            );
-                                          })()}
-                                        </div>
-                                      </td>
-                                      {/* Experience / Industry — one column,
-                                          stacked, same space-saving treatment
-                                          as Posted On / By below. Industry is
-                                          run through the same formatter as the
-                                          job rows so it never shows the raw
-                                          snake_case value. */}
-                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                        <div className="text-sm text-gray-700 dark:text-slate-300">
-                                          {experienceText || '—'}
-                                        </div>
-                                        <div className="text-xs text-gray-500 dark:text-slate-400 max-w-[180px] truncate" title={detail?.industry_type ? formatIndustryType(detail.industry_type) : ''}>
-                                          {detail?.industry_type ? formatIndustryType(detail.industry_type) : '—'}
-                                        </div>
-                                      </td>
-                                      {/* Location — this version's own record;
-                                          single field first, else the cities
-                                          from the locations list. */}
-                                      {(() => {
-                                        const locationText =
-                                          detail?.location
-                                          || (detail?.locations || []).map((loc: any) => loc?.city).filter(Boolean).join(', ');
-                                        return (
-                                          <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap max-w-[160px] truncate align-middle" title={locationText || ''}>
-                                            {locationText || '—'}
-                                          </td>
-                                        );
-                                      })()}
-                                      {/* Work Mode / Type — stacked: employment
-                                          type over remote mode, from this
-                                          version's own record. A missing half
-                                          simply drops out; nothing is invented. */}
-                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                        <div className="text-sm text-gray-700 dark:text-slate-300">
-                                          {detail?.employment_type ? formatEmploymentType(detail.employment_type) : '—'}
-                                        </div>
-                                        {detail?.remote_type && (
-                                          <div className="text-xs text-gray-500 dark:text-slate-400">
-                                            {formatEmploymentType(detail.remote_type)}
-                                          </div>
-                                        )}
-                                      </td>
-                                      {/* Posted On / By — one column, date over
-                                          author, so the table stays narrower
-                                          without dropping either fact. */}
-                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                        <div className="text-sm text-gray-700 dark:text-slate-300">
-                                          {postedOn ? formatISTDate(postedOn) : '—'}
-                                        </div>
-                                        <div className="text-xs text-gray-500 dark:text-slate-400 max-w-[160px] truncate" title={detail?.created_by_name || ''}>
-                                          {detail?.created_by_name || '—'}
-                                        </div>
-                                      </td>
-                                      <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
-                                        {lastUpdated ? formatISTDate(lastUpdated) : '—'}
-                                      </td>
-                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                        <span className="inline-flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300">
-                                          <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                                          {/* Resumes scored against this
-                                              version. Dash only while the
-                                              count is still in flight (or if
-                                              it failed) — a real zero prints
-                                              as 0. */}
-                                          {versionApplicants[version.id] ?? '—'}
-                                        </span>
-                                      </td>
-                                      {/* Action — pinned right so it stays
-                                          reachable while the table scrolls
-                                          sideways. Opaque background (plus a
-                                          solid hover tint matching the row's
-                                          translucent one) so content sliding
-                                          underneath never shows through; the
-                                          left hairline makes it read as
-                                          floating over the scrolling cells. */}
-                                      <td className="py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] bg-white group-hover:bg-[#f8f9fc] shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:bg-slate-900 dark:group-hover:bg-slate-800 dark:shadow-[-1px_0_0_0_#334155]">
-                                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                          <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                              <button
-                                                className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
-                                                title="More actions"
-                                                aria-label="More actions"
-                                              >
-                                                <MoreVertical className="w-4 h-4" />
-                                              </button>
-                                            </DropdownMenuTrigger>
-                                            {/* Same action options, gates and handlers
-                                                as the latest-version row's ⋮
-                                                menu, except View Details lives
-                                                on the Job Role link in this
-                                                table. versionJob keeps every
-                                                remaining action scoped to this
-                                                version's own id. */}
-                                            <DropdownMenuContent align="end" className="w-52">
-                                              {/* View Applicants - Hide for Draft */}
-                                              {versionJob.status.toLowerCase() !== 'draft' && (
-                                                <DropdownMenuItem onSelect={() => (onViewApplicants || onViewJob)(versionJob)} className={viewVersionsMenuItemClass}>
-                                                  <Users className="w-4 h-4 text-menu-icon-secondary" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Quick Actions — same gates as the latest-version menu */}
-                                              {onAIMatch && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
-                                                <DropdownMenuItem onSelect={() => requestAIMatch(versionJob)} className={viewVersionsMenuItemClass}>
-                                                  <Brain className="w-4 h-4 text-menu-icon-ai" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {onScoreResumes && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
-                                                <DropdownMenuItem onSelect={() => onScoreResumes(versionJob)} className={viewVersionsMenuItemClass}>
-                                                  <Target className="w-4 h-4 text-menu-icon-score" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Disable Job for Published */}
-                                              {versionJob.status === 'Published' && onDisableJob && (
-                                                <DropdownMenuItem
-                                                  onSelect={() => onDisableJob(versionJob)}
-                                                  className={viewVersionsMenuItemOrangeClass}
-                                                >
-                                                  <Ban className="w-4 h-4" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Re-enable JD for Disabled */}
-                                              {versionJob.status === 'Disabled' && onRepublishJob && (
-                                                <DropdownMenuItem
-                                                  onSelect={() => onRepublishJob(versionJob)}
-                                                  className={viewVersionsMenuItemGreenClass}
-                                                >
-                                                  <CheckCircle2 className="w-4 h-4" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Archive Job */}
-                                              {versionJob.status !== 'Archived' && onArchiveJob && (
-                                                <DropdownMenuItem onSelect={() => onArchiveJob(versionJob)} className={viewVersionsMenuItemClass}>
-                                                  <Archive className="w-4 h-4 text-menu-icon-archive" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Unarchive Job */}
-                                              {versionJob.status === 'Archived' && onUnarchiveJob && (
-                                                <DropdownMenuItem
-                                                  onSelect={() => onUnarchiveJob(versionJob)}
-                                                  className={viewVersionsMenuItemGreenClass}
-                                                >
-                                                  <RefreshCw className="w-4 h-4" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Delete Job */}
-                                              {onDeleteJob && (
-                                                <DropdownMenuItem
-                                                  onSelect={() => onDeleteJob(versionJob)}
-                                                  className={viewVersionsMenuItemRedClass}
-                                                >
-                                                  <Trash2 className="w-4 h-4" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                            </DropdownMenuContent>
-                                          </DropdownMenu>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <JobVersionHistoryPanel
+                          job={job}
+                          versions={versionLineage.lineages[versionKey]}
+                          loading={versionLineage.isLoading(versionKey)}
+                          versionDetails={versionLineage.versionDetails}
+                          versionApplicants={versionLineage.versionApplicants}
+                          onRowClick={(versionId) => router.push(`/recruitment/job-details?id=${versionId}`)}
+                          renderAction={(versionJob) => (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+                                  title="More actions"
+                                  aria-label="More actions"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              {/* Same action options, gates and handlers as the
+                                  latest-version row's ⋮ menu, except View
+                                  Details lives on the Job Role link in the
+                                  table. versionJob keeps every remaining action
+                                  scoped to this version's own id. */}
+                              <DropdownMenuContent align="end" className="w-52">
+                                {/* View Applicants - Hide for Draft */}
+                                {versionJob.status.toLowerCase() !== 'draft' && (
+                                  <DropdownMenuItem onSelect={() => (onViewApplicants || onViewJob)(versionJob)} className={viewVersionsMenuItemClass}>
+                                    <Users className="w-4 h-4 text-menu-icon-secondary" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
+                                  </DropdownMenuItem>
+                                )}
+                                {/* Quick Actions — same gates as the latest-version menu */}
+                                {onAIMatch && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
+                                  <DropdownMenuItem onSelect={() => requestAIMatch(versionJob)} className={viewVersionsMenuItemClass}>
+                                    <Brain className="w-4 h-4 text-menu-icon-ai" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
+                                  </DropdownMenuItem>
+                                )}
+                                {onScoreResumes && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
+                                  <DropdownMenuItem onSelect={() => onScoreResumes(versionJob)} className={viewVersionsMenuItemClass}>
+                                    <Target className="w-4 h-4 text-menu-icon-score" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
+                                  </DropdownMenuItem>
+                                )}
+                                {/* Disable Job for Published */}
+                                {versionJob.status === 'Published' && onDisableJob && (
+                                  <DropdownMenuItem onSelect={() => onDisableJob(versionJob)} className={viewVersionsMenuItemOrangeClass}>
+                                    <Ban className="w-4 h-4" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
+                                  </DropdownMenuItem>
+                                )}
+                                {/* Re-enable JD for Disabled */}
+                                {versionJob.status === 'Disabled' && onRepublishJob && (
+                                  <DropdownMenuItem onSelect={() => onRepublishJob(versionJob)} className={viewVersionsMenuItemGreenClass}>
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
+                                  </DropdownMenuItem>
+                                )}
+                                {/* Archive Job */}
+                                {versionJob.status !== 'Archived' && onArchiveJob && (
+                                  <DropdownMenuItem onSelect={() => onArchiveJob(versionJob)} className={viewVersionsMenuItemClass}>
+                                    <Archive className="w-4 h-4 text-menu-icon-archive" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
+                                  </DropdownMenuItem>
+                                )}
+                                {/* Unarchive Job */}
+                                {versionJob.status === 'Archived' && onUnarchiveJob && (
+                                  <DropdownMenuItem onSelect={() => onUnarchiveJob(versionJob)} className={viewVersionsMenuItemGreenClass}>
+                                    <RefreshCw className="w-4 h-4" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
+                                  </DropdownMenuItem>
+                                )}
+                                {/* Delete Job */}
+                                {onDeleteJob && (
+                                  <DropdownMenuItem onSelect={() => onDeleteJob(versionJob)} className={viewVersionsMenuItemRedClass}>
+                                    <Trash2 className="w-4 h-4" />
+                                    <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        />
                       </div>
                     )}
                   </div>
