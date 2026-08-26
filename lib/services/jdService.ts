@@ -41,6 +41,10 @@ export interface JDCreate {
   compensation_type?: string;
   assessment_guidance?: string;
   internal_comments?: string;
+  /** JD22 - recruiter free text about the job (shift timings, WFO/WFH, anything
+   *  extraction missed). Shown to candidates and in every JD view; never an input
+   *  to resume scoring, assessment generation or the AI interview. */
+  additional_details?: string;
   must_have_comments?: string[];
   nice_to_have_comments?: string[];
   coding_required?: boolean;
@@ -197,6 +201,10 @@ export interface JDVersion {
   compensation_type?: string;
   assessment_guidance?: string;
   internal_comments?: string;
+  /** JD22 - recruiter free text about the job (shift timings, WFO/WFH, anything
+   *  extraction missed). Shown to candidates and in every JD view; never an input
+   *  to resume scoring, assessment generation or the AI interview. */
+  additional_details?: string;
   must_have_comments?: string[];
   coding_required: boolean;
   supported_languages: string[];
@@ -258,6 +266,8 @@ export interface JDDownstreamResponse {
   assessment_guidance?: string;
   allow_overqualified: boolean;
   internal_comments?: string;
+  /** JD22 - see JDCreate.additional_details. */
+  additional_details?: string;
   must_have_comments: string[];
   status: 'published';
   published_at?: string;

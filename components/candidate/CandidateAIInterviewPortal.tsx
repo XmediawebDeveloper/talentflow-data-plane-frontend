@@ -3030,6 +3030,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           jdExperienceMin={interview.jd_experience_min}
           jdExperienceMax={interview.jd_experience_max}
           jdJobLevel={interview.jd_job_level}
+          jdAdditionalDetails={interview.jd_additional_details}
           duration={interview.duration_minutes}
           interviewType={interview.interview_type}
           interviewMode={interview.interview_mode}

@@ -40,6 +40,10 @@ export interface CandidateInterviewInfo {
   jd_experience_max?: number | null;
   jd_job_level?: string | null;
   jd_industry_type?: string | null;
+  /** JD22 - recruiter free text about the job (shift timings, WFO/WFH, ...) shown to the
+   *  candidate on the JD screen. Display only: it is not part of jd_description and is
+   *  never sent to the interview engine, so it cannot steer the questions or scoring. */
+  jd_additional_details?: string | null;
   // Introduction video for Step 6
   introduction_video_url?: string | null;
   // Identity verification for Step 3

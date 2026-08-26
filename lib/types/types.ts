@@ -82,6 +82,10 @@ export interface Job {
   postedBy?: string;
   internalRecruiterComments?: string[];
   assessmentGuidance?: string;
+  /** JD22 - recruiter free text about the job (shift timings, WFO/WFH, anything the
+   *  extraction missed). Shown to candidates and in every JD view; deliberately not an
+   *  input to resume scoring, assessment generation or the AI interview. */
+  additionalDetails?: string;
   employmentType?: string;
   workMode?: string; // Remote type: onsite, hybrid, remote
   education?: string; // Education requirement: bachelors, masters, doctorate, etc.

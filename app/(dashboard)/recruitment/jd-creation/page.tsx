@@ -462,6 +462,7 @@ function JDCreationContent() {
       remote_type: editingJD.remote_type,
       assessment_guidance: editingJD.assessment_guidance,
       internal_comments: editingJD.internal_comments,
+      additional_details: editingJD.additional_details,
       must_have_comments: editingJD.must_have_comments,
       nice_to_have_comments: editingJD.nice_to_have_comments,
       // Also forwarded (previously dropped on edit → silent data loss):

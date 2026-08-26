@@ -2255,6 +2255,21 @@ Best regards`);
                     )}
                   </div>
 
+                  {/* JD22 - Additional Details. Above the recruiter-side pair and full
+                      width: this is job information the candidate also sees, not an
+                      internal annotation. Only rendered when it was filled in. */}
+                  {jdDetails.additional_details && (
+                    <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <h4 className="text-sm font-semibold text-gray-900">Additional Details</h4>
+                        <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded">
+                          Visible to candidates
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 whitespace-pre-wrap">{jdDetails.additional_details}</p>
+                    </div>
+                  )}
+
                   {/* Internal Recruiter Notes & Assessment Guidance */}
                   <div className={`grid ${jdDetails.assessment_guidance ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-4`}>
                     <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">

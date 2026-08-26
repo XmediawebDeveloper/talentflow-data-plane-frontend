@@ -2665,6 +2665,24 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </div>
           </div>
 
+          {/* JD22 - Additional Details. Sits ABOVE the internal/assessment pair and full
+              width, because unlike those two this is part of the job as the CANDIDATE
+              sees it, not a recruiter-side annotation. Rendered only when the recruiter
+              filled it in (requirement 4), so an unused field costs no vertical space -
+              which is why it does not follow the "No ... provided" placeholder pattern
+              the two cards below use. */}
+          {job.additionalDetails && (
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50">Additional Details</h3>
+                <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded">
+                  Visible to candidates
+                </span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-wrap">{job.additionalDetails}</p>
+            </div>
+          )}
+
           {/* Internal Recruiter Notes & Assessment Guidance - Side by Side */}
           <div className={`grid ${hasPlanFeature('assessment') ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
             {/* Internal Recruiter Notes */}

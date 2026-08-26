@@ -626,6 +626,11 @@ interface ExtractedData {
   locations: Array<{ city: string; radius: string; radiusKm?: number; isRequired?: boolean; country?: 'IN' | 'US' }>;
   locationsRequired: boolean;
   assessmentGuidance: string;
+  /** JD22. Free text ABOUT the job that the recruiter wants the candidate to see -
+   *  shift timings, WFO/WFH, and whatever extraction did not pick up. Purely
+   *  informational: it is sent as its own field and never folded into the
+   *  description, so no scoring, assessment or interview input ever reads it. */
+  additionalDetails: string;
   internalRecruiterComments: string[];
   // JD09: Additional extraction fields
   certifications: string[];
@@ -661,6 +666,10 @@ interface EditingJDData {
   remote_type?: string;
   assessment_guidance?: string;
   internal_comments?: string;
+  /** JD22 - see ExtractedData.additionalDetails. Both editingJD mappings (this
+   *  component's and jd-creation/page.tsx's) must forward it, or editing a JD silently
+   *  drops what the recruiter wrote. */
+  additional_details?: string;
   must_have_comments?: string[];
   nice_to_have_comments?: string[];
   certifications?: string[];
@@ -1180,6 +1189,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             remote_type: jd.remote_type,
             assessment_guidance: jd.assessment_guidance,
             internal_comments: jd.internal_comments,
+            additional_details: jd.additional_details,
             must_have_comments: jd.must_have_comments,
             nice_to_have_comments: jd.nice_to_have_comments,
             department: jd.department,
@@ -1273,6 +1283,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     locations: [],
     locationsRequired: false,
     assessmentGuidance: '',
+    additionalDetails: '',
     internalRecruiterComments: [],
     // JD09: Certifications and Domain Keywords
     certifications: [],
@@ -3230,6 +3241,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         })) : (isEditMode ? extractedData.locations : []),
         locationsRequired: params.location_mandatory || (isEditMode ? extractedData.locationsRequired : false),
         assessmentGuidance: isEditMode ? extractedData.assessmentGuidance : '',
+        // Always carried over, edit mode or not (JD22 req 3: the text must survive
+        // moving between steps). Extraction never produces this field - it is only
+        // ever typed by the recruiter - so there is nothing to overwrite it with.
+        additionalDetails: extractedData.additionalDetails,
         internalRecruiterComments: isEditMode ? extractedData.internalRecruiterComments : [],
         // JD09: Extract certifications and domain keywords
         certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? extractedData.certifications : []),
@@ -4179,6 +4194,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return false;
     }
 
+    if (extractedData.additionalDetails.trim() && !validateEnglishOnlyExtractedValue(extractedData.additionalDetails.trim(), 'Additional details')) {
+      return false;
+    }
+
     return englishOnlyChecks.every(check => check.valid);
   };
 
@@ -4487,6 +4506,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         employment_type: extractedData.employmentType,
         remote_type: extractedData.workModel,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
+        additional_details: extractedData.additionalDetails || undefined,
         allow_overqualified: extractedData.allowOverqualified,
         certifications: extractedData.certifications,
         domain_keywords: extractedData.domainKeywords,
@@ -4806,6 +4826,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_currency: extractedData.salaryCurrency,
         job_level: experiencePayload.jobLevel,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
+        additional_details: extractedData.additionalDetails || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
         nice_to_have_comments: extractedData.niceToHaveComments,
@@ -5100,6 +5121,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_currency: extractedData.salaryCurrency,
         job_level: experiencePayload.jobLevel,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
+        additional_details: extractedData.additionalDetails || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
         nice_to_have_comments: extractedData.niceToHaveComments,
@@ -5371,6 +5393,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           compensationType: (effectiveEditingJD.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
           salaryCurrency: normalizeSalaryCurrency(effectiveEditingJD.salary_currency),
           assessmentGuidance: effectiveEditingJD.assessment_guidance || '',
+          additionalDetails: effectiveEditingJD.additional_details || '',
           internalRecruiterComments: effectiveEditingJD.internal_comments ? effectiveEditingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
           mustHaveComments: effectiveEditingJD.must_have_comments || [],
           niceToHaveComments: effectiveEditingJD.nice_to_have_comments || [],
@@ -7989,6 +8012,53 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
+              {/* JD22 - Additional Details. Last field in Step 2 on purpose: it is the
+                  catch-all for whatever extraction did not pick up, so the recruiter
+                  reaches it after reviewing everything that WAS extracted.
+
+                  Full width rather than sharing the grid above, because the content is
+                  prose the candidate reads (shift timings, WFO/WFH arrangements) and a
+                  half-width box invites one-word answers.
+
+                  The "not used for scoring" line is not decoration - it is the contract.
+                  Assessment Guidance above it DOES steer the assessment and Internal
+                  Notes are hidden entirely, so without saying which of the three this is,
+                  a recruiter has no way to know whether writing "prefers night shift"
+                  here will quietly affect a candidate's score. It will not: the field
+                  travels as its own column and no scoring, assessment or interview input
+                  ever reads it. */}
+              <div className="mt-4 sm:mt-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">Additional Details</h3>
+                  <span className="text-xs text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded">Optional</span>
+                  <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded flex items-center gap-1">
+                    👁️ Visible to candidates
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-slate-400 mb-3">
+                  Extra information about this job for the candidate — shift timings, work from
+                  office / work from home, or anything else the extraction missed. This is
+                  <span className="font-medium text-gray-700 dark:text-slate-300"> information only</span>: it is
+                  not used in resume scoring, AI assessment, or the AI interview.
+                </p>
+                <textarea
+                  value={extractedData.additionalDetails}
+                  onChange={(e) => {
+                    const nextValue = e.target.value.slice(0, 2000);
+                    applyEnglishOnlyInputChange(nextValue, 'Additional details', () => {
+                      setExtractedData(prev => ({ ...prev, additionalDetails: nextValue }));
+                      markExtractedDataModified();
+                    });
+                  }}
+                  placeholder="e.g., Shift timings 2 PM - 11 PM IST. Work from office 3 days a week, remaining days work from home. Cab facility provided for night shifts."
+                  className={`w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                  rows={4}
+                  disabled={isRegenerating}
+                  readOnly={isRegenerating}
+                />
+                <div className="text-right text-xs text-gray-500 dark:text-slate-500 mt-1">{extractedData.additionalDetails?.length || 0}/2000</div>
+              </div>
+
             {/* Validation Warning Banner - Show when required fields are missing */}
             {!validationStatus.isValid && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 sm:p-4 mt-4 sm:mt-6">
@@ -8412,6 +8482,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         {loc.city} <span className="text-gray-800">(+{loc.radius}km)</span>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* JD22 - Additional Details. Rendered only when the recruiter actually
+                  wrote something (requirement 4: "only the details provided"), so an
+                  empty field adds no empty section to the preview. */}
+              {extractedData.additionalDetails && (
+                <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
+                  <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 flex items-center gap-2">
+                    Additional Details
+                    <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded">
+                      👁️ Visible to candidates
+                    </span>
+                  </h3>
+                  <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg text-xs sm:text-sm text-gray-700 dark:text-slate-300 whitespace-pre-wrap">
+                    {extractedData.additionalDetails}
                   </div>
                 </div>
               )}
