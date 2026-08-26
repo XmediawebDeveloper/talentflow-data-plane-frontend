@@ -680,14 +680,14 @@ export default function ResumeDatabasePage() {
   };
 
   // Handle job selection for Assessment creation
-  const handleAssessmentJobSelect = async (resumeIds: string[], jobIds: string[]) => {
+  const handleAssessmentJobSelect = async (resumeIds: string[], jobIds: string[], jobRecords?: Job[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setShowAssessmentJobModal(false);
 
     // Get the selected job and resumes
     const jobId = jobIds[0]; // Take first selected job
-    const selectedJob = jobs.find(j => j.id === jobId);
+    const selectedJob = jobRecords?.[0] || jobs.find(j => j.id === jobId);
     const selectedResumesList = resumeIds.map(id => {
       const resume = resumes.find(r => r.id === id);
       return {
@@ -710,14 +710,15 @@ export default function ResumeDatabasePage() {
   };
 
   // Handle actual apply action from modal - using async Celery scoring
-  const handleApply = async (resumeIds: string[], jobIds: string[]) => {
+  const handleApply = async (resumeIds: string[], jobIds: string[], jobRecords?: Job[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setShowApplyToJobModal(false);
 
-    // Get the selected job details
+    /* The dialog reads the job list itself, so take the record it hands back;
+       the local list is only a fallback. */
     const jobId = jobIds[0];
-    const selectedJob = jobs.find(j => j.id === jobId);
+    const selectedJob = jobRecords?.[0] || jobs.find(j => j.id === jobId);
 
     try {
       // Check for already-scored resumes before proceeding

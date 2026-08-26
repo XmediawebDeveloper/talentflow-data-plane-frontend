@@ -745,6 +745,29 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const [aiInterviewConfigError, setAiInterviewConfigError] = useState<string | null>(null);
   const aiInterviewConfigFetchedRef = useRef(false);
 
+  /* `aiInterviewConfig` comes from findLiveConfigForJd, which only matches
+     published/in-use configs — so its presence IS "there is something to invite
+     candidates to". A draft leaves it null, which is what we want: the AI
+     Interview Send Invite gate mirrors the assessment one exactly.
+
+     Declared here, alongside the state it reads, because it gates more than the
+     section's own button now: the Scored Resumes row menus and the Candidate
+     View both take it (with `hasPublishedAssessment`) as their invite gate, and
+     the Candidate View is rendered from an early return above the tabs. */
+  const hasLiveAIInterview = !!aiInterviewConfig;
+
+  /* Is there anything on this JD to invite a candidate TO?
+     One answer per side, shared by every Invite on the page: the Assessment /
+     AI Interview sections' own Send Invite buttons, each Scored Resumes row's
+     Invite menu, and the Candidate View opened from that table. Whatever
+     silences the section's button — nothing published yet, the tenant switch
+     off, the JD disabled — silences the row menus with it, so the table can
+     never offer an invite the section above refuses. */
+  const canInviteToAssessment =
+    hasPublishedAssessment && features.assessment && job.status !== 'Disabled';
+  const canInviteToAIInterview =
+    hasLiveAIInterview && features.ai_interview && job.status !== 'Disabled';
+
   const loadAIInterviewConfig = async () => {
     if (aiInterviewConfigFetchedRef.current) return;
     aiInterviewConfigFetchedRef.current = true;
@@ -1877,6 +1900,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         totalCount={scoredResumes.length}
         onPrev={_scoredIdx > 0 ? () => _goToScoredCandidate(_scoredIdx - 1) : undefined}
         onNext={_scoredIdx >= 0 && _scoredIdx < scoredResumes.length - 1 ? () => _goToScoredCandidate(_scoredIdx + 1) : undefined}
+        /* Handed down rather than re-resolved inside the candidate page, so
+           its Invite menu is gated on the very same answer as the row it was
+           opened from and as the sections above. */
+        assessmentConfigured={canInviteToAssessment}
+        aiInterviewConfigured={canInviteToAIInterview}
       />
     );
   }
@@ -1928,11 +1956,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const canScoreResumesFromTab =
     permissions.canRunScoring && hasPlanFeature('resume_scoring') && job.status !== 'Disabled';
 
-  // `aiInterviewConfig` comes from findLiveConfigForJd, which only matches
-  // published/in-use configs — so its presence IS "there is something to invite
-  // candidates to". A draft leaves it null, which is what we want: the AI
-  // Interview Send Invite gate mirrors the assessment one exactly.
-  const hasLiveAIInterview = !!aiInterviewConfig;
   const hasAssessmentInviteSent = assessmentInviteCount > 0;
   const hasAIInterviewInviteSent = aiInterviewCount > 0;
 
@@ -1963,7 +1986,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     permissions.canCreateAssessments && hasPlanFeature('assessment') ? (
       <button
         onClick={handleOpenShareAssessment}
-        disabled={!features.assessment || job.status === 'Disabled' || isLoadingShareAssessments || !hasPublishedAssessment}
+        disabled={!canInviteToAssessment || isLoadingShareAssessments}
         title={
           !features.assessment
             ? 'Assessments not enabled'
@@ -2033,7 +2056,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         /* Wrapped so the click event isn't passed through as the candidate
            seed — this entry point opens the form empty. */
         onClick={() => handleInviteAIInterview()}
-        disabled={!features.ai_interview || job.status === 'Disabled' || resolvingInviteConfig || !hasLiveAIInterview}
+        disabled={!canInviteToAIInterview || resolvingInviteConfig}
         title={
           !features.ai_interview
             ? 'AI Interviews not enabled'
@@ -2940,7 +2963,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                         accent="cyan"
                         onClick={handleOpenShareAssessment}
                         loading={isLoadingShareAssessments}
-                        disabled={!features.assessment || job.status === 'Disabled' || !hasPublishedAssessment}
+                        disabled={!canInviteToAssessment}
                         disabledTooltip={
                           !features.assessment
                             ? 'Assessments not enabled'
@@ -3037,7 +3060,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       accent="orange"
                       onClick={handleInviteAIInterview}
                       loading={resolvingInviteConfig}
-                      disabled={!features.ai_interview || job.status === 'Disabled' || !hasLiveAIInterview}
+                      disabled={!canInviteToAIInterview}
                       disabledTooltip={
                         !features.ai_interview
                           ? 'AI Interviews not enabled'
@@ -3276,6 +3299,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   ? (candidate) => handleInviteAIInterview([candidate])
                   : undefined
               }
+              /* The row menu offers only what this JD actually has. Same two
+                 flags the Assessment / AI Interview sections' own Send Invite
+                 buttons read, so a row can never offer an invite the section
+                 above says isn't ready — and with neither configured the
+                 Invite button itself is disabled. */
+              assessmentConfigured={canInviteToAssessment}
+              aiInterviewConfigured={canInviteToAIInterview}
               onViewCandidate={(resume) => {
                 // Pass resume directly - data already formatted by fetchScoredResumes
                 // CandidateScoringDetailPage handles the same format as ResumeScoringPage

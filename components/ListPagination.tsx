@@ -9,6 +9,20 @@ interface ListPaginationProps {
   onPageChange: (page: number) => void;
   onItemsPerPageChange: (itemsPerPage: number) => void;
   itemLabel?: string;
+  /**
+   * Scroll THIS element back to the top on a page change instead of the window.
+   * Set when the list lives in its own scroller — inside a dialog, where
+   * scrolling the window would move the page behind it and leave the new page
+   * of rows starting halfway down.
+   */
+  scrollContainerRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * A smaller build of the same control — shorter select and page buttons,
+   * smaller labels, tighter gaps. For a bar that has to share a dialog with
+   * everything else rather than sit under a full page of rows. Off by default,
+   * so every existing list keeps the size it has.
+   */
+  compact?: boolean;
 }
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 40, 100];
@@ -20,8 +34,23 @@ export default function ListPagination({
   onPageChange,
   onItemsPerPageChange,
   itemLabel = 'records',
+  scrollContainerRef,
+  compact = false,
 }: ListPaginationProps) {
   if (totalItems <= 5) return null;
+
+  /* One place per dimension, so the two builds can't drift: shell padding,
+     label type scale, the select, and the page/step buttons. */
+  const shellClass = compact ? 'p-2' : 'rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4 sm:mt-6';
+  const labelClass = compact ? 'text-xs' : 'text-sm';
+  const groupGapClass = compact ? 'gap-2 sm:gap-3' : 'gap-3 sm:gap-4';
+  const selectClass = compact
+    ? 'h-7 px-1.5 rounded-md text-xs'
+    : 'h-9 px-2.5 sm:px-3 rounded-xl text-sm';
+  const stepButtonClass = compact ? 'w-7 h-7' : 'w-9 h-9';
+  const pageButtonClass = compact
+    ? 'min-w-[28px] h-7 px-1.5 text-xs'
+    : 'min-w-[36px] h-9 px-2.5 sm:px-3 text-sm';
 
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -48,46 +77,49 @@ export default function ListPagination({
   const handlePageClick = (page: number) => {
     if (page < 1 || page > totalPages || page === safePage) return;
     onPageChange(page);
-    if (typeof window !== 'undefined') {
+    const container = scrollContainerRef?.current;
+    if (container) {
+      container.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4 sm:mt-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Show:</span>
+    <div className={shellClass}>
+      <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between ${compact ? 'gap-2' : 'gap-3'}`}>
+        <div className={`flex flex-wrap items-center ${groupGapClass}`}>
+          <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
+            <span className={`${labelClass} text-gray-600`}>Show:</span>
             <select
               value={itemsPerPage}
               onChange={(e) => {
                 onItemsPerPageChange(Number(e.target.value));
                 onPageChange(1);
               }}
-              className="h-9 px-2.5 sm:px-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+              className={`${selectClass} border border-gray-200 bg-white text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue`}
             >
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>{size}</option>
               ))}
             </select>
-            <span className="text-sm text-gray-600">per page</span>
+            <span className={`${labelClass} text-gray-600`}>per page</span>
           </div>
 
           <div className="hidden sm:block h-5 w-px bg-gray-200" />
 
-          <span className="text-xs sm:text-sm text-gray-600">
+          <span className={`${compact ? 'text-xs' : 'text-xs sm:text-sm'} text-gray-600`}>
             Showing <span className="font-medium text-gray-900">{(safePage - 1) * itemsPerPage + 1}</span> to{' '}
             <span className="font-medium text-gray-900">{Math.min(safePage * itemsPerPage, totalItems)}</span> of{' '}
             <span className="font-medium text-gray-900">{totalItems}</span> {itemLabel}
           </span>
         </div>
 
-        <div className="flex items-center justify-center sm:justify-end gap-1 sm:gap-1.5">
+        <div className={`flex items-center justify-center sm:justify-end ${compact ? 'gap-1' : 'gap-1 sm:gap-1.5'}`}>
           <button
             onClick={() => handlePageClick(safePage - 1)}
             disabled={safePage === 1}
-            className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
+            className={`inline-flex items-center justify-center ${stepButtonClass} rounded-md border border-gray-200 transition-colors ${
               safePage === 1
                 ? 'text-gray-400 opacity-40 cursor-not-allowed'
                 : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
@@ -97,13 +129,13 @@ export default function ListPagination({
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          <div className="flex items-center gap-1 sm:gap-1.5">
+          <div className={`flex items-center ${compact ? 'gap-1' : 'gap-1 sm:gap-1.5'}`}>
             {getPageNumbers().map((page, index) => (
               <button
                 key={`${page}-${index}`}
                 onClick={() => typeof page === 'number' && handlePageClick(page)}
                 disabled={page === '...'}
-                className={`inline-flex items-center justify-center min-w-[36px] h-9 px-2.5 sm:px-3 rounded-md text-sm font-medium transition-colors ${
+                className={`inline-flex items-center justify-center ${pageButtonClass} rounded-md font-medium transition-colors ${
                   page === safePage
                     ? 'bg-brand-blue text-white'
                     : page === '...'
@@ -119,7 +151,7 @@ export default function ListPagination({
           <button
             onClick={() => handlePageClick(safePage + 1)}
             disabled={safePage === totalPages}
-            className={`inline-flex items-center justify-center w-9 h-9 rounded-md border border-gray-200 transition-colors ${
+            className={`inline-flex items-center justify-center ${stepButtonClass} rounded-md border border-gray-200 transition-colors ${
               safePage === totalPages
                 ? 'text-gray-400 opacity-40 cursor-not-allowed'
                 : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'

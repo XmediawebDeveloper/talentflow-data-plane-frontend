@@ -897,7 +897,7 @@ Best regards`);
   useEffect(() => () => clearScoringPoll(), []);
 
   // Handle applying resume to selected job (scoring) - using async Celery
-  const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[]) => {
+  const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[], jobRecords?: Job[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setIsApplyToJobModalOpen(false);
@@ -906,7 +906,7 @@ Best regards`);
     const jobId = jobIds[0];
     // Use selected version if available, otherwise use current resume
     const resumeIdToScore = selectedVersionForApply || resumeId;
-    const selectedJob = publishedJobs.find(job => job.id === jobId);
+    const selectedJob = jobRecords?.[0] || publishedJobs.find(job => job.id === jobId);
     const fallbackJobTitle = selectedJob?.title || 'Selected Job';
     const candidateName = getCandidateName();
 
@@ -2292,9 +2292,12 @@ Best regards`);
           stayOnCurrentPage
           confirmLabel="Run AI Talent Match"
           onClose={() => setShowAITalentMatchModal(false)}
-          onMatch={(resumeIds, jobId) => {
+          onMatch={(resumeIds, jobId, jobRecord) => {
             if (resumeIds.length === 0) return;
-            const selectedJob = publishedJobs.find(job => job.id === jobId);
+            /* The dialog reads the job list itself, so take the record it hands
+               back; the local list is only a fallback for a job that was
+               already loaded here. */
+            const selectedJob = jobRecord || publishedJobs.find(job => job.id === jobId);
 
             if (!selectedJob) {
               toast.error('Selected job is no longer available');

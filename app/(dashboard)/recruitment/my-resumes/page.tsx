@@ -2580,10 +2580,9 @@ export default function MyResumesPage() {
       toast.error('Please select at least one resume');
       return;
     }
-    // Fetch published jobs if not already loaded
-    if (publishedJobs.length === 0) {
-      await fetchPublishedJobs();
-    }
+    /* The dialog loads the job list itself now, so this no longer gates the
+       open — it just warms the local copy the submit handler falls back on. */
+    if (publishedJobs.length === 0) void fetchPublishedJobs();
     setIsAITalentMatchModalOpen(true);
   };
 
@@ -2649,7 +2648,7 @@ export default function MyResumesPage() {
 
     // Every ticked candidate goes in on its latest version; the dialog is where
     // a different one is chosen.
-    await fetchPublishedJobs();
+    void fetchPublishedJobs();
     setIsApplyToJobModalOpen(true);
   };
 
@@ -2664,7 +2663,7 @@ export default function MyResumesPage() {
     }
 
     setSingleResumeToApply(resume);
-    await fetchPublishedJobs();
+    void fetchPublishedJobs();
     setIsApplyToJobModalOpen(true);
   };
 
@@ -2674,19 +2673,21 @@ export default function MyResumesPage() {
     setUploadedResumeToScore({ id: resumeId, candidateName });
 
     // Fetch published jobs and open modal
-    await fetchPublishedJobs();
+    void fetchPublishedJobs();
     setIsApplyToJobModalOpen(true);
   };
 
   // Handle applying resumes to selected jobs (scoring) - using async Celery
-  const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[]) => {
+  const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[], jobRecords?: Job[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setIsApplyToJobModalOpen(false);
 
-    // Get the selected job details
+    /* The dialog reads the job list itself — from the same endpoint and mapping
+       as the Job Openings page — so take the record it hands back; the locally
+       fetched list is only a fallback. */
     const jobId = jobIds[0];
-    const selectedJob = publishedJobs.find(j => j.id === jobId);
+    const selectedJob = jobRecords?.[0] || publishedJobs.find(j => j.id === jobId);
 
     try {
       // Check for existing scores (duplicate check)
