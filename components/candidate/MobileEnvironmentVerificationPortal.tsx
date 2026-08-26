@@ -890,7 +890,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     && !['loading', 'expired', 'error', 'permission_denied', 'instructions', 'requesting_permission', 'ready_to_submit', 'uploading', 'done'].includes(phase);
 
   return (
-    <div className="min-h-[100dvh] bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 text-center overflow-y-auto">
+    <div className={`min-h-[100dvh] bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 landscape:px-6 landscape:py-3 text-center overflow-y-auto ${showLinkTimer ? 'pt-28 landscape:pt-20' : ''}`}>
       {showLinkTimer && (
         <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[400] flex flex-col items-center gap-1 rounded-xl border border-amber-400/30 bg-[#0F1929]/95 backdrop-blur px-6 py-3 shadow-lg shadow-black/30">
           <span className="font-mono font-bold text-3xl tracking-wider text-amber-400 tabular-nums">
@@ -1007,7 +1007,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           otherwise the stream has nowhere to attach to and the preview
           stays black even though recording is happening. Hidden outside
           the aligning/recording phases via `hidden` rather than unmounted. */}
-      <div className={`w-full max-w-2xl space-y-4 ${(phase === 'aligning' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+      <div className={`w-full max-w-2xl landscape:max-w-sm space-y-4 landscape:space-y-2 ${(phase === 'aligning' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
         <div className="relative">
           <video
             ref={videoRef}
@@ -1045,23 +1045,26 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               <span className="text-2xl font-bold text-white tabular-nums">{recordingCountdown}</span>
             </div>
           )}
+          {/* Overlaid ON the camera preview (not stacked below it) so it's
+              always visible within the bounded video frame — no scrolling
+              needed to find and tap it, regardless of page height/orientation. */}
+          {phase === 'aligning' && canRecord && (
+            <button
+              type="button"
+              onClick={handleRecordClick}
+              disabled={recordClicked}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl bg-red-500 text-white font-medium text-sm shadow-lg shadow-black/40 hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {recordClicked ? 'Recording…' : '● Record'}
+            </button>
+          )}
         </div>
         {phase === 'aligning' ? (
           canRecord ? (
-            <>
-              <div className="flex items-center justify-center gap-2 text-green-400 text-xs font-medium">
-                <span className="w-2 h-2 rounded-full bg-green-400" />
-                Screen aligned
-              </div>
-              <button
-                type="button"
-                onClick={handleRecordClick}
-                disabled={recordClicked}
-                className="w-full py-3 rounded-xl bg-red-500 text-white font-medium text-sm hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {recordClicked ? 'Recording…' : '● Record'}
-              </button>
-            </>
+            <div className="flex items-center justify-center gap-2 text-green-400 text-xs font-medium">
+              <span className="w-2 h-2 rounded-full bg-green-400" />
+              Screen aligned
+            </div>
           ) : (
             <p className="text-sm leading-relaxed text-[#94a3b8]">
               Waiting for your laptop screen to be clearly visible and centered in the camera…
