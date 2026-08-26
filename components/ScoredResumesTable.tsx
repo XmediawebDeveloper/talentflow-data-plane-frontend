@@ -1,4 +1,4 @@
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, Target, Share2, Paperclip, FileText, MoreVertical, Award } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, Target, Share2, Paperclip, FileText, MoreVertical, Award, ChevronDown, Video } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
@@ -8,6 +8,7 @@ import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import InviteShareModal from './InviteShareModal';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { resumeService } from '@/lib/services/resumeService';
@@ -29,9 +30,7 @@ import {
    than that page's hand-rolled absolute dropdown. The `!` overrides beat the
    dropdown-menu primitive's own default item styling (accent bg, rounded-sm,
    muted-foreground icons). */
-const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700 [&_svg]:!text-current';
-const scoredResumesMenuLabelClass = 'inline-block origin-left transition-transform duration-150 ease-out group-hover:scale-[0.97] group-focus:scale-[0.97] group-data-[highlighted]:scale-[0.97]';
-
+const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
 const DEFAULT_COLUMNS = [
@@ -125,6 +124,13 @@ interface ScoredResumesTableProps {
    * owns SelectSourceModal; ResumeScoringPage has its own scoring entry points.
    */
   onScoreResumes?: () => void;
+  /**
+   * Opens the host's "Send AI Interview via Email" flow for one candidate —
+   * the AI Interview entry in each row's Invite menu. Omitted where the host
+   * has no AI interview to invite to (or the viewer can't share one), and the
+   * menu then offers Assessment alone.
+   */
+  onInviteAIInterview?: (candidate: { name: string; email: string; resumeId?: string }) => void;
 }
 
 export default function ScoredResumesTable({
@@ -139,7 +145,8 @@ export default function ScoredResumesTable({
   onSelectAll,
   isGlobalView = false,
   bulkActions,
-  onScoreResumes
+  onScoreResumes,
+  onInviteAIInterview
 }: ScoredResumesTableProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();  // Get tenant info from auth context
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
@@ -940,7 +947,7 @@ Best regards`);
                   {col.label}
                 </th>
               ))}
-              <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle">Assessment</th>
+              <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle">Invite</th>
               <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle tf-sticky-col">Actions</th>
             </tr>
           </thead>
@@ -1123,49 +1130,63 @@ Best regards`);
                   return null;
                 })}
 
-                {/* Assessment Column */}
-                <td className="py-3 px-4 align-middle whitespace-nowrap">
-                  {/* Invite Button - For Exact Match & Partial Match */}
-                  {canCreateAssessments && (resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') ? (
-                    availableUnits === 0 ? (
-                      <div className="relative group">
+                {/* Invite Column — every row gets the button, whatever its
+                    match status, so a scored candidate can always be invited.
+                    The menu carries the two things a candidate can be invited
+                    to; each entry is gated by its own permission rather than
+                    hiding the whole control. */}
+                <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                  {(canCreateAssessments || onInviteAIInterview) ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <button
-                          disabled
-                          className="px-3 py-1.5 text-xs text-gray-400 bg-gray-200 rounded-md cursor-not-allowed flex items-center gap-1.5 opacity-60"
+                          aria-label="Invite"
+                          title="Invite"
+                          className="px-3 py-1.5 text-xs text-white rounded-md transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md bg-brand-blue hover:bg-brand-blue-2 ring-1 ring-white/10"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
                           Invite
+                          <ChevronDown className="w-3 h-3" />
                         </button>
-                        {/* Tooltip */}
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-30">
-                          <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap shadow-lg">
-                            <div className="flex items-center gap-2">
-                              <AlertCircle className="w-3.5 h-3.5 text-red-400" />
-                              <span>No assessment units available</span>
-                            </div>
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
-                              <div className="border-4 border-transparent border-t-gray-900"></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setInviteCandidate(resume);
-                          setShowInviteModal(true);
-                        }}
-                        className={`px-3 py-1.5 text-xs text-white rounded-md transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md ${
-                          resume.matchStatus === 'Exact Match'
-                            ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
-                            : 'bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-700 hover:to-amber-700'
-                        }`}
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="start"
+                        className="w-48 !rounded-lg !border !border-gray-200 !bg-white !py-1 !px-0 !shadow-xl"
                       >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        Invite
-                      </button>
-                    )
+                        {canCreateAssessments && (
+                          <DropdownMenuItem
+                            className={scoredResumesMenuItemClass}
+                            /* Assessment invites spend a unit, so the entry
+                               goes quiet when there are none left rather than
+                               opening a form that cannot be submitted. */
+                            disabled={availableUnits === 0}
+                            title={availableUnits === 0 ? 'No assessment units available' : undefined}
+                            onSelect={() => {
+                              setInviteCandidate(resume);
+                              setShowInviteModal(true);
+                            }}
+                          >
+                            <FileText className="w-4 h-4 text-menu-icon-view" />
+                            <span className={MENU_ITEM_SCALE_CLASS}>Assessment</span>
+                          </DropdownMenuItem>
+                        )}
+                        {onInviteAIInterview && (
+                          <DropdownMenuItem
+                            className={scoredResumesMenuItemClass}
+                            onSelect={() =>
+                              onInviteAIInterview({
+                                name: resume.candidateName || 'Unknown',
+                                email: resume.email || '',
+                                resumeId: resume.resumeId,
+                              })
+                            }
+                          >
+                            <Video className="w-4 h-4 text-menu-icon-share" />
+                            <span className={MENU_ITEM_SCALE_CLASS}>AI Interview</span>
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   ) : (
                     <span className="text-xs text-gray-400">-</span>
                   )}
@@ -1178,7 +1199,7 @@ Best regards`);
                       <button
                         aria-label="Actions"
                         title="Actions"
-                        className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                        className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all"
                       >
                         <MoreVertical className="w-4 h-4 text-gray-600" />
                       </button>
@@ -1188,14 +1209,14 @@ Best regards`);
                       className="w-52 !rounded-lg !border !border-gray-200 !bg-white !py-1 !px-0 !shadow-xl"
                     >
                       <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => onViewCandidate && onViewCandidate(resume)}>
-                        <Eye className="w-4 h-4" />
-                        <span className={scoredResumesMenuLabelClass}>View Results</span>
+                        <Eye className="w-4 h-4 text-menu-icon-view" />
+                        <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
                       </DropdownMenuItem>
                       {/* Only scores that still point at a resume can be shared. */}
                       {canShareResume && resume.resumeId && (
                         <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => openShareModal(resume)}>
-                          <Share2 className="w-4 h-4" />
-                          <span className={scoredResumesMenuLabelClass}>Share via Email</span>
+                          <Share2 className="w-4 h-4 text-menu-icon-share" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>Share via Email</span>
                         </DropdownMenuItem>
                       )}
                       {canExport && (
@@ -1205,11 +1226,11 @@ Best regards`);
                           onSelect={() => handleDownloadScorecard(resume.id)}
                         >
                           {downloadingId === resume.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
                           ) : (
-                            <Download className="w-4 h-4" />
+                            <Download className="w-4 h-4 text-menu-icon-download" />
                           )}
-                          <span className={scoredResumesMenuLabelClass}>Download Scorecard</span>
+                          <span className={MENU_ITEM_SCALE_CLASS}>Download Scorecard</span>
                         </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>

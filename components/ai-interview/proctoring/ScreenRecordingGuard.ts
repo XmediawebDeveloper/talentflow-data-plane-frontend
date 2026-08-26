@@ -112,6 +112,36 @@ export function isLegitimateShareInFlight(): boolean {
   return typeof window !== 'undefined' && Boolean((window as any).__tfAllowLegitimateShare);
 }
 
+// ── App-owned canvases ──────────────────────────────────────────────────────
+//
+// The interview relays the webcam through a canvas and records THAT, so the
+// recorder owns a video track that outlives camera reacquires (BUG25: swapping
+// a track on the recorder's stream makes the UA discard the whole recording).
+// That relay calls HTMLCanvasElement.captureStream, which rule 5 below refuses.
+//
+// Before this WeakSet existed the guard blocked the app's own recording, showed
+// the candidate "Screen Recording Not Allowed", logged a high-confidence
+// proctoring violation against an innocent candidate, AND dropped the recording
+// back to the raw camera track — reinstating the exact BUG25 data loss.
+//
+// A WeakSet, deliberately, NOT a window flag or a time window:
+//   • it is module-private and never reachable from `window`, so an injected
+//     content script cannot add its own canvas to it (a global boolean can be
+//     flipped by anyone);
+//   • it authorises ONE element rather than a period of time, so it widens no
+//     other capture route while it is open;
+//   • entries vanish with the element, so there is nothing to clean up.
+const appOwnedCanvases = new WeakSet<HTMLCanvasElement>();
+
+/**
+ * Declare a canvas as app-owned so captureStream() on it is allowed through.
+ * Call immediately before capturing, on a canvas the app created itself —
+ * never on one built from candidate-supplied input.
+ */
+export function markAppOwnedCanvas(canvas: HTMLCanvasElement): void {
+  appOwnedCanvases.add(canvas);
+}
+
 // ── App-owned display tracks ────────────────────────────────────────────────
 //
 // The interview records the candidate's screen itself, so "a MediaRecorder over
@@ -354,14 +384,21 @@ function install(): Uninstall {
     restores.push(() => { window.MediaRecorder = OriginalMediaRecorder; });
   }
 
-  // 5. captureStream on our own <canvas>/<video>/<audio>. The app never calls
-  //    either, so refusing them costs nothing and closes the "duplicate the
-  //    avatar and webcam elements into a recordable stream" route available to
-  //    an injected content script.
+  // 5. captureStream on our own <canvas>/<video>/<audio>. Closes the
+  //    "duplicate the avatar and webcam elements into a recordable stream"
+  //    route available to an injected content script.
+  //
+  //    EXCEPTION: canvases the app marked via markAppOwnedCanvas() pass through.
+  //    The webcam relay in InterviewUI is one — see the WeakSet comment above
+  //    for why blocking it was a false accusation AND a recording-loss bug.
+  //    <video>/<audio> captureStream has no exception: the app never uses it.
   const canvasProto = typeof HTMLCanvasElement !== 'undefined' ? HTMLCanvasElement.prototype : null;
   const originalCanvasCapture = (canvasProto as any)?.captureStream;
   if (canvasProto && typeof originalCanvasCapture === 'function') {
-    (canvasProto as any).captureStream = function () {
+    (canvasProto as any).captureStream = function (this: HTMLCanvasElement, ...args: unknown[]) {
+      if (appOwnedCanvases.has(this)) {
+        return originalCanvasCapture.apply(this, args);
+      }
       throw refuse('captureStream', 'HTMLCanvasElement.captureStream');
     };
     restores.push(() => { (canvasProto as any).captureStream = originalCanvasCapture; });

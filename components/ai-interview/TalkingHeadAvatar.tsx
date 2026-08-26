@@ -31,6 +31,17 @@ export interface TalkingHeadHandle {
   setText(text: string): void;
   /** Optional live viseme override driven by the InterviewUI amplitude loop. */
   applyVisemeLive?(viseme: string, value: number): void;
+  /**
+   * Push the viseme timing anchor forward by `ms`.
+   *
+   * Lip-sync is paced off performance.now() minus a speech-start stamp, which
+   * keeps running while the AudioContext is suspended. When a turn is frozen
+   * mid-question (camera/mic disconnect) and later resumed, the voice picks up
+   * exactly where it stopped but this wall clock has advanced by the whole
+   * outage — leaving the mouth that far ahead of the audio. Shifting the
+   * anchor by the outage duration re-aligns them.
+   */
+  shiftSpeechClock?(ms: number): void;
 }
 
 interface Props {
@@ -970,6 +981,20 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
       setText(text: string) {
         fullTextRef.current = text;
+      },
+
+      shiftSpeechClock(ms: number) {
+        if (!(ms > 0)) return;
+        // Only meaningful mid-speech; outside a turn the anchor is null and the
+        // next streamStart stamps a fresh one anyway.
+        if (speechStartRef.current !== null) {
+          speechStartRef.current += ms;
+          console.log(`[TalkingHead] speech clock shifted +${Math.round(ms)}ms (resumed after a paused turn)`);
+        }
+        // The onset measurement for this turn spans the outage, so it would
+        // record a wildly inflated audible delay and skew the next turn's text
+        // pacing. Drop it — lastMeasuredDelayRef keeps the previous good value.
+        if (!onsetMeasuredRef.current) firstChunkAtRef.current = null;
       },
 
       streamStop() {

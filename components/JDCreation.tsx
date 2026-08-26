@@ -1609,33 +1609,36 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   };
 
   // Validate salary range
+  //
+  // JD-21: ONE bound is a complete answer. A floor with no ceiling ("10 LPA+") and a
+  // ceiling with no floor ("Up to 10 LPA") are both things a real posting says, so
+  // neither is an error any more. This used to return 'Enter the maximum salary to
+  // complete the range.' / 'Enter the minimum salary to complete the range.', and
+  // because the publish check folds this message into missingFields, a recruiter who
+  // genuinely only had a floor could not publish at all - the only way past it was to
+  // invent the other number, which is exactly the fabricated figure we must not store.
+  //
+  // What still fails: an out-of-range magnitude on EITHER side, and a max below the
+  // min. The 8-digit ceiling is a product rule (see the input onChange handlers, which
+  // cap typing at 8 whole-currency digits); it is checked on both bounds now that each
+  // one can stand alone - previously only `to` was reachable with the other side empty.
   const validateSalaryRange = (from: string, to: string): string | undefined => {
     const minSalary = parseSalaryValue(from);
     const maxSalary = parseSalaryValue(to);
 
-    // If both are empty, no error
+    // If both are empty, no error. An unstated salary stays unstated.
     if (minSalary === null && maxSalary === null) return undefined;
 
-    // If only min is filled, prompt for max
-    if (minSalary !== null && maxSalary === null) {
-      return 'Enter the maximum salary to complete the range.';
+    if (minSalary !== null && minSalary > 99999999) {
+      return 'Minimum salary cannot exceed ₹9,99,99,999 (8 digits)';
     }
 
-    // If only max is filled, validate limit then prompt for min
-    if (minSalary === null && maxSalary !== null) {
-      if (maxSalary > 99999999) {
-        return 'Maximum salary cannot exceed ₹9,99,99,999 (8 digits)';
-      }
-      return 'Enter the minimum salary to complete the range.';
-    }
-
-    // Max salary must not exceed 8 digits (99,999,999)
     if (maxSalary !== null && maxSalary > 99999999) {
       return 'Maximum salary cannot exceed ₹9,99,99,999 (8 digits)';
     }
 
-    // Both are filled - validate range
-    if (minSalary > maxSalary) {
+    // Only meaningful when both bounds exist - a lone bound has nothing to contradict.
+    if (minSalary !== null && maxSalary !== null && minSalary > maxSalary) {
       return 'Maximum salary cannot be less than minimum salary.';
     }
 
@@ -2414,24 +2417,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    // Validate salary: if prompt mentions a single salary (e.g., "3 LPA") without a range, ask user to provide a range
-    // Detect single salary value with salary keyword (e.g., "6 LPA", "3 lakh", "salary 500000")
-    const singleSalaryPattern = /\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|per\s*annum|ctc|package)/i;
-    // Detect salary RANGE: requires salary unit keyword on at least one side (e.g., "3 LPA to 5 LPA", "3 to 5 LPA")
-    // This avoids false matches on experience ranges like "3-5 years"
-    const salaryRangePattern = /\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|k|cr|crores?)\s*(?:to|-|–|~)\s*\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|k|cr|crores?)?/i;
-    const salaryRangePattern2 = /\d[\d,.\s]*\s*(?:to|-|–|~)\s*\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|k|cr|crores?)/i;
-
-    const hasSingleSalary = singleSalaryPattern.test(aiPrompt);
-    const hasSalaryRange = salaryRangePattern.test(aiPrompt) || salaryRangePattern2.test(aiPrompt);
-
-    if (hasSingleSalary && !hasSalaryRange) {
-      toast.error({
-        title: 'Salary Range Required',
-        description: 'Please enter a salary range instead of a single value. For example: "3 LPA to 4 LPA" instead of just "3 LPA".',
-      });
-      return;
-    }
+    // JD-21 removed the "Salary Range Required" gate that used to stand here. A prompt
+    // stating one figure ("3 LPA") was refused outright with 'Please enter a salary
+    // range instead of a single value', which forced the recruiter to make up a second
+    // number before the JD could even be generated. A single figure is now a legal
+    // answer: extraction files it as the MINIMUM and it displays as "3 LPA+".
+    //
+    // Deliberately nothing is substituted for the missing bound here or anywhere
+    // downstream - a salary the prompt did not state stays null all the way to the JD.
 
     // Note: Quota check moved to publish action - generation doesn't consume quota
     setIsGenerating(true);
@@ -6607,7 +6600,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           const error = validateSalaryRange(newValue, extractedData.salaryTo || '');
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
-                        placeholder="From (e.g., 50000)"
+                        // "Minimum"/"Maximum" rather than "From"/"To": with either box now
+                        // allowed to stand alone (JD-21), the placeholder is what tells the
+                        // recruiter which end they are stating, and which box the figure
+                        // lands in decides whether it reads "50,000+" or "Up to 50,000".
+                        placeholder="Minimum (e.g., 50000)"
                         className={`w-full pl-7 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
                           validationErrors.salaryRange ? 'border-red-500' : 'border-gray-200'
                         } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
@@ -6633,7 +6630,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           const error = validateSalaryRange(extractedData.salaryFrom || '', newValue);
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
-                        placeholder="To (e.g., 100000)"
+                        placeholder="Maximum (e.g., 100000)"
                         className={`w-full pl-7 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
                           validationErrors.salaryRange ? 'border-red-500' : 'border-gray-200'
                         } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}

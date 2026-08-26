@@ -13,6 +13,7 @@ import {
   useInterviewProctoringMonitor,
   InterviewProctoringWarnings,
   EnvironmentVerificationOverlay,
+  markAppOwnedCanvas,
   type DetectedObjectEvent,
   type ObjectEventType,
 } from './proctoring';
@@ -1315,6 +1316,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const handleNoResponseRef = useRef<() => void>(() => {});
   const stopRecordingSilentRef = useRef<() => void>(() => {});
   const abortRecordingForSkipRef = useRef<() => void>(() => {});
+  // Media-pause counterpart to abortRecordingForSkip: releases the mic but
+  // PRESERVES the in-progress answer so it can be continued after the outage.
+  const holdRecordingForOutageRef = useRef<() => void>(() => {});
+  // Set by holdRecordingForOutage, consumed by the next startRecordingInternal:
+  // marks that the mic is reopening into an answer that is ALREADY IN PROGRESS
+  // (interrupted by a device outage) rather than starting a fresh one.
+  const resumingHeldAnswerRef = useRef(false);
 
   // Clear no-response timer helper — declared early because it's referenced in
   // many setInterval / ws.onmessage callbacks that appear before the former
@@ -1661,6 +1669,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // playing its whole buffered queue unless streamStop() is called. This
   // mirror gives the pause-arm branch the real "cut her off now" action.
   const hardStopBinaRef = useRef<() => void>(() => {});
+  // Thaws a FROZEN turn (see hardStopBinaPlayback) — resumes Bina's voice and
+  // the text reveal from the exact point the disconnect interrupted them.
+  const resumeBinaRef = useRef<() => void>(() => {});
+  // True while Bina's turn is SUSPENDED rather than torn down: her remaining
+  // audio is still sitting in TalkingHead's worklet and the question text is
+  // still in tokenBufferRef, both held in place by a suspended AudioContext.
+  const binaFrozenRef = useRef(false);
+  // Wall-clock at the moment of the freeze — used to shift TalkingHead's
+  // performance.now()-based viseme clock forward by the outage duration so the
+  // lip-sync doesn't run ahead of the voice after the thaw.
+  const binaFrozenAtMsRef = useRef<number | null>(null);
 
   const clearMediaPauseTimers = useCallback(() => {
     if (mediaPauseCountdownIdRef.current) { clearInterval(mediaPauseCountdownIdRef.current); mediaPauseCountdownIdRef.current = null; }
@@ -1744,14 +1763,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // Bina kept speaking out of the worklet's own buffer and the question
       // text kept streaming in behind the blurred overlay. hardStopBina stops
       // the worklet, the token reveal and the turn-scoped playback state for
-      // real. The backend cancels its in-flight pipeline on session_pause and
-      // re-speaks this same finalized question on session_resume
-      // (tts_pause_interrupted_question), so discarding what is in flight here
-      // loses nothing.
+      // real, and COMMITS the question she was asking so it stays on screen
+      // for the whole pause (do NOT discard it — the backend's
+      // tts_pause_interrupted_question re-speak almost never fires; see
+      // hardStopBinaPlayback for why).
       hardStopBinaRef.current();
-      console.log('[INTERVIEW-DEBUG][PAUSE] BINA SPEECH PAUSED — worklet stopped, token reveal stopped, queued audio cleared');
-      try { abortRecordingForSkipRef.current(); } catch { /* ignore */ }
-      console.log('[INTERVIEW-DEBUG][PAUSE] CANDIDATE RECORDING STOPPED (no submission)');
+      console.log('[INTERVIEW-DEBUG][PAUSE] BINA SPEECH PAUSED — worklet stopped, token reveal stopped, question committed to transcript');
+      // HOLD the answer, don't abandon it. abortRecordingForSkip() (used here
+      // before) wiped speechDetectedRef, the live transcript and the streaming
+      // state, so everything the candidate had already said was thrown away and
+      // the resume started them from a blank answer. holdRecordingForOutage
+      // releases only the mic hardware and the per-turn watchdogs; the answer,
+      // its transcript and its backend utterance stay open, so reopening the
+      // mic on resume simply continues it. Still no end_turn — the answer is
+      // SUSPENDED, never submitted, which was the original intent all along.
+      try { holdRecordingForOutageRef.current(); } catch { /* ignore */ }
+      console.log('[INTERVIEW-DEBUG][PAUSE] CANDIDATE ANSWER HELD (not submitted, not discarded)');
       // Freeze the per-question answer clock the instant the device drops.
       // The backend cancels its own auto-skip task on session_pause and shifts
       // question_start_time forward on resume, but it never re-sends a
@@ -1821,6 +1848,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // span into questionTimerPausedMsRef, which computeQuestionRemaining
       // subtracts, so no part of the outage counts against the candidate.
       resumeQuestionTimerRef.current();
+      // Thaw a mid-question freeze BEFORE anything else looks at speaking
+      // state: Bina's voice and the question text pick up from the exact point
+      // the disconnect interrupted them. No-ops when the turn was torn down
+      // instead of frozen (candidate was answering, or her audio was
+      // incomplete) — in that case the recording restart below is what matters.
+      resumeBinaRef.current();
       console.log('[INTERVIEW-DEBUG][PAUSE] TIMER RESUMED, BINA SPEECH/RECORDING ALLOWED AGAIN');
       // Recording itself does NOT come back on its own: the ARM branch above
       // calls abortRecordingForSkipRef.current() to kill any in-flight answer
@@ -2158,6 +2191,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         relayCanvas.height = video.videoHeight || 480;
         const relayCtx = relayCanvas.getContext('2d', { alpha: false });
         if (relayCtx) {
+          // Tell the screen-recording guard this canvas is ours. Without it the
+          // captureStream() below is refused, the candidate is shown "Screen
+          // Recording Not Allowed", a high-confidence proctoring violation is
+          // logged against them, AND the catch below silently drops us to the
+          // raw camera track — which dies on the next camera reacquire (BUG25).
+          markAppOwnedCanvas(relayCanvas);
           if (recordRelayTimerRef.current) clearInterval(recordRelayTimerRef.current);
           recordRelayTimerRef.current = setInterval(() => {
             // readyState >= HAVE_CURRENT_DATA — anything less has no frame to
@@ -2497,10 +2536,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         return null;
       }
     }
-    if (ctx.state === 'suspended') {
+    if (ctx.state === 'suspended' && !binaFrozenRef.current) {
       // Fire-and-forget resume. Any gesture during the interview will
       // unlock it; until then the tracker will lag behind real audio,
       // in which case we fall back to wall-clock anchors.
+      //
+      // Skipped while a turn is FROZEN: there the suspension is deliberate
+      // (it is what holds Bina's voice and the text reveal in place across a
+      // device disconnect), and auto-resuming here would un-pause her behind
+      // the blocking overlay. resumeBinaPlayback owns the resume in that case.
       ctx.resume().catch(() => { /* ignore */ });
     }
     return ctx;
@@ -2614,14 +2658,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // Wall-clock safety net — if the tracker context is suspended (browser
     // doesn't allow AudioContext before a user gesture on first question)
     // we still need to advance at some point.
-    setTimeout(() => {
+    const armSafety = (ms: number) => setTimeout(() => {
+      // A FROZEN turn suspends this context deliberately (device disconnect),
+      // so "the tracker isn't advancing" is expected, not a stall. Firing here
+      // would finalize the turn mid-outage — open the mic, commit the question
+      // and move on while the candidate is still reconnecting. Defer instead;
+      // the thaw gives it a fresh full window.
+      if (binaFrozenRef.current) { armSafety(safetyTimeoutMs); return; }
       const idx = awaitingAudioEndCallbacksRef.current.indexOf(wrapped);
       if (idx >= 0) {
         awaitingAudioEndCallbacksRef.current.splice(idx, 1);
         console.warn('[PlaybackTracker] safety timeout — firing deferred callback');
         wrapped();
       }
-    }, safetyTimeoutMs);
+    }, ms);
+    armSafety(safetyTimeoutMs);
   }, []);
   const isRecordingRef = useRef(false);
   const audioEndReceivedRef = useRef(false);
@@ -4221,10 +4272,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // playback is complete and it's time to start recording.
 
   const queueAudio = useCallback((pcmData: ArrayBuffer) => {
-    // Paused for a camera/mic disconnect — this chunk is being dropped by the
+    // Paused with the turn TORN DOWN — this chunk is being dropped by the
     // ws.onmessage gate, so it must not stamp playback anchors or flip
-    // isAiSpeaking back on either.
-    if (isMediaPausedRef.current) return;
+    // isAiSpeaking back on either. A FROZEN turn still books its chunks: they
+    // are buffered for the thaw, and currentTurnAudioMsRef must count them so
+    // the turn's true audio length stays correct.
+    if (isMediaPausedRef.current && !binaFrozenRef.current) return;
     // TalkingHead handles audio playback (gain:1) + lip sync.
     // Accumulate turn audio duration so the audio_end fallback timeout is
     // proportional to how long Bina actually spoke (not a fixed 3 s).
@@ -4262,6 +4315,61 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // AudioWorklet, so a pause that only clears queues/flags leaves several
   // seconds of Bina still audible.
   const hardStopBinaPlayback = useCallback(() => {
+    // ── FREEZE path ──────────────────────────────────────────────────────
+    // If Bina is mid-question AND the backend already delivered the whole
+    // turn (audio_end received), every byte she has left to say is sitting in
+    // TalkingHead's AudioWorklet and the full question text is in
+    // tokenBufferRef. Nothing needs to be stored or replayed — SUSPENDING the
+    // AudioContext freezes the voice mid-sample, and because the token reveal
+    // paces off `ctx.currentTime` of that SAME context (see
+    // getPlaybackTracker: it deliberately reuses __interviewAudioContext), the
+    // text freezes at exactly the same instant and stays in sync on resume.
+    //
+    // The silent mirror buffers that drive end-of-playback detection are
+    // scheduled on that context too, so `whenTrackedPlaybackEnds` keeps
+    // working across the outage with no re-arming — its deadline is in
+    // context-seconds, which stop advancing while suspended.
+    //
+    // Works whether or not audio_end has arrived yet. The backend deliberately
+    // does NOT cancel Bina's pipeline for a media pause (see the session_pause
+    // handler in ai_interview_ws.py), so any part of the question still being
+    // synthesised keeps streaming in and accumulates in the suspended worklet —
+    // the ws PCM gate lets chunks through while frozen for exactly this reason.
+    // The turn is therefore complete by the time it thaws, in every case.
+    const ctx = playbackTrackerCtxRef.current;
+    const canFreeze =
+      (isPlayingRef.current || isAiSpeakingRef.current) &&
+      !!ctx && ctx.state === 'running';
+
+    if (canFreeze) {
+      binaFrozenRef.current = true;
+      binaFrozenAtMsRef.current = Date.now();
+      // Stop the reveal INTERVAL (so nothing paints behind the overlay). The
+      // reveal POSITION — revealedCharsRef / tokenBufferRef — is deliberately
+      // left untouched so the thaw continues from the same character.
+      if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
+      // Wall-clock safety nets must not fire mid-outage and force-end the turn.
+      // The context-clocked primary path above survives on its own; these are
+      // re-armed by resumeBinaPlayback.
+      if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+      if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
+      ctx.suspend().catch((e) => console.warn('[Pause] AudioContext suspend failed:', e));
+      console.log(`[Pause] Bina FROZEN mid-question — ${tokenBufferRef.current.length - revealedCharsRef.current} chars and the rest of her audio held for resume`);
+      return;
+    }
+
+    // ── TEAR-DOWN path ───────────────────────────────────────────────────
+    // Bina is not mid-question (candidate was answering), or her audio is
+    // incomplete. Nothing coherent to resume — stop her for real.
+    //
+    // Un-freeze first if a previous turn left the context suspended: a
+    // suspended AudioContext silences EVERY later turn, so it must never
+    // outlive the turn that froze it.
+    if (binaFrozenRef.current) {
+      binaFrozenRef.current = false;
+      binaFrozenAtMsRef.current = null;
+      playbackTrackerCtxRef.current?.resume().catch(() => { /* ignore */ });
+    }
     talkingHeadRef.current?.streamStop();
     isPlayingRef.current = false;
     isAiSpeakingRef.current = false;
@@ -4269,23 +4377,73 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     setIsProcessing(false);
     isProcessingRef.current = false;
     avatarState.onAiStopSpeaking();
-    // Turn-scoped playback state — re-armed by the resume re-speak's own
+    // Turn-scoped playback state — re-armed by the next turn's own
     // speaking_started, so clearing it here cannot leak into the next turn.
     pendingStreamStartRef.current = null;
     pendingBuffersRef.current = 0;
     audioEndReceivedRef.current = false;
     if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
     if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
-    // Stop the token reveal and drop the buffered question text. The backend
-    // re-speaks the same finalized question on resume, which repopulates both.
-    if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
-    tokenBufferRef.current = "";
-    currentAiTextRef.current = "";
-    revealedCharsRef.current = 0;
-    setCurrentAiText("");
-  }, [avatarState]);
+    // COMMIT the question instead of discarding it. saveAiMessage() stops the
+    // reveal interval (so no more text streams in behind the overlay) and moves
+    // the FULL buffered question text into `messages` as a permanent bubble.
+    //
+    // This must not be a wipe, for two independent reasons:
+    //
+    //  1. finalizePlayback() — which calls saveAiMessage() — is queued ASYNC on
+    //     the tracker AudioContext via whenTrackedPlaybackEnds. streamStop()
+    //     above triggers it, but it runs AFTER this function returns. Clearing
+    //     tokenBufferRef synchronously here meant saveAiMessage() then read an
+    //     empty buffer, committed nothing, and the question vanished from the
+    //     screen entirely — live bubble gone AND no transcript bubble.
+    //  2. There is no second chance to repaint it. The backend only stashes
+    //     tts_pause_interrupted_question when session.is_ai_speaking is true,
+    //     and that flag flips False the moment the last TTS byte is SENT — long
+    //     before the client finishes playing it (see message_handler.py). So the
+    //     resume re-speak effectively never fires; a real disconnect log shows
+    //     zero "TTS-interrupt resume" lines across five pause/resume cycles.
+    //
+    // saveAiMessage() is safe to call twice: it clears tokenBufferRef after
+    // committing, so the later finalizePlayback() call is a no-op. When Bina
+    // was not speaking at all (the common case — the candidate unplugs mid
+    // ANSWER) the buffer is already empty and this only stops the interval.
+    saveAiMessage();
+  }, [avatarState, saveAiMessage]);
 
   useEffect(() => { hardStopBinaRef.current = hardStopBinaPlayback; }, [hardStopBinaPlayback]);
+
+  /**
+   * Thaw a turn frozen by hardStopBinaPlayback — Bina picks up mid-sentence
+   * and the question text keeps revealing from the same character.
+   *
+   * Resuming the AudioContext restores BOTH: the worklet continues from the
+   * exact sample it stopped on, and `ctx.currentTime` starts advancing again
+   * so the reveal loop's pacing maths land exactly where they left off.
+   * No-ops when nothing is frozen.
+   */
+  const resumeBinaPlayback = useCallback(() => {
+    if (!binaFrozenRef.current) return;
+    const ctx = playbackTrackerCtxRef.current;
+    const frozenAt = binaFrozenAtMsRef.current;
+    const outageMs = frozenAt === null ? 0 : Math.max(0, Date.now() - frozenAt);
+    binaFrozenRef.current = false;
+    binaFrozenAtMsRef.current = null;
+
+    // TalkingHead times its visemes off performance.now(), which kept running
+    // through the outage. Without this shift her mouth would be `outageMs`
+    // ahead of her voice for the rest of the question.
+    talkingHeadRef.current?.shiftSpeechClock?.(outageMs);
+
+    ctx?.resume()
+      .then(() => console.log(`[Pause] Bina THAWED after ${outageMs}ms — voice and text resume mid-question`))
+      .catch((e) => console.warn('[Pause] AudioContext resume failed:', e));
+
+    // Restart the reveal interval. revealedCharsRef was never reset, so it
+    // continues from the exact character the outage interrupted.
+    startRevealingTokens();
+  }, [startRevealingTokens]);
+
+  useEffect(() => { resumeBinaRef.current = resumeBinaPlayback; }, [resumeBinaPlayback]);
 
   // WebSocket handlers
   const handleMessage = useCallback((data: InterviewSocketMessage) => {
@@ -4886,9 +5044,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         break;
       case "speaking_started":
         console.log(`[WS ${timestamp}] Speaking started`);
-        // Bina talking again is proof any pending session_resume retry landed
-        // — stop resending it (see resumeEnvVerification/stopResumeRetries).
-        stopResumeRetries();
+        // A NEW turn supersedes anything a disconnect left pending — including
+        // a held answer that the backend has since moved past. Clearing this
+        // stops a stale flag from preserving speechDetected into an unrelated
+        // later question.
+        resumingHeldAnswerRef.current = false;
+        // A NEW turn supersedes anything a disconnect froze. Release the
+        // suspended AudioContext now — leaving it suspended would silence this
+        // turn and every one after it. Harmless no-op when nothing is frozen.
+        if (binaFrozenRef.current) {
+          console.log('[Pause] New turn started while a frozen turn was pending — releasing the freeze');
+          resumeBinaRef.current();
+        }
         // Bina is speaking again — abort any in-progress pre-turn "get ready"
         // countdown and any pending mic-open timer (they belong to a turn that
         // is no longer opening) + the mid-speech silence countdown.
@@ -5320,6 +5487,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // delay (audioMs + 1200ms) so it never fires BEFORE the audio actually
         // finishes (which would start the silence clock early and shorten the
         // candidate's answer window). Idempotent on the backend.
+        // A FROZEN turn (device disconnected mid-question) must not arm either
+        // wall-clock timer below: both are sized to the audio duration and would
+        // fire during the outage, force-ending a turn whose audio has not played
+        // a single sample of its remainder yet. The context-clocked primary path
+        // — whenTrackedPlaybackEnds → finalizePlayback — is unaffected by the
+        // suspension and fires correctly after the thaw, sending playback_complete
+        // and opening the mic the normal way. audio_end itself is still recorded
+        // above, and notifyEnd() correctly tells the suspended worklet that no
+        // more chunks are coming.
+        if (binaFrozenRef.current) {
+          console.log('[Pause] audio_end arrived during a frozen turn — tail timers deferred to the thaw');
+          break;
+        }
+
         if (playbackCompleteSignalRef.current) clearTimeout(playbackCompleteSignalRef.current);
         const _signalDelayMs = Math.max(2000, currentTurnAudioMsRef.current + 1200);
         playbackCompleteSignalRef.current = setTimeout(() => {
@@ -6530,7 +6711,67 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // stopRecordingSilent() is unsafe here because a false-positive speechDetected
   // bit can still schedule an end_turn 100 ms later, and that stale end_turn
   // lands after the backend already advanced to the next question.
+  /**
+   * HOLD the candidate's answer across a device outage — do not abandon it.
+   *
+   * Used by the camera/mic pause arm in place of abortRecordingForSkip. The
+   * mic hardware is released (the device is gone anyway) and every per-turn
+   * watchdog is stopped so nothing fires during the outage, but the ANSWER
+   * ITSELF is left completely intact:
+   *
+   *   • speechDetectedRef / speechDetectedAtRef — the turn still counts as
+   *     answered, so the resume doesn't look like a silent question.
+   *   • currentTranscript — stays on screen, so the candidate can see what
+   *     they had already said while they plug the headset back in.
+   *   • webSpeechFinalizedRef / liveBatchSentCharsRef — live-transcript
+   *     bookkeeping continues from where it stopped instead of re-sending.
+   *   • candidateAudioStreamingRef — the backend is mid-utterance for this
+   *     turn; keeping this true means audio resumes into the SAME utterance
+   *     rather than opening a second one.
+   *   • pinnedAudioDeviceIdRef — kept, so the replugged headset is preferred.
+   *
+   * No end_turn is sent, exactly as before: the answer is not submitted, it is
+   * suspended. startRecordingInternal on resume reopens the mic without
+   * resetting any of the above, so the candidate simply carries on and the
+   * stored answer is the whole thing, start to finish.
+   */
+  const holdRecordingForOutage = useCallback(() => {
+    if (!isRecordingRef.current) return;
+    // Tell the next startRecordingInternal that it is REOPENING this answer,
+    // not starting a new one — see the flag's use there.
+    resumingHeldAnswerRef.current = true;
+    isRecordingRef.current = false;
+    setIsRecording(false);
+    avatarState.onUserStopSpeaking();
+    // Per-turn watchdogs must not fire mid-outage — a silence/no-response timer
+    // firing behind the overlay would end or skip the turn the candidate is
+    // still in the middle of. They re-arm when the mic reopens.
+    stopWebSpeechRecognition();
+    clearNoResponseTimer();
+    clearMaxRecordingTimer();
+    // VAD run-state only — these describe the CURRENT audio window, not the
+    // answer, so they must reset or the resumed window inherits stale streaks.
+    silenceStartRef.current = null;
+    lastMeaningfulAudioAtRef.current = null;
+    lastStrongVoiceAtRef.current = null;
+    activeStreakStartRef.current = null;
+    lastActiveFrameAtRef.current = null;
+    setMicInputLevel(0);
+    lastGoodMicAtRef.current = null;
+    micInputLowRef.current = false;
+    setMicInputLow(false);
+    removeAudioDeviceChangeListener();
+    // Release the mic but KEEP the pinned device (false) so the replugged
+    // headset is reused for the rest of the answer.
+    teardownRecordingMedia(false);
+    console.log('[Pause] Candidate answer HELD — mic released, partial answer and transcript preserved for resume');
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, clearMaxRecordingTimer, teardownRecordingMedia]);
+
+  useEffect(() => { holdRecordingForOutageRef.current = holdRecordingForOutage; }, [holdRecordingForOutage]);
+
   const abortRecordingForSkip = useCallback(() => {
+    // A deliberate skip abandons the turn — any held-answer resume is void.
+    resumingHeldAnswerRef.current = false;
     if (!isRecordingRef.current) return;
     isRecordingRef.current = false;
     setIsRecording(false);
@@ -6764,8 +7005,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       const downsampleRatio = ctx.sampleRate / targetSampleRate;
 
       silenceStartRef.current = null;
-      speechDetectedRef.current = false;
-      speechDetectedAtRef.current = null;
+      // Reopening a HELD answer (device unplugged mid-answer) must not erase
+      // the fact that the candidate had already spoken. speechDetectedRef is
+      // what makes the turn end with an end_turn: if it is false when the turn
+      // closes, stopRecording takes its "no speech → silent discard" branch and
+      // never asks the backend to transcribe — so everything said before the
+      // outage would be thrown away for a candidate who had finished answering
+      // and simply had nothing left to add after reconnecting.
+      const _resumingHeld = resumingHeldAnswerRef.current;
+      resumingHeldAnswerRef.current = false;
+      if (!_resumingHeld) {
+        speechDetectedRef.current = false;
+        speechDetectedAtRef.current = null;
+      } else {
+        console.log('[Pause] Mic reopened into the HELD answer — prior speech preserved, candidate continues the same turn');
+      }
+      // speechStartSentRef / candidateAudioStreamingRef below reset either way:
+      // re-announcing "speech started" for the resumed window is harmless (the
+      // backend's audio queue for this turn is append-only, so the pre-outage
+      // audio stays queued and is transcribed together with what follows).
       speechStartSentRef.current = false;
       speechFrameCountRef.current = 0;
       lastMeaningfulAudioAtRef.current = null;
@@ -7922,12 +8180,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // Use refs so handlers always call the latest version without reconnecting
     ws.onmessage = (event) => {
       if (event.data instanceof ArrayBuffer) {
-        // Interview is paused (camera/mic disconnected). The backend cancels
-        // its pipeline on session_pause, but chunks already in flight would
-        // still land here and restart the worklet the pause just stopped —
-        // Bina would resume speaking behind the blocking overlay. Drop them;
-        // the interrupted question is re-spoken in full on resume.
-        if (isMediaPausedRef.current) return;
+        // Interview is paused (camera/mic disconnected).
+        //
+        // FROZEN turn → let the chunk THROUGH. The AudioContext is suspended,
+        // so the worklet cannot play it; it simply accumulates. This is how the
+        // tail of a question that was still being synthesised at unplug time
+        // still reaches the candidate: the backend keeps streaming, we keep
+        // buffering, and the thaw plays the complete turn from where it froze.
+        //
+        // Torn-down turn → drop it. There is no suspended context holding
+        // playback back, so handing chunks to TalkingHead would have Bina
+        // talking out loud behind the blocking overlay.
+        if (isMediaPausedRef.current && !binaFrozenRef.current) return;
         console.log(`[WS ${new Date().toISOString()}] Audio chunk received: size=${event.data.byteLength} bytes`);
         // CRITICAL: call our bookkeeping (queueAudio + trackPlaybackChunk)
         // BEFORE streamAudio. TalkingHead's streamAudio transfers/detaches the

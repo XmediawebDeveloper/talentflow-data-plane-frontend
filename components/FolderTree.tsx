@@ -90,6 +90,8 @@ interface DroppableFolderItemProps {
   onToggleFolder: (id: string) => void;
   onShowMenu: (id: string | null, anchor?: DOMRect) => void;
   onMoveToFolder?: (resumeIds: string[], folderId: string) => void;
+  /** Hides the per-row folder-actions trigger. See `FolderTreeProps.readOnly`. */
+  readOnly?: boolean;
   children?: React.ReactNode;
 }
 
@@ -105,6 +107,7 @@ function DroppableFolderItem({
   onToggleFolder,
   onShowMenu,
   onMoveToFolder,
+  readOnly = false,
   children,
 }: DroppableFolderItemProps) {
   // "All Resumes" is a view, not a destination — there is nothing to move a
@@ -182,7 +185,8 @@ function DroppableFolderItem({
           Archived Resumes can't be renamed or deleted, which is most of what
           the menu is for. Uploading into root happens through the page's
           Upload button, which already defaults there. */}
-      {folder.id !== 'all'
+      {!readOnly
+        && folder.id !== 'all'
         && !(folder.name.toLowerCase() === 'root' && !folder.parentId)
         && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
         <button
@@ -212,15 +216,21 @@ interface FolderTreeProps {
   folders: FolderType[];
   selectedFolder: string;
   onSelectFolder: (id: string) => void;
-  onCreateFolder: (name: string, parentId?: string) => void;
-  onRenameFolder: (folderId: string, newName: string) => void;
-  onDeleteFolder: (folderId: string) => void;
+  onCreateFolder?: (name: string, parentId?: string) => void;
+  onRenameFolder?: (folderId: string, newName: string) => void;
+  onDeleteFolder?: (folderId: string) => void;
   onUploadToFolder?: (folderId: string) => void;
   onMoveToFolder?: (resumeIds: string[], folderId: string) => void;
   selectedResumes?: string[];
   resumes: Resume[];
   width: number;
   onWidthChange: (width: number) => void;
+  /** Browse-only tree: same hierarchy, labels, icons, colours and selected
+   *  state, but without the folder-editing affordances (the "+ New" button and
+   *  the per-row create/rename/delete/upload menu). For pickers such as the
+   *  job-details "Select Applicants to Score" popup, where the tree is a filter
+   *  and folder management belongs on the My Resumes page. */
+  readOnly?: boolean;
 }
 
 export default function FolderTree({
@@ -236,6 +246,7 @@ export default function FolderTree({
   resumes,
   width,
   onWidthChange,
+  readOnly = false,
 }: FolderTreeProps) {
   const [expandedFolders, setExpandedFolders] = useState<string[]>(['engineering']);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -462,7 +473,7 @@ export default function FolderTree({
         }
       }
 
-      onCreateFolder(newFolderName, actualParentId);
+      onCreateFolder?.(newFolderName, actualParentId);
       setNewFolderName('');
       setIsCreatingFolder(false);
       setCreatingSubFolderFor(null);
@@ -475,7 +486,7 @@ export default function FolderTree({
 
   const handleRename = (folderId: string) => {
     if (renameValue.trim()) {
-      onRenameFolder(folderId, renameValue);
+      onRenameFolder?.(folderId, renameValue);
       setRenamingFolderId(null);
       setRenameValue('');
     }
@@ -601,6 +612,7 @@ export default function FolderTree({
             onToggleFolder={toggleFolder}
             onShowMenu={openFolderMenu}
             onMoveToFolder={onMoveToFolder}
+            readOnly={readOnly}
           />
         )}
         </div>
@@ -627,7 +639,7 @@ export default function FolderTree({
                 e.preventDefault();
                 e.stopPropagation();
                 if (onUploadToFolder) {
-                  onUploadToFolder(folder.id);
+                  onUploadToFolder?.(folder.id);
                 }
                 closeFolderMenu();
               }}
@@ -688,7 +700,7 @@ export default function FolderTree({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    onDeleteFolder(folder.id);
+                    onDeleteFolder?.(folder.id);
                     closeFolderMenu();
                   }}
                   className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
@@ -830,14 +842,16 @@ export default function FolderTree({
 
       <div className="flex shrink-0 items-center justify-between mt-4 mb-3">
         <h3 className="text-gray-900">My Folders</h3>
-        <button
-          type="button"
-          onClick={() => setIsCreatingFolder(true)}
-          className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1"
-        >
-          <Plus className="w-4 h-4" />
-          New
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => setIsCreatingFolder(true)}
+            className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1"
+          >
+            <Plus className="w-4 h-4" />
+            New
+          </button>
+        )}
       </div>
 
       {isCreatingFolder && (
