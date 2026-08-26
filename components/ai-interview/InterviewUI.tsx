@@ -1700,6 +1700,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // event (disconnect_count) — the count no longer gates anything or renders
   // anywhere — and still owns reporting `microphone_disabled` for the same
   // coverage reason as before (the pause effect only reports the camera one).
+  //
+  // "No strike limit" is about the NUMBER of disconnects, and is unrelated to
+  // the DURATION rule in the pause effect below: any single disconnect that
+  // lasts longer than MEDIA_PAUSE_GRACE_MS does terminate the interview. A
+  // candidate can disconnect ten times without penalty, as long as each one is
+  // reconnected inside the grace window.
   const headsetDisconnectCountRef = useRef(0);
   // Tracks the PREVIOUS mic state so we count transitions, not renders.
   const micWasActiveRef = useRef(true);
@@ -1739,13 +1745,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       isMediaPausedRef.current = true;
       setIsMediaPaused(true);
       mediaPauseStartMsRef.current = Date.now();
-      // Camera loss keeps its existing, independent 3-minute grace-then-
-      // terminate rule (untouched). A MIC-only pause must never auto-
-      // terminate on a timeout — no countdown-to-end is shown or scheduled
-      // for that case; it just stays paused until the mic is genuinely
-      // reconnected, however long that takes.
-      const cameraIsDown = !proctoringState.isCameraActive;
-      setMediaPauseSecondsRemaining(cameraIsDown ? Math.ceil(MEDIA_PAUSE_GRACE_MS / 1000) : null);
+      // Camera AND microphone now share ONE grace-then-terminate rule: the
+      // candidate has MEDIA_PAUSE_GRACE_MS to reconnect whichever device
+      // dropped, and the interview ends if it is still missing when that runs
+      // out. (Reverses the earlier "a mic-only pause waits forever" policy — an
+      // interview cannot proceed without a microphone any more than without a
+      // camera, and an indefinite hold left sessions parked open.)
+      //
+      // audioDeviceLost counts as mic-down: that is the wired-unplug case where
+      // the track stays live because the OS silently fell back to another input,
+      // so isMicrophoneActive alone would read healthy.
+      const micIsDown = !proctoringState.isMicrophoneActive || audioDeviceLost;
+      const graceApplies = !proctoringState.isCameraActive || micIsDown;
+      setMediaPauseSecondsRemaining(graceApplies ? Math.ceil(MEDIA_PAUSE_GRACE_MS / 1000) : null);
       const armReason = mediaDownReason(proctoringState.isCameraActive, proctoringState.isMicrophoneActive);
       console.warn(`[INTERVIEW-DEBUG][PAUSE] INTERVIEW PAUSED — reason=${armReason} isCameraActive=${proctoringState.isCameraActive} isMicrophoneActive=${proctoringState.isMicrophoneActive} audioDeviceLost=${audioDeviceLost}`);
       // Strict mic requirement: nothing may keep running in the background
@@ -1805,7 +1817,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // happen while this pause is already armed for the camera).
 
       clearMediaPauseTimers();
-      if (cameraIsDown) {
+      if (graceApplies) {
         mediaPauseCountdownIdRef.current = setInterval(() => {
           const startedAt = mediaPauseStartMsRef.current;
           if (startedAt === null) return;
@@ -1816,13 +1828,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           clearMediaPauseTimers();
           // Still down after the full grace window — terminate, mirroring the
           // "left the interview screen" termination path in the parent portal.
-          // Reads CURRENT state (not the state at arm time): only terminate
-          // if the CAMERA is still the problem — that's the independent,
-          // pre-existing rule this timeout exists for. If the camera has
-          // recovered and only the mic remains down, do NOT terminate.
+          //
+          // Reads CURRENT state, never the state at arm time: the device that
+          // triggered the pause may have come back while a DIFFERENT one
+          // dropped, and either way what matters is whether the interview is
+          // usable NOW. Terminate only if the camera or the mic is still
+          // missing at this instant; if everything recovered, the resume branch
+          // below has already torn the pause down and this is a no-op.
           const cur = proctoringStateRef.current;
-          if (!cur.isCameraActive) {
-            onTerminate?.(`${mediaDownReason(cur.isCameraActive, cur.isMicrophoneActive)}_timeout`);
+          const micStillDown = !cur.isMicrophoneActive || audioDeviceLostRef.current;
+          if (!cur.isCameraActive || micStillDown) {
+            onTerminate?.(`${mediaDownReason(cur.isCameraActive, !micStillDown)}_timeout`);
           }
         }, MEDIA_PAUSE_GRACE_MS);
       }
@@ -2199,10 +2215,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           markAppOwnedCanvas(relayCanvas);
           if (recordRelayTimerRef.current) clearInterval(recordRelayTimerRef.current);
           recordRelayTimerRef.current = setInterval(() => {
+            // Resolve the LIVE element each tick rather than closing over the
+            // one captured here. If <Webcam> ever swaps its <video> (it did
+            // when a device error replaced the whole subtree), a captured
+            // reference would point at a detached element and the recording
+            // would freeze on its last frame while the camera ran fine.
+            const src = webcamRef.current?.getVideoElement?.() ?? video;
             // readyState >= HAVE_CURRENT_DATA — anything less has no frame to
             // draw (mid-reacquire), so we simply hold the previous one.
-            if (video.readyState >= 2) {
-              try { relayCtx.drawImage(video, 0, 0, relayCanvas.width, relayCanvas.height); } catch { /* frame skipped */ }
+            if (src && src.readyState >= 2) {
+              try { relayCtx.drawImage(src, 0, 0, relayCanvas.width, relayCanvas.height); } catch { /* frame skipped */ }
             }
           }, Math.round(1000 / RELAY_FPS));
           stableVideoTrack = relayCanvas.captureStream(RELAY_FPS).getVideoTracks()[0] ?? null;
@@ -10374,7 +10396,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   ? "Your interview is paused. Please reconnect your camera and microphone — it will resume automatically."
                   : !proctoringState.isCameraActive
                   ? "Your interview is paused. Please reconnect your camera — it will resume automatically."
-                  : "Microphone disconnected. Please connect your microphone to continue the interview — it will resume automatically."}
+                  : "Your interview is paused. Please reconnect your microphone — it will resume automatically."}
               </p>
             </div>
             {mediaPauseSecondsRemaining !== null && (

@@ -179,6 +179,8 @@ export interface AIInterviewResponse {
   screen_recording_file_path?: string;
   screen_recording_url?: string;
   invitation_sent: boolean;
+  /** Last invite send (resend included); null on rows created before the column. */
+  invitation_sent_at?: string | null;
   invitations_count?: number;
   expires_at?: string | null;
   revoked_at?: string | null;

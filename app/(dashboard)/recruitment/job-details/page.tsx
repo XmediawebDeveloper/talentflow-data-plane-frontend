@@ -150,6 +150,7 @@ function JobDetailsContent() {
         mustHaveComments: data.must_have_comments || [],
         niceToHaveComments: data.nice_to_have_comments || [],
         assessmentGuidance: data.assessment_guidance,
+        additionalDetails: data.additional_details,
         salaryMin: data.salary_min,
         salaryMax: data.salary_max,
         salaryCurrency: data.salary_currency,

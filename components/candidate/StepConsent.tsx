@@ -32,6 +32,10 @@ interface StepConsentProps {
   jdExperienceMin?: number | null;
   jdExperienceMax?: number | null;
   jdJobLevel?: string | null;
+  /** JD22 - recruiter free text about the job (shift timings, WFO/WFH, ...). Shown
+   *  to the candidate verbatim; it is not part of jdDescription and never reaches
+   *  the interview engine. */
+  jdAdditionalDetails?: string | null;
   duration?: number;
   interviewType?: string;
   interviewMode?: string | null;
@@ -89,6 +93,7 @@ export default function StepConsent({
   jdExperienceMin,
   jdExperienceMax,
   jdJobLevel,
+  jdAdditionalDetails,
   duration,
   interviewType,
   interviewMode,
@@ -295,6 +300,26 @@ export default function StepConsent({
                 {showFullDesc ? 'Show less' : 'Read more'}
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── JD22 Additional Details ──
+          Its own card directly under the role description, NOT appended to that
+          markdown: the recruiter typed this after the JD was generated, and the
+          description is AI-written prose that gets rewritten on every reformat.
+          Keeping it separate is what guarantees the candidate reads the recruiter's
+          exact words. Plain pre-wrapped text for the same reason - no markdown pass
+          to reinterpret what they typed. Hidden entirely when empty. */}
+      {jdAdditionalDetails && jdAdditionalDetails.trim() && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden" style={{ colorScheme: 'light' }}>
+          <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Additional Details</h2>
+          </div>
+          <div className="p-5">
+            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#374151' }}>
+              {jdAdditionalDetails}
+            </p>
           </div>
         </div>
       )}

@@ -296,6 +296,11 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                         {assessment.short_id && (
                           <span className="text-xs text-gray-400 dark:text-gray-500">{assessment.short_id}</span>
                         )}
+                        {/* Every version of an assessment shares one AS-XXX, so
+                            the version is what tells two results apart here. */}
+                        {assessment.version > 1 && (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">V{assessment.version}</span>
+                        )}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                         {assessment.jd_title} · {assessment.status}

@@ -139,7 +139,12 @@ const copyInterviewLink = async (inv: any) => {
  *  assessment tracker gives its timeline. */
 const timelineEvents = (inv: any) => {
   const out: { label: string; at: string; Icon: LucideIcon; tone: string }[] = [];
-  if (inv.created_at) out.push({ label: 'Invited', at: inv.created_at, Icon: Mail, tone: 'text-brand-blue' });
+  /* Last send, not the first: a resend regenerates the link and pushes the
+     expiry, so showing the original invite time next to a fresh deadline read
+     as stale. invitation_sent_at is null on invites that predate the column —
+     those fall back to created_at, which is when they were sent. */
+  const invitedAt = inv.invitation_sent_at || inv.created_at;
+  if (invitedAt) out.push({ label: 'Invited', at: invitedAt, Icon: Mail, tone: 'text-brand-blue' });
   /* Consent accepted -> the candidate reached the system check step. Same
      milestone (and wording) the assessment tracker prints from opened_at. */
   if (inv.consent_accepted_at) out.push({ label: 'System Check', at: inv.consent_accepted_at, Icon: Monitor, tone: 'text-brand-cyan' });

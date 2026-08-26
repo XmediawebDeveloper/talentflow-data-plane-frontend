@@ -53,6 +53,9 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
 
   // Guard: ensure onVideoReady is called exactly once even if both effects fire
   const videoReadyCalledRef = useRef(false);
+  // A stream that was acquired while videoRef.current was null, waiting to be
+  // attached once the element exists (see startWebcam's else branch).
+  const pendingAttachRef = useRef<MediaStream | null>(null);
 
   // Acquire (or RE-acquire on device recovery) the webcam+mic stream. On SUCCESS
   // it swaps in the fresh stream and stops the old one; on FAILURE it leaves the
@@ -117,6 +120,11 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
         if (videoRef.current.readyState >= 1) finish();
         else videoRef.current.onloadedmetadata = finish;
       } else {
+        // No element to attach to right now. Remember the stream so the effect
+        // below can wire it up the moment the element exists — otherwise this
+        // acquire silently produces a live-but-invisible camera (the preview
+        // stays black and isActive never flips true).
+        pendingAttachRef.current = stream;
         onStream?.(stream);
       }
 
@@ -209,6 +217,20 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
 
+  // Attach a stream that arrived while the element was missing. Runs on every
+  // render, so it catches the element as soon as it appears.
+  useEffect(() => {
+    const pending = pendingAttachRef.current;
+    if (!pending || !videoRef.current) return;
+    pendingAttachRef.current = null;
+    if (pending.getVideoTracks().every((t) => t.readyState !== 'live')) return;
+    videoRef.current.srcObject = pending;
+    videoRef.current.play().then(() => {
+      setIsActive(true);
+      onStream?.(pending);
+    }).catch(() => { /* autoplay refused — the next acquire retries */ });
+  });
+
   useEffect(() => {
     if (isActive && videoRef.current && streamRef.current) {
       onStream?.(streamRef.current);
@@ -221,14 +243,16 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
     }
   }, [onStream, onVideoReady, isActive]);
 
-  if (error) {
-    return (
-      <div className={`bg-gray-800 rounded-xl flex items-center justify-center p-4 text-center ${className}`}>
-        <p className="text-red-400 text-sm">{error}</p>
-      </div>
-    );
-  }
-
+  // NOTE: the error state is rendered as an OVERLAY, never as a replacement for
+  // the <video> element. Returning a different tree on error used to UNMOUNT the
+  // video, which nulled videoRef.current — and startWebcam only assigns
+  // srcObject when that ref exists. On a machine with no built-in camera,
+  // unplugging the only webcam makes getUserMedia throw (nothing to fall back
+  // to), so the error branch rendered; when the camera came back, the successful
+  // reacquire had no element to attach to and silently took its `else` path.
+  // The preview then stayed black for the rest of the interview even though the
+  // camera was live and proctoring had cleared. Keeping the element mounted at
+  // all times makes reacquire able to reattach.
   return (
     <div className={`relative overflow-hidden rounded-xl bg-gray-800 ${className}`}>
       <video
@@ -241,9 +265,17 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
         className="w-full h-full object-cover"
         style={{ transform: "scaleX(-1)" }}
       />
-      {!isActive && (
+      {!isActive && !error && (
         <div className="absolute inset-0 flex items-center justify-center">
           <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+        </div>
+      )}
+
+      {/* Device error — an overlay, so the <video> underneath stays mounted and
+          a later successful reacquire can attach its stream to it. */}
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-800 p-4 text-center">
+          <p className="text-red-400 text-sm">{error}</p>
         </div>
       )}
 

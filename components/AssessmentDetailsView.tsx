@@ -2277,6 +2277,25 @@ export default function AssessmentDetailsView({
                 </div>
               )}
 
+              {/* JD22 - Additional Details. Rendered as plain pre-wrapped text rather
+                  than through ReactMarkdown like the guidance below: this is the
+                  recruiter's own words shown verbatim to candidates, so it should read
+                  identically here and on the candidate's screen. */}
+              {jdData.additional_details && (
+                <div>
+                  <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+                    <Info className="w-3.5 h-3.5 text-green-600" />
+                    Additional Details
+                    <span className="text-[11px] text-green-700 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded">
+                      Visible to candidates
+                    </span>
+                  </div>
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-green-50/60 rounded-lg ring-1 ring-green-200 text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                    {jdData.additional_details}
+                  </div>
+                </div>
+              )}
+
               {/* Assessment Guidance */}
               {jdData.assessment_guidance && (
                 <div>
