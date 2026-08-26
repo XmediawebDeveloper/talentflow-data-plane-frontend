@@ -595,16 +595,25 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // Only on 'completed'. Deliberately NOT on 'terminated' — asking someone to
   // rate their experience right after their interview was cut short for a
   // malpractice flag would be tone-deaf, and the story scopes this to the
-  // completion flow. The per-token localStorage flag makes it once-only.
+  // completion flow. Feedback is ONE-TIME per interview.
   useEffect(() => {
     if (step !== 'completed' || !token) return;
+    // SERVER is the source of truth: once feedback exists for this interview,
+    // never ask again — even when the same link is reopened in a DIFFERENT
+    // browser / incognito window, where the localStorage flag below is absent.
+    // (The backend also rejects a duplicate submission, so this can't produce a
+    // second record even if the modal were somehow shown.)
+    if ((interview as { feedback_submitted?: boolean } | null)?.feedback_submitted) {
+      setShowFeedback(false);
+      return;
+    }
     try {
       if (window.localStorage.getItem(`tf_ai_feedback_done_${token}`)) return;
     } catch {
       /* private mode / storage blocked — fall through and just show it */
     }
     setShowFeedback(true);
-  }, [step, token]);
+  }, [step, token, interview]);
 
   const dismissFeedback = useCallback(() => {
     setShowFeedback(false);

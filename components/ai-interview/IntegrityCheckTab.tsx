@@ -666,6 +666,28 @@ function buildVerdict(
     };
   }
 
+  // 3b. Repeated device disconnects. Ranked above the generic serious bucket
+  //     because the PATTERN is the finding, and the generic verdict would hide
+  //     it behind a bare count: any single unplug reads as an accident, but each
+  //     one pauses the interview, so repeatedly pulling a cable is the one lever
+  //     a candidate has for buying unmonitored time. Named explicitly so the
+  //     recruiter knows to check what happened during those gaps.
+  if (summary.repeatDeviceDisconnects) {
+    const cam = find('camera_disabled');
+    const mic = find('microphone_disabled');
+    const bits = [
+      cam?.count ? `camera ${cam.count}×` : '',
+      mic?.count ? `microphone ${mic.count}×` : '',
+    ].filter(Boolean).join(', ');
+    return {
+      tone: 'critical',
+      headline: 'The camera or microphone was disconnected repeatedly',
+      body: `Devices were disconnected ${summary.deviceDisconnects} times during the interview${bits ? ` (${bits})` : ''}. Each disconnect pauses the interview, so review the recording around these gaps — a single unplug is usually accidental, but a repeated pattern is worth confirming.`,
+      recommendation: 'Review the recording around each disconnect',
+      ...toneChrome('critical'),
+    };
+  }
+
   // 4. Other serious flags (screen share stopped, camera off, etc.)
   if (summary.serious > 0) {
     return {
