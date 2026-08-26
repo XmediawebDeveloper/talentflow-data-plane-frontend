@@ -99,6 +99,24 @@ export const formatSalaryAmount = (
   )}`;
 };
 
+/**
+ * Render a salary for display. THE single definition - JD Creation, the Step 3 preview,
+ * the JD list column, the published JD detail and the candidate scorecard all call this,
+ * which is what keeps the four screens showing the same string for the same row (JD-21's
+ * "Consistent Salary Representation").
+ *
+ * The three shapes JD-21 specifies:
+ *   min only   -> "<amount>+"        an open-ended floor: 10 LPA+
+ *   max only   -> "Up to <amount>"   a ceiling: Up to 10 LPA
+ *   both       -> "<min> - <max>"    a true range: 8 - 12 LPA
+ *
+ * The min-only case used to read "From <amount>". Same meaning, but the ticket asks for
+ * the trailing "+" because that is how the figure is written on a job posting.
+ *
+ * Absent stays absent. A blank salary returns '' and every call site guards on that, so a
+ * JD that never stated a salary shows nothing rather than a fabricated 0 or a placeholder
+ * range - "we were not told" and "this job pays nothing" are different facts.
+ */
 export const formatSalaryRange = ({
   min,
   max,
@@ -116,6 +134,11 @@ export const formatSalaryRange = ({
   }
 
   if (minValue !== null && maxValue !== null) {
+    // Both bounds present and identical is a FIXED salary, not JD-21's single-value
+    // case: the recruiter typed the same figure into both boxes on purpose. Rendering
+    // it as "<amount>+" would claim an open-ended top end nobody stated. JD-21's
+    // "entered one value" case never reaches here - extraction now leaves salary_max
+    // null (see extract_salary_details_from_text), so it lands in the min-only branch.
     if (minValue === maxValue) {
       return formatSalaryAmount(minValue, currency);
     }
@@ -124,7 +147,7 @@ export const formatSalaryRange = ({
   }
 
   if (minValue !== null) {
-    return `From ${formatSalaryAmount(minValue, currency)}`;
+    return `${formatSalaryAmount(minValue, currency)}+`;
   }
 
   return `Up to ${formatSalaryAmount(maxValue, currency)}`;

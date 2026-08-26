@@ -17,6 +17,7 @@ export {
   resetLegitimateShareState,
   registerAppOwnedStream,
   unregisterAppOwnedStream,
+  markAppOwnedCanvas,
   installScreenCaptureGuard,
   isScreenCaptureGuardInstalled,
   isDesktopCaptureConstraint,
