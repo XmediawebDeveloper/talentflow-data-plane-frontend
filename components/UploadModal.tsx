@@ -1,8 +1,9 @@
 'use client';
 
-import { X, Upload, File, Trash2, FolderPlus, FolderOpen, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, FileUser, Files, Database, Info, Lightbulb, Target } from 'lucide-react';
+import { X, Upload, File, Trash2, FolderPlus, FolderOpen, FolderInput, FolderRoot, Archive, ChevronRight, ChevronDown, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, FileUser, Files, Database, Info, Lightbulb, Target } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import ViewResumeButton from '@/components/ui/view-resume-button';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
 import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
@@ -25,6 +26,17 @@ const ALLOWED_FORMATS = [
   'text/plain'
 ];
 const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.rtf', '.txt'];
+
+// Geometry for the portalled folder-picker dropdown and its cascading
+// flyouts — same treatment as the "Move to Folder" picker in BulkActionsBar.
+const FOLDER_PICKER_WIDTH = 280;
+const FOLDER_PICKER_GAP = 6;
+const FOLDER_PICKER_EDGE = 8;
+// Same 7-row budget as the "Move to Folder" picker in BulkActionsBar — the
+// panel used to grow to fill whatever viewport space was available (could
+// be a dozen+ rows on a tall screen), which read as inconsistent with that
+// picker. Capped here too, still shrinking further on short viewports.
+const FOLDER_PICKER_MAX_HEIGHT = 338;
 
 interface FileValidationError {
   fileName: string;
@@ -141,14 +153,173 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
   /* The destination exactly as the dropdown states it ("Arun / sub folder"),
      for anything downstream that has to name where these files were headed —
-     the duplicate dialog above all. Read from `allFolders`, the same list the
-     <option>s are built from, so the dialog can never disagree with what the
-     user just picked. Callers prefix it with the section name. */
+     the duplicate dialog above all. Read from `allFolders`, the same list
+     the folder picker below resolves ids against, so the dialog can never
+     disagree with what the user just picked. Callers prefix it with the
+     section name. */
   const selectedFolderPath = useMemo(() => {
     const id = selectedFolder || rootFolder?.id;
     if (!id) return 'root';
     return allFolders.find(entry => entry.folder.id === id)?.path || 'root';
   }, [selectedFolder, rootFolder?.id, allFolders]);
+
+  /** What the folder picker's trigger button shows. */
+  const selectedFolderLabel = useMemo(() => {
+    const id = selectedFolder || rootFolder?.id;
+    if (!id) return 'Choose folder...';
+    if (rootFolder && id === rootFolder.id) return 'Root (Default)';
+    return allFolders.find(entry => entry.folder.id === id)?.path || 'Choose folder...';
+  }, [selectedFolder, rootFolder, allFolders]);
+
+  /* Folder picker — replaces the old flattened, indented <select> ("↳  ")
+     with a real nested/cascading dropdown: top-level folders in the main
+     panel, subfolders opening as a flyout to the side on hover (or a tap on
+     the chevron, for touch). Same pattern as the "Move to Folder" picker in
+     BulkActionsBar.tsx. */
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  const [folderPickerAnchor, setFolderPickerAnchor] = useState<DOMRect | null>(null);
+  const [folderPickerPosition, setFolderPickerPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const folderPickerRef = useRef<HTMLDivElement | null>(null);
+  const [openPath, setOpenPath] = useState<{ folder: Folder; anchor: DOMRect }[]>([]);
+  const hoverIntentTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const closeFolderPicker = () => {
+    setShowFolderPicker(false);
+    setFolderPickerAnchor(null);
+    setFolderPickerPosition(null);
+    setOpenPath([]);
+  };
+
+  useEffect(() => () => {
+    if (hoverIntentTimer.current) clearTimeout(hoverIntentTimer.current);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!showFolderPicker || !folderPickerAnchor) return;
+    const menu = folderPickerRef.current;
+    if (!menu) return;
+
+    const viewportH = window.innerHeight;
+    const viewportW = window.innerWidth;
+    const height = menu.offsetHeight;
+    const spaceBelow = viewportH - folderPickerAnchor.bottom - FOLDER_PICKER_GAP - FOLDER_PICKER_EDGE;
+    const spaceAbove = folderPickerAnchor.top - FOLDER_PICKER_GAP - FOLDER_PICKER_EDGE;
+    const flipUp = height > spaceBelow && spaceAbove > spaceBelow;
+    const maxHeight = Math.min(FOLDER_PICKER_MAX_HEIGHT, Math.max(120, flipUp ? spaceAbove : spaceBelow));
+    const clampedHeight = Math.min(height, maxHeight);
+
+    const top = flipUp
+      ? Math.max(FOLDER_PICKER_EDGE, folderPickerAnchor.top - FOLDER_PICKER_GAP - clampedHeight)
+      : Math.min(folderPickerAnchor.bottom + FOLDER_PICKER_GAP, viewportH - FOLDER_PICKER_EDGE - clampedHeight);
+    const left = Math.min(
+      Math.max(FOLDER_PICKER_EDGE, folderPickerAnchor.left),
+      viewportW - FOLDER_PICKER_EDGE - FOLDER_PICKER_WIDTH,
+    );
+
+    setFolderPickerPosition(prev =>
+      prev && prev.top === top && prev.left === left && prev.maxHeight === maxHeight
+        ? prev
+        : { top, left, maxHeight },
+    );
+  }, [showFolderPicker, folderPickerAnchor]);
+
+  useEffect(() => {
+    if (!showFolderPicker) return;
+    const dismiss = (e?: Event) => {
+      const target = e?.target as Element | undefined;
+      if (target?.closest?.('[data-folder-picker]')) return;
+      closeFolderPicker();
+    };
+    window.addEventListener('scroll', dismiss, true);
+    window.addEventListener('resize', dismiss);
+    return () => {
+      window.removeEventListener('scroll', dismiss, true);
+      window.removeEventListener('resize', dismiss);
+    };
+  }, [showFolderPicker]);
+
+  const scheduleOpenPath = (path: { folder: Folder; anchor: DOMRect }[]) => {
+    if (hoverIntentTimer.current) clearTimeout(hoverIntentTimer.current);
+    hoverIntentTimer.current = setTimeout(() => setOpenPath(path), 200);
+  };
+  const cancelScheduledClose = () => {
+    if (hoverIntentTimer.current) {
+      clearTimeout(hoverIntentTimer.current);
+      hoverIntentTimer.current = null;
+    }
+  };
+
+  const computeFlyoutPosition = (anchor: DOMRect) => {
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const estimatedHeight = Math.min(260, viewportH - FOLDER_PICKER_EDGE * 2);
+    const openLeft =
+      viewportW - anchor.right - FOLDER_PICKER_EDGE < FOLDER_PICKER_WIDTH &&
+      anchor.left - FOLDER_PICKER_EDGE >= FOLDER_PICKER_WIDTH;
+    const left = openLeft
+      ? Math.max(FOLDER_PICKER_EDGE, anchor.left - FOLDER_PICKER_WIDTH)
+      : Math.min(anchor.right, viewportW - FOLDER_PICKER_EDGE - FOLDER_PICKER_WIDTH);
+    const top = Math.min(
+      Math.max(FOLDER_PICKER_EDGE, anchor.top),
+      viewportH - FOLDER_PICKER_EDGE - estimatedHeight,
+    );
+    return { top, left, maxHeight: estimatedHeight };
+  };
+
+  /* Same System Folders / My Folders split as the "Move to Folder" picker in
+     BulkActionsBar — Root and Archived Resumes grouped and pinned above a
+     "My Folders" heading, rather than only Root pinned and Archived Resumes
+     unreachable from this picker entirely. */
+  const isSystemPickerFolder = (f: Folder) => !f.parentId && (f.name.toLowerCase() === 'root' || f.name === 'Archived Resumes');
+  const systemPickerFolders = folders
+    .filter(isSystemPickerFolder)
+    .sort((a, b) => (a.name.toLowerCase() === 'root' ? 0 : 1) - (b.name.toLowerCase() === 'root' ? 0 : 1));
+  const myPickerFolders = folders.filter(f => f.id !== 'all' && !isSystemPickerFolder(f));
+
+  const renderFolderPickerRow = (folder: Folder, depth: number, ancestors: { folder: Folder; anchor: DOMRect }[]): React.ReactNode => {
+    const hasChildren = !!folder.children && folder.children.length > 0;
+    const isOpen = openPath[depth]?.folder.id === folder.id;
+    const isSelected = (selectedFolder || rootFolder?.id) === folder.id;
+    return (
+      <button
+        key={folder.id}
+        type="button"
+        onClick={() => {
+          setSelectedFolder(folder.id);
+          closeFolderPicker();
+        }}
+        onMouseEnter={(e) => {
+          if (!hasChildren) {
+            scheduleOpenPath(ancestors);
+            return;
+          }
+          const anchor = e.currentTarget.getBoundingClientRect();
+          scheduleOpenPath([...ancestors, { folder, anchor }]);
+        }}
+        onMouseLeave={() => scheduleOpenPath(ancestors)}
+        className={`w-full text-left py-2 text-sm transition-colors flex items-center gap-2 ${
+          isSelected ? 'text-brand-blue bg-brand-blue/[0.06]' : 'text-gray-700 dark:text-slate-300'
+        } ${isOpen ? 'bg-blue-50 dark:bg-slate-800' : 'hover:bg-blue-50 dark:hover:bg-slate-800'}`}
+        style={{ paddingLeft: 12 + depth * 16, paddingRight: 8, marginLeft: 4, marginRight: 4, width: 'calc(100% - 8px)' }}
+      >
+        <FolderInput className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+        <span className="truncate flex-1">{folder.name}</span>
+        <span className="flex-shrink-0 text-xs text-gray-400 dark:text-slate-500">({folder.count})</span>
+        {hasChildren && (
+          <ChevronRight
+            className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              cancelScheduledClose();
+              const anchor = (e.currentTarget as Element).closest('button')!.getBoundingClientRect();
+              setOpenPath(isOpen ? ancestors : [...ancestors, { folder, anchor }]);
+            }}
+          />
+        )}
+      </button>
+    );
+  };
+
   const [isDragging, setIsDragging] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -1030,35 +1201,114 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               /* Select and Create side by side from sm up — the reference keeps
                  both reachable without scrolling past one to find the other. */
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 sm:gap-3">
-                <select
-                  value={selectedFolder || rootFolder?.id || ''}
-                  onChange={(e) => setSelectedFolder(e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue text-sm text-gray-900 dark:text-slate-100 transition-colors"
-                >
-                  {/* Show Root folder first as default */}
-                  {rootFolder && (
-                    <option key={rootFolder.id} value={rootFolder.id}>
-                      Root (Default)
-                    </option>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      if (showFolderPicker) {
+                        closeFolderPicker();
+                        return;
+                      }
+                      setFolderPickerAnchor(e.currentTarget.getBoundingClientRect());
+                      setFolderPickerPosition(null);
+                      setShowFolderPicker(true);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue text-sm text-gray-900 dark:text-slate-100 transition-colors"
+                  >
+                    <FolderOpen className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                    <span className="flex-1 min-w-0 truncate text-left">{selectedFolderLabel}</span>
+                    <ChevronDown className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                  </button>
+
+                  {showFolderPicker && folderPickerAnchor && typeof document !== 'undefined' && createPortal(
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={closeFolderPicker} />
+                      {/* System Folders (Root, Archived Resumes) grouped above
+                          My Folders — same split as the "Move to Folder"
+                          picker in BulkActionsBar. A folder with subfolders
+                          opens them as a flyout to the side (hover, or tap
+                          its chevron on touch) instead of a flattened,
+                          indented list. */}
+                      <div
+                        ref={folderPickerRef}
+                        data-folder-picker
+                        className="fixed bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 py-1.5 overflow-y-auto overscroll-contain z-50"
+                        style={{
+                          top: folderPickerPosition?.top ?? folderPickerAnchor.bottom + FOLDER_PICKER_GAP,
+                          left: folderPickerPosition?.left ?? folderPickerAnchor.left,
+                          width: FOLDER_PICKER_WIDTH,
+                          maxHeight: folderPickerPosition?.maxHeight ?? FOLDER_PICKER_MAX_HEIGHT,
+                          visibility: folderPickerPosition ? 'visible' : 'hidden',
+                        }}
+                      >
+                        {systemPickerFolders.length > 0 && (
+                          <>
+                            <div className="px-3 pt-1 pb-1 text-[11px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide">
+                              System Folders
+                            </div>
+                            {systemPickerFolders.map(folder => (
+                              <button
+                                key={folder.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedFolder(folder.id);
+                                  closeFolderPicker();
+                                }}
+                                className={`w-full text-left py-2 text-sm transition-colors flex items-center gap-2 ${
+                                  (selectedFolder || rootFolder?.id) === folder.id
+                                    ? 'text-brand-blue bg-brand-blue/[0.06]'
+                                    : 'text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-800'
+                                }`}
+                                style={{ paddingLeft: 12, paddingRight: 8, marginLeft: 4, marginRight: 4, width: 'calc(100% - 8px)' }}
+                              >
+                                {folder.name === 'Archived Resumes' ? (
+                                  <Archive className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                                ) : (
+                                  <FolderRoot className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                                )}
+                                <span className="flex-1 truncate text-left">
+                                  {folder.name.toLowerCase() === 'root' ? 'Root (Default)' : folder.name}
+                                </span>
+                                <span className="flex-shrink-0 text-xs text-gray-400 dark:text-slate-500">({folder.count})</span>
+                              </button>
+                            ))}
+                          </>
+                        )}
+                        {systemPickerFolders.length > 0 && myPickerFolders.length > 0 && (
+                          <div className="border-t border-gray-200 dark:border-slate-700 my-1" />
+                        )}
+                        {myPickerFolders.length > 0 && (
+                          <>
+                            <div className="px-3 pt-1 pb-1 text-[11px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide">
+                              My Folders
+                            </div>
+                            {myPickerFolders.map(folder => renderFolderPickerRow(folder, 0, []))}
+                          </>
+                        )}
+                      </div>
+
+                      {/* Cascading flyouts, one portal per open depth. */}
+                      {openPath.map((entry, i) => {
+                        const ancestors = openPath.slice(0, i + 1);
+                        const pos = computeFlyoutPosition(entry.anchor);
+                        return createPortal(
+                          <div
+                            key={entry.folder.id}
+                            data-folder-picker
+                            className="fixed bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 py-1.5 overflow-y-auto overscroll-contain z-50"
+                            style={{ top: pos.top, left: pos.left, width: FOLDER_PICKER_WIDTH, maxHeight: pos.maxHeight }}
+                            onMouseEnter={cancelScheduledClose}
+                            onMouseLeave={() => scheduleOpenPath(openPath.slice(0, i))}
+                          >
+                            {entry.folder.children!.map(child => renderFolderPickerRow(child, i + 1, ancestors))}
+                          </div>,
+                          document.body,
+                        );
+                      })}
+                    </>,
+                    document.body,
                   )}
-                  {/* Only show "Choose folder" if no root folder exists */}
-                  {!rootFolder && <option value="">Choose folder...</option>}
-                  {/* Flattened tree — includes sub-folders shown with the
-                      breadcrumb path (e.g. "Arun / sub folder") and indented
-                      so the hierarchy is visually obvious. Excludes 'all',
-                      the Root folder (rendered above), and 'Archived Resumes'. */}
-                  {allFolders
-                    .filter(({ folder: f }) =>
-                      !(f.name.toLowerCase() === 'root' && !f.parentId) &&
-                      !(f.name === 'Archived Resumes' && !f.parentId),
-                    )
-                    .map(({ folder, depth, path }) => (
-                      <option key={folder.id} value={folder.id}>
-                        {`${'  '.repeat(depth)}${depth > 0 ? '↳ ' : ''}${path}`}
-                      </option>
-                    ))}
-                </select>
-                
+                </div>
                 <button
                   onClick={() => setShowCreateFolder(true)}
                   className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium border border-dashed border-brand-blue/40 text-brand-blue rounded-xl hover:border-brand-blue hover:bg-brand-blue/[0.06] transition-all whitespace-nowrap"
