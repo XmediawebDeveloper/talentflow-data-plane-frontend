@@ -697,6 +697,38 @@ interface JDCreationProps {
   isEmbedded?: boolean;  // Flag to indicate embedded mode
 }
 
+/**
+ * Has extraction ALREADY produced structured data for this JD?
+ *
+ * Answered from the persisted record, never from `creation_stage`. Three places used
+ * `creation_stage !== 'create'` as a stand-in for this question, and all three were
+ * defeated the same way: jd-creation/page.tsx builds the editing object with
+ * `creation_stage: stageFromUrl || editingJD.creation_stage`, so opening a JD with
+ * `?stage=create` in the link REWRITES the stage to 'create' no matter what is stored.
+ *
+ * That is how a draft another recruiter had already taken through Step 2 lost every
+ * no-change-no-LLM guard at once - the skip in handleNext, the lastExtractedJD
+ * hydration, and the load of the extracted data itself - and re-ran the extraction LLM
+ * on a JD nobody had edited, spending a call and risking a different answer for
+ * identical text.
+ *
+ * The two ideas are genuinely separate: creation_stage says WHICH STEP TO SHOW (and the
+ * URL may legitimately override that), while this says WHETHER THERE IS ANYTHING TO
+ * RE-EXTRACT. Only the persisted output can answer the second one.
+ */
+const jdHasPersistedExtraction = (jd?: EditingJDData | null): boolean => Boolean(
+  jd && (
+    jd.experience_min != null ||
+    jd.experience_max != null ||
+    (jd.must_have_skills?.length || 0) > 0 ||
+    (jd.must_have_comments?.length || 0) > 0 ||
+    (jd.nice_to_have_skills?.length || 0) > 0 ||
+    (jd.nice_to_have_comments?.length || 0) > 0 ||
+    jd.education_requirements?.degree ||
+    jd.industry_type
+  )
+);
+
 // How many skills a category shows before the rest collapse behind "+N more".
 const SKILL_PREVIEW_LIMIT = 10;
 
@@ -2544,6 +2576,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         suggestedLanguages: [],
         certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? prev.certifications : []),
         domainKeywords: params.domain_keywords?.length > 0 ? params.domain_keywords : (isEditMode ? prev.domainKeywords : []),
+        // JD22 - whatever the JD says that no other field models (shift timings,
+        // WFO/WFH, facilities). What the RECRUITER typed always wins: extraction fills
+        // this box only while it is still empty, so re-running extraction can never
+        // overwrite a sentence someone wrote by hand.
+        additionalDetails: prev.additionalDetails?.trim()
+          ? prev.additionalDetails
+          : (params.additional_details || ''),
         };
       });
 
@@ -2860,17 +2899,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // (those are kept below as a secondary layer) — if the text and title match
     // what's already persisted, and that record already went through extraction,
     // there is nothing new to extract, full stop.
-    if (effectiveEditingJD && effectiveEditingJD.creation_stage !== 'create') {
-      const alreadyExtracted = Boolean(
-        effectiveEditingJD.experience_min != null ||
-        effectiveEditingJD.experience_max != null ||
-        (effectiveEditingJD.must_have_skills?.length || 0) > 0 ||
-        (effectiveEditingJD.must_have_comments?.length || 0) > 0 ||
-        (effectiveEditingJD.nice_to_have_skills?.length || 0) > 0 ||
-        (effectiveEditingJD.nice_to_have_comments?.length || 0) > 0 ||
-        effectiveEditingJD.education_requirements?.degree ||
-        effectiveEditingJD.industry_type
-      );
+    if (effectiveEditingJD) {
+      // Deliberately NOT gated on creation_stage - see jdHasPersistedExtraction.
+      const alreadyExtracted = jdHasPersistedExtraction(effectiveEditingJD);
       const textUnchangedFromPersisted =
         jdText.trim() === (effectiveEditingJD.description || '').trim() &&
         trimmedJobTitle === (effectiveEditingJD.title || '').trim();
@@ -3262,10 +3293,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         })) : (isEditMode ? extractedData.locations : []),
         locationsRequired: params.location_mandatory || (isEditMode ? extractedData.locationsRequired : false),
         assessmentGuidance: isEditMode ? extractedData.assessmentGuidance : '',
-        // Always carried over, edit mode or not (JD22 req 3: the text must survive
-        // moving between steps). Extraction never produces this field - it is only
-        // ever typed by the recruiter - so there is nothing to overwrite it with.
-        additionalDetails: extractedData.additionalDetails,
+        // JD22. Extraction now DOES produce this field (the catch-all for anything the
+        // structured fields do not model), but what the recruiter typed still wins -
+        // it is filled from extraction only while the box is empty. Carrying `prev`
+        // over otherwise is also what makes the text survive moving between steps
+        // (JD22 req 3).
+        additionalDetails: extractedData.additionalDetails?.trim()
+          ? extractedData.additionalDetails
+          : (params.additional_details || ''),
         internalRecruiterComments: isEditMode ? extractedData.internalRecruiterComments : [],
         // JD09: Extract certifications and domain keywords
         certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? extractedData.certifications : []),
@@ -3400,8 +3435,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extraction.industryType || undefined,
         role_family: extraction.roleFamily || undefined,
         role_family_confidence: extraction.roleFamilyConfidence ?? undefined,
-        salary_min: parseSalaryInput(extraction.salaryFrom),
-        salary_max: parseSalaryInput(extraction.salaryTo),
+        // `?? null`, never bare undefined - same rule as the experience payload below.
+        // parseSalaryInput returns undefined for an empty box, JSON.stringify DROPS an
+        // undefined key, and the backend's exclude_unset PATCH then never sees the field
+        // and keeps whatever an earlier save wrote. So a JD re-extracted as "up to 5 LPA"
+        // (max only) kept its old salary_min forever and carried on rendering a range
+        // instead of "Up to Rs 5,00,000". Sending null clears the column.
+        salary_min: parseSalaryInput(extraction.salaryFrom) ?? null,
+        salary_max: parseSalaryInput(extraction.salaryTo) ?? null,
         compensation_type: extraction.compensationType,
         salary_currency: extraction.salaryCurrency,
         employment_type: extraction.employmentType,
@@ -4401,8 +4442,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
             supported_languages: extractedData.suggestedLanguages,
-            salary_min: parseSalaryInput(extractedData.salaryFrom),
-            salary_max: parseSalaryInput(extractedData.salaryTo),
+            salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
+            salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
             salary_currency: extractedData.salaryCurrency,
             compensation_type: extractedData.compensationType,
           };
@@ -4520,8 +4561,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extractedData.industryType || undefined,
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
-        salary_min: parseSalaryInput(extractedData.salaryFrom),
-        salary_max: parseSalaryInput(extractedData.salaryTo),
+        salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
+        salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
         compensation_type: extractedData.compensationType,
         salary_currency: extractedData.salaryCurrency,
         employment_type: extractedData.employmentType,
@@ -4801,8 +4842,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
             supported_languages: extractedData.suggestedLanguages,
-            salary_min: parseSalaryInput(extractedData.salaryFrom),
-            salary_max: parseSalaryInput(extractedData.salaryTo),
+            salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
+            salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
             salary_currency: extractedData.salaryCurrency,
             compensation_type: extractedData.compensationType,
           };
@@ -4841,8 +4882,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extractedData.industryType || undefined,
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
-        salary_min: parseSalaryInput(extractedData.salaryFrom),
-        salary_max: parseSalaryInput(extractedData.salaryTo),
+        salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
+        salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
         compensation_type: extractedData.compensationType,
         salary_currency: extractedData.salaryCurrency,
         job_level: experiencePayload.jobLevel,
@@ -5136,8 +5177,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extractedData.industryType || undefined,
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
-        salary_min: parseSalaryInput(extractedData.salaryFrom),
-        salary_max: parseSalaryInput(extractedData.salaryTo),
+        salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
+        salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
         compensation_type: extractedData.compensationType,
         salary_currency: extractedData.salaryCurrency,
         job_level: experiencePayload.jobLevel,
@@ -5328,7 +5369,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // a fresh (non-deterministic) LLM call that could return a different value
       // (e.g. overwriting a correctly-saved experience_min of 3.5 with 2) for text
       // that never changed.
-      if (effectiveEditingJD.creation_stage !== 'create') {
+      if (jdHasPersistedExtraction(effectiveEditingJD)) {
         setLastExtractedJD(effectiveEditingJD.description || '');
         setOriginalStage1Values({
           jobTitle: effectiveEditingJD.title || '',
@@ -5358,7 +5399,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // Load extracted data if:
       // 1. We're past the create step (draft JDs), OR
       // 2. It's a published JD (always has data regardless of stage)
-      if (effectiveEditingJD.creation_stage !== 'create' || effectiveEditingJD.status === 'published') {
+      if (jdHasPersistedExtraction(effectiveEditingJD) || effectiveEditingJD.status === 'published') {
         // Calculate actual values first, then set Required based on whether value exists
         const educationValue = effectiveEditingJD.education_requirements?.degree || '';
 

@@ -35,8 +35,13 @@ export interface JDCreate {
   republish_count?: number;
   role_family?: string;
   role_family_confidence?: number;
-  salary_min?: number;
-  salary_max?: number;
+  /** `null` means "this bound is not stated" and CLEARS the stored column; `undefined`
+   *  is dropped by JSON.stringify, so the backend's exclude_unset PATCH never sees the
+   *  field and keeps whatever an earlier save left there. A max-only salary therefore
+   *  has to send `salary_min: null` explicitly, or a stale minimum survives and the JD
+   *  keeps rendering a range instead of "Up to X". */
+  salary_min?: number | null;
+  salary_max?: number | null;
   salary_currency?: string;
   compensation_type?: string;
   assessment_guidance?: string;
@@ -117,10 +122,19 @@ export interface JDExtractedParams {
   role_family_confidence?: number;
   coding_required: boolean;
   suggested_languages: string[];
+  /** JD22 - job information the other extracted fields do not model (shift timings,
+   *  WFO/WFH, facilities, anything under an "Additional Details" heading). Null when
+   *  the JD says nothing of the kind; never invented to fill the field. */
+  additional_details?: string | null;
   // New fields for extraction
   locations?: ExtractedLocation[];
-  salary_min?: number;
-  salary_max?: number;
+  /** `null` means "this bound is not stated" and CLEARS the stored column; `undefined`
+   *  is dropped by JSON.stringify, so the backend's exclude_unset PATCH never sees the
+   *  field and keeps whatever an earlier save left there. A max-only salary therefore
+   *  has to send `salary_min: null` explicitly, or a stale minimum survives and the JD
+   *  keeps rendering a range instead of "Up to X". */
+  salary_min?: number | null;
+  salary_max?: number | null;
   salary_currency?: string;
   compensation_type?: 'yearly' | 'monthly' | 'hourly' | 'daily';
   must_have_comments?: string[];
@@ -195,8 +209,13 @@ export interface JDVersion {
   industry_type?: string;
   role_family?: string;
   role_family_confidence?: number;
-  salary_min?: number;
-  salary_max?: number;
+  /** `null` means "this bound is not stated" and CLEARS the stored column; `undefined`
+   *  is dropped by JSON.stringify, so the backend's exclude_unset PATCH never sees the
+   *  field and keeps whatever an earlier save left there. A max-only salary therefore
+   *  has to send `salary_min: null` explicitly, or a stale minimum survives and the JD
+   *  keeps rendering a range instead of "Up to X". */
+  salary_min?: number | null;
+  salary_max?: number | null;
   salary_currency?: string;
   compensation_type?: string;
   assessment_guidance?: string;
@@ -257,8 +276,13 @@ export interface JDDownstreamResponse {
   certifications: string[];
   job_level?: string;
   industry_type?: string;
-  salary_min?: number;
-  salary_max?: number;
+  /** `null` means "this bound is not stated" and CLEARS the stored column; `undefined`
+   *  is dropped by JSON.stringify, so the backend's exclude_unset PATCH never sees the
+   *  field and keeps whatever an earlier save left there. A max-only salary therefore
+   *  has to send `salary_min: null` explicitly, or a stale minimum survives and the JD
+   *  keeps rendering a range instead of "Up to X". */
+  salary_min?: number | null;
+  salary_max?: number | null;
   salary_currency?: string;
   compensation_type?: string;
   coding_required: boolean;

@@ -773,7 +773,7 @@ export function useInterviewProctoringMonitor({
     // Periodic health check — track events (onended/onmute) don't always fire
     // when the user disables camera/mic via browser site settings. Poll
     // readyState and track.enabled to catch those cases.
-    trackHealthIntervalRef.current = setInterval(() => {
+    const runHealthCheck = () => {
       const s = streamRef.current;
       if (!s) return;
 
@@ -831,7 +831,16 @@ export function useInterviewProctoringMonitor({
           reportMicRestored();
         }
       }
-    }, 2000);
+    };
+
+    // Run ONCE immediately, then on a tick. setupTrackMonitoring re-runs every
+    // time a fresh stream arrives — which is exactly what a successful
+    // reacquire produces — so without this first synchronous evaluation the
+    // recovered device sat unnoticed until the next tick. That was up to 2s of
+    // pure dead time added to every reconnect, on top of the recovery poll's
+    // own interval, and it is a large part of why resuming took 5-10s.
+    runHealthCheck();
+    trackHealthIntervalRef.current = setInterval(runHealthCheck, 1000);
 
     // Permissions API — catches browser-level permission revocation even when
     // the MediaStreamTrack events stay silent.
