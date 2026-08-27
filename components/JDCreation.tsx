@@ -729,6 +729,34 @@ const jdHasPersistedExtraction = (jd?: EditingJDData | null): boolean => Boolean
   )
 );
 
+/**
+ * Serialise Step-2 data for change detection, with object keys in a stable order.
+ *
+ * Plain JSON.stringify is key-ORDER sensitive, and the two objects being compared are
+ * built differently: the extraction path writes a fresh `{...}` literal, while the
+ * post-reformat path spreads (`{...extractedData, <lists>}`) and the load path builds up
+ * through `setExtractedData(prev => ...)`. Identical values could therefore serialise
+ * differently and read as "changed", spending an LLM reformat on data nobody touched.
+ */
+const serializeStep2 = (value: unknown): string =>
+  JSON.stringify(value, (_key, val) =>
+    val && typeof val === 'object' && !Array.isArray(val)
+      ? Object.fromEntries(Object.entries(val as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+      : val,
+  );
+
+/**
+ * What Step 3's formatted output was built from: the Step-2 data AND the job title.
+ *
+ * The title has to be in here even though it is not part of ExtractedData. It is separate
+ * state, but the reformat writes it into the description as the H1 heading, so a
+ * title-only Step-1 edit re-extracts to an IDENTICAL ExtractedData - and without the
+ * title in the fingerprint, nothing would mark Step 3 stale and the published JD would
+ * keep its old heading.
+ */
+const step2Fingerprint = (data: unknown, jobTitle: string): string =>
+  serializeStep2({ jobTitle: (jobTitle || '').trim(), data });
+
 // How many skills a category shows before the rest collapse behind "+N more".
 const SKILL_PREVIEW_LIMIT = 10;
 
@@ -1438,6 +1466,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Snapshot of extractedData when entering step 2 — used to detect actual changes via data comparison
   const step2DataSnapshot = useRef<string>('');
+
+  /**
+   * Step 3's formatted output is stale because Step 2 was RE-EXTRACTED under it.
+   *
+   * The steps form a chain: editing Step 1 invalidates Step 2 (so extraction re-runs),
+   * and new Step-2 data invalidates Step 3 (so the reformat must re-run). Only the first
+   * half of that was implemented. `extractedDataModified` means "the recruiter hand-edited
+   * Step 2", and a fresh extraction explicitly resets it to false - correctly, since the
+   * recruiter edited nothing - while `step2DataSnapshot` was ALSO overwritten with the
+   * new extraction on the same line. Both signals that feed `shouldReformat` were
+   * therefore cleared by the very extraction that made the data new, so Step 3 kept
+   * rendering a description built from the PREVIOUS Step-2 data, and the de-duplication
+   * pass folded into that same call never ran either.
+   *
+   * A separate ref rather than reusing `extractedDataModified`: that flag also drives
+   * `preserveUserEdits` and the "AI reformat" banner, which really do mean "the human
+   * changed something".
+   *
+   * Set only when the new extraction DIFFERS from what Step 3 was last built from, so a
+   * Step-1 edit that happens to re-extract identically costs no LLM call.
+   */
+  const extractionInvalidatedFormat = useRef(false);
   // Baseline of Step-1 content captured when an existing JD is loaded for editing.
   // Lets handleNext / handleConfirmPublish detect "no changes since load" and skip
   // the extraction / reformat LLM calls on a no-op edit pass-through.
@@ -3397,7 +3447,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // that reload is suppressed and the extraction result is preserved.
       hasLoadedFromEditingJD.current = true;
       setExtractedDataModified(false);  // Reset after fresh extraction - no user modifications yet
-      step2DataSnapshot.current = JSON.stringify(extraction);  // Snapshot for change detection
+
+      // Chain invalidation: this extraction replaced Step 2's data, so Step 3's formatted
+      // description (and the de-dupe folded into it) is now built from stale input.
+      // Compared BEFORE the snapshot is overwritten - afterwards the difference is gone.
+      const nextStep2Snapshot = step2Fingerprint(extraction, trimmedJobTitle);
+      if (step2DataSnapshot.current !== '' && step2DataSnapshot.current !== nextStep2Snapshot) {
+        extractionInvalidatedFormat.current = true;
+        // "Already formatted for review" stops being true the moment the data under it is
+        // re-derived. Without this, a draft opened at the review stage (which sets the flag
+        // on load) stays suppressed no matter how much the extraction changed.
+        setHasFormattedForReview(false);
+        console.log('[TalentFlow] Extraction changed Step 2 data - Step 3 will be re-formatted');
+      }
+      step2DataSnapshot.current = nextStep2Snapshot;  // Snapshot for change detection
       setLastExtractedJD(jdText);  // Track JD text to skip extraction if unchanged on next "Next" click
 
       // Trigger salary validation so warning shows immediately if only one field is filled
@@ -4368,7 +4431,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // If no edits were made, skip AI formatting and go directly to review
 
     // Detect changes via data comparison (bulletproof fallback - works even if a handler misses the flag)
-    const dataChanged = step2DataSnapshot.current !== '' && JSON.stringify(extractedData) !== step2DataSnapshot.current;
+    const dataChanged = step2DataSnapshot.current !== '' && step2Fingerprint(extractedData, jobTitle) !== step2DataSnapshot.current;
 
     // For manual JD mode: detect if the description lacks markdown formatting
     // (no headers, no line breaks, no bullets, no bold) → force reformat so the
@@ -4381,9 +4444,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       /^[-*+]\s/m.test(currentDescription)            // bullet points
     );
 
-    const shouldReformat = (extractedDataModified && !hasFormattedForReview) || dataChanged || lacksMarkdownFormatting;
+    const shouldReformat = (extractedDataModified && !hasFormattedForReview) || dataChanged || lacksMarkdownFormatting || extractionInvalidatedFormat.current;
 
-    console.log('[DEBUG] handlePublish - extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview, 'dataChanged:', dataChanged, 'lacksMarkdownFormatting:', lacksMarkdownFormatting, 'shouldReformat:', shouldReformat);
+    console.log('[DEBUG] handlePublish - extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview, 'dataChanged:', dataChanged, 'lacksMarkdownFormatting:', lacksMarkdownFormatting, 'extractionInvalidatedFormat:', extractionInvalidatedFormat.current, 'shouldReformat:', shouldReformat);
 
     // --- De-duplication is folded into the reformat pass ---
     // IMPORTANT: the AI reformat (which also de-duplicates) must fire ONLY when the
@@ -4534,7 +4597,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setStep('review');
     setHasProceededToReview(true);  // Mark that user has proceeded to review (makes Stage 2 fields read-only)
     setHasFormattedForReview(true);  // Mark as formatted so we can skip on next "Next" click
-    step2DataSnapshot.current = JSON.stringify(reviewData);  // Update snapshot so returning without new edits skips
+    step2DataSnapshot.current = step2Fingerprint(reviewData, jobTitle);  // Update snapshot so returning without new edits skips
+    extractionInvalidatedFormat.current = false;  // Step 3 now matches the current Step 2 data
     // NOTE: Don't reset extractedDataModified here - it should persist to prevent reloading
     // user's deleted items from DB when navigating back to Stage 1/2
     setValidationErrors({});  // Clear validation errors since all validations passed
@@ -5498,12 +5562,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   }, [effectiveEditingJD]);
 
-  // Take snapshot of extractedData when first entering step 2 (for change detection in handlePublish)
+  // Seed the "what Step 3 was last built from" snapshot, once.
+  //
+  // Also seeds for a LOADED JD that is still showing Step 1, which the `step === 'extract'`
+  // condition alone did not cover. That gap mattered: a JD opened with ?stage=create in the
+  // link lands on Step 1 (see jdHasPersistedExtraction), so the snapshot stayed empty, and
+  // the chain-invalidation check above - which needs a non-empty baseline to compare the
+  // fresh extraction against - could never fire. That is the exact flow this was reported
+  // on: open a colleague's draft, edit Step 1, and Step 3 never re-formatted.
   useEffect(() => {
-    if (step === 'extract' && step2DataSnapshot.current === '') {
-      step2DataSnapshot.current = JSON.stringify(extractedData);
+    if (step2DataSnapshot.current !== '') return;
+    const loadedJDHasData = Boolean(effectiveEditingJD) && hasExtractedRequirementData();
+    if (step === 'extract' || loadedJDHasData) {
+      step2DataSnapshot.current = step2Fingerprint(extractedData, jobTitle);
     }
-  }, [step, extractedData]);
+  }, [step, extractedData, effectiveEditingJD]);
 
   // FIX-003: Show loading state when fetching JD in embedded mode
   if (loadingJD) {
