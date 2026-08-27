@@ -2625,8 +2625,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           : (isEditMode ? (prev.salaryTo || '') : ''),
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || prev.salaryCurrency),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
+        // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
+        // (see the load effect) and how the save path re-splits it. Dropping `state` here
+        // meant an extracted "Chennai, Tamil Nadu" reached Step 2 as a bare "Chennai" and
+        // was persisted with state=null, so it no longer matched the city the recruiter
+        // would pick by hand.
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
-          city: loc.city || '',
+          city: loc.state ? `${loc.city}, ${loc.state}` : (loc.city || ''),
           radius: '50'
         })) : (isEditMode ? prev.locations : []),
         allowOverqualified: isEditMode ? prev.allowOverqualified : false,
@@ -3363,8 +3368,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           : (isEditMode ? (extractedData.salaryTo || '') : ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || extractedData.salaryCurrency),
+        // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
+        // (see the load effect) and how the save path re-splits it. Dropping `state` here
+        // meant an extracted "Chennai, Tamil Nadu" reached Step 2 as a bare "Chennai" and
+        // was persisted with state=null, so it no longer matched the city the recruiter
+        // would pick by hand.
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
-          city: loc.city || '',
+          city: loc.state ? `${loc.city}, ${loc.state}` : (loc.city || ''),
           radius: '50'  // Default radius
         })) : (isEditMode ? extractedData.locations : []),
         locationsRequired: params.location_mandatory || (isEditMode ? extractedData.locationsRequired : false),
