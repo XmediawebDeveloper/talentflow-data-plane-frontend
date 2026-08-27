@@ -6,6 +6,15 @@ import { createPortal } from 'react-dom';
 import { useDrop } from 'react-dnd';
 import { Folder as FolderType, Resume } from '@/lib/types/types';
 import { toast } from 'sonner';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+
+// Folder-actions (⋮) menu item styling — same neutral hover-changes-only-the-
+// background convention as every other ⋮ menu in the app (ResumeTable,
+// JobsListing), rather than this menu's old text-turns-blue-on-hover
+// treatment, whose dark-mode variant left a light-blue pill with black text
+// floating in an otherwise dark popover.
+const folderMenuItemClass = 'group w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2';
+const folderMenuItemRedClass = 'group w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors flex items-center gap-2';
 
 // Max folder depth (root → level1 → level2 → level3 = 3 levels of nesting).
 // Exported so the card view's create control enforces the same ceiling as the
@@ -623,7 +632,7 @@ export default function FolderTree({
             /* `fixed` + portal: outside the folder list's scroll box, so the
                full option list and its border/shadow always render. It scrolls
                internally only when the viewport itself is too short. */
-            className="fixed w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[60] overflow-y-auto overscroll-contain"
+            className="fixed w-48 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 py-1 z-[60] overflow-y-auto overscroll-contain"
             style={{
               top: menuPosition?.top ?? menuAnchor.bottom + FOLDER_MENU_GAP,
               left: menuPosition?.left ?? Math.max(FOLDER_MENU_EDGE, menuAnchor.right - FOLDER_MENU_WIDTH),
@@ -643,10 +652,10 @@ export default function FolderTree({
                 }
                 closeFolderMenu();
               }}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+              className={folderMenuItemClass}
             >
-              <Upload className="w-4 h-4" />
-              Upload to Folder
+              <Upload className="w-4 h-4 text-menu-icon-download" />
+              <span className={MENU_ITEM_SCALE_CLASS}>Upload to Folder</span>
             </button>
             <button
               type="button"
@@ -663,16 +672,16 @@ export default function FolderTree({
                 closeFolderMenu();
               }}
               disabled={!canCreateSubfolder}
-              className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+              className={`group w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
                 canCreateSubfolder
-                  ? 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
-                  : 'text-gray-400 cursor-not-allowed'
+                  ? 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                  : 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
               }`}
               title={!canCreateSubfolder ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : ''}
             >
-              <Plus className="w-4 h-4" />
-              Create Subfolder
-              {!canCreateSubfolder && <span className="text-xs text-gray-400 ml-auto">(max depth)</span>}
+              <Plus className={`w-4 h-4 ${canCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
+              <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
+              {!canCreateSubfolder && <span className="text-xs text-gray-400 dark:text-slate-600 ml-auto">(max depth)</span>}
             </button>
             {/* Only show rename option if not root folder or Archived Resumes folder */}
             {!(folder.name.toLowerCase() === 'root' && !folder.parentId) && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
@@ -685,16 +694,16 @@ export default function FolderTree({
                   setRenamingFolderId(folder.id);
                   closeFolderMenu();
                 }}
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+                className={folderMenuItemClass}
               >
-                <Edit2 className="w-4 h-4" />
-                Rename Folder
+                <Edit2 className="w-4 h-4 text-menu-icon-edit" />
+                <span className={MENU_ITEM_SCALE_CLASS}>Rename Folder</span>
               </button>
             )}
             {/* Only show delete option if not root folder or Archived Resumes folder */}
             {!(folder.name.toLowerCase() === 'root' && !folder.parentId) && !(folder.name === 'Archived Resumes' && !folder.parentId) && (
               <>
-                <div className="border-t border-gray-200 my-1" />
+                <div className="border-t border-gray-200 dark:border-slate-700 my-1" />
                 <button
                   type="button"
                   onClick={(e) => {
@@ -703,10 +712,10 @@ export default function FolderTree({
                     onDeleteFolder?.(folder.id);
                     closeFolderMenu();
                   }}
-                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                  className={folderMenuItemRedClass}
                 >
                   <Trash2 className="w-4 h-4" />
-                  Delete Folder
+                  <span className={MENU_ITEM_SCALE_CLASS}>Delete Folder</span>
                 </button>
               </>
             )}

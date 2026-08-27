@@ -697,6 +697,66 @@ interface JDCreationProps {
   isEmbedded?: boolean;  // Flag to indicate embedded mode
 }
 
+/**
+ * Has extraction ALREADY produced structured data for this JD?
+ *
+ * Answered from the persisted record, never from `creation_stage`. Three places used
+ * `creation_stage !== 'create'` as a stand-in for this question, and all three were
+ * defeated the same way: jd-creation/page.tsx builds the editing object with
+ * `creation_stage: stageFromUrl || editingJD.creation_stage`, so opening a JD with
+ * `?stage=create` in the link REWRITES the stage to 'create' no matter what is stored.
+ *
+ * That is how a draft another recruiter had already taken through Step 2 lost every
+ * no-change-no-LLM guard at once - the skip in handleNext, the lastExtractedJD
+ * hydration, and the load of the extracted data itself - and re-ran the extraction LLM
+ * on a JD nobody had edited, spending a call and risking a different answer for
+ * identical text.
+ *
+ * The two ideas are genuinely separate: creation_stage says WHICH STEP TO SHOW (and the
+ * URL may legitimately override that), while this says WHETHER THERE IS ANYTHING TO
+ * RE-EXTRACT. Only the persisted output can answer the second one.
+ */
+const jdHasPersistedExtraction = (jd?: EditingJDData | null): boolean => Boolean(
+  jd && (
+    jd.experience_min != null ||
+    jd.experience_max != null ||
+    (jd.must_have_skills?.length || 0) > 0 ||
+    (jd.must_have_comments?.length || 0) > 0 ||
+    (jd.nice_to_have_skills?.length || 0) > 0 ||
+    (jd.nice_to_have_comments?.length || 0) > 0 ||
+    jd.education_requirements?.degree ||
+    jd.industry_type
+  )
+);
+
+/**
+ * Serialise Step-2 data for change detection, with object keys in a stable order.
+ *
+ * Plain JSON.stringify is key-ORDER sensitive, and the two objects being compared are
+ * built differently: the extraction path writes a fresh `{...}` literal, while the
+ * post-reformat path spreads (`{...extractedData, <lists>}`) and the load path builds up
+ * through `setExtractedData(prev => ...)`. Identical values could therefore serialise
+ * differently and read as "changed", spending an LLM reformat on data nobody touched.
+ */
+const serializeStep2 = (value: unknown): string =>
+  JSON.stringify(value, (_key, val) =>
+    val && typeof val === 'object' && !Array.isArray(val)
+      ? Object.fromEntries(Object.entries(val as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+      : val,
+  );
+
+/**
+ * What Step 3's formatted output was built from: the Step-2 data AND the job title.
+ *
+ * The title has to be in here even though it is not part of ExtractedData. It is separate
+ * state, but the reformat writes it into the description as the H1 heading, so a
+ * title-only Step-1 edit re-extracts to an IDENTICAL ExtractedData - and without the
+ * title in the fingerprint, nothing would mark Step 3 stale and the published JD would
+ * keep its old heading.
+ */
+const step2Fingerprint = (data: unknown, jobTitle: string): string =>
+  serializeStep2({ jobTitle: (jobTitle || '').trim(), data });
+
 // How many skills a category shows before the rest collapse behind "+N more".
 const SKILL_PREVIEW_LIMIT = 10;
 
@@ -1406,6 +1466,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Snapshot of extractedData when entering step 2 — used to detect actual changes via data comparison
   const step2DataSnapshot = useRef<string>('');
+
+  /**
+   * Step 3's formatted output is stale because Step 2 was RE-EXTRACTED under it.
+   *
+   * The steps form a chain: editing Step 1 invalidates Step 2 (so extraction re-runs),
+   * and new Step-2 data invalidates Step 3 (so the reformat must re-run). Only the first
+   * half of that was implemented. `extractedDataModified` means "the recruiter hand-edited
+   * Step 2", and a fresh extraction explicitly resets it to false - correctly, since the
+   * recruiter edited nothing - while `step2DataSnapshot` was ALSO overwritten with the
+   * new extraction on the same line. Both signals that feed `shouldReformat` were
+   * therefore cleared by the very extraction that made the data new, so Step 3 kept
+   * rendering a description built from the PREVIOUS Step-2 data, and the de-duplication
+   * pass folded into that same call never ran either.
+   *
+   * A separate ref rather than reusing `extractedDataModified`: that flag also drives
+   * `preserveUserEdits` and the "AI reformat" banner, which really do mean "the human
+   * changed something".
+   *
+   * Set only when the new extraction DIFFERS from what Step 3 was last built from, so a
+   * Step-1 edit that happens to re-extract identically costs no LLM call.
+   */
+  const extractionInvalidatedFormat = useRef(false);
   // Baseline of Step-1 content captured when an existing JD is loaded for editing.
   // Lets handleNext / handleConfirmPublish detect "no changes since load" and skip
   // the extraction / reformat LLM calls on a no-op edit pass-through.
@@ -2526,12 +2608,30 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         employmentType: prev.employmentType,
         workModel: prev.workModel,
         // Pre-fill salary from AI extraction
-        salaryFrom: params.salary_min != null ? (sanitizeExtractedSalary(params.salary_min) || prev.salaryFrom || '') : (prev.salaryFrom || ''),
-        salaryTo: params.salary_max != null ? (sanitizeExtractedSalary(params.salary_max) || prev.salaryTo || '') : (prev.salaryTo || ''),
+        // A null bound from extraction is an ANSWER - "this JD states no maximum" - not a
+        // gap to be papered over with the previous value. Falling back to `prev` here meant
+        // a re-extraction could never CLEAR a bound: editing the prompt from "2 LPA upto
+        // 7 LPA" down to "2 LPA" re-extracted correctly as min-only, and the stale 7,00,000
+        // stayed in the Maximum box (and in the saved JD) forever.
+        //
+        // Preserved only in edit mode, exactly like workModel/education/industryType above:
+        // a FRESH extraction replaces Step 2 (see forceFreshExtraction), so it must be able
+        // to replace a bound with nothing.
+        salaryFrom: params.salary_min != null
+          ? (sanitizeExtractedSalary(params.salary_min) || '')
+          : (isEditMode ? (prev.salaryFrom || '') : ''),
+        salaryTo: params.salary_max != null
+          ? (sanitizeExtractedSalary(params.salary_max) || '')
+          : (isEditMode ? (prev.salaryTo || '') : ''),
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || prev.salaryCurrency),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
+        // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
+        // (see the load effect) and how the save path re-splits it. Dropping `state` here
+        // meant an extracted "Chennai, Tamil Nadu" reached Step 2 as a bare "Chennai" and
+        // was persisted with state=null, so it no longer matched the city the recruiter
+        // would pick by hand.
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
-          city: loc.city || '',
+          city: loc.state ? `${loc.city}, ${loc.state}` : (loc.city || ''),
           radius: '50'
         })) : (isEditMode ? prev.locations : []),
         allowOverqualified: isEditMode ? prev.allowOverqualified : false,
@@ -2544,6 +2644,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         suggestedLanguages: [],
         certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? prev.certifications : []),
         domainKeywords: params.domain_keywords?.length > 0 ? params.domain_keywords : (isEditMode ? prev.domainKeywords : []),
+        // JD22 - whatever the JD says that no other field models (shift timings,
+        // WFO/WFH, facilities). What the RECRUITER typed always wins: extraction fills
+        // this box only while it is still empty, so re-running extraction can never
+        // overwrite a sentence someone wrote by hand.
+        additionalDetails: prev.additionalDetails?.trim()
+          ? prev.additionalDetails
+          : (params.additional_details || ''),
         };
       });
 
@@ -2860,17 +2967,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // (those are kept below as a secondary layer) — if the text and title match
     // what's already persisted, and that record already went through extraction,
     // there is nothing new to extract, full stop.
-    if (effectiveEditingJD && effectiveEditingJD.creation_stage !== 'create') {
-      const alreadyExtracted = Boolean(
-        effectiveEditingJD.experience_min != null ||
-        effectiveEditingJD.experience_max != null ||
-        (effectiveEditingJD.must_have_skills?.length || 0) > 0 ||
-        (effectiveEditingJD.must_have_comments?.length || 0) > 0 ||
-        (effectiveEditingJD.nice_to_have_skills?.length || 0) > 0 ||
-        (effectiveEditingJD.nice_to_have_comments?.length || 0) > 0 ||
-        effectiveEditingJD.education_requirements?.degree ||
-        effectiveEditingJD.industry_type
-      );
+    if (effectiveEditingJD) {
+      // Deliberately NOT gated on creation_stage - see jdHasPersistedExtraction.
+      const alreadyExtracted = jdHasPersistedExtraction(effectiveEditingJD);
       const textUnchangedFromPersisted =
         jdText.trim() === (effectiveEditingJD.description || '').trim() &&
         trimmedJobTitle === (effectiveEditingJD.title || '').trim();
@@ -3252,20 +3351,42 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         employmentType: (params.job_type as 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary') || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: (params.work_mode as 'onsite' | 'remote' | 'hybrid' | 'field_based') || (isEditMode ? extractedData.workModel : 'onsite'),
         // Pre-fill salary from AI extraction
-        salaryFrom: params.salary_min != null ? (sanitizeExtractedSalary(params.salary_min) || extractedData.salaryFrom || '') : (extractedData.salaryFrom || ''),
-        salaryTo: params.salary_max != null ? (sanitizeExtractedSalary(params.salary_max) || extractedData.salaryTo || '') : (extractedData.salaryTo || ''),
+        // A null bound from extraction is an ANSWER - "this JD states no maximum" - not a
+        // gap to be papered over with the previous value. Falling back to `prev` here meant
+        // a re-extraction could never CLEAR a bound: editing the prompt from "2 LPA upto
+        // 7 LPA" down to "2 LPA" re-extracted correctly as min-only, and the stale 7,00,000
+        // stayed in the Maximum box (and in the saved JD) forever.
+        //
+        // Preserved only in edit mode, exactly like workModel/education/industryType above:
+        // a FRESH extraction replaces Step 2 (see forceFreshExtraction), so it must be able
+        // to replace a bound with nothing.
+        salaryFrom: params.salary_min != null
+          ? (sanitizeExtractedSalary(params.salary_min) || '')
+          : (isEditMode ? (extractedData.salaryFrom || '') : ''),
+        salaryTo: params.salary_max != null
+          ? (sanitizeExtractedSalary(params.salary_max) || '')
+          : (isEditMode ? (extractedData.salaryTo || '') : ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || extractedData.salaryCurrency),
+        // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
+        // (see the load effect) and how the save path re-splits it. Dropping `state` here
+        // meant an extracted "Chennai, Tamil Nadu" reached Step 2 as a bare "Chennai" and
+        // was persisted with state=null, so it no longer matched the city the recruiter
+        // would pick by hand.
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
-          city: loc.city || '',
+          city: loc.state ? `${loc.city}, ${loc.state}` : (loc.city || ''),
           radius: '50'  // Default radius
         })) : (isEditMode ? extractedData.locations : []),
         locationsRequired: params.location_mandatory || (isEditMode ? extractedData.locationsRequired : false),
         assessmentGuidance: isEditMode ? extractedData.assessmentGuidance : '',
-        // Always carried over, edit mode or not (JD22 req 3: the text must survive
-        // moving between steps). Extraction never produces this field - it is only
-        // ever typed by the recruiter - so there is nothing to overwrite it with.
-        additionalDetails: extractedData.additionalDetails,
+        // JD22. Extraction now DOES produce this field (the catch-all for anything the
+        // structured fields do not model), but what the recruiter typed still wins -
+        // it is filled from extraction only while the box is empty. Carrying `prev`
+        // over otherwise is also what makes the text survive moving between steps
+        // (JD22 req 3).
+        additionalDetails: extractedData.additionalDetails?.trim()
+          ? extractedData.additionalDetails
+          : (params.additional_details || ''),
         internalRecruiterComments: isEditMode ? extractedData.internalRecruiterComments : [],
         // JD09: Extract certifications and domain keywords
         certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? extractedData.certifications : []),
@@ -3362,7 +3483,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // that reload is suppressed and the extraction result is preserved.
       hasLoadedFromEditingJD.current = true;
       setExtractedDataModified(false);  // Reset after fresh extraction - no user modifications yet
-      step2DataSnapshot.current = JSON.stringify(extraction);  // Snapshot for change detection
+
+      // Chain invalidation: this extraction replaced Step 2's data, so Step 3's formatted
+      // description (and the de-dupe folded into it) is now built from stale input.
+      // Compared BEFORE the snapshot is overwritten - afterwards the difference is gone.
+      const nextStep2Snapshot = step2Fingerprint(extraction, trimmedJobTitle);
+      if (step2DataSnapshot.current !== '' && step2DataSnapshot.current !== nextStep2Snapshot) {
+        extractionInvalidatedFormat.current = true;
+        // "Already formatted for review" stops being true the moment the data under it is
+        // re-derived. Without this, a draft opened at the review stage (which sets the flag
+        // on load) stays suppressed no matter how much the extraction changed.
+        setHasFormattedForReview(false);
+        console.log('[TalentFlow] Extraction changed Step 2 data - Step 3 will be re-formatted');
+      }
+      step2DataSnapshot.current = nextStep2Snapshot;  // Snapshot for change detection
       setLastExtractedJD(jdText);  // Track JD text to skip extraction if unchanged on next "Next" click
 
       // Trigger salary validation so warning shows immediately if only one field is filled
@@ -3400,8 +3534,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extraction.industryType || undefined,
         role_family: extraction.roleFamily || undefined,
         role_family_confidence: extraction.roleFamilyConfidence ?? undefined,
-        salary_min: parseSalaryInput(extraction.salaryFrom),
-        salary_max: parseSalaryInput(extraction.salaryTo),
+        // `?? null`, never bare undefined - same rule as the experience payload below.
+        // parseSalaryInput returns undefined for an empty box, JSON.stringify DROPS an
+        // undefined key, and the backend's exclude_unset PATCH then never sees the field
+        // and keeps whatever an earlier save wrote. So a JD re-extracted as "up to 5 LPA"
+        // (max only) kept its old salary_min forever and carried on rendering a range
+        // instead of "Up to Rs 5,00,000". Sending null clears the column.
+        salary_min: parseSalaryInput(extraction.salaryFrom) ?? null,
+        salary_max: parseSalaryInput(extraction.salaryTo) ?? null,
         compensation_type: extraction.compensationType,
         salary_currency: extraction.salaryCurrency,
         employment_type: extraction.employmentType,
@@ -4327,7 +4467,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // If no edits were made, skip AI formatting and go directly to review
 
     // Detect changes via data comparison (bulletproof fallback - works even if a handler misses the flag)
-    const dataChanged = step2DataSnapshot.current !== '' && JSON.stringify(extractedData) !== step2DataSnapshot.current;
+    const dataChanged = step2DataSnapshot.current !== '' && step2Fingerprint(extractedData, jobTitle) !== step2DataSnapshot.current;
 
     // For manual JD mode: detect if the description lacks markdown formatting
     // (no headers, no line breaks, no bullets, no bold) → force reformat so the
@@ -4340,9 +4480,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       /^[-*+]\s/m.test(currentDescription)            // bullet points
     );
 
-    const shouldReformat = (extractedDataModified && !hasFormattedForReview) || dataChanged || lacksMarkdownFormatting;
+    const shouldReformat = (extractedDataModified && !hasFormattedForReview) || dataChanged || lacksMarkdownFormatting || extractionInvalidatedFormat.current;
 
-    console.log('[DEBUG] handlePublish - extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview, 'dataChanged:', dataChanged, 'lacksMarkdownFormatting:', lacksMarkdownFormatting, 'shouldReformat:', shouldReformat);
+    console.log('[DEBUG] handlePublish - extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview, 'dataChanged:', dataChanged, 'lacksMarkdownFormatting:', lacksMarkdownFormatting, 'extractionInvalidatedFormat:', extractionInvalidatedFormat.current, 'shouldReformat:', shouldReformat);
 
     // --- De-duplication is folded into the reformat pass ---
     // IMPORTANT: the AI reformat (which also de-duplicates) must fire ONLY when the
@@ -4401,8 +4541,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
             supported_languages: extractedData.suggestedLanguages,
-            salary_min: parseSalaryInput(extractedData.salaryFrom),
-            salary_max: parseSalaryInput(extractedData.salaryTo),
+            salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
+            salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
             salary_currency: extractedData.salaryCurrency,
             compensation_type: extractedData.compensationType,
           };
@@ -4493,7 +4633,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setStep('review');
     setHasProceededToReview(true);  // Mark that user has proceeded to review (makes Stage 2 fields read-only)
     setHasFormattedForReview(true);  // Mark as formatted so we can skip on next "Next" click
-    step2DataSnapshot.current = JSON.stringify(reviewData);  // Update snapshot so returning without new edits skips
+    step2DataSnapshot.current = step2Fingerprint(reviewData, jobTitle);  // Update snapshot so returning without new edits skips
+    extractionInvalidatedFormat.current = false;  // Step 3 now matches the current Step 2 data
     // NOTE: Don't reset extractedDataModified here - it should persist to prevent reloading
     // user's deleted items from DB when navigating back to Stage 1/2
     setValidationErrors({});  // Clear validation errors since all validations passed
@@ -4520,8 +4661,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extractedData.industryType || undefined,
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
-        salary_min: parseSalaryInput(extractedData.salaryFrom),
-        salary_max: parseSalaryInput(extractedData.salaryTo),
+        salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
+        salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
         compensation_type: extractedData.compensationType,
         salary_currency: extractedData.salaryCurrency,
         employment_type: extractedData.employmentType,
@@ -4801,8 +4942,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
             supported_languages: extractedData.suggestedLanguages,
-            salary_min: parseSalaryInput(extractedData.salaryFrom),
-            salary_max: parseSalaryInput(extractedData.salaryTo),
+            salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
+            salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
             salary_currency: extractedData.salaryCurrency,
             compensation_type: extractedData.compensationType,
           };
@@ -4841,8 +4982,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extractedData.industryType || undefined,
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
-        salary_min: parseSalaryInput(extractedData.salaryFrom),
-        salary_max: parseSalaryInput(extractedData.salaryTo),
+        salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
+        salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
         compensation_type: extractedData.compensationType,
         salary_currency: extractedData.salaryCurrency,
         job_level: experiencePayload.jobLevel,
@@ -5136,8 +5277,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industry_type: extractedData.industryType || undefined,
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
-        salary_min: parseSalaryInput(extractedData.salaryFrom),
-        salary_max: parseSalaryInput(extractedData.salaryTo),
+        salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
+        salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
         compensation_type: extractedData.compensationType,
         salary_currency: extractedData.salaryCurrency,
         job_level: experiencePayload.jobLevel,
@@ -5328,7 +5469,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // a fresh (non-deterministic) LLM call that could return a different value
       // (e.g. overwriting a correctly-saved experience_min of 3.5 with 2) for text
       // that never changed.
-      if (effectiveEditingJD.creation_stage !== 'create') {
+      if (jdHasPersistedExtraction(effectiveEditingJD)) {
         setLastExtractedJD(effectiveEditingJD.description || '');
         setOriginalStage1Values({
           jobTitle: effectiveEditingJD.title || '',
@@ -5358,7 +5499,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // Load extracted data if:
       // 1. We're past the create step (draft JDs), OR
       // 2. It's a published JD (always has data regardless of stage)
-      if (effectiveEditingJD.creation_stage !== 'create' || effectiveEditingJD.status === 'published') {
+      if (jdHasPersistedExtraction(effectiveEditingJD) || effectiveEditingJD.status === 'published') {
         // Calculate actual values first, then set Required based on whether value exists
         const educationValue = effectiveEditingJD.education_requirements?.degree || '';
 
@@ -5457,12 +5598,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   }, [effectiveEditingJD]);
 
-  // Take snapshot of extractedData when first entering step 2 (for change detection in handlePublish)
+  // Seed the "what Step 3 was last built from" snapshot, once.
+  //
+  // Also seeds for a LOADED JD that is still showing Step 1, which the `step === 'extract'`
+  // condition alone did not cover. That gap mattered: a JD opened with ?stage=create in the
+  // link lands on Step 1 (see jdHasPersistedExtraction), so the snapshot stayed empty, and
+  // the chain-invalidation check above - which needs a non-empty baseline to compare the
+  // fresh extraction against - could never fire. That is the exact flow this was reported
+  // on: open a colleague's draft, edit Step 1, and Step 3 never re-formatted.
   useEffect(() => {
-    if (step === 'extract' && step2DataSnapshot.current === '') {
-      step2DataSnapshot.current = JSON.stringify(extractedData);
+    if (step2DataSnapshot.current !== '') return;
+    const loadedJDHasData = Boolean(effectiveEditingJD) && hasExtractedRequirementData();
+    if (step === 'extract' || loadedJDHasData) {
+      step2DataSnapshot.current = step2Fingerprint(extractedData, jobTitle);
     }
-  }, [step, extractedData]);
+  }, [step, extractedData, effectiveEditingJD]);
 
   // FIX-003: Show loading state when fetching JD in embedded mode
   if (loadingJD) {

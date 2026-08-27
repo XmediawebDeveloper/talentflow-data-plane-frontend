@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { jdService, JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { scoringService } from '@/lib/services/scoringService';
 
@@ -42,6 +42,24 @@ export interface JobVersionLineage {
    * the expanded table.
    */
   ensureLoaded: (key: string, jobId: string) => void;
+  /**
+   * Lineage rows per key, loaded for FILTERING — the version list the status
+   * pills need in order to see past the latest version.
+   *
+   * Deliberately separate from `lineages` above, and deliberately thin: it
+   * fetches ONLY the lineage, never the per-version JD records or scored-resume
+   * counts that the expanded table pulls in. Those are two requests per version;
+   * this has to run for every job on the page, so it stays at one request per
+   * job. Undefined for a key means "not loaded yet", which the caller treats as
+   * "no extra versions known" rather than as an empty history.
+   */
+  filterLineages: Record<string, JDLineageVersion[]>;
+  /**
+   * Load the filtering lineages for these jobs, skipping any already loaded or
+   * in flight. Safe to call on every render — it is a no-op once each key has
+   * landed.
+   */
+  ensureFilterLineages: (targets: { key: string; jobId: string }[]) => void;
 }
 
 export function useJobVersionLineage(): JobVersionLineage {
@@ -50,6 +68,11 @@ export function useJobVersionLineage(): JobVersionLineage {
   const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
   const [versionDetails, setVersionDetails] = useState<Record<string, JDResponse>>({});
   const [versionApplicants, setVersionApplicants] = useState<Record<string, number>>({});
+  const [filterLineages, setFilterLineages] = useState<Record<string, JDLineageVersion[]>>({});
+  /* A ref, not state: this only needs to stop a second fetch for the same key
+     being started before the first resolves, and putting it in state would
+     re-render the whole list on every request that starts and finishes. */
+  const filterLineagesInFlight = useRef<Set<string>>(new Set());
 
   /* Deliberately not cached the way the JD record is: scoring a resume changes
      this number, so it is re-counted every time the panel is opened. A failure
@@ -98,6 +121,34 @@ export function useJobVersionLineage(): JobVersionLineage {
     [refreshVersionApplicants],
   );
 
+  const ensureFilterLineages = useCallback(
+    (targets: { key: string; jobId: string }[]) => {
+      targets.forEach(({ key, jobId }) => {
+        if (!key || !jobId) return;
+        if (filterLineages[key] || filterLineagesInFlight.current.has(key)) return;
+        filterLineagesInFlight.current.add(key);
+        jdService
+          .getLineageVersions(jobId)
+          /* Every write is inside a promise callback, never synchronous with the
+             call — the caller runs this from an effect, and a synchronous
+             setState there would cascade renders. */
+          .then((rows) => {
+            setFilterLineages(prev => (prev[key] ? prev : { ...prev, [key]: rows || [] }));
+          })
+          .catch(() => {
+            /* Cached as empty so a failing job does not re-request on every
+               render. The pill then sees only what the main table gave it,
+               which is the pre-existing behaviour rather than a blank list. */
+            setFilterLineages(prev => (prev[key] ? prev : { ...prev, [key]: [] }));
+          })
+          .finally(() => {
+            filterLineagesInFlight.current.delete(key);
+          });
+      });
+    },
+    [filterLineages],
+  );
+
   const toggle = useCallback(
     (key: string, jobId: string) => {
       const wasExpanded = expandedKeys.has(key);
@@ -136,5 +187,7 @@ export function useJobVersionLineage(): JobVersionLineage {
     versionApplicants,
     toggle,
     ensureLoaded,
+    filterLineages,
+    ensureFilterLineages,
   };
 }

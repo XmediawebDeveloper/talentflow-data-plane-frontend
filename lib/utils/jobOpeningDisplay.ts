@@ -69,6 +69,46 @@ export const getDisplayStatus = (status: string, currentVersion?: number): strin
   return status;
 };
 
+/**
+ * Does ONE JD version satisfy a status pill?
+ *
+ * Evaluated per version, and the list keeps a job when any of its versions says
+ * yes — so a job appears under Draft because some version is a draft, even when
+ * its latest version is published, and vice versa. Section-by-section:
+ *
+ *   Published → Published OR Republished
+ *   Draft     → Draft only
+ *   Disabled  → Disabled only
+ *   Archived  → Archived only
+ *
+ * Published is the only combined condition. "Republished" is not a stored
+ * status — `getDisplayStatus` derives it from the publish counter over a status
+ * that is already `Published` — so the raw test covers it on its own. The
+ * display status is compared as well rather than relying on that: if
+ * "Republished" ever becomes a status in its own right, this keeps answering
+ * correctly instead of quietly dropping those versions out of the Published
+ * pill.
+ *
+ * 'all' is not this function's business — the caller short-circuits it, so the
+ * All Jobs filter keeps its own untouched behaviour.
+ */
+export const matchesStatusFilter = (job: Job, statusFilter: string): boolean => {
+  const pill = statusFilter.toLowerCase();
+  if (pill === 'all') return true;
+
+  const rawStatus = (job.status || '').toLowerCase();
+  const displayStatus = getDisplayStatus(job.status, job.currentVersion).toLowerCase();
+
+  if (pill === 'published') {
+    return rawStatus === 'published' || displayStatus === 'published' || displayStatus === 'republished';
+  }
+
+  /* Exact match for Draft, Disabled and Archived — no status is folded into
+     another. getDisplayStatus leaves all three untouched, so the two tests
+     agree; the display one is kept only for symmetry with the branch above. */
+  return rawStatus === pill || displayStatus === pill;
+};
+
 export interface BadgeTokens {
   bg: string;
   text: string;

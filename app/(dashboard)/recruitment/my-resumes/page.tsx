@@ -38,6 +38,7 @@ import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder, FolderDeletionInfo } from '@/lib/services/resumeService';
@@ -609,7 +610,7 @@ function DroppableFolderCard({
           {!hideActions && showActions && (
             <div
               role="menu"
-              className={`absolute right-0 w-52 rounded-lg border border-gray-200 bg-white py-1 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] z-50 ${
+              className={`absolute right-0 w-52 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-1 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] z-50 ${
                 actionsDropUp ? 'bottom-full mb-1' : 'top-full mt-1'
               }`}
               onClick={(e) => e.stopPropagation()}
@@ -619,10 +620,10 @@ function DroppableFolderCard({
                 role="menuitem"
                 disabled={!canUpload || !onUploadToFolder}
                 onClick={(e) => runFolderAction(e, () => onUploadToFolder?.(folder.id), !canUpload || !onUploadToFolder)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 disabled:text-gray-400 disabled:hover:bg-white disabled:hover:text-gray-400 transition-colors"
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
-                <Upload className="w-4 h-4" />
-                Upload to Folder
+                <Upload className={`w-4 h-4 ${canUpload && onUploadToFolder ? 'text-menu-icon-download' : ''}`} />
+                <span className={MENU_ITEM_SCALE_CLASS}>Upload to Folder</span>
               </button>
               <button
                 type="button"
@@ -630,32 +631,32 @@ function DroppableFolderCard({
                 disabled={!canCreateSubfolder || !onCreateSubfolder}
                 onClick={(e) => runFolderAction(e, () => onCreateSubfolder?.(folder.id), !canCreateSubfolder || !onCreateSubfolder)}
                 title={!canCreateSubfolder ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : undefined}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 disabled:text-gray-400 disabled:hover:bg-white disabled:hover:text-gray-400 transition-colors"
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
-                <Plus className="w-4 h-4" />
-                <span>Create Subfolder</span>
-                {!canCreateSubfolder && <span className="ml-auto text-xs text-gray-400">(max)</span>}
+                <Plus className={`w-4 h-4 ${canCreateSubfolder && onCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
+                <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
+                {!canCreateSubfolder && <span className="ml-auto text-xs text-gray-400 dark:text-slate-600">(max)</span>}
               </button>
               <button
                 type="button"
                 role="menuitem"
                 disabled={!canRename || !onStartRename}
                 onClick={(e) => runFolderAction(e, () => onStartRename?.(folder), !canRename || !onStartRename)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 disabled:text-gray-400 disabled:hover:bg-white disabled:hover:text-gray-400 transition-colors"
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
-                <Edit2 className="w-4 h-4" />
-                Rename Folder
+                <Edit2 className={`w-4 h-4 ${canRename && onStartRename ? 'text-menu-icon-edit' : ''}`} />
+                <span className={MENU_ITEM_SCALE_CLASS}>Rename Folder</span>
               </button>
-              <div className="my-1 border-t border-gray-100" />
+              <div className="my-1 border-t border-gray-100 dark:border-slate-700" />
               <button
                 type="button"
                 role="menuitem"
                 disabled={!canDelete || !onDeleteFolder}
                 onClick={(e) => runFolderAction(e, () => onDeleteFolder?.(folder.id), !canDelete || !onDeleteFolder)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 disabled:text-gray-400 disabled:hover:bg-white transition-colors"
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
-                Delete Folder
+                <span className={MENU_ITEM_SCALE_CLASS}>Delete Folder</span>
               </button>
             </div>
           )}
@@ -3721,19 +3722,26 @@ export default function MyResumesPage() {
 
   // Handle duplicate resolution
   const handleResolveDuplicates = async (resolutions: { fileIndex: number; action: 'discard' | 'overwrite' | 'version' }[]) => {
-    const toastId = toast.loading('Processing duplicate resolution...');
+    /* No "Processing duplicate resolution..." loading toast here — the
+       DuplicateResumeModal's Confirm All/Continue button shows its own
+       loading state while this runs, so a floating toast on top of it was
+       redundant. Only the final outcome gets a toast. */
     // Same as a plain upload: whatever batch this creates has to be claimed,
     // or the ownership filter will read it as another account's.
     const priorBatchIds = await snapshotBatchIds();
 
     try {
+      let discardedCount = 0;
+      let overwrittenCount = 0;
+      let versionedCount = 0;
+
       for (const resolution of resolutions) {
         const duplicateFile = duplicateFiles[resolution.fileIndex];
         if (!duplicateFile) continue;
 
         if (resolution.action === 'discard') {
           // Just skip this file
-          toast.success('New resume discarded, keeping existing', { id: toastId });
+          discardedCount += 1;
         } else {
           // Use the resolve duplicate and upload endpoint
           await resumeService.resolveDuplicateAndUpload(
@@ -3744,12 +3752,22 @@ export default function MyResumesPage() {
           );
 
           if (resolution.action === 'overwrite') {
-            toast.success('Resume overwritten successfully', { id: toastId });
+            overwrittenCount += 1;
           } else {
-            toast.success(`Resume saved as version ${(duplicateFile.existingResume.version || 1) + 1}`, { id: toastId });
+            versionedCount += 1;
           }
         }
       }
+
+      const summaryParts = [
+        discardedCount > 0 && `${discardedCount} discarded`,
+        overwrittenCount > 0 && `${overwrittenCount} overwritten`,
+        versionedCount > 0 && `${versionedCount} saved as new version${versionedCount > 1 ? 's' : ''}`,
+      ].filter(Boolean);
+      if (summaryParts.length > 0) {
+        toast.success(`Duplicate resolution complete: ${summaryParts.join(', ')}`);
+      }
+
       // Refresh full list from server to get correct data
       setTimeout(async () => {
         isFetchingRef.current = false;
@@ -3760,7 +3778,7 @@ export default function MyResumesPage() {
       }, 500);
     } catch (error: any) {
       console.error('Error resolving duplicates:', error);
-      toast.error('Failed to resolve duplicate', { id: toastId });
+      toast.error('Failed to resolve duplicate');
     } finally {
       setDuplicateFiles([]);
       setPendingUploadFolderId(undefined);
@@ -3867,7 +3885,7 @@ export default function MyResumesPage() {
             onApplyToJob={!isArchivedContext && hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleApplyToJob : undefined}
             onDownload={handleBulkDownload}
             onDelete={canDeleteMyResumes ? () => handleDeleteResumes(selectedResumes) : undefined}
-            folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
+            folders={folders.filter(f => f.id !== 'all')}
             onAssessment={!isArchivedContext && hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? handleAssessment : undefined}
             onArchive={!isArchivedContext && canArchiveMyResumes ? () => handleArchiveResumes(selectedResumes) : undefined}
             onUnarchive={isArchivedContext && canArchiveMyResumes ? () => handleUnarchiveResumes(selectedResumes) : undefined}
@@ -4130,7 +4148,8 @@ export default function MyResumesPage() {
               const currentFolderCanCreateSubfolder =
                 cardViewFolder !== null &&
                 cardViewFolder !== 'all' &&
-                canCreateNestedFolder(cardViewFolder);
+                canCreateNestedFolder(cardViewFolder) &&
+                !(currentFolderData?.name === 'Archived Resumes' && !currentFolderData?.parentId);
 
               // Get folders to display (top-level or children of current folder)
               const foldersToDisplay = cardViewFolder === null

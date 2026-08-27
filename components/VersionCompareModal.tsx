@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { X, History, FileText, Check } from 'lucide-react';
 import { buildUnifiedDiff, buildDiffSidePairs, type DiffLine } from '@/lib/utils/textDiff';
 import ReactMarkdown from 'react-markdown';
@@ -18,6 +18,16 @@ export interface CompareVersion {
    *  two sides aren't versions of one record, e.g. a resume on file against an
    *  upload that was refused. */
   label?: string;
+  /**
+   * A card describing this side, shown above the diff.
+   *
+   * Opt-in and supplied whole by the host, so this modal needs to know nothing
+   * about what is being compared: the JD version history passes its own version
+   * header card, and the résumé surfaces pass nothing and render exactly as
+   * before. Give both sides a card or neither — one alone reads as a missing
+   * half rather than a deliberate asymmetry.
+   */
+  card?: ReactNode;
 }
 
 interface VersionCompareModalProps {
@@ -216,7 +226,17 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden bg-gray-100">
+        <div className="flex-1 overflow-hidden bg-gray-100 flex flex-col">
+          {/* The two versions being compared, described in full — same cards the
+              host shows when a single version is opened on its own. Older left,
+              newer right, matching the diff panes below. */}
+          {(older.card || newer.card) && (
+            <div className="flex-shrink-0 grid grid-cols-1 lg:grid-cols-2 gap-2 p-3 border-b border-gray-200 bg-gray-50 dark:bg-slate-950 dark:border-slate-700 max-h-[35%] overflow-y-auto">
+              {older.card}
+              {newer.card}
+            </div>
+          )}
+          <div className="flex-1 overflow-hidden">
           {!olderText && !newerText ? (
             <div className="text-center text-gray-500 py-12">
               <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -310,6 +330,7 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
               </div>
             </div>
           )}
+          </div>
         </div>
 
         {/* Footer */}

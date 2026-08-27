@@ -1576,7 +1576,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // Re-acquiring a healthy camera would mint a new video track for nothing,
     // so only a genuinely dead/absent one is rebuilt.
     let cancelled = false;
-    const id = setInterval(async () => {
+    let attemptInFlight = false;
+    const attempt = async () => {
+      if (cancelled || attemptInFlight) return;
+      attemptInFlight = true;
+      try { await runRecovery(); } finally { attemptInFlight = false; }
+    };
+    const runRecovery = async () => {
       if (cancelled) return;
       const videoAlive = webcamStreamRef.current
         ?.getVideoTracks?.().some(t => t.readyState === 'live') ?? false;
@@ -1615,10 +1621,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (cur.isCameraActive && cur.isMicrophoneActive) {
         cancelled = true;
         clearInterval(id);
+        navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
         console.log('[InterviewUI] Device recovery: all media restored — overlay will clear');
       }
-    }, 2500);
-    return () => { cancelled = true; clearInterval(id); };
+    };
+
+    // EVENT-DRIVEN first, polling only as the safety net. `devicechange` fires
+    // the instant the OS re-enumerates a replugged camera/headset, so recovery
+    // starts immediately instead of waiting out a poll tick. Waiting for the
+    // tick was the single biggest contributor to the 5-10s resume lag: the
+    // candidate plugs the cable back in and nothing even ATTEMPTS to reacquire
+    // until the interval comes round.
+    const onDeviceChange = () => { void attempt(); };
+    navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
+    // Poll kept (and tightened from 2500ms) because devicechange is not
+    // reliable on every driver/OS combination, and because a device can be
+    // enumerated a moment before getUserMedia will actually open it — the
+    // retry is what covers that settling window.
+    const id = setInterval(() => { void attempt(); }, 700);
+    void attempt();  // don't wait a full tick for the first try either
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
+    };
   }, [isConnected, proctoringState.isCameraActive, proctoringState.isMicrophoneActive, initialMicDeviceId]);
 
   // ── Camera/mic disconnect: pause + 3-minute grace, then terminate ──────────

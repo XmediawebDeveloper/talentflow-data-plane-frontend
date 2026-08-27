@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye, Download, Calendar } from 'lucide-react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye, Download, Calendar, MapPin } from 'lucide-react';
 import { jdService, JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
@@ -9,6 +9,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
+import { formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
+import { formatSalaryRange } from '@/lib/utils/salary';
 
 interface JDVersionHistoryModalProps {
   isOpen: boolean;
@@ -41,6 +43,15 @@ interface JDHistoryVersion {
   employment_type?: string;
   remote_type?: string;
   industry_type?: string;
+  /* Location and pay, per version. Both are on the version's own JD record and
+     were simply never carried across, which is why the popup showed neither.
+     `location` is already flattened to a display string by mapVersion — the
+     record can hold either a single free-text location or a structured list. */
+  location?: string;
+  salary_min?: number;
+  salary_max?: number;
+  salary_currency?: string;
+  compensation_type?: string;
 }
 
 const formatVersionDate = (value?: string) => value ? formatIST(value) : 'Date not available';
@@ -76,6 +87,48 @@ const versionStatusLabel = (version: JDHistoryVersion): string => {
   return label === 'Published' && wasRepublished(version) ? 'Republished' : label;
 };
 
+/**
+ * Status pill colours for the version header card.
+ *
+ * Deliberately the same palette as the Job Details page's own header card
+ * (JobDetailView's getStatusBadgeClass), keyed on the label versionStatusLabel
+ * already produces — so a version reads the same in this popup as the JD does
+ * on the page behind it. Copied rather than imported because that helper is
+ * local to JobDetailView and this change is not meant to touch that file.
+ */
+const versionStatusBadgeClass = (label: string) => {
+  switch (label) {
+    case 'Published':
+      return 'bg-green-100 text-green-700 border-green-200';
+    case 'Republished':
+      return 'bg-blue-100 text-blue-700 border-blue-200';
+    case 'Draft':
+      return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    case 'Disabled':
+      return 'bg-red-100 text-red-700 border-red-200';
+    case 'Archived':
+      return 'bg-purple-100 text-purple-700 border-purple-200';
+    default:
+      return 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
+  }
+};
+
+/**
+ * A version's pay, formatted the way the Job Details header card formats it:
+ * the range through the shared salary formatter, with the compensation period
+ * appended. Empty string when the version records no pay at all, which is what
+ * the callers test to decide between the value and the placeholder.
+ */
+const formatVersionSalary = (version: JDHistoryVersion): string => {
+  const range = formatSalaryRange({
+    min: version.salary_min,
+    max: version.salary_max,
+    currency: version.salary_currency,
+  });
+  if (!range) return '';
+  return version.compensation_type ? `${range} / ${version.compensation_type}` : range;
+};
+
 const versionDate = (version: JDHistoryVersion) => version.published_at || version.created_at || '';
 
 const buildCompareText = (version: JDHistoryVersion) => {
@@ -87,6 +140,8 @@ const buildCompareText = (version: JDHistoryVersion) => {
     version.industry_type ? `Industry: ${version.industry_type}` : '',
     version.employment_type ? `Employment Type: ${version.employment_type}` : '',
     version.remote_type ? `Work Mode: ${version.remote_type}` : '',
+    version.location ? `Location: ${version.location}` : '',
+    formatVersionSalary(version) ? `Salary: ${formatVersionSalary(version)}` : '',
     '',
     'Job Description:',
     version.description || '',
@@ -113,7 +168,139 @@ const mapVersion = (lineageVersion: JDLineageVersion, detail?: JDResponse): JDHi
   employment_type: detail?.employment_type,
   remote_type: detail?.remote_type,
   industry_type: detail?.industry_type,
+  /* Single free-text location first, else the cities from the structured list —
+     the same fallback the Job Details page applies when it builds its own Job
+     object, so a version reads the same there and here.
+
+     `detail` is THIS version's record: the caller fetches it by
+     lineageVersion.id and pairs the two inside one closure, so a value can
+     never land on a different version than the one it came from. */
+  location: detail?.location
+    || (detail?.locations || []).map((entry) => entry?.city).filter(Boolean).join(', ')
+    || undefined,
+  salary_min: detail?.salary_min,
+  salary_max: detail?.salary_max,
+  salary_currency: detail?.salary_currency,
+  compensation_type: detail?.compensation_type,
 });
+
+/**
+ * One version, described as a card.
+ *
+ * Built to the same format as the first section below the breadcrumb on the Job
+ * Details page (the "Job Details Card" in JobDetailView): an identity row on top
+ * (ID chip · title · status pill), a metadata chip row beneath it, and an
+ * optional action pinned right. Same container, same chip vocabulary, same dot
+ * separators, so a version reads here exactly the way the JD reads on the page
+ * behind this popup.
+ *
+ * One component, three places: the single-version view and BOTH sides of the
+ * comparison popup — so the two versions being diffed are described exactly the
+ * way the version you opened on its own is.
+ *
+ * Its METRICS are deliberately tighter than the page card's — smaller padding,
+ * one step down the type scale, slimmer chips. Same design, less of it: this
+ * card lives in a dialog, and in the comparison popup two of them sit side by
+ * side in roughly half the width the page card gets. Colours, structure and chip
+ * vocabulary are untouched, so it still reads as the same card.
+ */
+function VersionHeaderCard({ version, action }: { version: JDHistoryVersion; action?: ReactNode }) {
+  const statusText = versionStatusLabel(version);
+  const salaryText = formatVersionSalary(version);
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-3">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          {/* Row 1: JD ID + Job Title + Status */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-1">
+            {version.job_id && (
+              <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
+                {version.job_id}
+              </span>
+            )}
+            <h3 className="font-normal text-gray-900 dark:text-slate-50 text-sm sm:text-base truncate">
+              {version.title}
+            </h3>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${versionStatusBadgeClass(statusText)}`}>
+              {statusText}
+            </span>
+            {version.is_latest_version && (
+              <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue text-white rounded text-xs font-medium whitespace-nowrap">
+                Latest
+              </span>
+            )}
+          </div>
+
+          {/* Row 2: Location + Salary + Department + Industry + Employment
+              Type + Work Mode + Posted On / By + Version */}
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-600 dark:text-slate-400">
+            {/* Location */}
+            <span className="inline-flex items-center gap-1 min-w-0">
+              <MapPin className="w-3 h-3 text-purple-600 shrink-0" />
+              <span className="truncate max-w-[180px]" title={version.location || undefined}>
+                {version.location || 'Not specified'}
+              </span>
+            </span>
+            <span className="text-gray-300">•</span>
+
+            {/* Salary */}
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${
+              salaryText
+                ? 'bg-green-50 text-green-700'
+                : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-normal italic'
+            }`}>
+              {salaryText || 'Salary not specified'}
+            </span>
+
+            {version.department && (
+              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
+                {version.department}
+              </span>
+            )}
+            {version.industry_type && (
+              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
+                {formatIndustryType(version.industry_type)}
+              </span>
+            )}
+            {version.employment_type && (
+              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
+                {formatEmploymentType(version.employment_type)}
+              </span>
+            )}
+            {version.remote_type && (
+              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
+                {formatEmploymentType(version.remote_type)}
+              </span>
+            )}
+            {/* Location and Salary always precede this, so the dot never
+                opens the row on its own. */}
+            <span className="text-gray-300">•</span>
+
+            <span className="inline-flex items-center gap-1">
+              <Calendar className="w-3 h-3" />
+              Posted {formatVersionDate(versionDate(version))}
+            </span>
+            <span className="text-gray-300">•</span>
+
+            <span>By {version.created_by_name || 'Unknown'}</span>
+            <span className="text-gray-300">•</span>
+
+            {/* Version badge — the Job Details card's purple pill, static here:
+                this popup IS the version picker, so it has no menu to drop. */}
+            <span className="inline-flex items-center px-2 py-0.5 bg-purple-600 text-white rounded-full text-xs font-medium">
+              v{version.version_number}.0
+            </span>
+          </div>
+        </div>
+
+        {/* Actions — pinned right, mirroring the Job Details card. Omitted on
+            the comparison sides, which are read-only descriptions. */}
+        {action && <div className="flex items-center gap-2 shrink-0">{action}</div>}
+      </div>
+    </div>
+  );
+}
 
 export default function JDVersionHistoryModal({
   isOpen,
@@ -126,7 +313,7 @@ export default function JDVersionHistoryModal({
   const [versions, setVersions] = useState<JDHistoryVersion[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<JDHistoryVersion | null>(null);
   const [compareChecked, setCompareChecked] = useState<string[]>([]);
-  const [comparePair, setComparePair] = useState<{ older: CompareVersion; newer: CompareVersion } | null>(null);
+  const [comparePair, setComparePair] = useState<{ older: JDHistoryVersion; newer: JDHistoryVersion } | null>(null);
 
   const fetchVersionHistory = useCallback(async () => {
     setLoading(true);
@@ -204,21 +391,20 @@ export default function JDVersionHistoryModal({
 
   const openComparison = (a: JDHistoryVersion, b: JDHistoryVersion) => {
     const [older, newer] = (a.version_number || 0) <= (b.version_number || 0) ? [a, b] : [b, a];
-    setComparePair({
-      older: {
-        version: older.version_number,
-        label: `Version ${older.version_number}.0`,
-        name: `${older.title} - ${formatVersionDate(versionDate(older))}`,
-        text: older.description || '',
-      },
-      newer: {
-        version: newer.version_number,
-        label: `Version ${newer.version_number}.0`,
-        name: `${newer.title} - ${formatVersionDate(versionDate(newer))}`,
-        text: newer.description || '',
-      },
-    });
+    setComparePair({ older, newer });
   };
+
+  /* One side of the comparison, in the shape VersionCompareModal wants. The
+     `card` is the same VersionHeaderCard the single-version view renders, so a
+     version is described identically whether you open it alone or diff it — no
+     action on it, because a comparison side is a read-only description. */
+  const toCompareSide = (version: JDHistoryVersion): CompareVersion => ({
+    version: version.version_number,
+    label: `Version ${version.version_number}.0`,
+    name: `${version.title} - ${formatVersionDate(versionDate(version))}`,
+    text: version.description || '',
+    card: <VersionHeaderCard version={version} />,
+  });
 
   const compareSelected = () => {
     if (compareChecked.length !== 2) return;
@@ -227,13 +413,49 @@ export default function JDVersionHistoryModal({
     if (a && b) openComparison(a, b);
   };
 
-  const handleDownload = (version: JDHistoryVersion) => {
-    const content = buildCompareText(version);
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  /* Downloads the version as a Word document.
+
+     The content still comes from buildCompareText, so exactly the same fields
+     in the same order are written as before — only the container changed from
+     text/plain to a real .docx. Each line becomes its own paragraph, which is
+     also what makes a multi-line description read correctly in Word rather than
+     collapsing into one run.
+
+     `docx` is imported dynamically, the way the AI-interview Q&A export does
+     it, so the library stays out of the bundle until someone actually
+     downloads. */
+  const handleDownload = async (version: JDHistoryVersion) => {
+    const { Document, Packer, Paragraph, TextRun } = await import('docx');
+
+    const lines = buildCompareText(version).split('\n');
+    /* Everything before the first blank line is the `Label: value` metadata
+       block; past it is the description body, which is left as plain runs
+       because a colon inside prose is not a label. */
+    const metadataEnd = lines.indexOf('');
+
+    const children = lines.map((line, index) => {
+      const label = index < metadataEnd ? /^([^:]+): ?(.*)$/.exec(line) : null;
+
+      if (label) {
+        return new Paragraph({
+          children: [
+            new TextRun({ text: `${label[1]}: `, bold: true }),
+            new TextRun({ text: label[2] }),
+          ],
+        });
+      }
+
+      // Blank lines included — an empty paragraph is the spacer Word expects.
+      return new Paragraph({
+        children: [new TextRun({ text: line, bold: line === 'Job Description:' })],
+      });
+    });
+
+    const blob = await Packer.toBlob(new Document({ sections: [{ properties: {}, children }] }));
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${version.title.replace(/[^a-z0-9]/gi, '_')}_v${version.version_number}.txt`;
+    a.download = `${version.title.replace(/[^a-z0-9]/gi, '_')}_v${version.version_number}.docx`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -323,45 +545,26 @@ export default function JDVersionHistoryModal({
             </div>
           ) : selectedVersion ? (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl">
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <span className="px-3 py-1.5 bg-brand-blue text-white rounded-lg text-sm font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                    v{selectedVersion.version_number}.0
-                  </span>
-                  {selectedVersion.is_latest_version && (
-                    <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs font-medium">
-                      Latest
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-600 dark:text-slate-400 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5" />
-                    {formatVersionDate(versionDate(selectedVersion))}
-                  </span>
-                  <span className="text-xs text-gray-600 dark:text-slate-400">
-                    {versionStatusLabel(selectedVersion)}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleDownload(selectedVersion)}
-                  className="flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors font-medium"
-                >
-                  <Download className="w-4 h-4" />
-                  Download
-                </button>
-              </div>
+              {/* The version being viewed, described by the shared card. */}
+              <VersionHeaderCard
+                version={selectedVersion}
+                action={
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(selectedVersion)}
+                    className="flex items-center justify-center p-1.5 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors font-medium"
+                    aria-label="Download this version as a Word document"
+                    title="Download this version as a Word document"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                }
+              />
 
               <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-2">
-                  {selectedVersion.title}
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-600 dark:text-slate-400 mb-4">
-                  {selectedVersion.job_id && <span>Job ID: {selectedVersion.job_id}</span>}
-                  {selectedVersion.department && <span>Department: {selectedVersion.department}</span>}
-                  {selectedVersion.industry_type && <span>Industry: {selectedVersion.industry_type}</span>}
-                  {selectedVersion.created_by_name && <span>By {selectedVersion.created_by_name}</span>}
-                </div>
-                <div className="h-px bg-gray-200 dark:bg-slate-700 mb-4" />
+                {/* Identity and metadata live in the header card above —
+                    repeating them here put the same facts on screen twice.
+                    This card is the description body. */}
                 {selectedVersion.description ? (
                   <div className="prose prose-sm max-w-none text-gray-700 dark:text-slate-300 leading-relaxed markdown-content">
                     <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
@@ -519,8 +722,8 @@ export default function JDVersionHistoryModal({
       {comparePair && (
         <div onClick={(e) => e.stopPropagation()}>
           <VersionCompareModal
-            older={comparePair.older}
-            newer={comparePair.newer}
+            older={toCompareSide(comparePair.older)}
+            newer={toCompareSide(comparePair.newer)}
             contentFormat="markdown"
             onClose={() => {
               setComparePair(null);

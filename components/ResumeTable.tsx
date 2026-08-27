@@ -3,7 +3,8 @@
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
 import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
 import { Resume, Folder } from '@/lib/types/types';
@@ -30,10 +31,11 @@ const resumeActionMenuItemRedClass = 'group w-full flex items-center gap-2 px-3 
 // Drag item type for resumes
 const RESUME_DRAG_TYPE = 'RESUME';
 
-/* Room the ⋮ menu needs below its trigger before it flips upward instead.
-   Sized for the tallest the menu gets — seven options plus its padding — so a
-   full menu on a last row still clears the pagination bar. */
-const ACTION_MENU_MIN_SPACE = 330;
+/* Geometry for the portalled ⋮ menu — mirrors FolderTree's folder-actions
+   menu. Right-aligned to its trigger, w-52 (208px). */
+const ACTION_MENU_WIDTH = 208; // w-52
+const ACTION_MENU_GAP = 4; // matches the old mt-1/mb-1 spacing
+const ACTION_MENU_EDGE = 8; // smallest gap left to any viewport edge
 
 interface DragItem {
   id: string;
@@ -98,7 +100,7 @@ function DraggableResumeRow({ resume, selectedResumes, children, className, onVi
       {draggable && (
         <td
           className={`sticky left-0 z-0 w-10 min-w-[40px] max-w-[40px] px-2 py-3 ${
-            selectedResumes.includes(resume.id) ? 'bg-[#e7ecf5]' : 'bg-white group-hover:bg-[#f3f5fa]'
+            selectedResumes.includes(resume.id) ? 'bg-[#e7ecf5] dark:bg-transparent' : 'bg-white group-hover:bg-[#f3f5fa]'
           }`}
         >
           <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab hover:bg-gray-100 rounded p-1 flex items-center justify-center">
@@ -224,9 +226,15 @@ export default function ResumeTable({
 }: ResumeTableProps) {
   const router = useRouter();
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
-  /* Whether the open ⋮ menu opens upward. Decided when it opens, from the
-     trigger's distance to the bottom of the viewport. */
-  const [actionMenuDropUp, setActionMenuDropUp] = useState(false);
+  /* The ⋮ menu used to be absolutely positioned inside `.tf-table-shell`,
+     which is `overflow-auto` — clipping the menu on the last few rows
+     regardless of z-index, since overflow clipping isn't something z-index
+     can escape. It is portalled to the body now (same fix as FolderTree's
+     folder-actions menu) and placed against the viewport from the trigger's
+     own coordinates. */
+  const [actionMenuAnchor, setActionMenuAnchor] = useState<DOMRect | null>(null);
+  const [actionMenuPosition, setActionMenuPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
   /** Set while the version history is being fetched for the Files column. */
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
@@ -240,16 +248,68 @@ export default function ResumeTable({
   const [showAddTagsModal, setShowAddTagsModal] = useState(false);
   const [selectedResumeForAction, setSelectedResumeForAction] = useState<Resume | null>(null);
 
+  const closeActionMenu = () => {
+    setOpenActionMenu(null);
+    setActionMenuAnchor(null);
+    setActionMenuPosition(null);
+  };
+
   // Same outside-click close behavior as the Job Openings three-dot menu.
   useEffect(() => {
     const handleClickOutside = () => {
       if (openActionMenu) {
-        setOpenActionMenu(null);
+        closeActionMenu();
       }
     };
 
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
+  }, [openActionMenu]);
+
+  /* Measured in a layout effect so the corrected position lands before paint —
+     right-aligned to the trigger, dropping below it when there's room and
+     flipping above when there isn't, clamped away from every viewport edge. */
+  useLayoutEffect(() => {
+    if (!openActionMenu || !actionMenuAnchor) return;
+    const menu = actionMenuRef.current;
+    if (!menu) return;
+
+    const viewportH = window.innerHeight;
+    const viewportW = window.innerWidth;
+    const height = menu.offsetHeight;
+    const spaceBelow = viewportH - actionMenuAnchor.bottom - ACTION_MENU_GAP - ACTION_MENU_EDGE;
+    const spaceAbove = actionMenuAnchor.top - ACTION_MENU_GAP - ACTION_MENU_EDGE;
+    const flipUp = height > spaceBelow && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(120, flipUp ? spaceAbove : spaceBelow);
+    const clampedHeight = Math.min(height, maxHeight);
+
+    const top = flipUp
+      ? Math.max(ACTION_MENU_EDGE, actionMenuAnchor.top - ACTION_MENU_GAP - clampedHeight)
+      : Math.min(actionMenuAnchor.bottom + ACTION_MENU_GAP, viewportH - ACTION_MENU_EDGE - clampedHeight);
+    const left = Math.min(
+      Math.max(ACTION_MENU_EDGE, actionMenuAnchor.right - ACTION_MENU_WIDTH),
+      viewportW - ACTION_MENU_EDGE - ACTION_MENU_WIDTH,
+    );
+
+    setActionMenuPosition(prev =>
+      prev && prev.top === top && prev.left === left && prev.maxHeight === maxHeight
+        ? prev
+        : { top, left, maxHeight },
+    );
+  }, [openActionMenu, actionMenuAnchor]);
+
+  // Fixed coordinates go stale the moment anything scrolls under them —
+  // close on scroll (capture, to catch the table shell's own scrolling) and
+  // resize, same as FolderTree's folder-actions menu.
+  useEffect(() => {
+    if (!openActionMenu) return;
+    const dismiss = () => closeActionMenu();
+    window.addEventListener('scroll', dismiss, true);
+    window.addEventListener('resize', dismiss);
+    return () => {
+      window.removeEventListener('scroll', dismiss, true);
+      window.removeEventListener('resize', dismiss);
+    };
   }, [openActionMenu]);
 
   /* Custom row order. Only ids are kept — the rows themselves come from the
@@ -517,7 +577,7 @@ export default function ResumeTable({
                 <td
                   className={`sticky ${draggable ? 'left-10' : 'left-0'} z-0 px-4 py-3 align-middle border-r border-gray-200 ${
                     selectedResumes.includes(resume.id)
-                      ? 'bg-[#e7ecf5]'
+                      ? 'bg-[#e7ecf5] dark:bg-transparent'
                       : 'bg-white group-hover:bg-[#f3f5fa]'
                   }`}
                   onClick={(e) => e.stopPropagation()}
@@ -685,41 +745,42 @@ export default function ResumeTable({
                             e.stopPropagation();
                             const willOpen = openActionMenu !== resume.id;
                             if (willOpen) {
-                              /* Flip the menu upward when there isn't room for
-                                 it below the trigger. On the last rows a
-                                 downward menu ran past the table and was cut
-                                 off by the scroll shell, colliding with the
-                                 horizontal scrollbar and the pagination bar.
-
-                                 Measured against the scroll shell, not the
-                                 viewport: the shell is what clips the menu, and
-                                 its bottom edge usually sits well above the
-                                 bottom of the window. */
                               const trigger = e.currentTarget as HTMLElement;
-                              const rect = trigger.getBoundingClientRect();
-                              const shell = trigger.closest('.tf-table-shell');
-                              const clipBottom = shell
-                                ? shell.getBoundingClientRect().bottom
-                                : window.innerHeight;
-                              setActionMenuDropUp(
-                                Math.min(clipBottom, window.innerHeight) - rect.bottom < ACTION_MENU_MIN_SPACE,
-                              );
+                              setActionMenuAnchor(trigger.getBoundingClientRect());
+                              setActionMenuPosition(null);
+                              setOpenActionMenu(resume.id);
+                            } else {
+                              closeActionMenu();
                             }
-                            setOpenActionMenu(willOpen ? resume.id : null);
                           }}
                           className="h-7 w-7 flex items-center justify-center bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-all"
                         >
                           <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
                         </button>
-                        {openActionMenu === resume.id && (
-                          <div className={`absolute right-0 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[9999] ${
-                            actionMenuDropUp ? 'bottom-full mb-1' : 'top-full mt-1'
-                          }`}>
+                        {openActionMenu === resume.id && actionMenuAnchor && typeof document !== 'undefined' && createPortal(
+                          <div
+                            ref={actionMenuRef}
+                            /* `fixed` + portal: outside `.tf-table-shell`'s
+                               `overflow-auto` box, so the menu is never clipped
+                               regardless of z-index — overflow clipping isn't
+                               something z-index can escape. */
+                            className="fixed w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[9999] overflow-y-auto overscroll-contain"
+                            style={{
+                              top: actionMenuPosition?.top ?? actionMenuAnchor.bottom + ACTION_MENU_GAP,
+                              left: actionMenuPosition?.left ?? Math.max(ACTION_MENU_EDGE, actionMenuAnchor.right - ACTION_MENU_WIDTH),
+                              maxHeight: actionMenuPosition?.maxHeight,
+                              // Hidden for the one frame before the layout
+                              // effect measures it, so it never flashes at the
+                              // unclamped position.
+                              visibility: actionMenuPosition ? 'visible' : 'hidden',
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onQuickView(resume);
-                                setOpenActionMenu(null);
+                                closeActionMenu();
                               }}
                               className={resumeActionMenuItemClass}
                             >
@@ -734,7 +795,7 @@ export default function ResumeTable({
                               <button
                                 onClick={async (e) => {
                                   e.stopPropagation();
-                                  setOpenActionMenu(null);
+                                  closeActionMenu();
                                   try {
                                     toast.loading('Downloading resume...', { id: 'download' });
                                     const blob = await resumeService.download(resume.id);
@@ -764,7 +825,7 @@ export default function ResumeTable({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   openShareModal(resume);
-                                  setOpenActionMenu(null);
+                                  closeActionMenu();
                                 }}
                                 className={resumeActionMenuItemClass}
                               >
@@ -778,7 +839,7 @@ export default function ResumeTable({
                                   e.stopPropagation();
                                   setSelectedResumeForAction(resume);
                                   setShowAddTagsModal(true);
-                                  setOpenActionMenu(null);
+                                  closeActionMenu();
                                 }}
                                 className={resumeActionMenuItemClass}
                               >
@@ -792,7 +853,7 @@ export default function ResumeTable({
                                   e.stopPropagation();
                                   setSelectedResumeForAction(resume);
                                   setShowArchiveModal(true);
-                                  setOpenActionMenu(null);
+                                  closeActionMenu();
                                 }}
                                 className={resumeActionMenuItemClass}
                               >
@@ -805,7 +866,7 @@ export default function ResumeTable({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onDelete?.(resume.id);
-                                  setOpenActionMenu(null);
+                                  closeActionMenu();
                                 }}
                                 className={resumeActionMenuItemRedClass}
                               >
@@ -813,7 +874,8 @@ export default function ResumeTable({
                                 <span className={MENU_ITEM_SCALE_CLASS}>Delete Resume</span>
                               </button>
                             )}
-                          </div>
+                          </div>,
+                          document.body,
                         )}
                       </div>
                     </>
