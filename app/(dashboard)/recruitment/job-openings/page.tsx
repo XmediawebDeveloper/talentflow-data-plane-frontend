@@ -334,6 +334,20 @@ export default function JobOpeningsPage() {
     }
   };
 
+  /* Statuses we have successfully written, by JD version id.
+   *
+   * The main list rows re-render from `jobs` below, but the View Versions table
+   * renders from a separately fetched, cached lineage that knows nothing about
+   * an action taken since it loaded — so an archived or disabled version kept
+   * showing its old badge until the panel was reopened. Each entry is written
+   * ONLY after the backend confirmed the change, so the badge can never claim a
+   * status the database does not hold.
+   *
+   * Keyed by version id, so one row moves and its siblings do not. */
+  const [versionStatusOverrides, setVersionStatusOverrides] = useState<Record<string, string>>({});
+  const markVersionStatus = (versionId: string, status: string) =>
+    setVersionStatusOverrides(prev => ({ ...prev, [versionId]: status }));
+
   const handleDisableJob = (job: Job) => {
     // Show confirmation dialog instead of directly disabling
     setDisableDialog({ open: true, job });
@@ -348,6 +362,7 @@ export default function JobOpeningsPage() {
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: 'Disabled' } : j
       ));
+      markVersionStatus(job.id, 'disabled');
       toast.info(`"${job.title}" has been disabled`);
     } catch (error) {
       toast.error('Failed to disable job');
@@ -362,6 +377,7 @@ export default function JobOpeningsPage() {
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: 'Published' } : j
       ));
+      markVersionStatus(job.id, 'published');
       toast.success(`"${job.title}" has been republished`);
     } catch (error) {
       toast.error('Failed to republish job');
@@ -374,6 +390,7 @@ export default function JobOpeningsPage() {
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: 'Archived' } : j
       ));
+      markVersionStatus(job.id, 'archived');
       toast.success(`"${job.title}" has been archived`);
     } catch (error) {
       toast.error('Failed to archive job');
@@ -386,6 +403,7 @@ export default function JobOpeningsPage() {
       setJobs(prev => prev.map(j =>
         j.id === job.id ? { ...j, status: 'Published' } : j
       ));
+      markVersionStatus(job.id, 'published');
       toast.success(`"${job.title}" has been unarchived and published`);
     } catch (error) {
       toast.error('Failed to unarchive job');
@@ -487,6 +505,7 @@ export default function JobOpeningsPage() {
         onUpdateJobStatus={handleUpdateJobStatus}
         onEditJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleEditJob : undefined}
         onPublishJob={hasPermission('canCreateJD') || isTenantAdmin ? handlePublishJob : undefined}
+        versionStatusOverrides={versionStatusOverrides}
         onDisableJob={isTenantAdmin || hasPermission('canDisableJD') ? handleDisableJob : undefined}
         onRepublishJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleRepublishJob : undefined}
         onArchiveJob={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchiveJob : undefined}

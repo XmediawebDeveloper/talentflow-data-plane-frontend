@@ -2,7 +2,7 @@
 
 import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -11,14 +11,16 @@ import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import {
-  collapseToLatestVersions,
   formatEmploymentType,
   formatIndustryType,
   formatLastUpdated,
   getCreationMethodConfig,
   getDisplayStatus,
+  mapJDStatus,
+  matchesStatusFilter,
   getPublishedJobs,
   getStatusConfig,
+  collapseToLatestVersions,
   groupByLineage,
   sortJobs,
 } from '@/lib/utils/jobOpeningDisplay';
@@ -61,6 +63,13 @@ interface JobsListingProps {
   onScoreResumes?: (job: Job) => void;
   onUpdateJobStatus?: (jobId: string, status: Job['status']) => void;
   onEditJob?: (job: Job) => void;
+  /**
+   * Statuses the host has successfully written since the version lineage was
+   * fetched, by version id. Forwarded straight to the View Versions table, whose
+   * cached lineage would otherwise keep showing a version's pre-action badge
+   * until the panel was reopened. See JobVersionHistoryPanel.statusOverrides.
+   */
+  versionStatusOverrides?: Record<string, string>;
   onPublishJob?: (job: Job) => void;
   onDisableJob?: (job: Job) => void;
   onRepublishJob?: (job: Job) => void;
@@ -89,7 +98,7 @@ interface JobsListingProps {
   masterDataLinks?: { id: string; label: string; href: string; icon: LucideIcon }[];
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, masterDataLinks }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onUpdateJobStatus, onEditJob, versionStatusOverrides, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, masterDataLinks }: JobsListingProps) {
   const dialog = useGlobalDialog();
   const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
@@ -158,6 +167,22 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
      applicant counts, all from the shared hook so the Apply to Job dialog opens
      the same history from the same endpoints. */
   const versionLineage = useJobVersionLineage();
+  /* One target per job: the lineage key, and the id to fetch that lineage by.
+     Memoised on `jobs` so the effect below is not handed a fresh array on every
+     render — `groupByLineage` builds a new Map each call. */
+  const lineageFilterTargets = useMemo(
+    () => Array.from(groupByLineage(jobs).entries(), ([key, bucket]) => ({ key, jobId: bucket[0].id })),
+    [jobs],
+  );
+  /* The status pills answer from the version history as well as the main table,
+     so that history has to be loaded for every job — but ONLY once a pill is
+     actually selected. All Jobs needs none of it and pays nothing: no requests
+     fire until the user picks Published, Draft, Disabled or Archived. */
+  const { ensureFilterLineages } = versionLineage;
+  useEffect(() => {
+    if (statusFilter === 'all') return;
+    ensureFilterLineages(lineageFilterTargets);
+  }, [statusFilter, lineageFilterTargets, ensureFilterLineages]);
   const toggleVersions = versionLineage.toggle;
 
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -294,7 +319,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     },
   );
 
-  const filteredJobs = jobs.filter(job => {
+  const criteriaMatchedJobs = jobs.filter(job => {
     // Enhanced search - search across multiple fields
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = searchQuery === '' || (
@@ -312,7 +337,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       formatEmploymentType((job as any).workMode).toLowerCase().includes(searchLower)  // Also search formatted work mode
     );
 
-    const matchesStatus = statusFilter === 'all' || job.status.toLowerCase() === statusFilter.toLowerCase();
     const matchesLocation = locationFilter === 'all' || job.location === locationFilter;
     const matchesDepartment = departmentFilter === 'all' || job.department === departmentFilter;
     const matchesIndustry = industryFilter === 'all' || job.industry_type === industryFilter;
@@ -390,7 +414,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       else if (applicantsFilter === 'high') matchesApplicants = count >= 50;
     }
 
-    return matchesSearch && matchesStatus && matchesLocation && matchesDepartment &&
+    /* Status is deliberately NOT here — see the lineage-aware selection below.
+       It cannot be decided one row at a time, because the version that carries
+       the status the pill asks for may not be among these rows at all. */
+    return matchesSearch && matchesLocation && matchesDepartment &&
            matchesIndustry && matchesEmploymentType && matchesExperience && matchesDatePosted &&
            matchesApplicants && matchesCreationMethod;
   });
@@ -408,8 +435,60 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
      Keyed on `job_id` because that is what the lineage shares; rows without one
      (drafts that never got an ID) fall back to their own id and so stay
      individual. "Latest" is the highest version_number present — read from the
-     data, never assumed to be first or last in the response. */
-  const dedupedJobs = collapseToLatestVersions(filteredJobs);
+     data, never assumed to be first or last in the response.
+
+     One row per JOB under every filter, status pills included: a pill selects
+     which JOBS to show, and the version that matched it stands for the job. The
+     representative being the newest version that PASSED is what makes the row's
+     own badge agree with the pill you clicked — under Archived you see the
+     archived version, not the draft that happens to be newer.
+
+     ── Two sources, one answer ─────────────────────────────────────────────
+     A status pill is answered from the main table's rows AND from the View
+     Versions history, because the list endpoint does not necessarily send every
+     version: a job whose only archived version is v1 can arrive here as its
+     latest row alone, and the Archived pill would never see it. So when no row
+     in a group carries the status, its lineage is consulted too, and a matching
+     version there is rendered as a row built from the group's own row — the same
+     stand-in the version table itself builds (spread the job, point it at the
+     version's id/title/status/number). */
+  const statusSelectedJobs = statusFilter === 'all'
+    ? collapseToLatestVersions(criteriaMatchedJobs)
+    : Array.from(groupByLineage(criteriaMatchedJobs).entries(), ([key, bucket]) => {
+      /* bucket is newest-version-first (groupByLineage sorts it), so the first
+         row that matches IS the newest matching version. */
+      const matchedRow = bucket.find(row => matchesStatusFilter(row, statusFilter));
+      if (matchedRow) return matchedRow;
+
+      /* Nothing in the main table matched. Ask the version history — undefined
+         means it has not loaded yet, and the group simply drops out until it
+         does rather than flashing in with the wrong badge. */
+      const lineage = versionLineage.filterLineages[key];
+      if (!lineage) return null;
+
+      const base = bucket[0];
+      const matchedVersion = lineage
+        .map(version => ({
+          version,
+          /* The lineage carries the raw DB status ('published'); matchesStatusFilter
+             speaks the Job type's capitalised form, and needs current_version to
+             tell Published from Republished. */
+          asJob: {
+            ...base,
+            id: version.id,
+            title: version.title || base.title,
+            status: mapJDStatus(version.status || ''),
+            currentVersion: version.current_version ?? base.currentVersion,
+            versionNumber: version.version_number ?? base.versionNumber,
+          } as Job,
+        }))
+        .filter(({ asJob }) => matchesStatusFilter(asJob, statusFilter))
+        .sort((a, b) => (b.version.version_number ?? 1) - (a.version.version_number ?? 1))[0];
+
+      return matchedVersion ? matchedVersion.asJob : null;
+    }).filter((row): row is Job => row !== null);
+
+  const dedupedJobs = statusSelectedJobs;
 
   /* Grouped over the WHOLE list, not the filtered one, so the counts below
      describe the library rather than the current filter. The expanded history
@@ -1661,6 +1740,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                           loading={versionLineage.isLoading(versionKey)}
                           versionDetails={versionLineage.versionDetails}
                           versionApplicants={versionLineage.versionApplicants}
+                          statusOverrides={versionStatusOverrides}
                           onRowClick={(versionId) => router.push(`/recruitment/job-details?id=${versionId}`)}
                           renderAction={(versionJob) => (
                             <DropdownMenu>
