@@ -7,7 +7,8 @@ interface AITalentMatchSelectJobModalProps {
   resumes: Resume[];
   jobs: Job[];
   onClose: () => void;
-  onMatch: (resumeIds: string[], jobId: string) => void;
+  /** The third argument is the job record itself — see ApplyToJobModal.onApply. */
+  onMatch: (resumeIds: string[], jobId: string, jobRecord?: Job) => void;
   stayOnCurrentPage?: boolean;
   confirmLabel?: string;
 }
@@ -38,9 +39,9 @@ export default function AITalentMatchSelectJobModal({
       stayOnCurrentPage={stayOnCurrentPage}
       confirmLabel={confirmLabel}
       // One job at a time here too, so the first id is the whole answer.
-      onApply={(resumeIds, jobIds) => {
+      onApply={(resumeIds, jobIds, selectedJobRecords) => {
         if (resumeIds.length === 0 || !jobIds[0]) return;
-        onMatch(resumeIds, jobIds[0]);
+        onMatch(resumeIds, jobIds[0], selectedJobRecords?.[0]);
       }}
     />
   );

@@ -131,6 +131,17 @@ interface ScoredResumesTableProps {
    * menu then offers Assessment alone.
    */
   onInviteAIInterview?: (candidate: { name: string; email: string; resumeId?: string }) => void;
+  /**
+   * Whether the host JD actually has a published assessment / a live AI
+   * interview to invite candidates to. A row's Invite menu only offers what
+   * exists: with neither, the whole Invite button is disabled rather than
+   * opening a menu whose every entry dead-ends in "create one first".
+   *
+   * `undefined` means the host doesn't track this (the Resume Scoring global
+   * view spans many JDs), and the entry keeps its permission-only gate.
+   */
+  assessmentConfigured?: boolean;
+  aiInterviewConfigured?: boolean;
 }
 
 export default function ScoredResumesTable({
@@ -146,10 +157,26 @@ export default function ScoredResumesTable({
   isGlobalView = false,
   bulkActions,
   onScoreResumes,
-  onInviteAIInterview
+  onInviteAIInterview,
+  assessmentConfigured,
+  aiInterviewConfigured
 }: ScoredResumesTableProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();  // Get tenant info from auth context
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
+
+  /* Invite gating. An entry is offered when the viewer may use it AND the JD
+     has something to invite to; `undefined` from the host means unknown, which
+     is treated as "don't gate" so the global scoring view is unchanged.
+     With neither entry available the trigger itself goes disabled — matching
+     the Assessment / AI Interview sections' own Send Invite buttons on the Job
+     Details page, which read the same two flags. */
+  const canInviteAssessment = canCreateAssessments && assessmentConfigured !== false;
+  const canInviteAIInterview = !!onInviteAIInterview && aiInterviewConfigured !== false;
+  const inviteDisabled = !canInviteAssessment && !canInviteAIInterview;
+  const inviteDisabledTitle =
+    canCreateAssessments || onInviteAIInterview
+      ? 'No published assessment or AI interview for this job yet'
+      : undefined;
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
@@ -912,9 +939,17 @@ Best regards`);
                 {canCreateAssessments && (
                   <button
                     onClick={() => setShowBulkInviteModal(true)}
-                    disabled={availableUnits === 0}
+                    /* Bulk Invite goes to assessments too, so it takes the same
+                       "is there one on this JD" gate as the per-row entry. */
+                    disabled={!canInviteAssessment || availableUnits === 0}
                     className="h-9 px-3.5 text-sm bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={availableUnits === 0 ? 'No assessment units available' : `Bulk invite ${selectedResumes.length} candidates`}
+                    title={
+                      !canInviteAssessment
+                        ? 'No published assessment for this job yet'
+                        : availableUnits === 0
+                          ? 'No assessment units available'
+                          : `Bulk invite ${selectedResumes.length} candidates`
+                    }
                   >
                     <Send className="w-4 h-4" />
                     Bulk Invite ({selectedResumes.length})
@@ -1133,16 +1168,18 @@ Best regards`);
                 {/* Invite Column — every row gets the button, whatever its
                     match status, so a scored candidate can always be invited.
                     The menu carries the two things a candidate can be invited
-                    to; each entry is gated by its own permission rather than
-                    hiding the whole control. */}
+                    to; each entry is gated by its own permission and by whether
+                    that section exists on this JD, rather than hiding the whole
+                    control. Neither configured → the button is disabled. */}
                 <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                   {(canCreateAssessments || onInviteAIInterview) ? (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
                           aria-label="Invite"
-                          title="Invite"
-                          className="px-3 py-1.5 text-xs text-white rounded-md transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md bg-brand-blue hover:bg-brand-blue-2 ring-1 ring-white/10"
+                          disabled={inviteDisabled}
+                          title={inviteDisabled ? inviteDisabledTitle : 'Invite'}
+                          className="px-3 py-1.5 text-xs text-white rounded-md transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md bg-brand-blue hover:bg-brand-blue-2 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:bg-brand-blue"
                         >
                           <UserPlus className="w-3.5 h-3.5" />
                           Invite
@@ -1156,11 +1193,18 @@ Best regards`);
                         {canCreateAssessments && (
                           <DropdownMenuItem
                             className={scoredResumesMenuItemClass}
-                            /* Assessment invites spend a unit, so the entry
-                               goes quiet when there are none left rather than
-                               opening a form that cannot be submitted. */
-                            disabled={availableUnits === 0}
-                            title={availableUnits === 0 ? 'No assessment units available' : undefined}
+                            /* Off unless this JD has a published assessment —
+                               and assessment invites spend a unit, so the entry
+                               also goes quiet when there are none left rather
+                               than opening a form that cannot be submitted. */
+                            disabled={!canInviteAssessment || availableUnits === 0}
+                            title={
+                              !canInviteAssessment
+                                ? 'No published assessment for this job yet'
+                                : availableUnits === 0
+                                  ? 'No assessment units available'
+                                  : undefined
+                            }
                             onSelect={() => {
                               setInviteCandidate(resume);
                               setShowInviteModal(true);
@@ -1173,6 +1217,14 @@ Best regards`);
                         {onInviteAIInterview && (
                           <DropdownMenuItem
                             className={scoredResumesMenuItemClass}
+                            /* Same rule on the interview side: nothing live on
+                               this JD means nothing to invite the candidate to. */
+                            disabled={!canInviteAIInterview}
+                            title={
+                              !canInviteAIInterview
+                                ? 'No published AI interview for this job yet'
+                                : undefined
+                            }
                             onSelect={() =>
                               onInviteAIInterview({
                                 name: resume.candidateName || 'Unknown',
@@ -1359,9 +1411,11 @@ Best regards`);
 
             {/* Card Actions */}
             <div className="space-y-2">
-              {/* Invite Button - For Exact Match & Partial Match + assessment permission */}
+              {/* Invite Button - For Exact Match & Partial Match + assessment permission.
+                  Same two blockers as the table row's Assessment entry: no
+                  published assessment on this JD, or no units left. */}
               {canCreateAssessments && (resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
-                availableUnits === 0 ? (
+                (!canInviteAssessment || availableUnits === 0) ? (
                   <div className="relative group">
                     <button
                       disabled
@@ -1375,7 +1429,11 @@ Best regards`);
                       <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap shadow-lg">
                         <div className="flex items-center gap-2">
                           <AlertCircle className="w-3.5 h-3.5 text-red-400" />
-                          <span>No assessment units available</span>
+                          <span>
+                            {!canInviteAssessment
+                              ? 'No published assessment for this job yet'
+                              : 'No assessment units available'}
+                          </span>
                         </div>
                         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
                           <div className="border-4 border-transparent border-t-gray-900"></div>
