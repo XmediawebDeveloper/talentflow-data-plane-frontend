@@ -31,14 +31,17 @@ import {
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
-import { checkVirtualCamera, virtualCameraMessage } from '@/lib/proctoring/virtualCameraDetection';
+import { checkVirtualCamera, isVirtualCameraLabel, INVALID_CAMERA_SELECTION_MESSAGE } from '@/lib/proctoring/virtualCameraDetection';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 interface StepSystemCheckProps {
   token: string;
   position?: string;
-  onAllPassed: () => void;
+  /** approvedCameraDeviceId is the resolved deviceId of the camera that
+   * passed the webcam check (null if none — shouldn't happen once Continue
+   * is enabled, but kept nullable defensively). */
+  onAllPassed: (approvedCameraDeviceId: string | null) => void;
   /** Called just before proceeding — registers the candidate's face as a baseline for identity verification during the interview */
   onRegisterFace?: (videoElement: HTMLVideoElement) => Promise<boolean>;
   /**
@@ -362,6 +365,16 @@ export default function StepSystemCheck({
   // see the OLD selection.
   const selectedCameraIdRef = useRef<string>('');
   const selectedMicIdRef = useRef<string>('');
+  // The concrete deviceId of whichever camera most recently PASSED the
+  // webcam check (see runWebcam) — carried forward to the interview so it
+  // can pin to and monitor this exact device, not just "whatever the OS
+  // calls default" (which selectedCameraIdRef alone can't express, since ''
+  // means "system default" there).
+  const approvedCameraDeviceIdRef = useRef<string | null>(null);
+  // Shown next to the camera dropdown when the candidate attempts to select
+  // (or programmatically bypasses the disabled state of) an unsupported
+  // virtual/mobile-relay camera — see switchCamera.
+  const [cameraSelectionError, setCameraSelectionError] = useState<string | null>(null);
   // Set the moment a PREVIOUSLY-PASSING microphone check goes dead (headset
   // unplugged, Bluetooth drop, etc.) here on the System Check screen itself —
   // i.e. after the candidate already selected a mic and it passed, but before
@@ -552,6 +565,8 @@ export default function StepSystemCheck({
     try {
       const videoConstraint: MediaTrackConstraints | boolean = selectedCameraIdRef.current
         ? { deviceId: { exact: selectedCameraIdRef.current } }
+        : defaultCameraDeviceIdRef.current
+        ? { deviceId: { exact: defaultCameraDeviceIdRef.current } }
         : true;
       const s = await navigator.mediaDevices.getUserMedia({ video: videoConstraint });
       streamRef.current = s;
@@ -620,6 +635,47 @@ export default function StepSystemCheck({
     // dedup applies again on the next refresh.
     return filtered.length > 0 ? filtered : devices;
   };
+
+  // Camera dropdown labels. The MediaDevices API never exposes a device's
+  // transport (USB vs built-in) and — unlike audio — Chrome does NOT create a
+  // synthetic 'default' pseudo-entry for video input devices, so there is no
+  // groupId to match against. USB is instead detected from the OS/driver-
+  // reported name itself — USB webcam drivers virtually always put "USB" in
+  // the label (e.g. "USB2.0 HD UVC WebCam", "Logitech USB Webcam"), while
+  // built-in cameras don't (e.g. "HP TrueVision HD Camera", "Integrated
+  // Webcam"). Any camera whose label doesn't look like a USB device is
+  // treated as the system/built-in default.
+  const isUsbCameraLabel = (label: string): boolean => /usb/i.test(label);
+  const getCameraDeviceLabel = (d: MediaDeviceInfo, i: number): string => {
+    const base = d.label || `Camera ${i + 1}`;
+    if (isVirtualCameraLabel(base)) return `${base} (Unsupported)`;
+    return isUsbCameraLabel(base) ? `${base} USB Camera` : `${base} System Default`;
+  };
+  // Whichever listed camera doesn't look like a USB device (and isn't a
+  // known virtual/mobile-relay driver — a virtual camera must NEVER be the
+  // implicit "System Default" row, or picking that row would silently
+  // activate it) is treated as THE system default and rendered with
+  // value="" (no deviceId constraint — same as the old placeholder option)
+  // instead of its own deviceId, so it gets exactly one dropdown row rather
+  // than a separate "System Default" row on top of its own named row. Falls
+  // back to any non-virtual device, then to null (renders no value="" row —
+  // e.g. every enumerated camera is virtual, so none should be implicit).
+  const defaultCameraDevice: MediaDeviceInfo | null =
+    cameraDevices.find((d) => !isUsbCameraLabel(d.label || '') && !isVirtualCameraLabel(d.label || ''))
+    || cameraDevices.find((d) => !isVirtualCameraLabel(d.label || ''))
+    || null;
+  // Mirrors defaultCameraDevice's id for getUserMedia calls inside
+  // useCallback closures (ensureVideoStream/runWebcam) below — those have
+  // narrow dependency arrays, so reading the derived value directly would
+  // see a stale ("no devices yet") snapshot. Used to explicitly constrain
+  // those calls instead of leaving them unconstrained (`video: true`): an
+  // unconstrained request lets the OS/browser pick ANY registered camera as
+  // its own "default," which a virtual-camera driver like DroidCam can win
+  // even while this dropdown is showing a real camera as selected.
+  const defaultCameraDeviceIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    defaultCameraDeviceIdRef.current = defaultCameraDevice?.deviceId || null;
+  }, [defaultCameraDevice]);
 
   // Populate the dropdown option lists. Labels are only populated by the
   // browser once camera/mic permission has been granted, so this is called
@@ -717,6 +773,8 @@ export default function StepSystemCheck({
       streamRef.current?.getVideoTracks().forEach((t) => t.stop()); // release stale track on retry
       const videoConstraint: MediaTrackConstraints | boolean = selectedCameraIdRef.current
         ? { deviceId: { exact: selectedCameraIdRef.current } }
+        : defaultCameraDeviceIdRef.current
+        ? { deviceId: { exact: defaultCameraDeviceIdRef.current } }
         : true;
       const videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint });
 
@@ -730,7 +788,8 @@ export default function StepSystemCheck({
       const camCheck = checkVirtualCamera(videoStream.getVideoTracks()[0]);
       if (camCheck.flagged) {
         videoStream.getTracks().forEach((t) => t.stop());
-        updateSystemCheck('webcam', { status: 'fail', detail: virtualCameraMessage(camCheck.label) });
+        console.warn(`[SystemCheck] Rejected virtual/unsupported camera: "${camCheck.label}"`);
+        updateSystemCheck('webcam', { status: 'fail', detail: INVALID_CAMERA_SELECTION_MESSAGE });
         return;
       }
 
@@ -755,6 +814,12 @@ export default function StepSystemCheck({
         }
       } else if (vid && vid.readyState >= 1) {
         videoOk = true;
+      }
+      // Capture the resolved device id of whichever camera just PASSED (not
+      // just selectedCameraIdRef — that can be '' meaning "system default",
+      // and we need the concrete id to carry forward into the interview).
+      if (videoOk) {
+        approvedCameraDeviceIdRef.current = videoStream.getVideoTracks()[0]?.getSettings?.().deviceId || null;
       }
       updateSystemCheck('webcam', videoOk
         ? { status: 'pass', detail: 'Webcam producing video' }
@@ -1242,10 +1307,23 @@ export default function StepSystemCheck({
 
   const switchCamera = useCallback((deviceId: string) => {
     if (deviceId === selectedCameraId) return;
+    // Defense-in-depth: the dropdown already renders virtual/mobile-relay
+    // cameras as disabled <option>s, but a disabled option can still end up
+    // "selected" via programmatic dispatch — never activate one even if that
+    // happens. deviceId === '' means "system default", which is never one of
+    // the enumerated (and therefore never a flagged) devices.
+    if (deviceId) {
+      const target = cameraDevices.find((d) => d.deviceId === deviceId);
+      if (target && isVirtualCameraLabel(target.label)) {
+        setCameraSelectionError(INVALID_CAMERA_SELECTION_MESSAGE);
+        return;
+      }
+    }
+    setCameraSelectionError(null);
     selectedCameraIdRef.current = deviceId;
     setSelectedCameraId(deviceId);
     markCameraChecksUnverified();
-  }, [selectedCameraId, markCameraChecksUnverified]);
+  }, [selectedCameraId, cameraDevices, markCameraChecksUnverified]);
 
   // Mark BOTH audio-dependent checks as unverified after the selected mic
   // changes (dropdown pick, or the single-device auto-select).
@@ -1305,6 +1383,23 @@ export default function StepSystemCheck({
     navigator.mediaDevices.addEventListener('devicechange', refreshDeviceLists);
     return () => navigator.mediaDevices.removeEventListener('devicechange', refreshDeviceLists);
   }, [phase, refreshDeviceLists]);
+
+  // Start the camera preview the moment this screen loads — so the candidate
+  // can see their actual device and pick a different one from the Device
+  // Settings dropdown BEFORE running system checks, instead of only being
+  // able to choose it after "Run Check" already ran against whatever camera
+  // happened to be default (labels/preview were previously blank until then).
+  // This only acquires a preview stream — it does NOT mark the webcam check
+  // as passed; that still requires an explicit "Run Check" or "Retry" click.
+  useEffect(() => {
+    if (phase !== 'system_checks') return;
+    let cancelled = false;
+    (async () => {
+      const ok = await ensureVideoStream();
+      if (ok && !cancelled) void refreshDeviceLists();
+    })();
+    return () => { cancelled = true; };
+  }, [phase, ensureVideoStream, refreshDeviceLists]);
 
   // If exactly one microphone is connected, there's nothing to choose between —
   // auto-select it so the candidate doesn't have to open the dropdown just to
@@ -1610,7 +1705,7 @@ export default function StepSystemCheck({
         streamRef.current = null;
       }
 
-      onAllPassed();
+      onAllPassed(approvedCameraDeviceIdRef.current);
     } finally {
       if (mountedRef.current) setIsProceedLoading(false);
     }
@@ -2017,11 +2112,20 @@ export default function StepSystemCheck({
                       disabled={isSwitchingDevice || checksRunning}
                       className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/20"
                     >
-                      <option value="">System Default</option>
+                      {cameraDevices.length === 0 && <option value="">System Default</option>}
                       {cameraDevices.map((d, i) => (
-                        <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>
+                        <option
+                          key={d.deviceId}
+                          value={d === defaultCameraDevice ? '' : d.deviceId}
+                          disabled={isVirtualCameraLabel(d.label)}
+                        >
+                          {getCameraDeviceLabel(d, i)}
+                        </option>
                       ))}
                     </select>
+                    {cameraSelectionError && (
+                      <p className="mt-1 text-xs font-medium text-red-600">{cameraSelectionError}</p>
+                    )}
                   </div>
 
                   <div>

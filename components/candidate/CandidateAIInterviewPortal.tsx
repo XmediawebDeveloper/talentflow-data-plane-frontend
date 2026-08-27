@@ -256,6 +256,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // interview runs the heavy/accurate path only on capable machines and a
   // lightweight path on old/low-end systems. See lib/utils/deviceCapability.
   const [deviceCapability, setDeviceCapability] = useState<DeviceCapability | undefined>(undefined);
+  // The camera deviceId that passed System Check's webcam validation
+  // (StepSystemCheck's onAllPassed) — threaded into InterviewUI so it pins
+  // to and monitors this exact device instead of "whatever the OS calls
+  // default" at interview start.
+  const [approvedCameraDeviceId, setApprovedCameraDeviceId] = useState<string | null>(null);
 
   // Identity photo blob — stored here so onRegisterFace can use it AFTER system-check
   // face polling is stopped (avoids concurrent TF.js/WebGL calls that corrupt the backend).
@@ -1212,7 +1217,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     }
   };
 
-  const handleSystemCheckPassed = () => {
+  const handleSystemCheckPassed = (approvedCameraId: string | null) => {
+    setApprovedCameraDeviceId(approvedCameraId);
     // Detect the candidate's device tier ONCE here (system check already gates
     // entry). The interview then enables heavy features (neural VAD, 3D avatar)
     // only on 'high' tier and a lightweight path on weaker machines.
@@ -2835,6 +2841,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           onTimerChange={setTimerSnapshot}
           deviceCapability={deviceCapability}
           candidatePhotoUrl={candidatePhotoUrl}
+          approvedCameraDeviceId={approvedCameraDeviceId}
         />
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (
