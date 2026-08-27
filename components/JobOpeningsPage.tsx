@@ -34,6 +34,7 @@ import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import api from '@/lib/services/api';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 type ViewMode = 'grid' | 'list';
