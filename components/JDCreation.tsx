@@ -2608,8 +2608,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         employmentType: prev.employmentType,
         workModel: prev.workModel,
         // Pre-fill salary from AI extraction
-        salaryFrom: params.salary_min != null ? (sanitizeExtractedSalary(params.salary_min) || prev.salaryFrom || '') : (prev.salaryFrom || ''),
-        salaryTo: params.salary_max != null ? (sanitizeExtractedSalary(params.salary_max) || prev.salaryTo || '') : (prev.salaryTo || ''),
+        // A null bound from extraction is an ANSWER - "this JD states no maximum" - not a
+        // gap to be papered over with the previous value. Falling back to `prev` here meant
+        // a re-extraction could never CLEAR a bound: editing the prompt from "2 LPA upto
+        // 7 LPA" down to "2 LPA" re-extracted correctly as min-only, and the stale 7,00,000
+        // stayed in the Maximum box (and in the saved JD) forever.
+        //
+        // Preserved only in edit mode, exactly like workModel/education/industryType above:
+        // a FRESH extraction replaces Step 2 (see forceFreshExtraction), so it must be able
+        // to replace a bound with nothing.
+        salaryFrom: params.salary_min != null
+          ? (sanitizeExtractedSalary(params.salary_min) || '')
+          : (isEditMode ? (prev.salaryFrom || '') : ''),
+        salaryTo: params.salary_max != null
+          ? (sanitizeExtractedSalary(params.salary_max) || '')
+          : (isEditMode ? (prev.salaryTo || '') : ''),
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || prev.salaryCurrency),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
@@ -3333,8 +3346,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         employmentType: (params.job_type as 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary') || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: (params.work_mode as 'onsite' | 'remote' | 'hybrid' | 'field_based') || (isEditMode ? extractedData.workModel : 'onsite'),
         // Pre-fill salary from AI extraction
-        salaryFrom: params.salary_min != null ? (sanitizeExtractedSalary(params.salary_min) || extractedData.salaryFrom || '') : (extractedData.salaryFrom || ''),
-        salaryTo: params.salary_max != null ? (sanitizeExtractedSalary(params.salary_max) || extractedData.salaryTo || '') : (extractedData.salaryTo || ''),
+        // A null bound from extraction is an ANSWER - "this JD states no maximum" - not a
+        // gap to be papered over with the previous value. Falling back to `prev` here meant
+        // a re-extraction could never CLEAR a bound: editing the prompt from "2 LPA upto
+        // 7 LPA" down to "2 LPA" re-extracted correctly as min-only, and the stale 7,00,000
+        // stayed in the Maximum box (and in the saved JD) forever.
+        //
+        // Preserved only in edit mode, exactly like workModel/education/industryType above:
+        // a FRESH extraction replaces Step 2 (see forceFreshExtraction), so it must be able
+        // to replace a bound with nothing.
+        salaryFrom: params.salary_min != null
+          ? (sanitizeExtractedSalary(params.salary_min) || '')
+          : (isEditMode ? (extractedData.salaryFrom || '') : ''),
+        salaryTo: params.salary_max != null
+          ? (sanitizeExtractedSalary(params.salary_max) || '')
+          : (isEditMode ? (extractedData.salaryTo || '') : ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || extractedData.salaryCurrency),
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
