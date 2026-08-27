@@ -14,6 +14,24 @@ import { toast } from 'sonner';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/lib/hooks/useAuth';
 
+/* Only the LATEST version of a JD lineage may be edited.
+
+   An earlier version is a historical snapshot: whatever has been done with it —
+   a resume scored, an assessment or AI interview sent, an AI match run — was
+   produced from the text it holds, so editing it in place would rewrite
+   history. It is frozen regardless of whether anything has been done with it
+   yet, so the answer cannot flip under the user as downstream work accumulates.
+
+   Scoped to THIS page's Edit button, which is the only Edit a specific version
+   is reachable through — both ways in land here: Job Openings → View Versions →
+   a version row, and this page's own version-badge switcher. The JD list, the
+   Job Description module and every other table are untouched; a JD's latest
+   version also behaves exactly as before, Edit included, and a refusal there
+   still comes from JDEditBlockedModal, which can fork the JD into a new
+   version. */
+const VERSION_EDIT_LOCK_REASON =
+  'This JD version is in use and can’t be edited. Only the latest version can be edited.';
+
 // Extended Job type with additional fields for JD view
 interface ExtendedJob extends Job {
   niceToHaveSkills?: string[];
@@ -62,11 +80,52 @@ function JobDetailsContent() {
   const [editBlock, setEditBlock] = useState<{ modules: JDUsageModule[]; reason?: string } | null>(null);
   const [checkingEditUsage, setCheckingEditUsage] = useState(false);
   const [creatingVersion, setCreatingVersion] = useState(false);
+  /* Whether the JD on screen is an EARLIER version of its lineage.
+
+     Stored WITH the id it was resolved for, so the answer can never outlive the
+     version it describes: switching versions re-reads it, and until the new
+     read lands the check below simply does not match, which leaves Edit alone.
+     Nothing is written unless the lineage answers, so an unreachable lineage —
+     or a version it does not list — also leaves Edit alone rather than locking
+     it on a guess: a failed lookup must not strand a recruiter who legitimately
+     needs to edit the latest version. */
+  const [historicalVersionCheck, setHistoricalVersionCheck] =
+    useState<{ id: string; isHistorical: boolean } | null>(null);
 
   useEffect(() => {
     if (jobId) {
       fetchJobDetails();
     }
+  }, [jobId]);
+
+  useEffect(() => {
+    if (!jobId) return;
+    let cancelled = false;
+    /* The lineage endpoint is authoritative about which version is latest — the
+       JD record itself carries no is_latest_version flag, and inferring it from
+       version_number would need the whole lineage anyway. Same endpoint the
+       version-badge switcher already reads, which accepts ANY version's id.
+
+       One extra GET per Job Details view, which is why it is its own effect
+       rather than part of fetchJobDetails: it must not delay the JD itself
+       rendering, and its failure must not fail the page. */
+    jdService
+      .getLineageVersions(jobId)
+      .then((lineage) => {
+        if (cancelled) return;
+        const self = (lineage || []).find((version) => version.id === jobId);
+        setHistoricalVersionCheck({
+          id: jobId,
+          isHistorical: !!self && self.is_latest_version === false,
+        });
+      })
+      .catch(() => {
+        /* Leave it unresolved — Edit keeps its normal behaviour rather than
+           being locked because a lookup failed. */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [jobId]);
 
   useEffect(() => {
@@ -214,24 +273,55 @@ function JobDetailsContent() {
     router.push(fromAiInterview ? '/recruitment/ai-interviews/jd-selection' : '/recruitment/job-openings');
   };
 
+  /* Being an OLDER version is the whole rule — usage is deliberately not
+     consulted, and neither is how the user navigated here. Whether the version
+     was opened from Job Openings → View Versions or picked from this page's own
+     version badge, the same version gets the same answer. */
+  const versionEditLocked =
+    historicalVersionCheck?.id === jobId && historicalVersionCheck.isHistorical;
+
   const handleEdit = async (editJob: Job) => {
     if (checkingEditUsage) return;
+    // Belt and braces: the button is disabled, so this only catches a
+    // keyboard or programmatic activation of it.
+    if (versionEditLocked) return;
 
-    /* Re-read usage at click time rather than trusting what the page loaded
-       with. A recruiter can sit on this screen while a colleague runs the JD
-       through Assessment or AI Interview in another tab, and the stale answer
-       would be the permissive one. */
+    /* Re-read usage AND the lineage at click time rather than trusting what the
+       page loaded with. A recruiter can sit on this screen while a colleague
+       runs the JD through Assessment or AI Interview in another tab, or
+       publishes a newer version of it — in both cases the stale answer is the
+       permissive one. Fetched together so verifying the version costs no extra
+       click latency on top of the usage check that already happened here. */
     setCheckingEditUsage(true);
     let usageStatus = (editJob as ExtendedJob).usageStatus;
-    try {
-      usageStatus = await jdService.getUsageStatus(editJob.id);
-      setJob(prev => (prev ? { ...prev, usageStatus } : prev));
-    } catch (error) {
+    const [usageResult, lineageResult] = await Promise.allSettled([
+      jdService.getUsageStatus(editJob.id),
+      jdService.getLineageVersions(editJob.id),
+    ]);
+    setCheckingEditUsage(false);
+
+    if (usageResult.status === 'fulfilled') {
+      usageStatus = usageResult.value;
+      setJob(prev => (prev ? { ...prev, usageStatus: usageResult.value } : prev));
+    } else {
       // Endpoint unreachable — fall through on what we already had. Editing is
       // checked again when jd-creation loads, so this cannot skip the guard.
-      console.warn('[JobDetails] Could not refresh usage status for edit:', error);
-    } finally {
-      setCheckingEditUsage(false);
+      console.warn('[JobDetails] Could not refresh usage status for edit:', usageResult.reason);
+    }
+
+    /* Superseded while the page sat open: the button was enabled because this
+       version WAS the latest when the page loaded. Latch the answer so the
+       button now reads as disabled, and say why — there is no modal for this
+       one, because unlike module usage there is nothing to offer instead. */
+    if (lineageResult.status === 'fulfilled') {
+      const self = (lineageResult.value || []).find((version) => version.id === editJob.id);
+      if (self?.is_latest_version === false) {
+        setHistoricalVersionCheck({ id: editJob.id, isHistorical: true });
+        toast.error('This JD version can no longer be edited', {
+          description: VERSION_EDIT_LOCK_REASON,
+        });
+        return;
+      }
     }
 
     const modules = getJDUsageModules(usageStatus?.usage);
@@ -487,6 +577,11 @@ function JobDetailsContent() {
         initialTab={tabParam || undefined}
         initialAction={actionParam || undefined}
         onEdit={isTenantAdmin || hasPermission('canUpdateJD') ? handleEdit : undefined}
+        /* Only the latest version keeps a live Edit — see
+           VERSION_EDIT_LOCK_REASON above. `editDisabled` is false for it, so
+           the latest version's Edit button renders exactly as it always has. */
+        editDisabled={versionEditLocked}
+        editDisabledReason={VERSION_EDIT_LOCK_REASON}
         onDisable={isTenantAdmin || hasPermission('canDisableJD') ? handleDisable : undefined}
         onEnable={isTenantAdmin || hasPermission('canDisableJD') ? handleEnable : undefined}
         onArchive={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchive : undefined}

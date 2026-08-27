@@ -98,6 +98,20 @@ interface JobVersionHistoryPanelProps {
    * twitching when you tick it.
    */
   staticRows?: boolean;
+  /**
+   * Status the host knows a version is now in, by version id — applied over
+   * whatever the cached lineage says.
+   *
+   * The lineage is fetched once and cached, so a version whose status the host
+   * has just changed (Archive, Disable, Unarchive, Re-enable from the row's own
+   * menu) would keep rendering the status it was fetched with until the panel is
+   * reopened. The host sets an entry here only AFTER the backend confirmed the
+   * change, so this can only ever show a status the database actually holds.
+   *
+   * Keyed by version id, so it moves exactly one row and leaves every sibling
+   * version alone.
+   */
+  statusOverrides?: Record<string, string>;
 }
 
 /**
@@ -127,13 +141,56 @@ export default function JobVersionHistoryPanel({
   openInNewTab = false,
   onRowClick,
   staticRows = false,
+  statusOverrides,
 }: JobVersionHistoryPanelProps) {
   const columns = buildColumns(!!onSelectVersion, !!renderAction);
-  /* The row above IS the latest version — repeating it here would duplicate
-     what the user is already looking at, so only previous versions are listed.
-     The id check backstops a lineage row whose is_latest_version flag is
-     missing. */
-  const jobVersions = (versions ?? []).filter((v) => !v.is_latest_version && v.id !== job.id);
+  /* Which versions this table lists: the WHOLE chain — v1, v2 … up to and
+     including the latest.
+
+     The latest used to be dropped here, on the reasoning that the row this
+     panel hangs off already IS the latest, so listing it again duplicated what
+     the user was looking at. In practice that left the history reading as an
+     incomplete story: a job at v2 showed a Version History of "v1" alone, with
+     no row for the version actually live. The version the whole lineage leads
+     up to belongs in its own history, marked as the latest (see `isLatest` per
+     row below) so it is never mistaken for one of the superseded ones.
+
+     Deduplicated by version NUMBER rather than id: a republished JD can report
+     several entries sharing one version number — republishing bumps
+     current_version, not the lineage version — and those are one version, not
+     several. The first entry for a number wins.
+
+     Sorted newest-first, so the table opens on the live version — v3 (Latest)
+     → v2 → v1. The version a recruiter is most likely to want is the one they
+     read without scrolling, and it matches the rest of the page, where the
+     newest thing is always at the top.
+
+     No status test: the latest is listed whatever it is, so a Published latest
+     and a Republished one (the same DB status — `getDisplayStatus` below derives
+     the "Republished" label from current_version) both appear without either
+     being special-cased. */
+  const lineageVersions = versions ?? [];
+  const latestVersionNumber = lineageVersions.reduce(
+    (highest, v) => Math.max(highest, v.version_number ?? 1),
+    job.versionNumber ?? 1,
+  );
+
+  const seenVersionNumbers = new Set<number>();
+  const jobVersions = lineageVersions
+    .filter((v) => {
+      const number = v.version_number ?? 1;
+      if (seenVersionNumbers.has(number)) return false;
+      seenVersionNumbers.add(number);
+      /* One exception, and only where the rows are CONTROLS: in the Apply to Job
+         dialog the row above is itself a radio for this same version, and
+         selection is keyed on the job id — so listing it here would put two
+         checked radios on screen for one pick. A read-only table has no such
+         clash, which is why this is gated on selection mode rather than applied
+         everywhere. */
+      if (onSelectVersion && v.id === job.id) return false;
+      return true;
+    })
+    .sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1));
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
@@ -147,7 +204,7 @@ export default function JobVersionHistoryPanel({
           Loading versions...
         </div>
       ) : jobVersions.length === 0 ? (
-        <p className="py-2 text-xs text-gray-500 dark:text-slate-400">No other versions of this job.</p>
+        <p className="py-2 text-xs text-gray-500 dark:text-slate-400">No versions recorded for this job.</p>
       ) : (
         /* One shell owns BOTH scroll axes (x on narrow screens, y past 3 rows),
            so header and body live in one <table> and their columns can never
@@ -197,7 +254,11 @@ export default function JobVersionHistoryPanel({
               {jobVersions.map((version) => {
                 /* Lineage rows carry the raw DB status ('published'); the status
                    helpers speak the Job type's capitalised form. */
-                const rawStatus = version.status || '';
+                const rawStatus = statusOverrides?.[version.id] || version.status || '';
+                /* The live version of this lineage. The flag is preferred; the
+                   number comparison backstops a lineage row that omits it. */
+                const isLatest = version.is_latest_version
+                  || (version.version_number ?? 1) >= latestVersionNumber;
                 const versionStatus = getDisplayStatus(
                   rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase(),
                   version.current_version,
@@ -248,10 +309,17 @@ export default function JobVersionHistoryPanel({
                      lives on the Job Title text instead (group-hover below). */
                   <tr
                     key={version.id}
+                    /* The latest version carries a faint brand tint, so it
+                       reads as the live one among the superseded rows. Kept
+                       below the selected tint, which is the state the user just
+                       acted on, and light enough that the pinned Action/Select
+                       cells' own backgrounds still sit cleanly over it. */
                     className={`group transition-colors duration-200 ease-out ${
                       isSelected
                         ? 'bg-brand-blue/[0.07] dark:bg-brand-blue/[0.14]'
-                        : 'hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08]'
+                        : isLatest
+                          ? 'bg-brand-blue/[0.025] hover:bg-brand-blue/[0.05] dark:bg-brand-blue/[0.06] dark:hover:bg-brand-blue/[0.1]'
+                          : 'hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08]'
                     } ${onRowClick ? 'cursor-pointer' : ''}`}
                     onClick={onRowClick ? () => onRowClick(version.id) : undefined}
                   >
@@ -297,6 +365,14 @@ export default function JobVersionHistoryPanel({
                         <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                           v{version.version_number ?? 1}
                         </span>
+                        {/* Marks the live version, so the row added to the
+                            bottom of the chain is never read as just another
+                            superseded one. */}
+                        {isLatest && (
+                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
+                            Latest
+                          </span>
+                        )}
                       </span>
                     </td>
                     <td

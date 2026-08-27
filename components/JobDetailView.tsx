@@ -11,6 +11,7 @@ import remarkBreaks from 'remark-breaks';
 import { jdService, JDLineageVersion, JDUsageStatus } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
+import { Tooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import ConfirmationDialog from './ConfirmationDialog';
 import ResumeUploadModal from './ResumeUploadModal';
@@ -438,6 +439,17 @@ interface JobDetailViewProps {
   initialTab?: 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results';
   initialAction?: 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | 'create-ai-interview' | 'invite-ai-interview' | 'ai-interview-status';
   onEdit?: (job: Job) => void;
+  /**
+   * Render Edit as disabled rather than clickable, with `editDisabledReason` as
+   * its hover tooltip. Set by the host that knows the JD may not be edited at
+   * all — currently only the Job Details page, and only for a JD that is an
+   * earlier version of its lineage. Left unset everywhere else, which keeps the
+   * default behaviour: Edit stays clickable and the host explains any refusal
+   * after the click.
+   */
+  editDisabled?: boolean;
+  /** Why Edit is disabled — shown on hover. Required for it to read as anything. */
+  editDisabledReason?: string;
   resumes?: any[]; // All resumes for selection
   onScoreResumes?: (resumeIds: string[], jobId: string, source: 'my-resumes' | 'internal-db') => void;
   onNavigateToAITalentMatch?: (jobId: string) => void; // Navigate to AI Talent Match page
@@ -458,7 +470,7 @@ interface JobDetailViewProps {
   totalCount?: number;
 }
 
-export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, breadcrumbItems, initialTab, initialAction, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, editDisabled = false, editDisabledReason, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, breadcrumbItems, initialTab, initialAction, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
   const router = useRouter();
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
@@ -2385,16 +2397,39 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* Edit — published JDs only. Deliberately NOT disabled when the JD
                 is in use: the point of the click is to explain *why* it cannot
                 be edited, naming the modules holding it. The page owns that
-                check (it re-reads usage status live) and this only asks. */}
+                check (it re-reads usage status live) and this only asks.
+
+                The one exception is `editDisabled`, which the host sets when
+                the JD may not be edited at all and there is nothing a click
+                could usefully offer — an earlier version of its lineage, where
+                only the latest is editable. Then the button is genuinely
+                disabled and the reason is a hover tooltip instead of a
+                post-click modal. The tooltip's handlers sit on the wrapper, not
+                the button, so they still fire over a disabled control. */}
             {job.status === 'Published' && onEdit && (
-              <button
-                onClick={handleEdit}
-                className="px-4 py-2 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all flex items-center gap-2"
-                aria-label="Edit this JD" title="Edit this JD"
-              >
-                <Edit className="w-4 h-4" />
-                <span className="font-medium">Edit</span>
-              </button>
+              editDisabled ? (
+                <Tooltip content={editDisabledReason} position="bottom">
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    className="px-4 py-2 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700 rounded-lg cursor-not-allowed flex items-center gap-2"
+                    aria-label={editDisabledReason || 'Editing is not available for this JD'}
+                  >
+                    <Edit className="w-4 h-4" />
+                    <span className="font-medium">Edit</span>
+                  </button>
+                </Tooltip>
+              ) : (
+                <button
+                  onClick={handleEdit}
+                  className="px-4 py-2 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all flex items-center gap-2"
+                  aria-label="Edit this JD" title="Edit this JD"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span className="font-medium">Edit</span>
+                </button>
+              )
             )}
 
             {/* JD15: Action Buttons - For Disabled jobs */}
