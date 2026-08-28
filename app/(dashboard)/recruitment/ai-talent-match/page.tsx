@@ -61,6 +61,7 @@ function transformJDToJob(jd: JDResponse): Job {
 export default function AITalentMatchRoute() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [matchHistory, setMatchHistory] = useState<MatchHistory[]>([]);
+  const [matchSessionCounts, setMatchSessionCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,14 +82,26 @@ export default function AITalentMatchRoute() {
 
         // Group sessions by job - only keep the latest session per job
         const sessionsByJob = new Map<string, AIMatchSessionResponse>();
+        // How many match runs a job has across its whole lineage, so the card
+        // can show "View Version History" only when there is more than one run
+        // to look back at. Keyed by the human JD-xxx code rather than the raw
+        // session.jd_id: a republish forks the JD into a new row with its own
+        // id, so a job matched once, republished, then matched again produces
+        // two sessions with two DIFFERENT jd_ids — counting by jd_id alone
+        // would read as "1 run" on each version and never show the button.
+        const sessionCounts: Record<string, number> = {};
         for (const session of historyResponse.items) {
           const jobId = session.jd_id || session.search_query || 'unknown';
+          const ownerJob = transformedJobs.find(j => j.id === session.jd_id);
+          const countKey = ownerJob?.jobId || jobId;
+          sessionCounts[countKey] = (sessionCounts[countKey] || 0) + 1;
           const existing = sessionsByJob.get(jobId);
           // Keep the most recent session for each job
           if (!existing || new Date(session.created_at) > new Date(existing.created_at)) {
             sessionsByJob.set(jobId, session);
           }
         }
+        setMatchSessionCounts(sessionCounts);
 
         // Keep route load summary-only.
         // Candidate details are fetched lazily when the user opens a specific session.
@@ -115,6 +128,7 @@ export default function AITalentMatchRoute() {
         setError(err instanceof Error ? err.message : 'Failed to load data');
         setJobs([]);
         setMatchHistory([]);
+        setMatchSessionCounts({});
       } finally {
         setIsLoading(false);
       }
@@ -157,7 +171,7 @@ export default function AITalentMatchRoute() {
   return (
     <FeatureGate feature="ai_talent_match">
       <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
-        <AITalentMatchPage jobs={jobs} matchHistory={matchHistory} />
+        <AITalentMatchPage jobs={jobs} matchHistory={matchHistory} matchSessionCounts={matchSessionCounts} />
       </div>
     </FeatureGate>
   );
