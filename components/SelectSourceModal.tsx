@@ -816,7 +816,17 @@ export default function SelectSourceModal({
       const allFolders = (function flatten(list: FolderType[]): FolderType[] {
         return list.flatMap(f => [f, ...flatten(f.children || [])]);
       })(folders);
-      if (allFolders.find(f => f.name.toLowerCase() === name.toLowerCase() && f.id !== 'all')) {
+      /* Siblings only, matching the My Resumes page. A name is a path segment,
+         not a global id — "Test" at the root and "Test" inside it are two
+         different folders — so a tree-wide check made the first subfolder
+         named after any existing folder impossible to create. */
+      if (allFolders.find(f =>
+        f.name.trim().toLowerCase() === name.trim().toLowerCase() &&
+        // The API shape here, not the tree's: this list is `folderService.list()`
+        // output verbatim, so the parent link is `parent_id`.
+        (f.parent_id || undefined) === (parentId || undefined) &&
+        f.id !== 'all'
+      )) {
         toast.error(`Folder "${name}" already exists`);
         return;
       }
