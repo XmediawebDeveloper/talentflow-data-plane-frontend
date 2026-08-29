@@ -126,6 +126,15 @@ const TERMINATION_MESSAGES: Record<string, string> = {
 const terminationMessage = (reason: string): string =>
   TERMINATION_MESSAGES[reason] || 'Left the interview screen';
 
+/** Shared wording for a camera/mic that has gone missing at a pre-start gate. */
+const deviceMissingMessage = (missing: 'camera' | 'microphone' | 'both'): string => {
+  const what = missing === 'both' ? 'camera and microphone' : missing;
+  const isAre = missing === 'both' ? 'are' : 'is';
+  const itThem = missing === 'both' ? 'them' : 'it';
+  return `Your ${what} ${isAre} no longer available. Please reconnect ${itThem} — ` +
+    `the interview cannot start without ${missing === 'both' ? 'both' : itThem}.`;
+};
+
 // True when a keyboard event is the Windows / Command (Meta / Super) key.
 // Checked by key name, physical code, AND the metaKey modifier so it's caught
 // across browsers/OSes — though the OS often intercepts the bare Windows key
@@ -205,6 +214,13 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ours, which is what makes the vision check (and clean-reference comparison)
   // reliable. Restored immediately after the capture.
   const shareBarCardRef = useRef<HTMLDivElement>(null);
+  // Baseline browser zoom (via devicePixelRatio) captured when the candidate is
+  // interacting normally. Shrinking the browser zoom to minimum makes an in-page
+  // recorder/extension widget tiny enough to evade the vision check, so at the
+  // Hide step we refuse to verify while zoomed OUT relative to this baseline (or
+  // below an absolute floor) and ask the candidate to reset to 100%. Tracks the
+  // MAX DPR seen so zooming in then out can't lower the baseline.
+  const baselineDprRef = useRef<number>(1);
   // Pre-interview single-active-session lease: true when another browser/device
   // already holds this interview link (blocks the second person from system
   // check onward). See the lease heartbeat effect.
@@ -1118,8 +1134,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     const displayMediaOptions: any = {
       video: {
         frameRate: 15,
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        // Request ~1080p (was 1280x720). The screen share feeds BOTH the
+        // interview recording AND the Hide-step vision check; at 720p the
+        // browser downscaled the whole screen before capture, blurring small
+        // recorder/extension icons away. 1920x1080 gives every display a
+        // high-enough source to read those icons. File size barely changes —
+        // the recording is bitrate-capped (videoBitsPerSecond), so more pixels
+        // just means the same bytes, only a little more encode CPU.
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
         displaySurface: 'monitor',
       },
       audio: true,
@@ -1291,9 +1314,64 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   };
 
   // Called from StepSamplePractice "Start Interview" button — goes to fullscreen prompt first
-  const handleStartInterview = () => {
-    setStep('fullscreen_prompt');
-  };
+  /**
+   * Is the camera / microphone actually available RIGHT NOW?
+   *
+   * The system check runs minutes earlier and its verdict is PERSISTED
+   * (system_check_passed), so nothing re-tested the hardware at the moment the
+   * candidate pressed Start — unplug the camera after passing the check and the
+   * interview began normally, with no error and a dead camera.
+   *
+   * Video and audio are probed SEPARATELY and never in one getUserMedia call:
+   * a combined request is all-or-nothing, so one missing device would mask the
+   * other and we could not tell the candidate which one to reconnect.
+   * Probe tracks are stopped immediately — this only answers "can it open?",
+   * it never holds a device the interview is about to want.
+   */
+  const probeMediaDevicesReady = useCallback(async (): Promise<'camera' | 'microphone' | 'both' | null> => {
+    const canOpen = async (constraints: MediaStreamConstraints, kind: 'video' | 'audio') => {
+      let s: MediaStream | null = null;
+      try {
+        s = await navigator.mediaDevices.getUserMedia(constraints);
+        const tracks = kind === 'video' ? s.getVideoTracks() : s.getAudioTracks();
+        return tracks.some(t => t.readyState === 'live');
+      } catch {
+        return false;
+      } finally {
+        s?.getTracks().forEach(t => t.stop());
+      }
+    };
+    const camOk = await canOpen({ video: true }, 'video');
+    const micOk = await canOpen({ audio: true }, 'audio');
+    if (!camOk && !micOk) return 'both';
+    if (!camOk) return 'camera';
+    if (!micOk) return 'microphone';
+    return null;
+  }, []);
+
+  // Practice → fullscreen prompt. Gated on the devices being present RIGHT NOW.
+  //
+  // The device check used to live only in startInterviewNow, at the very END of
+  // the chain — so a candidate who unplugged their mic during practice was
+  // walked through the fullscreen prompt, the final consent and the hide-share-
+  // bar gate before anything noticed, and was then bounced all the way back to
+  // the system check. A device that is missing HERE must be caught HERE, at the
+  // step where it happened, before a single further screen is shown.
+  const handleStartInterview = useCallback(async () => {
+    if (startSubmitting) return;
+    setStartSubmitting(true);
+    try {
+      const missing = await probeMediaDevicesReady();
+      if (missing) {
+        toast.error(deviceMissingMessage(missing));
+        console.warn(`[Portal] Practice → start blocked — ${missing} unavailable`);
+        return;  // stay on practice; its own watcher re-acquires on replug
+      }
+      setStep('fullscreen_prompt');
+    } finally {
+      setStartSubmitting(false);
+    }
+  }, [startSubmitting, probeMediaDevicesReady]);
 
   // Called from fullscreen prompt button — handles screen share, fullscreen entry, then starts interview
   const handleFullscreenReady = useCallback(async () => {
@@ -1360,6 +1438,21 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       }
     } catch (permErr) {
       console.warn('[Portal] Permission pre-check failed:', permErr);
+    }
+
+    // Permission GRANTED is not the same as the device being PRESENT — a
+    // candidate can unplug between screens with permission still granted. Check
+    // presence here too, on the same "stay on this step and let them fix it"
+    // principle as the denial branch above, so they cannot walk any further
+    // into the start flow with a missing device.
+    {
+      const missing = await probeMediaDevicesReady();
+      if (missing) {
+        toast.error(deviceMissingMessage(missing), { duration: 8000 });
+        console.warn(`[Portal] Fullscreen-ready blocked — ${missing} unavailable`);
+        setStartSubmitting(false);
+        return; // stay on fullscreen_prompt
+      }
     }
 
     // ── "Already in a meeting" pre-flight (backend-gated) ─────────────────────
@@ -1586,6 +1679,20 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     setStartSubmitting(false);
   }, [startSubmitting, token, requestEntireScreenShare]);
 
+  // Track the highest browser zoom (devicePixelRatio) seen — used as the "not
+  // zoomed out" baseline for the Hide-step zoom guard. Zooming OUT only lowers
+  // DPR, so the max seen approximates the candidate's normal (≈100%) zoom.
+  useEffect(() => {
+    const sync = () => {
+      const dpr = window.devicePixelRatio || 1;
+      if (dpr > baselineDprRef.current) baselineDprRef.current = dpr;
+    };
+    sync();
+    // devicePixelRatio changes fire a resize event.
+    window.addEventListener('resize', sync);
+    return () => window.removeEventListener('resize', sync);
+  }, []);
+
 
   // Grab a single JPEG frame from the ENTIRE-screen share stream (used by the
   // hide-share-bar vision check). Returns null if the stream isn't available.
@@ -1641,17 +1748,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         window.setTimeout(resolve, 1500);
       });
       const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
-      // Keep close to native resolution (cap only very large/multi-monitor
-      // frames) and use high JPEG quality: the vision check must catch SMALL
-      // edge-docked recorder/extension toolbars (thin vertical icon strips at a
-      // screen edge), which aggressive downscale + low quality were blurring
-      // away before the model ever saw them.
-      const scale = Math.min(1, 1920 / vw);
+      // Normalize EVERY display's capture into the 1920–2048px-wide band so the
+      // frame sent to the vision model is consistently large across all screens:
+      // small displays are upscaled up to 1920 (so their frame isn't tiny), and
+      // large/multi-monitor displays are capped at 2048 (the effective ceiling
+      // for the vision API's high-detail tiling). JPEG stays at 0.9. NOTE:
+      // upscaling a low-res display does not invent detail — a small screen's
+      // real fidelity is bounded by its native resolution — but it keeps the
+      // input size uniform and never smaller than the model's tiling window.
+      const targetW = Math.min(2048, Math.max(vw, 1920));
+      const scale = targetW / vw;
       const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
       const canvas = document.createElement('canvas');
       canvas.width = cw; canvas.height = ch;
       const ctx = canvas.getContext('2d');
       if (!ctx) { try { video.pause(); } catch { /* ignore */ } video.srcObject = null; return null; }
+      ctx.imageSmoothingEnabled = true;
+      try { (ctx as CanvasRenderingContext2D).imageSmoothingQuality = 'high'; } catch { /* not all browsers */ }
       ctx.drawImage(video, 0, 0, cw, ch);
       try { video.pause(); } catch { /* ignore */ }
       video.srcObject = null;
@@ -1663,40 +1776,6 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     }
   }, []);
 
-  /**
-   * Is the camera / microphone actually available RIGHT NOW?
-   *
-   * The system check runs minutes earlier and its verdict is PERSISTED
-   * (system_check_passed), so nothing re-tested the hardware at the moment the
-   * candidate pressed Start — unplug the camera after passing the check and the
-   * interview began normally, with no error and a dead camera.
-   *
-   * Video and audio are probed SEPARATELY and never in one getUserMedia call:
-   * a combined request is all-or-nothing, so one missing device would mask the
-   * other and we could not tell the candidate which one to reconnect.
-   * Probe tracks are stopped immediately — this only answers "can it open?",
-   * it never holds a device the interview is about to want.
-   */
-  const probeMediaDevicesReady = useCallback(async (): Promise<'camera' | 'microphone' | 'both' | null> => {
-    const canOpen = async (constraints: MediaStreamConstraints, kind: 'video' | 'audio') => {
-      let s: MediaStream | null = null;
-      try {
-        s = await navigator.mediaDevices.getUserMedia(constraints);
-        const tracks = kind === 'video' ? s.getVideoTracks() : s.getAudioTracks();
-        return tracks.some(t => t.readyState === 'live');
-      } catch {
-        return false;
-      } finally {
-        s?.getTracks().forEach(t => t.stop());
-      }
-    };
-    const camOk = await canOpen({ video: true }, 'video');
-    const micOk = await canOpen({ audio: true }, 'audio');
-    if (!camOk && !micOk) return 'both';
-    if (!camOk) return 'camera';
-    if (!micOk) return 'microphone';
-    return null;
-  }, []);
 
   // Consume a unit + start the backend interview, then enter the interview UI.
   // Extracted so BOTH the final-consent accept and the share-bar gate can start.
@@ -1713,27 +1792,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       setStep('fullscreen_prompt');
       return;
     }
-    // HARD REQUIREMENT: the camera and microphone must be present and openable
-    // right now. Checked HERE (the single choke point both start paths funnel
-    // through) rather than trusting the persisted system-check verdict, which
-    // was taken minutes ago against hardware that may since have been unplugged.
-    // Sends them back to the system check — the screen whose whole job is
-    // verifying devices — so they can reconnect and re-verify properly.
+    // LAST-LINE device check. The earlier gates (practice → start, and the
+    // fullscreen-ready handler) should already have caught a missing device at
+    // the step it went missing; this is the backstop for an unplug in the final
+    // seconds.
+    //
+    // Deliberately does NOT redirect. It used to bounce the candidate all the
+    // way back to the system check, which — because this was once the ONLY
+    // check — meant unplugging during practice walked them through three more
+    // screens and then threw them back to step 3 with no idea why. Stay put and
+    // say what is wrong; every device screen now re-acquires on replug, so
+    // pressing the button again is all that is needed.
     setStartSubmitting(true);
     const missingDevice = await probeMediaDevicesReady();
     if (missingDevice) {
       setStartSubmitting(false);
-      const what =
-        missingDevice === 'both' ? 'camera and microphone'
-        : missingDevice === 'camera' ? 'camera'
-        : 'microphone';
-      toast.error(
-        `Your ${what} ${missingDevice === 'both' ? 'are' : 'is'} no longer available. ` +
-        `Please reconnect ${missingDevice === 'both' ? 'them' : 'it'} — the interview cannot start without ` +
-        `${missingDevice === 'both' ? 'both' : 'it'}.`,
-      );
-      console.warn(`[Portal] Start blocked — ${what} unavailable at start time (system check had passed earlier)`);
-      setStep('system_check');
+      toast.error(deviceMissingMessage(missingDevice), { duration: 8000 });
+      console.warn(`[Portal] Start blocked — ${missingDevice} unavailable at start time`);
       return;
     }
     try {
@@ -1787,6 +1862,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       ctx.resume?.().catch(() => { /* ignore */ });
       (window as any).__interviewAudioContext = ctx;
     } catch { /* ignore */ }
+    // ZOOM GUARD (deterministic, no LLM): if the browser is zoomed OUT too far,
+    // an in-page recorder/extension widget shrinks small enough to slip past the
+    // vision check. We ALLOW down to 75% zoom (some candidates prefer a slightly
+    // smaller page) and only block BELOW that. Blocked when DPR dropped >25%
+    // below the max seen (zoomed out since load), or below an absolute floor
+    // (covers loading already deeply zoomed out).
+    {
+      const dpr = window.devicePixelRatio || 1;
+      const baseline = baselineDprRef.current || dpr;
+      if (dpr < baseline * 0.75 || dpr < 0.6) {
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        console.warn(`[ShareBar] browser zoomed out too far (dpr=${dpr}, baseline=${baseline}) — blocking, ask ≥75%`);
+        setShareBarError('Your browser is zoomed out too far. Please set the zoom to at least 75% (press Ctrl+0 to reset to 100%), then click Continue again.');
+        return;
+      }
+    }
     setShareBarError(null);
     setShareBarChecking(true);
     try {

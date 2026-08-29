@@ -279,17 +279,41 @@ export default function StepSamplePractice({
 
     const initMedia = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
-        });
+        // Camera and microphone are opened INDEPENDENTLY and then combined.
+        //
+        // A single getUserMedia({video, audio}) is all-or-nothing: on a machine
+        // whose camera and mic are both peripherals, an unplugged MIC made the
+        // whole call throw and took the working CAMERA down with it — the
+        // preview went dead over a camera that was fine. Requesting each device
+        // on its own means one missing device never hides or disables the other.
+        const openOne = async (constraints: MediaStreamConstraints) => {
+          try { return await navigator.mediaDevices.getUserMedia(constraints); }
+          catch { return null; }
+        };
+        const camStream = await openOne({ video: true });
+        const micStream = await openOne({ audio: true });
         if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
+          camStream?.getTracks().forEach((t) => t.stop());
+          micStream?.getTracks().forEach((t) => t.stop());
           return;
         }
+        const videoTracks = camStream?.getVideoTracks() ?? [];
+        const audioTracks = micStream?.getAudioTracks() ?? [];
+        if (videoTracks.length === 0 && audioTracks.length === 0) {
+          console.error('[Practice] Neither camera nor microphone could be opened');
+          setMicReady(false);
+          return;
+        }
+        const stream = new MediaStream([...videoTracks, ...audioTracks]);
         mediaStreamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
-        setMicReady(true);
+        // Only claim the mic is ready when there actually IS one — this gates
+        // the practice recording UI.
+        setMicReady(audioTracks.length > 0);
+        if (audioTracks.length === 0) {
+          console.warn('[Practice] Camera opened but microphone is unavailable');
+          return;  // no audio track → nothing to analyse below
+        }
 
         // Audio analyser for level meter
         const AudioContextImpl: typeof AudioContext =
