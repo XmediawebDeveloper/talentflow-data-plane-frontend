@@ -199,6 +199,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // It is hidden during the entire-screen frame capture so the vision check
   // never mistakes OUR illustration for the real sharing bar (false positive).
   const shareBarMockRef = useRef<HTMLDivElement>(null);
+  // The ENTIRE hide-share-bar popup card. Hidden during the frame capture so the
+  // screenshot is just the empty screen background — then ANYTHING left on the
+  // frame (a recorder toolbar, another app, a stray icon) is unmistakably NOT
+  // ours, which is what makes the vision check (and clean-reference comparison)
+  // reliable. Restored immediately after the capture.
+  const shareBarCardRef = useRef<HTMLDivElement>(null);
   // Pre-interview single-active-session lease: true when another browser/device
   // already holds this interview link (blocks the second person from system
   // check onward). See the lease heartbeat effect.
@@ -1588,30 +1594,35 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // reports the real bar as "still visible" even when the candidate has hidden
     // it — a false positive that traps them on this step. We hide it, wait for
     // the screen-capture pipeline to reflect the change, capture, then restore.
-    // Hide EVERY decorative graphic on our own setup card during the capture —
-    // not just the share-bar mock. The strict foreign-icon vision check flags
-    // ANY non-interview icon on screen, so our own on-page graphics (the top
-    // Monitor icon, the mock bar, the button glyphs) would be reported as
-    // foreign apps and trap a compliant candidate. We hide anything tagged
-    // [data-capture-decor] (plus the mock ref for safety), wait for the
-    // screen-capture pipeline to reflect it, capture, then restore in finally.
-    const mock = shareBarMockRef.current;
-    const decorEls: HTMLElement[] = [];
-    if (mock) decorEls.push(mock);
-    try {
-      shareBarMockRef.current?.ownerDocument
-        ?.querySelectorAll<HTMLElement>('[data-capture-decor]')
-        .forEach((el) => { if (!decorEls.includes(el)) decorEls.push(el); });
-    } catch { /* querySelector never throws in practice; guard anyway */ }
-    const restores = decorEls.map((el) => {
+    // Hide the ENTIRE setup popup during the capture so the screenshot is just
+    // the empty screen background. Then anything still on the frame — a recorder
+    // toolbar, another app window, a stray icon — is unmistakably NOT part of the
+    // interview, which is exactly what makes the vision check and the clean-
+    // reference comparison reliable (no on-page text/icons of ours to reason
+    // around). We hide the whole card (falling back to the individual decorative
+    // graphics if the card ref is somehow unavailable), wait for the screen-
+    // capture pipeline to reflect it, capture, then restore in finally.
+    const hideEls: HTMLElement[] = [];
+    if (shareBarCardRef.current) {
+      hideEls.push(shareBarCardRef.current);
+    } else {
+      const mock = shareBarMockRef.current;
+      if (mock) hideEls.push(mock);
+      try {
+        shareBarMockRef.current?.ownerDocument
+          ?.querySelectorAll<HTMLElement>('[data-capture-decor]')
+          .forEach((el) => { if (!hideEls.includes(el)) hideEls.push(el); });
+      } catch { /* querySelector never throws in practice; guard anyway */ }
+    }
+    const restores = hideEls.map((el) => {
       const prev = el.style.visibility;
       el.style.visibility = 'hidden';
       return () => { el.style.visibility = prev; };
     });
     try {
-      // Let the compositor + screen-capture stream drop the now-hidden graphics
-      // (a few frames of latency); imperceptible during the "Checking…" state.
-      if (decorEls.length) await new Promise<void>((r) => window.setTimeout(r, 250));
+      // Let the compositor + screen-capture stream drop the now-hidden popup
+      // (a few frames of latency); brief, during the "Checking…" state.
+      if (hideEls.length) await new Promise<void>((r) => window.setTimeout(r, 250));
       const video = document.createElement('video');
       video.muted = true;
       (video as HTMLVideoElement).playsInline = true;
@@ -2741,7 +2752,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   if (step === 'hide_share_bar') {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
+        <div ref={shareBarCardRef} className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
           <div data-capture-decor className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Monitor className="w-8 h-8 text-blue-600" />
           </div>
