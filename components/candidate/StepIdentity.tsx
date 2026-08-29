@@ -832,11 +832,11 @@ export default function StepIdentity({
             {/* Left: Video feed */}
             <div className="relative bg-gray-900 rounded-xl aspect-video overflow-hidden flex items-center justify-center">
               {phase !== 'captured' && (
-                <video ref={videoRef} muted playsInline className="w-full h-full object-cover" />
+                <video ref={videoRef} muted playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
               )}
               {phase === 'captured' && photoPreview && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={photoPreview} alt="Captured identity photo" className="w-full h-full object-cover" />
+                <img src={photoPreview} alt="Captured identity photo" className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
               )}
               {cameraError && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white gap-2">
