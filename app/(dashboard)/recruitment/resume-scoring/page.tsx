@@ -379,6 +379,12 @@ export default function ResumeScoringRoute() {
         jdDepartment?: string; jdIndustryType?: string;
         jdEmploymentType?: string; jdRemoteType?: string; jdLocation?: string;
         jdPublishedAt?: string; jdCreatedByName?: string;
+        // The most recently scored resume's created_at for this JD. Captured
+        // from the FIRST item seen per jdId below, never re-derived from
+        // `scores` after that array gets re-sorted by score — `getAllScoredResumes`
+        // is documented to return newest-first, so the first item encountered
+        // for a jdId is its most recent score.
+        latestScoredAt?: string;
         scores: any[];
       }>();
 
@@ -398,6 +404,7 @@ export default function ResumeScoringRoute() {
             jdLocation: item.jd_location,
             jdPublishedAt: item.jd_published_at,
             jdCreatedByName: item.jd_created_by_name,
+            latestScoredAt: item.created_at,
             scores: [],
           });
         }
@@ -476,7 +483,10 @@ export default function ResumeScoringRoute() {
             id: jdId,
             jobId: jdId,
             jobTitle: data.jdTitle,
-            scoredAt: parseIST(data.scores[0]?.scoredDate || new Date().toISOString()),
+            // The most recent score's date, not data.scores[0] — that array is
+            // sorted by score descending just above, so its first entry is the
+            // highest-scoring resume, not necessarily the latest one scored.
+            scoredAt: parseIST(data.latestScoredAt || data.scores[0]?.scoredDate || new Date().toISOString()),
             source: 'database' as const,
             jdStatus: data.jdStatus,
             jdJobId: data.jdJobId,
@@ -536,6 +546,10 @@ export default function ResumeScoringRoute() {
         ? await scoringService.getJDScoredResumes(jdId, { page_size: probe.total, page: 1 })
         : probe;
       const allItems = [...(firstPage.items || [])];
+      // /scoring/jd/{id} returns newest-first — capture the most recent score's
+      // date here, before `scores` below gets re-sorted by score descending for
+      // display (see the same reasoning in loadScoredHistory above).
+      const mostRecentScoredAt = allItems[0]?.created_at;
 
       const scores = allItems.map((item: any) => {
         const matchScore = Math.round(item.overall_score || 0);
@@ -566,7 +580,7 @@ export default function ResumeScoringRoute() {
           scoredBy: item.scored_by_name || item.scored_by || 'System',
           version: item.resume_version || 1,
           resumeVersion: item.resume_version || 1,
-          source: 'database',
+          source: item.source || 'database',
           status: 'completed',
           errorReason: '',
           experience: item.experience_years ? `${item.experience_years} years` : undefined,
@@ -601,7 +615,7 @@ export default function ResumeScoringRoute() {
           id: jdId,
           jobId: jdId,
           jobTitle: title,
-          scoredAt: parseIST(scores[0]?.scoredDate || existing?.scoredAt?.toISOString() || new Date().toISOString()),
+          scoredAt: parseIST(mostRecentScoredAt || scores[0]?.scoredDate || existing?.scoredAt?.toISOString() || new Date().toISOString()),
           source: 'database' as const,
           totalScored: firstPage.total || scores.length,
           scoredResumes: scores,
