@@ -6,6 +6,8 @@ import type { ReactNode } from 'react';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import { formatJobExperienceText } from '@/lib/utils/jobExperience';
+import { formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
 
 /**
  * Job Version History for an assessment row, expanded in place beneath it.
@@ -61,7 +63,14 @@ interface AssessmentVersionHistoryPanelProps {
   /** Every assessment in this JD's lineage, in any order — sorted here. */
   assessments: AssessmentVersionRow[] | undefined;
   loading: boolean;
-  /** The job version the card above is on — the one that gets LATEST. */
+  /**
+   * The live job version as the HOST resolved it — the same number its own
+   * LATEST badge and its collapsed-row choice are drawn from, and the number
+   * this table badges LATEST from, so the card and this table cannot name
+   * different versions. It is the highest version number in the lineage —
+   * sequence, not status; this panel derives its own only when the prop is
+   * absent (rendered without a host).
+   */
   latestJobVersion?: number;
   /** The assessment the card is showing, marked so it is findable. */
   currentAssessmentId?: string;
@@ -115,13 +124,29 @@ const jobStatusLabel = (status?: string) => {
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 };
 
-/** Job-level columns only. Assessments live in the accordion below the row. */
+/**
+ * Job-level columns only — assessments live in the accordion below the row.
+ *
+ * The same columns, in the same order and under the same names, as the Job
+ * Openings version history (`buildBaseColumns` in
+ * components/jobs/JobVersionHistoryPanel): a job version reads identically
+ * wherever a recruiter meets it. Every cell is this version's own JD record;
+ * a field the record does not carry shows a dash.
+ *
+ * `Assessments` is this table's own addition and stays last before Actions —
+ * it is the whole reason the panel exists, and the Job Openings table has no
+ * equivalent to conflict with. The two columns Job Openings carries after
+ * Posted On / By (Last Updated, Applicants) are deliberately not here: this
+ * table's subject is which assessment answers which job version.
+ */
 const COLUMNS: { label: string; minW: string }[] = [
-  { label: 'Job Version', minW: 'min-w-[150px]' },
-  { label: 'Job Role', minW: 'min-w-[180px]' },
+  { label: 'Version', minW: 'min-w-[150px]' },
+  { label: 'Job Title', minW: 'min-w-[180px]' },
   { label: 'Status', minW: 'min-w-[110px]' },
-  { label: 'Created On', minW: 'min-w-[120px]' },
-  { label: 'Created By', minW: 'min-w-[130px]' },
+  { label: 'Experience / Industry', minW: 'min-w-[150px]' },
+  { label: 'Location', minW: 'min-w-[120px]' },
+  { label: 'Work Mode / Type', minW: 'min-w-[130px]' },
+  { label: 'Posted On / By', minW: 'min-w-[130px]' },
   { label: 'Assessments', minW: 'min-w-[240px]' },
 ];
 
@@ -132,8 +157,17 @@ interface JobVersionGroup {
   isLatestJobVersion: boolean;
   jobTitle?: string;
   jobStatus?: string;
-  jobCreatedAt?: string;
-  jobCreatedBy?: string;
+  /** Experience / Industry, Location and Work Mode / Type all come from this
+   *  version's own JD record, so they describe the version in the row rather
+   *  than the job's current state. Undefined until that record lands, and
+   *  undefined stays a dash — never a default. */
+  experienceText?: string;
+  industryType?: string;
+  locationText?: string;
+  employmentType?: string;
+  remoteType?: string;
+  postedOn?: string;
+  postedBy?: string;
   assessments: AssessmentVersionRow[];
 }
 
@@ -203,12 +237,22 @@ export default function AssessmentVersionHistoryPanel({
     return [...numbers].sort((a, b) => b - a); // Latest first, then older.
   })();
 
-  /* The live job version. The lineage's own flag wins; the card's number is
-     the fallback, and the highest present backstops both. */
-  const newestJobVersion =
-    (jobVersions ?? []).find((v) => v.is_latest_version)?.version_number
-    ?? latestJobVersion
-    ?? jobVersionNumbers[0];
+  /* The live job version, as the HOST resolved it — one resolver
+     (`getLatestJobVersion` in the assessments list) answers this for the card's
+     LATEST badge, for the version each lineage is collapsed down to on that
+     card, and for the row badged LATEST here. So the row this table marks is
+     always the row the card above it is showing, and both move together when a
+     version is created, republished or dropped back to Draft.
+
+     That number is the highest version in the lineage — SEQUENCE, as on the
+     Job Openings page, never status and never `is_latest_version`, so a Draft
+     v2 over a Published v1 is the row badged LATEST here and the row the card
+     above is showing. It already counts every job version the list knows and
+     this panel's own assessment rows, so it can never be lower than what is
+     printed here. Deriving it independently is exactly what let the two
+     disagree; the fallback runs only if no host number is passed at all, and
+     `jobVersionNumbers` is already sorted newest-first. */
+  const newestJobVersion = latestJobVersion ?? jobVersionNumbers[0] ?? 1;
 
   const lineageByVersion = new Map<number, JDLineageVersion>();
   for (const version of jobVersions ?? []) {
@@ -227,8 +271,25 @@ export default function AssessmentVersionHistoryPanel({
       isLatestJobVersion: jobVersion === newestJobVersion,
       jobTitle: detail?.title || lineageEntry?.title || fallbackJobTitle,
       jobStatus: lineageEntry?.status,
-      jobCreatedAt: lineageEntry?.published_at || lineageEntry?.created_at || detail?.created_at,
-      jobCreatedBy: detail?.created_by_name,
+      /* Read exactly as the Job Openings history reads them, off the same JD
+         record, so the two tables can never format the same job differently. */
+      experienceText: detail
+        ? formatJobExperienceText({
+            jobLevel: detail.job_level || detail.experience_level,
+            experienceMin: detail.experience_min,
+            experienceMax: detail.experience_max,
+          })
+        : undefined,
+      industryType: detail?.industry_type,
+      /* The single field first, else the cities named in the structured list. */
+      locationText:
+        detail?.location
+        || (detail?.locations || []).map((loc) => loc?.city).filter(Boolean).join(', ')
+        || undefined,
+      employmentType: detail?.employment_type,
+      remoteType: detail?.remote_type,
+      postedOn: lineageEntry?.published_at || detail?.published_at || lineageEntry?.created_at || detail?.created_at,
+      postedBy: detail?.created_by_name,
       /* Only the assessments actually recorded against THIS job version,
          newest assessment version first. */
       assessments: assessmentRows
@@ -272,7 +333,7 @@ export default function AssessmentVersionHistoryPanel({
               : ''
           }`}
         >
-          <table className="w-full min-w-[1240px] text-left">
+          <table className="w-full min-w-[1320px] text-left">
             <thead>
               {/* The bottom hairline is an inset shadow, not border-b —
                   collapsed-table borders detach from sticky cells and would
@@ -348,14 +409,53 @@ export default function AssessmentVersionHistoryPanel({
                       <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                         <StatusChip label={jobStatusLabel(group.jobStatus)} />
                       </td>
-                      <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
-                        {group.jobCreatedAt ? formatISTDate(group.jobCreatedAt) : '—'}
+                      {/* Experience / Industry — one column, stacked, exactly
+                          as the Job Openings history stacks it. Industry runs
+                          through the shared formatter so it never shows the raw
+                          snake_case value. */}
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                        <div className="text-sm text-gray-700 dark:text-slate-300">
+                          {group.experienceText || '—'}
+                        </div>
+                        <div
+                          className="text-xs text-gray-500 dark:text-slate-400 max-w-[180px] truncate"
+                          title={group.industryType ? formatIndustryType(group.industryType) : ''}
+                        >
+                          {group.industryType ? formatIndustryType(group.industryType) : '—'}
+                        </div>
                       </td>
                       <td
-                        className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap max-w-[150px] truncate align-middle"
-                        title={group.jobCreatedBy || ''}
+                        className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap max-w-[160px] truncate align-middle"
+                        title={group.locationText || ''}
                       >
-                        {group.jobCreatedBy || '—'}
+                        {group.locationText || '—'}
+                      </td>
+                      {/* Work Mode / Type — stacked: employment type over
+                          remote mode. A missing half drops out rather than
+                          being filled in. */}
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                        <div className="text-sm text-gray-700 dark:text-slate-300">
+                          {group.employmentType ? formatEmploymentType(group.employmentType) : '—'}
+                        </div>
+                        {group.remoteType && (
+                          <div className="text-xs text-gray-500 dark:text-slate-400">
+                            {formatEmploymentType(group.remoteType)}
+                          </div>
+                        )}
+                      </td>
+                      {/* Posted On / By — date over author, the pair the two
+                          old Created On / Created By columns used to spend two
+                          columns on. */}
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                        <div className="text-sm text-gray-700 dark:text-slate-300">
+                          {group.postedOn ? formatISTDate(group.postedOn) : '—'}
+                        </div>
+                        <div
+                          className="text-xs text-gray-500 dark:text-slate-400 max-w-[160px] truncate"
+                          title={group.postedBy || ''}
+                        >
+                          {group.postedBy || '—'}
+                        </div>
                       </td>
                       {/* Summary, not a column pair: one assessment is named
                           here and needs no accordion, several are counted here
@@ -379,12 +479,12 @@ export default function AssessmentVersionHistoryPanel({
                             </span>
                           </span>
                         ) : (
+                          /* The count alone. The Actions chevron and the
+                             row's own click already say it opens, and its
+                             aria-label carries that for a screen reader. */
                           <span className="inline-flex items-center gap-1.5">
                             <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35">
                               {count} assessments
-                            </span>
-                            <span className="text-xs text-gray-500 dark:text-slate-400">
-                              {isOpen ? 'Showing all' : 'Expand to view'}
                             </span>
                           </span>
                         )}

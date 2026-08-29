@@ -37,6 +37,17 @@ interface ApplyToJobModalProps {
   stayOnCurrentPage?: boolean;
   /** Overrides the confirm button's label — "Run AI Talent Match" and friends. */
   confirmLabel?: string;
+  /**
+   * Run the dialog as a JOB PICKER: the Candidates Selected panel is dropped
+   * and the confirm needs only a job.
+   *
+   * For flows that choose the JOB FIRST and the candidates after it — Resume
+   * Scoring picks the job, then opens its own resume selection. Everything
+   * else is untouched: the same shell, header, search, job cards, version
+   * history, pagination and footer, so the picker reads as the dialog it is.
+   * `onApply` is then called with an empty resume list.
+   */
+  jobOnly?: boolean;
   /** Replaces the Next Steps list when a flow ends somewhere different. */
   nextSteps?: string[];
 }
@@ -52,6 +63,7 @@ export default function ApplyToJobModal({
   stayOnCurrentPage = false,
   confirmLabel,
   nextSteps,
+  jobOnly = false,
 }: ApplyToJobModalProps) {
   // Default titles based on mode
   const defaultTitle =
@@ -101,7 +113,71 @@ export default function ApplyToJobModal({
 
   const submittedIdFor = (resume: Resume) => versionChoice[resume.id]?.id || resume.id;
 
-  const canSubmit = !!selection && includedResumes.length > 0;
+  /* Every job is listed; the search narrows it — through the shared matcher,
+     so this dialog and the assessment JD picker answer a query identically. */
+  const jobSearch = searchQuery.trim().toLowerCase();
+  const matchesSearch = jobSearchMatcher(searchQuery);
+
+  /* Every version, as fetched — what the lineage grouping needs to know which
+     version of a job is the latest one. Also what the "View Versions" test
+     below counts, exactly as the Job Openings list counts it. */
+  const allVersions = useMemo(() => fetchedJobs ?? jobs ?? [], [fetchedJobs, jobs]);
+  const versionGroups = useMemo(() => groupByLineage(allVersions), [allVersions]);
+
+  /* The selectable jobs, and the number reported above them: one row per
+     lineage, the latest version representing it, kept only where that latest
+     version is Published. `getPublishedJobs` is the same call behind the Job
+     Openings page's Published stat card, over the same request — so the count
+     in this dialog is that card's count, not a second opinion.
+
+     Applied BEFORE the search, so a query can never promote an older version to
+     stand in for its lineage. */
+  const publishedJobs = useMemo(() => getPublishedJobs(allVersions), [allVersions]);
+
+  const filteredJobs = useMemo(
+    () => publishedJobs.filter(matchesSearch),
+    // matchesSearch closes over the query, which is the only thing that changes it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [publishedJobs, jobSearch],
+  );
+
+  /* Newest first — the Job Openings list's own default sort. Every row is a
+     published job, so there is no eligible-first partition to make. */
+  const sortedJobs = useMemo(() => sortJobs(filteredJobs, 'date', 'desc'), [filteredJobs]);
+
+  /* Pagination — same shape and page size as the Job Openings list. The page
+     is stored WITH the search it belongs to, so a new query starts back at page
+     one by comparison rather than by an effect that resets it a render later
+     (which would flash one page of the wrong rows). */
+  const [pageState, setPageState] = useState({ query: '', page: 1 });
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
+  const listRef = useRef<HTMLDivElement>(null);
+  const currentPage = pageState.query === jobSearch ? pageState.page : 1;
+  const setCurrentPage = (page: number) => setPageState({ query: jobSearch, page });
+
+  const totalPages = Math.max(1, Math.ceil(sortedJobs.length / itemsPerPage));
+  // A shrinking result set (a new search, a narrower list) can leave the
+  // current page past the end; clamp on read so the rows never come back empty
+  // while the page number still points somewhere.
+  const safePage = Math.min(currentPage, totalPages);
+  const currentJobs = sortedJobs.slice((safePage - 1) * itemsPerPage, safePage * itemsPerPage);
+
+  /* One role at a time. Candidates are applied to a single job, so picking a
+     second would be ambiguous rather than useful — the other rows go inert
+     until the current pick is cleared or swapped by clicking it again. The pick
+     survives paging and searching, since it is held outside the list. */
+  const selectedJobId = selection?.job.id ?? null;
+  const selectionOnThisPage = !!selection && currentJobs.some(job => lineageKey(job) === selection.lineage);
+
+  /* Pick a version — the card's own radio passes the latest, the Version
+     History rows pass an older one. Clicking the picked one lets go of it. */
+  const pickVersion = (job: Job, lineage: string) => {
+    setSelection(prev => (prev?.job.id === job.id ? null : { job, lineage }));
+  };
+
+  /* A job picker has no candidates to require — the flow that opened it picks
+     them next. Everywhere else both halves are still needed. */
+  const canSubmit = !!selection && (jobOnly || includedResumes.length > 0);
 
   const handleApply = async () => {
     if (canSubmit) {
@@ -114,6 +190,15 @@ export default function ApplyToJobModal({
          a version IS a JD record with its own id, so an older version chosen
          from the history is submitted as itself, not as its lineage's latest. */
       const picked = selection!.job;
+
+      /* A job picker hands the choice back and closes: there is nothing to
+         submit yet, so the confirm must not sit in a pending state pretending
+         there is. */
+      if (jobOnly) {
+        setIsApplying(false);
+        onApply([], [picked.id], [picked]);
+        return;
+      }
 
       // Simulate API call
       setTimeout(() => {
@@ -214,7 +299,17 @@ export default function ApplyToJobModal({
         {/* Footer */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
           <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-            {includedResumes.length === 0
+            {jobOnly
+              ? !selection
+                ? 'Select one job to continue'
+                : (
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                    Selected: {selection.job.job_id ? `${selection.job.job_id} · ` : ''}
+                    {selection.job.title} (v{selection.job.versionNumber ?? 1})
+                  </span>
+                )
+              : includedResumes.length === 0
               ? 'Select at least one candidate to continue'
               : !selection
                 ? 'Select one job to continue'

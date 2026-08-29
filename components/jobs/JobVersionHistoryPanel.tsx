@@ -47,11 +47,32 @@ const buildBaseColumns = (showScoredBy: boolean): { label: string; minW: string 
   { label: 'Applicants', minW: 'min-w-[90px]' },
 ];
 
-const buildColumns = (selectable: boolean, actionable: boolean, showScoredBy: boolean) => [
+const buildColumns = (
+  selectable: boolean,
+  actionable: boolean,
+  showScoredBy: boolean,
+  extraColumns: ExtraVersionColumn[],
+) => [
   ...(selectable ? [{ label: 'Select', minW: 'min-w-[64px]' }] : []),
   ...buildBaseColumns(showScoredBy),
+  ...extraColumns.map(({ label, minW }) => ({ label, minW })),
   ...(actionable ? [{ label: 'Action', minW: 'min-w-[64px]' }] : []),
 ];
+
+/**
+ * A column a host adds after the shared ones, before Action.
+ *
+ * For a fact that belongs to THAT surface rather than to job versions in
+ * general — the assessment each JD version does or does not have, on the
+ * assessment JD picker. Kept as a column rather than crammed into the Action
+ * cell so the table still reads as a table, and optional so every other host
+ * renders exactly the columns it did before.
+ */
+export interface ExtraVersionColumn {
+  label: string;
+  minW: string;
+  render: (versionJob: Job) => ReactNode;
+}
 
 interface JobVersionHistoryPanelProps {
   /** The latest-version row this history hangs off. */
@@ -93,6 +114,31 @@ interface JobVersionHistoryPanelProps {
   onSelectVersion?: (versionJob: Job) => void;
   /** Which version is currently picked, if any — the checked radio. */
   selectedVersionId?: string | null;
+  /**
+   * Keep the LATEST version's row when the Select column is on.
+   *
+   * Off by default, because on most selectable surfaces the row this panel
+   * hangs off is itself a radio for the latest version, and listing it again
+   * would put two radios on screen for one pick. The assessment JD picker sets
+   * it: its table carries an Assessment column and a per-version Create action
+   * that have to answer for v3 beside v2 and v1, so the latest row cannot be
+   * dropped. A host that turns this on must keep its own card radio in a
+   * SEPARATE `radioGroupName`, or the browser will strip the checked state off
+   * one of the two inputs that represent the same pick.
+   */
+  keepLatestWhenSelectable?: boolean;
+  /**
+   * Per-version veto on selection, replacing the panel's default
+   * published-only rule. Return `null` where the version can be picked, or the
+   * reason it cannot — which becomes the disabled radio's tooltip.
+   *
+   * Assessments are built against drafts as freely as against published
+   * versions, and are blocked instead by a version already having one, so that
+   * surface answers this question for itself.
+   */
+  versionSelectionState?: (versionJob: Job) => string | null;
+  /** Tooltip on a selectable version's radio. Defaults to "Apply to vN". */
+  selectHint?: (versionJob: Job) => string;
   /**
    * Turn every radio off without dropping the column — set when the host has
    * already committed the pick elsewhere (another job is chosen in the Apply to
@@ -138,6 +184,8 @@ interface JobVersionHistoryPanelProps {
    * version alone.
    */
   statusOverrides?: Record<string, string>;
+  /** Host-specific columns, inserted after the shared ones and before Action. */
+  extraColumns?: ExtraVersionColumn[];
 }
 
 /**
@@ -161,6 +209,9 @@ export default function JobVersionHistoryPanel({
   renderAction,
   onSelectVersion,
   selectedVersionId = null,
+  keepLatestWhenSelectable = false,
+  versionSelectionState,
+  selectHint = (versionJob) => `Apply to v${versionJob.versionNumber ?? 1}`,
   selectionDisabled = false,
   selectionDisabledReason,
   radioGroupName = 'job-version-selection',
@@ -169,8 +220,9 @@ export default function JobVersionHistoryPanel({
   onRowClick,
   staticRows = false,
   statusOverrides,
+  extraColumns = [],
 }: JobVersionHistoryPanelProps) {
-  const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy);
+  const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy, extraColumns);
   /* Which versions this table lists: the WHOLE chain — v1, v2 … up to and
      including the latest.
 
@@ -207,7 +259,7 @@ export default function JobVersionHistoryPanel({
      pick. A read-only table has no such clash, which is why this is gated on
      selection mode rather than applied everywhere. */
   const jobVersions = resolveVersionHistoryRows(job, versions, {
-    excludeId: onSelectVersion ? job.id : undefined,
+    excludeId: onSelectVersion && !keepLatestWhenSelectable ? job.id : undefined,
   });
 
   return (
@@ -311,11 +363,18 @@ export default function JobVersionHistoryPanel({
                 const isSelected = !!onSelectVersion && selectedVersionId === version.id;
                 /* Only a published version can receive candidates — the same
                    rule the dialog's job list is built on, applied per version
-                   here so a draft in the history can't be picked. */
-                const selectable = versionPlainStatus === 'Published' && !selectionDisabled;
+                   here so a draft in the history can't be picked. A host that
+                   answers this question itself (`versionSelectionState`)
+                   replaces the rule outright: the assessment picker builds
+                   against drafts, and blocks on an existing assessment
+                   instead. */
+                const hostVeto = versionSelectionState ? versionSelectionState(versionJob) : undefined;
+                const selectableByRule =
+                  hostVeto === undefined ? versionPlainStatus === 'Published' : hostVeto === null;
+                const selectable = selectableByRule && !selectionDisabled;
                 const notSelectableReason = selectionDisabled
                   ? selectionDisabledReason
-                  : 'Only published versions can receive candidates';
+                  : hostVeto ?? 'Only published versions can receive candidates';
 
                 return (
                   /* NO transform on the row itself: a transformed <tr> becomes
@@ -359,8 +418,11 @@ export default function JobVersionHistoryPanel({
                         onClick={(e) => e.stopPropagation()}
                       >
                         <label
-                          className={`flex items-center ${selectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                          title={selectable ? `Apply to v${version.version_number ?? 1}` : notSelectableReason}
+                          /* An unpickable radio is dimmed as well as disabled —
+                             a greyed native control alone is easy to miss on a
+                             table where every other row still ticks. */
+                          className={`flex items-center ${selectable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                          title={selectable ? selectHint(versionJob) : notSelectableReason}
                         >
                           <input
                             type="radio"
@@ -543,6 +605,11 @@ export default function JobVersionHistoryPanel({
                         {versionApplicants[version.id] ?? '—'}
                       </span>
                     </td>
+                    {extraColumns.map(({ label, render }) => (
+                      <td key={label} className="py-2.5 px-3 whitespace-nowrap align-middle">
+                        {render(versionJob)}
+                      </td>
+                    ))}
                     {renderAction && (
                       /* Action — pinned right so it stays reachable while the
                          table scrolls sideways. Opaque background (plus a solid

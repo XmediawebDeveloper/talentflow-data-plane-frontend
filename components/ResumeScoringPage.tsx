@@ -30,6 +30,7 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
+import ApplyToJobModal from '@/components/ApplyToJobModal';
 import JobVersionHistoryCards from '@/components/jobs/JobVersionHistoryCards';
 import type { Job as LineageJob } from '@/lib/types/types';
 import {
@@ -96,6 +97,37 @@ interface Job {
   industry_type?: string;
   remote_type?: string;
 }
+
+/**
+ * The Apply to Job dialog's `Job` → this page's own.
+ *
+ * The dialog reads the JD list through the shared `mapJDToJob`, which names
+ * these fields the way the Job type does (`currentVersion`, `postedDate`,
+ * `postedBy`, `workMode`); the summary on this page reads the API's own
+ * snake_case names. Only a rename — no field is invented, and one the record
+ * does not carry stays undefined so its chip simply doesn't render.
+ *
+ * `current_version` takes the LINEAGE version first: that is the number the
+ * dialog showed beside the job the user just picked, and a pick from a job's
+ * version history is a specific version rather than the lineage's latest.
+ */
+const toPageJob = (job: LineageJob): Job => ({
+  id: job.id,
+  title: job.title,
+  location: job.location || '',
+  department: job.department || '',
+  status: job.status,
+  applicants: job.applicants ?? 0,
+  employmentType: job.employmentType,
+  experience: job.experience,
+  job_id: job.job_id,
+  current_version: job.versionNumber ?? job.currentVersion,
+  published_at: job.postedDate,
+  created_by_name: job.postedBy,
+  creation_method: job.creation_method,
+  industry_type: job.industry_type,
+  remote_type: job.workMode,
+});
 
 interface Resume {
   id: string;
@@ -3179,6 +3211,74 @@ export default function ResumeScoringPage({
         )}
       </div>
       </div>
+
+      {/* Select Job Description — the Apply to Job dialog itself, in
+          job-picker mode: same shell, same job cards, same search, version
+          history, pagination and footer, reading the JD list from the same
+          endpoint the Job Openings page reads. Candidates are chosen after the
+          job here, so its Candidates Selected panel is off (`jobOnly`) and the
+          confirm needs only a job. */}
+      {showJobPicker && (
+        <ApplyToJobModal
+          resumes={[]}
+          /* Seeds the list so the dialog opens with content; it then refetches
+             every JD version for itself, which is what the version history and
+             the published-latest collapse need. */
+          jobs={publishedJobs as unknown as LineageJob[]}
+          jobOnly
+          mode="scoring"
+          confirmLabel="Select Job"
+          onClose={() => setShowJobPicker(false)}
+          onApply={(_resumeIds, jobIds, jobRecords) => {
+            const picked = jobRecords?.[0];
+            const jobId = jobIds[0];
+            if (!jobId) return;
+            /* A different job invalidates what was chosen against the old one,
+               so the source and the resume selection reset — exactly what
+               picking from the dropdown used to do. */
+            setSelectedJob(jobId);
+            setPickedJob(picked ? toPageJob(picked) : null);
+            setResumeSource(null);
+            setSelectedResumes([]);
+            setShowResults(false);
+            setShowJobPicker(false);
+          }}
+        />
+      )}
+
+      {/* Select Job Description — the Apply to Job dialog itself, in
+          job-picker mode: same shell, same job cards, same search, version
+          history, pagination and footer, reading the JD list from the same
+          endpoint the Job Openings page reads. Candidates are chosen after the
+          job here, so its Candidates Selected panel is off (`jobOnly`) and the
+          confirm needs only a job. */}
+      {showJobPicker && (
+        <ApplyToJobModal
+          resumes={[]}
+          /* Seeds the list so the dialog opens with content; it then refetches
+             every JD version for itself, which is what the version history and
+             the published-latest collapse need. */
+          jobs={publishedJobs as unknown as LineageJob[]}
+          jobOnly
+          mode="scoring"
+          confirmLabel="Select Job"
+          onClose={() => setShowJobPicker(false)}
+          onApply={(_resumeIds, jobIds, jobRecords) => {
+            const picked = jobRecords?.[0];
+            const jobId = jobIds[0];
+            if (!jobId) return;
+            /* A different job invalidates what was chosen against the old one,
+               so the source and the resume selection reset — exactly what
+               picking from the dropdown used to do. */
+            setSelectedJob(jobId);
+            setPickedJob(picked ? toPageJob(picked) : null);
+            setResumeSource(null);
+            setSelectedResumes([]);
+            setShowResults(false);
+            setShowJobPicker(false);
+          }}
+        />
+      )}
 
       {/* Resume Selection Modal — the same self-contained "Select Applicants to
           Score" popup the Job Details page uses (tabs, folder tree, search,
