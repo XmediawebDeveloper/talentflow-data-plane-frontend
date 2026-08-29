@@ -17,6 +17,7 @@ import {
 import { toast } from '@/components/ui/enhanced-toast';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -673,10 +674,10 @@ export default function TeamUsageAnalytics() {
                 <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-20 overflow-hidden">
                   <button
                     onClick={() => { exportCSV(teams, fromDate, toDate); setShowExportMenu(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-2"
+                    className="group w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-2"
                   >
                     <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                    Team Level
+                    <span className={MENU_ITEM_SCALE_CLASS}>Team Level</span>
                   </button>
                   <button
                     disabled={exportingUsers}
@@ -689,12 +690,12 @@ export default function TeamUsageAnalytics() {
                         setExportingUsers(false);
                       }
                     }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-2 disabled:opacity-50"
+                    className="group w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center gap-2 disabled:opacity-50"
                   >
                     {exportingUsers
                       ? <Loader2 className="w-4 h-4 text-gray-400 dark:text-slate-500 animate-spin" />
                       : <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />}
-                    User Level (drill-down)
+                    <span className={MENU_ITEM_SCALE_CLASS}>User Level (drill-down)</span>
                   </button>
                 </div>
               )}
