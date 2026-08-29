@@ -10,6 +10,7 @@ import { useDrag, useDrop } from 'react-dnd';
 import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
+import type { JDMergeTrailEntry } from '@/lib/services/jdService';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { normalizeManualJDToMarkdown, stripEmptyCertificationSections } from '@/lib/utils/jdMarkdown';
@@ -631,6 +632,9 @@ interface ExtractedData {
    *  informational: it is sent as its own field and never folded into the
    *  description, so no scoring, assessment or interview input ever reads it. */
   additionalDetails: string;
+  /** Duplicate groups the extraction collapsed. Kept in Step 2 state so a merged skill
+   *  can be explained and restored; not persisted - a re-extraction produces a new one. */
+  mergeTrail: JDMergeTrailEntry[];
   internalRecruiterComments: string[];
   // JD09: Additional extraction fields
   certifications: string[];
@@ -773,6 +777,9 @@ interface DraggableSkillProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   readOnly?: boolean;
+  /** Set when this skill absorbed duplicates during extraction. */
+  mergedInto?: JDMergeTrailEntry;
+  onRestoreMerged?: (survivor: string, removed: string) => void;
 }
 
 const DraggableSkill = ({
@@ -787,8 +794,11 @@ const DraggableSkill = ({
   onEditChange,
   onSaveEdit,
   onCancelEdit,
-  readOnly = false
+  readOnly = false,
+  mergedInto,
+  onRestoreMerged,
 }: DraggableSkillProps) => {
+  const [showMerged, setShowMerged] = useState(false);
   const [{ isDragging }, drag, dragPreview] = useDrag(() => ({
     type: 'SKILL',
     item: { skill, category, index },
@@ -851,12 +861,70 @@ const DraggableSkill = ({
             )}
             <CheckCircle className={`w-4 h-4 ${tickColor} flex-shrink-0`} />
             <span
-              className={`text-sm text-gray-700 dark:text-slate-300 flex-1 min-w-0 truncate ${readOnly ? '' : 'cursor-pointer hover:text-gray-900'}`}
+              className={`text-sm text-gray-700 dark:text-slate-300 min-w-0 truncate ${readOnly ? '' : 'cursor-pointer hover:text-gray-900'}`}
               onClick={() => !readOnly && onStartEdit(category, index, skill)}
               title={skill}
             >
               {skill}
             </span>
+            {/* A merged skill otherwise disappears with nothing on screen to say it was
+                ever extracted - the one Step 2 mistake a recruiter cannot notice. This
+                badge is the whole point: it makes the removal visible, explains it in the
+                JD's own terms, and undoes it. */}
+            {mergedInto && mergedInto.removed.length > 0 && (
+              <div className="relative flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowMerged(v => !v)}
+                  className="text-[11px] leading-none px-1.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                  title={`${mergedInto.removed.length} duplicate${mergedInto.removed.length > 1 ? 's' : ''} merged into this skill - click to see why`}
+                  aria-expanded={showMerged}
+                >
+                  +{mergedInto.removed.length} merged
+                </button>
+                {showMerged && (
+                  <div className="absolute right-0 z-30 mt-1 w-80 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg p-3 text-left">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">
+                        Merged into &ldquo;{skill}&rdquo;
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowMerged(false)}
+                        className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                        aria-label="Close"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="space-y-2.5">
+                      {mergedInto.removed.map((rm, i) => (
+                        <div key={rm} className="border-t border-gray-100 dark:border-slate-800 pt-2 first:border-t-0 first:pt-0">
+                          <p className="text-xs font-medium text-gray-800 dark:text-slate-200 break-words">{rm}</p>
+                          <p className="text-[11px] text-gray-600 dark:text-slate-400 mt-0.5 leading-snug">
+                            {mergedInto.reasons?.[i]}
+                          </p>
+                          {mergedInto.removed_sources?.[i] && (
+                            <p className="text-[11px] text-gray-500 dark:text-slate-500 mt-1 italic break-words">
+                              From the JD: &ldquo;{mergedInto.removed_sources[i]}&rdquo;
+                            </p>
+                          )}
+                          {!readOnly && onRestoreMerged && (
+                            <button
+                              type="button"
+                              onClick={() => onRestoreMerged(mergedInto.survivor, rm)}
+                              className="mt-1.5 text-[11px] font-medium text-brand-blue hover:underline"
+                            >
+                              Restore as a separate skill
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           {!readOnly && (
             <div className="flex gap-1">
@@ -1344,6 +1412,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     locationsRequired: false,
     assessmentGuidance: '',
     additionalDetails: '',
+    mergeTrail: [],
     internalRecruiterComments: [],
     // JD09: Certifications and Domain Keywords
     certifications: [],
@@ -1738,6 +1807,51 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     return undefined;
   };
 
+
+  /**
+   * Put a merged-away skill back as its own entry.
+   *
+   * The reason this exists at all: dedupe is the one operation in Step 2 whose mistakes
+   * are INVISIBLE - a wrongly merged skill leaves no trace on screen, so a recruiter
+   * cannot notice it to fix it. Explaining the merge makes it visible; this makes it
+   * correctable, which is what actually protects them.
+   *
+   * Restores into the SURVIVOR's list rather than wherever it was extracted from: the
+   * survivor is where the recruiter is looking, and the two were judged the same skill,
+   * so that is the list they belong in. They can drag it across afterwards.
+   *
+   * The entry is dropped from the trail once its last removal is restored, so the badge
+   * disappears rather than offering to restore something already on screen.
+   */
+  const handleRestoreMergedSkill = (survivor: string, removed: string) => {
+    setExtractedData(prev => {
+      const entry = prev.mergeTrail.find(e => e.survivor === survivor);
+      if (!entry) return prev;
+      const category = entry.list === 'nice_to_have_skills' ? 'niceToHaveSkills' : 'mustHaveSkills';
+      const already = (prev[category] || []).some(
+        sk => sk.trim().toLowerCase() === removed.trim().toLowerCase()
+      );
+      const nextIdx = entry.removed.indexOf(removed);
+      const nextTrail = prev.mergeTrail
+        .map(e => e !== entry ? e : {
+          ...e,
+          removed: e.removed.filter((_, i) => i !== nextIdx),
+          reasons: e.reasons.filter((_, i) => i !== nextIdx),
+          removed_sources: (e.removed_sources || []).filter((_, i) => i !== nextIdx),
+        })
+        .filter(e => e.removed.length > 0);
+      return {
+        ...prev,
+        [category]: already ? prev[category] : [...(prev[category] || []), removed],
+        mergeTrail: nextTrail,
+      };
+    });
+    markExtractedDataModified();
+    toast.success({
+      title: 'Skill restored',
+      description: `"${removed}" is back in the list as its own skill.`,
+    });
+  };
 
   // Helper: mark extracted data as modified AND reset formatted flag so AI reformatting triggers
   const markExtractedDataModified = () => {
@@ -2651,6 +2765,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         additionalDetails: prev.additionalDetails?.trim()
           ? prev.additionalDetails
           : (params.additional_details || ''),
+        // Skills only: comment merges rest on judgement, so their reasons are vaguer, and
+        // a vague explanation erodes trust faster than none.
+        mergeTrail: (params.merge_trail || []).filter((e: JDMergeTrailEntry) => e.kind === 'skill'),
         };
       });
 
@@ -3387,6 +3504,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         additionalDetails: extractedData.additionalDetails?.trim()
           ? extractedData.additionalDetails
           : (params.additional_details || ''),
+        mergeTrail: (params.merge_trail || []).filter((e: JDMergeTrailEntry) => e.kind === 'skill'),
         internalRecruiterComments: isEditMode ? extractedData.internalRecruiterComments : [],
         // JD09: Extract certifications and domain keywords
         certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? extractedData.certifications : []),
@@ -6337,6 +6455,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         skill={skill}
                         index={index}
                         category="mustHaveSkills"
+                        mergedInto={extractedData.mergeTrail?.find(
+                          e => e.list === 'must_have_skills' && e.survivor === skill
+                        )}
+                        onRestoreMerged={handleRestoreMergedSkill}
                         onMove={handleMoveSkill}
                         onRemove={handleRemoveSkill}
                         onStartEdit={handleStartEditSkill}
@@ -6414,6 +6536,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         skill={skill}
                         index={index}
                         category="niceToHaveSkills"
+                        mergedInto={extractedData.mergeTrail?.find(
+                          e => e.list === 'nice_to_have_skills' && e.survivor === skill
+                        )}
+                        onRestoreMerged={handleRestoreMergedSkill}
                         onMove={handleMoveSkill}
                         onRemove={handleRemoveSkill}
                         onStartEdit={handleStartEditSkill}
