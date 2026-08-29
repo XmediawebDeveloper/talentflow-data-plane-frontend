@@ -40,9 +40,11 @@ export interface JobVersionLineage {
    * from the same /scoring/jd/{id} request `versionApplicants` already makes
    * (that endpoint returns newest-first, so its one row IS the latest score),
    * so this costs no extra request. `null` means the version has never been
-   * scored; an unset key means the count hasn't loaded yet.
+   * scored; an unset key means the count hasn't loaded yet. `source` is the
+   * raw scoring-record source field, for callers to run through
+   * `getScoringSourceLabel`.
    */
-  versionScoredBy: Record<string, { name: string; scoredAt: string } | null>;
+  versionScoredBy: Record<string, { name: string; scoredAt: string; source?: string } | null>;
   /** Open or close one job's history, loading it on first open. */
   toggle: (key: string, jobId: string) => void;
   /**
@@ -77,7 +79,7 @@ export function useJobVersionLineage(): JobVersionLineage {
   const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
   const [versionDetails, setVersionDetails] = useState<Record<string, JDResponse>>({});
   const [versionApplicants, setVersionApplicants] = useState<Record<string, number>>({});
-  const [versionScoredBy, setVersionScoredBy] = useState<Record<string, { name: string; scoredAt: string } | null>>({});
+  const [versionScoredBy, setVersionScoredBy] = useState<Record<string, { name: string; scoredAt: string; source?: string } | null>>({});
   const [filterLineages, setFilterLineages] = useState<Record<string, JDLineageVersion[]>>({});
   /* A ref, not state: this only needs to stop a second fetch for the same key
      being started before the first resolves, and putting it in state would
@@ -100,7 +102,7 @@ export function useJobVersionLineage(): JobVersionLineage {
       setVersionScoredBy(prev => ({
         ...prev,
         [versionId]: latest
-          ? { name: latest.scored_by_name || latest.scored_by || 'Unknown', scoredAt: latest.created_at }
+          ? { name: latest.scored_by_name || latest.scored_by || 'Unknown', scoredAt: latest.created_at, source: latest.source }
           : null,
       }));
     } catch {

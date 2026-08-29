@@ -1,11 +1,12 @@
 "use client";
 
-import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, GitBranch, MoreVertical } from 'lucide-react';
+import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, GitBranch, MoreVertical, Info } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
 import ListPagination from './ListPagination';
-import ResumeSelectionModal from './ResumeSelectionModal';
+import SelectSourceModal from './SelectSourceModal';
+import JobOpeningPickerList, { JobSelection } from './jobs/JobOpeningPickerList';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
@@ -19,6 +20,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
+import { getScoringSourceLabel } from '@/lib/utils/scoringSource';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
@@ -145,6 +147,16 @@ interface ScoredResumeData {
   jdCreatedByName?: string;
   totalScored: number;
   scoredResumes: any[];
+  /**
+   * The highest `jdCurrentVersion` seen across every scored entry in this
+   * job's lineage, filled in by `collapseHistoryToLatestVersions`. Since that
+   * function now picks its representative row by most-recent `scoredAt` (not
+   * by version number), the representative itself can be an older,
+   * superseded version whose OWN `jdCurrentVersion` reads back as 1 — this
+   * field is what "does this job have version history worth a button"
+   * actually needs to check.
+   */
+  lineageMaxVersion?: number;
   // Processing state for in-progress jobs
   isProcessing?: boolean;
   processingProgress?: {
@@ -164,31 +176,34 @@ interface ScoredResumeData {
 const historyLineageKey = (item: ScoredResumeData): string => item.jdJobId || item.jobId;
 
 /**
- * One row per job lineage — the job's own final (highest) version — instead of
- * one row per scored JD version. Without this, a job scored against both v1
- * and v2 showed up twice in "View by Job", reading as two different jobs.
+ * One row per job lineage — whichever of its versions was scored most
+ * recently — instead of one row per scored JD version. Without this, a job
+ * scored against both v1 and v2 showed up twice in "View by Job", reading as
+ * two different jobs.
  *
- * "Final" is read from the data (`jdCurrentVersion`), tie-broken by the most
- * recently scored entry, never assumed from array order. The result is
- * re-sorted by scoredAt so the list keeps its most-recent-first order after
- * collapsing.
+ * Picked by `scoredAt` alone, NOT by version number: nothing stops a
+ * recruiter from scoring an older, superseded version after the job has
+ * already moved on to a newer one, and when that happens the card should
+ * surface THAT activity — the thing that actually just happened — rather
+ * than silently keep showing the latest version's own (now stale) scoring
+ * date. Earlier versions remain reachable through "View Versions" either way.
+ * The result is re-sorted by scoredAt so the list keeps its
+ * most-recent-first order after collapsing.
  */
 const collapseHistoryToLatestVersions = (list: ScoredResumeData[]): ScoredResumeData[] => {
   const groups = new Map<string, ScoredResumeData>();
+  const maxVersionByKey = new Map<string, number>();
   for (const item of list) {
     const key = historyLineageKey(item);
+    maxVersionByKey.set(key, Math.max(maxVersionByKey.get(key) ?? 1, item.jdCurrentVersion ?? 1));
     const existing = groups.get(key);
-    if (!existing) {
+    if (!existing || new Date(item.scoredAt).getTime() > new Date(existing.scoredAt).getTime()) {
       groups.set(key, item);
-      continue;
     }
-    const existingVersion = existing.jdCurrentVersion ?? 1;
-    const itemVersion = item.jdCurrentVersion ?? 1;
-    const itemIsNewer = itemVersion > existingVersion ||
-      (itemVersion === existingVersion && new Date(item.scoredAt).getTime() > new Date(existing.scoredAt).getTime());
-    if (itemIsNewer) groups.set(key, item);
   }
-  return Array.from(groups.values()).sort((a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime());
+  return Array.from(groups.entries())
+    .map(([key, item]) => ({ ...item, lineageMaxVersion: maxVersionByKey.get(key) }))
+    .sort((a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime());
 };
 
 interface AlreadyScoredItem {
@@ -256,13 +271,11 @@ interface ResumeScoringPageProps {
 export default function ResumeScoringPage({
   jobs: propJobs = [],
   resumes: propResumes = [],
-  folders: propFolders = [],
   scoredHistory = [],
   historyLoading = false,
   onSaveScores,
   onRefreshHistory,
   onLoadJdScores,
-  onRefreshResumes,
   onNavigateToAITalentMatch,
   onBack,
   tenant,
@@ -294,7 +307,6 @@ export default function ResumeScoringPage({
   // Use props directly - data is fetched by the page route
   const jobs = propJobs;
   const resumes = propResumes;
-  const folders = propFolders;
 
   // View state
   const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'candidateView'>('history');
@@ -322,7 +334,19 @@ export default function ResumeScoringPage({
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [showResumeSelectionModal, setShowResumeSelectionModal] = useState(false);
-  const [selectionError, setSelectionError] = useState<string | null>(null);
+  // The job-picking step of "Score Resumes" — the same job list component
+  // (search, job cards, Version History) the Apply to Job popup uses,
+  // rendered statically on the page instead of behind a popup.
+  const [pickerSelection, setPickerSelection] = useState<JobSelection>(null);
+  /**
+   * The picked job's own record, mapped into this page's local `Job` shape,
+   * for when it ISN'T already a row in `jobs` (this page's list is one row
+   * per lineage's LATEST published version; the picker's Version History can
+   * pick an older, superseded one that never appears there). Cleared once the
+   * pick is a job `jobs` already knows about, so a stale value never survives
+   * to shadow the real, fresher record.
+   */
+  const [extraJobRecord, setExtraJobRecord] = useState<Job | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [experienceFilter, setExperienceFilter] = useState<string>('all');
   const [isScoring, setIsScoring] = useState(false);
@@ -484,8 +508,9 @@ export default function ResumeScoringPage({
   const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
 
-  // Locally uploaded resumes (from Resume Selection Modal)
-  const [uploadedResumes, setUploadedResumes] = useState<SharedResume[]>([]);
+  // Locally uploaded resumes — feeds the (unused) legacy myResumes/databaseResumes
+  // merge below; the active resume-selection modal now uploads and fetches its own.
+  const [uploadedResumes] = useState<SharedResume[]>([]);
 
   // Persist list scroll position + view state across detail-page navigation, so
   // returning from a candidate/details drill-in lands the user exactly where
@@ -1335,21 +1360,45 @@ export default function ResumeScoringPage({
     </button>
   ) : null;
 
-  const publishedJobs = jobs.filter(j => j.status === 'Published' || j.status === 'Active');
-  const selectedJobData = jobs.find(j => j.id === selectedJob);
-  const [showJobDropdown, setShowJobDropdown] = useState(false);
-  const [jobDropdownSearch, setJobDropdownSearch] = useState('');
-  const jobDropdownRef = useRef<HTMLDivElement>(null);
+  const selectedJobData = jobs.find(j => j.id === selectedJob) || (extraJobRecord?.id === selectedJob ? extraJobRecord : undefined);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (jobDropdownRef.current && !jobDropdownRef.current.contains(e.target as Node)) {
-        setShowJobDropdown(false);
-      }
-    };
-    if (showJobDropdown) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showJobDropdown]);
+  /**
+   * A pick (or a cleared pick) from the static job picker below. This page's
+   * own `jobs` list is one row per lineage's LATEST published version — a
+   * version picked from the picker's Version History may not be in it at
+   * all — so the picked record's own fields are mapped as a fallback, the
+   * same way the earlier popup-based flow did.
+   */
+  const handleJobPicked = (next: JobSelection) => {
+    setPickerSelection(next);
+    if (!next) {
+      setSelectedJob('');
+      setExtraJobRecord(null);
+      return;
+    }
+    const picked = next.job;
+    const alreadyKnown = jobs.find(j => j.id === picked.id);
+    setExtraJobRecord(alreadyKnown ? null : {
+      id: picked.id,
+      title: picked.title,
+      location: picked.location || '',
+      department: picked.department || 'General',
+      status: picked.status,
+      applicants: picked.applicants ?? 0,
+      employmentType: picked.employmentType,
+      experience: picked.experience,
+      job_id: picked.job_id,
+      current_version: picked.currentVersion,
+      created_by_name: picked.postedBy,
+      creation_method: picked.creation_method,
+      industry_type: picked.industry_type,
+      remote_type: picked.workMode,
+    });
+    setSelectedJob(picked.id);
+    setResumeSource(null);
+    setSelectedResumes([]);
+    setShowResults(false);
+  };
 
   // Convert scored resumes to ScoredResumesTable format
   const convertToScoredResumesFormat = (scoredData: ScoredResumeData) => {
@@ -1944,7 +1993,10 @@ export default function ResumeScoringPage({
                         jobId: item.jobId,
                         source: item.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
                         status: 'Scored successfully' as const,
-                        scoredDateTime: new Date(item.scoredAt),
+                        // Each candidate's own scored date, not the job's aggregate
+                        // `scoredAt` — that would show every row under one job with
+                        // the same timestamp regardless of when it was actually scored.
+                        scoredDateTime: resume.scoredDate ? new Date(resume.scoredDate) : new Date(item.scoredAt),
                         matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
                                      : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
                                      : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
@@ -2188,7 +2240,11 @@ export default function ResumeScoringPage({
               // list uses, so "View Versions" here opens the same history.
               const versionKey = historyLineageKey(item);
               const versionsExpanded = versionLineage.isExpanded(versionKey);
-              const hasVersionHistory = (item.jdCurrentVersion ?? 1) > 1;
+              // lineageMaxVersion (the highest version scored anywhere in this
+              // job's lineage) rather than item.jdCurrentVersion — the
+              // representative row can itself be an older version now that
+              // it's picked by most-recent scoredAt, not by version number.
+              const hasVersionHistory = (item.lineageMaxVersion ?? item.jdCurrentVersion ?? 1) > 1;
               const versionStubJob: LineageJob = {
                 id: item.jobId,
                 job_id: item.jdJobId,
@@ -2429,65 +2485,76 @@ export default function ResumeScoringPage({
                         </div>
                       </div>
 
-                      {/* Action buttons - right side */}
+                      {/* Action buttons - right side. View Progress / View
+                          Details are icon-only: the row already carries the
+                          job title, status and version badges up top, so a
+                          text label here was repeating what a tooltip says
+                          just as well while taking up far more space. */}
                       <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Show progress in BulkScoringProgressModal
-                            const resumes = item.scoredResumes || [];
-                            const allProgressItems: ScoringProgressItem[] = resumes.map((resume: any) => ({
-                              id: resume.resumeId || resume.id || '',
-                              resumeId: resume.resumeId || resume.id || '',
-                              candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
-                              jobTitle: item.jobTitle,
-                              jobId: item.jobId,
-                              source: item.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
-                              status: (resume.status === 'failed' || resume.errorReason) ? 'Failed' as const : 'Scored successfully' as const,
-                              errorReason: resume.errorReason || resume.error_reason,
-                              scoredDateTime: new Date(item.scoredAt),
-                              matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
-                                           : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
-                                           : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
-                                           : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
-                                           : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
-                                           : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
-                              score: resume.overall_score || resume.scorePercentage || resume.score || 0,
-                            }));
-                            setProgressData(allProgressItems);
-                            setFilterByJobId(item.jobId);
-                            setShowJobTitleColumn(false);
-                            setShowProgressModal(true);
-                          }}
-                          className="px-3 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-all text-sm font-medium flex items-center gap-1.5 justify-center w-full shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View Progress
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedHistoryItem(item);
-                            setViewMode('details');
-                            onLoadJdScores?.(item.jobId, item.jobTitle);
-                            try {
-                              localStorage.setItem('lastViewedScoringJdId', item.jobId);
-                            } catch (e) {}
-                            router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
-                          }}
-                          className="px-3 py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm font-medium flex items-center justify-center w-full"
-                        >
-                          View Details
-                        </button>
+                        <div className="flex items-center gap-1.5 self-end">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Show progress in BulkScoringProgressModal
+                              const resumes = item.scoredResumes || [];
+                              const allProgressItems: ScoringProgressItem[] = resumes.map((resume: any) => ({
+                                id: resume.resumeId || resume.id || '',
+                                resumeId: resume.resumeId || resume.id || '',
+                                candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
+                                jobTitle: item.jobTitle,
+                                jobId: item.jobId,
+                                source: item.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
+                                status: (resume.status === 'failed' || resume.errorReason) ? 'Failed' as const : 'Scored successfully' as const,
+                                errorReason: resume.errorReason || resume.error_reason,
+                                // Each candidate's own scored date, not the job's
+                                // aggregate `scoredAt` (see note above).
+                                scoredDateTime: resume.scoredDate ? new Date(resume.scoredDate) : new Date(item.scoredAt),
+                                matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
+                                             : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
+                                             : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
+                                             : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
+                                             : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
+                                             : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
+                                score: resume.overall_score || resume.scorePercentage || resume.score || 0,
+                              }));
+                              setProgressData(allProgressItems);
+                              setFilterByJobId(item.jobId);
+                              setShowJobTitleColumn(false);
+                              setShowProgressModal(true);
+                            }}
+                            aria-label="View Progress"
+                            title="View Progress"
+                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedHistoryItem(item);
+                              setViewMode('details');
+                              onLoadJdScores?.(item.jobId, item.jobTitle);
+                              try {
+                                localStorage.setItem('lastViewedScoringJdId', item.jobId);
+                              } catch (e) {}
+                              router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+                            }}
+                            aria-label="View Details"
+                            title="View Details"
+                            className="h-9 w-9 flex items-center justify-center border border-brand-cyan/30 bg-white dark:bg-slate-900 text-brand-cyan hover:bg-brand-cyan/5 hover:border-brand-cyan/50 rounded-lg transition-colors"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                        </div>
                         {hasVersionHistory && (
                           <button
                             onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, item.jobId); }}
                             aria-expanded={versionsExpanded}
                             title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                            className={`px-3 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-1.5 justify-center w-full border ${
+                            className={`px-3 py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-1.5 justify-center w-full text-white ring-1 ring-white/10 ${
                               versionsExpanded
-                                ? 'bg-brand-sky text-brand-blue border-brand-blue/30'
-                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                                ? 'bg-brand-blue-2 shadow-md shadow-brand-blue/30'
+                                : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30'
                             }`}
                           >
                             <GitBranch className="w-3.5 h-3.5" />
@@ -2657,65 +2724,75 @@ export default function ResumeScoringPage({
                       <div className={`text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 tracking-tight ${getScoreColor(avgScore)}`}>
                         {avgScore}%
                       </div>
+                      {/* View Progress / View Details are icon-only: the card
+                          above already carries the job title, status and
+                          version badges, so a text label here repeated what
+                          the tooltip already says. */}
                       <div className="mt-4 flex flex-col gap-2 w-full">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const resumes = item.scoredResumes || [];
-                            const allProgressItems: ScoringProgressItem[] = resumes.map((resume: any) => ({
-                              id: resume.resumeId || resume.id || '',
-                              resumeId: resume.resumeId || resume.id || '',
-                              candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
-                              jobTitle: item.jobTitle,
-                              jobId: item.jobId,
-                              source: item.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
-                              status: (resume.status === 'failed' || resume.errorReason) ? 'Failed' as const : 'Scored successfully' as const,
-                              errorReason: resume.errorReason || resume.error_reason,
-                              scoredDateTime: new Date(item.scoredAt),
-                              matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
-                                           : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
-                                           : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
-                                           : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
-                                           : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
-                                           : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
-                              score: resume.overall_score || resume.scorePercentage || resume.score || 0,
-                            }));
-                            setProgressData(allProgressItems);
-                            setFilterByJobId(item.jobId);
-                            setShowJobTitleColumn(false);
-                            setShowProgressModal(true);
-                          }}
-                          className="px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-1.5 justify-center w-full"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          View Progress
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedHistoryItem(item);
-                            setViewMode('details');
-                            onLoadJdScores?.(item.jobId, item.jobTitle);
-                            try {
-                              localStorage.setItem('lastViewedScoringJdId', item.jobId);
-                            } catch (e) {
-                              console.error('Failed to save last viewed JD:', e);
-                            }
-                            router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
-                          }}
-                          className="flex-1 py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm font-medium flex items-center gap-1.5 justify-center cursor-pointer"
-                        >
-                          View Details
-                          <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const resumes = item.scoredResumes || [];
+                              const allProgressItems: ScoringProgressItem[] = resumes.map((resume: any) => ({
+                                id: resume.resumeId || resume.id || '',
+                                resumeId: resume.resumeId || resume.id || '',
+                                candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
+                                jobTitle: item.jobTitle,
+                                jobId: item.jobId,
+                                source: item.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
+                                status: (resume.status === 'failed' || resume.errorReason) ? 'Failed' as const : 'Scored successfully' as const,
+                                errorReason: resume.errorReason || resume.error_reason,
+                                // Each candidate's own scored date, not the job's
+                                // aggregate `scoredAt` (see note above).
+                                scoredDateTime: resume.scoredDate ? new Date(resume.scoredDate) : new Date(item.scoredAt),
+                                matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
+                                             : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
+                                             : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
+                                             : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
+                                             : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
+                                             : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
+                                score: resume.overall_score || resume.scorePercentage || resume.score || 0,
+                              }));
+                              setProgressData(allProgressItems);
+                              setFilterByJobId(item.jobId);
+                              setShowJobTitleColumn(false);
+                              setShowProgressModal(true);
+                            }}
+                            aria-label="View Progress"
+                            title="View Progress"
+                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedHistoryItem(item);
+                              setViewMode('details');
+                              onLoadJdScores?.(item.jobId, item.jobTitle);
+                              try {
+                                localStorage.setItem('lastViewedScoringJdId', item.jobId);
+                              } catch (e) {
+                                console.error('Failed to save last viewed JD:', e);
+                              }
+                              router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+                            }}
+                            aria-label="View Details"
+                            title="View Details"
+                            className="h-9 w-9 flex items-center justify-center border border-brand-cyan/30 bg-white dark:bg-slate-900 text-brand-cyan hover:bg-brand-cyan/5 hover:border-brand-cyan/50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                        </div>
                         {hasVersionHistory && (
                           <button
                             onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, item.jobId); }}
                             aria-expanded={versionsExpanded}
                             title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                            className={`py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-1.5 justify-center cursor-pointer border ${
+                            className={`py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-1.5 justify-center cursor-pointer text-white ring-1 ring-white/10 ${
                               versionsExpanded
-                                ? 'bg-brand-sky text-brand-blue border-brand-blue/30'
-                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                                ? 'bg-brand-blue-2 shadow-md shadow-brand-blue/30'
+                                : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30'
                             }`}
                           >
                             <GitBranch className="w-3.5 h-3.5" />
@@ -2884,7 +2961,7 @@ export default function ResumeScoringPage({
           const rawDate = r.scoredDate || r.created_at || historyModalItem.scoredAt;
           const day = formatISTDate(rawDate);
           const time = formatISTTime(rawDate);
-          const src = r.source === 'my-resumes' ? 'My Resumes' : 'Resume Database';
+          const src = getScoringSourceLabel(r.source);
           const key = `${scorer}||${day}||${src}`;
           if (seen.has(key)) {
             groups[seen.get(key)!].count++;
@@ -2946,7 +3023,13 @@ export default function ResumeScoringPage({
                               <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-100 font-bold text-sm">{g.count}</span>
                             </td>
                             <td className="px-5 py-3.5">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${g.source === 'My Resumes' ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20' : 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700'}`}>
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                g.source === 'My Resumes'
+                                  ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20'
+                                  : g.source === 'AI Talent Match'
+                                    ? 'bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20'
+                                    : 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700'
+                              }`}>
                                 {g.source}
                               </span>
                             </td>
@@ -2976,7 +3059,7 @@ export default function ResumeScoringPage({
   return (
     <main className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${showJobDropdown ? 'min-h-[780px]' : ''}`}>
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
       {/* Header */}
       <div className="mb-5">
@@ -2997,126 +3080,36 @@ export default function ResumeScoringPage({
         description="Evaluate resumes against a selected job description using AI analysis of skills, experience, education, and role fit. Review transparent scores and recommendations to identify the strongest candidates faster."
       />
 
-      {/* Job Selection */}
+      {/* Job Selection — static on the page: the same search, job cards and
+          Version History the Apply to Job popup uses (via the shared
+          JobOpeningPickerList), just rendered inline instead of behind a
+          popup. Everything after picking a job — Select Resumes, and the
+          scoring flow beyond it — stays a popup, unchanged. */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-5">
         <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
           Select Job Description
         </label>
 
-        {/* Custom Job Dropdown */}
-        <div className="relative" ref={jobDropdownRef}>
-          {/* Trigger button */}
-          <button
-            type="button"
-            onClick={() => { setShowJobDropdown(v => !v); setJobDropdownSearch(''); }}
-            className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-left flex items-center justify-between gap-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 hover:border-brand-blue/30 transition-colors"
-          >
-            {selectedJobData ? (
-              <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
-                {selectedJobData.job_id && (
-                  <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs font-bold font-mono border border-brand-blue/20">
-                    {selectedJobData.job_id}
-                  </span>
-                )}
-                <span className="text-gray-900 dark:text-slate-50 font-semibold text-sm">{selectedJobData.title}</span>
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
-                  Published
-                </span>
-                {selectedJobData.creation_method === 'ai_generated' && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-brand-blue-2/10 text-brand-blue-2 border border-brand-blue-2/20">
-                    <span className="w-1.5 h-1.5 rounded-full bg-brand-blue-2 inline-block"></span>
-                    AI
-                  </span>
-                )}
-                {selectedJobData.current_version && (
-                  <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
-                    v{selectedJobData.current_version}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <span className="text-gray-400 dark:text-slate-500 text-sm">Choose a published job...</span>
-            )}
-            <ChevronDown className={`w-4 h-4 text-gray-500 dark:text-slate-500 flex-shrink-0 transition-transform ${showJobDropdown ? 'rotate-180' : ''}`} />
-          </button>
-
-          {/* Dropdown panel */}
-          {showJobDropdown && (
-            <div className="absolute z-[9999] mt-1 left-0 right-0 w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl shadow-lg shadow-brand-blue/10 overflow-hidden">
-              {/* Search */}
-              <div className="p-2 border-b border-gray-100 dark:border-slate-700/60">
-                <div className="flex items-center gap-2 px-3 py-2 bg-brand-blue/5 ring-1 ring-brand-blue/10 rounded-lg">
-                  <Search className="w-4 h-4 text-brand-blue/60 flex-shrink-0" />
-                  <input
-                    autoFocus
-                    type="text"
-                    value={jobDropdownSearch}
-                    onChange={e => setJobDropdownSearch(e.target.value)}
-                    placeholder="Search by title or JD ID..."
-                    className="flex-1 bg-transparent text-sm text-gray-700 dark:text-slate-300 outline-none placeholder-gray-400 dark:placeholder-slate-500"
-                  />
-                </div>
-              </div>
-              {/* Options */}
-              <div className="min-h-[400px] max-h-[400px] overflow-y-auto">
-                {publishedJobs
-                  .filter(j => j.title.toLowerCase().includes(jobDropdownSearch.toLowerCase()) || (j.job_id || '').toLowerCase().includes(jobDropdownSearch.toLowerCase()))
-                  .map(job => (
-                    <button
-                      key={job.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedJob(job.id);
-                        setResumeSource(null);
-                        setSelectedResumes([]);
-                        setShowResults(false);
-                        setShowJobDropdown(false);
-                      }}
-                      className={`w-full px-3 py-2 text-left hover:bg-brand-blue/5 transition-colors border-b border-gray-100 dark:border-slate-700/60 last:border-0 ${selectedJob === job.id ? 'bg-brand-blue/10 hover:bg-brand-blue/10' : ''}`}
-                    >
-                      {/* JD ID + title + status + AI + version only */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {job.job_id && (
-                          <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs font-bold font-mono border border-brand-blue/20">
-                            {job.job_id}
-                          </span>
-                        )}
-                        <span className="text-gray-900 dark:text-slate-50 font-medium text-sm">{job.title}</span>
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
-                          Published
-                        </span>
-                        {job.creation_method === 'ai_generated' && (
-                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-brand-blue-2/10 text-brand-blue-2 border border-brand-blue-2/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-brand-blue-2 inline-block"></span>
-                            AI
-                          </span>
-                        )}
-                        {job.current_version && (
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
-                            v{job.current_version}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                {publishedJobs.filter(j => j.title.toLowerCase().includes(jobDropdownSearch.toLowerCase()) || (j.job_id || '').toLowerCase().includes(jobDropdownSearch.toLowerCase())).length === 0 && (
-                  <div className="px-4 py-6 text-center text-sm text-gray-400 dark:text-slate-500">No jobs match your search</div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {publishedJobs.length === 0 && (
-          <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-            <p className="text-sm text-amber-700">
-              No published jobs available. Create and publish a job first.
+        {/* Drafts, closed, archived and disabled jobs still show in the list
+            below (showAllStatuses) so none go silently missing — this just
+            explains up front why most of them can't be picked. */}
+        <div className="mb-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.06] border border-brand-blue/20 px-3 py-2.5">
+          <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">Job Eligibility</p>
+            <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
+              Only Published and Republished jobs can be scored. A job is shown here by its latest published version — if a newer version is a Draft, the last published one is shown instead. Jobs with no published version at all aren&apos;t listed.
             </p>
           </div>
-        )}
+        </div>
+
+        <JobOpeningPickerList
+          selection={pickerSelection}
+          onSelectionChange={handleJobPicked}
+          onProceed={canRunScoring ? () => setShowResumeSelectionModal(true) : undefined}
+          proceedLabel="Select Resumes"
+          showAllStatuses
+        />
 
         {/* Selected Job Details */}
         {selectedJobData && (
@@ -3187,149 +3180,26 @@ export default function ResumeScoringPage({
       </div>
       </div>
 
-      {/* Resume Selection Modal */}
+      {/* Resume Selection Modal — the same self-contained "Select Applicants to
+          Score" popup the Job Details page uses (tabs, folder tree, search,
+          upload, table with per-row actions). It handles fetching its own
+          resumes/folders, the existing-scores check, submitting the batch and
+          showing its own progress modal, so none of that needs re-implementing
+          here — only what happens once it reports scoring is done. */}
       {showResumeSelectionModal && selectedJobData && (
-        <ResumeSelectionModal
+        <SelectSourceModal
+          jobId={selectedJob}
           jobTitle={selectedJobData.title}
-          myResumes={myResumes}
-          databaseResumes={databaseResumes}
-          /* This page's local Folder is { id, name, resumeCount }, while the modal's
-             FolderType wants { id, name, count, parentId }. The shapes genuinely
-             differ, so the modal's count/parentId reads see undefined for folders
-             opened from here - pre-existing behaviour, left as-is deliberately.
-             Cast only, so nothing about what is passed changes. */
-          folders={folders as unknown as React.ComponentProps<typeof ResumeSelectionModal>['folders']}
-          availableUnits={availableUnits}
-          error={selectionError}
-          onClearError={() => setSelectionError(null)}
-          onClose={() => {
+          onClose={() => setShowResumeSelectionModal(false)}
+          onScoringComplete={async () => {
             setShowResumeSelectionModal(false);
-            setSelectionError(null); // Clear error when modal closes
-          }}
-          onResumeUploaded={async (resume) => {
-            // Add uploaded resume to local state temporarily for immediate display
-            setUploadedResumes(prev => [resume, ...prev]);
-
-            // Refresh resumes from API to get the uploaded resume from backend
-            // This ensures data consistency and prevents duplicates
-            if (onRefreshResumes) {
-              await onRefreshResumes();
-              // Clear uploadedResumes since API data now has it
-              setUploadedResumes([]);
-            }
-          }}
-          onScoreResumes={async (selectedIds, source, versionSelections) => {
-            // Clear any previous error when attempting to score
-            setSelectionError(null);
-
-            // Carry the actual source tab through to the progress modal so the
-            // Source column reflects where the resumes came from (was always
-            // hardcoded to "Internal DB").
-            const sourceLabel: 'Internal DB' | 'My Resumes' = source === 'my-resumes' ? 'My Resumes' : 'Internal DB';
-
-            // Check for existing scores before proceeding
-            try {
-              toast.loading('Checking for existing scores...', { id: 'check-existing' });
-              const checkResult = await scoringService.checkExistingScores(selectedJob, selectedIds);
-              toast.dismiss('check-existing');
-
-              // Close modal only if check succeeds
-              setShowResumeSelectionModal(false);
-
-              if (checkResult.existing_count > 0) {
-                // Build already-scored items for progress display
-                const alreadyScoredItems = checkResult.existing_scores.map((s: any) => ({
-                  resumeId: s.resume_id,
-                  candidateName: s.candidate_name || 'Unknown',
-                  score: s.overall_score || 0,
-                  scoredAt: s.scored_at,
-                  matchStatus: s.match_status,
-                }));
-
-                // Filter out already-scored, keep only new ones
-                const existingResumeIds = new Set(checkResult.existing_scores.map((s: any) => s.resume_id));
-                const newResumeIds = selectedIds.filter(id => !existingResumeIds.has(id));
-                const selectedResumesData = resumes.filter(r => newResumeIds.includes(r.id));
-                let newResumeNames: string[];
-                if (newResumeIds.length > 0) {
-                  if (versionSelections && versionSelections.length > 0) {
-                    const versionMap = new Map(versionSelections.map(v => [v.resumeId || v.id, v.candidateName || 'Unknown']));
-                    newResumeNames = newResumeIds.map(id => versionMap.get(id) || 'Unknown');
-                  } else {
-                    newResumeNames = selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown');
-                  }
-                } else {
-                  newResumeNames = [];
-                }
-
-                // Use redirect flow for both all-scored and partial cases
-                const pendingData = {
-                  jobId: selectedJob,
-                  jobTitle: selectedJobData.title,
-                  resumeIds: newResumeIds,
-                  resumeNames: newResumeNames,
-                  source: sourceLabel,
-                  alreadyScoredItems,
-                };
-                sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
-                window.location.href = `/recruitment/resume-scoring?jd_id=${selectedJob}&start_scoring=true&show_progress=true`;
-                return;
-              }
-            } catch (error: any) {
-              console.error('Failed to check existing scores:', error);
-              toast.dismiss('check-existing');
-
-              // Extract detailed error message from API response
-              let errorMessage = 'Failed to verify existing scores. Please try again.';
-
-              if (error?.response?.status === 400 && error?.response?.data?.detail) {
-                const detail = error.response.data.detail;
-                if (typeof detail === 'string') {
-                  errorMessage = detail;
-                } else if (detail.message) {
-                  errorMessage = detail.message;
-                } else if (detail.error) {
-                  errorMessage = `${detail.error}: ${detail.message || 'Please check your selection and try again.'}`;
-                }
-              } else if (error?.response?.data?.message) {
-                errorMessage = error.response.data.message;
-              } else if (error?.message) {
-                errorMessage = error.message;
-              }
-
-              console.log('[ResumeScoringPage] Setting selection error:', errorMessage);
-
-              // Show error inline in the modal instead of toast
-              setSelectionError(errorMessage);
-              setShowResumeSelectionModal(true); // Keep/reopen modal with error
-              return; // Don't proceed if check fails
-            }
-
-            // Get resume names - use versionSelections if available, otherwise fall back to resumes list
-            let resumeNames: string[];
-            if (versionSelections && versionSelections.length > 0) {
-              // Use candidate names from version selections
-              resumeNames = versionSelections.map(v => v.candidateName || 'Unknown');
-            } else {
-              // Fall back to finding names from resumes list
-              const selectedResumesData = resumes.filter(r => selectedIds.includes(r.id));
-              resumeNames = selectedResumesData.map(r => r.name || r.candidateName || r.candidate_name || 'Unknown');
-            }
-
-            // Start scoring in background and redirect to resume-scoring page with progress view
-            // Store pending scoring data in sessionStorage so it can be picked up after redirect
-            const pendingData = {
-              jobId: selectedJob,
-              jobTitle: selectedJobData.title,
-              resumeIds: selectedIds,
-              resumeNames: resumeNames,
-              source: sourceLabel,
-            };
-            sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
-
-            // Redirect to resume-scoring page with start_scoring=true to trigger scoring and show_progress=true to auto-open progress view
-            // Use window.location.href for full page reload so useEffect runs and reads sessionStorage
-            window.location.href = `/recruitment/resume-scoring?jd_id=${selectedJob}&start_scoring=true&show_progress=true`;
+            invalidateGlobalScoredResumes();
+            await onRefreshHistory?.();
+            // Same hand-off the async Celery flow above uses: once
+            // scoredHistory carries this job's fresh scores, the sync effect
+            // opens its details view automatically.
+            setPendingAutoSelectJdId(selectedJob);
+            router.push(`/recruitment/resume-scoring?jd_id=${selectedJob}`, { scroll: false });
           }}
         />
       )}
