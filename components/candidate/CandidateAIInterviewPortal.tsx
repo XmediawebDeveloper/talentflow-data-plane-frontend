@@ -1864,45 +1864,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     }
   }, [shareBarChecking, startSubmitting, shareBarAttempts, token, captureScreenFrame, startInterviewNow]);
 
-  // Silent auto-recheck while the share-bar gate is showing a blocking error
-  // (bar visible / PiP detected / recorder overlay detected). Closing the
-  // recorder or the PiP window is something the candidate does OUTSIDE this
-  // page, so without this the on-screen warning would sit there stale until
-  // they noticed and clicked "Continue" again themselves. This clears the
-  // warning reactively the moment a clean frame comes back — it does NOT
-  // start the interview on its own; starting still requires the candidate's
-  // own click on Continue (that click is the required user gesture for
-  // fullscreen re-entry / audio-context resume, which can't be done from a
-  // timer callback).
-  useEffect(() => {
-    if (step !== 'hide_share_bar' || !shareBarError) return;
-    let cancelled = false;
-    let inFlight = false;
-    const iv = setInterval(async () => {
-      if (cancelled || inFlight || shareBarChecking || startSubmitting) return;
-      const track = screenStreamRef.current?.getVideoTracks?.()[0];
-      if (!screenStreamRef.current || !track || track.readyState !== 'live') return; // let the manual Continue path handle re-share
-      inFlight = true;
-      try {
-        const frame = await captureScreenFrame();
-        if (!frame || cancelled) return;
-        const res = await candidateAIInterviewService.verifyShareBarHidden(token, frame);
-        if (cancelled) return;
-        if (res.hidden && !res.pip_detected && !res.recorder_overlay_detected
-            && !res.foreign_app_detected && res.interview_screen_present !== false) {
-          console.log('[ShareBar] auto-recheck: now clean — clearing warning');
-          setShareBarError(null);
-          setShareBarAttempts(0);
-        }
-      } catch {
-        // Silent — this is a background poll, not a user-initiated action.
-        // The manual Continue button remains the authoritative retry path.
-      } finally {
-        inFlight = false;
-      }
-    }, 4000);
-    return () => { cancelled = true; clearInterval(iv); };
-  }, [step, shareBarError, shareBarChecking, startSubmitting, token, captureScreenFrame]);
+  // NOTE: the share-bar check is CLICK-ONLY (no background auto-recheck). The
+  // vision LLM runs exactly once per candidate press of "Continue" — never on a
+  // timer. If a blocking warning is showing, the candidate fixes the problem
+  // (hides the bar / closes the recorder or app) and presses Continue again to
+  // re-verify. (An earlier version polled every 4s to auto-clear the warning;
+  // removed on request to avoid automatic LLM calls.)
 
   // Final in-fullscreen consent gate → actually start the interview. Runs the
   // backend start (unit consumption) only after the candidate explicitly
