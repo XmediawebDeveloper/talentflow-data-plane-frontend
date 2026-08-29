@@ -369,12 +369,15 @@ export const candidateAIInterviewService = {
 
   /** Send a frame of the shared screen; the backend vision-LLM says whether
    *  Chrome's "sharing your screen" bar is hidden/collapsed, whether a floating
-   *  Picture-in-Picture window is visible, and whether a third-party screen
-   *  recorder's own overlay (toolbar/border/REC timer) is visible. */
+   *  Picture-in-Picture window is visible, whether a third-party screen
+   *  recorder's own overlay (toolbar/border/REC timer) is visible, whether any
+   *  other application / AI-assistant tool is open besides the interview tab,
+   *  and whether the interview browser itself is actually the screen being
+   *  shared. */
   async verifyShareBarHidden(
     token: string,
     blob: Blob,
-  ): Promise<{ enabled: boolean; hidden: boolean; pip_detected?: boolean; recorder_overlay_detected?: boolean; reason?: string }> {
+  ): Promise<{ enabled: boolean; hidden: boolean; pip_detected?: boolean; recorder_overlay_detected?: boolean; foreign_app_detected?: boolean; foreign_app_label?: string; interview_screen_present?: boolean; reason?: string }> {
     const fd = new FormData();
     fd.append('file', blob, 'screen.jpg');
     const url = `${API_BASE_URL}/candidate/ai-interview/${token}/verify-share-bar`;
