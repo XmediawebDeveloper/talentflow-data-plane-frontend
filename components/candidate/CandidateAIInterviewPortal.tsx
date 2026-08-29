@@ -126,6 +126,15 @@ const TERMINATION_MESSAGES: Record<string, string> = {
 const terminationMessage = (reason: string): string =>
   TERMINATION_MESSAGES[reason] || 'Left the interview screen';
 
+/** Shared wording for a camera/mic that has gone missing at a pre-start gate. */
+const deviceMissingMessage = (missing: 'camera' | 'microphone' | 'both'): string => {
+  const what = missing === 'both' ? 'camera and microphone' : missing;
+  const isAre = missing === 'both' ? 'are' : 'is';
+  const itThem = missing === 'both' ? 'them' : 'it';
+  return `Your ${what} ${isAre} no longer available. Please reconnect ${itThem} — ` +
+    `the interview cannot start without ${missing === 'both' ? 'both' : itThem}.`;
+};
+
 // True when a keyboard event is the Windows / Command (Meta / Super) key.
 // Checked by key name, physical code, AND the metaKey modifier so it's caught
 // across browsers/OSes — though the OS often intercepts the bare Windows key
@@ -199,6 +208,19 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // It is hidden during the entire-screen frame capture so the vision check
   // never mistakes OUR illustration for the real sharing bar (false positive).
   const shareBarMockRef = useRef<HTMLDivElement>(null);
+  // The ENTIRE hide-share-bar popup card. Hidden during the frame capture so the
+  // screenshot is just the empty screen background — then ANYTHING left on the
+  // frame (a recorder toolbar, another app, a stray icon) is unmistakably NOT
+  // ours, which is what makes the vision check (and clean-reference comparison)
+  // reliable. Restored immediately after the capture.
+  const shareBarCardRef = useRef<HTMLDivElement>(null);
+  // Baseline browser zoom (via devicePixelRatio) captured when the candidate is
+  // interacting normally. Shrinking the browser zoom to minimum makes an in-page
+  // recorder/extension widget tiny enough to evade the vision check, so at the
+  // Hide step we refuse to verify while zoomed OUT relative to this baseline (or
+  // below an absolute floor) and ask the candidate to reset to 100%. Tracks the
+  // MAX DPR seen so zooming in then out can't lower the baseline.
+  const baselineDprRef = useRef<number>(1);
   // Pre-interview single-active-session lease: true when another browser/device
   // already holds this interview link (blocks the second person from system
   // check onward). See the lease heartbeat effect.
@@ -1107,8 +1129,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     const displayMediaOptions: any = {
       video: {
         frameRate: 15,
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        // Request ~1080p (was 1280x720). The screen share feeds BOTH the
+        // interview recording AND the Hide-step vision check; at 720p the
+        // browser downscaled the whole screen before capture, blurring small
+        // recorder/extension icons away. 1920x1080 gives every display a
+        // high-enough source to read those icons. File size barely changes —
+        // the recording is bitrate-capped (videoBitsPerSecond), so more pixels
+        // just means the same bytes, only a little more encode CPU.
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
         displaySurface: 'monitor',
       },
       audio: true,
@@ -1279,9 +1308,64 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   };
 
   // Called from StepSamplePractice "Start Interview" button — goes to fullscreen prompt first
-  const handleStartInterview = () => {
-    setStep('fullscreen_prompt');
-  };
+  /**
+   * Is the camera / microphone actually available RIGHT NOW?
+   *
+   * The system check runs minutes earlier and its verdict is PERSISTED
+   * (system_check_passed), so nothing re-tested the hardware at the moment the
+   * candidate pressed Start — unplug the camera after passing the check and the
+   * interview began normally, with no error and a dead camera.
+   *
+   * Video and audio are probed SEPARATELY and never in one getUserMedia call:
+   * a combined request is all-or-nothing, so one missing device would mask the
+   * other and we could not tell the candidate which one to reconnect.
+   * Probe tracks are stopped immediately — this only answers "can it open?",
+   * it never holds a device the interview is about to want.
+   */
+  const probeMediaDevicesReady = useCallback(async (): Promise<'camera' | 'microphone' | 'both' | null> => {
+    const canOpen = async (constraints: MediaStreamConstraints, kind: 'video' | 'audio') => {
+      let s: MediaStream | null = null;
+      try {
+        s = await navigator.mediaDevices.getUserMedia(constraints);
+        const tracks = kind === 'video' ? s.getVideoTracks() : s.getAudioTracks();
+        return tracks.some(t => t.readyState === 'live');
+      } catch {
+        return false;
+      } finally {
+        s?.getTracks().forEach(t => t.stop());
+      }
+    };
+    const camOk = await canOpen({ video: true }, 'video');
+    const micOk = await canOpen({ audio: true }, 'audio');
+    if (!camOk && !micOk) return 'both';
+    if (!camOk) return 'camera';
+    if (!micOk) return 'microphone';
+    return null;
+  }, []);
+
+  // Practice → fullscreen prompt. Gated on the devices being present RIGHT NOW.
+  //
+  // The device check used to live only in startInterviewNow, at the very END of
+  // the chain — so a candidate who unplugged their mic during practice was
+  // walked through the fullscreen prompt, the final consent and the hide-share-
+  // bar gate before anything noticed, and was then bounced all the way back to
+  // the system check. A device that is missing HERE must be caught HERE, at the
+  // step where it happened, before a single further screen is shown.
+  const handleStartInterview = useCallback(async () => {
+    if (startSubmitting) return;
+    setStartSubmitting(true);
+    try {
+      const missing = await probeMediaDevicesReady();
+      if (missing) {
+        toast.error(deviceMissingMessage(missing));
+        console.warn(`[Portal] Practice → start blocked — ${missing} unavailable`);
+        return;  // stay on practice; its own watcher re-acquires on replug
+      }
+      setStep('fullscreen_prompt');
+    } finally {
+      setStartSubmitting(false);
+    }
+  }, [startSubmitting, probeMediaDevicesReady]);
 
   // Called from fullscreen prompt button — handles screen share, fullscreen entry, then starts interview
   const handleFullscreenReady = useCallback(async () => {
@@ -1348,6 +1432,21 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       }
     } catch (permErr) {
       console.warn('[Portal] Permission pre-check failed:', permErr);
+    }
+
+    // Permission GRANTED is not the same as the device being PRESENT — a
+    // candidate can unplug between screens with permission still granted. Check
+    // presence here too, on the same "stay on this step and let them fix it"
+    // principle as the denial branch above, so they cannot walk any further
+    // into the start flow with a missing device.
+    {
+      const missing = await probeMediaDevicesReady();
+      if (missing) {
+        toast.error(deviceMissingMessage(missing), { duration: 8000 });
+        console.warn(`[Portal] Fullscreen-ready blocked — ${missing} unavailable`);
+        setStartSubmitting(false);
+        return; // stay on fullscreen_prompt
+      }
     }
 
     // ── "Already in a meeting" pre-flight (backend-gated) ─────────────────────
@@ -1574,6 +1673,20 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     setStartSubmitting(false);
   }, [startSubmitting, token, requestEntireScreenShare]);
 
+  // Track the highest browser zoom (devicePixelRatio) seen — used as the "not
+  // zoomed out" baseline for the Hide-step zoom guard. Zooming OUT only lowers
+  // DPR, so the max seen approximates the candidate's normal (≈100%) zoom.
+  useEffect(() => {
+    const sync = () => {
+      const dpr = window.devicePixelRatio || 1;
+      if (dpr > baselineDprRef.current) baselineDprRef.current = dpr;
+    };
+    sync();
+    // devicePixelRatio changes fire a resize event.
+    window.addEventListener('resize', sync);
+    return () => window.removeEventListener('resize', sync);
+  }, []);
+
 
   // Grab a single JPEG frame from the ENTIRE-screen share stream (used by the
   // hide-share-bar vision check). Returns null if the stream isn't available.
@@ -1588,13 +1701,35 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // reports the real bar as "still visible" even when the candidate has hidden
     // it — a false positive that traps them on this step. We hide it, wait for
     // the screen-capture pipeline to reflect the change, capture, then restore.
-    const mock = shareBarMockRef.current;
-    const prevVisibility = mock ? mock.style.visibility : '';
-    if (mock) mock.style.visibility = 'hidden';
+    // Hide the ENTIRE setup popup during the capture so the screenshot is just
+    // the empty screen background. Then anything still on the frame — a recorder
+    // toolbar, another app window, a stray icon — is unmistakably NOT part of the
+    // interview, which is exactly what makes the vision check and the clean-
+    // reference comparison reliable (no on-page text/icons of ours to reason
+    // around). We hide the whole card (falling back to the individual decorative
+    // graphics if the card ref is somehow unavailable), wait for the screen-
+    // capture pipeline to reflect it, capture, then restore in finally.
+    const hideEls: HTMLElement[] = [];
+    if (shareBarCardRef.current) {
+      hideEls.push(shareBarCardRef.current);
+    } else {
+      const mock = shareBarMockRef.current;
+      if (mock) hideEls.push(mock);
+      try {
+        shareBarMockRef.current?.ownerDocument
+          ?.querySelectorAll<HTMLElement>('[data-capture-decor]')
+          .forEach((el) => { if (!hideEls.includes(el)) hideEls.push(el); });
+      } catch { /* querySelector never throws in practice; guard anyway */ }
+    }
+    const restores = hideEls.map((el) => {
+      const prev = el.style.visibility;
+      el.style.visibility = 'hidden';
+      return () => { el.style.visibility = prev; };
+    });
     try {
-      // Let the compositor + screen-capture stream drop the now-hidden mock
-      // (a few frames of latency); imperceptible during the "Checking…" state.
-      if (mock) await new Promise<void>((r) => window.setTimeout(r, 250));
+      // Let the compositor + screen-capture stream drop the now-hidden popup
+      // (a few frames of latency); brief, during the "Checking…" state.
+      if (hideEls.length) await new Promise<void>((r) => window.setTimeout(r, 250));
       const video = document.createElement('video');
       video.muted = true;
       (video as HTMLVideoElement).playsInline = true;
@@ -1607,21 +1742,34 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         window.setTimeout(resolve, 1500);
       });
       const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
-      const scale = Math.min(1, 1600 / vw);
+      // Normalize EVERY display's capture into the 1920–2048px-wide band so the
+      // frame sent to the vision model is consistently large across all screens:
+      // small displays are upscaled up to 1920 (so their frame isn't tiny), and
+      // large/multi-monitor displays are capped at 2048 (the effective ceiling
+      // for the vision API's high-detail tiling). JPEG stays at 0.9. NOTE:
+      // upscaling a low-res display does not invent detail — a small screen's
+      // real fidelity is bounded by its native resolution — but it keeps the
+      // input size uniform and never smaller than the model's tiling window.
+      const targetW = Math.min(2048, Math.max(vw, 1920));
+      const scale = targetW / vw;
       const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
       const canvas = document.createElement('canvas');
       canvas.width = cw; canvas.height = ch;
       const ctx = canvas.getContext('2d');
       if (!ctx) { try { video.pause(); } catch { /* ignore */ } video.srcObject = null; return null; }
+      ctx.imageSmoothingEnabled = true;
+      try { (ctx as CanvasRenderingContext2D).imageSmoothingQuality = 'high'; } catch { /* not all browsers */ }
       ctx.drawImage(video, 0, 0, cw, ch);
       try { video.pause(); } catch { /* ignore */ }
       video.srcObject = null;
-      return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7));
+      return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
     } finally {
-      // Always restore the guide, whether capture succeeded, returned null, or threw.
-      if (mock) mock.style.visibility = prevVisibility;
+      // Always restore every hidden graphic, whether capture succeeded,
+      // returned null, or threw.
+      restores.forEach((restore) => restore());
     }
   }, []);
+
 
   // Consume a unit + start the backend interview, then enter the interview UI.
   // Extracted so BOTH the final-consent accept and the share-bar gate can start.
@@ -1638,7 +1786,25 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       setStep('fullscreen_prompt');
       return;
     }
+    // LAST-LINE device check. The earlier gates (practice → start, and the
+    // fullscreen-ready handler) should already have caught a missing device at
+    // the step it went missing; this is the backstop for an unplug in the final
+    // seconds.
+    //
+    // Deliberately does NOT redirect. It used to bounce the candidate all the
+    // way back to the system check, which — because this was once the ONLY
+    // check — meant unplugging during practice walked them through three more
+    // screens and then threw them back to step 3 with no idea why. Stay put and
+    // say what is wrong; every device screen now re-acquires on replug, so
+    // pressing the button again is all that is needed.
     setStartSubmitting(true);
+    const missingDevice = await probeMediaDevicesReady();
+    if (missingDevice) {
+      setStartSubmitting(false);
+      toast.error(deviceMissingMessage(missingDevice), { duration: 8000 });
+      console.warn(`[Portal] Start blocked — ${missingDevice} unavailable at start time`);
+      return;
+    }
     try {
       await candidateAIInterviewService.recordPracticeComplete(token);
       const result = await candidateAIInterviewService.startInterview(token);
@@ -1690,6 +1856,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       ctx.resume?.().catch(() => { /* ignore */ });
       (window as any).__interviewAudioContext = ctx;
     } catch { /* ignore */ }
+    // ZOOM GUARD (deterministic, no LLM): if the browser is zoomed OUT too far,
+    // an in-page recorder/extension widget shrinks small enough to slip past the
+    // vision check. We ALLOW down to 75% zoom (some candidates prefer a slightly
+    // smaller page) and only block BELOW that. Blocked when DPR dropped >25%
+    // below the max seen (zoomed out since load), or below an absolute floor
+    // (covers loading already deeply zoomed out).
+    {
+      const dpr = window.devicePixelRatio || 1;
+      const baseline = baselineDprRef.current || dpr;
+      if (dpr < baseline * 0.75 || dpr < 0.6) {
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        console.warn(`[ShareBar] browser zoomed out too far (dpr=${dpr}, baseline=${baseline}) — blocking, ask ≥75%`);
+        setShareBarError('Your browser is zoomed out too far. Please set the zoom to at least 75% (press Ctrl+0 to reset to 100%), then click Continue again.');
+        return;
+      }
+    }
     setShareBarError(null);
     setShareBarChecking(true);
     try {
@@ -1726,6 +1909,26 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         setShareBarAttempts(nextAttempt);
         console.warn(`[ShareBar] recorder overlay detected (attempt ${nextAttempt}) — re-prompting, not proceeding`);
         setShareBarError('We detected a screen-recording application running on your screen. Please close it completely, then press Continue again — the interview cannot start while screen-recording software is running.');
+      } else if (res.foreign_app_detected) {
+        // Vision check saw another application / AI-assistant tool open on the
+        // entire-screen capture besides the single interview tab (e.g. ChatGPT,
+        // another browser window, a code editor, notes). Same re-promptable gate.
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        const label = (res.foreign_app_label || '').trim();
+        console.warn(`[ShareBar] foreign app detected (attempt ${nextAttempt}, label=${label}) — re-prompting, not proceeding`);
+        setShareBarError(
+          `We detected another application open on your screen${label ? ` (${label})` : ''}. `
+          + 'Please close all other apps, windows and tabs so ONLY this interview is open, then press Continue again — the interview cannot start while other applications are running.',
+        );
+      } else if (res.interview_screen_present === false) {
+        // Vision check is confident no browser (the interview) is the shared
+        // content — the candidate shared the wrong monitor/desktop. Fail-open
+        // default is true, so this only trips on a definitive "wrong screen".
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        console.warn(`[ShareBar] interview screen NOT present (attempt ${nextAttempt}) — re-prompting, not proceeding`);
+        setShareBarError('We can’t see this interview on the screen you shared. Please stop sharing and share the screen (or monitor) that is showing THIS interview, then press Continue again.');
       } else if (res.hidden) {
         await startInterviewNow();
       } else {
@@ -1753,44 +1956,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     }
   }, [shareBarChecking, startSubmitting, shareBarAttempts, token, captureScreenFrame, startInterviewNow]);
 
-  // Silent auto-recheck while the share-bar gate is showing a blocking error
-  // (bar visible / PiP detected / recorder overlay detected). Closing the
-  // recorder or the PiP window is something the candidate does OUTSIDE this
-  // page, so without this the on-screen warning would sit there stale until
-  // they noticed and clicked "Continue" again themselves. This clears the
-  // warning reactively the moment a clean frame comes back — it does NOT
-  // start the interview on its own; starting still requires the candidate's
-  // own click on Continue (that click is the required user gesture for
-  // fullscreen re-entry / audio-context resume, which can't be done from a
-  // timer callback).
-  useEffect(() => {
-    if (step !== 'hide_share_bar' || !shareBarError) return;
-    let cancelled = false;
-    let inFlight = false;
-    const iv = setInterval(async () => {
-      if (cancelled || inFlight || shareBarChecking || startSubmitting) return;
-      const track = screenStreamRef.current?.getVideoTracks?.()[0];
-      if (!screenStreamRef.current || !track || track.readyState !== 'live') return; // let the manual Continue path handle re-share
-      inFlight = true;
-      try {
-        const frame = await captureScreenFrame();
-        if (!frame || cancelled) return;
-        const res = await candidateAIInterviewService.verifyShareBarHidden(token, frame);
-        if (cancelled) return;
-        if (res.hidden && !res.pip_detected && !res.recorder_overlay_detected) {
-          console.log('[ShareBar] auto-recheck: now clean — clearing warning');
-          setShareBarError(null);
-          setShareBarAttempts(0);
-        }
-      } catch {
-        // Silent — this is a background poll, not a user-initiated action.
-        // The manual Continue button remains the authoritative retry path.
-      } finally {
-        inFlight = false;
-      }
-    }, 4000);
-    return () => { cancelled = true; clearInterval(iv); };
-  }, [step, shareBarError, shareBarChecking, startSubmitting, token, captureScreenFrame]);
+  // NOTE: the share-bar check is CLICK-ONLY (no background auto-recheck). The
+  // vision LLM runs exactly once per candidate press of "Continue" — never on a
+  // timer. If a blocking warning is showing, the candidate fixes the problem
+  // (hides the bar / closes the recorder or app) and presses Continue again to
+  // re-verify. (An earlier version polled every 4s to auto-clear the warning;
+  // removed on request to avoid automatic LLM calls.)
 
   // Final in-fullscreen consent gate → actually start the interview. Runs the
   // backend start (unit consumption) only after the candidate explicitly
@@ -2574,7 +2745,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           {/* Do-not-refresh warning, inline: reloading here drops fullscreen +
               screen sharing and sends the candidate back to re-share. */}
           <p className="text-xs font-semibold text-red-600 mb-4 text-center flex items-center justify-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <AlertTriangle data-capture-decor className="w-3.5 h-3.5 shrink-0" />
             Do not refresh this page — it drops screen sharing and restarts setup.
           </p>
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-left">
@@ -2640,8 +2811,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   if (step === 'hide_share_bar') {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+        <div ref={shareBarCardRef} className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
+          <div data-capture-decor className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Monitor className="w-8 h-8 text-blue-600" />
           </div>
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
@@ -2655,13 +2826,16 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             <b> Continue</b> and we&apos;ll verify it before starting.
           </p>
           <p className="text-gray-500 mb-2 text-center text-xs leading-relaxed">
-            Also close any screen-recording software (e.g. OBS, ScreenRec,
-            Bandicam, Camtasia, Game Bar) before continuing — the interview
-            cannot start while one is running.
+            Before continuing, close <b>every other app, window and browser tab</b>
+            {' '}so only this interview is open — including any AI assistant
+            (e.g. ChatGPT, Copilot, Gemini) and any screen-recording software
+            (e.g. OBS, ScreenRec, Bandicam, Camtasia, Game Bar). Make sure the
+            screen you shared is the one showing <b>this interview</b>. The
+            interview cannot start while another application is running.
           </p>
           {/* Do-not-refresh warning, inline (replaces the old red top bar). */}
           <p className="text-xs font-semibold text-red-600 mb-4 text-center flex items-center justify-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <AlertTriangle data-capture-decor className="w-3.5 h-3.5 shrink-0" />
             Do not refresh this page — it drops screen sharing and restarts setup.
           </p>
 
@@ -2683,7 +2857,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
           {shareBarError && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5 flex items-start gap-2">
-              <XCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <XCircle data-capture-decor className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-red-700">{shareBarError}</p>
                 {shareBarAttempts >= 2 && (
@@ -2699,11 +2873,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
           >
             {startSubmitting ? (
-              <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
+              <><Loader2 data-capture-decor className="w-5 h-5 animate-spin" />Starting Interview...</>
             ) : shareBarChecking ? (
-              <><Loader2 className="w-5 h-5 animate-spin" />Checking…</>
+              <><Loader2 data-capture-decor className="w-5 h-5 animate-spin" />Checking…</>
             ) : (
-              <><CheckCircle className="w-5 h-5" />I&apos;ve hidden it — Continue</>
+              <><CheckCircle data-capture-decor className="w-5 h-5" />I&apos;ve hidden it — Continue</>
             )}
           </button>
           <p className="text-[11px] text-gray-400 mt-3 text-center">

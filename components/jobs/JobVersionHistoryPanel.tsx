@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import type { Job } from '@/lib/types/types';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { getScoringSourceLabel } from '@/lib/utils/scoringSource';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import {
   formatEmploymentType,
@@ -23,6 +24,13 @@ import {
  * likewise conditional: it only means anything on the Resume Scoring page, so
  * it's included only when that page passes `versionScoredBy` — Job Openings
  * and the Apply to Job dialog never see the column at all.
+ *
+ * "Last Updated" vs "Source" is the same conditional: Job Openings and the
+ * Apply to Job dialog keep "Last Updated" (when this version's record last
+ * changed), while the Resume Scoring page swaps it for "Source" — which
+ * module produced the score against this version (AI Talent Match, Job
+ * Descriptions, My Resumes) — since a JD's own last-updated timestamp isn't
+ * what a recruiter is scanning this table for there.
  */
 const buildBaseColumns = (showScoredBy: boolean): { label: string; minW: string }[] => [
   { label: 'Version', minW: 'min-w-[72px]' },
@@ -32,7 +40,9 @@ const buildBaseColumns = (showScoredBy: boolean): { label: string; minW: string 
   { label: 'Location', minW: 'min-w-[120px]' },
   { label: 'Work Mode / Type', minW: 'min-w-[130px]' },
   { label: 'Posted On / By', minW: 'min-w-[130px]' },
-  { label: 'Last Updated', minW: 'min-w-[110px]' },
+  showScoredBy
+    ? { label: 'Source', minW: 'min-w-[140px]' }
+    : { label: 'Last Updated', minW: 'min-w-[110px]' },
   ...(showScoredBy ? [{ label: 'Scored By', minW: 'min-w-[160px]' }] : []),
   { label: 'Applicants', minW: 'min-w-[90px]' },
 ];
@@ -78,9 +88,11 @@ interface JobVersionHistoryPanelProps {
    * default) and the column is dropped entirely, header included: only the
    * Resume Scoring page's version history has anything meaningful to put
    * there. `null` means the version has never been scored; an unset key means
-   * still loading.
+   * still loading. `source` is the raw scoring-record source field, rendered
+   * via `getScoringSourceLabel` in the Source column that replaces Last
+   * Updated whenever this prop is passed.
    */
-  versionScoredBy?: Record<string, { name: string; scoredAt: string } | null>;
+  versionScoredBy?: Record<string, { name: string; scoredAt: string; source?: string } | null>;
   /**
    * The Action cell for one version, built from a Job-shaped stand-in pointed
    * at THAT version's id — so a host's existing per-job handlers work unchanged.
@@ -391,10 +403,17 @@ export default function JobVersionHistoryPanel({
                          sliding underneath never show through, plus the hairline
                          that makes it read as floating over them. */
                       <td
+                        /* Solid colour, not the row's own translucent
+                           `bg-brand-blue/[x]`: a sticky cell needs an opaque
+                           background so cells sliding underneath during
+                           horizontal scroll never show through. #eff3f9 per
+                           spec, static — not just on hover — so the cell
+                           reads the same whether the row is being hovered
+                           or not. */
                         className={`py-2.5 px-3 whitespace-nowrap align-middle sticky left-0 z-[5] shadow-[1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:shadow-[1px_0_0_0_#334155] ${
                           isSelected
                             ? 'bg-[#eef2fb] dark:bg-slate-800'
-                            : 'bg-white group-hover:bg-[#f8f9fc] dark:bg-slate-900 dark:group-hover:bg-slate-800'
+                            : 'bg-[#eff3f9] dark:bg-slate-900'
                         }`}
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -416,8 +435,11 @@ export default function JobVersionHistoryPanel({
                             onClick={() => isSelected && onSelectVersion(versionJob)}
                             /* Same size, colour and focus ring as the job
                                rows' own radio, so a version tick and a job tick
-                               read as the same control. */
-                            className="w-4 h-4 text-brand-blue border-gray-300 dark:border-slate-700 focus:ring-brand-blue/40 flex-shrink-0 disabled:cursor-not-allowed"
+                               read as the same control. .tf-radio-tinted
+                               (globals.css) — see that radio's own comment for
+                               why this is a plain CSS rule rather than a
+                               Tailwind arbitrary-value class. */
+                            className="tf-radio-tinted focus:ring-brand-blue/40 flex-shrink-0"
                           />
                           <span className="sr-only">
                             Select version v{version.version_number ?? 1}
@@ -528,9 +550,27 @@ export default function JobVersionHistoryPanel({
                         {detail?.created_by_name || '—'}
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
-                      {lastUpdated ? formatISTDate(lastUpdated) : '—'}
-                    </td>
+                    {versionScoredBy ? (() => {
+                      /* Unset key = still loading; explicit null = loaded and
+                         genuinely never scored — those read differently, so
+                         they're not collapsed into one fallback. */
+                      const sourceInfo = versionScoredBy[version.id];
+                      return (
+                        <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                          {sourceInfo ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
+                              {getScoringSourceLabel(sourceInfo.source)}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
+                          )}
+                        </td>
+                      );
+                    })() : (
+                      <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
+                        {lastUpdated ? formatISTDate(lastUpdated) : '—'}
+                      </td>
+                    )}
                     {versionScoredBy && (() => {
                       /* Unset key = still loading; explicit null = loaded and
                          genuinely never scored — those read differently, so
@@ -577,7 +617,7 @@ export default function JobVersionHistoryPanel({
                          content sliding underneath never shows through; the
                          left hairline makes it read as floating over the
                          scrolling cells. */
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] bg-white group-hover:bg-[#f8f9fc] shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:bg-slate-900 dark:group-hover:bg-slate-800 dark:shadow-[-1px_0_0_0_#334155]">
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] bg-[#eff3f9] shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:bg-slate-900 dark:shadow-[-1px_0_0_0_#334155]">
                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           {renderAction(versionJob)}
                         </div>

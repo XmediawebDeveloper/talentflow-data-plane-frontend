@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, Briefcase, MapPin, Target, Upload } from 'lucide-react';
+import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, Target, Upload } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { DndProvider } from 'react-dnd';
@@ -18,7 +18,6 @@ import { toast } from 'sonner';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
-import SkillsList from '@/components/ui/SkillsList';
 import UploadModal from './UploadModal';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 
@@ -1041,316 +1040,106 @@ export default function SelectSourceModal({
               </div>
             </div>
 
-            {/* Resume List. My Resumes renders the shared table, which brings
-                its own scroll shell and spacing — the padding here is for the
-                Internal Database list, whose header is a fixed row above its
-                own scrolling body. */}
-            <div className={`flex-1 min-h-0 flex flex-col ${activeTab === 'my-resumes' ? '' : 'p-3 sm:p-6'}`}>
+            {/* Resume List. Both tabs render the same shared table the
+                Resume Database and My Resumes pages use — column set and
+                order, widths, sticky header, sticky Actions column,
+                separators, hover/selected states, checkbox styling,
+                pagination — so this popup's Internal Database tab looks
+                exactly like the Resume Database page instead of a second,
+                hand-rolled implementation of it. */}
+            <div className="flex-1 min-h-0 flex flex-col">
               {loading ? (
                 <div className="flex items-center justify-center py-10 sm:py-16 tf-loader-center tf-loader-center--compact">
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
                   <span className="ml-2 sm:ml-3 text-xs sm:text-base text-gray-600 dark:text-slate-400">Loading resumes...</span>
                 </div>
-              ) : activeTab === 'internal-db' && filteredResumes.length === 0 ? (
-                <div className="text-center py-10 sm:py-16">
-                  <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300 dark:text-slate-500" />
-                  <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Resumes Found</h3>
-                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
-                    {searchTerm
-                      ? 'No resumes match your search. Try different keywords.'
-                      : 'No resumes available in the internal database.'}
-                  </p>
-                </div>
-              ) : activeTab === 'my-resumes' ? (
-                /* The My Resumes page's own table, embedded. Everything visual
-                   — column set and order, widths, sticky header, sticky
-                   Actions column, separators, hover and selected states,
-                   checkbox styling, scroll shell — comes from that one
-                   component, so the popup follows the page automatically. */
-                  <ResumeTable
-                    resumes={tableRows}
-                    selectedResumes={selectedResumes}
-                    onSelectResume={handleToggleResume}
-                    onSelectAll={handleTableSelectAll}
-                    /* Clicking a row picks the applicant, as this list has
-                       always done — the page uses this hook to navigate, but
-                       navigating away from a half-made selection is not what
-                       this popup wants. */
-                    onViewDetails={(resume) => handleToggleResume(resume.id)}
-                    /* Opened from the ⋮ menu's Preview; a new tab keeps the
-                       popup and its current selection intact. */
-                    onQuickView={(resume) =>
-                      window.open(`/recruitment/resume-view/${resume.id}`, '_blank', 'noopener,noreferrer')
-                    }
-                    /* The rest of the My Resumes ⋮ menu, gated by the same
-                       permissions that page uses. Download, Share and Add Tags
-                       are self-contained in the table; Archive and Delete run
-                       through the handlers above. */
-                    onArchive={canArchiveMyResumes ? handleArchiveResume : undefined}
-                    onDelete={
-                      canDeleteMyResumes
-                        ? (id) => {
-                            const row = resumes.find(r => r.id === id);
-                            setDeleteResumeTarget({
-                              id,
-                              name: row?.candidate_name || row?.file_name || 'this resume',
-                            });
-                          }
-                        : undefined
-                    }
-                    canShare={canShareMyResumes}
-                    canTag={canUpdateMyResumes}
-                    archivedFolderId={folders.find(f => f.name === 'Archived Resumes' && !f.parent_id)?.id}
-                    folders={tableFolders}
-                    highlightQuery={searchTerm}
-                    draggable={false}
-                    /* Paginated, not one long scroll. `ResumeTable`'s built-in
-                       pagination renders the same `components/Pagination`
-                       the My Resumes page uses, with the same props — so the
-                       count line, page buttons, per-page picker, disabled
-                       states and hover/focus styling all match that page
-                       without a second implementation here. Selection is held
-                       by resume id, so ticks survive a page change. */
-                    /* Left at its default (true), as on My Resumes, so the
-                       Download Resume entry appears. */
-                    canDownload
-                    /* Fill the modal body and scroll inside it. Without this
-                       the shell keeps `.tf-table-shell`'s 400px floor / vh cap
-                       — taller than the space left under the header and tabs —
-                       so its scrollbars ended up floating over the footer
-                       buttons instead of staying in the table. */
-                    containerClassName="flex-1 min-h-0 flex flex-col"
-                    tableShellClassName="tf-table-shell--fill flex-1 min-h-0"
-                    showEmptyAction={false}
-                    /* Same call the My Resumes page makes: its illustrated
-                       empty state for a genuinely empty folder, and the
-                       table's own "no matches" copy while a search is
-                       narrowing the list. */
-                    emptyState={
-                      searchTerm.trim()
-                        ? undefined
-                        : renderNoResumesEmptyState(selectedFolder === 'all' ? undefined : selectedFolder)
-                    }
-                    isArchivedFolder={
-                      folders.find(f => f.id === selectedFolder)?.name?.toLowerCase().includes('archived') || false
-                    }
-                    /* Same rule as the My Resumes page: the folder column
-                       only earns its place in the aggregated view. */
-                    getFolderName={selectedFolder === 'all' ? getResumeFolderName : undefined}
-                  />
               ) : (
-                <div className="flex flex-col min-h-0 flex-1">
-                  {/* Desktop Table Header - hidden on mobile */}
-                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-slate-50 dark:bg-slate-950 border-b border-gray-200 dark:border-slate-700/60 text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider flex-shrink-0">
-                    <div className="col-span-1 flex items-center justify-center">
-                      {(() => {
-                        const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
-                        const visibleSelectedCount = visibleIds.filter(id => selectedResumes.includes(id)).length;
-                        const allVisibleSelected = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-                        const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
-                        return (
-                          <input
-                            type="checkbox"
-                            checked={allVisibleSelected}
-                            ref={input => {
-                              if (input) input.indeterminate = someVisibleSelected;
-                            }}
-                            onChange={handleSelectAll}
-                            className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
-                            aria-label={allVisibleSelected ? 'Deselect all visible resumes' : 'Select all visible resumes'}
-                          />
-                        );
-                      })()}
-                    </div>
-                    <div className="col-span-3">Candidate</div>
-                    <div className="col-span-2">Current Role</div>
-                    <div className="col-span-2">Contact</div>
-                    <div className="col-span-2">Experience</div>
-                    <div className="col-span-2">Skills</div>
-                  </div>
-
-                  {/* Resume Items — the scrolling region (the "tbody"). Mobile
-                      cards keep a visible gap between them; the desktop table
-                      rows instead share a border like a real table body. */}
-                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2 md:space-y-0 md:divide-y md:divide-gray-200 dark:md:divide-slate-700/60">
-                  {filteredResumes.map((resume) => {
-                    const isSelected = selectedResumes.includes(resume.id);
-                    const selectedFolderData = folders.find(f => f.id === selectedFolder);
-                    const isArchivedFolder = selectedFolderData?.name?.toLowerCase().includes('archived') || false;
-                    const isArchived = resume.is_archived === true || isArchivedFolder;
-
-                    return (
-                      <div key={resume.id}>
-                        {/* Mobile Card View */}
-                        <div
-                          className="md:hidden"
-                          onClick={() => {
-                            if (isArchived) {
-                              toast.error('Archived resumes cannot be scored.');
-                              return;
-                            }
-                            handleToggleResume(resume.id);
-                          }}
-                        >
-                          <div className={`p-3 border-2 rounded-lg transition-all ${
-                            isArchived
-                              ? 'border-brand-orange/20 bg-brand-orange/5 ring-1 ring-brand-orange/20 opacity-60 cursor-not-allowed'
-                              : isSelected
-                                ? 'border-brand-blue/40 bg-brand-blue/5 ring-1 ring-brand-blue/15 cursor-pointer'
-                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer'
-                          }`}>
-                            <div className="flex items-start gap-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!isArchived) handleToggleResume(resume.id);
-                                }}
-                                disabled={isArchived}
-                                className="p-0.5 mt-0.5 flex-shrink-0"
-                              >
-                                {isSelected ? (
-                                  <CheckSquare className="w-4 h-4 text-brand-blue" />
-                                ) : (
-                                  <Square className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                                )}
-                              </button>
-                              <div className="w-8 h-8 rounded-full bg-brand-blue flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
-                                {(resume.candidate_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{resume.candidate_name || 'Unknown'}</span>
-                                  {isArchived && (
-                                    <span className="text-[10px] text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1 py-0.5 rounded flex-shrink-0">Archived</span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-gray-600 dark:text-slate-400 truncate">{resume.current_title || 'N/A'}{resume.current_company ? ` · ${resume.current_company}` : ''}</p>
-                                <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-500 dark:text-slate-500 flex-wrap">
-                                  {resume.location && (
-                                    <span className="flex items-center gap-0.5"><MapPin className="w-2.5 h-2.5" />{resume.location}</span>
-                                  )}
-                                  {resume.experience_years && (
-                                    <span className="flex items-center gap-0.5"><Briefcase className="w-2.5 h-2.5" />{resume.experience_years}y</span>
-                                  )}
-                                </div>
-                                {resume.skills && resume.skills.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 mt-1.5">
-                                    <SkillsList
-                                      skills={resume.skills}
-                                      chipClassName="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-[10px]"
-                                      moreClassName="px-1.5 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded text-[10px] hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                                    />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
+                <ResumeTable
+                  resumes={tableRows}
+                  selectedResumes={selectedResumes}
+                  onSelectResume={handleToggleResume}
+                  onSelectAll={handleTableSelectAll}
+                  /* Clicking a row picks the applicant, as this list has
+                     always done — the page uses this hook to navigate, but
+                     navigating away from a half-made selection is not what
+                     this popup wants. */
+                  onViewDetails={(resume) => handleToggleResume(resume.id)}
+                  /* Opened from the ⋮ menu's Preview; a new tab keeps the
+                     popup and its current selection intact. */
+                  onQuickView={(resume) =>
+                    window.open(`/recruitment/resume-view/${resume.id}`, '_blank', 'noopener,noreferrer')
+                  }
+                  /* Archive/Delete/Share/Tag stay My Resumes-only — the
+                     Internal Database tab never offered them (it's a shared,
+                     org-wide list to pick candidates from, not one this
+                     modal manages), so only the read-only Preview/Download
+                     actions carry over onto it. */
+                  onArchive={activeTab === 'my-resumes' && canArchiveMyResumes ? handleArchiveResume : undefined}
+                  onDelete={
+                    activeTab === 'my-resumes' && canDeleteMyResumes
+                      ? (id) => {
+                          const row = resumes.find(r => r.id === id);
+                          setDeleteResumeTarget({
+                            id,
+                            name: row?.candidate_name || row?.file_name || 'this resume',
+                          });
+                        }
+                      : undefined
+                  }
+                  canShare={activeTab === 'my-resumes' && canShareMyResumes}
+                  canTag={activeTab === 'my-resumes' && canUpdateMyResumes}
+                  archivedFolderId={activeTab === 'my-resumes' ? folders.find(f => f.name === 'Archived Resumes' && !f.parent_id)?.id : undefined}
+                  /* Internal Database has no folder concept — the whole
+                     tab is one flat, unfiltered list. */
+                  folders={activeTab === 'my-resumes' ? tableFolders : []}
+                  highlightQuery={searchTerm}
+                  draggable={false}
+                  /* Paginated, not one long scroll. `ResumeTable`'s built-in
+                     pagination renders the same `components/Pagination`
+                     the My Resumes and Resume Database pages use, with the
+                     same props — so the count line, page buttons, per-page
+                     picker, disabled states and hover/focus styling all
+                     match those pages without a second implementation here.
+                     Selection is held by resume id, so ticks survive a page
+                     change. */
+                  /* Left at its default (true), as on My Resumes and Resume
+                     Database, so the Download Resume entry appears. */
+                  canDownload
+                  /* Fill the modal body and scroll inside it. Without this
+                     the shell keeps `.tf-table-shell`'s 400px floor / vh cap
+                     — taller than the space left under the header and tabs —
+                     so its scrollbars ended up floating over the footer
+                     buttons instead of staying in the table. */
+                  containerClassName="flex-1 min-h-0 flex flex-col"
+                  tableShellClassName="tf-table-shell--fill flex-1 min-h-0"
+                  showEmptyAction={false}
+                  emptyState={
+                    activeTab === 'my-resumes'
+                      /* Same call the My Resumes page makes: its illustrated
+                         empty state for a genuinely empty folder, and the
+                         table's own "no matches" copy while a search is
+                         narrowing the list. */
+                      ? (searchTerm.trim() ? undefined : renderNoResumesEmptyState(selectedFolder === 'all' ? undefined : selectedFolder))
+                      : (
+                        <div className="text-center py-10 sm:py-16">
+                          <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300 dark:text-slate-500" />
+                          <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Resumes Found</h3>
+                          <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
+                            {searchTerm
+                              ? 'No resumes match your search. Try different keywords.'
+                              : 'No resumes available in the internal database.'}
+                          </p>
                         </div>
-
-                        {/* Desktop Table Row — flat divide-y row, matching the
-                            My Resumes table (ResumeTable.tsx): no per-row card
-                            border/radius, a light brand-blue tint for the
-                            selected/hover states instead. */}
-                        <div
-                          className={`hidden md:grid grid-cols-12 gap-4 px-4 py-3 items-center transition-colors ${
-                            isArchived
-                              ? 'bg-brand-orange/5 opacity-60 cursor-not-allowed'
-                              : isSelected
-                                ? 'bg-brand-blue/10 ring-1 ring-inset ring-brand-blue/20 cursor-pointer'
-                                : 'bg-white dark:bg-slate-900 hover:bg-brand-blue/5 cursor-pointer'
-                          }`}
-                          onClick={() => {
-                            if (isArchived) {
-                              toast.error('Archived resumes cannot be scored. Please select an active resume.');
-                              return;
-                            }
-                            handleToggleResume(resume.id);
-                          }}
-                        >
-                          {/* Checkbox */}
-                          <div className="col-span-1 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              disabled={isArchived}
-                              onChange={() => {
-                                if (isArchived) {
-                                  toast.error('Archived resumes cannot be scored. Please select an active resume.');
-                                  return;
-                                }
-                                handleToggleResume(resume.id);
-                              }}
-                              className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 disabled:cursor-not-allowed disabled:opacity-50"
-                            />
-                          </div>
-
-                          {/* Candidate Name */}
-                          <div className="col-span-3 min-w-0">
-                            <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{resume.candidate_name || 'Unknown'}</div>
-                            {isArchived && (
-                              <span className="inline-flex items-center gap-1 text-xs text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded mt-0.5">
-                                Archived
-                              </span>
-                            )}
-                            {resume.location && (
-                              <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 mt-0.5">
-                                <MapPin className="w-3 h-3" />
-                                {resume.location}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Current Role */}
-                          <div className="col-span-2">
-                            <div className="text-sm text-gray-700 dark:text-slate-300">{resume.current_title || 'N/A'}</div>
-                            {resume.current_company && (
-                              <div className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{resume.current_company}</div>
-                            )}
-                          </div>
-
-                          {/* Contact */}
-                          <div className="col-span-2">
-                            {resume.email && (
-                              <div className="text-xs text-gray-700 dark:text-slate-300 truncate">{resume.email}</div>
-                            )}
-                            {resume.phone && (
-                              <div className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{resume.phone}</div>
-                            )}
-                            {!resume.email && !resume.phone && (
-                              <span className="text-xs text-gray-400 dark:text-slate-500">-</span>
-                            )}
-                          </div>
-
-                          {/* Experience */}
-                          <div className="col-span-2">
-                            <div className="text-sm text-gray-700 dark:text-slate-300">
-                              {resume.experience_years ? `${resume.experience_years} years` : 'N/A'}
-                            </div>
-                            {resume.notice_period && (
-                              <div className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{resume.notice_period}</div>
-                            )}
-                          </div>
-
-                          {/* Skills */}
-                          <div className="col-span-2">
-                            {resume.skills && resume.skills.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                <SkillsList
-                                  skills={resume.skills}
-                                  chipClassName="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-xs"
-                                  moreClassName="px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded text-xs hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
-                                />
-                              </div>
-                            ) : (
-                              <span className="text-xs text-gray-400 dark:text-slate-500">-</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  </div>
-                </div>
+                      )
+                  }
+                  isArchivedFolder={
+                    activeTab === 'my-resumes' &&
+                    (folders.find(f => f.id === selectedFolder)?.name?.toLowerCase().includes('archived') || false)
+                  }
+                  /* Same rule as the My Resumes page: the folder column
+                     only earns its place in the aggregated view. */
+                  getFolderName={activeTab === 'my-resumes' && selectedFolder === 'all' ? getResumeFolderName : undefined}
+                />
               )}
             </div>
           </div>
