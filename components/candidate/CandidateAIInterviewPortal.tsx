@@ -1594,13 +1594,30 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // reports the real bar as "still visible" even when the candidate has hidden
     // it — a false positive that traps them on this step. We hide it, wait for
     // the screen-capture pipeline to reflect the change, capture, then restore.
+    // Hide EVERY decorative graphic on our own setup card during the capture —
+    // not just the share-bar mock. The strict foreign-icon vision check flags
+    // ANY non-interview icon on screen, so our own on-page graphics (the top
+    // Monitor icon, the mock bar, the button glyphs) would be reported as
+    // foreign apps and trap a compliant candidate. We hide anything tagged
+    // [data-capture-decor] (plus the mock ref for safety), wait for the
+    // screen-capture pipeline to reflect it, capture, then restore in finally.
     const mock = shareBarMockRef.current;
-    const prevVisibility = mock ? mock.style.visibility : '';
-    if (mock) mock.style.visibility = 'hidden';
+    const decorEls: HTMLElement[] = [];
+    if (mock) decorEls.push(mock);
     try {
-      // Let the compositor + screen-capture stream drop the now-hidden mock
+      shareBarMockRef.current?.ownerDocument
+        ?.querySelectorAll<HTMLElement>('[data-capture-decor]')
+        .forEach((el) => { if (!decorEls.includes(el)) decorEls.push(el); });
+    } catch { /* querySelector never throws in practice; guard anyway */ }
+    const restores = decorEls.map((el) => {
+      const prev = el.style.visibility;
+      el.style.visibility = 'hidden';
+      return () => { el.style.visibility = prev; };
+    });
+    try {
+      // Let the compositor + screen-capture stream drop the now-hidden graphics
       // (a few frames of latency); imperceptible during the "Checking…" state.
-      if (mock) await new Promise<void>((r) => window.setTimeout(r, 250));
+      if (decorEls.length) await new Promise<void>((r) => window.setTimeout(r, 250));
       const video = document.createElement('video');
       video.muted = true;
       (video as HTMLVideoElement).playsInline = true;
@@ -1624,8 +1641,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       video.srcObject = null;
       return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7));
     } finally {
-      // Always restore the guide, whether capture succeeded, returned null, or threw.
-      if (mock) mock.style.visibility = prevVisibility;
+      // Always restore every hidden graphic, whether capture succeeded,
+      // returned null, or threw.
+      restores.forEach((restore) => restore());
     }
   }, []);
 
@@ -1789,6 +1807,26 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         setShareBarAttempts(nextAttempt);
         console.warn(`[ShareBar] recorder overlay detected (attempt ${nextAttempt}) — re-prompting, not proceeding`);
         setShareBarError('We detected a screen-recording application running on your screen. Please close it completely, then press Continue again — the interview cannot start while screen-recording software is running.');
+      } else if (res.foreign_app_detected) {
+        // Vision check saw another application / AI-assistant tool open on the
+        // entire-screen capture besides the single interview tab (e.g. ChatGPT,
+        // another browser window, a code editor, notes). Same re-promptable gate.
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        const label = (res.foreign_app_label || '').trim();
+        console.warn(`[ShareBar] foreign app detected (attempt ${nextAttempt}, label=${label}) — re-prompting, not proceeding`);
+        setShareBarError(
+          `We detected another application open on your screen${label ? ` (${label})` : ''}. `
+          + 'Please close all other apps, windows and tabs so ONLY this interview is open, then press Continue again — the interview cannot start while other applications are running.',
+        );
+      } else if (res.interview_screen_present === false) {
+        // Vision check is confident no browser (the interview) is the shared
+        // content — the candidate shared the wrong monitor/desktop. Fail-open
+        // default is true, so this only trips on a definitive "wrong screen".
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        console.warn(`[ShareBar] interview screen NOT present (attempt ${nextAttempt}) — re-prompting, not proceeding`);
+        setShareBarError('We can’t see this interview on the screen you shared. Please stop sharing and share the screen (or monitor) that is showing THIS interview, then press Continue again.');
       } else if (res.hidden) {
         await startInterviewNow();
       } else {
@@ -1840,7 +1878,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         if (!frame || cancelled) return;
         const res = await candidateAIInterviewService.verifyShareBarHidden(token, frame);
         if (cancelled) return;
-        if (res.hidden && !res.pip_detected && !res.recorder_overlay_detected) {
+        if (res.hidden && !res.pip_detected && !res.recorder_overlay_detected
+            && !res.foreign_app_detected && res.interview_screen_present !== false) {
           console.log('[ShareBar] auto-recheck: now clean — clearing warning');
           setShareBarError(null);
           setShareBarAttempts(0);
@@ -2637,7 +2676,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           {/* Do-not-refresh warning, inline: reloading here drops fullscreen +
               screen sharing and sends the candidate back to re-share. */}
           <p className="text-xs font-semibold text-red-600 mb-4 text-center flex items-center justify-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <AlertTriangle data-capture-decor className="w-3.5 h-3.5 shrink-0" />
             Do not refresh this page — it drops screen sharing and restarts setup.
           </p>
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-left">
@@ -2704,7 +2743,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+          <div data-capture-decor className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Monitor className="w-8 h-8 text-blue-600" />
           </div>
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
@@ -2718,13 +2757,16 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             <b> Continue</b> and we&apos;ll verify it before starting.
           </p>
           <p className="text-gray-500 mb-2 text-center text-xs leading-relaxed">
-            Also close any screen-recording software (e.g. OBS, ScreenRec,
-            Bandicam, Camtasia, Game Bar) before continuing — the interview
-            cannot start while one is running.
+            Before continuing, close <b>every other app, window and browser tab</b>
+            {' '}so only this interview is open — including any AI assistant
+            (e.g. ChatGPT, Copilot, Gemini) and any screen-recording software
+            (e.g. OBS, ScreenRec, Bandicam, Camtasia, Game Bar). Make sure the
+            screen you shared is the one showing <b>this interview</b>. The
+            interview cannot start while another application is running.
           </p>
           {/* Do-not-refresh warning, inline (replaces the old red top bar). */}
           <p className="text-xs font-semibold text-red-600 mb-4 text-center flex items-center justify-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <AlertTriangle data-capture-decor className="w-3.5 h-3.5 shrink-0" />
             Do not refresh this page — it drops screen sharing and restarts setup.
           </p>
 
@@ -2746,7 +2788,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
           {shareBarError && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5 flex items-start gap-2">
-              <XCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+              <XCircle data-capture-decor className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-red-700">{shareBarError}</p>
                 {shareBarAttempts >= 2 && (
@@ -2762,11 +2804,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
           >
             {startSubmitting ? (
-              <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
+              <><Loader2 data-capture-decor className="w-5 h-5 animate-spin" />Starting Interview...</>
             ) : shareBarChecking ? (
-              <><Loader2 className="w-5 h-5 animate-spin" />Checking…</>
+              <><Loader2 data-capture-decor className="w-5 h-5 animate-spin" />Checking…</>
             ) : (
-              <><CheckCircle className="w-5 h-5" />I&apos;ve hidden it — Continue</>
+              <><CheckCircle data-capture-decor className="w-5 h-5" />I&apos;ve hidden it — Continue</>
             )}
           </button>
           <p className="text-[11px] text-gray-400 mt-3 text-center">
