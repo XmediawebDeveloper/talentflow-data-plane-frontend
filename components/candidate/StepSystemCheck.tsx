@@ -351,14 +351,11 @@ export default function StepSystemCheck({
   // instead of waiting for "Run Check" — Voice Verification must be
   // completable before Run Check is even enabled.
   const [micStreamReady, setMicStreamReady] = useState(false);
-  // Set when the proactive mic-acquisition attempt below fails (permission
-  // denied/blocked, no device, etc.) — distinguishes "still acquiring" from
-  // "acquisition failed" so the panel doesn't sit on a silent, indefinite
-  // "Waiting for microphone access" with no explanation or way forward.
+  // Set when startVoiceEnroll's on-demand mic-acquisition attempt fails
+  // (permission denied/blocked, no device, etc.) — switches the idle panel
+  // to an explicit error + Retry instead of the button silently doing
+  // nothing on a second click.
   const [micAcquireFailed, setMicAcquireFailed] = useState(false);
-  // Bumped by the "Retry" action below to force the acquisition effect to
-  // run again after a failure (it isn't itself a dependency the effect reads).
-  const [micAcquireAttempt, setMicAcquireAttempt] = useState(0);
   // Whether the Camera Preview <video> actually has live frames — the
   // "Camera Active" badge used to be hardcoded and shown regardless of
   // whether the preview was really playing, which lied to the candidate
@@ -487,48 +484,6 @@ export default function StepSystemCheck({
     [],
   );
 
-  // Kick off voice enrollment once, updating the visible panel state as it runs.
-  // Called from the mic check the moment the candidate's voice is detected.
-  //
-  // Guarded by voiceEnrollAttemptIdRef: if the headset dies mid-recording, the
-  // candidate can start a FRESH attempt (once the mic check passes again)
-  // before the old, now-aborted onEnrollVoice() promise has actually settled.
-  // Without the id check, that stale promise resolving later would stomp the
-  // new attempt's 'recording'/'success' state with its own leftover outcome.
-  const startVoiceEnroll = useCallback(() => {
-    if (voiceEnrollPromiseRef.current || !onEnrollVoice || !streamRef.current) return;
-    const attemptId = ++voiceEnrollAttemptIdRef.current;
-    setVoiceEnrollStatus('recording');
-    setVoiceEnrollProgress(0);
-    voiceEnrollPromiseRef.current = onEnrollVoice(streamRef.current)
-      .then((ok) => {
-        if (mountedRef.current && voiceEnrollAttemptIdRef.current === attemptId) {
-          setVoiceEnrollStatus(ok ? 'success' : 'failed');
-        }
-        return ok;
-      })
-      .catch((err) => {
-        if (mountedRef.current && voiceEnrollAttemptIdRef.current === attemptId) {
-          // Headset pulled mid-recording: distinct status/messaging from a
-          // normal "no speech heard" failure — the candidate must reconnect
-          // and record again from scratch, not just retry.
-          setVoiceEnrollStatus(err instanceof MicDisconnectedDuringRecordingError ? 'disconnected' : 'failed');
-        }
-        return false;
-      })
-      .finally(() => {
-        if (voiceEnrollAttemptIdRef.current === attemptId) voiceEnrollPromiseRef.current = null;
-      });
-  }, [onEnrollVoice]);
-
-  // Re-run voice enrollment (from the panel's Retry / Record-again button).
-  const retryVoiceEnroll = useCallback(() => {
-    voiceEnrollPromiseRef.current = null;
-    setVoiceEnrollStatus('idle');
-    setVoiceEnrollProgress(0);
-    startVoiceEnroll();
-  }, [startVoiceEnroll]);
-
   useEffect(() => { voiceEnrollStatusRef.current = voiceEnrollStatus; }, [voiceEnrollStatus]);
 
   // Drive the recording progress bar (~12 s capture) for visible feedback.
@@ -557,9 +512,25 @@ export default function StepSystemCheck({
     if (noiseIntervalRef.current) { clearInterval(noiseIntervalRef.current); noiseIntervalRef.current = null; }
     stopFacePoll();
     if (micIntervalRef.current) { clearInterval(micIntervalRef.current); micIntervalRef.current = null; }
-    if (audioContextRef.current) { audioContextRef.current.close().catch(() => {}); audioContextRef.current = null; }
-    analyserRef.current = null;
-    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+
+    // Preserve the microphone if Voice Verification already succeeded on it.
+    // This is called at the top of every "Run Check" run (to give Brave time
+    // to release camera hardware from a prior run before re-acquiring it) —
+    // but stopping the mic track here too would kill an already-good
+    // voiceprint for no reason, which the disconnect watcher then treats as a
+    // real disconnect and invalidates, forcing the candidate to redo Voice
+    // Verification every single time Run Check runs. Only video needs the
+    // stop-and-reacquire treatment; the mic can just stay live throughout.
+    const keepMic = voiceEnrollStatusRef.current === 'success';
+    if (!keepMic) {
+      if (audioContextRef.current) { audioContextRef.current.close().catch(() => {}); audioContextRef.current = null; }
+      analyserRef.current = null;
+    }
+    if (streamRef.current) {
+      const tracksToStop = keepMic ? streamRef.current.getVideoTracks() : streamRef.current.getTracks();
+      tracksToStop.forEach((t) => t.stop());
+      streamRef.current = keepMic ? new MediaStream(streamRef.current.getAudioTracks()) : null;
+    }
   }, [stopFacePoll]);
 
   const INITIAL_CHECKS: SystemCheckItem[] = [
@@ -601,11 +572,12 @@ export default function StepSystemCheck({
         : true;
       const s = await navigator.mediaDevices.getUserMedia({ video: videoConstraint });
       // Preserve any audio track ensureAudioAnalyser already put on
-      // streamRef.current (the proactive mic-acquisition effect races this
-      // one on mount) instead of overwriting it outright — same combine
-      // pattern runWebcam uses below. Overwriting would silently drop a
-      // live mic track and Voice Verification would record from a
-      // video-only stream (captured silence → "We didn't hear any speech").
+      // streamRef.current (e.g. Voice Verification's on-demand mic
+      // acquisition resolving while this video call is still in flight)
+      // instead of overwriting it outright — same combine pattern runWebcam
+      // uses below. Overwriting would silently drop a live mic track and
+      // Voice Verification would record from a video-only stream (captured
+      // silence → "We didn't hear any speech").
       const existingAudioTracks = streamRef.current?.getAudioTracks() ?? [];
       const combined = new MediaStream([...s.getVideoTracks(), ...existingAudioTracks]);
       streamRef.current = combined;
@@ -646,13 +618,11 @@ export default function StepSystemCheck({
       if (streamRef.current) {
         audioStream.getAudioTracks().forEach((t) => streamRef.current!.addTrack(t));
       } else {
-        // No shared stream yet — this can resolve BEFORE ensureVideoStream's
-        // own getUserMedia call, since the proactive mic-acquisition effect
-        // races the proactive camera-preview effect on mount (both fire in
-        // the same render, order of resolution isn't guaranteed). Start
-        // streamRef.current with just the audio track so it isn't silently
-        // dropped; ensureVideoStream merges its video track into whatever's
-        // already here instead of overwriting it (see that function).
+        // No shared stream yet — e.g. the candidate clicked "Start recording"
+        // before the camera preview's own getUserMedia call (fired on mount)
+        // has resolved. Start streamRef.current with just the audio track so
+        // it isn't silently dropped; ensureVideoStream merges its video
+        // track into whatever's already here instead of overwriting it.
         streamRef.current = audioStream;
       }
       return analyser;
@@ -660,6 +630,65 @@ export default function StepSystemCheck({
       return null;
     }
   }, []);
+
+  // Kick off voice enrollment once, updating the visible panel state as it
+  // runs. Called on the candidate's own click — "Start recording" or "Retry"
+  // — so the microphone permission prompt (when this is the first-ever
+  // request) is a direct, expected result of that click, not something that
+  // fired unprompted in the background before they touched anything.
+  //
+  // Guarded by voiceEnrollAttemptIdRef: if the headset dies mid-recording, the
+  // candidate can start a FRESH attempt (once the mic is live again) before
+  // the old, now-aborted onEnrollVoice() promise has actually settled.
+  // Without the id check, that stale promise resolving later would stomp the
+  // new attempt's 'recording'/'success' state with its own leftover outcome.
+  const startVoiceEnroll = useCallback(async () => {
+    if (voiceEnrollPromiseRef.current || !onEnrollVoice) return;
+    const hasLiveAudio = streamRef.current?.getAudioTracks().some((t) => t.readyState === 'live');
+    if (!hasLiveAudio) {
+      setMicAcquireFailed(false);
+      const analyser = await ensureAudioAnalyser();
+      if (!analyser) {
+        // getUserMedia rejected — permission denied/blocked, no device, or
+        // hardware in use elsewhere. Surface this so the candidate has a
+        // clear next step instead of the button just doing nothing.
+        setMicAcquireFailed(true);
+        return;
+      }
+      setMicStreamReady(true);
+    }
+    if (!streamRef.current) return; // shouldn't happen once analyser succeeded, but nothing to record from otherwise
+    const attemptId = ++voiceEnrollAttemptIdRef.current;
+    setVoiceEnrollStatus('recording');
+    setVoiceEnrollProgress(0);
+    voiceEnrollPromiseRef.current = onEnrollVoice(streamRef.current)
+      .then((ok) => {
+        if (mountedRef.current && voiceEnrollAttemptIdRef.current === attemptId) {
+          setVoiceEnrollStatus(ok ? 'success' : 'failed');
+        }
+        return ok;
+      })
+      .catch((err) => {
+        if (mountedRef.current && voiceEnrollAttemptIdRef.current === attemptId) {
+          // Headset pulled mid-recording: distinct status/messaging from a
+          // normal "no speech heard" failure — the candidate must reconnect
+          // and record again from scratch, not just retry.
+          setVoiceEnrollStatus(err instanceof MicDisconnectedDuringRecordingError ? 'disconnected' : 'failed');
+        }
+        return false;
+      })
+      .finally(() => {
+        if (voiceEnrollAttemptIdRef.current === attemptId) voiceEnrollPromiseRef.current = null;
+      });
+  }, [onEnrollVoice, ensureAudioAnalyser]);
+
+  // Re-run voice enrollment (from the panel's Retry / Record-again button).
+  const retryVoiceEnroll = useCallback(() => {
+    voiceEnrollPromiseRef.current = null;
+    setVoiceEnrollStatus('idle');
+    setVoiceEnrollProgress(0);
+    void startVoiceEnroll();
+  }, [startVoiceEnroll]);
 
   // Chrome/Edge expose two synthetic aliases per physical audio device
   // ("default" and "communications", deviceId literally 'default'/'communications')
@@ -1450,50 +1479,31 @@ export default function StepSystemCheck({
     return () => navigator.mediaDevices.removeEventListener('devicechange', refreshDeviceLists);
   }, [phase, refreshDeviceLists]);
 
-  // Acquire camera, then microphone — the moment this screen loads, and
-  // SEQUENTIALLY in one effect rather than two independent effects firing
-  // getUserMedia in parallel. Two concurrent getUserMedia calls (one video,
-  // one audio) race the browser's own permission-prompt handling: some
-  // browsers only surface one prompt at a time and can silently fail the
-  // second request instead of queuing it, which was showing "Couldn't access
-  // your microphone" on a fresh grant even though the candidate never
-  // actually got asked for mic access — only camera. Awaiting the camera
-  // grant first, then requesting the mic, avoids that collision entirely.
+  // Start the camera preview the moment this screen loads — so the candidate
+  // can see their actual device and pick a different one from the Device
+  // Settings dropdown BEFORE running system checks, instead of only being
+  // able to choose it after "Run Check" already ran against whatever camera
+  // happened to be default. This does NOT mark the webcam check as passed;
+  // that still requires an explicit "Run Check" or "Retry" click.
   //
-  // Camera-only: lets the candidate see their actual device and pick a
-  // different one from Device Settings BEFORE running system checks, instead
-  // of only being able to choose it after "Run Check" already ran against
-  // whatever camera happened to be default. This does NOT mark the webcam
-  // check as passed; that still requires an explicit "Run Check" or "Retry".
-  //
-  // Microphone: Voice Verification must be usable — and completable —
-  // before Run Check is even enabled (see micReadyForVoice and the Run Check
-  // button's disabled state), so this can't wait for Run Check to open it.
-  // selectedMicId/micAcquireAttempt are dependencies so switchMicrophone's
-  // reset and the panel's "Retry" button both re-trigger just the mic half
-  // (re-running ensureVideoStream here too is a cheap no-op — it reuses the
-  // already-live video track instead of re-prompting).
+  // The microphone is deliberately NOT acquired proactively here — it's
+  // requested on-demand, inside startVoiceEnroll, the moment the candidate
+  // actually clicks "Start recording" (or "Retry"). Asking for it up front
+  // used to fire alongside this camera request and race it (two concurrent
+  // getUserMedia calls competing for the browser's permission-prompt UI could
+  // silently fail one of them), and it also meant a mic permission prompt
+  // could pop up before the candidate had done anything — surprising, and
+  // hard to explain when it failed. Tying it to the click keeps cause and
+  // effect obvious: click record → prompt (first time) → recording starts.
   useEffect(() => {
     if (phase !== 'system_checks') return;
     let cancelled = false;
     (async () => {
-      const videoOk = await ensureVideoStream();
-      if (videoOk && !cancelled) void refreshDeviceLists();
-      if (cancelled || !onEnrollVoice) return;
-      setMicAcquireFailed(false);
-      const analyser = await ensureAudioAnalyser();
-      if (cancelled) return;
-      if (analyser) {
-        setMicStreamReady(true);
-      } else {
-        // getUserMedia rejected — permission denied/blocked, no device, or
-        // hardware in use elsewhere. Surface this instead of leaving the
-        // panel stuck on a silent "Waiting for microphone access" forever.
-        setMicAcquireFailed(true);
-      }
+      const ok = await ensureVideoStream();
+      if (ok && !cancelled) void refreshDeviceLists();
     })();
     return () => { cancelled = true; };
-  }, [phase, onEnrollVoice, ensureVideoStream, ensureAudioAnalyser, refreshDeviceLists, selectedMicId, micAcquireAttempt]);
+  }, [phase, ensureVideoStream, refreshDeviceLists]);
 
   // If exactly one microphone is connected, there's nothing to choose between —
   // auto-select it so the candidate doesn't have to open the dropdown just to
@@ -2205,12 +2215,15 @@ export default function StepSystemCheck({
 
             {/* Status area + manual record control */}
             <div className="mt-3">
-              {/* IDLE — must click to record. Three sub-states: ready, still
-                  acquiring the mic, or acquisition failed (permission
-                  denied/blocked, no device, hardware busy elsewhere) — the
-                  last one gets its own message + Retry instead of sitting on
-                  the generic "waiting" text forever with no way forward. */}
-              {voiceEnrollStatus === 'idle' && micAcquireFailed && !micReadyForVoice && (
+              {/* IDLE — must click to record. The mic is requested on-demand,
+                  inside startVoiceEnroll, only once the candidate clicks — so
+                  this button is enabled from the start rather than waiting on
+                  a background acquisition. If that click's getUserMedia call
+                  fails (permission denied/blocked, no device, hardware busy
+                  elsewhere), micAcquireFailed switches this to an explicit
+                  error + Retry — which just calls startVoiceEnroll again, so
+                  retrying is a real new attempt, not a no-op. */}
+              {voiceEnrollStatus === 'idle' && micAcquireFailed && (
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
                     <MicOff className="w-4 h-4 text-red-600 flex-shrink-0" />
@@ -2218,7 +2231,7 @@ export default function StepSystemCheck({
                   </p>
                   <button
                     type="button"
-                    onClick={() => setMicAcquireAttempt((n) => n + 1)}
+                    onClick={startVoiceEnroll}
                     className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer flex-shrink-0"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
@@ -2226,22 +2239,15 @@ export default function StepSystemCheck({
                   </button>
                 </div>
               )}
-              {voiceEnrollStatus === 'idle' && !(micAcquireFailed && !micReadyForVoice) && (
+              {voiceEnrollStatus === 'idle' && !micAcquireFailed && (
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-gray-500">
-                    {micReadyForVoice
-                      ? 'Click record, then speak for a few seconds.'
-                      : 'Waiting for microphone access — select a device below if prompted.'}
+                    Click record, then speak for a few seconds.
                   </p>
                   <button
                     type="button"
                     onClick={startVoiceEnroll}
-                    disabled={!micReadyForVoice}
-                    className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors ${
-                      micReadyForVoice
-                        ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    }`}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer"
                   >
                     <Mic className="w-3.5 h-3.5" />
                     Start recording
