@@ -332,6 +332,80 @@ export const sortJobs = (list: Job[], sortBy: JobSortBy, sortOrder: JobSortOrder
     return sortOrder === 'desc' ? -comparison : comparison;
   });
 
+/**
+ * The live version NUMBER of a lineage — the single answer every "Latest"
+ * badge is checked against, so the Job Openings list, the Assessments list and
+ * both version-history tables mark the same version as latest.
+ *
+ * Read from the lineage rather than assumed: a version is latest because it is
+ * the highest one the data carries, never because it came first in a response
+ * or because nothing contradicted it. `fallback` is what the caller already
+ * knows (typically the row's own version), so a lineage that has not loaded
+ * yet degrades to "the newest version known here" instead of to 1.
+ *
+ * SEQUENCE, not status, and not `is_latest_version`. A v2 draft sitting over a
+ * published v1 is the latest version — the job is being re-drafted, which is
+ * the same reading `getPublishedJobs` below takes of it. And the flag can only
+ * ever agree with the number here: it names a row that is already in this list,
+ * so honouring it separately could only ever LOWER the answer, putting the
+ * badge (and the card the badge sits on) on a superseded version.
+ */
+export const latestVersionNumber = (
+  versions: Pick<JDLineageVersion, 'version_number'>[] | undefined,
+  fallback = 1,
+): number =>
+  (versions ?? []).reduce((highest, v) => Math.max(highest, v.version_number ?? 1), fallback);
+
+/**
+ * The job-list search, as one implementation: the Apply to Job dialog's and
+ * the assessment JD picker's "Search Jobs" field both narrow their list
+ * through this, so a query that finds a job in one finds it in the other.
+ *
+ * Matching only the title meant a JD number typed in full returned nothing —
+ * the number lives on `job_id`, and departments and locations are searched for
+ * just as often.
+ *
+ * Two passes per field. The plain one is a straight substring, so "77" finds
+ * JD-77 and "develop" finds Developer. The second strips everything that isn't
+ * a letter or a digit from BOTH sides first, so the separator a recruiter
+ * types doesn't have to match the one the record was stored with: "jd-77",
+ * "JD 77", "jd_77" and "jd77" all find the same job.
+ *
+ * Returns a predicate rather than taking the query per row: the normalising
+ * happens once for the whole list, not once per job.
+ */
+export const jobSearchMatcher = (query: string): ((job: Job) => boolean) => {
+  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const plain = query.trim().toLowerCase();
+  const compact = normalize(query);
+
+  return (job: Job) => {
+    if (!plain) return true;
+    // Hosts hand in rows carrying the JD number under several names.
+    const j = job as Job & Record<string, unknown>;
+    return [
+      job.title,
+      j.job_id,
+      j.jobId,
+      j.jd_number,
+      j.jd_id,
+      j.reference_id,
+      j.industry_type,
+      j.department,
+      job.location,
+      j.employment_type,
+      j.employmentType,
+    ]
+      .filter(Boolean)
+      .some(field => {
+        const raw = String(field).toLowerCase();
+        if (raw.includes(plain)) return true;
+        // Guard against a punctuation-only query matching everything.
+        return !!compact && normalize(String(field)).includes(compact);
+      });
+  };
+};
+
 export interface ResolvedVersionRow extends JDLineageVersion {
   /** The live version of the lineage — the flag is preferred, the version
    *  number backstops a lineage row that omits it. */
@@ -355,10 +429,7 @@ export const resolveVersionHistoryRows = (
   options?: { excludeId?: string },
 ): ResolvedVersionRow[] => {
   const lineageVersions = versions ?? [];
-  const latestVersionNumber = lineageVersions.reduce(
-    (highest, v) => Math.max(highest, v.version_number ?? 1),
-    job.versionNumber ?? 1,
-  );
+  const latestNumber = latestVersionNumber(lineageVersions, job.versionNumber ?? 1);
 
   const seenVersionNumbers = new Set<number>();
   return lineageVersions
@@ -375,6 +446,6 @@ export const resolveVersionHistoryRows = (
     .sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1))
     .map((v) => ({
       ...v,
-      isLatest: v.is_latest_version || (v.version_number ?? 1) >= latestVersionNumber,
+      isLatest: v.is_latest_version || (v.version_number ?? 1) >= latestNumber,
     }));
 };

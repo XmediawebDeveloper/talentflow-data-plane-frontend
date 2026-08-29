@@ -7,6 +7,7 @@ import { jdService } from '@/lib/services/jdService';
 import {
   getPublishedJobs,
   groupByLineage,
+  jobSearchMatcher,
   lineageKey,
   mapJDToJob,
   sortJobs,
@@ -53,6 +54,17 @@ interface ApplyToJobModalProps {
   stayOnCurrentPage?: boolean;
   /** Overrides the confirm button's label — "Run AI Talent Match" and friends. */
   confirmLabel?: string;
+  /**
+   * Run the dialog as a JOB PICKER: the Candidates Selected panel is dropped
+   * and the confirm needs only a job.
+   *
+   * For flows that choose the JOB FIRST and the candidates after it — Resume
+   * Scoring picks the job, then opens its own resume selection. Everything
+   * else is untouched: the same shell, header, search, job cards, version
+   * history, pagination and footer, so the picker reads as the dialog it is.
+   * `onApply` is then called with an empty resume list.
+   */
+  jobOnly?: boolean;
   /** Replaces the Next Steps list when a flow ends somewhere different. */
   nextSteps?: string[];
 }
@@ -68,6 +80,7 @@ export default function ApplyToJobModal({
   stayOnCurrentPage = false,
   confirmLabel,
   nextSteps,
+  jobOnly = false,
 }: ApplyToJobModalProps) {
   // Default titles based on mode
   const defaultTitle =
@@ -182,44 +195,10 @@ export default function ApplyToJobModal({
 
   const submittedIdFor = (resume: Resume) => versionChoice[resume.id]?.id || resume.id;
 
-  /* Every job is listed; the search narrows it. Matching only `job.title`
-     meant a JD number typed in full returned nothing — the number lives on
-     `job_id`, and departments and locations are searched for just as often.
-
-     Two passes per field. The plain one is a straight substring, so "77" finds
-     JD-77 and "develop" finds Developer. The second strips everything that
-     isn't a letter or a digit from BOTH sides first, so the separator a
-     recruiter types doesn't have to match the one the record was stored with:
-     "jd-77", "JD 77", "jd_77" and "jd77" all find the same job. */
-  const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  /* Every job is listed; the search narrows it — through the shared matcher,
+     so this dialog and the assessment JD picker answer a query identically. */
   const jobSearch = searchQuery.trim().toLowerCase();
-  const jobSearchCompact = normalize(searchQuery);
-
-  const matchesSearch = (job: Job) => {
-    if (!jobSearch) return true;
-    // Hosts hand in rows carrying the JD number under several names.
-    const j = job as Job & Record<string, unknown>;
-    return [
-      job.title,
-      j.job_id,
-      j.jobId,
-      j.jd_number,
-      j.jd_id,
-      j.reference_id,
-      j.industry_type,
-      j.department,
-      job.location,
-      j.employment_type,
-      j.employmentType,
-    ]
-      .filter(Boolean)
-      .some(field => {
-        const raw = String(field).toLowerCase();
-        if (raw.includes(jobSearch)) return true;
-        // Guard against a punctuation-only query matching everything.
-        return !!jobSearchCompact && normalize(String(field)).includes(jobSearchCompact);
-      });
-  };
+  const matchesSearch = jobSearchMatcher(searchQuery);
 
   /* Every version, as fetched — what the lineage grouping needs to know which
      version of a job is the latest one. Also what the "View Versions" test
@@ -241,7 +220,7 @@ export default function ApplyToJobModal({
     () => publishedJobs.filter(matchesSearch),
     // matchesSearch closes over the query, which is the only thing that changes it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [publishedJobs, jobSearch, jobSearchCompact],
+    [publishedJobs, jobSearch],
   );
 
   /* Newest first — the Job Openings list's own default sort. Every row is a
@@ -278,7 +257,9 @@ export default function ApplyToJobModal({
     setSelection(prev => (prev?.job.id === job.id ? null : { job, lineage }));
   };
 
-  const canSubmit = !!selection && includedResumes.length > 0;
+  /* A job picker has no candidates to require — the flow that opened it picks
+     them next. Everywhere else both halves are still needed. */
+  const canSubmit = !!selection && (jobOnly || includedResumes.length > 0);
 
   const handleApply = async () => {
     if (canSubmit) {
@@ -291,6 +272,15 @@ export default function ApplyToJobModal({
          a version IS a JD record with its own id, so an older version chosen
          from the history is submitted as itself, not as its lineage's latest. */
       const picked = selection!.job;
+
+      /* A job picker hands the choice back and closes: there is nothing to
+         submit yet, so the confirm must not sit in a pending state pretending
+         there is. */
+      if (jobOnly) {
+        setIsApplying(false);
+        onApply([], [picked.id], [picked]);
+        return;
+      }
 
       // Simulate API call
       setTimeout(() => {
@@ -329,16 +319,20 @@ export default function ApplyToJobModal({
         {/* Content */}
         <div ref={listRef} className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Candidates Selected — shared with every other flow that acts
-              on a set of candidates, so they all read the same. */}
-          <SelectedCandidatesPanel
-            resumes={resumes}
-            excludedIds={excludedIds}
-            onToggleCandidate={toggleCandidate}
-            versionChoice={versionChoice}
-            onVersionChosen={(resumeId, choice) =>
-              setVersionChoice(prev => ({ ...prev, [resumeId]: choice }))
-            }
-          />
+              on a set of candidates, so they all read the same. Dropped in
+              job-picker mode, where no candidates have been chosen yet and an
+              empty panel would only say so. */}
+          {!jobOnly && (
+            <SelectedCandidatesPanel
+              resumes={resumes}
+              excludedIds={excludedIds}
+              onToggleCandidate={toggleCandidate}
+              versionChoice={versionChoice}
+              onVersionChosen={(resumeId, choice) =>
+                setVersionChoice(prev => ({ ...prev, [resumeId]: choice }))
+              }
+            />
+          )}
 
           {/* Job Search */}
           <div className="mb-4">
@@ -701,7 +695,17 @@ export default function ApplyToJobModal({
         {/* Footer */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
           <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-            {includedResumes.length === 0
+            {jobOnly
+              ? !selection
+                ? 'Select one job to continue'
+                : (
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                    Selected: {selection.job.job_id ? `${selection.job.job_id} · ` : ''}
+                    {selection.job.title} (v{selection.job.versionNumber ?? 1})
+                  </span>
+                )
+              : includedResumes.length === 0
               ? 'Select at least one candidate to continue'
               : !selection
                 ? 'Select one job to continue'

@@ -28,6 +28,7 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
+import ApplyToJobModal from '@/components/ApplyToJobModal';
 import JobVersionHistoryCards from '@/components/jobs/JobVersionHistoryCards';
 import type { Job as LineageJob } from '@/lib/types/types';
 import {
@@ -94,6 +95,37 @@ interface Job {
   industry_type?: string;
   remote_type?: string;
 }
+
+/**
+ * The Apply to Job dialog's `Job` → this page's own.
+ *
+ * The dialog reads the JD list through the shared `mapJDToJob`, which names
+ * these fields the way the Job type does (`currentVersion`, `postedDate`,
+ * `postedBy`, `workMode`); the summary on this page reads the API's own
+ * snake_case names. Only a rename — no field is invented, and one the record
+ * does not carry stays undefined so its chip simply doesn't render.
+ *
+ * `current_version` takes the LINEAGE version first: that is the number the
+ * dialog showed beside the job the user just picked, and a pick from a job's
+ * version history is a specific version rather than the lineage's latest.
+ */
+const toPageJob = (job: LineageJob): Job => ({
+  id: job.id,
+  title: job.title,
+  location: job.location || '',
+  department: job.department || '',
+  status: job.status,
+  applicants: job.applicants ?? 0,
+  employmentType: job.employmentType,
+  experience: job.experience,
+  job_id: job.job_id,
+  current_version: job.versionNumber ?? job.currentVersion,
+  published_at: job.postedDate,
+  created_by_name: job.postedBy,
+  creation_method: job.creation_method,
+  industry_type: job.industry_type,
+  remote_type: job.workMode,
+});
 
 interface Resume {
   id: string;
@@ -1336,20 +1368,15 @@ export default function ResumeScoringPage({
   ) : null;
 
   const publishedJobs = jobs.filter(j => j.status === 'Published' || j.status === 'Active');
-  const selectedJobData = jobs.find(j => j.id === selectedJob);
-  const [showJobDropdown, setShowJobDropdown] = useState(false);
-  const [jobDropdownSearch, setJobDropdownSearch] = useState('');
-  const jobDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (jobDropdownRef.current && !jobDropdownRef.current.contains(e.target as Node)) {
-        setShowJobDropdown(false);
-      }
-    };
-    if (showJobDropdown) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showJobDropdown]);
+  /* The job picked in the dialog, kept as the record the dialog handed back.
+     The dialog reads the JD list itself and offers every VERSION of a job
+     through its Version History, so the pick is not always one of the rows
+     this page loaded — `jobs.find` misses exactly then. Its own fields fill
+     the summary below, mapped to the names this page reads. */
+  const [pickedJob, setPickedJob] = useState<Job | null>(null);
+  const [showJobPicker, setShowJobPicker] = useState(false);
+  const selectedJobData = jobs.find(j => j.id === selectedJob)
+    || (pickedJob && pickedJob.id === selectedJob ? pickedJob : undefined);
 
   // Convert scored resumes to ScoredResumesTable format
   const convertToScoredResumesFormat = (scoredData: ScoredResumeData) => {
@@ -2976,7 +3003,7 @@ export default function ResumeScoringPage({
   return (
     <main className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${showJobDropdown ? 'min-h-[780px]' : ''}`}>
+      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
       {/* Header */}
       <div className="mb-5">
@@ -3003,12 +3030,15 @@ export default function ResumeScoringPage({
           Select Job Description
         </label>
 
-        {/* Custom Job Dropdown */}
-        <div className="relative" ref={jobDropdownRef}>
+        {/* The picker itself is the Apply to Job dialog — this is the field
+            that opens it, and the summary of what came back. */}
+        <div>
           {/* Trigger button */}
           <button
             type="button"
-            onClick={() => { setShowJobDropdown(v => !v); setJobDropdownSearch(''); }}
+            onClick={() => setShowJobPicker(true)}
+            aria-haspopup="dialog"
+            aria-expanded={showJobPicker}
             className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-left flex items-center justify-between gap-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 hover:border-brand-blue/30 transition-colors"
           >
             {selectedJobData ? (
@@ -3038,75 +3068,9 @@ export default function ResumeScoringPage({
             ) : (
               <span className="text-gray-400 dark:text-slate-500 text-sm">Choose a published job...</span>
             )}
-            <ChevronDown className={`w-4 h-4 text-gray-500 dark:text-slate-500 flex-shrink-0 transition-transform ${showJobDropdown ? 'rotate-180' : ''}`} />
+            <ChevronDown className="w-4 h-4 text-gray-500 dark:text-slate-500 flex-shrink-0" />
           </button>
 
-          {/* Dropdown panel */}
-          {showJobDropdown && (
-            <div className="absolute z-[9999] mt-1 left-0 right-0 w-full bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl shadow-lg shadow-brand-blue/10 overflow-hidden">
-              {/* Search */}
-              <div className="p-2 border-b border-gray-100 dark:border-slate-700/60">
-                <div className="flex items-center gap-2 px-3 py-2 bg-brand-blue/5 ring-1 ring-brand-blue/10 rounded-lg">
-                  <Search className="w-4 h-4 text-brand-blue/60 flex-shrink-0" />
-                  <input
-                    autoFocus
-                    type="text"
-                    value={jobDropdownSearch}
-                    onChange={e => setJobDropdownSearch(e.target.value)}
-                    placeholder="Search by title or JD ID..."
-                    className="flex-1 bg-transparent text-sm text-gray-700 dark:text-slate-300 outline-none placeholder-gray-400 dark:placeholder-slate-500"
-                  />
-                </div>
-              </div>
-              {/* Options */}
-              <div className="min-h-[400px] max-h-[400px] overflow-y-auto">
-                {publishedJobs
-                  .filter(j => j.title.toLowerCase().includes(jobDropdownSearch.toLowerCase()) || (j.job_id || '').toLowerCase().includes(jobDropdownSearch.toLowerCase()))
-                  .map(job => (
-                    <button
-                      key={job.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedJob(job.id);
-                        setResumeSource(null);
-                        setSelectedResumes([]);
-                        setShowResults(false);
-                        setShowJobDropdown(false);
-                      }}
-                      className={`w-full px-3 py-2 text-left hover:bg-brand-blue/5 transition-colors border-b border-gray-100 dark:border-slate-700/60 last:border-0 ${selectedJob === job.id ? 'bg-brand-blue/10 hover:bg-brand-blue/10' : ''}`}
-                    >
-                      {/* JD ID + title + status + AI + version only */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {job.job_id && (
-                          <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs font-bold font-mono border border-brand-blue/20">
-                            {job.job_id}
-                          </span>
-                        )}
-                        <span className="text-gray-900 dark:text-slate-50 font-medium text-sm">{job.title}</span>
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
-                          Published
-                        </span>
-                        {job.creation_method === 'ai_generated' && (
-                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-brand-blue-2/10 text-brand-blue-2 border border-brand-blue-2/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-brand-blue-2 inline-block"></span>
-                            AI
-                          </span>
-                        )}
-                        {job.current_version && (
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
-                            v{job.current_version}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                {publishedJobs.filter(j => j.title.toLowerCase().includes(jobDropdownSearch.toLowerCase()) || (j.job_id || '').toLowerCase().includes(jobDropdownSearch.toLowerCase())).length === 0 && (
-                  <div className="px-4 py-6 text-center text-sm text-gray-400 dark:text-slate-500">No jobs match your search</div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         {publishedJobs.length === 0 && (
@@ -3186,6 +3150,40 @@ export default function ResumeScoringPage({
         )}
       </div>
       </div>
+
+      {/* Select Job Description — the Apply to Job dialog itself, in
+          job-picker mode: same shell, same job cards, same search, version
+          history, pagination and footer, reading the JD list from the same
+          endpoint the Job Openings page reads. Candidates are chosen after the
+          job here, so its Candidates Selected panel is off (`jobOnly`) and the
+          confirm needs only a job. */}
+      {showJobPicker && (
+        <ApplyToJobModal
+          resumes={[]}
+          /* Seeds the list so the dialog opens with content; it then refetches
+             every JD version for itself, which is what the version history and
+             the published-latest collapse need. */
+          jobs={publishedJobs as unknown as LineageJob[]}
+          jobOnly
+          mode="scoring"
+          confirmLabel="Select Job"
+          onClose={() => setShowJobPicker(false)}
+          onApply={(_resumeIds, jobIds, jobRecords) => {
+            const picked = jobRecords?.[0];
+            const jobId = jobIds[0];
+            if (!jobId) return;
+            /* A different job invalidates what was chosen against the old one,
+               so the source and the resume selection reset — exactly what
+               picking from the dropdown used to do. */
+            setSelectedJob(jobId);
+            setPickedJob(picked ? toPageJob(picked) : null);
+            setResumeSource(null);
+            setSelectedResumes([]);
+            setShowResults(false);
+            setShowJobPicker(false);
+          }}
+        />
+      )}
 
       {/* Resume Selection Modal */}
       {showResumeSelectionModal && selectedJobData && (
