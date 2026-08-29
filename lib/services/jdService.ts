@@ -104,6 +104,33 @@ export interface ExtractedLocation {
   country?: string;
 }
 
+/** One duplicate group the extraction collapsed, and why.
+ *
+ * Exists because a merged skill otherwise vanishes from Step 2 with nothing on screen
+ * to say it was ever extracted - the failure the whole dedupe path is guarded against,
+ * and the one a recruiter cannot detect. Every field is meant to be shown: the reason
+ * names real evidence (the qualifier word, the acronym, the spelling), and the source
+ * lines are found by searching the JD text, never generated, so a paraphrased skill has
+ * `null` rather than an invented quotation.
+ */
+export interface JDMergeTrailEntry {
+  /** The wording kept in the list. */
+  survivor: string;
+  /** Wordings folded into it and removed from the list. */
+  removed: string[];
+  /** One reason per `removed`, same order - a three-way merge has three explanations. */
+  reasons: string[];
+  /** The JD line each removed wording came from; null when it was not found verbatim. */
+  removed_sources?: (string | null)[];
+  survivor_source?: string | null;
+  list: 'must_have_skills' | 'nice_to_have_skills' | 'must_have_comments' | 'nice_to_have_comments';
+  /** 'skill' entries are worth surfacing; 'comment' merges rest on judgement, so their
+   *  reasons are vaguer and vague explanations erode trust faster than none. */
+  kind: 'skill' | 'comment';
+  /** Which pass proposed it: deterministic name/requirement match, or the AI review. */
+  source: 'same-skill-name' | 'same-requirement-reworded' | 'ai-review';
+}
+
 export interface JDExtractedParams {
   must_have_skills: string[];
   nice_to_have_skills: string[];
@@ -126,6 +153,9 @@ export interface JDExtractedParams {
    *  WFO/WFH, facilities, anything under an "Additional Details" heading). Null when
    *  the JD says nothing of the kind; never invented to fill the field. */
   additional_details?: string | null;
+  /** Provenance for every duplicate group collapsed during extraction. Empty when
+   *  nothing merged. See JDMergeTrailEntry. */
+  merge_trail?: JDMergeTrailEntry[];
   // New fields for extraction
   locations?: ExtractedLocation[];
   /** `null` means "this bound is not stated" and CLEARS the stored column; `undefined`

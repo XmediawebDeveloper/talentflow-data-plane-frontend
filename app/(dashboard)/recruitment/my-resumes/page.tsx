@@ -38,7 +38,7 @@ import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { MENU_ITEM_SCALE_UP_CLASS } from '@/lib/constants/menuAnimation';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder, FolderDeletionInfo } from '@/lib/services/resumeService';
@@ -623,7 +623,7 @@ function DroppableFolderCard({
                 className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Upload className={`w-4 h-4 ${canUpload && onUploadToFolder ? 'text-menu-icon-download' : ''}`} />
-                <span className={MENU_ITEM_SCALE_CLASS}>Upload to Folder</span>
+                <span className={MENU_ITEM_SCALE_UP_CLASS}>Upload to Folder</span>
               </button>
               <button
                 type="button"
@@ -634,7 +634,7 @@ function DroppableFolderCard({
                 className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Plus className={`w-4 h-4 ${canCreateSubfolder && onCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
-                <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
+                <span className={MENU_ITEM_SCALE_UP_CLASS}>Create Subfolder</span>
                 {!canCreateSubfolder && <span className="ml-auto text-xs text-gray-400 dark:text-slate-600">(max)</span>}
               </button>
               <button
@@ -645,7 +645,7 @@ function DroppableFolderCard({
                 className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Edit2 className={`w-4 h-4 ${canRename && onStartRename ? 'text-menu-icon-edit' : ''}`} />
-                <span className={MENU_ITEM_SCALE_CLASS}>Rename Folder</span>
+                <span className={MENU_ITEM_SCALE_UP_CLASS}>Rename Folder</span>
               </button>
               <div className="my-1 border-t border-gray-100 dark:border-slate-700" />
               <button
@@ -656,7 +656,7 @@ function DroppableFolderCard({
                 className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
-                <span className={MENU_ITEM_SCALE_CLASS}>Delete Folder</span>
+                <span className={MENU_ITEM_SCALE_UP_CLASS}>Delete Folder</span>
               </button>
             </div>
           )}
@@ -2809,11 +2809,19 @@ export default function MyResumesPage() {
         return result;
       };
 
-      /* Names are compared trimmed and case-insensitively. Siblings are
-         checked first so the message can say where the clash is — a subfolder
-         called "Mani" next to another "Mani" is the case this guard exists
-         for — then the global rule (names are unique across the whole tree)
-         catches everything else. */
+      /* Names are compared trimmed and case-insensitively, and only against
+         SIBLINGS — the folders sharing this one's parent. A name is a path
+         segment, not a global id: "Test" at the root and "Test" inside it are
+         two different folders, exactly as two files of the same name in
+         different directories are. This used to also enforce a second,
+         tree-wide rule ("no two folders anywhere may share a name"), which
+         made the first subfolder named after any existing folder impossible
+         to create.
+
+         Root-level folders are siblings of each other, so the same comparison
+         covers them: `parentId` is undefined for both, and `|| undefined`
+         folds null/'' into that so a folder the API returned with
+         `parent_id: null` still matches a create call that passed nothing. */
       const allFolders = getAllFolders(folders);
       const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
@@ -2829,14 +2837,6 @@ export default function MyResumesPage() {
             ? `"${folderName}" already exists inside "${parentName}"`
             : `Folder "${folderName}" already exists`
         );
-        return;
-      }
-
-      const existingFolder = allFolders.find(f =>
-        f.id !== 'all' && sameName(f.name, folderName)
-      );
-      if (existingFolder) {
-        toast.error(`Folder "${folderName}" already exists`);
         return;
       }
 
@@ -2955,18 +2955,28 @@ export default function MyResumesPage() {
         return result;
       };
 
-      /* Compared trimmed, like creation — otherwise a rename is a second way
-         to land two same-named folders side by side. */
+      /* Compared trimmed and against siblings only, exactly like creation —
+         otherwise a rename is a second way to land two same-named folders side
+         by side, and (when it was tree-wide) a second way to reject a name
+         that is only taken somewhere else in the tree. Siblings here are the
+         folders sharing the renamed folder's own parent. */
       const trimmedName = name.trim();
       const allFolders = getAllFolders(folders);
-      const existingFolder = allFolders.find(f =>
+      const parentOfRenamed = folderToRename?.parentId || undefined;
+      const existingSibling = allFolders.find(f =>
         f.name.trim().toLowerCase() === trimmedName.toLowerCase() &&
+        (f.parentId || undefined) === parentOfRenamed &&
         f.id !== id &&
         f.id !== 'all'
       );
 
-      if (existingFolder) {
-        toast.error(`Folder "${trimmedName}" already exists`);
+      if (existingSibling) {
+        const parentName = parentOfRenamed ? getFolderById(parentOfRenamed)?.name : undefined;
+        toast.error(
+          parentName
+            ? `"${trimmedName}" already exists inside "${parentName}"`
+            : `Folder "${trimmedName}" already exists`
+        );
         return;
       }
 

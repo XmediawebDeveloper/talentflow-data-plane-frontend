@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { Job } from '@/lib/types/types';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
-import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import {
   formatEmploymentType,
@@ -13,14 +13,18 @@ import {
   getCreationMethodConfig,
   getDisplayStatus,
   getStatusConfig,
+  resolveVersionHistoryRows,
 } from '@/lib/utils/jobOpeningDisplay';
 
 /**
  * The columns every surface shows. Select is prepended and Action appended per
  * surface — see `buildColumns`: the Job Openings list has actions and no
- * selection, the Apply to Job dialog is the other way round.
+ * selection, the Apply to Job dialog is the other way round. "Scored By" is
+ * likewise conditional: it only means anything on the Resume Scoring page, so
+ * it's included only when that page passes `versionScoredBy` — Job Openings
+ * and the Apply to Job dialog never see the column at all.
  */
-const BASE_COLUMNS: { label: string; minW: string }[] = [
+const buildBaseColumns = (showScoredBy: boolean): { label: string; minW: string }[] => [
   { label: 'Version', minW: 'min-w-[72px]' },
   { label: 'Job Title', minW: 'min-w-[160px]' },
   { label: 'Status', minW: 'min-w-[110px]' },
@@ -29,12 +33,13 @@ const BASE_COLUMNS: { label: string; minW: string }[] = [
   { label: 'Work Mode / Type', minW: 'min-w-[130px]' },
   { label: 'Posted On / By', minW: 'min-w-[130px]' },
   { label: 'Last Updated', minW: 'min-w-[110px]' },
+  ...(showScoredBy ? [{ label: 'Scored By', minW: 'min-w-[160px]' }] : []),
   { label: 'Applicants', minW: 'min-w-[90px]' },
 ];
 
-const buildColumns = (selectable: boolean, actionable: boolean) => [
+const buildColumns = (selectable: boolean, actionable: boolean, showScoredBy: boolean) => [
   ...(selectable ? [{ label: 'Select', minW: 'min-w-[64px]' }] : []),
-  ...BASE_COLUMNS,
+  ...buildBaseColumns(showScoredBy),
   ...(actionable ? [{ label: 'Action', minW: 'min-w-[64px]' }] : []),
 ];
 
@@ -46,6 +51,15 @@ interface JobVersionHistoryPanelProps {
   loading: boolean;
   versionDetails: Record<string, JDResponse>;
   versionApplicants: Record<string, number>;
+  /**
+   * Who most recently scored a resume against each version, and when —
+   * renders as a "Scored By" column just before Applicants. Omit it (the
+   * default) and the column is dropped entirely, header included: only the
+   * Resume Scoring page's version history has anything meaningful to put
+   * there. `null` means the version has never been scored; an unset key means
+   * still loading.
+   */
+  versionScoredBy?: Record<string, { name: string; scoredAt: string } | null>;
   /**
    * The Action cell for one version, built from a Job-shaped stand-in pointed
    * at THAT version's id — so a host's existing per-job handlers work unchanged.
@@ -131,6 +145,7 @@ export default function JobVersionHistoryPanel({
   loading,
   versionDetails,
   versionApplicants,
+  versionScoredBy,
   renderAction,
   onSelectVersion,
   selectedVersionId = null,
@@ -143,7 +158,7 @@ export default function JobVersionHistoryPanel({
   staticRows = false,
   statusOverrides,
 }: JobVersionHistoryPanelProps) {
-  const columns = buildColumns(!!onSelectVersion, !!renderAction);
+  const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy);
   /* Which versions this table lists: the WHOLE chain — v1, v2 … up to and
      including the latest.
 
@@ -168,29 +183,20 @@ export default function JobVersionHistoryPanel({
      No status test: the latest is listed whatever it is, so a Published latest
      and a Republished one (the same DB status — `getDisplayStatus` below derives
      the "Republished" label from current_version) both appear without either
-     being special-cased. */
-  const lineageVersions = versions ?? [];
-  const latestVersionNumber = lineageVersions.reduce(
-    (highest, v) => Math.max(highest, v.version_number ?? 1),
-    job.versionNumber ?? 1,
-  );
+     being special-cased.
 
-  const seenVersionNumbers = new Set<number>();
-  const jobVersions = lineageVersions
-    .filter((v) => {
-      const number = v.version_number ?? 1;
-      if (seenVersionNumbers.has(number)) return false;
-      seenVersionNumbers.add(number);
-      /* One exception, and only where the rows are CONTROLS: in the Apply to Job
-         dialog the row above is itself a radio for this same version, and
-         selection is keyed on the job id — so listing it here would put two
-         checked radios on screen for one pick. A read-only table has no such
-         clash, which is why this is gated on selection mode rather than applied
-         everywhere. */
-      if (onSelectVersion && v.id === job.id) return false;
-      return true;
-    })
-    .sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1));
+     Resolution itself (dedup by version number, newest-first sort, isLatest)
+     lives in `resolveVersionHistoryRows` — shared with the compact
+     JobVersionHistoryCards on Resume Scoring's grid view, so both always
+     render the identical chain. The `excludeId` exception below is specific to
+     CONTROL surfaces: in the Apply to Job dialog the row above this table is
+     itself a radio for this same version, and selection is keyed on the job
+     id — so listing it here would put two checked radios on screen for one
+     pick. A read-only table has no such clash, which is why this is gated on
+     selection mode rather than applied everywhere. */
+  const jobVersions = resolveVersionHistoryRows(job, versions, {
+    excludeId: onSelectVersion ? job.id : undefined,
+  });
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
@@ -255,10 +261,7 @@ export default function JobVersionHistoryPanel({
                 /* Lineage rows carry the raw DB status ('published'); the status
                    helpers speak the Job type's capitalised form. */
                 const rawStatus = statusOverrides?.[version.id] || version.status || '';
-                /* The live version of this lineage. The flag is preferred; the
-                   number comparison backstops a lineage row that omits it. */
-                const isLatest = version.is_latest_version
-                  || (version.version_number ?? 1) >= latestVersionNumber;
+                const { isLatest } = version;
                 const versionStatus = getDisplayStatus(
                   rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1).toLowerCase(),
                   version.current_version,
@@ -466,6 +469,31 @@ export default function JobVersionHistoryPanel({
                     <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
                       {lastUpdated ? formatISTDate(lastUpdated) : '—'}
                     </td>
+                    {versionScoredBy && (() => {
+                      /* Unset key = still loading; explicit null = loaded and
+                         genuinely never scored — those read differently, so
+                         they're not collapsed into one fallback. */
+                      const scoredByLoaded = Object.prototype.hasOwnProperty.call(versionScoredBy, version.id);
+                      const info = versionScoredBy[version.id];
+                      return (
+                        <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                          {info ? (
+                            <div className="text-sm text-gray-700 dark:text-slate-300">
+                              <div className="truncate max-w-[170px]" title={info.name}>
+                                Scored by {info.name}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-slate-400">
+                                {formatIST(info.scoredAt)}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400 dark:text-slate-500">
+                              {scoredByLoaded ? 'Not scored yet' : '—'}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })()}
                     <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                       <span className="inline-flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300">
                         <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />

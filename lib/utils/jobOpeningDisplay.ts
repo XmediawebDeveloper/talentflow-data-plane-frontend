@@ -11,7 +11,7 @@
  */
 
 import type { Job } from '@/lib/types/types';
-import type { JDResponse } from '@/lib/services/jdService';
+import type { JDResponse, JDLineageVersion } from '@/lib/services/jdService';
 import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 
@@ -331,3 +331,50 @@ export const sortJobs = (list: Job[], sortBy: JobSortBy, sortOrder: JobSortOrder
 
     return sortOrder === 'desc' ? -comparison : comparison;
   });
+
+export interface ResolvedVersionRow extends JDLineageVersion {
+  /** The live version of the lineage — the flag is preferred, the version
+   *  number backstops a lineage row that omits it. */
+  isLatest: boolean;
+}
+
+/**
+ * The version rows one job's "View Versions" history renders, resolved once so
+ * the table (JobVersionHistoryPanel) and the compact cards
+ * (JobVersionHistoryCards) always show the identical chain instead of two
+ * hand-rolled copies drifting apart.
+ *
+ * Deduplicated by version NUMBER: a republished JD can report several lineage
+ * entries sharing one version number (republishing bumps `current_version`,
+ * not the lineage version), and those are one version, not several. Sorted
+ * newest-first, so a chain always opens on the live version.
+ */
+export const resolveVersionHistoryRows = (
+  job: Pick<Job, 'id' | 'versionNumber'>,
+  versions: JDLineageVersion[] | undefined,
+  options?: { excludeId?: string },
+): ResolvedVersionRow[] => {
+  const lineageVersions = versions ?? [];
+  const latestVersionNumber = lineageVersions.reduce(
+    (highest, v) => Math.max(highest, v.version_number ?? 1),
+    job.versionNumber ?? 1,
+  );
+
+  const seenVersionNumbers = new Set<number>();
+  return lineageVersions
+    .filter((v) => {
+      const number = v.version_number ?? 1;
+      if (seenVersionNumbers.has(number)) return false;
+      seenVersionNumbers.add(number);
+      /* Selection surfaces (Apply to Job dialog) show a radio for the row
+         above this history that duplicates its own version — excluded only
+         there, via excludeId, so a read-only table isn't missing a row. */
+      if (options?.excludeId && v.id === options.excludeId) return false;
+      return true;
+    })
+    .sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1))
+    .map((v) => ({
+      ...v,
+      isLatest: v.is_latest_version || (v.version_number ?? 1) >= latestVersionNumber,
+    }));
+};
