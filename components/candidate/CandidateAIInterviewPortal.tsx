@@ -1624,7 +1624,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         window.setTimeout(resolve, 1500);
       });
       const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
-      const scale = Math.min(1, 1600 / vw);
+      // Keep close to native resolution (cap only very large/multi-monitor
+      // frames) and use high JPEG quality: the vision check must catch SMALL
+      // edge-docked recorder/extension toolbars (thin vertical icon strips at a
+      // screen edge), which aggressive downscale + low quality were blurring
+      // away before the model ever saw them.
+      const scale = Math.min(1, 1920 / vw);
       const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
       const canvas = document.createElement('canvas');
       canvas.width = cw; canvas.height = ch;
@@ -1633,7 +1638,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       ctx.drawImage(video, 0, 0, cw, ch);
       try { video.pause(); } catch { /* ignore */ }
       video.srcObject = null;
-      return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.7));
+      return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
     } finally {
       // Always restore every hidden graphic, whether capture succeeded,
       // returned null, or threw.
