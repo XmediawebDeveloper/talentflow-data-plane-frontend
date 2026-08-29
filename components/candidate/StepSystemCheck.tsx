@@ -1598,6 +1598,46 @@ export default function StepSystemCheck({
     if (isProceedLoading) return;
     setIsProceedLoading(true);
 
+    // ── FINAL device gate ──────────────────────────────────────────────────
+    // Every check on this screen is a STORED verdict from when it ran. A camera
+    // or headset unplugged after those checks passed leaves them reading "pass"
+    // — the live pollers can lag, and the candidate can even unplug between the
+    // last poll and this click — so the run would be recorded as passed against
+    // hardware that is no longer there.
+    //
+    // Probe both devices for real, right now. Video and audio are opened
+    // SEPARATELY, never in one getUserMedia call: a combined request is
+    // all-or-nothing, so a missing camera would mask a missing mic and the
+    // candidate would be told to fix the wrong thing. Probe tracks are stopped
+    // immediately — this only answers "can it open?".
+    const probeDevice = async (constraints: MediaStreamConstraints, kind: 'video' | 'audio') => {
+      let s: MediaStream | null = null;
+      try {
+        s = await navigator.mediaDevices.getUserMedia(constraints);
+        const tracks = kind === 'video' ? s.getVideoTracks() : s.getAudioTracks();
+        return tracks.some(t => t.readyState === 'live');
+      } catch {
+        return false;
+      } finally {
+        s?.getTracks().forEach(t => t.stop());
+      }
+    };
+    const _camLive = await probeDevice({ video: true }, 'video');
+    const _micLive = await probeDevice({ audio: true }, 'audio');
+    if (!_camLive || !_micLive) {
+      console.warn(`[SystemCheck] Continue blocked — camera=${_camLive} mic=${_micLive} at click time`);
+      if (!_camLive) {
+        // NB the check id is 'webcam', not 'camera' — updateSystemCheck matches
+        // by id and silently no-ops on a wrong one.
+        updateSystemCheck('webcam', { status: 'fail', detail: 'Camera is not available — reconnect it and run the check again' });
+      }
+      if (!_micLive) {
+        updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone is not available — reconnect it and run the check again' });
+      }
+      setIsProceedLoading(false);
+      return;
+    }
+
     const checkStatus = (id: string) =>
       systemChecks.find((c) => c.id === id)?.status === 'pass' ? 'pass' : 'fail';
 
