@@ -34,6 +34,15 @@ export interface JobVersionLineage {
    * /scoring/jd/{id} — the endpoint the Scored Resumes tab lists from.
    */
   versionApplicants: Record<string, number>;
+  /**
+   * Who most recently scored a resume against each version, and when — the
+   * "Scored By" column on the Resume Scoring page's version history. Read
+   * from the same /scoring/jd/{id} request `versionApplicants` already makes
+   * (that endpoint returns newest-first, so its one row IS the latest score),
+   * so this costs no extra request. `null` means the version has never been
+   * scored; an unset key means the count hasn't loaded yet.
+   */
+  versionScoredBy: Record<string, { name: string; scoredAt: string } | null>;
   /** Open or close one job's history, loading it on first open. */
   toggle: (key: string, jobId: string) => void;
   /**
@@ -68,6 +77,7 @@ export function useJobVersionLineage(): JobVersionLineage {
   const [loadingKeys, setLoadingKeys] = useState<Set<string>>(new Set());
   const [versionDetails, setVersionDetails] = useState<Record<string, JDResponse>>({});
   const [versionApplicants, setVersionApplicants] = useState<Record<string, number>>({});
+  const [versionScoredBy, setVersionScoredBy] = useState<Record<string, { name: string; scoredAt: string } | null>>({});
   const [filterLineages, setFilterLineages] = useState<Record<string, JDLineageVersion[]>>({});
   /* A ref, not state: this only needs to stop a second fetch for the same key
      being started before the first resolves, and putting it in state would
@@ -82,6 +92,17 @@ export function useJobVersionLineage(): JobVersionLineage {
     try {
       const scored = await scoringService.getJDScoredResumes(versionId, { page_size: 1 });
       setVersionApplicants(prev => ({ ...prev, [versionId]: scored?.total ?? 0 }));
+      /* /scoring/jd/{id} returns newest-first, same as /scoring/all — so the
+         single row this page_size:1 request already fetched is the most
+         recent score for this version. Reused here rather than a second
+         request just for the "Scored By" column. */
+      const latest = scored?.items?.[0];
+      setVersionScoredBy(prev => ({
+        ...prev,
+        [versionId]: latest
+          ? { name: latest.scored_by_name || latest.scored_by || 'Unknown', scoredAt: latest.created_at }
+          : null,
+      }));
     } catch {
       /* keep whatever was there; the cell falls back to a dash */
     }
@@ -185,6 +206,7 @@ export function useJobVersionLineage(): JobVersionLineage {
     isLoading: (key: string) => loadingKeys.has(key),
     versionDetails,
     versionApplicants,
+    versionScoredBy,
     toggle,
     ensureLoaded,
     filterLineages,

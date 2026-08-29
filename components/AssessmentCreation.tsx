@@ -993,6 +993,63 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           }));
           setLocalJobs(mappedJobs);
         }
+
+        /* The pre-selected JD may not be in that list at all.
+         *
+         * The list above is `status: 'published'`, i.e. the CURRENT version of
+         * each job. A job republished to v3 leaves v1 and v2 as their own JD
+         * rows that the list no longer returns — so arriving from the
+         * Assessments page's Job Version History with `?jd_id=<v2's id>` found
+         * nothing to select, and the recruiter was dropped on the JD picker
+         * being asked to choose the job they had just clicked.
+         *
+         * Fetched by id and merged in, so the auto-select effect below resolves
+         * it like any other. Deliberately merged into `localJobs` only: the
+         * picker's own list is filtered to Published (`availableJobs`), so a
+         * superseded version becomes selectable-by-link without being offered
+         * as a fresh choice to everyone else.
+         *
+         * A failure here is not fatal — the flow falls through to the picker,
+         * which is exactly where it used to land. */
+        const wantedJdId = preSelectedJobId || urlJdId;
+        const alreadyListed = jdResponse?.items?.some((jd) => jd.id === wantedJdId);
+        if (wantedJdId && !alreadyListed) {
+          try {
+            const jd = await jdService.get(wantedJdId);
+            const versionJob: Job = {
+              id: jd.id,
+              job_id: jd.job_id || '',
+              title: jd.title,
+              currentVersion: jd.current_version,
+              description: jd.description || '',
+              department: jd.department || 'General',
+              location: jd.location || '',
+              experience: jd.job_level || 'Mid-Level',
+              skills: jd.must_have_skills || [],
+              /* Its real status, not a forced 'Published': `availableJobs`
+                 keys the picker off this, and claiming a superseded version is
+                 published would put it back in everyone's list. */
+              status: (String(jd.status || '').toLowerCase() === 'published' ? 'Published' : 'Closed') as Job['status'],
+              postedDate: jd.published_at || jd.created_at,
+              postedBy: jd.created_by_name || 'Unknown',
+              applicants: 0,
+              daysActive: 0,
+              requiredMatch: 70,
+              coding_required: jd.coding_required || false,
+              supported_languages: jd.supported_languages || [],
+              industry_type: jd.industry_type || 'Technology',
+              employmentType: jd.employment_type || 'full_time',
+              creation_method: jd.creation_method || 'manual',
+              experience_min: jd.experience_min,
+              experience_max: jd.experience_max,
+            };
+            setLocalJobs((prev) =>
+              prev.some((j) => j.id === versionJob.id) ? prev : [versionJob, ...prev]
+            );
+          } catch (error) {
+            console.error('[TalentFlow] Failed to resolve the pre-selected JD version:', error);
+          }
+        }
       } catch (error) {
         console.error('Failed to fetch JDs:', error);
         // Fall back to props if API fails

@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users } from 'lucide-react';
+import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, GitBranch, MoreVertical } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -26,7 +26,16 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
-import JDVersionHistory from '@/components/JDVersionHistory';
+import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
+import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
+import JobVersionHistoryCards from '@/components/jobs/JobVersionHistoryCards';
+import type { Job as LineageJob } from '@/lib/types/types';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -55,6 +64,16 @@ const convertMatchStatus = (status: string | undefined): 'Exact Match' | 'Partia
 
   // Default fallback
   return 'No Match';
+};
+
+// Maps a scored-history item's raw JD status (lowercase, backend form) to the
+// capitalised union JobVersionHistoryPanel's `Job` type expects.
+const mapJdStatusToJobStatus = (status: string | undefined): LineageJob['status'] => {
+  const normalized = (status || 'published').toLowerCase();
+  if (normalized === 'active') return 'Published';
+  const capitalized = normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  const known: LineageJob['status'][] = ['Published', 'Draft', 'Closed', 'Archived', 'Disabled'];
+  return (known as string[]).includes(capitalized) ? (capitalized as LineageJob['status']) : 'Published';
 };
 
 // Types
@@ -136,6 +155,41 @@ interface ScoredResumeData {
     failed: number;
   };
 }
+
+/**
+ * The lineage key a scored-history row belongs to — the human-readable job id
+ * shared across every version of the same job (e.g. "JD-128"), falling back to
+ * the row's own JD id for entries that predate that field.
+ */
+const historyLineageKey = (item: ScoredResumeData): string => item.jdJobId || item.jobId;
+
+/**
+ * One row per job lineage — the job's own final (highest) version — instead of
+ * one row per scored JD version. Without this, a job scored against both v1
+ * and v2 showed up twice in "View by Job", reading as two different jobs.
+ *
+ * "Final" is read from the data (`jdCurrentVersion`), tie-broken by the most
+ * recently scored entry, never assumed from array order. The result is
+ * re-sorted by scoredAt so the list keeps its most-recent-first order after
+ * collapsing.
+ */
+const collapseHistoryToLatestVersions = (list: ScoredResumeData[]): ScoredResumeData[] => {
+  const groups = new Map<string, ScoredResumeData>();
+  for (const item of list) {
+    const key = historyLineageKey(item);
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, item);
+      continue;
+    }
+    const existingVersion = existing.jdCurrentVersion ?? 1;
+    const itemVersion = item.jdCurrentVersion ?? 1;
+    const itemIsNewer = itemVersion > existingVersion ||
+      (itemVersion === existingVersion && new Date(item.scoredAt).getTime() > new Date(existing.scoredAt).getTime());
+    if (itemIsNewer) groups.set(key, item);
+  }
+  return Array.from(groups.values()).sort((a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime());
+};
 
 interface AlreadyScoredItem {
   resumeId: string;
@@ -260,6 +314,9 @@ export default function ResumeScoringPage({
   const jdInviteTargets = useJobInviteTargets(selectedHistoryItem?.jobId, {
     aiInterviewEnabled: false,
   });
+  // Version history for the "View by Job" list rows — same lineage endpoint
+  // and panel the Job Openings list uses, so both surfaces read one history.
+  const versionLineage = useJobVersionLineage();
   const [selectedJob, setSelectedJob] = useState('');
   const [resumeSource, setResumeSource] = useState<'my-resumes' | 'internal-database' | null>(null);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -1751,10 +1808,16 @@ export default function ResumeScoringPage({
       return matchesSearch && matchesCreatedBy && matchesScoredDate && matchesLocation && matchesJobType && matchesIndustry;
     });
 
+    // One row per job — its own final (highest) scored version — instead of
+    // one row per JD version. Earlier versions remain reachable through that
+    // row's "View Versions" panel.
+    const collapsedHistory = collapseHistoryToLatestVersions(filteredHistory);
+    const collapsedScoredHistoryCount = collapseHistoryToLatestVersions(scoredHistory).length;
+
     // Add processing entry at the top if it exists and matches filters
     const displayHistory = processingEntry && (historySearchQuery === '' || processingEntry.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase()))
-      ? [processingEntry, ...filteredHistory]
-      : filteredHistory;
+      ? [processingEntry, ...collapsedHistory]
+      : collapsedHistory;
 
 
     return (
@@ -2030,7 +2093,7 @@ export default function ResumeScoringPage({
               countBadge={
                 <ListCountBadge
                   filtered={displayHistory.length}
-                  total={scoredHistory.length + (processingEntry ? 1 : 0)}
+                  total={collapsedScoredHistoryCount + (processingEntry ? 1 : 0)}
                   noun="job"
                   selected={selectedHistoryItems.size}
                 />
@@ -2121,6 +2184,126 @@ export default function ResumeScoringPage({
 
               const jobDetails = jobs.find(j => j.id === item.jobId);
 
+              // Version history panel — same lineage key/hook the Job Openings
+              // list uses, so "View Versions" here opens the same history.
+              const versionKey = historyLineageKey(item);
+              const versionsExpanded = versionLineage.isExpanded(versionKey);
+              const hasVersionHistory = (item.jdCurrentVersion ?? 1) > 1;
+              const versionStubJob: LineageJob = {
+                id: item.jobId,
+                job_id: item.jdJobId,
+                title: item.jobTitle,
+                status: mapJdStatusToJobStatus(item.jdStatus),
+                location: item.jdLocation || '',
+                daysActive: 0,
+                requiredMatch: 0,
+                versionNumber: item.jdCurrentVersion,
+              };
+              const openVersionDetails = (versionId: string) => {
+                const stub: ScoredResumeData = {
+                  id: versionId,
+                  jobId: versionId,
+                  jobTitle: item.jobTitle,
+                  scoredAt: new Date(),
+                  source: 'database',
+                  totalScored: 0,
+                  scoredResumes: [],
+                };
+                setSelectedHistoryItem(stub);
+                setViewMode('details');
+                onLoadJdScores?.(versionId, item.jobTitle);
+                try { localStorage.setItem('lastViewedScoringJdId', versionId); } catch (e) {}
+                router.push(`/recruitment/resume-scoring?jd_id=${versionId}`);
+              };
+              // "View Progress" for one specific version — fetches that
+              // version's own scored resumes (never the representative row's
+              // `item.scoredResumes`, which belongs to a different JD id) and
+              // opens the same BulkScoringProgressModal the main list uses.
+              const openVersionProgress = async (versionId: string, versionTitle: string) => {
+                try {
+                  const probe = await scoringService.getJDScoredResumes(versionId, { page_size: 1 });
+                  const response = probe.total > (probe.items || []).length
+                    ? await scoringService.getJDScoredResumes(versionId, { page_size: probe.total })
+                    : probe;
+                  const allProgressItems: ScoringProgressItem[] = (response.items || []).map((resume: any) => ({
+                    id: resume.resume_id || '',
+                    resumeId: resume.resume_id || '',
+                    candidateName: resume.candidate_name || 'Unknown',
+                    jobTitle: versionTitle,
+                    jobId: versionId,
+                    source: 'Internal DB' as const,
+                    status: (resume.status === 'failed' || resume.error_message) ? 'Failed' as const : 'Scored successfully' as const,
+                    errorReason: resume.error_message || resume.error_reason,
+                    scoredDateTime: resume.created_at ? new Date(resume.created_at) : undefined,
+                    matchResult: convertMatchStatus(resume.match_status),
+                    score: resume.overall_score || 0,
+                  }));
+                  setProgressData(allProgressItems);
+                  setFilterByJobId(versionId);
+                  setShowJobTitleColumn(false);
+                  setShowProgressModal(true);
+                } catch (error) {
+                  console.error('[ResumeScoringPage] Failed to load version progress:', error);
+                  toast.error('Failed to load scoring progress for this version');
+                }
+              };
+              // Shared by both the table (list view) and the compact cards
+              // (grid view) — same ⋮ menu, same two actions, either way.
+              const renderVersionAction = (versionJob: LineageJob) => (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
+                      title="More actions"
+                      aria-label="More actions"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => openVersionProgress(versionJob.id, versionJob.title)}>
+                      <Eye className="w-4 h-4" />
+                      View Progress
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => openVersionDetails(versionJob.id)}>
+                      <FileText className="w-4 h-4" />
+                      View Details
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+              // Grid view gets compact version cards — a dense table read as out
+              // of place dropped into a visual, badge-heavy grid card. List view
+              // keeps the table: a full-width row has room for it, and it's the
+              // look this feature was modelled on (the Job Description page).
+              const versionHistoryPanel = versionsExpanded ? (
+                <div onClick={(e) => e.stopPropagation()} className="mt-3">
+                  {historyViewMode === 'grid' ? (
+                    <JobVersionHistoryCards
+                      job={versionStubJob}
+                      versions={versionLineage.lineages[versionKey]}
+                      loading={versionLineage.isLoading(versionKey)}
+                      versionDetails={versionLineage.versionDetails}
+                      versionApplicants={versionLineage.versionApplicants}
+                      versionScoredBy={versionLineage.versionScoredBy}
+                      onCardClick={openVersionDetails}
+                      renderAction={renderVersionAction}
+                    />
+                  ) : (
+                    <JobVersionHistoryPanel
+                      job={versionStubJob}
+                      versions={versionLineage.lineages[versionKey]}
+                      loading={versionLineage.isLoading(versionKey)}
+                      versionDetails={versionLineage.versionDetails}
+                      versionApplicants={versionLineage.versionApplicants}
+                      versionScoredBy={versionLineage.versionScoredBy}
+                      onRowClick={openVersionDetails}
+                      renderAction={renderVersionAction}
+                    />
+                  )}
+                </div>
+              ) : null;
+
               if (historyViewMode === 'list') {
                 return (
                   <div
@@ -2187,9 +2370,6 @@ export default function ResumeScoringPage({
                               v{item.jdCurrentVersion}
                             </span>
                           )}
-                          {/* View Versions — same control, same slot as the grid
-                              card: after the vN chip, before the history icon. */}
-                          <JDVersionHistory jdId={item.jobId} version={item.jdCurrentVersion} />
                           {/* History icon button */}
                           <button
                             onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
@@ -2299,8 +2479,24 @@ export default function ResumeScoringPage({
                         >
                           View Details
                         </button>
+                        {hasVersionHistory && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, item.jobId); }}
+                            aria-expanded={versionsExpanded}
+                            title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                            className={`px-3 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-1.5 justify-center w-full border ${
+                              versionsExpanded
+                                ? 'bg-brand-sky text-brand-blue border-brand-blue/30'
+                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                            }`}
+                          >
+                            <GitBranch className="w-3.5 h-3.5" />
+                            {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                          </button>
+                        )}
                       </div>
                     </div>
+                    {versionHistoryPanel}
                   </div>
                 );
               }
@@ -2309,7 +2505,11 @@ export default function ResumeScoringPage({
               return (
                 <div
                   key={item.id}
-                  className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all p-4 group hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5"
+                  // min-w-0: without it this grid item's default min-width:auto
+                  // lets the version-history table's min-w-[960px] (see below)
+                  // force the whole card wider than its grid track, bleeding
+                  // past the rounded border instead of scrolling internally.
+                  className="min-w-0 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all p-4 group hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5"
                 >
                   <div className="flex flex-col sm:flex-row items-start gap-3">
                     <div
@@ -2353,7 +2553,6 @@ export default function ResumeScoringPage({
                                 v{item.jdCurrentVersion}
                               </span>
                             )}
-                            <JDVersionHistory jdId={item.jobId} version={item.jdCurrentVersion} />
                             {/* History icon button */}
                             <button
                               onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
@@ -2508,9 +2707,25 @@ export default function ResumeScoringPage({
                           View Details
                           <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
                         </button>
+                        {hasVersionHistory && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, item.jobId); }}
+                            aria-expanded={versionsExpanded}
+                            title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                            className={`py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-1.5 justify-center cursor-pointer border ${
+                              versionsExpanded
+                                ? 'bg-brand-sky text-brand-blue border-brand-blue/30'
+                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                            }`}
+                          >
+                            <GitBranch className="w-3.5 h-3.5" />
+                            {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
+                  {versionHistoryPanel}
                 </div>
               );
             })}

@@ -3,7 +3,7 @@
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
 import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Tag, Archive, Clock, GripVertical, FileText, Loader2, X } from 'lucide-react';
-import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
@@ -36,6 +36,30 @@ const RESUME_DRAG_TYPE = 'RESUME';
 const ACTION_MENU_WIDTH = 208; // w-52
 const ACTION_MENU_GAP = 4; // matches the old mt-1/mb-1 spacing
 const ACTION_MENU_EDGE = 8; // smallest gap left to any viewport edge
+/* Never shrink below this, even in a sliver of space: the "Actions" heading
+   plus one scrollable option still has to be readable. */
+const ACTION_MENU_MIN_HEIGHT = 120;
+
+/* True while the ⋮ button is still painted — inside every scrolling ancestor's
+   box and inside the viewport. Checked against the trigger's midpoint, so a
+   row half-slid under `.tf-table-shell`'s sticky header still counts as its
+   own row; once it is past that, there is nothing left to anchor to and the
+   menu is dismissed rather than left pointing at empty space. */
+function isActionTriggerVisible(trigger: HTMLElement) {
+  const rect = trigger.getBoundingClientRect();
+  const midY = rect.top + rect.height / 2;
+  const midX = rect.left + rect.width / 2;
+  if (midY < 0 || midY > window.innerHeight || midX < 0 || midX > window.innerWidth) return false;
+  for (let node = trigger.parentElement; node; node = node.parentElement) {
+    const style = window.getComputedStyle(node);
+    if (!/(auto|scroll|hidden|clip|overlay)/.test(`${style.overflowY} ${style.overflowX}`)) continue;
+    const box = node.getBoundingClientRect();
+    // A zero-sized ancestor (a display-contents wrapper, say) clips nothing.
+    if (box.width === 0 && box.height === 0) continue;
+    if (midY < box.top || midY > box.bottom || midX < box.left || midX > box.right) return false;
+  }
+  return true;
+}
 
 interface DragItem {
   id: string;
@@ -231,10 +255,23 @@ export default function ResumeTable({
      regardless of z-index, since overflow clipping isn't something z-index
      can escape. It is portalled to the body now (same fix as FolderTree's
      folder-actions menu) and placed against the viewport from the trigger's
-     own coordinates. */
-  const [actionMenuAnchor, setActionMenuAnchor] = useState<DOMRect | null>(null);
+     own coordinates.
+
+     The trigger is held as the element, not as the DOMRect it had when it was
+     clicked. A rect captured once goes stale the moment anything scrolls under
+     it, which is exactly the case this menu is opened in — scroll the table,
+     then hit the ⋮ of a row near its top — and left the panel stranded beside
+     the wrong row, overlapping the sticky header. Keeping the element lets
+     every reposition re-read `getBoundingClientRect()`, so the menu tracks its
+     own row for as long as that row is on screen. */
+  const actionTriggerRef = useRef<HTMLElement | null>(null);
   const [actionMenuPosition, setActionMenuPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
+  /* The scrolling option list, separate from the panel: the "Actions" heading
+     sits outside it so it can never scroll out of view, and its `scrollHeight`
+     is what gives the panel's natural height back once a `maxHeight` has been
+     applied. */
+  const actionMenuListRef = useRef<HTMLDivElement | null>(null);
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
   /** Set while the version history is being fetched for the Files column. */
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
@@ -248,11 +285,11 @@ export default function ResumeTable({
   const [showAddTagsModal, setShowAddTagsModal] = useState(false);
   const [selectedResumeForAction, setSelectedResumeForAction] = useState<Resume | null>(null);
 
-  const closeActionMenu = () => {
+  const closeActionMenu = useCallback(() => {
+    actionTriggerRef.current = null;
     setOpenActionMenu(null);
-    setActionMenuAnchor(null);
     setActionMenuPosition(null);
-  };
+  }, []);
 
   // Same outside-click close behavior as the Job Openings three-dot menu.
   useEffect(() => {
@@ -264,30 +301,39 @@ export default function ResumeTable({
 
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
-  }, [openActionMenu]);
+  }, [openActionMenu, closeActionMenu]);
 
-  /* Measured in a layout effect so the corrected position lands before paint —
-     right-aligned to the trigger, dropping below it when there's room and
-     flipping above when there isn't, clamped away from every viewport edge. */
-  useLayoutEffect(() => {
-    if (!openActionMenu || !actionMenuAnchor) return;
+  /* Right-aligned to the trigger, dropping below it when there's room and
+     flipping above when there isn't, clamped away from every viewport edge.
+
+     Height comes from the option list's `scrollHeight`, not the panel's
+     `offsetHeight`: once a `maxHeight` has been applied, `offsetHeight` *is*
+     that cap, so measuring it again would ratchet the menu smaller on every
+     reposition until it collapsed. */
+  const positionActionMenu = useCallback(() => {
+    const trigger = actionTriggerRef.current;
     const menu = actionMenuRef.current;
-    if (!menu) return;
+    if (!trigger || !menu) return;
+
+    const anchor = trigger.getBoundingClientRect();
+    const list = actionMenuListRef.current;
+    const naturalHeight = list
+      ? menu.offsetHeight - list.clientHeight + list.scrollHeight
+      : menu.offsetHeight;
 
     const viewportH = window.innerHeight;
     const viewportW = window.innerWidth;
-    const height = menu.offsetHeight;
-    const spaceBelow = viewportH - actionMenuAnchor.bottom - ACTION_MENU_GAP - ACTION_MENU_EDGE;
-    const spaceAbove = actionMenuAnchor.top - ACTION_MENU_GAP - ACTION_MENU_EDGE;
-    const flipUp = height > spaceBelow && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(120, flipUp ? spaceAbove : spaceBelow);
-    const clampedHeight = Math.min(height, maxHeight);
+    const spaceBelow = viewportH - anchor.bottom - ACTION_MENU_GAP - ACTION_MENU_EDGE;
+    const spaceAbove = anchor.top - ACTION_MENU_GAP - ACTION_MENU_EDGE;
+    const flipUp = naturalHeight > spaceBelow && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(ACTION_MENU_MIN_HEIGHT, flipUp ? spaceAbove : spaceBelow);
+    const clampedHeight = Math.min(naturalHeight, maxHeight);
 
     const top = flipUp
-      ? Math.max(ACTION_MENU_EDGE, actionMenuAnchor.top - ACTION_MENU_GAP - clampedHeight)
-      : Math.min(actionMenuAnchor.bottom + ACTION_MENU_GAP, viewportH - ACTION_MENU_EDGE - clampedHeight);
+      ? Math.max(ACTION_MENU_EDGE, anchor.top - ACTION_MENU_GAP - clampedHeight)
+      : Math.min(anchor.bottom + ACTION_MENU_GAP, viewportH - ACTION_MENU_EDGE - clampedHeight);
     const left = Math.min(
-      Math.max(ACTION_MENU_EDGE, actionMenuAnchor.right - ACTION_MENU_WIDTH),
+      Math.max(ACTION_MENU_EDGE, anchor.right - ACTION_MENU_WIDTH),
       viewportW - ACTION_MENU_EDGE - ACTION_MENU_WIDTH,
     );
 
@@ -296,21 +342,47 @@ export default function ResumeTable({
         ? prev
         : { top, left, maxHeight },
     );
-  }, [openActionMenu, actionMenuAnchor]);
+  }, []);
 
-  // Fixed coordinates go stale the moment anything scrolls under them —
-  // close on scroll (capture, to catch the table shell's own scrolling) and
-  // resize, same as FolderTree's folder-actions menu.
+  // Measured in a layout effect so the corrected position lands before paint —
+  // the panel renders `visibility: hidden` until it has one, so it never
+  // flashes at the unmeasured spot.
+  useLayoutEffect(() => {
+    if (!openActionMenu) return;
+    positionActionMenu();
+  }, [openActionMenu, positionActionMenu]);
+
+  /* Fixed coordinates go stale the moment anything scrolls under them. The
+     menu follows its row instead of being dismissed — that row's ⋮ is what was
+     clicked, and dropping the menu on the first stray wheel tick is its own
+     annoyance — and only closes once the row has scrolled out of the table's
+     visible box, where there is no longer a row to point at. Capture phase, to
+     catch `.tf-table-shell`'s own scrolling as well as the page's; coalesced
+     into one frame so a fast scroll doesn't re-measure per event. */
   useEffect(() => {
     if (!openActionMenu) return;
-    const dismiss = () => closeActionMenu();
-    window.addEventListener('scroll', dismiss, true);
-    window.addEventListener('resize', dismiss);
-    return () => {
-      window.removeEventListener('scroll', dismiss, true);
-      window.removeEventListener('resize', dismiss);
+    let frame = 0;
+    const track = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        const trigger = actionTriggerRef.current;
+        if (!trigger) return;
+        if (!isActionTriggerVisible(trigger)) {
+          closeActionMenu();
+          return;
+        }
+        positionActionMenu();
+      });
     };
-  }, [openActionMenu]);
+    window.addEventListener('scroll', track, true);
+    window.addEventListener('resize', track);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', track, true);
+      window.removeEventListener('resize', track);
+    };
+  }, [openActionMenu, positionActionMenu, closeActionMenu]);
 
   /* Custom row order. Only ids are kept — the rows themselves come from the
      parent on every fetch — and ids the saved order doesn't mention keep their
@@ -719,8 +791,11 @@ export default function ResumeTable({
                 </button>
               </td>
               <td
+                /* No z-index lift while the menu is open: the menu is
+                   portalled to <body>, so the cell has nothing to rise above —
+                   and raising it past the sticky header's z-11 only made this
+                   one white cell paint over the ACTIONS heading. */
                 className="w-[76px] min-w-[76px] max-w-[76px] px-3 py-2.5 align-middle whitespace-nowrap tf-sticky-col"
-                style={openActionMenu === resume.id ? { zIndex: 9999 } : undefined}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-end gap-1">
@@ -745,8 +820,7 @@ export default function ResumeTable({
                             e.stopPropagation();
                             const willOpen = openActionMenu !== resume.id;
                             if (willOpen) {
-                              const trigger = e.currentTarget as HTMLElement;
-                              setActionMenuAnchor(trigger.getBoundingClientRect());
+                              actionTriggerRef.current = e.currentTarget as HTMLElement;
                               setActionMenuPosition(null);
                               setOpenActionMenu(resume.id);
                             } else {
@@ -757,25 +831,43 @@ export default function ResumeTable({
                         >
                           <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
                         </button>
-                        {openActionMenu === resume.id && actionMenuAnchor && typeof document !== 'undefined' && createPortal(
+                        {openActionMenu === resume.id && typeof document !== 'undefined' && createPortal(
                           <div
                             ref={actionMenuRef}
                             /* `fixed` + portal: outside `.tf-table-shell`'s
                                `overflow-auto` box, so the menu is never clipped
                                regardless of z-index — overflow clipping isn't
-                               something z-index can escape. */
-                            className="fixed w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[9999] overflow-y-auto overscroll-contain"
+                               something z-index can escape.
+
+                               A flex column, not one scrolling box: the heading
+                               is the non-shrinking first child and only the
+                               option list below it scrolls, so "Actions" stays
+                               readable at the top of the overlay however little
+                               room the menu was given. */
+                            className="fixed w-52 flex flex-col bg-white rounded-lg shadow-lg border border-gray-200 z-[9999] overflow-hidden"
                             style={{
-                              top: actionMenuPosition?.top ?? actionMenuAnchor.bottom + ACTION_MENU_GAP,
-                              left: actionMenuPosition?.left ?? Math.max(ACTION_MENU_EDGE, actionMenuAnchor.right - ACTION_MENU_WIDTH),
+                              // Measured before paint by the layout effect;
+                              // until then the panel sits at the origin with
+                              // `visibility: hidden`, so it is laid out (and so
+                              // measurable) without ever being seen there.
+                              top: actionMenuPosition?.top ?? 0,
+                              left: actionMenuPosition?.left ?? 0,
                               maxHeight: actionMenuPosition?.maxHeight,
-                              // Hidden for the one frame before the layout
-                              // effect measures it, so it never flashes at the
-                              // unclamped position.
                               visibility: actionMenuPosition ? 'visible' : 'hidden',
                             }}
                             onClick={(e) => e.stopPropagation()}
                           >
+                            {/* Same small-caps section label the rest of the
+                                app uses (VersionHistoryModal's field headings),
+                                so the menu names itself without competing with
+                                its own options. */}
+                            <div className="flex-none px-3 py-2 border-b border-gray-100 text-[11px] font-medium uppercase tracking-wider text-gray-500">
+                              Actions
+                            </div>
+                            <div
+                              ref={actionMenuListRef}
+                              className="flex-1 min-h-0 py-1 overflow-y-auto overscroll-contain"
+                            >
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -874,6 +966,7 @@ export default function ResumeTable({
                                 <span className={MENU_ITEM_SCALE_CLASS}>Delete Resume</span>
                               </button>
                             )}
+                            </div>
                           </div>,
                           document.body,
                         )}

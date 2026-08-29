@@ -10,6 +10,7 @@ import Pagination from './Pagination';
 import ListPagination from './ListPagination';
 import { recordUsage } from '@/lib/services/usageTrackingService';
 import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
+import AIMatchVersionHistoryTable, { AIMatchSessionVersion, buildAIMatchVersions } from './AIMatchVersionHistoryTable';
 import { scoringService } from '@/lib/services/scoringService';
 import { resumeService } from '@/lib/services/resumeService';
 import { jdService } from '@/lib/services/jdService';
@@ -108,6 +109,11 @@ interface CandidateMatchRow {
 interface AITalentMatchPageProps {
   jobs: Job[];
   matchHistory?: MatchHistory[];
+  /** Total AI match runs per job, keyed by the human JD-xxx code (not the row
+   *  id — a republish forks the JD into a new row, so runs across versions
+   *  share a JD code but not an id). Drives whether "View Version History"
+   *  shows at all. */
+  matchSessionCounts?: Record<string, number>;
   onSaveMatch?: (data: MatchHistory) => void;
   onSubmitToScoring?: (jobId: string, candidateIds: string[]) => void;
   onBack?: () => void;
@@ -116,6 +122,7 @@ interface AITalentMatchPageProps {
 export default function AITalentMatchPage({
   jobs,
   matchHistory = [],
+  matchSessionCounts = {},
   onSaveMatch,
   onSubmitToScoring,
   onBack
@@ -525,6 +532,76 @@ export default function AITalentMatchPage({
   const [selectedVersionsCandidate, setSelectedVersionsCandidate] = useState<MatchedCandidateWithVersions | null>(null);
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [realVersionsData, setRealVersionsData] = useState<any[]>([]);
+
+  // AI match version history — all match runs for one job, not just the latest.
+  // Inline expand-in-place under the job card, one open at a time (like the
+  // Job Openings list's own version history).
+  const [expandedHistoryJobId, setExpandedHistoryJobId] = useState<string | null>(null);
+  const [historyVersionsByJob, setHistoryVersionsByJob] = useState<Record<string, AIMatchSessionVersion[]>>({});
+  const [loadingHistoryJobId, setLoadingHistoryJobId] = useState<string | null>(null);
+  const [failedHistoryJobId, setFailedHistoryJobId] = useState<string | null>(null);
+
+  /**
+   * @param historyKey The human JD-xxx code — cache/state key, shared by every
+   *   republished version of this job.
+   * @param anyRowId Any row id belonging to that job's lineage (the card's own
+   *   `item.jobId` is enough) — used to look up every other version's id, since
+   *   AI match sessions are tied to whichever row was active when the run
+   *   happened, not to the JD-xxx code.
+   */
+  const loadAIMatchVersionHistory = async (historyKey: string, anyRowId: string) => {
+    setFailedHistoryJobId(current => current === historyKey ? null : current);
+    setLoadingHistoryJobId(historyKey);
+    try {
+      // A republish forks the JD into a new row with its own id, so a job's
+      // match history is scattered across every row in its lineage, not just
+      // the current one.
+      let lineageIds: string[];
+      try {
+        const lineage = await jdService.getLineageVersions(anyRowId);
+        lineageIds = lineage.length ? lineage.map(v => v.id) : [anyRowId];
+      } catch (error) {
+        console.warn('Failed to load JD lineage for version history:', anyRowId, error);
+        lineageIds = [anyRowId];
+      }
+      if (!lineageIds.includes(anyRowId)) lineageIds.push(anyRowId);
+
+      const sessionLists = await Promise.all(
+        lineageIds.map(id =>
+          aiMatchService.listSessions({ jd_id: id, page_size: 100 }).catch(() => ({ items: [], total: 0, page: 1, page_size: 100 }))
+        )
+      );
+      const allSessions = sessionLists.flatMap(list => list.items || []);
+
+      // listSessions returns each session with results: [] — the scores this
+      // table shows only exist on the single-session record, so every version
+      // has to be re-fetched individually (same gap JobDetailView's AI match
+      // tab hit).
+      const hydratedSessions = await Promise.all(
+        allSessions.map(async (session) => {
+          try {
+            const { session: fullSession } = await aiMatchService.getSession(session.id);
+            return fullSession;
+          } catch (error) {
+            console.warn('Failed to load AI match session detail:', session.id, error);
+            return session;
+          }
+        })
+      );
+      setHistoryVersionsByJob(prev => ({ ...prev, [historyKey]: buildAIMatchVersions(hydratedSessions) }));
+    } catch (error) {
+      console.error('Failed to load AI match version history:', error);
+      setFailedHistoryJobId(historyKey);
+    } finally {
+      setLoadingHistoryJobId(current => current === historyKey ? null : current);
+    }
+  };
+
+  const toggleAIMatchVersionHistory = (historyKey: string, anyRowId: string) => {
+    const opening = expandedHistoryJobId !== historyKey;
+    setExpandedHistoryJobId(opening ? historyKey : null);
+    if (opening && !historyVersionsByJob[historyKey]) void loadAIMatchVersionHistory(historyKey, anyRowId);
+  };
 
   // Version selection for scoring (single candidate)
   const [showVersionSelectForScoring, setShowVersionSelectForScoring] = useState(false);
@@ -3010,6 +3087,10 @@ export default function AITalentMatchPage({
             <div className="grid gap-3 sm:gap-4">
             {sortedHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const jobData = jobs.find(j => j.id === item.jobId);
+              // Version history is cached/keyed by the human JD-xxx code, not
+              // this row's id — every republished version of the same job
+              // shares one history key so their runs aren't split across cards.
+              const historyKey = jobData?.jobId || item.jobId;
 
               return (
                 <div
@@ -3070,22 +3151,78 @@ export default function AITalentMatchPage({
                       </div>
                     </div>
 
-                    {/* View Details Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        userChangedView.current = true; // Prevent useEffect from resetting view
-                        setSelectedHistoryItem(item);
-                        setSelectedJob(item.jobId);
-                        setViewMode('details');
-                        updateUrlParams({ jdId: item.jobId, view: 'details' });
-                      }}
-                      className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all flex items-center justify-center gap-2 font-medium text-sm w-full sm:w-auto shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-                    >
-                      View Details
-                      <ArrowLeft className="w-3.5 h-3.5 rotate-180 group-hover:translate-x-1 transition-transform" />
-                    </button>
+                    {/* View Details / View Version History Buttons */}
+                    <div className="flex flex-col items-stretch gap-2 w-full sm:w-auto">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          userChangedView.current = true; // Prevent useEffect from resetting view
+                          setSelectedHistoryItem(item);
+                          setSelectedJob(item.jobId);
+                          setViewMode('details');
+                          updateUrlParams({ jdId: item.jobId, view: 'details' });
+                        }}
+                        className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all flex items-center justify-center gap-2 font-medium text-sm w-full sm:w-auto shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                      >
+                        View Details
+                        <ArrowLeft className="w-3.5 h-3.5 rotate-180 group-hover:translate-x-1 transition-transform" />
+                      </button>
+                      {/* Only a job with more than one match run has history worth
+                          looking back at — a v1-only job would open onto a single
+                          row repeating the card above it. */}
+                      {(matchSessionCounts[historyKey] || 0) > 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleAIMatchVersionHistory(historyKey, item.jobId);
+                          }}
+                          aria-expanded={expandedHistoryJobId === historyKey}
+                          className={`px-3 py-2 rounded-lg transition-all flex items-center justify-center gap-2 font-medium text-sm border w-full sm:w-auto ${
+                            expandedHistoryJobId === historyKey
+                              ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
+                              : 'bg-white dark:bg-slate-800 hover:bg-brand-blue/5 text-gray-700 dark:text-slate-200 hover:text-brand-blue border-gray-200 dark:border-slate-700 hover:border-brand-blue/30'
+                          }`}
+                        >
+                          <History className="w-3.5 h-3.5" />
+                          {expandedHistoryJobId === historyKey ? 'Hide Version History' : 'View Version History'}
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Version History — inline, below the row (not a popup): every
+                      match run across this job's whole lineage (every republished
+                      version), expanding in place the same way the Job Openings
+                      list expands its own version history. */}
+                  {expandedHistoryJobId === historyKey && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60" onClick={(e) => e.stopPropagation()}>
+                      <AIMatchVersionHistoryTable
+                        loading={loadingHistoryJobId === historyKey}
+                        failed={failedHistoryJobId === historyKey}
+                        versions={historyVersionsByJob[historyKey] ?? null}
+                        onRetry={() => loadAIMatchVersionHistory(historyKey, item.jobId)}
+                        onViewSession={(session) => {
+                          userChangedView.current = true; // Prevent useEffect from resetting view
+                          // The session may belong to a different row in this
+                          // job's lineage than the card it was opened from —
+                          // navigate using the session's own jd_id, not this row's.
+                          const targetJobId = session.jd_id || item.jobId;
+                          const targetJob = jobs.find(j => j.id === targetJobId);
+                          setSelectedHistoryItem({
+                            id: session.id,
+                            jobId: targetJobId,
+                            jobTitle: targetJob?.title || item.jobTitle,
+                            matchedAt: new Date(session.created_at),
+                            totalMatches: session.total_matches,
+                            matchedCandidates: [],
+                          });
+                          setSelectedJob(targetJobId);
+                          setViewMode('details');
+                          updateUrlParams({ jdId: targetJobId, view: 'details' });
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -3171,6 +3308,7 @@ export default function AITalentMatchPage({
           }}
         />
       )}
+
       </>
     );
   }
