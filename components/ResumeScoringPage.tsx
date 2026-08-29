@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Resume as SharedResume } from '@/lib/types/types';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
@@ -2349,13 +2350,13 @@ export default function ResumeScoringPage({
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => openVersionProgress(versionJob.id, versionJob.title)}>
+                    <DropdownMenuItem className="group" onSelect={() => openVersionProgress(versionJob.id, versionJob.title)}>
                       <Eye className="w-4 h-4" />
-                      View Progress
+                      <span className={MENU_ITEM_SCALE_CLASS}>View Progress</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => openVersionDetails(versionJob.id)}>
+                    <DropdownMenuItem className="group" onSelect={() => openVersionDetails(versionJob.id)}>
                       <FileText className="w-4 h-4" />
-                      View Details
+                      <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
