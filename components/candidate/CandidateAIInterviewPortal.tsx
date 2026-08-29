@@ -205,6 +205,13 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ours, which is what makes the vision check (and clean-reference comparison)
   // reliable. Restored immediately after the capture.
   const shareBarCardRef = useRef<HTMLDivElement>(null);
+  // Baseline browser zoom (via devicePixelRatio) captured when the candidate is
+  // interacting normally. Shrinking the browser zoom to minimum makes an in-page
+  // recorder/extension widget tiny enough to evade the vision check, so at the
+  // Hide step we refuse to verify while zoomed OUT relative to this baseline (or
+  // below an absolute floor) and ask the candidate to reset to 100%. Tracks the
+  // MAX DPR seen so zooming in then out can't lower the baseline.
+  const baselineDprRef = useRef<number>(1);
   // Pre-interview single-active-session lease: true when another browser/device
   // already holds this interview link (blocks the second person from system
   // check onward). See the lease heartbeat effect.
@@ -1113,8 +1120,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     const displayMediaOptions: any = {
       video: {
         frameRate: 15,
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        // Request ~1080p (was 1280x720). The screen share feeds BOTH the
+        // interview recording AND the Hide-step vision check; at 720p the
+        // browser downscaled the whole screen before capture, blurring small
+        // recorder/extension icons away. 1920x1080 gives every display a
+        // high-enough source to read those icons. File size barely changes —
+        // the recording is bitrate-capped (videoBitsPerSecond), so more pixels
+        // just means the same bytes, only a little more encode CPU.
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
         displaySurface: 'monitor',
       },
       audio: true,
@@ -1580,6 +1594,20 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     setStartSubmitting(false);
   }, [startSubmitting, token, requestEntireScreenShare]);
 
+  // Track the highest browser zoom (devicePixelRatio) seen — used as the "not
+  // zoomed out" baseline for the Hide-step zoom guard. Zooming OUT only lowers
+  // DPR, so the max seen approximates the candidate's normal (≈100%) zoom.
+  useEffect(() => {
+    const sync = () => {
+      const dpr = window.devicePixelRatio || 1;
+      if (dpr > baselineDprRef.current) baselineDprRef.current = dpr;
+    };
+    sync();
+    // devicePixelRatio changes fire a resize event.
+    window.addEventListener('resize', sync);
+    return () => window.removeEventListener('resize', sync);
+  }, []);
+
 
   // Grab a single JPEG frame from the ENTIRE-screen share stream (used by the
   // hide-share-bar vision check). Returns null if the stream isn't available.
@@ -1635,17 +1663,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         window.setTimeout(resolve, 1500);
       });
       const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
-      // Keep close to native resolution (cap only very large/multi-monitor
-      // frames) and use high JPEG quality: the vision check must catch SMALL
-      // edge-docked recorder/extension toolbars (thin vertical icon strips at a
-      // screen edge), which aggressive downscale + low quality were blurring
-      // away before the model ever saw them.
-      const scale = Math.min(1, 1920 / vw);
+      // Normalize EVERY display's capture into the 1920–2048px-wide band so the
+      // frame sent to the vision model is consistently large across all screens:
+      // small displays are upscaled up to 1920 (so their frame isn't tiny), and
+      // large/multi-monitor displays are capped at 2048 (the effective ceiling
+      // for the vision API's high-detail tiling). JPEG stays at 0.9. NOTE:
+      // upscaling a low-res display does not invent detail — a small screen's
+      // real fidelity is bounded by its native resolution — but it keeps the
+      // input size uniform and never smaller than the model's tiling window.
+      const targetW = Math.min(2048, Math.max(vw, 1920));
+      const scale = targetW / vw;
       const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
       const canvas = document.createElement('canvas');
       canvas.width = cw; canvas.height = ch;
       const ctx = canvas.getContext('2d');
       if (!ctx) { try { video.pause(); } catch { /* ignore */ } video.srcObject = null; return null; }
+      ctx.imageSmoothingEnabled = true;
+      try { (ctx as CanvasRenderingContext2D).imageSmoothingQuality = 'high'; } catch { /* not all browsers */ }
       ctx.drawImage(video, 0, 0, cw, ch);
       try { video.pause(); } catch { /* ignore */ }
       video.srcObject = null;
@@ -1781,6 +1815,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       ctx.resume?.().catch(() => { /* ignore */ });
       (window as any).__interviewAudioContext = ctx;
     } catch { /* ignore */ }
+    // ZOOM GUARD (deterministic, no LLM): if the browser is zoomed OUT too far,
+    // an in-page recorder/extension widget shrinks small enough to slip past the
+    // vision check. We ALLOW down to 75% zoom (some candidates prefer a slightly
+    // smaller page) and only block BELOW that. Blocked when DPR dropped >25%
+    // below the max seen (zoomed out since load), or below an absolute floor
+    // (covers loading already deeply zoomed out).
+    {
+      const dpr = window.devicePixelRatio || 1;
+      const baseline = baselineDprRef.current || dpr;
+      if (dpr < baseline * 0.75 || dpr < 0.6) {
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        console.warn(`[ShareBar] browser zoomed out too far (dpr=${dpr}, baseline=${baseline}) — blocking, ask ≥75%`);
+        setShareBarError('Your browser is zoomed out too far. Please set the zoom to at least 75% (press Ctrl+0 to reset to 100%), then click Continue again.');
+        return;
+      }
+    }
     setShareBarError(null);
     setShareBarChecking(true);
     try {
