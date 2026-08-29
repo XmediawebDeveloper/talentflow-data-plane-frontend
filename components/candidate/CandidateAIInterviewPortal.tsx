@@ -1623,6 +1623,41 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     }
   }, []);
 
+  /**
+   * Is the camera / microphone actually available RIGHT NOW?
+   *
+   * The system check runs minutes earlier and its verdict is PERSISTED
+   * (system_check_passed), so nothing re-tested the hardware at the moment the
+   * candidate pressed Start — unplug the camera after passing the check and the
+   * interview began normally, with no error and a dead camera.
+   *
+   * Video and audio are probed SEPARATELY and never in one getUserMedia call:
+   * a combined request is all-or-nothing, so one missing device would mask the
+   * other and we could not tell the candidate which one to reconnect.
+   * Probe tracks are stopped immediately — this only answers "can it open?",
+   * it never holds a device the interview is about to want.
+   */
+  const probeMediaDevicesReady = useCallback(async (): Promise<'camera' | 'microphone' | 'both' | null> => {
+    const canOpen = async (constraints: MediaStreamConstraints, kind: 'video' | 'audio') => {
+      let s: MediaStream | null = null;
+      try {
+        s = await navigator.mediaDevices.getUserMedia(constraints);
+        const tracks = kind === 'video' ? s.getVideoTracks() : s.getAudioTracks();
+        return tracks.some(t => t.readyState === 'live');
+      } catch {
+        return false;
+      } finally {
+        s?.getTracks().forEach(t => t.stop());
+      }
+    };
+    const camOk = await canOpen({ video: true }, 'video');
+    const micOk = await canOpen({ audio: true }, 'audio');
+    if (!camOk && !micOk) return 'both';
+    if (!camOk) return 'camera';
+    if (!micOk) return 'microphone';
+    return null;
+  }, []);
+
   // Consume a unit + start the backend interview, then enter the interview UI.
   // Extracted so BOTH the final-consent accept and the share-bar gate can start.
   const startInterviewNow = useCallback(async () => {
@@ -1638,7 +1673,29 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       setStep('fullscreen_prompt');
       return;
     }
+    // HARD REQUIREMENT: the camera and microphone must be present and openable
+    // right now. Checked HERE (the single choke point both start paths funnel
+    // through) rather than trusting the persisted system-check verdict, which
+    // was taken minutes ago against hardware that may since have been unplugged.
+    // Sends them back to the system check — the screen whose whole job is
+    // verifying devices — so they can reconnect and re-verify properly.
     setStartSubmitting(true);
+    const missingDevice = await probeMediaDevicesReady();
+    if (missingDevice) {
+      setStartSubmitting(false);
+      const what =
+        missingDevice === 'both' ? 'camera and microphone'
+        : missingDevice === 'camera' ? 'camera'
+        : 'microphone';
+      toast.error(
+        `Your ${what} ${missingDevice === 'both' ? 'are' : 'is'} no longer available. ` +
+        `Please reconnect ${missingDevice === 'both' ? 'them' : 'it'} — the interview cannot start without ` +
+        `${missingDevice === 'both' ? 'both' : 'it'}.`,
+      );
+      console.warn(`[Portal] Start blocked — ${what} unavailable at start time (system check had passed earlier)`);
+      setStep('system_check');
+      return;
+    }
     try {
       await candidateAIInterviewService.recordPracticeComplete(token);
       const result = await candidateAIInterviewService.startInterview(token);
