@@ -181,14 +181,14 @@ function DroppableFolderItem({
         // apart from the user's folders in the fixtures section.
         <FolderRoot className="w-4 h-4 text-brand-cyan" />
       ) : isExpanded && hasChildren ? (
-        <FolderOpen className="w-4 h-4" />
+        <FolderOpen className="w-4 h-4 text-brand-orange" />
       ) : (
-        <Folder className="w-4 h-4" />
+        <Folder className="w-4 h-4 text-brand-orange" />
       )}
       {/* `min-w-0` + truncate is what keeps a long name inside the panel — a
           60-character folder would otherwise push the row wider than the
           column and run out over the table beside it. */}
-      <span className="flex-1 min-w-0 text-left truncate" title={folder.name}>{folder.name}</span>
+      <span className={`flex-1 min-w-0 text-left truncate ${MENU_ITEM_SCALE_CLASS}`} title={folder.name}>{folder.name}</span>
       <span className="flex-shrink-0 text-xs text-gray-500">({count})</span>
       {/* No actions on the fixtures: All Resumes is a view, and root and
           Archived Resumes can't be renamed or deleted, which is most of what

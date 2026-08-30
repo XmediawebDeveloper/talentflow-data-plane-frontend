@@ -11,6 +11,7 @@ import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { FOLDER_NAME_MAX_LENGTH } from './FolderTree';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
 import ErrorModal from './ErrorModal';
 
@@ -105,6 +106,32 @@ interface UploadModalProps {
   targetFolder?: string;
 }
 
+/**
+ * Folded-corner document glyph for the accepted-formats chips — a real file
+ * shape (not a generic Lucide icon) so PDF/DOCX/DOC read at a glance the way
+ * OS file pickers render them, in their conventional colors (PDF red, Word
+ * blue).
+ */
+function FileFormatIcon({ color, accent, label }: { color: string; accent: string; label: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true">
+      <path d="M5 2h9l5 5v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill={color} />
+      <path d="M14 2v4a1 1 0 0 0 1 1h4" fill={accent} />
+      <text
+        x="12"
+        y="17.5"
+        textAnchor="middle"
+        fontSize="6.5"
+        fontWeight="700"
+        fontFamily="Arial, sans-serif"
+        fill="#ffffff"
+      >
+        {label}
+      </text>
+    </svg>
+  );
+}
+
 export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onUploadComplete, onCreateFolder, onViewResume, onScoreResume, onDuplicateDetected, targetFolder }: UploadModalProps) {
   const { available: resumeUploadAvailable } = usePlanFeature('resume_upload');
 
@@ -169,6 +196,18 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     if (!id) return 'Choose folder...';
     if (rootFolder && id === rootFolder.id) return 'Root (Default)';
     return allFolders.find(entry => entry.folder.id === id)?.path || 'Choose folder...';
+  }, [selectedFolder, rootFolder, allFolders]);
+
+  /** Trigger icon color — mirrors the folder-list convention (Root=cyan,
+   *  Archived=amber, regular=orange) so the closed picker hints at what's
+   *  selected without opening it. */
+  const selectedFolderIconColorClass = useMemo(() => {
+    const id = selectedFolder || rootFolder?.id;
+    if (!id) return 'text-gray-400 dark:text-slate-500';
+    if (rootFolder && id === rootFolder.id) return 'text-brand-cyan';
+    const folder = allFolders.find(entry => entry.folder.id === id)?.folder;
+    if (folder?.name === 'Archived Resumes' && !folder.parentId) return 'text-amber-600';
+    return 'text-brand-orange';
   }, [selectedFolder, rootFolder, allFolders]);
 
   /* Folder picker — replaces the old flattened, indented <select> ("↳  ")
@@ -297,13 +336,13 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           scheduleOpenPath([...ancestors, { folder, anchor }]);
         }}
         onMouseLeave={() => scheduleOpenPath(ancestors)}
-        className={`w-full text-left py-2 text-sm transition-colors flex items-center gap-2 ${
+        className={`group w-full text-left py-2 text-sm transition-colors flex items-center gap-2 ${
           isSelected ? 'text-brand-blue bg-brand-blue/[0.06]' : 'text-gray-700 dark:text-slate-300'
         } ${isOpen ? 'bg-blue-50 dark:bg-slate-800' : 'hover:bg-blue-50 dark:hover:bg-slate-800'}`}
         style={{ paddingLeft: 12 + depth * 16, paddingRight: 8, marginLeft: 4, marginRight: 4, width: 'calc(100% - 8px)' }}
       >
-        <FolderInput className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-        <span className="truncate flex-1">{folder.name}</span>
+        <FolderInput className="w-4 h-4 text-brand-orange flex-shrink-0" />
+        <span className={`truncate flex-1 ${MENU_ITEM_SCALE_CLASS}`}>{folder.name}</span>
         <span className="flex-shrink-0 text-xs text-gray-400 dark:text-slate-500">({folder.count})</span>
         {hasChildren && (
           <ChevronRight
@@ -1001,20 +1040,14 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 : 'border-brand-blue/25 dark:border-slate-700 bg-gradient-to-b from-brand-blue/[0.03] via-brand-cyan/[0.03] to-white dark:from-slate-800/50 dark:via-slate-800/30 dark:to-slate-900 hover:border-brand-cyan/50 hover:from-brand-blue/[0.06] hover:via-brand-cyan/[0.05]'
             }`}
           >
-            {/* Folder-and-page mark: a plain upload arrow said "upload" twice
-                over, once here and once on the button below. */}
-            <div className="relative mx-auto mb-2.5 h-12 w-14 sm:h-14 sm:w-16">
-              <div className="absolute inset-0 rounded-full bg-brand-cyan/10 blur-lg" aria-hidden="true" />
-              <FolderOpen
-                className={`absolute bottom-0 left-1/2 -translate-x-1/2 h-10 w-10 sm:h-12 sm:w-12 ${
-                  isDragging ? 'text-brand-cyan' : 'text-brand-blue/70'
-                }`}
-                strokeWidth={1.25}
-              />
-              <span className="absolute -bottom-0.5 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-brand-orange text-white shadow-md shadow-brand-orange/25 ring-2 ring-white dark:ring-slate-900">
-                <Upload className="h-3.5 w-3.5" />
-              </span>
-            </div>
+            {/* Folder-and-resume illustration — its own upload badge and glow
+                are baked into the artwork, so nothing extra is layered on top. */}
+            <img
+              src="/upload-resume-illustration.png"
+              alt=""
+              aria-hidden="true"
+              className={`mx-auto mb-2.5 h-16 w-auto sm:h-20 transition-transform ${isDragging ? 'scale-105' : ''}`}
+            />
             <p className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50">
               {activeTab === 'single' ? 'Drag & drop your resume here' : 'Drag & drop your resumes here'}
             </p>
@@ -1028,7 +1061,11 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                   key={format}
                   className="inline-flex items-center gap-1.5 rounded-full border border-brand-cyan/20 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                 >
-                  <FileText className="h-3 w-3 text-brand-cyan" />
+                  {format === 'PDF' ? (
+                    <FileFormatIcon color="#dc2626" accent="#f87171" label="PDF" />
+                  ) : (
+                    <FileFormatIcon color="#2563eb" accent="#93c5fd" label="W" />
+                  )}
                   {format}
                 </span>
               ))}
@@ -1215,7 +1252,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                     }}
                     className="w-full flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue text-sm text-gray-900 dark:text-slate-100 transition-colors"
                   >
-                    <FolderOpen className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                    <FolderOpen className={`w-4 h-4 flex-shrink-0 ${selectedFolderIconColorClass}`} />
                     <span className="flex-1 min-w-0 truncate text-left">{selectedFolderLabel}</span>
                     <ChevronDown className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                   </button>
@@ -1254,7 +1291,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                                   setSelectedFolder(folder.id);
                                   closeFolderPicker();
                                 }}
-                                className={`w-full text-left py-2 text-sm transition-colors flex items-center gap-2 ${
+                                className={`group w-full text-left py-2 text-sm transition-colors flex items-center gap-2 ${
                                   (selectedFolder || rootFolder?.id) === folder.id
                                     ? 'text-brand-blue bg-brand-blue/[0.06]'
                                     : 'text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-800'
@@ -1262,11 +1299,11 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                                 style={{ paddingLeft: 12, paddingRight: 8, marginLeft: 4, marginRight: 4, width: 'calc(100% - 8px)' }}
                               >
                                 {folder.name === 'Archived Resumes' ? (
-                                  <Archive className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                                  <Archive className="w-4 h-4 text-amber-600 flex-shrink-0" />
                                 ) : (
-                                  <FolderRoot className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                                  <FolderRoot className="w-4 h-4 text-brand-cyan flex-shrink-0" />
                                 )}
-                                <span className="flex-1 truncate text-left">
+                                <span className={`flex-1 truncate text-left ${MENU_ITEM_SCALE_CLASS}`}>
                                   {folder.name.toLowerCase() === 'root' ? 'Root (Default)' : folder.name}
                                 </span>
                                 <span className="flex-shrink-0 text-xs text-gray-400 dark:text-slate-500">({folder.count})</span>

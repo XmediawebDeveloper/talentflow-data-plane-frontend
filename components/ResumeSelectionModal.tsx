@@ -796,9 +796,9 @@ export default function ResumeSelectionModal({
             )}
             {!hasChildren && <div className="w-5" />}
             {isExpanded ? (
-              <FolderOpen className="w-4 h-4" />
+              <FolderOpen className="w-4 h-4 text-brand-orange" />
             ) : (
-              <Folder className="w-4 h-4" />
+              <Folder className="w-4 h-4 text-brand-orange" />
             )}
             <span className="flex-1 text-left truncate">{folder.name}</span>
             {selectedInFolder > 0 && (
@@ -962,7 +962,7 @@ export default function ResumeSelectionModal({
                         : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                     }`}
                   >
-                    <Folder className="w-3.5 h-3.5" />
+                    <Folder className={`w-3.5 h-3.5 ${isSelected ? '' : 'text-brand-orange'}`} />
                     {folder.name}
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                       isSelected

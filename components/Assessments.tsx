@@ -46,12 +46,13 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import QuotaBadge from '@/components/ui/quota-badge';
 import AssessmentVersionHistoryPanel, { type AssessmentVersionRow } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
+import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
 
 
 /** What the version-history helpers below read off an assessment row — the
  *  rows themselves are the untyped shape `mapAssessmentFromApi` returns, so
  *  this names the three fields rather than widening to `any`. */
-type AssessmentLineageRef = { id: string; jd_id?: string; jd_assessment_count?: number };
+type AssessmentLineageRef = { id: string; jd_id?: string };
 
 const INVITATIONS_PAGE_SIZE = 10;
 /** Batch size when pulling every assessment for a browser-side filter. */
@@ -259,7 +260,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   /* The JOB half of the history. Same hook the Job Openings list and the Apply
      to Job dialog use, so the job versions a recruiter reads here are the ones
      they read there, from the same endpoints - lineage plus the per-version JD
-     record the Job Role column needs. */
+     record the Job Title, Experience / Industry, Location and Work
+     Mode / Type columns need. */
   const jdLineage = useJobVersionLineage();
   const [assessmentLineages, setAssessmentLineages] = useState<Record<string, AssessmentVersionRow[]>>({});
   const [loadingLineages, setLoadingLineages] = useState<Record<string, boolean>>({});
@@ -320,59 +322,146 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   /**
-   * How many versions this assessment's lineage has, for the toggle's label
-   * and for whether it appears at all.
-   *
-   * The backend count is preferred; the loaded page is the fallback so the
-   * control is still right on a backend that does not send it. Once the
-   * lineage itself has been fetched that wins outright — it is the same set
-   * the panel is listing.
+   * This row's JOB version history — the rows the LATEST badge is decided
+   * from. The panel's own fetch wins where it exists (card and open table then
+   * read one identical list); the badge prefetch below covers every other row.
+   * An empty cache entry is a failed fetch, not a one-version job, so it falls
+   * through rather than being read as the history.
    */
-  const getAssessmentVersionCount = (assessment: AssessmentLineageRef) => {
-    if (!assessment.jd_id) return 0;
-    const fetched = assessmentLineages[assessment.jd_id];
-    if (fetched) return fetched.length;
-    if (typeof assessment.jd_assessment_count === 'number') return assessment.jd_assessment_count;
-    return apiAssessments.filter((x) => x.jd_id === assessment.jd_id).length;
+  const getJobLineageRows = (assessment: { jd_id?: string; jd_short_id?: string }) => {
+    const opened = assessment.jd_id ? jdLineage.lineages[assessment.jd_id] : undefined;
+    if (opened?.length) return opened;
+    const prefetched = jdLineage.filterLineages[assessment.jd_short_id || assessment.jd_id || ''];
+    return prefetched?.length ? prefetched : undefined;
   };
 
   /**
-   * Whether this row has a version history worth opening.
+   * The live job version of this row's lineage — the ONE number every "latest"
+   * question on this page is answered from: the LATEST badge, which version of
+   * a lineage the list collapses down to, and the row the Job Version History
+   * table beneath it badges LATEST (it is handed this number, see
+   * `latestJobVersion` on `AssessmentVersionHistoryPanel`). Card and table
+   * naming different versions is only possible if they resolve it separately,
+   * so they don't.
    *
-   * Either axis counts. A job republished to v2 has a history even if one
-   * assessment covers every version of it, and an assessment duplicated to V2
-   * has one even on a job still at v1 - the panel exists to map the two, so
-   * more than one of EITHER is something to show. Both are read from data
-   * already on the row, so no request is needed to decide.
+   * SEQUENCE decides it, exactly as on the Job Openings page (`byLatestVersion`
+   * / `latestVersionNumber`): the highest version number in the lineage is the
+   * latest one. Not its status — a Draft v2 over a Published v1 is the latest
+   * version, and the page reads that lineage as being re-drafted rather than
+   * falling back to the published v1. Not `is_latest_version` either: that flag
+   * names a row already counted below, so consulting it separately could only
+   * ever LOWER the answer onto a superseded version.
    *
-   * Only a job at v1 with a single assessment has nothing to say, and there
-   * the button stays hidden rather than opening onto one row repeating the
-   * card above it.
+   * Every source of version numbers the page holds is reduced to their maximum,
+   * so the badge tracks the data instead of one lookup that can miss:
+   *
+   *   1. the JD's own lineage — the authority, and the same rows the
+   *      version-history table marks up, so card and table cannot disagree;
+   *   2. the published JDs this page already loaded, matched by the lineage's
+   *      human-readable Job ID (`job_id` / `jd_short_id`) rather than by row
+   *      id — a republish mints a NEW JD row, so matching on `jd_id` finds
+   *      nothing for exactly the older versions the badge has to rule out;
+   *   3. the other assessments loaded from the same lineage, which name the
+   *      job versions they were authored against;
+   *   4. the lineage fetch behind an open version panel, which is that panel's
+   *      other source of job versions — counting it here is what stops the
+   *      panel from ever knowing a version this number does not.
+   *
+   * The row's own version is the floor, so a lineage nothing else knows about
+   * still reads as the newest version known here rather than dropping to 1.
+   *
+   * This replaces a comparison against `currentVersion`, which is the JD's
+   * REPUBLISH COUNTER and not its lineage version at all — two different
+   * numberings — and the lookup that fed it (`jobs.find(j => j.id === jd_id)`)
+   * missed on every non-current version, so the guard fell through to
+   * `return true` and the card claimed LATEST whatever version it was on.
    */
+  const getLatestJobVersion = (assessment: { jd_id?: string; jd_short_id?: string; jd_version?: number }) => {
+    const own = assessment.jd_version ?? 1;
+
+    let latest = latestVersionNumber(getJobLineageRows(assessment), own);
+
+    for (const job of jobs) {
+      const sameLineage = assessment.jd_short_id
+        ? job.job_id === assessment.jd_short_id
+        : job.id === assessment.jd_id;
+      if (sameLineage) latest = Math.max(latest, job.versionNumber ?? 1);
+    }
+
+    for (const row of apiAssessments) {
+      const sameLineage = assessment.jd_short_id
+        ? row.jd_short_id === assessment.jd_short_id
+        : row.jd_id === assessment.jd_id;
+      if (sameLineage) latest = Math.max(latest, row.jd_version ?? 1);
+    }
+
+    for (const row of assessmentLineages[assessment.jd_id ?? ''] ?? []) {
+      latest = Math.max(latest, row.jd_version ?? 1);
+    }
+
+    return latest;
+  };
+
   /**
    * Whether the job version on this card is the job's LIVE one, for the LATEST
    * badge.
    *
-   * Checked against the page's own published-JD list rather than assumed: the
-   * card carries the newest job version that has an assessment, which is not
-   * the same thing as the newest job version. A JD republished to v4 with no
-   * assessment written for it yet leaves this card on v3, and calling that
-   * "latest" would be a plain untruth about the job.
-   *
-   * A JD the list does not carry (unpublished, archived) has nothing to check
-   * against, and the card is then the newest version known - so the badge
-   * stands rather than being silently withheld.
+   * Written as the version-history table writes it — `jobVersion ===
+   * newestJobVersion`, against the number that table is handed — so exactly one
+   * version is badged and it is the same one in both places. (`>=` cannot
+   * differ, since the resolved number takes this row's own version as its
+   * floor; equality is the honest spelling of the comparison, not a change to
+   * it.)
    */
-  const isLatestJobVersion = (assessment: { jd_id?: string; jd_version?: number }) => {
-    const job = jobs.find((j) => j.id === assessment.jd_id);
-    if (!job?.currentVersion) return true;
-    return (assessment.jd_version ?? 1) >= job.currentVersion;
-  };
+  const isLatestJobVersion = (assessment: { jd_id?: string; jd_short_id?: string; jd_version?: number }) =>
+    (assessment.jd_version ?? 1) === getLatestJobVersion(assessment);
 
-  const hasVersionHistory = (assessment: AssessmentLineageRef & { jd_version?: number }) => {
-    if (!assessment.jd_id) return false;
-    return (assessment.jd_version ?? 1) > 1 || getAssessmentVersionCount(assessment) > 1;
-  };
+  /**
+   * Fetch every listed job's lineage, so the LATEST badge is answered from the
+   * JD itself rather than from what the assessments happen to reveal.
+   *
+   * The rows only name the job version they were authored against: a JD
+   * republished to v3 whose newest assessment is still on v1 looks, from the
+   * list alone, exactly like a JD that only ever had a v1. Nothing on the row
+   * can tell those apart, so the badge is fetched rather than inferred.
+   *
+   * This is `ensureFilterLineages` — the same batch path the Job Openings list
+   * uses to resolve its status pills. One lineage request per JOB (not per
+   * assessment), cached in the hook, never refetched, and every write lands in
+   * a promise callback, so a landing lineage re-renders the badge and nothing
+   * else.
+   */
+  const { ensureFilterLineages: ensureJobLineages } = jdLineage;
+  useEffect(() => {
+    /* Keyed by the lineage, not the row: every version of a job resolves to
+       the same history, so JD-080 is fetched once however many of its
+       assessments are loaded. */
+    const targets = new Map<string, string>();
+    for (const row of apiAssessments) {
+      if (!row?.jd_id) continue;
+      const key = row.jd_short_id || row.jd_id;
+      if (!targets.has(key)) targets.set(key, row.jd_id);
+    }
+    if (targets.size === 0) return;
+    ensureJobLineages([...targets].map(([key, jobId]) => ({ key, jobId })));
+  }, [apiAssessments, ensureJobLineages]);
+
+  /**
+   * Whether this row can open a version history — every job entry can.
+   *
+   * The control used to appear only where the row itself already proved a
+   * second version existed (job v2+, or a second assessment on the same JD).
+   * With one row per Job ID the row no longer carries that proof: the other
+   * versions are exactly what has been collapsed out of the list, so hiding
+   * the button on a row showing "Job v1" would hide the only way to reach
+   * them. Every job now gets it, in both views; a job that genuinely has one
+   * version opens onto that one version, which is an answer rather than a
+   * dead end.
+   *
+   * A row with no JD has no job history to open, and gets no button — it is
+   * not a job entry.
+   */
+  const hasVersionHistory = (assessment: AssessmentLineageRef) => !!assessment.jd_id;
   // Assessment list search + filters. `assessmentSearch` is what the user types;
   // `assessmentSearchQuery` is the debounced value sent to the API, so the search
   // spans every page rather than only the one on screen. The rest narrow the
@@ -1868,6 +1957,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * assessments must not collapse into each other just because they share a
    * missing field.
    *
+   * "Sharing its JD" means the JOB, not one version of it. Every republish
+   * mints a new JD row with its own `jd_id` under the same human-readable
+   * `jd_short_id` (JD-025), so keying on `jd_id` put one card on the page per
+   * job VERSION — three rows all badged JD-025, which is the duplication a
+   * recruiter sees. `jd_short_id` is what the versions of a job share, and it
+   * is the same key the Job Openings list collapses on (`lineageKey` in
+   * lib/utils/jobOpeningDisplay), so one Job ID means one row here too. The
+   * versions behind it are what View Versions opens.
+   *
    * Order is by each lineage's FIRST appearance in the server's ordering, so
    * collapsing does not reshuffle a list the user was already reading.
    *
@@ -1878,20 +1976,44 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    */
   const collapsedAssessments = (() => {
     const byLineage = new Map<string, (typeof filteredAssessments)[number]>();
+
+    /* Which of two rows of one lineage is the newer VERSION — the Job Openings
+       list's `byLatestVersion`, read against the pair of numbers an assessment
+       carries. Negative when `a` is newer, so it reads like a sort comparator.
+
+       Newest JOB version wins, and only then the newest assessment version
+       within it. The job is the parent, so "which row represents this job" is
+       answered by the job's own version first - picking on the assessment
+       number alone could put an older job version on the card whenever an
+       assessment was duplicated after a republish.
+
+       STATUS is not a term in it, deliberately, and that is the whole rule the
+       Job Openings page states: a Draft v2 over a Published v1 is the LATEST
+       version, and the lineage reads as being re-drafted. A published version
+       never displaces a newer draft.
+
+       `created_at` is the last tie-break, for the same reason it is one there:
+       when the list endpoint omits `version` every row falls back to 1, both
+       numeric comparisons tie, and "latest" would quietly become whatever order
+       the API happened to return — enough to flip a lineage's card between its
+       draft and its published version from one load to the next. */
+    const isNewerVersion = (
+      a: (typeof filteredAssessments)[number],
+      b: (typeof filteredAssessments)[number],
+    ) => {
+      const jobDelta = (a.jd_version ?? 1) - (b.jd_version ?? 1);
+      if (jobDelta !== 0) return jobDelta > 0;
+      const versionDelta = (a.version ?? 1) - (b.version ?? 1);
+      if (versionDelta !== 0) return versionDelta > 0;
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return aTime > bTime;
+    };
+
     for (const assessment of filteredAssessments) {
-      const key = assessment.jd_id || `__unlinked__:${assessment.id}`;
+      const key = assessment.jd_short_id || assessment.jd_id || `__unlinked__:${assessment.id}`;
       const current = byLineage.get(key);
-      /* Newest JOB version wins, and only then the newest assessment version
-         within it. The job is the parent, so "which row represents this job"
-         is answered by the job's own version first - picking on the assessment
-         number alone could put an older job version on the card whenever an
-         assessment was duplicated after a republish. */
-      if (
-        !current
-        || (assessment.jd_version ?? 1) > (current.jd_version ?? 1)
-        || ((assessment.jd_version ?? 1) === (current.jd_version ?? 1)
-            && (assessment.version ?? 1) > (current.version ?? 1))
-      ) {
+      if (!current || isNewerVersion(assessment, current)) {
         byLineage.set(key, assessment);
       }
     }
@@ -3673,9 +3795,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {/* Line 2: the assessment itself - the child of the job above,
                           and what this card's actions operate on. */}
                       <div className="flex items-center gap-2 flex-wrap text-xs text-gray-700 dark:text-slate-300 font-medium mb-1.5">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-gray-700 ring-1 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
-                          {assessment.short_id}
-                        </span>
                         <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35 whitespace-nowrap">
                           Assessment v{assessment.version ?? 1}
                         </span>
@@ -3905,7 +4024,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             assessments={assessmentLineages[assessment.jd_id]}
                             loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
                             currentAssessmentId={assessment.id}
-                            latestJobVersion={assessment.job?.version || assessment.jd_version}
+                            latestJobVersion={getLatestJobVersion(assessment)}
                             fallbackJobTitle={assessment.job?.title}
                             onRowClick={(versionId) => router.push(`/recruitment/assessments/${versionId}`)}
                             onCreateAssessment={handleCreateAssessmentForJobVersion}
@@ -4018,9 +4137,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {/* Line 2: the assessment itself - the child of the job above,
                               and what this card's actions operate on. */}
                           <div className="flex items-center gap-2 flex-wrap text-xs text-gray-700 dark:text-slate-300 font-medium mb-1.5">
-                            <span className="px-1.5 py-0.5 rounded bg-slate-100 text-gray-700 ring-1 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
-                              {assessment.short_id}
-                            </span>
                             <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35 whitespace-nowrap">
                               Assessment v{assessment.version ?? 1}
                             </span>
@@ -4106,7 +4222,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           assessments={assessmentLineages[assessment.jd_id]}
                           loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
                           currentAssessmentId={assessment.id}
-                          latestJobVersion={assessment.job?.version || assessment.jd_version}
+                          latestJobVersion={getLatestJobVersion(assessment)}
                           fallbackJobTitle={assessment.job?.title}
                           onRowClick={(versionId) => router.push(`/recruitment/assessments/${versionId}`)}
                           /* Every version gets the card's own menu, keyed

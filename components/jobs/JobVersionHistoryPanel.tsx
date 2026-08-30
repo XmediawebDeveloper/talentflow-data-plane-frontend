@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import type { Job } from '@/lib/types/types';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { getScoringSourceLabel } from '@/lib/utils/scoringSource';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import {
   formatEmploymentType,
@@ -23,6 +24,13 @@ import {
  * likewise conditional: it only means anything on the Resume Scoring page, so
  * it's included only when that page passes `versionScoredBy` — Job Openings
  * and the Apply to Job dialog never see the column at all.
+ *
+ * "Last Updated" vs "Source" is the same conditional: Job Openings and the
+ * Apply to Job dialog keep "Last Updated" (when this version's record last
+ * changed), while the Resume Scoring page swaps it for "Source" — which
+ * module produced the score against this version (AI Talent Match, Job
+ * Descriptions, My Resumes) — since a JD's own last-updated timestamp isn't
+ * what a recruiter is scanning this table for there.
  */
 const buildBaseColumns = (showScoredBy: boolean): { label: string; minW: string }[] => [
   { label: 'Version', minW: 'min-w-[72px]' },
@@ -32,16 +40,39 @@ const buildBaseColumns = (showScoredBy: boolean): { label: string; minW: string 
   { label: 'Location', minW: 'min-w-[120px]' },
   { label: 'Work Mode / Type', minW: 'min-w-[130px]' },
   { label: 'Posted On / By', minW: 'min-w-[130px]' },
-  { label: 'Last Updated', minW: 'min-w-[110px]' },
+  showScoredBy
+    ? { label: 'Source', minW: 'min-w-[140px]' }
+    : { label: 'Last Updated', minW: 'min-w-[110px]' },
   ...(showScoredBy ? [{ label: 'Scored By', minW: 'min-w-[160px]' }] : []),
   { label: 'Applicants', minW: 'min-w-[90px]' },
 ];
 
-const buildColumns = (selectable: boolean, actionable: boolean, showScoredBy: boolean) => [
+const buildColumns = (
+  selectable: boolean,
+  actionable: boolean,
+  showScoredBy: boolean,
+  extraColumns: ExtraVersionColumn[],
+) => [
   ...(selectable ? [{ label: 'Select', minW: 'min-w-[64px]' }] : []),
   ...buildBaseColumns(showScoredBy),
+  ...extraColumns.map(({ label, minW }) => ({ label, minW })),
   ...(actionable ? [{ label: 'Action', minW: 'min-w-[64px]' }] : []),
 ];
+
+/**
+ * A column a host adds after the shared ones, before Action.
+ *
+ * For a fact that belongs to THAT surface rather than to job versions in
+ * general — the assessment each JD version does or does not have, on the
+ * assessment JD picker. Kept as a column rather than crammed into the Action
+ * cell so the table still reads as a table, and optional so every other host
+ * renders exactly the columns it did before.
+ */
+export interface ExtraVersionColumn {
+  label: string;
+  minW: string;
+  render: (versionJob: Job) => ReactNode;
+}
 
 interface JobVersionHistoryPanelProps {
   /** The latest-version row this history hangs off. */
@@ -57,9 +88,11 @@ interface JobVersionHistoryPanelProps {
    * default) and the column is dropped entirely, header included: only the
    * Resume Scoring page's version history has anything meaningful to put
    * there. `null` means the version has never been scored; an unset key means
-   * still loading.
+   * still loading. `source` is the raw scoring-record source field, rendered
+   * via `getScoringSourceLabel` in the Source column that replaces Last
+   * Updated whenever this prop is passed.
    */
-  versionScoredBy?: Record<string, { name: string; scoredAt: string } | null>;
+  versionScoredBy?: Record<string, { name: string; scoredAt: string; source?: string } | null>;
   /**
    * The Action cell for one version, built from a Job-shaped stand-in pointed
    * at THAT version's id — so a host's existing per-job handlers work unchanged.
@@ -81,6 +114,31 @@ interface JobVersionHistoryPanelProps {
   onSelectVersion?: (versionJob: Job) => void;
   /** Which version is currently picked, if any — the checked radio. */
   selectedVersionId?: string | null;
+  /**
+   * Keep the LATEST version's row when the Select column is on.
+   *
+   * Off by default, because on most selectable surfaces the row this panel
+   * hangs off is itself a radio for the latest version, and listing it again
+   * would put two radios on screen for one pick. The assessment JD picker sets
+   * it: its table carries an Assessment column and a per-version Create action
+   * that have to answer for v3 beside v2 and v1, so the latest row cannot be
+   * dropped. A host that turns this on must keep its own card radio in a
+   * SEPARATE `radioGroupName`, or the browser will strip the checked state off
+   * one of the two inputs that represent the same pick.
+   */
+  keepLatestWhenSelectable?: boolean;
+  /**
+   * Per-version veto on selection, replacing the panel's default
+   * published-only rule. Return `null` where the version can be picked, or the
+   * reason it cannot — which becomes the disabled radio's tooltip.
+   *
+   * Assessments are built against drafts as freely as against published
+   * versions, and are blocked instead by a version already having one, so that
+   * surface answers this question for itself.
+   */
+  versionSelectionState?: (versionJob: Job) => string | null;
+  /** Tooltip on a selectable version's radio. Defaults to "Apply to vN". */
+  selectHint?: (versionJob: Job) => string;
   /**
    * Turn every radio off without dropping the column — set when the host has
    * already committed the pick elsewhere (another job is chosen in the Apply to
@@ -126,6 +184,8 @@ interface JobVersionHistoryPanelProps {
    * version alone.
    */
   statusOverrides?: Record<string, string>;
+  /** Host-specific columns, inserted after the shared ones and before Action. */
+  extraColumns?: ExtraVersionColumn[];
 }
 
 /**
@@ -149,6 +209,9 @@ export default function JobVersionHistoryPanel({
   renderAction,
   onSelectVersion,
   selectedVersionId = null,
+  keepLatestWhenSelectable = false,
+  versionSelectionState,
+  selectHint = (versionJob) => `Apply to v${versionJob.versionNumber ?? 1}`,
   selectionDisabled = false,
   selectionDisabledReason,
   radioGroupName = 'job-version-selection',
@@ -157,8 +220,9 @@ export default function JobVersionHistoryPanel({
   onRowClick,
   staticRows = false,
   statusOverrides,
+  extraColumns = [],
 }: JobVersionHistoryPanelProps) {
-  const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy);
+  const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy, extraColumns);
   /* Which versions this table lists: the WHOLE chain — v1, v2 … up to and
      including the latest.
 
@@ -195,7 +259,7 @@ export default function JobVersionHistoryPanel({
      pick. A read-only table has no such clash, which is why this is gated on
      selection mode rather than applied everywhere. */
   const jobVersions = resolveVersionHistoryRows(job, versions, {
-    excludeId: onSelectVersion ? job.id : undefined,
+    excludeId: onSelectVersion && !keepLatestWhenSelectable ? job.id : undefined,
   });
 
   return (
@@ -299,11 +363,18 @@ export default function JobVersionHistoryPanel({
                 const isSelected = !!onSelectVersion && selectedVersionId === version.id;
                 /* Only a published version can receive candidates — the same
                    rule the dialog's job list is built on, applied per version
-                   here so a draft in the history can't be picked. */
-                const selectable = versionPlainStatus === 'Published' && !selectionDisabled;
+                   here so a draft in the history can't be picked. A host that
+                   answers this question itself (`versionSelectionState`)
+                   replaces the rule outright: the assessment picker builds
+                   against drafts, and blocks on an existing assessment
+                   instead. */
+                const hostVeto = versionSelectionState ? versionSelectionState(versionJob) : undefined;
+                const selectableByRule =
+                  hostVeto === undefined ? versionPlainStatus === 'Published' : hostVeto === null;
+                const selectable = selectableByRule && !selectionDisabled;
                 const notSelectableReason = selectionDisabled
                   ? selectionDisabledReason
-                  : 'Only published versions can receive candidates';
+                  : hostVeto ?? 'Only published versions can receive candidates';
 
                 return (
                   /* NO transform on the row itself: a transformed <tr> becomes
@@ -332,16 +403,26 @@ export default function JobVersionHistoryPanel({
                          sliding underneath never show through, plus the hairline
                          that makes it read as floating over them. */
                       <td
+                        /* Solid colour, not the row's own translucent
+                           `bg-brand-blue/[x]`: a sticky cell needs an opaque
+                           background so cells sliding underneath during
+                           horizontal scroll never show through. #eff3f9 per
+                           spec, static — not just on hover — so the cell
+                           reads the same whether the row is being hovered
+                           or not. */
                         className={`py-2.5 px-3 whitespace-nowrap align-middle sticky left-0 z-[5] shadow-[1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:shadow-[1px_0_0_0_#334155] ${
                           isSelected
                             ? 'bg-[#eef2fb] dark:bg-slate-800'
-                            : 'bg-white group-hover:bg-[#f8f9fc] dark:bg-slate-900 dark:group-hover:bg-slate-800'
+                            : 'bg-[#eff3f9] dark:bg-slate-900'
                         }`}
                         onClick={(e) => e.stopPropagation()}
                       >
                         <label
-                          className={`flex items-center ${selectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                          title={selectable ? `Apply to v${version.version_number ?? 1}` : notSelectableReason}
+                          /* An unpickable radio is dimmed as well as disabled —
+                             a greyed native control alone is easy to miss on a
+                             table where every other row still ticks. */
+                          className={`flex items-center ${selectable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                          title={selectable ? selectHint(versionJob) : notSelectableReason}
                         >
                           <input
                             type="radio"
@@ -354,8 +435,11 @@ export default function JobVersionHistoryPanel({
                             onClick={() => isSelected && onSelectVersion(versionJob)}
                             /* Same size, colour and focus ring as the job
                                rows' own radio, so a version tick and a job tick
-                               read as the same control. */
-                            className="w-4 h-4 text-brand-blue border-gray-300 dark:border-slate-700 focus:ring-brand-blue/40 flex-shrink-0 disabled:cursor-not-allowed"
+                               read as the same control. .tf-radio-tinted
+                               (globals.css) — see that radio's own comment for
+                               why this is a plain CSS rule rather than a
+                               Tailwind arbitrary-value class. */
+                            className="tf-radio-tinted focus:ring-brand-blue/40 flex-shrink-0"
                           />
                           <span className="sr-only">
                             Select version v{version.version_number ?? 1}
@@ -466,9 +550,27 @@ export default function JobVersionHistoryPanel({
                         {detail?.created_by_name || '—'}
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
-                      {lastUpdated ? formatISTDate(lastUpdated) : '—'}
-                    </td>
+                    {versionScoredBy ? (() => {
+                      /* Unset key = still loading; explicit null = loaded and
+                         genuinely never scored — those read differently, so
+                         they're not collapsed into one fallback. */
+                      const sourceInfo = versionScoredBy[version.id];
+                      return (
+                        <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                          {sourceInfo ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
+                              {getScoringSourceLabel(sourceInfo.source)}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
+                          )}
+                        </td>
+                      );
+                    })() : (
+                      <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
+                        {lastUpdated ? formatISTDate(lastUpdated) : '—'}
+                      </td>
+                    )}
                     {versionScoredBy && (() => {
                       /* Unset key = still loading; explicit null = loaded and
                          genuinely never scored — those read differently, so
@@ -503,6 +605,11 @@ export default function JobVersionHistoryPanel({
                         {versionApplicants[version.id] ?? '—'}
                       </span>
                     </td>
+                    {extraColumns.map(({ label, render }) => (
+                      <td key={label} className="py-2.5 px-3 whitespace-nowrap align-middle">
+                        {render(versionJob)}
+                      </td>
+                    ))}
                     {renderAction && (
                       /* Action — pinned right so it stays reachable while the
                          table scrolls sideways. Opaque background (plus a solid
@@ -510,7 +617,7 @@ export default function JobVersionHistoryPanel({
                          content sliding underneath never shows through; the
                          left hairline makes it read as floating over the
                          scrolling cells. */
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] bg-white group-hover:bg-[#f8f9fc] shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:bg-slate-900 dark:group-hover:bg-slate-800 dark:shadow-[-1px_0_0_0_#334155]">
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] bg-[#eff3f9] shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:bg-slate-900 dark:shadow-[-1px_0_0_0_#334155]">
                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           {renderAction(versionJob)}
                         </div>

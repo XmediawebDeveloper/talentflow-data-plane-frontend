@@ -56,7 +56,8 @@ export default function AssessmentsRoute() {
           id: jd.id,
           job_id: jd.job_id,
           title: jd.title,
-          currentVersion: jd.current_version,  // republish counter -> the vN badge
+          currentVersion: jd.current_version,  // republish counter -> the "Republished" label
+          versionNumber: jd.version_number ?? 1,  // lineage version -> which job version is LATEST
           status: jd.status === 'published' ? 'Published' : jd.status === 'draft' ? 'Draft' : 'Closed',
           location: jd.location || 'Remote',
           daysActive: jd.days_active || 0,
