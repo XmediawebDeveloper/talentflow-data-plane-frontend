@@ -113,67 +113,6 @@ export default function ApplyToJobModal({
 
   const submittedIdFor = (resume: Resume) => versionChoice[resume.id]?.id || resume.id;
 
-  /* Every job is listed; the search narrows it — through the shared matcher,
-     so this dialog and the assessment JD picker answer a query identically. */
-  const jobSearch = searchQuery.trim().toLowerCase();
-  const matchesSearch = jobSearchMatcher(searchQuery);
-
-  /* Every version, as fetched — what the lineage grouping needs to know which
-     version of a job is the latest one. Also what the "View Versions" test
-     below counts, exactly as the Job Openings list counts it. */
-  const allVersions = useMemo(() => fetchedJobs ?? jobs ?? [], [fetchedJobs, jobs]);
-  const versionGroups = useMemo(() => groupByLineage(allVersions), [allVersions]);
-
-  /* The selectable jobs, and the number reported above them: one row per
-     lineage, the latest version representing it, kept only where that latest
-     version is Published. `getPublishedJobs` is the same call behind the Job
-     Openings page's Published stat card, over the same request — so the count
-     in this dialog is that card's count, not a second opinion.
-
-     Applied BEFORE the search, so a query can never promote an older version to
-     stand in for its lineage. */
-  const publishedJobs = useMemo(() => getPublishedJobs(allVersions), [allVersions]);
-
-  const filteredJobs = useMemo(
-    () => publishedJobs.filter(matchesSearch),
-    // matchesSearch closes over the query, which is the only thing that changes it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [publishedJobs, jobSearch],
-  );
-
-  /* Newest first — the Job Openings list's own default sort. Every row is a
-     published job, so there is no eligible-first partition to make. */
-  const sortedJobs = useMemo(() => sortJobs(filteredJobs, 'date', 'desc'), [filteredJobs]);
-
-  /* Pagination — same shape and page size as the Job Openings list. The page
-     is stored WITH the search it belongs to, so a new query starts back at page
-     one by comparison rather than by an effect that resets it a render later
-     (which would flash one page of the wrong rows). */
-  const [pageState, setPageState] = useState({ query: '', page: 1 });
-  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
-  const currentPage = pageState.query === jobSearch ? pageState.page : 1;
-  const setCurrentPage = (page: number) => setPageState({ query: jobSearch, page });
-
-  const totalPages = Math.max(1, Math.ceil(sortedJobs.length / itemsPerPage));
-  // A shrinking result set (a new search, a narrower list) can leave the
-  // current page past the end; clamp on read so the rows never come back empty
-  // while the page number still points somewhere.
-  const safePage = Math.min(currentPage, totalPages);
-  const currentJobs = sortedJobs.slice((safePage - 1) * itemsPerPage, safePage * itemsPerPage);
-
-  /* One role at a time. Candidates are applied to a single job, so picking a
-     second would be ambiguous rather than useful — the other rows go inert
-     until the current pick is cleared or swapped by clicking it again. The pick
-     survives paging and searching, since it is held outside the list. */
-  const selectedJobId = selection?.job.id ?? null;
-  const selectionOnThisPage = !!selection && currentJobs.some(job => lineageKey(job) === selection.lineage);
-
-  /* Pick a version — the card's own radio passes the latest, the Version
-     History rows pass an older one. Clicking the picked one lets go of it. */
-  const pickVersion = (job: Job, lineage: string) => {
-    setSelection(prev => (prev?.job.id === job.id ? null : { job, lineage }));
-  };
-
   /* A job picker has no candidates to require — the flow that opened it picks
      them next. Everywhere else both halves are still needed. */
   const canSubmit = !!selection && (jobOnly || includedResumes.length > 0);

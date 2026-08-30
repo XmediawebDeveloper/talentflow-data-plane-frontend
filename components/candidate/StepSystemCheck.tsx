@@ -644,6 +644,14 @@ export default function StepSystemCheck({
   // new attempt's 'recording'/'success' state with its own leftover outcome.
   const startVoiceEnroll = useCallback(async () => {
     if (voiceEnrollPromiseRef.current || !onEnrollVoice) return;
+    // With 2+ mics connected, the browser's own "default" pick is a guess —
+    // the same rule runMicrophone already enforces for the Microphone check
+    // itself (see its selectedMicIdRef gate). Recording against the wrong
+    // device silently captures near-silence and fails every attempt with "We
+    // didn't hear any speech," with nothing tying that back to the
+    // unselected dropdown. The render guard below keeps "Start recording"
+    // itself hidden in this case; this is the defense-in-depth backstop.
+    if (micDevices.length > 1 && !selectedMicIdRef.current) return;
     const hasLiveAudio = streamRef.current?.getAudioTracks().some((t) => t.readyState === 'live');
     if (!hasLiveAudio) {
       setMicAcquireFailed(false);
@@ -680,7 +688,7 @@ export default function StepSystemCheck({
       .finally(() => {
         if (voiceEnrollAttemptIdRef.current === attemptId) voiceEnrollPromiseRef.current = null;
       });
-  }, [onEnrollVoice, ensureAudioAnalyser]);
+  }, [onEnrollVoice, ensureAudioAnalyser, micDevices]);
 
   // Re-run voice enrollment (from the panel's Retry / Record-again button).
   const retryVoiceEnroll = useCallback(() => {
@@ -2239,7 +2247,20 @@ export default function StepSystemCheck({
                   </button>
                 </div>
               )}
-              {voiceEnrollStatus === 'idle' && !micAcquireFailed && (
+              {/* Ambiguous device: 2+ mics connected and none picked yet.
+                  Recording now would fall back to getUserMedia's own
+                  "default" guess, which can silently point at the wrong
+                  device — every attempt would then fail as "no speech heard"
+                  with nothing telling the candidate why. Block the record
+                  button until they resolve it via the dropdown below, same
+                  rule the Microphone check itself already enforces. */}
+              {voiceEnrollStatus === 'idle' && !micAcquireFailed && micDevices.length > 1 && !selectedMicId && (
+                <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
+                  <MicOff className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  Select your microphone in Device Settings below, then click Start recording — with more than one device connected we can&apos;t guess which one you&apos;ll speak into.
+                </p>
+              )}
+              {voiceEnrollStatus === 'idle' && !micAcquireFailed && (micDevices.length <= 1 || selectedMicId) && (
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-gray-500">
                     Click record, then speak for a few seconds.
