@@ -151,7 +151,6 @@ export default function ApplyToJobModal({
      (which would flash one page of the wrong rows). */
   const [pageState, setPageState] = useState({ query: '', page: 1 });
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
-  const listRef = useRef<HTMLDivElement>(null);
   const currentPage = pageState.query === jobSearch ? pageState.page : 1;
   const setCurrentPage = (page: number) => setPageState({ query: jobSearch, page });
 
