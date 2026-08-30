@@ -2908,6 +2908,7 @@ export default function AIInterviewConfig() {
                           muted
                           playsInline
                           className={`w-full h-full object-cover ${recordedPreviewUrl ? 'hidden' : ''}`}
+                          style={{ transform: 'scaleX(-1)' }}
                         />
                         {recordedPreviewUrl && (
                           <video

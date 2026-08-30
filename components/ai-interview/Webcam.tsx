@@ -21,6 +21,15 @@ interface WebcamProps {
   className?: string;
   showHandIndicator?: boolean;
   isHandRaised?: boolean;
+  /**
+   * The camera deviceId to pin every acquire to (initial mount, full
+   * reacquire, and reacquireVideo when no deviceId is passed to it
+   * explicitly) — set from System Check's approved camera. Omitted/undefined
+   * preserves the old unconstrained-default behavior. If the exact device
+   * can't be opened (e.g. unplugged since System Check), falls back to an
+   * unconstrained request rather than failing outright.
+   */
+  initialCameraDeviceId?: string;
 }
 
 export interface WebcamRef {
@@ -49,17 +58,27 @@ export interface WebcamRef {
   // devices, unplugging both peripherals and replugging only the camera left
   // that call still failing on the audio constraint, so the camera stayed dark
   // until the headset came back too.
-  reacquireVideo: () => Promise<boolean>;
+  // Pass `deviceId` to target a SPECIFIC camera (the one approved during
+  // System Check) instead of whatever the OS currently calls "default" —
+  // falls back to the unconstrained default request if that exact device
+  // can't be opened. Omit to fall back to initialCameraDeviceId (if any),
+  // then to the old default-only behavior.
+  reacquireVideo: (deviceId?: string) => Promise<boolean>;
 }
 
 export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
-  { onStream, onVideoReady, onTracksReplaced, className = "", showHandIndicator = false, isHandRaised = false },
+  { onStream, onVideoReady, onTracksReplaced, className = "", showHandIndicator = false, isHandRaised = false, initialCameraDeviceId },
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isActive, setIsActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // Captured ONCE from the initialCameraDeviceId prop and never reassigned —
+  // every acquire (mount, full reacquire, and reacquireVideo's implicit
+  // target) retries this SAME approved device rather than drifting onto
+  // whatever a fallback happened to land on last time.
+  const pinnedCameraDeviceIdRef = useRef<string | undefined>(initialCameraDeviceId);
 
   // Guard: ensure onVideoReady is called exactly once even if both effects fire
   const videoReadyCalledRef = useRef(false);
@@ -73,19 +92,28 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
   // camera. Returns true when a live stream was obtained.
   const startWebcam = useCallback(async (): Promise<boolean> => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: "user",
-        },
-        audio: {
-          channelCount: { ideal: 1 },
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        }, // Required for proctoring voice detection and webcam recording
-      });
+      const baseVideo = { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" as const };
+      const audioConstraint = {
+        channelCount: { ideal: 1 },
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      }; // Required for proctoring voice detection and webcam recording
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: pinnedCameraDeviceIdRef.current
+            ? { ...baseVideo, deviceId: { exact: pinnedCameraDeviceIdRef.current } }
+            : baseVideo,
+          audio: audioConstraint,
+        });
+      } catch (err) {
+        // Approved device may be gone (unplugged since System Check, or the
+        // interview started on a fresh session with a stale id) — fall back
+        // to the OS default rather than failing the whole acquire.
+        if (!pinnedCameraDeviceIdRef.current) throw err;
+        stream = await navigator.mediaDevices.getUserMedia({ video: baseVideo, audio: audioConstraint });
+      }
 
       // Reject mobile-camera-relay virtual drivers (Motorola Smart Connect,
       // DroidCam, Iriun, EpocCam, Camo, OBS Virtual Camera, etc.) before
@@ -213,13 +241,24 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
   // in place. The audio side is never requested, so this works on a machine
   // whose only microphone is currently unplugged — which is the entire point:
   // the combined reacquire() cannot restore the camera while the mic is missing.
-  const reacquireVideo = useCallback(async (): Promise<boolean> => {
+  const reacquireVideo = useCallback(async (deviceId?: string): Promise<boolean> => {
     const current = streamRef.current;
     if (!current) return false;
+    const targetId = deviceId ?? pinnedCameraDeviceIdRef.current;
+    const baseVideo = { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" as const };
     try {
-      const videoStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
-      });
+      let videoStream: MediaStream;
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({
+          video: targetId ? { ...baseVideo, deviceId: { exact: targetId } } : baseVideo,
+        });
+      } catch (err) {
+        // Targeted device may have gone away again between the caller's
+        // presence check and this call — fall back to whatever the OS
+        // currently calls "default" rather than failing the whole reacquire.
+        if (!targetId) throw err;
+        videoStream = await navigator.mediaDevices.getUserMedia({ video: baseVideo });
+      }
       const newVideoTrack = videoStream.getVideoTracks()[0];
       if (!newVideoTrack) return false;
 
@@ -266,7 +305,7 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
     getVideoElement: () => videoRef.current,
     reacquire: () => startWebcam(),
     reacquireAudio: (deviceId?: string) => reacquireAudio(deviceId),
-    reacquireVideo: () => reacquireVideo(),
+    reacquireVideo: (deviceId?: string) => reacquireVideo(deviceId),
   }), [startWebcam, reacquireAudio, reacquireVideo]);
 
   useEffect(() => {

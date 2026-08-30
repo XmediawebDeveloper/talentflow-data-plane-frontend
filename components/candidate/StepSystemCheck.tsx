@@ -31,14 +31,17 @@ import {
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
-import { checkVirtualCamera, virtualCameraMessage } from '@/lib/proctoring/virtualCameraDetection';
+import { checkVirtualCamera, isVirtualCameraLabel, INVALID_CAMERA_SELECTION_MESSAGE } from '@/lib/proctoring/virtualCameraDetection';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 interface StepSystemCheckProps {
   token: string;
   position?: string;
-  onAllPassed: () => void;
+  /** approvedCameraDeviceId is the resolved deviceId of the camera that
+   * passed the webcam check (null if none — shouldn't happen once Continue
+   * is enabled, but kept nullable defensively). */
+  onAllPassed: (approvedCameraDeviceId: string | null) => void;
   /** Called just before proceeding — registers the candidate's face as a baseline for identity verification during the interview */
   onRegisterFace?: (videoElement: HTMLVideoElement) => Promise<boolean>;
   /**
@@ -344,6 +347,21 @@ export default function StepSystemCheck({
   const [voiceEnrollStatus, setVoiceEnrollStatus] =
     useState<'idle' | 'recording' | 'success' | 'failed' | 'disconnected'>('idle');
   const [voiceEnrollProgress, setVoiceEnrollProgress] = useState(0); // 0..100
+  // Whether a live mic stream/analyser is up, acquired proactively (below)
+  // instead of waiting for "Run Check" — Voice Verification must be
+  // completable before Run Check is even enabled.
+  const [micStreamReady, setMicStreamReady] = useState(false);
+  // Set when startVoiceEnroll's on-demand mic-acquisition attempt fails
+  // (permission denied/blocked, no device, etc.) — switches the idle panel
+  // to an explicit error + Retry instead of the button silently doing
+  // nothing on a second click.
+  const [micAcquireFailed, setMicAcquireFailed] = useState(false);
+  // Whether the Camera Preview <video> actually has live frames — the
+  // "Camera Active" badge used to be hardcoded and shown regardless of
+  // whether the preview was really playing, which lied to the candidate
+  // whenever the camera failed to start (e.g. black preview, device busy in
+  // another tab) while still claiming "Camera Active".
+  const [cameraLive, setCameraLive] = useState(false);
 
   // Candidate-selectable camera/microphone — lets the candidate pick whichever
   // connected device is actually compatible (e.g. a USB webcam over a broken
@@ -362,6 +380,16 @@ export default function StepSystemCheck({
   // see the OLD selection.
   const selectedCameraIdRef = useRef<string>('');
   const selectedMicIdRef = useRef<string>('');
+  // The concrete deviceId of whichever camera most recently PASSED the
+  // webcam check (see runWebcam) — carried forward to the interview so it
+  // can pin to and monitor this exact device, not just "whatever the OS
+  // calls default" (which selectedCameraIdRef alone can't express, since ''
+  // means "system default" there).
+  const approvedCameraDeviceIdRef = useRef<string | null>(null);
+  // Shown next to the camera dropdown when the candidate attempts to select
+  // (or programmatically bypasses the disabled state of) an unsupported
+  // virtual/mobile-relay camera — see switchCamera.
+  const [cameraSelectionError, setCameraSelectionError] = useState<string | null>(null);
   // Set the moment a PREVIOUSLY-PASSING microphone check goes dead (headset
   // unplugged, Bluetooth drop, etc.) here on the System Check screen itself —
   // i.e. after the candidate already selected a mic and it passed, but before
@@ -415,6 +443,19 @@ export default function StepSystemCheck({
   // handleProceed waits for this to clear before calling onRegisterFace.
   const faceApiBusyRef = useRef(false);
 
+  // The parent portal scrolls to top on STEP transitions (entering this
+  // component at all), but StepSystemCheck itself cycles through several
+  // internal PHASES (browser_check → system_checks → ...) via setPhase
+  // without ever unmounting/remounting — so a mount-only effect here would
+  // fire once for 'browser_check' and never again. Depending on `phase`
+  // instead re-fires on every internal phase change too, e.g. the "Continue"
+  // click on Browser Check that reveals System Checks (and, above it, the
+  // Voice Verification card) — otherwise the browser can keep whatever
+  // scroll position Browser Check was left at and land mid-page.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [phase]);
+
   // ────────────────────────────────────────
   // Phase 1: Browser Check — auto-detect on mount
   // ────────────────────────────────────────
@@ -442,48 +483,6 @@ export default function StepSystemCheck({
     },
     [],
   );
-
-  // Kick off voice enrollment once, updating the visible panel state as it runs.
-  // Called from the mic check the moment the candidate's voice is detected.
-  //
-  // Guarded by voiceEnrollAttemptIdRef: if the headset dies mid-recording, the
-  // candidate can start a FRESH attempt (once the mic check passes again)
-  // before the old, now-aborted onEnrollVoice() promise has actually settled.
-  // Without the id check, that stale promise resolving later would stomp the
-  // new attempt's 'recording'/'success' state with its own leftover outcome.
-  const startVoiceEnroll = useCallback(() => {
-    if (voiceEnrollPromiseRef.current || !onEnrollVoice || !streamRef.current) return;
-    const attemptId = ++voiceEnrollAttemptIdRef.current;
-    setVoiceEnrollStatus('recording');
-    setVoiceEnrollProgress(0);
-    voiceEnrollPromiseRef.current = onEnrollVoice(streamRef.current)
-      .then((ok) => {
-        if (mountedRef.current && voiceEnrollAttemptIdRef.current === attemptId) {
-          setVoiceEnrollStatus(ok ? 'success' : 'failed');
-        }
-        return ok;
-      })
-      .catch((err) => {
-        if (mountedRef.current && voiceEnrollAttemptIdRef.current === attemptId) {
-          // Headset pulled mid-recording: distinct status/messaging from a
-          // normal "no speech heard" failure — the candidate must reconnect
-          // and record again from scratch, not just retry.
-          setVoiceEnrollStatus(err instanceof MicDisconnectedDuringRecordingError ? 'disconnected' : 'failed');
-        }
-        return false;
-      })
-      .finally(() => {
-        if (voiceEnrollAttemptIdRef.current === attemptId) voiceEnrollPromiseRef.current = null;
-      });
-  }, [onEnrollVoice]);
-
-  // Re-run voice enrollment (from the panel's Retry / Record-again button).
-  const retryVoiceEnroll = useCallback(() => {
-    voiceEnrollPromiseRef.current = null;
-    setVoiceEnrollStatus('idle');
-    setVoiceEnrollProgress(0);
-    startVoiceEnroll();
-  }, [startVoiceEnroll]);
 
   useEffect(() => { voiceEnrollStatusRef.current = voiceEnrollStatus; }, [voiceEnrollStatus]);
 
@@ -513,9 +512,25 @@ export default function StepSystemCheck({
     if (noiseIntervalRef.current) { clearInterval(noiseIntervalRef.current); noiseIntervalRef.current = null; }
     stopFacePoll();
     if (micIntervalRef.current) { clearInterval(micIntervalRef.current); micIntervalRef.current = null; }
-    if (audioContextRef.current) { audioContextRef.current.close().catch(() => {}); audioContextRef.current = null; }
-    analyserRef.current = null;
-    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+
+    // Preserve the microphone if Voice Verification already succeeded on it.
+    // This is called at the top of every "Run Check" run (to give Brave time
+    // to release camera hardware from a prior run before re-acquiring it) —
+    // but stopping the mic track here too would kill an already-good
+    // voiceprint for no reason, which the disconnect watcher then treats as a
+    // real disconnect and invalidates, forcing the candidate to redo Voice
+    // Verification every single time Run Check runs. Only video needs the
+    // stop-and-reacquire treatment; the mic can just stay live throughout.
+    const keepMic = voiceEnrollStatusRef.current === 'success';
+    if (!keepMic) {
+      if (audioContextRef.current) { audioContextRef.current.close().catch(() => {}); audioContextRef.current = null; }
+      analyserRef.current = null;
+    }
+    if (streamRef.current) {
+      const tracksToStop = keepMic ? streamRef.current.getVideoTracks() : streamRef.current.getTracks();
+      tracksToStop.forEach((t) => t.stop());
+      streamRef.current = keepMic ? new MediaStream(streamRef.current.getAudioTracks()) : null;
+    }
   }, [stopFacePoll]);
 
   const INITIAL_CHECKS: SystemCheckItem[] = [
@@ -552,10 +567,21 @@ export default function StepSystemCheck({
     try {
       const videoConstraint: MediaTrackConstraints | boolean = selectedCameraIdRef.current
         ? { deviceId: { exact: selectedCameraIdRef.current } }
+        : defaultCameraDeviceIdRef.current
+        ? { deviceId: { exact: defaultCameraDeviceIdRef.current } }
         : true;
       const s = await navigator.mediaDevices.getUserMedia({ video: videoConstraint });
-      streamRef.current = s;
-      if (videoRef.current) videoRef.current.srcObject = s;
+      // Preserve any audio track ensureAudioAnalyser already put on
+      // streamRef.current (e.g. Voice Verification's on-demand mic
+      // acquisition resolving while this video call is still in flight)
+      // instead of overwriting it outright — same combine pattern runWebcam
+      // uses below. Overwriting would silently drop a live mic track and
+      // Voice Verification would record from a video-only stream (captured
+      // silence → "We didn't hear any speech").
+      const existingAudioTracks = streamRef.current?.getAudioTracks() ?? [];
+      const combined = new MediaStream([...s.getVideoTracks(), ...existingAudioTracks]);
+      streamRef.current = combined;
+      if (videoRef.current) videoRef.current.srcObject = combined;
       await new Promise((r) => setTimeout(r, 1200)); // let metadata / first frames arrive
       return true;
     } catch {
@@ -589,12 +615,80 @@ export default function StepSystemCheck({
       }
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
-      if (streamRef.current) audioStream.getAudioTracks().forEach((t) => streamRef.current!.addTrack(t));
+      if (streamRef.current) {
+        audioStream.getAudioTracks().forEach((t) => streamRef.current!.addTrack(t));
+      } else {
+        // No shared stream yet — e.g. the candidate clicked "Start recording"
+        // before the camera preview's own getUserMedia call (fired on mount)
+        // has resolved. Start streamRef.current with just the audio track so
+        // it isn't silently dropped; ensureVideoStream merges its video
+        // track into whatever's already here instead of overwriting it.
+        streamRef.current = audioStream;
+      }
       return analyser;
     } catch {
       return null;
     }
   }, []);
+
+  // Kick off voice enrollment once, updating the visible panel state as it
+  // runs. Called on the candidate's own click — "Start recording" or "Retry"
+  // — so the microphone permission prompt (when this is the first-ever
+  // request) is a direct, expected result of that click, not something that
+  // fired unprompted in the background before they touched anything.
+  //
+  // Guarded by voiceEnrollAttemptIdRef: if the headset dies mid-recording, the
+  // candidate can start a FRESH attempt (once the mic is live again) before
+  // the old, now-aborted onEnrollVoice() promise has actually settled.
+  // Without the id check, that stale promise resolving later would stomp the
+  // new attempt's 'recording'/'success' state with its own leftover outcome.
+  const startVoiceEnroll = useCallback(async () => {
+    if (voiceEnrollPromiseRef.current || !onEnrollVoice) return;
+    const hasLiveAudio = streamRef.current?.getAudioTracks().some((t) => t.readyState === 'live');
+    if (!hasLiveAudio) {
+      setMicAcquireFailed(false);
+      const analyser = await ensureAudioAnalyser();
+      if (!analyser) {
+        // getUserMedia rejected — permission denied/blocked, no device, or
+        // hardware in use elsewhere. Surface this so the candidate has a
+        // clear next step instead of the button just doing nothing.
+        setMicAcquireFailed(true);
+        return;
+      }
+      setMicStreamReady(true);
+    }
+    if (!streamRef.current) return; // shouldn't happen once analyser succeeded, but nothing to record from otherwise
+    const attemptId = ++voiceEnrollAttemptIdRef.current;
+    setVoiceEnrollStatus('recording');
+    setVoiceEnrollProgress(0);
+    voiceEnrollPromiseRef.current = onEnrollVoice(streamRef.current)
+      .then((ok) => {
+        if (mountedRef.current && voiceEnrollAttemptIdRef.current === attemptId) {
+          setVoiceEnrollStatus(ok ? 'success' : 'failed');
+        }
+        return ok;
+      })
+      .catch((err) => {
+        if (mountedRef.current && voiceEnrollAttemptIdRef.current === attemptId) {
+          // Headset pulled mid-recording: distinct status/messaging from a
+          // normal "no speech heard" failure — the candidate must reconnect
+          // and record again from scratch, not just retry.
+          setVoiceEnrollStatus(err instanceof MicDisconnectedDuringRecordingError ? 'disconnected' : 'failed');
+        }
+        return false;
+      })
+      .finally(() => {
+        if (voiceEnrollAttemptIdRef.current === attemptId) voiceEnrollPromiseRef.current = null;
+      });
+  }, [onEnrollVoice, ensureAudioAnalyser]);
+
+  // Re-run voice enrollment (from the panel's Retry / Record-again button).
+  const retryVoiceEnroll = useCallback(() => {
+    voiceEnrollPromiseRef.current = null;
+    setVoiceEnrollStatus('idle');
+    setVoiceEnrollProgress(0);
+    void startVoiceEnroll();
+  }, [startVoiceEnroll]);
 
   // Chrome/Edge expose two synthetic aliases per physical audio device
   // ("default" and "communications", deviceId literally 'default'/'communications')
@@ -620,6 +714,47 @@ export default function StepSystemCheck({
     // dedup applies again on the next refresh.
     return filtered.length > 0 ? filtered : devices;
   };
+
+  // Camera dropdown labels. The MediaDevices API never exposes a device's
+  // transport (USB vs built-in) and — unlike audio — Chrome does NOT create a
+  // synthetic 'default' pseudo-entry for video input devices, so there is no
+  // groupId to match against. USB is instead detected from the OS/driver-
+  // reported name itself — USB webcam drivers virtually always put "USB" in
+  // the label (e.g. "USB2.0 HD UVC WebCam", "Logitech USB Webcam"), while
+  // built-in cameras don't (e.g. "HP TrueVision HD Camera", "Integrated
+  // Webcam"). Any camera whose label doesn't look like a USB device is
+  // treated as the system/built-in default.
+  const isUsbCameraLabel = (label: string): boolean => /usb/i.test(label);
+  const getCameraDeviceLabel = (d: MediaDeviceInfo, i: number): string => {
+    const base = d.label || `Camera ${i + 1}`;
+    if (isVirtualCameraLabel(base)) return `${base} (Unsupported)`;
+    return isUsbCameraLabel(base) ? `${base} USB Camera` : `${base} System Default`;
+  };
+  // Whichever listed camera doesn't look like a USB device (and isn't a
+  // known virtual/mobile-relay driver — a virtual camera must NEVER be the
+  // implicit "System Default" row, or picking that row would silently
+  // activate it) is treated as THE system default and rendered with
+  // value="" (no deviceId constraint — same as the old placeholder option)
+  // instead of its own deviceId, so it gets exactly one dropdown row rather
+  // than a separate "System Default" row on top of its own named row. Falls
+  // back to any non-virtual device, then to null (renders no value="" row —
+  // e.g. every enumerated camera is virtual, so none should be implicit).
+  const defaultCameraDevice: MediaDeviceInfo | null =
+    cameraDevices.find((d) => !isUsbCameraLabel(d.label || '') && !isVirtualCameraLabel(d.label || ''))
+    || cameraDevices.find((d) => !isVirtualCameraLabel(d.label || ''))
+    || null;
+  // Mirrors defaultCameraDevice's id for getUserMedia calls inside
+  // useCallback closures (ensureVideoStream/runWebcam) below — those have
+  // narrow dependency arrays, so reading the derived value directly would
+  // see a stale ("no devices yet") snapshot. Used to explicitly constrain
+  // those calls instead of leaving them unconstrained (`video: true`): an
+  // unconstrained request lets the OS/browser pick ANY registered camera as
+  // its own "default," which a virtual-camera driver like DroidCam can win
+  // even while this dropdown is showing a real camera as selected.
+  const defaultCameraDeviceIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    defaultCameraDeviceIdRef.current = defaultCameraDevice?.deviceId || null;
+  }, [defaultCameraDevice]);
 
   // Populate the dropdown option lists. Labels are only populated by the
   // browser once camera/mic permission has been granted, so this is called
@@ -679,6 +814,7 @@ export default function StepSystemCheck({
       setSelectedMicId(fallbackDeviceId);
       const analyser = await ensureAudioAnalyser();
       if (analyser) {
+        setMicStreamReady(true);
         updateSystemCheck('microphone', {
           status: 'pass',
           detail: 'Microphone active — switched to built-in microphone after headset disconnected',
@@ -690,6 +826,7 @@ export default function StepSystemCheck({
       // through to the plain failure below.
     }
 
+    setMicStreamReady(false);
     updateSystemCheck('microphone', {
       status: 'fail',
       detail: 'No microphone detected — please connect a microphone',
@@ -717,6 +854,8 @@ export default function StepSystemCheck({
       streamRef.current?.getVideoTracks().forEach((t) => t.stop()); // release stale track on retry
       const videoConstraint: MediaTrackConstraints | boolean = selectedCameraIdRef.current
         ? { deviceId: { exact: selectedCameraIdRef.current } }
+        : defaultCameraDeviceIdRef.current
+        ? { deviceId: { exact: defaultCameraDeviceIdRef.current } }
         : true;
       const videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraint });
 
@@ -730,7 +869,8 @@ export default function StepSystemCheck({
       const camCheck = checkVirtualCamera(videoStream.getVideoTracks()[0]);
       if (camCheck.flagged) {
         videoStream.getTracks().forEach((t) => t.stop());
-        updateSystemCheck('webcam', { status: 'fail', detail: virtualCameraMessage(camCheck.label) });
+        console.warn(`[SystemCheck] Rejected virtual/unsupported camera: "${camCheck.label}"`);
+        updateSystemCheck('webcam', { status: 'fail', detail: INVALID_CAMERA_SELECTION_MESSAGE });
         return;
       }
 
@@ -756,6 +896,12 @@ export default function StepSystemCheck({
       } else if (vid && vid.readyState >= 1) {
         videoOk = true;
       }
+      // Capture the resolved device id of whichever camera just PASSED (not
+      // just selectedCameraIdRef — that can be '' meaning "system default",
+      // and we need the concrete id to carry forward into the interview).
+      if (videoOk) {
+        approvedCameraDeviceIdRef.current = videoStream.getVideoTracks()[0]?.getSettings?.().deviceId || null;
+      }
       updateSystemCheck('webcam', videoOk
         ? { status: 'pass', detail: 'Webcam producing video' }
         : { status: 'fail', detail: 'Camera connected but no video signal — check if lens is covered' });
@@ -780,6 +926,7 @@ export default function StepSystemCheck({
       if (selectedMicIdRef.current) {
         await tryMicFallbackOrFail(selectedMicIdRef.current);
       } else {
+        setMicStreamReady(false);
         updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
       }
       return;
@@ -803,6 +950,15 @@ export default function StepSystemCheck({
       });
       return;
     }
+    // Keep micStreamReady in sync: Run Check can reach this point after
+    // stopActiveChecks() (called at the top of handleRunChecks) released the
+    // PRIOR track — which the disconnect watcher armed by Voice Verification
+    // sees as a real disconnect and reacts to (see handleDisconnect above) —
+    // and this fresh re-acquisition then supersedes that. Without this, a
+    // Run Check re-run after Voice Verification already succeeded could leave
+    // the checklist showing "Microphone active" while the Voice Verification
+    // panel stays stuck on "No microphone detected".
+    setMicStreamReady(true);
     updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone active' });
   }, [ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists, tryMicFallbackOrFail]);
 
@@ -1175,6 +1331,9 @@ export default function StepSystemCheck({
 
   // Full run — orchestrates every check in order (initial "Run Check").
   const handleRunChecks = useCallback(async () => {
+    // Voice Verification is required first — the button is also disabled in
+    // the UI for this, this is just defense in depth.
+    if (onEnrollVoice && voiceEnrollStatus !== 'success') return;
     stopActiveChecks();
     checksCancelledRef.current = false;
     setChecksRunning(true);
@@ -1205,7 +1364,7 @@ export default function StepSystemCheck({
       setChecksCompleted(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stopActiveChecks, runDevice, runWebcam, runMicrophone, runInternet, runAiEngine, runWebsocket, runLighting, runNoise, runFaceMultiple]);
+  }, [onEnrollVoice, voiceEnrollStatus, stopActiveChecks, runDevice, runWebcam, runMicrophone, runInternet, runAiEngine, runWebsocket, runLighting, runNoise, runFaceMultiple]);
 
   // Retry a SINGLE check — reruns only that row (face/multiple share one detector).
   const retryCheck = useCallback(async (id: string) => {
@@ -1242,10 +1401,23 @@ export default function StepSystemCheck({
 
   const switchCamera = useCallback((deviceId: string) => {
     if (deviceId === selectedCameraId) return;
+    // Defense-in-depth: the dropdown already renders virtual/mobile-relay
+    // cameras as disabled <option>s, but a disabled option can still end up
+    // "selected" via programmatic dispatch — never activate one even if that
+    // happens. deviceId === '' means "system default", which is never one of
+    // the enumerated (and therefore never a flagged) devices.
+    if (deviceId) {
+      const target = cameraDevices.find((d) => d.deviceId === deviceId);
+      if (target && isVirtualCameraLabel(target.label)) {
+        setCameraSelectionError(INVALID_CAMERA_SELECTION_MESSAGE);
+        return;
+      }
+    }
+    setCameraSelectionError(null);
     selectedCameraIdRef.current = deviceId;
     setSelectedCameraId(deviceId);
     markCameraChecksUnverified();
-  }, [selectedCameraId, markCameraChecksUnverified]);
+  }, [selectedCameraId, cameraDevices, markCameraChecksUnverified]);
 
   // Mark BOTH audio-dependent checks as unverified after the selected mic
   // changes (dropdown pick, or the single-device auto-select).
@@ -1290,6 +1462,7 @@ export default function StepSystemCheck({
           streamRef.current!.removeTrack(t);
         });
       }
+      setMicStreamReady(false);
       markAudioChecksUnverified();
     } finally {
       setIsSwitchingDevice(false);
@@ -1305,6 +1478,32 @@ export default function StepSystemCheck({
     navigator.mediaDevices.addEventListener('devicechange', refreshDeviceLists);
     return () => navigator.mediaDevices.removeEventListener('devicechange', refreshDeviceLists);
   }, [phase, refreshDeviceLists]);
+
+  // Start the camera preview the moment this screen loads — so the candidate
+  // can see their actual device and pick a different one from the Device
+  // Settings dropdown BEFORE running system checks, instead of only being
+  // able to choose it after "Run Check" already ran against whatever camera
+  // happened to be default. This does NOT mark the webcam check as passed;
+  // that still requires an explicit "Run Check" or "Retry" click.
+  //
+  // The microphone is deliberately NOT acquired proactively here — it's
+  // requested on-demand, inside startVoiceEnroll, the moment the candidate
+  // actually clicks "Start recording" (or "Retry"). Asking for it up front
+  // used to fire alongside this camera request and race it (two concurrent
+  // getUserMedia calls competing for the browser's permission-prompt UI could
+  // silently fail one of them), and it also meant a mic permission prompt
+  // could pop up before the candidate had done anything — surprising, and
+  // hard to explain when it failed. Tying it to the click keeps cause and
+  // effect obvious: click record → prompt (first time) → recording starts.
+  useEffect(() => {
+    if (phase !== 'system_checks') return;
+    let cancelled = false;
+    (async () => {
+      const ok = await ensureVideoStream();
+      if (ok && !cancelled) void refreshDeviceLists();
+    })();
+    return () => { cancelled = true; };
+  }, [phase, ensureVideoStream, refreshDeviceLists]);
 
   // If exactly one microphone is connected, there's nothing to choose between —
   // auto-select it so the candidate doesn't have to open the dropdown just to
@@ -1333,7 +1532,12 @@ export default function StepSystemCheck({
   // allSystemPassed) and show the reconnect popup.
   const micCheckStatus = systemChecks.find((c) => c.id === 'microphone')?.status;
   useEffect(() => {
-    if (phase !== 'system_checks' || micCheckStatus !== 'pass') return;
+    // Gated on micStreamReady (not micCheckStatus) so this watcher is armed
+    // as soon as the proactively-acquired mic stream is live — i.e. from the
+    // moment Voice Verification becomes usable, which is now BEFORE "Run
+    // Check" has ever run (see micReadyForVoice above). micCheckStatus
+    // becoming 'pass' no longer precedes that; it's the other way around.
+    if (phase !== 'system_checks' || !micStreamReady) return;
     const track = streamRef.current?.getAudioTracks().find((t) => t.readyState === 'live');
     if (!track) return;
 
@@ -1341,6 +1545,7 @@ export default function StepSystemCheck({
     const handleDisconnect = async () => {
       if (handling) return; // re-entrancy guard — 'ended' + the 1s poll can both fire
       handling = true;
+      setMicStreamReady(false);
       try {
         // Drop the cached analyser/AudioContext — ensureAudioAnalyser() short-
         // circuits and returns them as-is whenever they exist, regardless of
@@ -1439,12 +1644,12 @@ export default function StepSystemCheck({
       track.removeEventListener('ended', handleDisconnect);
       clearInterval(poll);
     };
-    // selectedMicId (not just micCheckStatus) is a dependency because a
-    // successful "laptop" silent fallback switch keeps the check at 'pass'
-    // the whole time — status never changes — so without also re-running on
-    // selectedMicId, this effect would keep polling the OLD, now-dead track
-    // forever instead of picking up the newly-active fallback device's track.
-  }, [phase, micCheckStatus, selectedMicId, updateSystemCheck, tryMicFallbackOrFail]);
+    // selectedMicId is a dependency because a successful "laptop" silent
+    // fallback switch keeps micStreamReady true the whole time — it never
+    // changes — so without also re-running on selectedMicId, this effect
+    // would keep polling the OLD, now-dead track forever instead of picking
+    // up the newly-active fallback device's track.
+  }, [phase, micStreamReady, selectedMicId, updateSystemCheck, tryMicFallbackOrFail]);
 
   // While the reconnect popup is showing, try to recover automatically the
   // moment the OS reports a device change (headset plugged back in) — no
@@ -1458,6 +1663,7 @@ export default function StepSystemCheck({
     const tryRecover = async () => {
       const analyser = await ensureAudioAnalyser();
       if (!analyser || !selectedMicIdRef.current) return; // still gone — stay quiet
+      setMicStreamReady(true);
       updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone active' });
       void refreshDeviceLists();
     };
@@ -1494,7 +1700,11 @@ export default function StepSystemCheck({
   const allSystemDone = systemChecks.length > 0 && systemChecks.every((c) => c.status === 'pass' || c.status === 'fail');
   const isAnyChecking = systemChecks.some((c) => c.status === 'checking' || c.status === 'pending');
   // The mic must be accessible before the candidate can record their voice.
-  const micReadyForVoice = systemChecks.some((c) => c.id === 'microphone' && c.status === 'pass');
+  // Gated on the proactively-acquired mic stream (micStreamReady), NOT on the
+  // formal "microphone" system-check row passing — Voice Verification must be
+  // usable before "Run Check" has run at all (see the effect that calls
+  // ensureAudioAnalyser() above, and the Run Check button's disabled state).
+  const micReadyForVoice = micStreamReady;
   // Voice Verification is a REQUIRED sub-step (when enabled): Continue is blocked
   // until a valid, non-silent voice sample has been captured.
   const voiceGateOk = !onEnrollVoice || voiceEnrollStatus === 'success';
@@ -1650,7 +1860,7 @@ export default function StepSystemCheck({
         streamRef.current = null;
       }
 
-      onAllPassed();
+      onAllPassed(approvedCameraDeviceIdRef.current);
     } finally {
       if (mountedRef.current) setIsProceedLoading(false);
     }
@@ -1944,6 +2154,10 @@ export default function StepSystemCheck({
   // Phase 2: system_checks
   // ────────────────────────────────────────
   if (phase === 'system_checks') {
+    // Voice Verification must be completed before "Run Check" unlocks — see
+    // micReadyForVoice / the mic-acquisition effect above, which make the
+    // Voice Verification panel usable from the moment this screen loads.
+    const runCheckLocked = !!onEnrollVoice && voiceEnrollStatus !== 'success';
     return (
       <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-6">
         <ProgressStepper phase={phase} />
@@ -1955,6 +2169,182 @@ export default function StepSystemCheck({
             System Checks
           </span>
         </div>
+
+        {/* Voice Verification — its own standalone card, entirely OUTSIDE and
+            ABOVE the "System Checks" card below. Shown whenever voice
+            enrollment is available (onEnrollVoice set). Voice Verification is
+            now the required first step, gating "Run Check" inside the System
+            Checks card below (see runCheckLocked there) — so it must read as
+            a clearly separate step, not something tucked inside that card. */}
+        {onEnrollVoice && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 shadow-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                <Mic className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-gray-900">Voice Verification</p>
+                  <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                    voiceEnrollStatus === 'success'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {voiceEnrollStatus === 'success' ? 'Done' : 'Required'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Click record and speak for a few seconds — this captures your voice so we can confirm it&apos;s you throughout the interview.
+                </p>
+              </div>
+            </div>
+
+            {/* A suggested line — NOT required. The candidate can say anything;
+                we only need to hear their voice (no word-matching). */}
+            <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-500 mb-1">
+                Just speak naturally — say anything, or read this
+              </p>
+              <p className="text-base font-medium text-gray-900 leading-snug">
+                &ldquo;{ENROLL_PASSAGE}&rdquo;
+              </p>
+              <p className="text-[11px] text-gray-400 mt-1.5">
+                You don&apos;t have to read this exactly — we only check that you spoke.
+              </p>
+            </div>
+
+            {/* Status area + manual record control */}
+            <div className="mt-3">
+              {/* IDLE — must click to record. The mic is requested on-demand,
+                  inside startVoiceEnroll, only once the candidate clicks — so
+                  this button is enabled from the start rather than waiting on
+                  a background acquisition. If that click's getUserMedia call
+                  fails (permission denied/blocked, no device, hardware busy
+                  elsewhere), micAcquireFailed switches this to an explicit
+                  error + Retry — which just calls startVoiceEnroll again, so
+                  retrying is a real new attempt, not a no-op. */}
+              {voiceEnrollStatus === 'idle' && micAcquireFailed && (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
+                    <MicOff className="w-4 h-4 text-red-600 flex-shrink-0" />
+                    Couldn&apos;t access your microphone. Check your browser&apos;s site permissions, or pick a different device below, then retry.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={startVoiceEnroll}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer flex-shrink-0"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Retry
+                  </button>
+                </div>
+              )}
+              {voiceEnrollStatus === 'idle' && !micAcquireFailed && (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-gray-500">
+                    Click record, then speak for a few seconds.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={startVoiceEnroll}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer"
+                  >
+                    <Mic className="w-3.5 h-3.5" />
+                    Start recording
+                  </button>
+                </div>
+              )}
+
+              {/* RECORDING — live progress */}
+              {voiceEnrollStatus === 'recording' && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-indigo-700 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    Recording — keep speaking…
+                  </p>
+                  <div className="h-1.5 w-full rounded-full bg-indigo-100 overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-500 transition-all duration-200 ease-linear"
+                      style={{ width: `${voiceEnrollProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* SUCCESS */}
+              {voiceEnrollStatus === 'success' && (
+                <p className="text-xs font-medium text-green-700 flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                  Voice sample captured — you&apos;re all set.
+                </p>
+              )}
+
+              {/* FAILED — now only the "no speech" case: the server/VAD
+                  rejects a silent or noise-only clip. No word-matching. */}
+              {voiceEnrollStatus === 'failed' && (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
+                    <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                    We didn&apos;t hear any speech. Please speak clearly for a few seconds, then record again.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={retryVoiceEnroll}
+                    disabled={!micReadyForVoice}
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors flex-shrink-0 ${
+                      micReadyForVoice
+                        ? 'text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Mic className="w-3.5 h-3.5" />
+                    Record again
+                  </button>
+                </div>
+              )}
+
+              {/* DISCONNECTED — the mic died partway through the read-aloud
+                  capture (see MicDisconnectedDuringRecordingError). The
+                  partial audio was already discarded, so this is NOT a
+                  pause: the only way forward is a brand-new capture from
+                  0:00. Two sub-states:
+                    • mic still gone  → "No microphone detected", button
+                      disabled so the candidate can't restart onto a dead
+                      device (micReadyForVoice tracks micStreamReady,
+                      which the reconnect watcher flips back to true by
+                      itself the moment a device is live again).
+                    • mic reconnected → button enabled, wording makes it
+                      explicit that this starts over rather than resumes. */}
+              {voiceEnrollStatus === 'disconnected' && (
+                <div className="flex items-center justify-between gap-3">
+                  <p className={`text-xs font-medium flex items-center gap-1.5 ${
+                    micReadyForVoice ? 'text-amber-700' : 'text-red-700'
+                  }`}>
+                    <MicOff className={`w-4 h-4 flex-shrink-0 ${
+                      micReadyForVoice ? 'text-amber-600' : 'text-red-600'
+                    }`} />
+                    {micReadyForVoice
+                      ? 'Microphone reconnected. Your earlier recording was discarded — start the voice verification again from the beginning.'
+                      : 'No microphone detected. Please connect a microphone.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={retryVoiceEnroll}
+                    disabled={!micReadyForVoice}
+                    className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors flex-shrink-0 ${
+                      micReadyForVoice
+                        ? 'text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Mic className="w-3.5 h-3.5" />
+                    Start over
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Gradient header */}
         <div className="rounded-xl overflow-hidden shadow-lg">
@@ -1981,6 +2371,7 @@ export default function StepSystemCheck({
                 {checksRunning ? 'Please wait while we verify your environment'
                   : checksCompleted && allSystemPassed ? 'All environment checks have been completed'
                   : checksCompleted ? 'Fix the issues below and retry'
+                  : runCheckLocked ? 'Complete Voice Verification below first, then click "Run Check"'
                   : 'Click "Run Check" to begin verifying your environment'}
               </p>
             </div>
@@ -2000,8 +2391,14 @@ export default function StepSystemCheck({
                 <button
                   type="button"
                   onClick={handleRunChecks}
-                  style={{ animation: 'tfRunCheckPulse 1.2s ease-in-out infinite' }}
-                  className="flex-shrink-0 inline-flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-gray-900 font-bold py-2.5 px-5 rounded-lg text-sm ring-2 ring-white/80 shadow-lg transition-colors"
+                  disabled={runCheckLocked}
+                  title={runCheckLocked ? 'Complete Voice Verification below first' : undefined}
+                  style={runCheckLocked ? undefined : { animation: 'tfRunCheckPulse 1.2s ease-in-out infinite' }}
+                  className={`flex-shrink-0 inline-flex items-center gap-2 font-bold py-2.5 px-5 rounded-lg text-sm transition-colors ${
+                    runCheckLocked
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : 'bg-amber-400 hover:bg-amber-300 text-gray-900 ring-2 ring-white/80 shadow-lg'
+                  }`}
                 >
                   <Play className="w-4 h-4" />
                   Run Check
@@ -2027,12 +2424,27 @@ export default function StepSystemCheck({
                       playsInline
                       muted
                       className="w-full h-full object-cover"
+                      style={{ transform: 'scaleX(-1)' }}
+                      onLoadedData={() => setCameraLive(true)}
+                      onPlaying={() => setCameraLive(true)}
+                      onEmptied={() => setCameraLive(false)}
+                      onError={() => setCameraLive(false)}
+                      onStalled={() => setCameraLive(false)}
                     />
-                    {/* Camera Active badge */}
-                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-green-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
-                      <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
-                      Camera Active
-                    </div>
+                    {/* Camera Active / Unavailable badge — reflects the
+                        video element's actual playback state (cameraLive)
+                        instead of always claiming "Camera Active". */}
+                    {cameraLive ? (
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-green-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
+                        <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
+                        Camera Active
+                      </div>
+                    ) : (
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-red-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
+                        <span className="w-2 h-2 bg-red-300 rounded-full" />
+                        No Camera Signal
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2057,11 +2469,20 @@ export default function StepSystemCheck({
                       disabled={isSwitchingDevice || checksRunning}
                       className="w-full text-sm rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/20"
                     >
-                      <option value="">System Default</option>
+                      {cameraDevices.length === 0 && <option value="">System Default</option>}
                       {cameraDevices.map((d, i) => (
-                        <option key={d.deviceId} value={d.deviceId}>{d.label || `Camera ${i + 1}`}</option>
+                        <option
+                          key={d.deviceId}
+                          value={d === defaultCameraDevice ? '' : d.deviceId}
+                          disabled={isVirtualCameraLabel(d.label)}
+                        >
+                          {getCameraDeviceLabel(d, i)}
+                        </option>
                       ))}
                     </select>
+                    {cameraSelectionError && (
+                      <p className="mt-1 text-xs font-medium text-red-600">{cameraSelectionError}</p>
+                    )}
                   </div>
 
                   <div>
@@ -2202,162 +2623,6 @@ export default function StepSystemCheck({
                           : 'Click Retry on the Microphone check below to verify your selected device.')
                       : 'Fix the issues above and click Retry on each failed check to re-run just that one.'}
                   </p>
-                </div>
-              </div>
-            )}
-
-            {/* Voice Verification — visible read-aloud enrollment panel.
-                Shown whenever voice enrollment is available (onEnrollVoice set). */}
-            {onEnrollVoice && (
-              <div className="mt-5 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                    <Mic className="w-4 h-4 text-indigo-600" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-gray-900">Voice Verification</p>
-                      <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
-                        voiceEnrollStatus === 'success'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {voiceEnrollStatus === 'success' ? 'Done' : 'Required'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Click record and speak for a few seconds — this captures your voice so we can confirm it&apos;s you throughout the interview.
-                    </p>
-                  </div>
-                </div>
-
-                {/* A suggested line — NOT required. The candidate can say anything;
-                    we only need to hear their voice (no word-matching). */}
-                <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-500 mb-1">
-                    Just speak naturally — say anything, or read this
-                  </p>
-                  <p className="text-base font-medium text-gray-900 leading-snug">
-                    &ldquo;{ENROLL_PASSAGE}&rdquo;
-                  </p>
-                  <p className="text-[11px] text-gray-400 mt-1.5">
-                    You don&apos;t have to read this exactly — we only check that you spoke.
-                  </p>
-                </div>
-
-                {/* Status area + manual record control */}
-                <div className="mt-3">
-                  {/* IDLE — must click to record */}
-                  {voiceEnrollStatus === 'idle' && (
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs text-gray-500">
-                        {micReadyForVoice
-                          ? 'Click record, then speak for a few seconds.'
-                          : 'Complete the microphone check first, then record your voice.'}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={startVoiceEnroll}
-                        disabled={!micReadyForVoice}
-                        className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors ${
-                          micReadyForVoice
-                            ? 'bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer'
-                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                        }`}
-                      >
-                        <Mic className="w-3.5 h-3.5" />
-                        Start recording
-                      </button>
-                    </div>
-                  )}
-
-                  {/* RECORDING — live progress */}
-                  {voiceEnrollStatus === 'recording' && (
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-medium text-indigo-700 flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                        Recording — keep speaking…
-                      </p>
-                      <div className="h-1.5 w-full rounded-full bg-indigo-100 overflow-hidden">
-                        <div
-                          className="h-full bg-indigo-500 transition-all duration-200 ease-linear"
-                          style={{ width: `${voiceEnrollProgress}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* SUCCESS */}
-                  {voiceEnrollStatus === 'success' && (
-                    <p className="text-xs font-medium text-green-700 flex items-center gap-1.5">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      Voice sample captured — you&apos;re all set.
-                    </p>
-                  )}
-
-                  {/* FAILED — now only the "no speech" case: the server/VAD
-                      rejects a silent or noise-only clip. No word-matching. */}
-                  {voiceEnrollStatus === 'failed' && (
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
-                        <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                        We didn&apos;t hear any speech. Please speak clearly for a few seconds, then record again.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={retryVoiceEnroll}
-                        disabled={!micReadyForVoice}
-                        className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors flex-shrink-0 ${
-                          micReadyForVoice
-                            ? 'text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer'
-                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                        }`}
-                      >
-                        <Mic className="w-3.5 h-3.5" />
-                        Record again
-                      </button>
-                    </div>
-                  )}
-
-                  {/* DISCONNECTED — the mic died partway through the read-aloud
-                      capture (see MicDisconnectedDuringRecordingError). The
-                      partial audio was already discarded, so this is NOT a
-                      pause: the only way forward is a brand-new capture from
-                      0:00. Two sub-states:
-                        • mic still gone  → "No microphone detected", button
-                          disabled so the candidate can't restart onto a dead
-                          device (micReadyForVoice tracks the Microphone check,
-                          which the reconnect watcher flips back to 'pass' by
-                          itself the moment a device is live again).
-                        • mic reconnected → button enabled, wording makes it
-                          explicit that this starts over rather than resumes. */}
-                  {voiceEnrollStatus === 'disconnected' && (
-                    <div className="flex items-center justify-between gap-3">
-                      <p className={`text-xs font-medium flex items-center gap-1.5 ${
-                        micReadyForVoice ? 'text-amber-700' : 'text-red-700'
-                      }`}>
-                        <MicOff className={`w-4 h-4 flex-shrink-0 ${
-                          micReadyForVoice ? 'text-amber-600' : 'text-red-600'
-                        }`} />
-                        {micReadyForVoice
-                          ? 'Microphone reconnected. Your earlier recording was discarded — start the voice verification again from the beginning.'
-                          : 'No microphone detected. Please connect a microphone.'}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={retryVoiceEnroll}
-                        disabled={!micReadyForVoice}
-                        className={`inline-flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition-colors flex-shrink-0 ${
-                          micReadyForVoice
-                            ? 'text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer'
-                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                        }`}
-                      >
-                        <Mic className="w-3.5 h-3.5" />
-                        Start over
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
