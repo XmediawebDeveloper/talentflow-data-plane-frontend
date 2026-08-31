@@ -6,7 +6,6 @@ import type { ReactNode } from 'react';
 import type { Job } from '@/lib/types/types';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import { getScoringSourceLabel } from '@/lib/utils/scoringSource';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import {
   formatEmploymentType,
@@ -25,12 +24,10 @@ import {
  * it's included only when that page passes `versionScoredBy` — Job Openings
  * and the Apply to Job dialog never see the column at all.
  *
- * "Last Updated" vs "Source" is the same conditional: Job Openings and the
- * Apply to Job dialog keep "Last Updated" (when this version's record last
- * changed), while the Resume Scoring page swaps it for "Source" — which
- * module produced the score against this version (AI Talent Match, Job
- * Descriptions, My Resumes) — since a JD's own last-updated timestamp isn't
- * what a recruiter is scanning this table for there.
+ * Source (which module produced a score) is NOT one of these columns — a
+ * version can carry scores from several different sources at once, so one
+ * column per VERSION can't represent that. It's shown per SCORED RESUME
+ * instead, in ScoredResumesTable, where each row has its own real answer.
  */
 const buildBaseColumns = (showScoredBy: boolean): { label: string; minW: string }[] => [
   { label: 'Version', minW: 'min-w-[72px]' },
@@ -40,9 +37,7 @@ const buildBaseColumns = (showScoredBy: boolean): { label: string; minW: string 
   { label: 'Location', minW: 'min-w-[120px]' },
   { label: 'Work Mode / Type', minW: 'min-w-[130px]' },
   { label: 'Posted On / By', minW: 'min-w-[130px]' },
-  showScoredBy
-    ? { label: 'Source', minW: 'min-w-[140px]' }
-    : { label: 'Last Updated', minW: 'min-w-[110px]' },
+  { label: 'Last Updated', minW: 'min-w-[110px]' },
   ...(showScoredBy ? [{ label: 'Scored By', minW: 'min-w-[160px]' }] : []),
   { label: 'Applicants', minW: 'min-w-[90px]' },
 ];
@@ -88,9 +83,7 @@ interface JobVersionHistoryPanelProps {
    * default) and the column is dropped entirely, header included: only the
    * Resume Scoring page's version history has anything meaningful to put
    * there. `null` means the version has never been scored; an unset key means
-   * still loading. `source` is the raw scoring-record source field, rendered
-   * via `getScoringSourceLabel` in the Source column that replaces Last
-   * Updated whenever this prop is passed.
+   * still loading.
    */
   versionScoredBy?: Record<string, { name: string; scoredAt: string; source?: string } | null>;
   /**
@@ -188,6 +181,16 @@ interface JobVersionHistoryPanelProps {
   publishedOnly?: boolean;
   /** Host-specific columns, inserted after the shared ones and before Action. */
   extraColumns?: ExtraVersionColumn[];
+  /**
+   * Pin the Version column to the left edge while the table scrolls
+   * sideways, the same way Select/Action already pin. Resume Scoring's job
+   * list turns this on: that table is wide enough that scrolling right to
+   * read Scored By/Applicants otherwise loses track of which version a row
+   * even is. Off by default — Job Openings and the Apply to Job dialog keep
+   * Version as an ordinary column, and neither host sets this alongside a
+   * Select column (the two would fight over the left edge).
+   */
+  stickyVersionColumn?: boolean;
 }
 
 /**
@@ -224,6 +227,7 @@ export default function JobVersionHistoryPanel({
   statusOverrides,
   publishedOnly = false,
   extraColumns = [],
+  stickyVersionColumn = false,
 }: JobVersionHistoryPanelProps) {
   const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy, extraColumns);
   /* Which versions this table lists: the WHOLE chain — v1, v2 … up to and
@@ -264,6 +268,7 @@ export default function JobVersionHistoryPanel({
   const jobVersions = resolveVersionHistoryRows(job, versions, {
     excludeId: onSelectVersion && !keepLatestWhenSelectable ? job.id : undefined,
     publishedOnly,
+    versionApplicants,
   });
 
   return (
@@ -314,7 +319,7 @@ export default function JobVersionHistoryPanel({
                     className={`sticky top-0 py-2.5 px-3 text-xs font-bold text-gray-900 whitespace-nowrap bg-brand-sky dark:bg-slate-800 dark:text-slate-100 ${minW} ${
                       label === 'Action'
                         ? 'right-0 z-[8] shadow-[inset_0_-1px_0_#e5e7eb,-1px_0_0_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155,-1px_0_0_0_#334155]'
-                        : label === 'Select'
+                        : label === 'Select' || (label === 'Version' && stickyVersionColumn)
                           ? 'left-0 z-[8] shadow-[inset_0_-1px_0_#e5e7eb,1px_0_0_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155,1px_0_0_0_#334155]'
                           : 'z-[7] shadow-[inset_0_-1px_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155]'
                     }`}
@@ -451,7 +456,11 @@ export default function JobVersionHistoryPanel({
                         </label>
                       </td>
                     )}
-                    <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                    <td className={`py-2.5 px-3 whitespace-nowrap align-middle ${
+                      stickyVersionColumn
+                        ? 'sticky left-0 z-[5] bg-[#eff3f9] shadow-[1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:bg-slate-900 dark:shadow-[1px_0_0_0_#334155]'
+                        : ''
+                    }`}>
                       <span className="inline-flex items-center gap-1.5">
                         <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                           v{version.version_number ?? 1}
@@ -554,27 +563,9 @@ export default function JobVersionHistoryPanel({
                         {detail?.created_by_name || '—'}
                       </div>
                     </td>
-                    {versionScoredBy ? (() => {
-                      /* Unset key = still loading; explicit null = loaded and
-                         genuinely never scored — those read differently, so
-                         they're not collapsed into one fallback. */
-                      const sourceInfo = versionScoredBy[version.id];
-                      return (
-                        <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                          {sourceInfo ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
-                              {getScoringSourceLabel(sourceInfo.source)}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
-                          )}
-                        </td>
-                      );
-                    })() : (
-                      <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
-                        {lastUpdated ? formatISTDate(lastUpdated) : '—'}
-                      </td>
-                    )}
+                    <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
+                      {lastUpdated ? formatISTDate(lastUpdated) : '—'}
+                    </td>
                     {versionScoredBy && (() => {
                       /* Unset key = still loading; explicit null = loaded and
                          genuinely never scored — those read differently, so
