@@ -602,6 +602,7 @@ export default function JobOpeningPickerList({
                       selectionDisabled={blockedByOtherPick}
                       selectionDisabledReason={reason}
                       radioGroupName={radioGroupName}
+                      publishedOnly
                     />
                   )}
                 </div>
