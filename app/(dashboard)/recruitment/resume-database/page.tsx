@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Clock, Loader2, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { Plus, Clock, Loader2, ChevronLeft, ChevronRight, Search, X, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -1263,24 +1263,81 @@ export default function ResumeDatabasePage() {
       )}
       {/* Delete Resume Confirmation Dialog */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="max-w-md sm:max-w-lg">
+          <button
+            type="button"
+            onClick={() => setDeleteConfirm(null)}
+            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Resume{deleteConfirm && deleteConfirm.ids.length > 1 ? 's' : ''}?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <span className="block">
-                {deleteConfirm && deleteConfirm.ids.length > 1
-                  ? `You are about to permanently delete ${deleteConfirm.ids.length} resumes.`
-                  : 'You are about to permanently delete this resume.'}
-              </span>
-              <span className="block font-semibold text-red-600">
-                This action is irreversible and cannot be undone.
-              </span>
+            <div className="flex items-start gap-4 pr-8">
+              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <div className="flex-1 pt-1">
+                <AlertDialogTitle className="text-2xl font-bold text-gray-900">
+                  Delete {deleteConfirm && deleteConfirm.ids.length > 1 ? `${deleteConfirm.ids.length} Resumes` : 'Resume'}
+                </AlertDialogTitle>
+                <p className="mt-1 text-sm text-gray-500">This action is permanent and cannot be undone.</p>
+              </div>
+            </div>
+            <AlertDialogDescription asChild>
+              <div className="mt-2 space-y-4">
+                <div className="space-y-4 rounded-xl border border-red-100 bg-red-50/60 p-4">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
+                      <ShieldAlert className="h-4 w-4" />
+                    </span>
+                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
+                    <p className="text-sm text-gray-800">
+                      This action is <span className="font-semibold text-red-600">permanent</span> and{' '}
+                      <span className="font-semibold text-red-600">cannot be undone</span>.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
+                      <Lock className="h-4 w-4" />
+                    </span>
+                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
+                    <p className="text-sm text-gray-800">
+                      Deleted {deleteConfirm && deleteConfirm.ids.length > 1 ? 'resumes' : 'resume'}{' '}
+                      <span className="font-semibold text-red-600">cannot be recovered</span>.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
+                      <AlertCircle className="h-4 w-4" />
+                    </span>
+                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
+                    <p className="text-sm text-gray-800">
+                      All associated data will be <span className="font-semibold text-red-600">permanently removed</span>.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 border-t border-gray-100 pt-4">
+                  <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 border-brand-orange text-brand-orange">
+                    <HelpCircle className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {deleteConfirm && deleteConfirm.ids.length > 1
+                        ? <>Are you sure you want to delete <span className="font-semibold text-gray-900">{deleteConfirm.ids.length} resumes</span>?</>
+                        : 'Are you sure you want to delete this resume?'
+                      }
+                    </p>
+                    <p className="mt-0.5 text-sm text-gray-500">This action cannot be reversed.</p>
+                  </div>
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="border-t border-gray-100 pt-4">
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="gap-2 bg-red-600 text-white hover:bg-red-700"
               onClick={() => {
                 if (deleteConfirm) {
                   executeDelete(deleteConfirm.ids);
@@ -1288,7 +1345,8 @@ export default function ResumeDatabasePage() {
                 }
               }}
             >
-              Yes, Delete
+              <Trash2 className="h-4 w-4" />
+              Delete {deleteConfirm && deleteConfirm.ids.length > 1 ? 'Resumes' : 'Resume'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

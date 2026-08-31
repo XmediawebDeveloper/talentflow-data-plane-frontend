@@ -964,6 +964,47 @@ a:focus:not(:focus-visible) {
   accent-color: var(--control-accent);
 }
 
+/* Job-picker radios (JobOpeningPickerList, JobVersionHistoryPanel): a fill
+   colour was asked for, and browsers don't expose their native radio's
+   circle to `background-color` at all — only `accent-color` reaches it, and
+   only for the checked dot. `appearance: none` takes the control away from
+   the engine entirely, same as the dark-mode checkbox rule above, so this is
+   a plain CSS rule rather than a Tailwind arbitrary-value class: it doesn't
+   depend on the JIT scanner correctly extracting a nested radial-gradient()
+   out of a bracketed class string, which arbitrary-value classes this
+   elaborate have been unreliable for in practice.
+
+   #eff3f9 per spec. */
+.tf-radio-tinted {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  border-radius: 9999px;
+  border: 1px solid #d1d5db;
+  background-color: #eff3f9;
+  cursor: pointer;
+}
+.tf-radio-tinted:checked {
+  border-color: var(--brand-blue);
+  background-color: #eff3f9;
+  background-image: radial-gradient(circle, var(--brand-blue) 0 40%, transparent 41% 100%);
+}
+.tf-radio-tinted:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.dark .tf-radio-tinted {
+  border-color: var(--border-dark);
+  background-color: var(--input-background);
+}
+.dark .tf-radio-tinted:checked {
+  border-color: var(--brand-blue);
+  background-color: var(--input-background);
+  background-image: radial-gradient(circle, var(--brand-blue) 0 40%, transparent 41% 100%);
+}
+
 /* The brand blue at :root is a dark ink chosen for white surfaces; on a dark
    row it reads as near-black. Same lift the rest of the dark brand family
    gets — keep in step with `.dark .bg-brand-blue` below. */

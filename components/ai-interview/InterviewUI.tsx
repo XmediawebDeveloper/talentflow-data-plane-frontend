@@ -29,6 +29,8 @@ import { VisemeTimeline } from "./avatar3d/text-to-viseme";
 import { isFlexibleDuration, modeFromConfig } from "@/lib/constants/aiInterviewMode";
 import { isTranscriptMeaningful } from "@/lib/utils/whisperFilter";
 import { detectDeviceCapability, type DeviceCapability } from "@/lib/utils/deviceCapability";
+import { checkCameraApproval } from "@/lib/proctoring/cameraDeviceMonitor";
+import { INVALID_CAMERA_SELECTION_MESSAGE } from "@/lib/proctoring/virtualCameraDetection";
 // Side-effect import: arms the global unhandledrejection guard that silences
 // TF.js backend crashes AND benign browser-extension "message channel closed"
 // noise. Idempotent — safe even though face-verification also imports it.
@@ -79,6 +81,13 @@ interface InterviewUIProps {
   /** Detected device tier + feature flags (from the system-check step). When
    * omitted, the interview assumes a capable device (all features on). */
   deviceCapability?: DeviceCapability;
+  /** The camera deviceId that passed System Check's webcam validation. When
+   * set, the interview pins <Webcam> to this exact device at acquire time
+   * and monitors for the candidate switching away from it mid-interview
+   * (see the camera-device-lost effect below). Null/undefined (e.g. system
+   * check skipped) falls back to today's unconstrained default-camera
+   * behavior — no pinning, no switch detection. */
+  approvedCameraDeviceId?: string | null;
   /** Object URL of the candidate's captured identity photo, used for the "You"
    * chat avatar. Null/undefined (e.g. identity step skipped) → the "You" text
    * avatar is shown instead. */
@@ -512,7 +521,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
 });
 const LiveAIBubbleMemo = memo(LiveAIBubble);
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl, approvedCameraDeviceId }: InterviewUIProps) {
   // ── Effective device capability ──────────────────────────────────────────
   // The portal detects this at the system-check step, but a RESUMED session (or
   // any entry path that skips system check) arrives with deviceCapability=undefined
@@ -1582,7 +1591,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
       if (!videoAlive) {
         try {
-          if (await webcamRef.current?.reacquireVideo()) {
+          // Target the device the interview STARTED on (approved in System
+          // Check), mirroring reacquireAudio(initialMicDeviceId) below — so a
+          // replugged approved camera is recognized as "restored" instead of
+          // silently landing on whatever the OS currently calls default.
+          if (await webcamRef.current?.reacquireVideo(interviewCameraDeviceIdRef.current)) {
             console.log('[InterviewUI] Device recovery: CAMERA re-acquired independently');
           }
         } catch { /* camera still unavailable — keep polling */ }
@@ -1672,6 +1685,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // so a "does the pinned device still exist?" check would always say yes. This
   // ref stays on the ORIGINAL device so its disappearance is detectable.
   const interviewMicDeviceIdRef = useRef<string | undefined>(undefined);
+  // True when the live camera track is no longer the one approved during
+  // System Check — either it switched to a DIFFERENT physical device, or it
+  // switched to a known virtual/mobile-relay camera. Rides the exact same
+  // pause/grace/terminate path as a camera or mic-track drop (see anyDown
+  // below) — mirrors audioDeviceLost above, but for video.
+  const [cameraDeviceLost, setCameraDeviceLost] = useState(false);
+  const cameraDeviceLostRef = useRef(false);
+  const [cameraDeviceLostReason, setCameraDeviceLostReason] = useState<'virtual' | 'switched' | null>(null);
+  // The camera device the interview is pinned to — seeded directly from the
+  // approvedCameraDeviceId prop (known upfront from System Check, unlike the
+  // mic's interviewMicDeviceIdRef which has to wait on the live stream
+  // because no upstream id exists for audio).
+  const interviewCameraDeviceIdRef = useRef<string | undefined>(approvedCameraDeviceId ?? undefined);
   const mediaPauseCountdownIdRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaPauseTimeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mirrors proctoringState so the setTimeout fired at ARM time can read
@@ -1813,7 +1839,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // live (built-in mic silently takes over) — without it, that unplug would
     // NOT pause. It rides the exact same pause/grace/terminate path as a camera
     // or mic-track drop, so Bina stops and the answer clock freezes identically.
-    const anyDown = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive || audioDeviceLost;
+    const anyDown = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive || audioDeviceLost || cameraDeviceLost;
 
     if (anyDown && !isMediaPausedRef.current) {
       // ARM: a device just went down — start the pause+grace window.
@@ -1832,10 +1858,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // the track stays live because the OS silently fell back to another input,
       // so isMicrophoneActive alone would read healthy.
       const micIsDown = !proctoringState.isMicrophoneActive || audioDeviceLost;
-      const graceApplies = !proctoringState.isCameraActive || micIsDown;
+      // cameraDeviceLost counts as camera-down: the candidate switched to an
+      // unapproved (different, or virtual/mobile-relay) camera, so the track
+      // may still read "active" even though it's no longer a device this
+      // interview should be trusting.
+      const camIsDown = !proctoringState.isCameraActive || cameraDeviceLost;
+      const graceApplies = camIsDown || micIsDown;
       setMediaPauseSecondsRemaining(graceApplies ? Math.ceil(MEDIA_PAUSE_GRACE_MS / 1000) : null);
-      const armReason = mediaDownReason(proctoringState.isCameraActive, proctoringState.isMicrophoneActive);
-      console.warn(`[INTERVIEW-DEBUG][PAUSE] INTERVIEW PAUSED — reason=${armReason} isCameraActive=${proctoringState.isCameraActive} isMicrophoneActive=${proctoringState.isMicrophoneActive} audioDeviceLost=${audioDeviceLost}`);
+      const armReason = mediaDownReason(!camIsDown, proctoringState.isMicrophoneActive);
+      console.warn(`[INTERVIEW-DEBUG][PAUSE] INTERVIEW PAUSED — reason=${armReason} isCameraActive=${proctoringState.isCameraActive} isMicrophoneActive=${proctoringState.isMicrophoneActive} audioDeviceLost=${audioDeviceLost} cameraDeviceLost=${cameraDeviceLost}`);
       // Strict mic requirement: nothing may keep running in the background
       // while paused. Silence the avatar immediately (no more lip-sync/
       // "speaking" animation), drop any still-queued TTS audio so nothing
@@ -1876,7 +1907,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       pauseQuestionTimerRef.current();
       console.log('[INTERVIEW-DEBUG][PAUSE] TIMER STOPPED');
 
-      const reason = mediaDownReason(proctoringState.isCameraActive, proctoringState.isMicrophoneActive);
+      const reason = mediaDownReason(!camIsDown, proctoringState.isMicrophoneActive);
       try {
         wsRef.current?.send(JSON.stringify({ type: 'session_pause', reason }));
         console.log(`[INTERVIEW-DEBUG][PAUSE] LIVE STREAM PAUSED — session_pause sent (reason=${reason})`);
@@ -1911,8 +1942,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           // below has already torn the pause down and this is a no-op.
           const cur = proctoringStateRef.current;
           const micStillDown = !cur.isMicrophoneActive || audioDeviceLostRef.current;
-          if (!cur.isCameraActive || micStillDown) {
-            onTerminate?.(`${mediaDownReason(cur.isCameraActive, !micStillDown)}_timeout`);
+          const camStillDown = !cur.isCameraActive || cameraDeviceLostRef.current;
+          if (camStillDown || micStillDown) {
+            onTerminate?.(`${mediaDownReason(!camStillDown, !micStillDown)}_timeout`);
           }
         }, MEDIA_PAUSE_GRACE_MS);
       }
@@ -1927,7 +1959,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       isMediaPausedRef.current = false;
       setIsMediaPaused(false);
       setMediaPauseSecondsRemaining(null);
-      console.warn(`[INTERVIEW-DEBUG][PAUSE] INTERVIEW RESUMED — pauseDurationMs=${pauseDurationMs} isCameraActive=${proctoringState.isCameraActive} isMicrophoneActive=${proctoringState.isMicrophoneActive} audioDeviceLost=${audioDeviceLost}`);
+      console.warn(`[INTERVIEW-DEBUG][PAUSE] INTERVIEW RESUMED — pauseDurationMs=${pauseDurationMs} isCameraActive=${proctoringState.isCameraActive} isMicrophoneActive=${proctoringState.isMicrophoneActive} audioDeviceLost=${audioDeviceLost} cameraDeviceLost=${cameraDeviceLost}`);
 
       try {
         wsRef.current?.send(JSON.stringify({ type: 'session_resume' }));
@@ -1977,10 +2009,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         },
       }).catch(() => { /* best-effort */ });
     }
-  }, [isConnected, proctoringState.isMicrophoneActive, proctoringState.isCameraActive, audioDeviceLost, token, onTerminate, clearMediaPauseTimers, mediaDownReason]);
+  }, [isConnected, proctoringState.isMicrophoneActive, proctoringState.isCameraActive, audioDeviceLost, cameraDeviceLost, token, onTerminate, clearMediaPauseTimers, mediaDownReason]);
 
   // Keep the audioDeviceLost ref mirror current for the always-on listener.
   useEffect(() => { audioDeviceLostRef.current = audioDeviceLost; }, [audioDeviceLost]);
+
+  // Keep the cameraDeviceLost ref mirror current for the always-on listener
+  // (see the camera-device-lost effect below, mirrors the mic pattern above).
+  useEffect(() => { cameraDeviceLostRef.current = cameraDeviceLost; }, [cameraDeviceLost]);
 
   // Detect the PINNED microphone device disappearing / reappearing via the
   // devicechange event (fires even when the track survives a fallback swap).
@@ -2143,6 +2179,70 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     // between the OS reporting the mic gone and the pause actually engaging.
     const pollId = setInterval(() => { void check('poll'); }, 500);
     void check('mount'); // baseline + catch an already-removed device
+    return () => {
+      cancelled = true;
+      clearInterval(pollId);
+      navigator.mediaDevices.removeEventListener('devicechange', onDeviceChange);
+    };
+  }, [isConnected, token]);
+
+  // Detect the live CAMERA track no longer being the approved device — either
+  // it swapped to a DIFFERENT physical camera, or to a known virtual/mobile-
+  // relay driver (DroidCam, Moto Connect, OBS Virtual Camera, etc.). Mirrors
+  // the mic effect above, but video's own live track carries its device id
+  // and label directly — unlike audio there's no 'default'/'communications'
+  // alias for Chrome to silently swap a live video track onto, so no separate
+  // enumerateDevices()-based "missing from list" signal is needed here: the
+  // live track's own getSettings().deviceId/label IS the ground truth,
+  // updated the moment Webcam.tsx acquires any new stream (mount, full
+  // reacquire, or a targeted reacquireVideo after the original device died).
+  useEffect(() => {
+    if (!isConnected) return;
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices) return;
+    let cancelled = false;
+
+    const check = async (trigger: string) => {
+      try {
+        const track = webcamStreamRef.current?.getVideoTracks?.().find(t => t.readyState === 'live');
+        // No live track — camera is genuinely down, which proctoringState.
+        // isCameraActive / the existing camera-disconnected overlay already
+        // covers. Nothing for the approval check to validate here.
+        if (!track) return;
+        const result = checkCameraApproval({
+          approvedDeviceId: interviewCameraDeviceIdRef.current,
+          liveTrackDeviceId: track.getSettings?.().deviceId,
+          liveTrackLabel: track.label,
+        });
+        if (cancelled) return;
+        if (!result.valid && !cameraDeviceLostRef.current) {
+          console.warn(`[INTERVIEW-DEBUG] Camera device lost (trigger=${trigger}, reason=${result.reason}) — pausing interview (approved=${interviewCameraDeviceIdRef.current ?? 'unset'})`);
+          setCameraDeviceLostReason(result.reason);
+          setCameraDeviceLost(true);
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'camera_disabled',
+            severity: 'severe',
+            details: {
+              phase: 'in_interview',
+              reason: result.reason === 'virtual' ? 'virtual_camera_detected' : 'camera_switched',
+              trigger,
+            },
+          }).catch(() => { /* best-effort */ });
+        } else if (result.valid && cameraDeviceLostRef.current) {
+          console.log(`[INTERVIEW-DEBUG] Camera device restored (trigger=${trigger}) — resuming interview`);
+          setCameraDeviceLost(false);
+          setCameraDeviceLostReason(null);
+        }
+      } catch (e) {
+        console.warn(`[INTERVIEW-DEBUG] camera check() threw (trigger=${trigger})`, e);
+      }
+    };
+
+    const onDeviceChange = () => { void check('devicechange'); };
+    navigator.mediaDevices.addEventListener('devicechange', onDeviceChange);
+    // Poll as well, same reasoning as the mic effect: a reacquired track can
+    // land without a devicechange event ever firing.
+    const pollId = setInterval(() => { void check('poll'); }, 1000);
+    void check('mount');
     return () => {
       cancelled = true;
       clearInterval(pollId);
@@ -9621,6 +9721,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 onTracksReplaced={handleTracksReplaced}
                 showHandIndicator={false}
                 isHandRaised={handDetection.isHandRaised}
+                initialCameraDeviceId={interviewCameraDeviceIdRef.current}
               />
 
               {/* REC badge — overlaid inside the camera frame (top-right). REC is
@@ -10486,12 +10587,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         // Mic is "down" for the overlay when either the track dropped OR the
         // pinned device was unplugged (track survived via a built-in fallback).
         const _micDown = !proctoringState.isMicrophoneActive || audioDeviceLost;
+        // Camera is "down" for the overlay when either the hardware track
+        // dropped OR it's live but on an unapproved device (switched, or a
+        // virtual/mobile-relay camera) — cameraDeviceLost.
+        const _camDown = !proctoringState.isCameraActive || cameraDeviceLost;
         // A CAMERA drop blocks exactly like a mic drop. The scrim used to be
         // gated on _micDown alone, so a camera-only disconnect rendered a
         // transparent, click-through overlay — the interview looked like it was
         // still running underneath (live preview visible, page clickable) while
         // it was actually paused and counting down to termination.
-        const _blocking = _micDown || !proctoringState.isCameraActive;
+        const _blocking = _micDown || _camDown;
+        // An unapproved-but-still-live camera (cameraDeviceLost while the
+        // hardware itself reads active) gets its own copy pointing the
+        // candidate back at the exact camera they approved, distinct from a
+        // genuine hardware disconnect.
+        const _camUnapproved = cameraDeviceLost && proctoringState.isCameraActive;
         return (
         <div className={`fixed inset-0 z-[200] flex items-center justify-center ${
           !_blocking
@@ -10500,22 +10610,26 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }`}>
           <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/30 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5 pointer-events-auto">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/15 border border-red-400/30">
-              {!proctoringState.isCameraActive
+              {_camDown
                 ? <Camera className="w-6 h-6 text-red-400" />
                 : <MicOff className="w-6 h-6 text-red-400" />}
             </div>
             <div className="text-center">
               <h3 className="text-white font-semibold text-base mb-1">
-                {!proctoringState.isCameraActive && _micDown
+                {_camDown && _micDown
                   ? "Camera & Microphone Disconnected"
-                  : !proctoringState.isCameraActive
+                  : _camUnapproved
+                  ? "Unapproved Camera Detected"
+                  : _camDown
                   ? "Camera Disconnected"
                   : "Microphone Disconnected"}
               </h3>
               <p className="text-[#94A3B8] text-sm leading-relaxed">
-                {!proctoringState.isCameraActive && _micDown
+                {_camDown && _micDown
                   ? "Your interview is paused. Please reconnect your camera and microphone — it will resume automatically."
-                  : !proctoringState.isCameraActive
+                  : _camUnapproved
+                  ? INVALID_CAMERA_SELECTION_MESSAGE
+                  : _camDown
                   ? "Your interview is paused. Please reconnect your camera — it will resume automatically."
                   : "Your interview is paused. Please reconnect your microphone — it will resume automatically."}
               </p>

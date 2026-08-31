@@ -7,6 +7,7 @@ import AssessmentCreation from '@/components/AssessmentCreation';
 import { jdService } from '@/lib/services/jdService';
 import api from '@/lib/services/api';
 import { Job } from '@/lib/types/types';
+import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import FeatureGate from '@/components/shared/FeatureGate';
 
 interface TopicSettings {
@@ -53,24 +54,12 @@ export default function CreateAssessmentPage() {
         ]);
 
         if (jobsResponse.status === 'fulfilled' && jobsResponse.value?.items) {
+          /* The shared mapper — the same rows the JD picker builds for itself
+             once its own fetch lands, so the list does not change shape
+             underneath the user. The two coding fields it does not carry are
+             what the assessment flow reads to configure the coding round. */
           const realJobs: Job[] = jobsResponse.value.items.map((jd: any) => ({
-            id: jd.id,
-            job_id: jd.job_id,
-            title: jd.title,
-            currentVersion: jd.current_version,  // republish counter -> the vN badge
-            status: jd.status === 'published' ? 'Published' : jd.status === 'draft' ? 'Draft' : 'Closed',
-            location: jd.location || 'Remote',
-            daysActive: jd.days_active || 0,
-            requiredMatch: jd.required_match || 70,
-            department: jd.department,
-            industry_type: jd.industry_type,
-            experience: jd.experience_required,
-            experience_min: jd.experience_min,
-            experience_max: jd.experience_max,
-            description: jd.description,
-            skills: jd.must_have_skills || [],
-            postedDate: jd.created_at,
-            employmentType: jd.employment_type,
+            ...mapJDToJob(jd),
             coding_required: jd.coding_required,
             supported_languages: jd.supported_languages,
           }));

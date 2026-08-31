@@ -91,7 +91,16 @@ const nextConfig: NextConfig = {
 
   async headers() {
     return [
-      {
+      /* Production only: in dev, Next.js warns that a custom Cache-Control
+         header on /_next/static/:path* "can break Next.js development
+         behavior" — and it does. Dev-mode static chunks aren't content-hashed
+         the same immutable way production's are, so a browser honoring this
+         1-year immutable cache keeps serving a stale bundle after every edit,
+         through plain refreshes and even across different browsers that have
+         hit the page before. Confirmed the hard way: none of several rounds
+         of component/CSS fixes were visibly taking effect until this was
+         scoped to production. */
+      ...(process.env.NODE_ENV === 'production' ? [{
         source: '/_next/static/:path*',
         headers: [
           {
@@ -99,7 +108,7 @@ const nextConfig: NextConfig = {
             value: 'public, max-age=31536000, immutable',
           },
         ],
-      },
+      }] : []),
       // Proctoring web workers must never be served stale. These files live in
       // public/, so Next gives them the default 4-hour max-age — meaning after a
       // deploy, candidates' browsers AND the Cloudflare edge keep running the

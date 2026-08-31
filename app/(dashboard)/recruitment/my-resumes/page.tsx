@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, ShieldAlert, Lock, HelpCircle } from 'lucide-react';
 import Link from 'next/link';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -38,7 +38,7 @@ import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { MENU_ITEM_SCALE_UP_CLASS } from '@/lib/constants/menuAnimation';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder, FolderDeletionInfo } from '@/lib/services/resumeService';
@@ -535,7 +535,7 @@ function DroppableFolderCard({
   return (
     <div
       ref={attachRefs}
-      className={`group relative bg-white border rounded-xl shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 transition-all ${
+      className={`group/card relative bg-white border rounded-xl shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 transition-all ${
         stretch ? 'h-full' : ''
       } ${
         // High enough to clear the sections that follow the grid (the resumes
@@ -545,9 +545,9 @@ function DroppableFolderCard({
         isDropTarget
           ? 'border-brand-blue border-2 border-dashed bg-brand-blue/5'
           : isArchived
-            ? 'border-brand-orange/20 hover:border-brand-orange/40'
+            ? 'border-amber-200 hover:border-amber-400'
             : isRoot
-              ? 'border-green-200 hover:border-green-400'
+              ? 'border-brand-cyan/20 hover:border-brand-cyan/40'
               : showSubfolders
                 // Open card reads as the anchor of the list hanging off it.
                 // No lift while open — the panel is pinned to the card's edge.
@@ -562,15 +562,15 @@ function DroppableFolderCard({
       <div className="flex items-center gap-3 p-3">
         <div className={`w-9 h-9 rounded-lg flex items-center justify-center ring-1 ${
           isArchived
-            ? 'bg-brand-orange/10 ring-brand-orange/15'
+            ? 'bg-amber-100 ring-amber-200/60'
             : isRoot
-              ? 'bg-green-100 ring-green-200/60'
-              : 'bg-brand-blue/10 ring-brand-blue/15'
+              ? 'bg-brand-cyan/10 ring-brand-cyan/15'
+              : 'bg-brand-orange/10 ring-brand-orange/15'
         }`}>
           {isArchived ? (
-            <Archive className="w-4 h-4 text-brand-orange-deep" />
+            <Archive className="w-4 h-4 text-amber-600" />
           ) : (
-            <Folder className={`w-4 h-4 ${isRoot ? 'text-green-600' : 'text-brand-blue'}`} />
+            <Folder className={`w-4 h-4 ${isRoot ? 'text-brand-cyan' : 'text-brand-orange'}`} />
           )}
         </div>
         <div className="flex-1 min-w-0">
@@ -596,7 +596,7 @@ function DroppableFolderCard({
             className={`p-1 rounded-md transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30 ${
               showActions
                 ? 'opacity-100 pointer-events-auto bg-brand-blue/10 text-brand-blue'
-                : 'opacity-100 text-gray-500 hover:bg-brand-blue/10 hover:text-brand-blue sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100'
+                : 'opacity-100 text-gray-500 hover:bg-brand-blue/10 hover:text-brand-blue sm:pointer-events-none sm:opacity-0 sm:group-hover/card:pointer-events-auto sm:group-hover/card:opacity-100 sm:group-focus-within/card:pointer-events-auto sm:group-focus-within/card:opacity-100'
             }`}
             aria-haspopup="menu"
             aria-expanded={showActions}
@@ -623,7 +623,7 @@ function DroppableFolderCard({
                 className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Upload className={`w-4 h-4 ${canUpload && onUploadToFolder ? 'text-menu-icon-download' : ''}`} />
-                <span className={MENU_ITEM_SCALE_UP_CLASS}>Upload to Folder</span>
+                <span className={MENU_ITEM_SCALE_CLASS}>Upload to Folder</span>
               </button>
               <button
                 type="button"
@@ -634,7 +634,7 @@ function DroppableFolderCard({
                 className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Plus className={`w-4 h-4 ${canCreateSubfolder && onCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
-                <span className={MENU_ITEM_SCALE_UP_CLASS}>Create Subfolder</span>
+                <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
                 {!canCreateSubfolder && <span className="ml-auto text-xs text-gray-400 dark:text-slate-600">(max)</span>}
               </button>
               <button
@@ -645,7 +645,7 @@ function DroppableFolderCard({
                 className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Edit2 className={`w-4 h-4 ${canRename && onStartRename ? 'text-menu-icon-edit' : ''}`} />
-                <span className={MENU_ITEM_SCALE_UP_CLASS}>Rename Folder</span>
+                <span className={MENU_ITEM_SCALE_CLASS}>Rename Folder</span>
               </button>
               <div className="my-1 border-t border-gray-100 dark:border-slate-700" />
               <button
@@ -656,7 +656,7 @@ function DroppableFolderCard({
                 className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
-                <span className={MENU_ITEM_SCALE_UP_CLASS}>Delete Folder</span>
+                <span className={MENU_ITEM_SCALE_CLASS}>Delete Folder</span>
               </button>
             </div>
           )}
@@ -725,7 +725,7 @@ function DroppableFolderCard({
               >
                 <span aria-hidden="true" className="text-gray-300 text-xs leading-none">└</span>
                 <Folder className={`w-3.5 h-3.5 flex-shrink-0 ${
-                  peekChild?.id === child.id ? 'text-brand-blue' : 'text-brand-blue/70'
+                  peekChild?.id === child.id ? 'text-brand-blue' : 'text-brand-orange'
                 }`} />
                 <span className={`flex-1 min-w-0 truncate text-xs ${
                   peekChild?.id === child.id ? 'font-medium text-brand-blue' : 'text-gray-700'
@@ -771,7 +771,7 @@ function DroppableFolderCard({
               // as one list.
               className="w-full flex items-center gap-2 px-3 py-2 text-left border-b border-gray-100 last:border-b-0 border-l-2 border-l-transparent hover:bg-brand-blue/10 hover:border-l-brand-blue/40 transition-colors cursor-pointer"
             >
-              <Folder className="w-3.5 h-3.5 text-brand-blue/70 flex-shrink-0" />
+              <Folder className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
               <span className="flex-1 min-w-0 truncate text-xs text-gray-700">{grandChild.name}</span>
               <span className="text-[11px] text-gray-500 flex-shrink-0">{grandChild.count || 0}</span>
               <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
@@ -4252,10 +4252,7 @@ export default function MyResumesPage() {
                       resumeCount={folder.count || 0}
                       hasSubfolders={(folder.children && folder.children.length > 0) || false}
                       isArchived={isArchivedFolder}
-                      // Rendered as an ordinary folder card — same icon, same
-                      // colours, its real name. Only the rename/delete guards
-                      // below still treat it as special.
-                      isRoot={false}
+                      isRoot={isRootFolder}
                       // Root and Archived Resumes offer nothing renameable or
                       // deletable, so their cards drop the hover "+".
                       hideActions={isSystemCard}
@@ -4350,18 +4347,18 @@ export default function MyResumesPage() {
                         <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                       <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ${
                         currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId
-                          ? 'bg-brand-orange/10 ring-brand-orange/15'
+                          ? 'bg-amber-100 ring-amber-200/60'
                           : currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
-                            ? 'bg-green-100 ring-green-200/60'
-                            : 'bg-brand-blue/10 ring-brand-blue/15'
+                            ? 'bg-brand-cyan/10 ring-brand-cyan/15'
+                            : 'bg-brand-orange/10 ring-brand-orange/15'
                       }`}>
                         {currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId ? (
-                          <Archive className="w-5 h-5 sm:w-6 sm:h-6 text-brand-orange-deep" />
+                          <Archive className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
                         ) : (
                           <FolderOpen className={`w-5 h-5 sm:w-6 sm:h-6 ${
                             currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
-                              ? 'text-green-600'
-                              : 'text-brand-blue'
+                              ? 'text-brand-cyan'
+                              : 'text-brand-orange'
                           }`} />
                         )}
                       </div>
@@ -4462,8 +4459,8 @@ export default function MyResumesPage() {
                                     }}
                                   >
                                     <div className="flex h-full items-center gap-3 p-3">
-                                      <div className="w-9 h-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <LayoutGrid className="w-4 h-4 text-brand-blue" />
+                                      <div className="w-9 h-9 bg-[#155dfc]/10 ring-1 ring-[#155dfc]/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <LayoutGrid className="w-4 h-4 text-[#155dfc]" />
                                       </div>
                                       <div className="flex-1 min-w-0">
                                         <h3 className="font-semibold text-sm text-gray-900 truncate">All Resumes</h3>
@@ -6329,27 +6326,39 @@ export default function MyResumesPage() {
           if (!open) setCancelBatchConfirm({ isOpen: false, batchId: '', pendingCount: 0 });
         }}
       >
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="max-w-md sm:max-w-lg">
+          <button
+            type="button"
+            onClick={() => setCancelBatchConfirm({ isOpen: false, batchId: '', pendingCount: 0 })}
+            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Ban className="w-5 h-5 text-red-500" />
-              Cancel {cancelBatchConfirm.pendingCount} queued file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''}?
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm text-gray-600">
-                <p>
-                  This stops <span className="font-medium text-gray-900">{cancelBatchConfirm.pendingCount} file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''}</span> that
+            <div className="flex items-start gap-4 pr-8">
+              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+                <Ban className="h-6 w-6 text-red-600" />
+              </div>
+              <div className="flex-1 pt-1">
+                <AlertDialogTitle className="text-2xl font-bold text-gray-900">
+                  Cancel {cancelBatchConfirm.pendingCount} queued file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''}?
+                </AlertDialogTitle>
+                <p className="mt-1 text-sm text-gray-500">
+                  This stops {cancelBatchConfirm.pendingCount} file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''} that
                   {cancelBatchConfirm.pendingCount !== 1 ? ' have' : ' has'} not finished processing.
                 </p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>Files already completed are kept</li>
-                  <li>Their Resume Storage units are refunded</li>
-                  <li>You can re-queue cancelled files later with Retry</li>
-                </ul>
+              </div>
+            </div>
+            <AlertDialogDescription asChild>
+              <div className="mt-2 space-y-1.5 rounded-xl border border-red-100 bg-red-50/60 p-4 text-sm text-gray-800">
+                <p>Files already completed are kept</p>
+                <p>Their Resume Storage units are refunded</p>
+                <p>You can re-queue cancelled files later with Retry</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="border-t border-gray-100 pt-4">
             <AlertDialogCancel>Keep processing</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmCancelBatch}
@@ -6368,22 +6377,34 @@ export default function MyResumesPage() {
           if (!open) setCancelItemConfirm({ isOpen: false, batchId: '', itemId: '', fileName: '' });
         }}
       >
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="max-w-md sm:max-w-lg">
+          <button
+            type="button"
+            onClick={() => setCancelItemConfirm({ isOpen: false, batchId: '', itemId: '', fileName: '' })}
+            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Ban className="w-5 h-5 text-red-500" />
-              Cancel this file?
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm text-gray-600">
-                <p>
-                  <span className="font-medium text-gray-900">{cancelItemConfirm.fileName}</span> will not
-                  be processed. Its unit is refunded and you can re-queue it later with Retry.
-                </p>
+            <div className="flex items-start gap-4 pr-8">
+              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+                <Ban className="h-6 w-6 text-red-600" />
               </div>
-            </AlertDialogDescription>
+              <div className="flex-1 pt-1">
+                <AlertDialogTitle className="text-2xl font-bold text-gray-900">
+                  Cancel this file?
+                </AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <p className="mt-1 text-sm text-gray-500">
+                    <span className="font-medium text-gray-900">{cancelItemConfirm.fileName}</span> will not
+                    be processed. Its unit is refunded and you can re-queue it later with Retry.
+                  </p>
+                </AlertDialogDescription>
+              </div>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="border-t border-gray-100 pt-4">
             <AlertDialogCancel>Keep processing</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmCancelItem}
@@ -6402,35 +6423,85 @@ export default function MyResumesPage() {
           if (!open) setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] });
         }}
       >
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="max-w-md sm:max-w-lg">
+          <button
+            type="button"
+            onClick={() => setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] })}
+            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Trash2 className="w-5 h-5 text-red-500" />
-              Delete {deleteResumeConfirm.ids.length === 1 ? 'Resume' : `${deleteResumeConfirm.ids.length} Resumes`}
-            </AlertDialogTitle>
+            <div className="flex items-start gap-4 pr-8">
+              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <div className="flex-1 pt-1">
+                <AlertDialogTitle className="text-2xl font-bold text-gray-900">
+                  Delete {deleteResumeConfirm.ids.length === 1 ? 'Resume' : `${deleteResumeConfirm.ids.length} Resumes`}
+                </AlertDialogTitle>
+                <p className="mt-1 text-sm text-gray-500">This action is permanent and cannot be undone.</p>
+              </div>
+            </div>
             <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm text-gray-600">
-                <ul className="list-disc list-inside space-y-1">
-                  <li>Deletion is permanent and irreversible</li>
-                  <li>Deleted resumes cannot be recovered</li>
-                  <li>This action cannot be undone.</li>
-                </ul>
-                <p>
-                  {deleteResumeConfirm.ids.length === 1
-                    ? 'Are you sure you want to delete the resume?'
-                    : <>Are you sure you want to delete <span className="font-medium text-gray-900">{deleteResumeConfirm.ids.length} resumes</span>?</>
-                  }
-                </p>
+              <div className="mt-2 space-y-4">
+                <div className="space-y-4 rounded-xl border border-red-100 bg-red-50/60 p-4">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
+                      <ShieldAlert className="h-4 w-4" />
+                    </span>
+                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
+                    <p className="text-sm text-gray-800">
+                      This action is <span className="font-semibold text-red-600">permanent</span> and{' '}
+                      <span className="font-semibold text-red-600">cannot be undone</span>.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
+                      <Lock className="h-4 w-4" />
+                    </span>
+                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
+                    <p className="text-sm text-gray-800">
+                      Deleted {deleteResumeConfirm.ids.length === 1 ? 'resume' : 'resumes'}{' '}
+                      <span className="font-semibold text-red-600">cannot be recovered</span>.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-600 text-white">
+                      <AlertCircle className="h-4 w-4" />
+                    </span>
+                    <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
+                    <p className="text-sm text-gray-800">
+                      All associated data will be <span className="font-semibold text-red-600">permanently removed</span>.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 border-t border-gray-100 pt-4">
+                  <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 border-brand-orange text-brand-orange">
+                    <HelpCircle className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {deleteResumeConfirm.ids.length === 1
+                        ? 'Are you sure you want to delete this resume?'
+                        : <>Are you sure you want to delete <span className="font-semibold text-gray-900">{deleteResumeConfirm.ids.length} resumes</span>?</>
+                      }
+                    </p>
+                    <p className="mt-0.5 text-sm text-gray-500">This action cannot be reversed.</p>
+                  </div>
+                </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="border-t border-gray-100 pt-4">
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteResumes}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="gap-2 bg-red-600 text-white hover:bg-red-700"
             >
-              Delete
+              <Trash2 className="h-4 w-4" />
+              Delete {deleteResumeConfirm.ids.length === 1 ? 'Resume' : 'Resumes'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -6445,14 +6516,26 @@ export default function MyResumesPage() {
           }
         }}
       >
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="max-w-md sm:max-w-lg">
+          <button
+            type="button"
+            onClick={() => setDeleteFolderConfirm({ isOpen: false, folderId: null, folderName: '', resumeCount: 0, parentFolderId: null, parentFolderName: '', contentAction: null, hasSubfolders: false, subfolderCount: 0, subfolderDetails: [], totalResumeCount: 0, subfolderResumeCount: 0, loading: false })}
+            className="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Trash2 className="w-5 h-5 text-red-500" />
-              Delete Folder
-            </AlertDialogTitle>
+            <div className="flex items-start gap-4 pr-8">
+              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+              <AlertDialogTitle className="pt-1 text-2xl font-bold text-gray-900">
+                Delete Folder
+              </AlertDialogTitle>
+            </div>
             <AlertDialogDescription asChild>
-              <div className="space-y-4">
+              <div className="mt-2 space-y-4 text-left">
                 {deleteFolderConfirm.loading ? (
                   <div className="flex items-center justify-center py-6 tf-loader-center tf-loader-center--compact">
                     <Loader2 className="w-6 h-6 animate-spin text-gray-400" />

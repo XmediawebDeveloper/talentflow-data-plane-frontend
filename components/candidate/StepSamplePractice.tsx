@@ -1156,7 +1156,7 @@ export default function StepSamplePractice({
               <span className="text-[10px] font-medium tracking-wide uppercase text-[#64748B]">You</span>
             </div>
             <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
-              <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${showReplay ? 'hidden' : ''}`} />
+              <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${showReplay ? 'hidden' : ''}`} style={{ transform: 'scaleX(-1)' }} />
               {showReplay && recordedVideoUrl && (
                 <video ref={replayVideoRef} src={recordedVideoUrl} controls playsInline controlsList="nodownload nopictureinpicture" disablePictureInPicture onContextMenu={(e) => e.preventDefault()} className="w-full h-full object-cover" />
               )}

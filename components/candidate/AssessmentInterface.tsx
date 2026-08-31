@@ -1842,6 +1842,7 @@ export function AssessmentInterface({
                   playsInline
                   muted
                   className="w-full h-full object-cover"
+                  style={{ transform: 'scaleX(-1)' }}
                 />
                 <div className="absolute bottom-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
               </div>

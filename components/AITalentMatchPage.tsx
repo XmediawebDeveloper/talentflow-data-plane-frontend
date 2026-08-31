@@ -3184,7 +3184,7 @@ export default function AITalentMatchPage({
                           }`}
                         >
                           <History className="w-3.5 h-3.5" />
-                          {expandedHistoryJobId === historyKey ? 'Hide Version History' : 'View Version History'}
+                          {expandedHistoryJobId === historyKey ? 'Hide Version History' : 'Version History'}
                         </button>
                       )}
                     </div>
