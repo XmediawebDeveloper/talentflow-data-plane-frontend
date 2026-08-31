@@ -1,4 +1,4 @@
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, Target, Share2, Paperclip, FileText, MoreVertical, Award, ChevronDown, Video } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, Target, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronDown, Video } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
@@ -43,9 +43,8 @@ const DEFAULT_COLUMNS = [
   { id: 'experience', label: 'Experience', enabled: true },  // Enable by default
   { id: 'education', label: 'Education', enabled: false },
   { id: 'certifications', label: 'Certifications', enabled: false },
-  { id: 'scoredDate', label: 'Scored Date', enabled: true },
+  { id: 'scoredDate', label: 'Scored By / Date', enabled: true },
   { id: 'version', label: 'Version', enabled: true },
-  { id: 'scoredBy', label: 'Scored By', enabled: true },
 ];
 
 interface ScoredResume {
@@ -97,12 +96,22 @@ interface ScoredResume {
   // For global view
   jobTitle?: string;
   jdId?: string;
+  /** The readable job code (e.g. "JD-151") this row's score belongs to —
+   *  only set in the global "View All Candidates" view, where rows span
+   *  different jobs. In a single-job view every row shares the host's own
+   *  `jobId` prop instead, so this stays unset there. */
+  jobCode?: string;
 }
 
 interface ScoredResumesTableProps {
   resumes: ScoredResume[];
   jobTitle: string;
   jobId?: string;
+  /** The readable job code (e.g. "JD-151") for this single-job host, used to
+   *  prefix downloaded scorecard filenames. Left unset by the global "View
+   *  All Candidates" host, which instead relies on each row's own `jobCode`
+   *  since rows there span different jobs. */
+  jobCode?: string;
   availableUnits?: number;
   initialMatchStatus?: 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
   onViewCandidate?: (resume: ScoredResume) => void;
@@ -110,14 +119,6 @@ interface ScoredResumesTableProps {
   onSelectResume?: (resumeId: string) => void;
   onSelectAll?: (resumeIds: string[]) => void;
   isGlobalView?: boolean; // Show job title column in global view
-  /**
-   * Host-supplied bulk actions, rendered in the selection row beside Download
-   * and Bulk Invite and only while rows are picked — ResumeScoringPage uses it
-   * for "Download N Scorecards (ZIP)". Passed down rather than lifting this
-   * component's seven filter states up, which would force the same plumbing on
-   * JobDetailView, which has no bulk actions of its own.
-   */
-  bulkActions?: React.ReactNode;
   /**
    * Opens the caller's "Select Applicants to Score" flow. Optional so the
    * button only appears where a host has somewhere to send it — JobDetailView
@@ -148,6 +149,7 @@ export default function ScoredResumesTable({
   resumes,
   jobTitle,
   jobId = 'jd-1',
+  jobCode,
   availableUnits = 10,
   initialMatchStatus = 'all',
   onViewCandidate,
@@ -155,7 +157,6 @@ export default function ScoredResumesTable({
   onSelectResume,
   onSelectAll,
   isGlobalView = false,
-  bulkActions,
   onScoreResumes,
   onInviteAIInterview,
   assessmentConfigured,
@@ -193,6 +194,11 @@ export default function ScoredResumesTable({
      name, type and size are read from the resume record when the dialog opens. */
   const [shareFile, setShareFile] = useState<{ name: string; type: string; sizeKb?: number } | null>(null);
   const [isSharePreviewOpen, setIsSharePreviewOpen] = useState(false);
+  /* "View Resume" in the Actions menu — the same read-in-place preview the
+     Share dialog's attachment eye opens, but reachable directly without
+     going through Share. Independent of shareCandidate/isSharePreviewOpen so
+     the two entry points never fight over one piece of state. */
+  const [viewResumeCandidate, setViewResumeCandidate] = useState<ScoredResume | null>(null);
   /* Scorecard side of the same dialog — the resume and the scorecard are the
      two files this page can send, so the eye beside each opens that one. */
   const [scorecardPreviewUrl, setScorecardPreviewUrl] = useState<string | null>(null);
@@ -496,6 +502,7 @@ Best regards`);
 
   // Export format modal state
   const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xls'>('csv');
 
   // Get cell value for export based on column ID
   const getCellValue = (resume: ScoredResume, columnId: string): string => {
@@ -527,9 +534,7 @@ Best regards`);
           typeof cert === 'string' ? cert : (cert?.name || '')
         ).join(', ') || '';
       case 'scoredDate':
-        return formatIST(resume.scoredDate);
-      case 'scoredBy':
-        return resume.scoredBy || '';
+        return `${resume.scoredBy || ''} — ${formatIST(resume.scoredDate)}`;
       default:
         return '';
     }
@@ -555,7 +560,7 @@ Best regards`);
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${jobTitle.replace(/\s+/g, '_')}_Scored_Resumes_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `${jobCodePrefix(dataToExport)}${jobTitle.replace(/\s+/g, '_')}${versionTag(dataToExport)}_Scorecards_${formatFileDate(new Date())}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -623,7 +628,7 @@ Best regards`);
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${jobTitle.replace(/\s+/g, '_')}_Scored_Resumes_${new Date().toISOString().slice(0, 10)}.xls`;
+    link.download = `${jobCodePrefix(dataToExport)}${jobTitle.replace(/\s+/g, '_')}${versionTag(dataToExport)}_Scorecards_${formatFileDate(new Date())}.xls`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -653,6 +658,54 @@ Best regards`);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [bulkDownloading, setBulkDownloading] = useState(false);
 
+  /* The trailing number in a job code ("JD-151" -> 151), for a numerically
+     correct sort — a plain string sort would put "JD-140" before "JD-9".
+     NaN (no trailing digits) falls back to alphabetical below. */
+  const jobCodeNumber = (code: string): number => {
+    const match = code.match(/(\d+)\s*$/);
+    return match ? parseInt(match[1], 10) : NaN;
+  };
+
+  /* One job code per selected resume, prefixed onto the download filename —
+     that resume's own `jobCode` (set in the global "View All Candidates"
+     view, which spans many jobs) or else this table's single host job. Two
+     or more distinct codes collapse to a "first-last" range rather than
+     listing every one, so a bulk download across many jobs still gets a
+     short, readable filename. */
+  const jobCodePrefix = (rows: ScoredResume[]): string => {
+    const codes = Array.from(new Set(
+      rows.map(r => r.jobCode || jobCode).filter((c): c is string => !!c),
+    )).sort((a, b) => {
+      const na = jobCodeNumber(a);
+      const nb = jobCodeNumber(b);
+      return !isNaN(na) && !isNaN(nb) ? na - nb : a.localeCompare(b);
+    });
+    if (codes.length === 0) return '';
+    if (codes.length === 1) return `${codes[0]}_`;
+    return `${codes[0]}-${codes[codes.length - 1]}_`;
+  };
+
+  /* "_(V3)" for the JD version(s) scored — matching the same "Version"
+     badge/column every row already shows. A range ("_(V1-V3)") when a bulk
+     download's rows were scored against different versions of their job(s);
+     nothing at all when no row carries a version number. */
+  const versionTag = (rows: ScoredResume[]): string => {
+    const versions = Array.from(new Set(
+      rows.map(r => r.version || r.resumeVersion).filter((v): v is number => !!v),
+    )).sort((a, b) => a - b);
+    if (versions.length === 0) return '';
+    if (versions.length === 1) return `_(V${versions[0]})`;
+    return `_(V${versions[0]}-V${versions[versions.length - 1]})`;
+  };
+
+  /* DD-MM-YYYY for filenames — distinct from formatISTDate's "31 Aug 2026"
+     display format, which isn't filename-safe (spaces, no fixed width). */
+  const formatFileDate = (date: Date): string => {
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    return `${dd}-${mm}-${date.getFullYear()}`;
+  };
+
   const handleDownloadScorecard = async (resumeId: string) => {
     const resume = resumes.find(r => r.id === resumeId);
     if (!resume) return;
@@ -666,7 +719,7 @@ Best regards`);
       const link = document.createElement('a');
       link.href = url;
       const safeCandidateName = (resume.candidateName || 'Candidate').replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') || 'Candidate';
-      link.download = `${safeCandidateName}_Screening_Report.pdf`;
+      link.download = `${jobCodePrefix([resume])}${safeCandidateName}${versionTag([resume])}_Scorecards.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -683,6 +736,13 @@ Best regards`);
   const handleDownloadBulkScorecards = async () => {
     if (selectedResumes.length === 0) return;
 
+    // One candidate needs no ZIP wrapper — download that single PDF
+    // directly, via the exact same path the per-row action uses.
+    if (selectedResumes.length === 1) {
+      await handleDownloadScorecard(selectedResumes[0]);
+      return;
+    }
+
     setBulkDownloading(true);
     try {
       const rawBlob = await scoringService.exportScorecards(selectedResumes);
@@ -691,8 +751,9 @@ Best regards`);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
+      const selectedRows = resumes.filter(r => selectedResumes.includes(r.id));
       const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_') || 'Scorecards';
-      link.download = `${safeName}_Scorecards.zip`;
+      link.download = `${jobCodePrefix(selectedRows)}${safeName}${versionTag(selectedRows)}_Scorecards_${formatFileDate(new Date())}.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -955,8 +1016,6 @@ Best regards`);
                     Bulk Invite ({selectedResumes.length})
                   </button>
                 )}
-                {/* Host-supplied bulk action — Download N Scorecards (ZIP). */}
-                {bulkActions}
               </>
             )}
           </div>
@@ -982,7 +1041,7 @@ Best regards`);
                   {col.label}
                 </th>
               ))}
-              <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle">Invite</th>
+              <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle">Invitation</th>
               <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle tf-sticky-col">Actions</th>
             </tr>
           </thead>
@@ -1148,17 +1207,11 @@ Best regards`);
                   if (col.id === 'scoredDate') {
                     return (
                       <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <Calendar className="w-3.5 h-3.5" />
+                        <div className="text-sm text-gray-900">{resume.scoredBy}</div>
+                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                          <Calendar className="w-3 h-3" />
                           <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
                         </div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'scoredBy') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="text-sm text-gray-600">{resume.scoredBy}</div>
                       </td>
                     );
                   }
@@ -1264,6 +1317,14 @@ Best regards`);
                         <Eye className="w-4 h-4 text-menu-icon-view" />
                         <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
                       </DropdownMenuItem>
+                      {/* Only scores that still point at a resume have a file
+                          behind them to preview. */}
+                      {resume.resumeId && (
+                        <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => setViewResumeCandidate(resume)}>
+                          <FileText className="w-4 h-4 text-menu-icon-view" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>View Resume</span>
+                        </DropdownMenuItem>
+                      )}
                       {/* Only scores that still point at a resume can be shared. */}
                       {canShareResume && resume.resumeId && (
                         <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => openShareModal(resume)}>
@@ -1397,14 +1458,12 @@ Best regards`);
                 </div>
               )}
               {enabledColumns.find(c => c.id === 'scoredDate') && (
-                  <div className="flex items-center gap-2 text-gray-600">
-                    <Calendar className="w-4 h-4" />
-                    <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
-                  </div>
-              )}
-              {enabledColumns.find(c => c.id === 'scoredBy') && (
                 <div className="text-gray-600">
                   <span className="text-gray-500">Scored by:</span> {resume.scoredBy}
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
+                  </div>
                 </div>
               )}
             </div>
@@ -1481,6 +1540,19 @@ Best regards`);
                   </>
                 )}
               </button>
+              )}
+
+              {resume.resumeId && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewResumeCandidate(resume);
+                  }}
+                  className="w-full px-4 py-2 text-sm text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <FileText className="w-4 h-4" />
+                  View Resume
+                </button>
               )}
 
               {canShareResume && resume.resumeId && (
@@ -1702,6 +1774,15 @@ Best regards`);
         />
       )}
 
+      {/* "View Resume" from the Actions menu — same preview, opened directly. */}
+      {viewResumeCandidate?.resumeId && (
+        <ResumeTextPreviewModal
+          resumeId={viewResumeCandidate.resumeId}
+          title={viewResumeCandidate.candidateName}
+          onClose={() => setViewResumeCandidate(null)}
+        />
+      )}
+
       {/* The scorecard, read in place. z-[60] puts it over the share
           dialog, the same level the resume preview uses. */}
       {scorecardPreviewUrl && shareCandidate && (
@@ -1770,59 +1851,86 @@ Best regards`);
       {/* Export Format Selection Modal */}
       {showExportModal && (
         <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
-            <div className="flex items-center justify-between p-5 border-b border-gray-200 shrink-0">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900">Export Scored Resumes</h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  {selectedResumes.length > 0
-                    ? `${selectedResumes.length} selected records`
-                    : `${filteredResumes.length} records`
-                  } • {enabledColumns.length} columns
-                </p>
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
+            <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 shrink-0">
+              <div className="flex items-start gap-3">
+                <div className="w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+                  <FileDown className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Export Scored Resumes</h3>
+                  <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
+                    {selectedResumes.length > 0
+                      ? `${selectedResumes.length} selected records`
+                      : `${filteredResumes.length} records`
+                    }
+                    <span className="w-1 h-1 rounded-full bg-blue-500" />
+                    {enabledColumns.length} columns
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setShowExportModal(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 flex-shrink-0"
                aria-label="Close">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="p-5 overflow-y-auto flex-1">
-              <p className="text-sm text-gray-600 mb-4">Choose export format:</p>
+              <p className="text-sm font-bold text-gray-900 mb-3">Choose export format</p>
 
               <div className="space-y-3">
                 <button
-                  onClick={exportToCSV}
-                  className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                  onClick={() => setExportFormat('csv')}
+                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                    exportFormat === 'csv'
+                      ? 'border-blue-500 bg-blue-50/60'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
                 >
-                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
-                    <FileDown className="w-6 h-6 text-green-700" />
+                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-6 h-6 text-green-700" />
                   </div>
-                  <div className="text-left flex-1">
-                    <div className="font-medium text-gray-900">CSV Format</div>
-                    <div className="text-sm text-gray-500">Compatible with Excel, Google Sheets, and most spreadsheet apps</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-gray-900">CSV Format</div>
+                    <div className="text-sm text-gray-500">Compatible with Excel, Google Sheets, and most spreadsheet apps.</div>
                   </div>
+                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                    exportFormat === 'csv' ? 'border-blue-600' : 'border-gray-300'
+                  }`}>
+                    {exportFormat === 'csv' && <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                  </span>
                 </button>
 
                 <button
-                  onClick={exportToXLS}
-                  className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                  onClick={() => setExportFormat('xls')}
+                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                    exportFormat === 'xls'
+                      ? 'border-blue-500 bg-blue-50/60'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
                 >
-                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                    <FileDown className="w-6 h-6 text-blue-700" />
+                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <FileSpreadsheet className="w-6 h-6 text-blue-700" />
                   </div>
-                  <div className="text-left flex-1">
-                    <div className="font-medium text-gray-900">Excel Format (.xls)</div>
-                    <div className="text-sm text-gray-500">Native Excel format with formatting and styling</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-gray-900">Excel Format (.xls)</div>
+                    <div className="text-sm text-gray-500">Native Excel format with formatting and styling.</div>
                   </div>
+                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                    exportFormat === 'xls' ? 'border-blue-600' : 'border-gray-300'
+                  }`}>
+                    {exportFormat === 'xls' && <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                  </span>
                 </button>
               </div>
 
-              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500">
-                  <strong>Columns included:</strong> {enabledColumns.map(c => c.label).join(', ')}
+              <div className="mt-4 p-4 bg-blue-50/60 rounded-xl flex items-start gap-3">
+                <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-gray-600">
+                  <span className="block font-bold text-blue-700 mb-0.5">Columns included</span>
+                  {enabledColumns.map(c => c.label).join(', ')}
                 </p>
               </div>
             </div>
@@ -1830,9 +1938,16 @@ Best regards`);
             <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
               <button
                 onClick={() => setShowExportModal(false)}
-                className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
+              </button>
+              <button
+                onClick={() => (exportFormat === 'csv' ? exportToCSV() : exportToXLS())}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
+              >
+                <Download className="w-4 h-4" />
+                Export
               </button>
             </div>
           </div>

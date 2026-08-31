@@ -6,7 +6,6 @@ import type { ReactNode } from 'react';
 import type { Job } from '@/lib/types/types';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import { getScoringSourceLabel } from '@/lib/utils/scoringSource';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import {
   formatEmploymentType,
@@ -27,8 +26,6 @@ interface JobVersionHistoryCardsProps {
   /**
    * Who most recently scored a resume against each version, and when. `null`
    * means the version has never been scored; an unset key means still loading.
-   * `source` is the raw scoring-record source field, rendered via
-   * `getScoringSourceLabel`.
    */
   versionScoredBy?: Record<string, { name: string; scoredAt: string; source?: string } | null>;
   /** The ⋮ menu for one version, built from a Job-shaped stand-in pointed at
@@ -39,6 +36,8 @@ interface JobVersionHistoryCardsProps {
   onCardClick?: (versionId: string) => void;
   /** Where a version's title links to. Defaults to its Job Details page. */
   versionHref?: (versionId: string) => string;
+  /** Drop still-drafted versions from the chain — see resolveVersionHistoryRows. */
+  publishedOnly?: boolean;
 }
 
 /**
@@ -64,8 +63,9 @@ export default function JobVersionHistoryCards({
   renderAction,
   onCardClick,
   versionHref = (id) => `/recruitment/job-details?id=${id}`,
+  publishedOnly = false,
 }: JobVersionHistoryCardsProps) {
-  const jobVersions = resolveVersionHistoryRows(job, versions);
+  const jobVersions = resolveVersionHistoryRows(job, versions, { publishedOnly, versionApplicants });
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
@@ -192,9 +192,6 @@ export default function JobVersionHistoryCards({
                         </div>
                         <div className="flex items-center gap-1.5 text-gray-500 dark:text-slate-400">
                           <span>{formatIST(scoredByInfo.scoredAt)}</span>
-                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
-                            {getScoringSourceLabel(scoredByInfo.source)}
-                          </span>
                         </div>
                       </>
                     ) : (

@@ -7,6 +7,7 @@ import { jdService } from '@/lib/services/jdService';
 import {
   getPublishedJobs,
   groupByLineage,
+  isVersionVisibleForScoring,
   lineageKey,
   mapJDToJob,
   sortJobs,
@@ -216,6 +217,23 @@ export default function JobOpeningPickerList({
   const allVersions = useMemo(() => fetchedJobs ?? jobs ?? [], [fetchedJobs, jobs]);
   const versionGroups = useMemo(() => groupByLineage(allVersions), [allVersions]);
 
+  /* Learn whether every archived/disabled version across the whole dataset
+     was ever scored — isVersionVisibleForScoring (and so the "does this
+     lineage have anything worth a View Versions button" check below) needs
+     that count to decide whether such a version belongs in the history at
+     all. Scoped to archived/disabled ids only: published and draft versions
+     don't need this count for that decision. */
+  const { ensureVersionApplicants } = versionLineage;
+  const archivedOrDisabledVersionIds = useMemo(
+    () => allVersions
+      .filter(v => ['archived', 'disabled'].includes((v.status || '').toLowerCase()))
+      .map(v => v.id),
+    [allVersions],
+  );
+  useEffect(() => {
+    ensureVersionApplicants(archivedOrDisabledVersionIds);
+  }, [archivedOrDisabledVersionIds, ensureVersionApplicants]);
+
   /* The listed jobs, and the number reported above them: one row per
      lineage.
      - Default: the lineage's LATEST version, kept only where that version is
@@ -402,14 +420,23 @@ export default function JobOpeningPickerList({
                  including any draft ahead of the published row on screen. */
               const lineageSiblings = versionGroups.get(versionKey) ?? [job];
 
-              /* Only jobs with MORE THAN ONE version get the control — the
-                 same test the Job Openings list applies, counting DISTINCT
-                 version numbers rather than rows (a republished JD arrives
-                 as several rows sharing one job_id and one v1). */
-              const distinctVersionCount = new Set(
-                lineageSiblings.map(sibling => sibling.versionNumber ?? 1),
+              /* Only jobs with MORE THAN ONE version visible to Resume
+                 Scoring get the control — the exact same
+                 isVersionVisibleForScoring test resolveVersionHistoryRows
+                 applies to the table itself below, so the button's guess
+                 never disagrees with what opening it actually shows: a
+                 draft is never counted, and an archived/disabled version
+                 counts only once its scored-count has come back positive
+                 (ensureVersionApplicants above). Counted from
+                 `lineageSiblings`, which already carries the full,
+                 already-fetched lineage — no extra request needed beyond
+                 that applicant-count prefetch. */
+              const visibleVersionCount = new Set(
+                lineageSiblings
+                  .filter(sibling => isVersionVisibleForScoring(sibling.status, sibling.id, versionLineage.versionApplicants))
+                  .map(sibling => sibling.versionNumber ?? 1),
               ).size;
-              const hasVersionHistory = (job.versionNumber ?? 1) > 1 || distinctVersionCount > 1;
+              const hasVersionHistory = visibleVersionCount > 1;
 
               return (
                 <div
@@ -602,6 +629,7 @@ export default function JobOpeningPickerList({
                       selectionDisabled={blockedByOtherPick}
                       selectionDisabledReason={reason}
                       radioGroupName={radioGroupName}
+                      publishedOnly
                     />
                   )}
                 </div>

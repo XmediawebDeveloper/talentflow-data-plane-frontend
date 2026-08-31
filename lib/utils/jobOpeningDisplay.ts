@@ -406,6 +406,32 @@ export const jobSearchMatcher = (query: string): ((job: Job) => boolean) => {
   };
 };
 
+/**
+ * Whether ONE version belongs in a `publishedOnly`-filtered Resume Scoring
+ * history: never a draft; an archived or disabled version only if it was
+ * actually scored (missing/zero count reads as "never scored" — nothing
+ * invented). Published and any other status pass through unconditionally.
+ *
+ * Shared by `resolveVersionHistoryRows` below (JDLineageVersion rows, the
+ * table/cards' own data) and `JobOpeningPickerList`'s "does this lineage have
+ * anything worth a View Versions button" check, which counts from its
+ * already-fetched Job-shaped siblings rather than a fresh lineage fetch — two
+ * different input shapes needing the identical rule so the button's guess
+ * never drifts from what the table it opens actually shows.
+ */
+export const isVersionVisibleForScoring = (
+  status: string | undefined,
+  versionId: string,
+  versionApplicants: Record<string, number> | undefined,
+): boolean => {
+  const normalized = (status || '').toLowerCase();
+  if (normalized === 'draft') return false;
+  if (normalized === 'archived' || normalized === 'disabled') {
+    return (versionApplicants?.[versionId] ?? 0) > 0;
+  }
+  return true;
+};
+
 export interface ResolvedVersionRow extends JDLineageVersion {
   /** The live version of the lineage — the flag is preferred, the version
    *  number backstops a lineage row that omits it. */
@@ -426,7 +452,21 @@ export interface ResolvedVersionRow extends JDLineageVersion {
 export const resolveVersionHistoryRows = (
   job: Pick<Job, 'id' | 'versionNumber'>,
   versions: JDLineageVersion[] | undefined,
-  options?: { excludeId?: string },
+  options?: {
+    excludeId?: string;
+    publishedOnly?: boolean;
+    /**
+     * Resumes scored per version id — only consulted under `publishedOnly`,
+     * to decide whether an ARCHIVED or DISABLED version is worth listing. A
+     * version a recruiter archived or disabled without ever scoring anyone
+     * against it has nothing for Resume Scoring's history to show; one that
+     * was scored before being archived/disabled is exactly the past activity
+     * that history exists to surface. Missing or zero counts as "no
+     * candidates" — never invented, since an uncounted version reads the
+     * same as a genuinely empty one here.
+     */
+    versionApplicants?: Record<string, number>;
+  },
 ): ResolvedVersionRow[] => {
   const lineageVersions = versions ?? [];
   const latestNumber = latestVersionNumber(lineageVersions, job.versionNumber ?? 1);
@@ -441,6 +481,15 @@ export const resolveVersionHistoryRows = (
          above this history that duplicates its own version — excluded only
          there, via excludeId, so a read-only table isn't missing a row. */
       if (options?.excludeId && v.id === options.excludeId) return false;
+      /* Resume Scoring's history is about what a candidate can be scored
+         against, so a still-drafted version — never live, nothing to score —
+         and an archived/disabled one nobody ever scored are both noise
+         there. Gated behind an option rather than applied everywhere: Job
+         Openings' own history is a job's full edit trail, where a draft in
+         progress is exactly what a recruiter expects to see. */
+      if (options?.publishedOnly && !isVersionVisibleForScoring(v.status, v.id, options.versionApplicants)) {
+        return false;
+      }
       return true;
     })
     .sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1))

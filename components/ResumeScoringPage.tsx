@@ -1,7 +1,7 @@
 "use client";
 
-import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, GitBranch, MoreVertical, Info } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronsUpDown, MoreVertical, Info, PieChart } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
 import ListPagination from './ListPagination';
@@ -20,8 +20,7 @@ import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
-import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
-import { getScoringSourceLabel } from '@/lib/utils/scoringSource';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
@@ -32,6 +31,7 @@ import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import JobVersionHistoryCards from '@/components/jobs/JobVersionHistoryCards';
+import { lineageKey, resolveVersionHistoryRows } from '@/lib/utils/jobOpeningDisplay';
 import type { Job as LineageJob } from '@/lib/types/types';
 import {
   DropdownMenu,
@@ -165,7 +165,10 @@ interface ScoredResumeData {
   jobId: string;
   jobTitle: string;
   scoredAt: Date;
-  source: 'my-resumes' | 'database';
+  /** The raw backend source of the most recently scored resume in this JD's
+   *  group (e.g. 'my-resumes', 'database', 'ai_talent_match'). Not currently
+   *  displayed anywhere; kept as real data in case a future surface needs it. */
+  source: string;
   jdStatus?: string;
   jdJobId?: string;
   jdCreationMethod?: string;
@@ -222,11 +225,17 @@ const historyLineageKey = (item: ScoredResumeData): string => item.jdJobId || it
  * The result is re-sorted by scoredAt so the list keeps its
  * most-recent-first order after collapsing.
  */
-const collapseHistoryToLatestVersions = (list: ScoredResumeData[]): ScoredResumeData[] => {
+const collapseHistoryToLatestVersions = (
+  list: ScoredResumeData[],
+  /** Overridable so the caller can resolve a lineage's real, fetched job_id
+   *  instead of trusting the (sometimes stale or missing) jdJobId denormalised
+   *  onto an individual score record — see resolveHistoryGroupKey below. */
+  resolveKey: (item: ScoredResumeData) => string = historyLineageKey,
+): ScoredResumeData[] => {
   const groups = new Map<string, ScoredResumeData>();
   const maxVersionByKey = new Map<string, number>();
   for (const item of list) {
-    const key = historyLineageKey(item);
+    const key = resolveKey(item);
     maxVersionByKey.set(key, Math.max(maxVersionByKey.get(key) ?? 1, item.jdCurrentVersion ?? 1));
     const existing = groups.get(key);
     if (!existing || new Date(item.scoredAt).getTime() > new Date(existing.scoredAt).getTime()) {
@@ -361,6 +370,59 @@ export default function ResumeScoringPage({
   // Version history for the "View by Job" list rows — same lineage endpoint
   // and panel the Job Openings list uses, so both surfaces read one history.
   const versionLineage = useJobVersionLineage();
+  /* Prefetch the lightweight lineage (statuses + true lineage version
+     numbers, no JD detail or applicant-count fetches) for every DISTINCT
+     scored JD — not just ones whose `jdCurrentVersion` already reads past 1.
+     That field is the republish counter for that one JD document, not its
+     position in the lineage (v1/v2/v3), so it reads back as 1 for a version
+     that has never itself been republished even when it is, say, the
+     lineage's v2 — the exact case this fetch exists to correct.
+     Keyed by the item's own raw JD id (never `historyLineageKey`'s
+     `jdJobId`, which can be stale or missing on older score records) so a
+     scored job's lineage is always the one this fetch actually asked for,
+     regardless of what the record's own denormalised job_id says. Consumed
+     below for the true version badge, the "has published siblings" check,
+     and the collapse step's real grouping key. */
+  const { ensureFilterLineages: ensureHistoryFilterLineages } = versionLineage;
+  const historyLineageFilterTargets = useMemo(
+    () => scoredHistory.map(item => ({ key: item.jobId, jobId: item.jobId })),
+    [scoredHistory],
+  );
+  useEffect(() => {
+    ensureHistoryFilterLineages(historyLineageFilterTargets);
+  }, [historyLineageFilterTargets, ensureHistoryFilterLineages]);
+  /* Once a lineage's statuses land, also learn whether its archived/disabled
+     versions were ever scored — resolveVersionHistoryRows needs that count to
+     decide whether such a version belongs in the history at all, and so does
+     "is there anything here worth a View Versions button" below. Scoped to
+     archived/disabled ids only: published and draft versions don't need this
+     count for either of those decisions. */
+  const { ensureVersionApplicants: ensureHistoryVersionApplicants } = versionLineage;
+  const archivedOrDisabledHistoryVersionIds = useMemo(
+    () => Array.from(new Set(
+      Object.values(versionLineage.filterLineages)
+        .flat()
+        .filter(v => ['archived', 'disabled'].includes((v.status || '').toLowerCase()))
+        .map(v => v.id),
+    )),
+    [versionLineage.filterLineages],
+  );
+  useEffect(() => {
+    ensureHistoryVersionApplicants(archivedOrDisabledHistoryVersionIds);
+  }, [archivedOrDisabledHistoryVersionIds, ensureHistoryVersionApplicants]);
+  /* The one lineage entry that IS this scored item — its authoritative
+     job_id (for grouping) and version_number (for the badge), read once the
+     prefetch above lands. `undefined` while still loading. */
+  const resolveHistoryLineageEntry = (item: ScoredResumeData) =>
+    versionLineage.filterLineages[item.jobId]?.find(v => v.id === item.jobId);
+  /* The real grouping key for "one card per job lineage": the lineage's own
+     job_id once known, falling back to the record's denormalised
+     jdJobId/jobId while that fetch is still in flight. Two scored versions
+     of the same job can carry DIFFERENT (or a missing) `jdJobId` on the
+     score record itself — this is what was producing two "v1" cards for one
+     job scored at both v1 and v2. */
+  const resolveHistoryGroupKey = (item: ScoredResumeData): string =>
+    resolveHistoryLineageEntry(item)?.job_id || historyLineageKey(item);
   const [selectedJob, setSelectedJob] = useState('');
   const [resumeSource, setResumeSource] = useState<'my-resumes' | 'internal-database' | null>(null);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -528,7 +590,6 @@ export default function ResumeScoringPage({
 
   // Bulk download state for scored resumes
   const [selectedScoredResumes, setSelectedScoredResumes] = useState<string[]>([]);
-  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
 
   // Available units from quota API
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);  // RS quota for scoring
@@ -625,6 +686,9 @@ export default function ResumeScoringPage({
         gaps: item.gaps,
         jobTitle: item.jd_title,
         jdId: item.jd_id,
+        // The readable job code — rows here span many jobs, so scorecard
+        // filenames need this per-row rather than one shared table-level id.
+        jobCode: item.jd_job_id,
         // Version tracking
         version: item.resume_version || 1,
         resumeVersion: item.resume_version || 1,
@@ -1323,75 +1387,6 @@ export default function ResumeScoringPage({
     toast.info(`Download initiated! ${selectedHistoryItems.size} scoring session(s) selected, ${totalResumes} total resume(s)`);
   };
 
-  // Bulk download scorecards as ZIP
-  const handleBulkDownloadScorecards = async () => {
-    if (selectedScoredResumes.length === 0) {
-      toast.error('Please select at least one candidate to download scorecards');
-      return;
-    }
-
-    setIsBulkDownloading(true);
-    toast.loading(`Preparing ${selectedScoredResumes.length} scorecard(s) for download...`, { id: 'bulk-scorecard-download' });
-
-    try {
-      console.log('[BulkDownload] Downloading scorecards for:', selectedScoredResumes);
-
-      // Use the scoring service to export scorecards
-      const blob = await scoringService.exportScorecards(selectedScoredResumes);
-
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      // View All Candidates spans every JD, so naming the file after one of them
-      // would be wrong — it gets All_Jobs instead.
-      const rawName = isGlobalView ? 'All Jobs' : (selectedHistoryItem?.jobTitle || 'TalentFlow');
-      const jdName = rawName.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
-      a.download = `${jdName}_Scorecards.zip`;
-      document.body.appendChild(a);
-      a.click();
-
-      // Cleanup
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      console.log('[BulkDownload] ZIP downloaded successfully');
-      toast.success(`Successfully downloaded ${selectedScoredResumes.length} scorecard(s)`, { id: 'bulk-scorecard-download' });
-
-      // Clear selection
-      setSelectedScoredResumes([]);
-    } catch (error) {
-      console.error('[BulkDownload] Error:', error);
-      toast.error('Failed to download scorecards. Please try again.', { id: 'bulk-scorecard-download' });
-    } finally {
-      setIsBulkDownloading(false);
-    }
-  };
-
-  // "Download N Scorecards (ZIP)" for ScoredResumesTable's selection row. Built
-  // once and handed to both the per-JD list and View All Candidates — the
-  // handler works off `selectedScoredResumes`, which both views populate, so
-  // there was never a reason for only one of them to offer it.
-  const bulkScorecardAction = canExport ? (
-    <button
-      onClick={handleBulkDownloadScorecards}
-      disabled={isBulkDownloading}
-      className="h-9 px-3.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-full transition-all text-sm font-medium flex items-center gap-2 whitespace-nowrap shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      {isBulkDownloading ? (
-        <>
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Generating ZIP...
-        </>
-      ) : (
-        <>
-          <Download className="w-4 h-4" />
-          Download {selectedScoredResumes.length} Scorecard{selectedScoredResumes.length > 1 ? 's' : ''} (ZIP)
-        </>
-      )}
-    </button>
-  ) : null;
-
   const selectedJobData = jobs.find(j => j.id === selectedJob) || (extraJobRecord?.id === selectedJob ? extraJobRecord : undefined);
 
   /**
@@ -1679,23 +1674,6 @@ export default function ResumeScoringPage({
                       <FileText className="w-3.5 h-3.5" />
                       {selectedHistoryItem.totalScored} candidates scored
                     </span>
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
-                      selectedHistoryItem.source === 'my-resumes'
-                        ? 'bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50'
-                        : 'bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50'
-                    }`}>
-                      {selectedHistoryItem.source === 'my-resumes' ? (
-                        <>
-                          <FolderOpen className="w-3 h-3" />
-                          My Resumes
-                        </>
-                      ) : (
-                        <>
-                          <Database className="w-3 h-3" />
-                          Resume Database
-                        </>
-                      )}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -1704,7 +1682,37 @@ export default function ResumeScoringPage({
                 {/* Prev/Next — placed before the Score New Resumes action */}
                 {canRunScoring && (
                   <button
-                    onClick={() => setViewMode('new')}
+                    onClick={() => {
+                      /* Already on this job's own page — skip the job
+                         picker entirely and land straight on "Select
+                         Applicants to Score" for it, instead of making the
+                         user search for and re-pick the same job they're
+                         already looking at. Built from this page's own JD
+                         fields (the same stand-in the version-history rows
+                         already use) rather than looked up from `jobs`,
+                         since that list only carries one row per lineage's
+                         LATEST published version — this job's own record
+                         either way. */
+                      const jobForPicker: LineageJob = {
+                        id: selectedHistoryItem.jobId,
+                        job_id: selectedHistoryItem.jdJobId,
+                        title: selectedHistoryItem.jobTitle,
+                        status: mapJdStatusToJobStatus(selectedHistoryItem.jdStatus),
+                        location: selectedHistoryItem.jdLocation || '',
+                        daysActive: 0,
+                        requiredMatch: 0,
+                        industry_type: selectedHistoryItem.jdIndustryType,
+                        employmentType: selectedHistoryItem.jdEmploymentType,
+                        workMode: selectedHistoryItem.jdRemoteType,
+                        postedBy: selectedHistoryItem.jdCreatedByName,
+                        postedDate: selectedHistoryItem.jdPublishedAt,
+                        creation_method: selectedHistoryItem.jdCreationMethod as LineageJob['creation_method'],
+                        currentVersion: selectedHistoryItem.jdCurrentVersion,
+                      };
+                      setViewMode('new');
+                      handleJobPicked({ job: jobForPicker, lineage: lineageKey(jobForPicker) });
+                      setShowResumeSelectionModal(true);
+                    }}
                     className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
                   >
                     <Target className="w-4 h-4" />
@@ -1716,14 +1724,12 @@ export default function ResumeScoringPage({
           </div>
         </div>
 
-        {/* Scored Resumes Table — the Download ZIP control is passed in as
-            `bulkActions` so it joins the table's own selection row rather than
-            sitting in a separate bar above it. */}
+        {/* Scored Resumes Table */}
         <ScoredResumesTable
           resumes={scoredResumesData}
           jobTitle={selectedHistoryItem.jobTitle}
           jobId={selectedHistoryItem.jobId}
-          bulkActions={bulkScorecardAction}
+          jobCode={selectedHistoryItem.jdJobId}
           availableUnits={availableASUnits ?? 10}
           /* Nothing published on this JD → nothing to invite to, so the row's
              Invite goes disabled rather than opening a menu that dead-ends. */
@@ -1891,9 +1897,12 @@ export default function ResumeScoringPage({
 
     // One row per job — its own final (highest) scored version — instead of
     // one row per JD version. Earlier versions remain reachable through that
-    // row's "View Versions" panel.
-    const collapsedHistory = collapseHistoryToLatestVersions(filteredHistory);
-    const collapsedScoredHistoryCount = collapseHistoryToLatestVersions(scoredHistory).length;
+    // row's "View Versions" panel. Grouped by each item's real, fetched
+    // lineage job_id (resolveHistoryGroupKey) rather than the record's own
+    // possibly-stale jdJobId, so a job scored at both v1 and v2 collapses
+    // into one card instead of showing up as two.
+    const collapsedHistory = collapseHistoryToLatestVersions(filteredHistory, resolveHistoryGroupKey);
+    const collapsedScoredHistoryCount = collapseHistoryToLatestVersions(scoredHistory, resolveHistoryGroupKey).length;
 
     // Add processing entry at the top if it exists and matches filters
     const displayHistory = processingEntry && (historySearchQuery === '' || processingEntry.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase()))
@@ -2023,7 +2032,10 @@ export default function ResumeScoringPage({
                         candidateName: resume.candidateName || resume.name || 'Unknown',
                         jobTitle: item.jobTitle,
                         jobId: item.jobId,
-                        source: item.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
+                        // This resume's own source, not the JD's aggregate — a job
+                        // scored from both My Resumes and the internal database
+                        // would otherwise show every row under one source.
+                        source: resume.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
                         status: 'Scored successfully' as const,
                         // Each candidate's own scored date, not the job's aggregate
                         // `scoredAt` — that would show every row under one job with
@@ -2115,7 +2127,6 @@ export default function ResumeScoringPage({
                 resumes={globalScoredResumes}
                 jobTitle="All Jobs"
                 jobId="global"
-                bulkActions={bulkScorecardAction}
                 availableUnits={availableASUnits ?? 10}
                 onViewCandidate={(resume) => {
                   setSelectedCandidateForView(resume);
@@ -2272,20 +2283,47 @@ export default function ResumeScoringPage({
               // list uses, so "View Versions" here opens the same history.
               const versionKey = historyLineageKey(item);
               const versionsExpanded = versionLineage.isExpanded(versionKey);
+              // This item's own entry in its (prefetched) lineage — the
+              // authoritative version_number for the badge below, since
+              // item.jdCurrentVersion is that JD document's republish
+              // counter, not its position in the lineage (v1/v2/v3). Falls
+              // back to jdCurrentVersion while the fetch is still in flight.
+              const historyLineageEntry = resolveHistoryLineageEntry(item);
+              const displayVersionNumber = historyLineageEntry?.version_number ?? item.jdCurrentVersion;
               // lineageMaxVersion (the highest version scored anywhere in this
               // job's lineage) rather than item.jdCurrentVersion — the
               // representative row can itself be an older version now that
               // it's picked by most-recent scoredAt, not by version number.
-              const hasVersionHistory = (item.lineageMaxVersion ?? item.jdCurrentVersion ?? 1) > 1;
+              //
+              // Once the prefetched filter lineage (and, for any
+              // archived/disabled sibling, its scored count) lands, refine
+              // that guess into the REAL answer: run the exact same
+              // resolveVersionHistoryRows the panel itself renders from, and
+              // check whether more than one row survives. Reusing that
+              // function rather than a hand-rolled count is what keeps this
+              // in sync with the table. Falls back to the version-number
+              // guess only while the fetch is still in flight, so the button
+              // doesn't flicker away on first paint.
+              const filterLineageForItem = versionLineage.filterLineages[item.jobId];
+              const visibleHistoryRowCount = filterLineageForItem
+                ? resolveVersionHistoryRows(
+                    { id: item.jobId, versionNumber: displayVersionNumber },
+                    filterLineageForItem,
+                    { publishedOnly: true, versionApplicants: versionLineage.versionApplicants },
+                  ).length
+                : undefined;
+              const hasVersionHistory = visibleHistoryRowCount !== undefined
+                ? visibleHistoryRowCount > 1
+                : (item.lineageMaxVersion ?? item.jdCurrentVersion ?? 1) > 1;
               const versionStubJob: LineageJob = {
                 id: item.jobId,
-                job_id: item.jdJobId,
+                job_id: historyLineageEntry?.job_id || item.jdJobId,
                 title: item.jobTitle,
                 status: mapJdStatusToJobStatus(item.jdStatus),
                 location: item.jdLocation || '',
                 daysActive: 0,
                 requiredMatch: 0,
-                versionNumber: item.jdCurrentVersion,
+                versionNumber: displayVersionNumber,
               };
               const openVersionDetails = (versionId: string) => {
                 const stub: ScoredResumeData = {
@@ -2376,6 +2414,7 @@ export default function ResumeScoringPage({
                       versionScoredBy={versionLineage.versionScoredBy}
                       onCardClick={openVersionDetails}
                       renderAction={renderVersionAction}
+                      publishedOnly
                     />
                   ) : (
                     <JobVersionHistoryPanel
@@ -2387,6 +2426,8 @@ export default function ResumeScoringPage({
                       versionScoredBy={versionLineage.versionScoredBy}
                       onRowClick={openVersionDetails}
                       renderAction={renderVersionAction}
+                      publishedOnly
+                      stickyVersionColumn
                     />
                   )}
                 </div>
@@ -2452,10 +2493,10 @@ export default function ResumeScoringPage({
                             );
                           })()}
                           {/* Version badge */}
-                          {item.jdCurrentVersion && item.jdCurrentVersion >= 1 && (
+                          {displayVersionNumber && displayVersionNumber >= 1 && (
                             <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
                               <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
-                              v{item.jdCurrentVersion}
+                              v{displayVersionNumber}
                             </span>
                           )}
                           {/* History icon button */}
@@ -2535,7 +2576,10 @@ export default function ResumeScoringPage({
                                 candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
                                 jobTitle: item.jobTitle,
                                 jobId: item.jobId,
-                                source: item.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
+                                // This resume's own source, not the JD's aggregate — a
+                                // job scored from both My Resumes and the internal
+                                // database would otherwise show every row under one source.
+                                source: resume.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
                                 status: (resume.status === 'failed' || resume.errorReason) ? 'Failed' as const : 'Scored successfully' as const,
                                 errorReason: resume.errorReason || resume.error_reason,
                                 // Each candidate's own scored date, not the job's
@@ -2589,8 +2633,8 @@ export default function ResumeScoringPage({
                                 : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30'
                             }`}
                           >
-                            <GitBranch className="w-3.5 h-3.5" />
                             {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
                           </button>
                         )}
                       </div>
@@ -2646,10 +2690,10 @@ export default function ResumeScoringPage({
                                 </span>
                               );
                             })()}
-                            {item.jdCurrentVersion && item.jdCurrentVersion >= 1 && (
+                            {displayVersionNumber && displayVersionNumber >= 1 && (
                               <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
-                                v{item.jdCurrentVersion}
+                                v{displayVersionNumber}
                               </span>
                             )}
                             {/* History icon button */}
@@ -2772,7 +2816,10 @@ export default function ResumeScoringPage({
                                 candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
                                 jobTitle: item.jobTitle,
                                 jobId: item.jobId,
-                                source: item.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
+                                // This resume's own source, not the JD's aggregate — a
+                                // job scored from both My Resumes and the internal
+                                // database would otherwise show every row under one source.
+                                source: resume.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
                                 status: (resume.status === 'failed' || resume.errorReason) ? 'Failed' as const : 'Scored successfully' as const,
                                 errorReason: resume.errorReason || resume.error_reason,
                                 // Each candidate's own scored date, not the job's
@@ -2827,8 +2874,8 @@ export default function ResumeScoringPage({
                                 : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30'
                             }`}
                           >
-                            <GitBranch className="w-3.5 h-3.5" />
                             {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
                           </button>
                         )}
                       </div>
@@ -2986,95 +3033,253 @@ export default function ResumeScoringPage({
 
       {/* Scoring History Modal */}
       {historyModalItem && (() => {
-        const groups: { scoredBy: string; date: string; count: number; source: string }[] = [];
+        const isExactMatch = (r: any) => r.matchStatus === 'Exact Match' || r.matchStatus === 'exact_match';
+        const isPartialMatch = (r: any) => r.matchStatus === 'Partial Match' || r.matchStatus === 'partial_match';
+        const isNoMatch = (r: any) => !isExactMatch(r) && !isPartialMatch(r);
+        const allResumes = historyModalItem.scoredResumes || [];
+
+        /* The JD version every resume here was scored against — ONE value
+           for the whole modal, not per row. `historyModalItem.scoredResumes`
+           only ever holds one job version's scores: the history list groups
+           raw scores by jd_id first (one ScoredResumeData per version), and
+           collapsing to "one card per job" (collapseHistoryToLatestVersions)
+           picks a single winning version's whole record rather than merging
+           several versions' resumes together — so there's nothing to group
+           by version here. `r.version`/`r.resumeVersion` on each resume is
+           `resume_version` — the CANDIDATE's own uploaded-resume revision,
+           not the job's — using it as if it were the JD version (and as a
+           grouping key) was the bug: it fragmented one job's resumes into
+           spurious extra rows and showed the wrong number in each.
+           Resolved the same way the list row's own badge is (see
+           resolveHistoryLineageEntry above): the version_number from this
+           JD's own lineage entry, falling back to the republish counter
+           only while that fetch hasn't landed yet. */
+        const modalVersionNumber = resolveHistoryLineageEntry(historyModalItem)?.version_number
+          ?? historyModalItem.jdCurrentVersion
+          ?? 1;
+
+        const groups: {
+          scoredBy: string;
+          scoredByEmail?: string;
+          date: string;
+          count: number;
+          exactCount: number;
+          partialCount: number;
+          noMatchCount: number;
+          totalScore: number;
+        }[] = [];
         const seen = new Map<string, number>();
-        (historyModalItem.scoredResumes || []).forEach((r: any) => {
+        allResumes.forEach((r: any) => {
           const scorer = r.scoredBy || 'System';
           const rawDate = r.scoredDate || r.created_at || historyModalItem.scoredAt;
           const day = formatISTDate(rawDate);
-          const time = formatISTTime(rawDate);
-          const src = getScoringSourceLabel(r.source);
-          const key = `${scorer}||${day}||${src}`;
+          const key = `${scorer}||${day}`;
+          const score = Number(r.overall_score ?? r.scorePercentage ?? 0);
           if (seen.has(key)) {
-            groups[seen.get(key)!].count++;
+            const g = groups[seen.get(key)!];
+            g.count++;
+            g.totalScore += score;
+            if (isExactMatch(r)) g.exactCount++;
+            else if (isPartialMatch(r)) g.partialCount++;
+            else g.noMatchCount++;
           } else {
             seen.set(key, groups.length);
-            groups.push({ scoredBy: scorer, date: `${day}, ${time}`, count: 1, source: src });
+            groups.push({
+              scoredBy: scorer,
+              scoredByEmail: r.scoredByEmail && r.scoredByEmail.includes('@') ? r.scoredByEmail : undefined,
+              date: day,
+              count: 1,
+              exactCount: isExactMatch(r) ? 1 : 0,
+              partialCount: isPartialMatch(r) ? 1 : 0,
+              noMatchCount: isNoMatch(r) ? 1 : 0,
+              totalScore: score,
+            });
           }
         });
+
+        const summary = {
+          total: allResumes.length,
+          exact: allResumes.filter(isExactMatch).length,
+          partial: allResumes.filter(isPartialMatch).length,
+          noMatch: allResumes.filter(isNoMatch).length,
+        };
+
+        const sortHeaderIcon = <ChevronsUpDown className="w-3 h-3 text-gray-400 dark:text-slate-500" />;
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[90dvh] flex flex-col tf-round-edges">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-5xl max-h-[90dvh] flex flex-col tf-round-edges">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
+                  <div className="w-11 h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <History className="w-5 h-5 text-brand-blue" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-sm">Scoring History</h3>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[260px]">{historyModalItem.jobTitle}</p>
+                    <h3 className="font-bold text-gray-900 dark:text-slate-50">Scoring History</h3>
+                    <p className="text-sm text-gray-500 dark:text-slate-500 truncate max-w-[360px]">
+                      {historyModalItem.jobTitle}
+                      {historyModalItem.jdJobId && ` (${historyModalItem.jdJobId})`}
+                    </p>
                   </div>
                 </div>
-                <button onClick={() => setHistoryModalItem(null)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
+                <button onClick={() => setHistoryModalItem(null)} className="p-1.5 border border-gray-200 dark:border-slate-700 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close">
                   <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
                 </button>
               </div>
-              {/* The shell is the dialog's only scroller. The body used to scroll
-                  too, and --compact's 55vh cap is taller than what is left of a
-                  90vh dialog after the header — so the cap never engaged, the
-                  body scrolled instead, and the sticky <thead> rode up out of
-                  view. --fill + flex-1/min-h-0 against an overflow-hidden
-                  parent is the pairing globals.css documents for this. */}
-              <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+
+              {/* The shell is the dialog's only scroller. */}
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="px-6 pt-5">
+                  <p className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-3">Match Summary</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                        <FileText className="w-4 h-4 text-brand-blue" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">Total Resumes Scored</div>
+                        <div className="text-xl font-bold text-brand-blue">{summary.total}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">Exact Match</div>
+                        <div className="text-xl font-bold text-green-600">{summary.exact}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                        <PieChart className="w-4 h-4 text-orange-500" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">Partial Match</div>
+                        <div className="text-xl font-bold text-orange-500">{summary.partial}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                        <XCircle className="w-4 h-4 text-red-500" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">No Match</div>
+                        <div className="text-xl font-bold text-red-500">{summary.noMatch}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {groups.length === 0 ? (
                   <div className="px-6 py-10 text-center text-sm text-gray-400 dark:text-slate-500">No scoring history available.</div>
                 ) : (
-                  <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 sticky top-0">
-                        <tr>
-                          <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Scored By</th>
-                          <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Date & Time</th>
-                          <th className="text-center px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Resumes</th>
-                          <th className="text-left px-5 py-3 text-xs font-medium text-gray-500 dark:text-slate-500">Source</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-50">
-                        {groups.map((g, i) => (
-                          <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
-                            <td className="px-5 py-3.5">
-                              <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                                  <span className="text-xs font-semibold text-brand-blue">{g.scoredBy.charAt(0).toUpperCase()}</span>
-                                </div>
-                                <span className="text-gray-800 dark:text-slate-100 font-medium">{g.scoredBy}</span>
-                              </div>
-                            </td>
-                            <td className="px-5 py-3.5 text-gray-600 dark:text-slate-400 text-xs whitespace-nowrap">{g.date}</td>
-                            <td className="px-5 py-3.5 text-center">
-                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-100 font-bold text-sm">{g.count}</span>
-                            </td>
-                            <td className="px-5 py-3.5">
-                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                g.source === 'My Resumes'
-                                  ? 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20'
-                                  : g.source === 'AI Talent Match'
-                                    ? 'bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20'
-                                    : 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700'
-                              }`}>
-                                {g.source}
-                              </span>
-                            </td>
+                  <div className="px-6">
+                    {/* Vertical scroll only — a fixed layout with explicit
+                        column widths means the header and body cells share
+                        the exact same grid regardless of content, so nothing
+                        pushes the table wider than the dialog and forces a
+                        horizontal scrollbar. Sticky is set on each <th>
+                        itself rather than the <thead> — more reliably
+                        supported than a sticky thead across browsers. */}
+                    <div className="max-h-[360px] overflow-y-auto overflow-x-hidden rounded-lg border border-gray-100 dark:border-slate-700/60">
+                      <table className="w-full text-sm table-fixed">
+                        <colgroup>
+                          <col className="w-[9%]" />
+                          <col className="w-[26%]" />
+                          <col className="w-[14%]" />
+                          <col className="w-[12%]" />
+                          <col className="w-[25%]" />
+                          <col className="w-[14%]" />
+                        </colgroup>
+                        <thead>
+                          <tr>
+                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-left px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">Version</th>
+                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-left px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">Scored By</th>
+                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-left px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">
+                              <span className="inline-flex items-center gap-1">Date {sortHeaderIcon}</span>
+                            </th>
+                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-center px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">
+                              <span className="inline-flex items-center justify-center gap-1">Resumes {sortHeaderIcon}</span>
+                            </th>
+                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-left px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">
+                              <span className="inline-flex items-center gap-1">Status {sortHeaderIcon}</span>
+                            </th>
+                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-center px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">
+                              <span className="inline-flex items-center justify-center gap-1">Average Score {sortHeaderIcon}</span>
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                          {groups.map((g, i) => (
+                            <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                              <td className="px-4 py-3.5 align-middle">
+                                <span className="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                                  v{modalVersionNumber}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5 align-middle">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-xs font-semibold text-brand-blue">{g.scoredBy.charAt(0).toUpperCase()}</span>
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-gray-900 dark:text-slate-100 font-semibold truncate">{g.scoredBy}</div>
+                                    {g.scoredByEmail && (
+                                      <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{g.scoredByEmail}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5 align-middle whitespace-nowrap">
+                                <div className="flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
+                                  <Calendar className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
+                                  {g.date}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5 align-middle text-center">
+                                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-brand-blue/10 text-brand-blue font-bold text-sm">{g.count}</span>
+                                <div className="text-[11px] text-gray-500 dark:text-slate-500 mt-0.5">Resume{g.count === 1 ? '' : 's'} Scored</div>
+                              </td>
+                              <td className="px-4 py-3.5 align-middle">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="inline-flex flex-col items-center px-2 py-1 rounded-lg bg-green-50 dark:bg-green-900/20 min-w-[52px]">
+                                    <span className="text-[10px] font-medium text-green-700 dark:text-green-400">Exact</span>
+                                    <span className="text-sm font-bold text-green-700 dark:text-green-400">{g.exactCount}</span>
+                                  </span>
+                                  <span className="inline-flex flex-col items-center px-2 py-1 rounded-lg bg-orange-50 dark:bg-orange-900/20 min-w-[52px]">
+                                    <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400">Partial</span>
+                                    <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{g.partialCount}</span>
+                                  </span>
+                                  <span className="inline-flex flex-col items-center px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 min-w-[52px]">
+                                    <span className="text-[10px] font-medium text-red-600 dark:text-red-400">No Match</span>
+                                    <span className="text-sm font-bold text-red-600 dark:text-red-400">{g.noMatchCount}</span>
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5 align-middle text-center">
+                                <span className="text-lg font-bold text-brand-blue">{Math.round(g.totalScore / g.count)}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
+
+                <div className="px-6 pt-4 pb-5">
+                  <div className="flex items-start gap-2.5 p-3.5 bg-brand-blue/[0.05] rounded-xl">
+                    <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-gray-600 dark:text-slate-400">
+                      Match status is based on the comparison of candidate resumes with the job description.
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 flex justify-between items-center bg-gray-50 dark:bg-slate-800/50 shrink-0">
-                <span className="text-xs text-gray-500 dark:text-slate-500">{historyModalItem.totalScored} total resumes scored</span>
-                <button onClick={() => setHistoryModalItem(null)} className="px-4 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-xs font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all">Close</button>
+
+              <div className="flex justify-end px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 shrink-0">
+                <button onClick={() => setHistoryModalItem(null)} className="px-6 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all">Close</button>
               </div>
             </div>
           </div>
@@ -3130,7 +3335,7 @@ export default function ResumeScoringPage({
           <div className="min-w-0">
             <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">Job Eligibility</p>
             <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
-              Only Published and Republished jobs can be scored. A job is shown here by its latest published version — if a newer version is a Draft, the last published one is shown instead. Jobs with no published version at all aren&apos;t listed.
+              Only Published and Republished jobs can be scored. A job is shown here by its latest published version — if a newer version is a Draft, the last published one is shown instead. Disabled or Archived jobs cannot be scored.
             </p>
           </div>
         </div>
