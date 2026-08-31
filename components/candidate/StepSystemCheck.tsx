@@ -32,6 +32,7 @@ import {
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
 import { checkVirtualCamera, virtualCameraMessage } from '@/lib/proctoring/virtualCameraDetection';
+import { canOpenDevice } from '@/lib/utils/mediaDeviceProbe';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -1515,20 +1516,8 @@ export default function StepSystemCheck({
     // all-or-nothing, so a missing camera would mask a missing mic and the
     // candidate would be told to fix the wrong thing. Probe tracks are stopped
     // immediately — this only answers "can it open?".
-    const probeDevice = async (constraints: MediaStreamConstraints, kind: 'video' | 'audio') => {
-      let s: MediaStream | null = null;
-      try {
-        s = await navigator.mediaDevices.getUserMedia(constraints);
-        const tracks = kind === 'video' ? s.getVideoTracks() : s.getAudioTracks();
-        return tracks.some(t => t.readyState === 'live');
-      } catch {
-        return false;
-      } finally {
-        s?.getTracks().forEach(t => t.stop());
-      }
-    };
-    const _camLive = await probeDevice({ video: true }, 'video');
-    const _micLive = await probeDevice({ audio: true }, 'audio');
+    const _camLive = await canOpenDevice({ video: true }, 'video');
+    const _micLive = await canOpenDevice({ audio: true }, 'audio');
     if (!_camLive || !_micLive) {
       console.warn(`[SystemCheck] Continue blocked — camera=${_camLive} mic=${_micLive} at click time`);
       if (!_camLive) {

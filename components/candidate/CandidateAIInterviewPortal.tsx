@@ -27,6 +27,7 @@ import { ScreenRecordingBlockedModal } from '@/components/ai-interview/proctorin
 import PreInterviewLayout from '@/components/candidate/PreInterviewLayout';
 import StepConsent from '@/components/candidate/StepConsent';
 import StepIdentity from '@/components/candidate/StepIdentity';
+import { probeMediaDevices, deviceMissingMessage } from '@/lib/utils/mediaDeviceProbe';
 import StepSystemCheck, { ENROLL_PASSAGE } from '@/components/candidate/StepSystemCheck';
 import StepIntroVideo from '@/components/candidate/StepIntroVideo';
 import StepLanguageSelect from '@/components/candidate/StepLanguageSelect';
@@ -126,14 +127,6 @@ const TERMINATION_MESSAGES: Record<string, string> = {
 const terminationMessage = (reason: string): string =>
   TERMINATION_MESSAGES[reason] || 'Left the interview screen';
 
-/** Shared wording for a camera/mic that has gone missing at a pre-start gate. */
-const deviceMissingMessage = (missing: 'camera' | 'microphone' | 'both'): string => {
-  const what = missing === 'both' ? 'camera and microphone' : missing;
-  const isAre = missing === 'both' ? 'are' : 'is';
-  const itThem = missing === 'both' ? 'them' : 'it';
-  return `Your ${what} ${isAre} no longer available. Please reconnect ${itThem} — ` +
-    `the interview cannot start without ${missing === 'both' ? 'both' : itThem}.`;
-};
 
 // True when a keyboard event is the Windows / Command (Meta / Super) key.
 // Checked by key name, physical code, AND the metaKey modifier so it's caught
@@ -1308,40 +1301,6 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   };
 
   // Called from StepSamplePractice "Start Interview" button — goes to fullscreen prompt first
-  /**
-   * Is the camera / microphone actually available RIGHT NOW?
-   *
-   * The system check runs minutes earlier and its verdict is PERSISTED
-   * (system_check_passed), so nothing re-tested the hardware at the moment the
-   * candidate pressed Start — unplug the camera after passing the check and the
-   * interview began normally, with no error and a dead camera.
-   *
-   * Video and audio are probed SEPARATELY and never in one getUserMedia call:
-   * a combined request is all-or-nothing, so one missing device would mask the
-   * other and we could not tell the candidate which one to reconnect.
-   * Probe tracks are stopped immediately — this only answers "can it open?",
-   * it never holds a device the interview is about to want.
-   */
-  const probeMediaDevicesReady = useCallback(async (): Promise<'camera' | 'microphone' | 'both' | null> => {
-    const canOpen = async (constraints: MediaStreamConstraints, kind: 'video' | 'audio') => {
-      let s: MediaStream | null = null;
-      try {
-        s = await navigator.mediaDevices.getUserMedia(constraints);
-        const tracks = kind === 'video' ? s.getVideoTracks() : s.getAudioTracks();
-        return tracks.some(t => t.readyState === 'live');
-      } catch {
-        return false;
-      } finally {
-        s?.getTracks().forEach(t => t.stop());
-      }
-    };
-    const camOk = await canOpen({ video: true }, 'video');
-    const micOk = await canOpen({ audio: true }, 'audio');
-    if (!camOk && !micOk) return 'both';
-    if (!camOk) return 'camera';
-    if (!micOk) return 'microphone';
-    return null;
-  }, []);
 
   // Practice → fullscreen prompt. Gated on the devices being present RIGHT NOW.
   //
@@ -1355,7 +1314,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     if (startSubmitting) return;
     setStartSubmitting(true);
     try {
-      const missing = await probeMediaDevicesReady();
+      const missing = await probeMediaDevices();
       if (missing) {
         toast.error(deviceMissingMessage(missing));
         console.warn(`[Portal] Practice → start blocked — ${missing} unavailable`);
@@ -1365,7 +1324,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     } finally {
       setStartSubmitting(false);
     }
-  }, [startSubmitting, probeMediaDevicesReady]);
+  }, [startSubmitting]);
 
   // Called from fullscreen prompt button — handles screen share, fullscreen entry, then starts interview
   const handleFullscreenReady = useCallback(async () => {
@@ -1440,7 +1399,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // principle as the denial branch above, so they cannot walk any further
     // into the start flow with a missing device.
     {
-      const missing = await probeMediaDevicesReady();
+      const missing = await probeMediaDevices();
       if (missing) {
         toast.error(deviceMissingMessage(missing), { duration: 8000 });
         console.warn(`[Portal] Fullscreen-ready blocked — ${missing} unavailable`);
@@ -1798,7 +1757,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // say what is wrong; every device screen now re-acquires on replug, so
     // pressing the button again is all that is needed.
     setStartSubmitting(true);
-    const missingDevice = await probeMediaDevicesReady();
+    const missingDevice = await probeMediaDevices();
     if (missingDevice) {
       setStartSubmitting(false);
       toast.error(deviceMissingMessage(missingDevice), { duration: 8000 });
@@ -1873,6 +1832,29 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         return;
       }
     }
+    // FINAL device gate — runs BEFORE the screen frame is captured and sent to
+    // the vision LLM. Two reasons it belongs here and not after:
+    //
+    //   • It is the last moment before the interview UI mounts, so it is the
+    //     last chance to catch a device the candidate disabled seconds ago.
+    //     Previously the only check ran after this gate, so a mic disabled here
+    //     was not noticed until the interview screen itself.
+    //   • No point spending a vision-LLM call (and the candidate's wait) on a
+    //     session that cannot legally start. Verify the devices first, and only
+    //     send the snapshot once they are known good.
+    //
+    // Uses the shared probe, so a Windows-DISABLED device — enumerable, opens
+    // fine, but hands back a live-and-MUTED track — is caught here exactly as
+    // an unplugged one is.
+    {
+      const missing = await probeMediaDevices();
+      if (missing) {
+        console.warn(`[ShareBar] Start blocked before vision check — ${missing} unavailable`);
+        setShareBarError(deviceMissingMessage(missing));
+        return;
+      }
+    }
+
     setShareBarError(null);
     setShareBarChecking(true);
     try {
