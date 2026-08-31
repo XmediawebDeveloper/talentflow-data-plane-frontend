@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import Assessments from '@/components/Assessments';
 import { jdService } from '@/lib/services/jdService';
+import { mapJDStatus } from '@/lib/utils/jobOpeningDisplay';
 import { Job } from '@/lib/types/types';
 import FeatureGate from '@/components/shared/FeatureGate';
 
@@ -46,8 +47,20 @@ export default function AssessmentsRoute() {
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        // Fetch only published JDs from the API — probe for total then pull all
-        const baseParams = { status: 'published' as const, source: 'my-jds' as const };
+        // Probe for total then pull all. NO status filter, deliberately: this list
+        // is handed to <Assessments> and on to the Create Assessment picker, whose
+        // rule is "hide drafts, show every other status". A published-only fetch
+        // contradicted that — the Disabled and Archived versions the picker is
+        // required to show simply were not in the list it was seeded with, so
+        // opening Create Assessment from THIS route showed a shorter list than
+        // opening it from /assessments/create until the picker's own unfiltered
+        // fetch landed and replaced it.
+        //
+        // It also fed the LATEST pill on the assessments list (via
+        // getLatestJobVersion, a Math.max over these rows): an archived newest
+        // version missing from the list lowers that maximum, which is what marks a
+        // superseded version "Latest".
+        const baseParams = { source: 'my-jds' as const };
         const probe = await jdService.list({ ...baseParams, page_size: 1 });
         const response = probe.total > probe.items.length
           ? await jdService.list({ ...baseParams, page_size: probe.total })
@@ -58,7 +71,11 @@ export default function AssessmentsRoute() {
           title: jd.title,
           currentVersion: jd.current_version,  // republish counter -> the "Republished" label
           versionNumber: jd.version_number ?? 1,  // lineage version -> which job version is LATEST
-          status: jd.status === 'published' ? 'Published' : jd.status === 'draft' ? 'Draft' : 'Closed',
+          /* The shared mapper. The hand-rolled ternary here recognised only
+             `published` and `draft` and collapsed EVERYTHING else — disabled and
+             archived included — into 'Closed', so an archived job reached the
+             picker labelled "Closed" and its real status was unrecoverable. */
+          status: mapJDStatus(jd.status),
           location: jd.location || 'Remote',
           daysActive: jd.days_active || 0,
           requiredMatch: jd.required_match || 70,
@@ -75,7 +92,7 @@ export default function AssessmentsRoute() {
           supported_languages: jd.supported_languages,
         }));
         setJobs(realJobs);
-        console.log('[TalentFlow] Loaded', realJobs.length, 'published JDs for assessments');
+        console.log('[TalentFlow] Loaded', realJobs.length, 'JD versions for assessments');
       } catch (error) {
         console.error('[TalentFlow] Failed to fetch JDs:', error);
         setJobs([]);
