@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from './utils';
 
@@ -27,6 +28,9 @@ export const TAB_EMPTY_ACTION_CLASS =
 
 export interface TabEmptyStateProps {
   icon: LucideIcon;
+  /** Optional illustration shown in place of the default icon. */
+  imageSrc?: string;
+  imageAlt?: string;
   /** Heading, e.g. "No Assessment Results". */
   title: string;
   /** One line on what would fill this tab. */
@@ -42,6 +46,8 @@ export interface TabEmptyStateProps {
 
 export default function TabEmptyState({
   icon: Icon,
+  imageSrc,
+  imageAlt = '',
   title,
   description,
   action,
@@ -49,7 +55,17 @@ export default function TabEmptyState({
 }: TabEmptyStateProps) {
   return (
     <div className={cn('flex flex-col items-center justify-center py-12 text-center', className)}>
-      <Icon className="w-12 h-12 text-gray-300 dark:text-slate-500 mb-3" />
+      {imageSrc ? (
+        <Image
+          src={imageSrc}
+          alt={imageAlt}
+          width={144}
+          height={144}
+          className="mb-4 h-32 w-32 object-contain sm:h-36 sm:w-36"
+        />
+      ) : (
+        <Icon className="w-12 h-12 text-gray-300 dark:text-slate-500 mb-3" />
+      )}
       <h3 className="text-base font-medium text-gray-700 dark:text-slate-300 mb-2">{title}</h3>
       <p className="text-sm text-gray-500 dark:text-slate-500 max-w-sm">{description}</p>
       {action && (

@@ -41,8 +41,7 @@ export interface JobVersionLineage {
    * (that endpoint returns newest-first, so its one row IS the latest score),
    * so this costs no extra request. `null` means the version has never been
    * scored; an unset key means the count hasn't loaded yet. `source` is the
-   * raw scoring-record source field, for callers to run through
-   * `getScoringSourceLabel`.
+   * raw scoring-record source field; not currently displayed anywhere.
    */
   versionScoredBy: Record<string, { name: string; scoredAt: string; source?: string } | null>;
   /** Open or close one job's history, loading it on first open. */
@@ -71,6 +70,17 @@ export interface JobVersionLineage {
    * landed.
    */
   ensureFilterLineages: (targets: { key: string; jobId: string }[]) => void;
+  /**
+   * Load resume-scored counts for these version ids, skipping any already
+   * known or in flight — the same counts `versionApplicants` above holds, but
+   * fetchable ahead of "View Versions" being opened. Exists so a "does this
+   * lineage have anything worth showing" check can know whether an archived
+   * or disabled version was ever scored (and so belongs in the history)
+   * before the host decides whether to render the button at all, rather than
+   * only finding out once the full lineage loads on click. Safe to call on
+   * every render — a no-op once each id has landed.
+   */
+  ensureVersionApplicants: (versionIds: string[]) => void;
 }
 
 export function useJobVersionLineage(): JobVersionLineage {
@@ -85,6 +95,10 @@ export function useJobVersionLineage(): JobVersionLineage {
      being started before the first resolves, and putting it in state would
      re-render the whole list on every request that starts and finishes. */
   const filterLineagesInFlight = useRef<Set<string>>(new Set());
+  /* Same shape as filterLineagesInFlight, for the applicant-count prefetch
+     below — a ref so a request starting/finishing does not itself trigger a
+     re-render. */
+  const versionApplicantsInFlight = useRef<Set<string>>(new Set());
 
   /* Deliberately not cached the way the JD record is: scoring a resume changes
      this number, so it is re-counted every time the panel is opened. A failure
@@ -109,6 +123,21 @@ export function useJobVersionLineage(): JobVersionLineage {
       /* keep whatever was there; the cell falls back to a dash */
     }
   }, []);
+
+  const ensureVersionApplicants = useCallback(
+    (versionIds: string[]) => {
+      versionIds.forEach((versionId) => {
+        if (!versionId) return;
+        if (Object.prototype.hasOwnProperty.call(versionApplicants, versionId)) return;
+        if (versionApplicantsInFlight.current.has(versionId)) return;
+        versionApplicantsInFlight.current.add(versionId);
+        void refreshVersionApplicants(versionId).finally(() => {
+          versionApplicantsInFlight.current.delete(versionId);
+        });
+      });
+    },
+    [versionApplicants, refreshVersionApplicants],
+  );
 
   const loadLineage = useCallback(
     async (key: string, jobId: string, alreadyCached: boolean, alreadyLoading: boolean) => {
@@ -213,5 +242,6 @@ export function useJobVersionLineage(): JobVersionLineage {
     ensureLoaded,
     filterLineages,
     ensureFilterLineages,
+    ensureVersionApplicants,
   };
 }

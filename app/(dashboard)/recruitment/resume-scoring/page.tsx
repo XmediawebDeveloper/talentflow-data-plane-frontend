@@ -17,7 +17,10 @@ interface ScoredResumeData {
   jobId: string;
   jobTitle: string;
   scoredAt: Date;
-  source: 'my-resumes' | 'database';
+  /** The raw backend source of the most recently scored resume in this JD's
+   *  group (e.g. 'my-resumes', 'database', 'ai_talent_match'). Not currently
+   *  displayed anywhere; kept as real data in case a future surface needs it. */
+  source: string;
   // JD metadata forwarded to <ResumeScoringPage />. This local copy of the interface had
   // drifted from the one in components/ResumeScoringPage.tsx, which declares all of these;
   // the object literal below has always passed them.
@@ -385,6 +388,12 @@ export default function ResumeScoringRoute() {
         // is documented to return newest-first, so the first item encountered
         // for a jdId is its most recent score.
         latestScoredAt?: string;
+        /** The raw `source` of the FIRST item seen per jdId — `getAllScoredResumes`
+         *  returns newest-first, so that's this JD's most-recently-scored resume's
+         *  actual origin, captured the same way as `latestScoredAt` above. Used for
+         *  the aggregate row's own `source` instead of a hardcoded value that read
+         *  the same regardless of where the resume was actually scored from. */
+        latestSource?: string;
         scores: any[];
       }>();
 
@@ -405,6 +414,7 @@ export default function ResumeScoringRoute() {
             jdPublishedAt: item.jd_published_at,
             jdCreatedByName: item.jd_created_by_name,
             latestScoredAt: item.created_at,
+            latestSource: item.source,
             scores: [],
           });
         }
@@ -443,6 +453,9 @@ export default function ResumeScoringRoute() {
           scorePercentage: matchScore,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by_name || item.scored_by || 'System',
+          // The scorer's own account identifier — for the Scoring History
+          // modal's per-scorer email line, shown only when it looks like one.
+          scoredByEmail: item.scored_by,
           // Version info
           version: item.resume_version || item.version || 1,
           resumeVersion: item.resume_version || item.version || 1,
@@ -487,7 +500,7 @@ export default function ResumeScoringRoute() {
             // sorted by score descending just above, so its first entry is the
             // highest-scoring resume, not necessarily the latest one scored.
             scoredAt: parseIST(data.latestScoredAt || data.scores[0]?.scoredDate || new Date().toISOString()),
-            source: 'database' as const,
+            source: data.latestSource || 'database',
             jdStatus: data.jdStatus,
             jdJobId: data.jdJobId,
             jdCreationMethod: data.jdCreationMethod,
@@ -550,6 +563,10 @@ export default function ResumeScoringRoute() {
       // date here, before `scores` below gets re-sorted by score descending for
       // display (see the same reasoning in loadScoredHistory above).
       const mostRecentScoredAt = allItems[0]?.created_at;
+      // Same newest-first reasoning as loadScoredHistory above: allItems[0] is
+      // this JD's most-recently-scored resume, so its own `source` is the
+      // aggregate row's real origin — not a hardcoded value.
+      const mostRecentSource = allItems[0]?.source;
 
       const scores = allItems.map((item: any) => {
         const matchScore = Math.round(item.overall_score || 0);
@@ -578,6 +595,7 @@ export default function ResumeScoringRoute() {
           scorePercentage: matchScore,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by_name || item.scored_by || 'System',
+          scoredByEmail: item.scored_by,
           version: item.resume_version || 1,
           resumeVersion: item.resume_version || 1,
           source: item.source || 'database',
@@ -616,7 +634,7 @@ export default function ResumeScoringRoute() {
           jobId: jdId,
           jobTitle: title,
           scoredAt: parseIST(mostRecentScoredAt || scores[0]?.scoredDate || existing?.scoredAt?.toISOString() || new Date().toISOString()),
-          source: 'database' as const,
+          source: mostRecentSource || existing?.source || 'database',
           totalScored: firstPage.total || scores.length,
           scoredResumes: scores,
         };

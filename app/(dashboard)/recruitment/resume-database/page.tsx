@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Clock, Loader2, ChevronLeft, ChevronRight, Search, X, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle } from 'lucide-react';
+import { Plus, Clock, Loader2, ChevronLeft, ChevronRight, Search, X, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle, Download, FileArchive, Users, Info } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -64,6 +64,8 @@ export default function ResumeDatabasePage() {
   // AI Interview invite — same shared flow the My Resumes list uses.
   const [isAIInterviewFlowOpen, setIsAIInterviewFlowOpen] = useState(false);
   const [isDownloadingSelection, setIsDownloadingSelection] = useState(false);
+  // ZIP download confirmation modal — shown when more than one resume is selected.
+  const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   // Search + filters in the shared hook. `appliedQuery` is the settled value —
   // it is what the API request and the row highlighting are built from.
@@ -580,30 +582,40 @@ export default function ResumeDatabasePage() {
    */
   const handleBulkDownload = async () => {
     if (selectedResumes.length === 0 || isDownloadingSelection) return;
-    const selected = resumes.filter(r => selectedResumes.includes(r.id));
 
-    if (selected.length === 1) {
-      const resume = selected[0];
-      toast.loading('Downloading resume...', { id: 'db-download' });
-      try {
-        const blob = await resumeService.download(resume.id);
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        // Original fileName keeps the real extension (pdf, docx, …).
-        link.download = resume.fileName || `${resume.name || 'resume'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(link);
-        toast.success('Resume downloaded', { id: 'db-download' });
-        setSelectedResumes([]);
-      } catch (error) {
-        console.error('[TalentFlow] Download failed:', error);
-        toast.error('Failed to download resume', { id: 'db-download' });
-      }
+    // More than one resume selected — confirm before zipping and downloading.
+    if (selectedResumes.length > 1) {
+      setIsZipDownloadModalOpen(true);
       return;
     }
+
+    const selected = resumes.filter(r => selectedResumes.includes(r.id));
+    const resume = selected[0];
+    toast.loading('Downloading resume...', { id: 'db-download' });
+    try {
+      const blob = await resumeService.download(resume.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      // Original fileName keeps the real extension (pdf, docx, …).
+      link.download = resume.fileName || `${resume.name || 'resume'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      toast.success('Resume downloaded', { id: 'db-download' });
+      setSelectedResumes([]);
+    } catch (error) {
+      console.error('[TalentFlow] Download failed:', error);
+      toast.error('Failed to download resume', { id: 'db-download' });
+    }
+  };
+
+  // Zips and downloads the current selection — invoked from the ZIP download
+  // confirmation modal's Continue button.
+  const handleZipDownload = async () => {
+    if (selectedResumes.length === 0) return;
+    const selected = resumes.filter(r => selectedResumes.includes(r.id));
 
     setIsDownloadingSelection(true);
     toast.loading(`Preparing ${selected.length} resumes for download...`, { id: 'db-download' });
@@ -647,6 +659,7 @@ export default function ResumeDatabasePage() {
         { id: 'db-download' }
       );
       setSelectedResumes([]);
+      setIsZipDownloadModalOpen(false);
     } catch (error) {
       console.error('[TalentFlow] ZIP download failed:', error);
       toast.error('Failed to prepare the download', { id: 'db-download' });
@@ -1351,6 +1364,96 @@ export default function ResumeDatabasePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ZIP Download Confirmation Modal */}
+      {isZipDownloadModalOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
+            onClick={() => !isDownloadingSelection && setIsZipDownloadModalOpen(false)}
+          />
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4 p-6 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-brand-blue/10 rounded-2xl flex items-center justify-center flex-shrink-0">
+                    <FileArchive className="w-7 h-7 text-brand-blue" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 tracking-tight">Download as ZIP</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">Multiple files selected</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => !isDownloadingSelection && setIsZipDownloadModalOpen(false)}
+                  disabled={isDownloadingSelection}
+                  className="p-1 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 flex items-center gap-4 border-b border-gray-200">
+                <div className="w-16 h-16 bg-brand-blue/5 rounded-2xl flex items-center justify-center flex-shrink-0">
+                  <Users className="w-7 h-7 text-brand-blue" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-brand-blue">
+                    {selectedResumes.length}
+                    <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    All selected resumes will be downloaded and packed in a ZIP file.
+                  </p>
+                </div>
+              </div>
+
+              {/* Info */}
+              <div className="flex items-center gap-3 px-6 py-4">
+                <div className="w-7 h-7 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Info className="w-4 h-4 text-brand-blue" />
+                </div>
+                <p className="text-sm text-gray-700">
+                  Do you want to download all selected resumes as a ZIP file?
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-2xl border-t border-gray-200">
+                <button
+                  onClick={() => setIsZipDownloadModalOpen(false)}
+                  disabled={isDownloadingSelection}
+                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleZipDownload}
+                  disabled={isDownloadingSelection}
+                  className="flex items-center gap-2 px-5 py-2.5 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDownloadingSelection ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Preparing...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Continue
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
       </div>
       </div>
     </main>

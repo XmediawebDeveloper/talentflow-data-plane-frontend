@@ -239,65 +239,105 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
       setIsLoading(false);
     }
   };
-
   if (!isOpen) return null;
 
+  // Copy for the header, kept in one place so the two lines never drift apart.
+  const HEADINGS: Record<ModalStep, { title: string; subtitle: string }> = {
+    email:            { title: 'Reset your password',   subtitle: 'We’ll send you a verification code' },
+    otp:              { title: 'Enter verification code', subtitle: `Code sent to ${email}` },
+    password:         { title: 'Create new password',    subtitle: 'Choose a strong password' },
+    success:          { title: 'Password reset',         subtitle: 'You can now sign in with your new password' },
+    firstLogin:       { title: 'Finish setting up your account', subtitle: 'This is your first sign-in' },
+    accountSuspended: { title: 'Account suspended',      subtitle: 'Password reset is unavailable' },
+    userDeactivated:  { title: 'Account deactivated',    subtitle: 'Password reset is unavailable' },
+  };
+  const heading = HEADINGS[step];
+
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-md animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
+    <div
+      className="tf-auth-scope"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(16, 24, 40, 0.55)',
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={heading.title}
+        style={{
+          background: 'var(--tf-surface)',
+          border: '1px solid var(--tf-border)',
+          borderRadius: 'var(--tf-radius)',
+          boxShadow: 'var(--tf-shadow)',
+          width: '100%',
+          maxWidth: 440,
+          maxHeight: 'calc(100dvh - 2rem)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
         {/* Header */}
-        <div className="relative bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white shrink-0">
+        <div style={{
+          padding: '20px 22px',
+          borderBottom: '1px solid var(--tf-border)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexShrink: 0,
+        }}>
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 650, letterSpacing: '-0.015em', color: 'var(--tf-ink)', margin: 0 }}>
+              {heading.title}
+            </h2>
+            <p style={{ fontSize: 13, color: 'var(--tf-ink-subtle)', margin: '3px 0 0' }}>
+              {heading.subtitle}
+            </p>
+          </div>
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-lg transition-colors"
-           aria-label="Close">
-            <X className="w-5 h-5" />
+            className="tf-auth-reveal"
+            style={{ position: 'static', transform: 'none', width: 28, height: 28, flexShrink: 0 }}
+            aria-label="Close"
+          >
+            <X style={{ width: 18, height: 18 }} />
           </button>
-          <h2 className="text-2xl font-bold">
-            {step === 'email' && 'Reset Your Password'}
-            {step === 'otp' && 'Enter Verification Code'}
-            {step === 'password' && 'Create New Password'}
-            {step === 'success' && 'Password Reset Successful!'}
-            {step === 'firstLogin' && 'Finish Setting Up Your Account'}
-            {step === 'accountSuspended' && 'Account Suspended'}
-            {step === 'userDeactivated' && 'Account Deactivated'}
-          </h2>
-          <p className="text-blue-100 text-sm mt-1">
-            {step === 'email' && 'We\'ll send you a verification code'}
-            {step === 'otp' && `Code sent to ${email}`}
-            {step === 'password' && 'Choose a strong password'}
-            {step === 'success' && 'You can now login with your new password'}
-            {step === 'firstLogin' && 'This is your first sign-in'}
-            {step === 'accountSuspended' && 'Password reset is unavailable'}
-            {step === 'userDeactivated' && 'Password reset is unavailable'}
-          </p>
         </div>
 
         {/* Content */}
-        <div className="p-6 flex-1 overflow-y-auto">
+        <div style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
           {/* Error Message */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-800">{error}</p>
+            <div className="tf-auth-alert tf-auth-alert--danger">
+              <AlertCircle style={{ width: 17, height: 17 }} />
+              <span>{error}</span>
             </div>
           )}
 
           {/* Step 1: Email Entry */}
           {step === 'email' && (
-            <form onSubmit={handleEmailSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
+            <form onSubmit={handleEmailSubmit}>
+              <div className="tf-auth-field">
+                <label className="tf-auth-label" htmlFor="tf-fp-email">Email address</label>
+                <div className="tf-auth-control">
+                  <span className="tf-auth-control-icon">
+                    <Mail style={{ width: 17, height: 17 }} />
+                  </span>
                   <input
+                    id="tf-fp-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
-                    className="w-full pl-11 pr-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    placeholder="you@company.com"
+                    className="tf-auth-input"
                     required
                   />
                 </div>
@@ -306,132 +346,140 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
               <button
                 type="submit"
                 disabled={isLoading || !email}
-                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                className={`tf-auth-btn${isLoading ? ' tf-auth-btn--busy' : ''}`}
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Sending Code...
+                    <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
+                    Sending code…
                   </>
                 ) : (
-                  'Send Verification Code'
+                  'Send verification code'
                 )}
               </button>
 
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full py-3 text-gray-600 dark:text-slate-400 hover:text-gray-800 font-medium transition-colors"
+                className="tf-auth-btn tf-auth-btn--outline"
+                style={{ marginTop: 10, borderColor: 'var(--tf-border)', color: 'var(--tf-ink-muted)' }}
               >
-                Back to Login
+                Back to sign in
               </button>
             </form>
           )}
 
           {/* Step 2: OTP Verification */}
           {step === 'otp' && (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-4 text-center">
-                  Enter the 6-digit code we sent to your email
-                </label>
-                <div className="flex gap-2 justify-center" onPaste={handleOtpPaste}>
-                  {otpCode.map((digit, index) => (
-                    <input
-                      key={index}
-                      /* Block body so the callback returns undefined. React 19 treats a
-                         ref callback's return value as a cleanup function, and the concise
-                         arrow returned the assigned element. */
-                      ref={(el) => { otpRefs.current[index] = el; }}
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={1}
-                      value={digit}
-                      onChange={(e) => handleOtpChange(index, e.target.value)}
-                      onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                      className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 dark:border-slate-700 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                    />
-                  ))}
-                </div>
+            <div>
+              <p style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', textAlign: 'center', margin: '0 0 16px' }}>
+                Enter the 6-digit code we sent to your email
+              </p>
+              <div className="tf-auth-otp-row" onPaste={handleOtpPaste}>
+                {otpCode.map((digit, index) => (
+                  <input
+                    key={index}
+                    /* Block body so the callback returns undefined. React 19 treats a
+                       ref callback's return value as a cleanup function, and the concise
+                       arrow returned the assigned element. */
+                    ref={(el) => { otpRefs.current[index] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(index, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                    aria-label={`Digit ${index + 1} of 6`}
+                    className="tf-auth-otp"
+                  />
+                ))}
               </div>
 
-              <div className="text-center">
+              <div style={{ textAlign: 'center', marginTop: 16 }}>
                 <button
                   type="button"
                   onClick={handleResendOtp}
                   disabled={resendTimer > 0 || isLoading}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:text-gray-400 dark:disabled:text-slate-500 disabled:cursor-not-allowed transition-colors"
+                  className="tf-auth-link"
+                  style={{ fontSize: 13.5 }}
                 >
-                  {resendTimer > 0 ? `Resend code in ${resendTimer}s` : 'Resend Code'}
+                  {resendTimer > 0 ? `Resend code in ${resendTimer}s` : 'Resend code'}
                 </button>
               </div>
 
               <button
                 type="button"
                 onClick={() => setStep('email')}
-                className="w-full py-3 text-gray-600 dark:text-slate-400 hover:text-gray-800 font-medium transition-colors flex items-center justify-center gap-2"
+                className="tf-auth-btn tf-auth-btn--outline"
+                style={{ marginTop: 18, borderColor: 'var(--tf-border)', color: 'var(--tf-ink-muted)' }}
               >
-                <ArrowLeft className="w-4 h-4" />
-                Change Email
+                <ArrowLeft style={{ width: 15, height: 15 }} />
+                Change email
               </button>
             </div>
           )}
 
           {/* Step 3: New Password */}
           {step === 'password' && (
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                  New Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
+            <form onSubmit={handlePasswordSubmit}>
+              <div className="tf-auth-field">
+                <label className="tf-auth-label" htmlFor="tf-fp-new">New password</label>
+                <div className="tf-auth-control">
+                  <span className="tf-auth-control-icon">
+                    <Lock style={{ width: 17, height: 17 }} />
+                  </span>
                   <input
+                    id="tf-fp-new"
                     type={showPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Enter new password"
-                    className="w-full pl-11 pr-12 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    className="tf-auth-input tf-auth-input--reveal"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 dark:text-slate-500 hover:text-gray-600 transition-colors"
+                    className="tf-auth-reveal"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showPassword ? <EyeOff style={{ width: 17, height: 17 }} /> : <Eye style={{ width: 17, height: 17 }} />}
                   </button>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                  Confirm Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
+              <div className="tf-auth-field">
+                <label className="tf-auth-label" htmlFor="tf-fp-confirm">Confirm password</label>
+                <div className="tf-auth-control">
+                  <span className="tf-auth-control-icon">
+                    <Lock style={{ width: 17, height: 17 }} />
+                  </span>
                   <input
+                    id="tf-fp-confirm"
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm new password"
-                    className="w-full pl-11 pr-12 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    className="tf-auth-input tf-auth-input--reveal"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 dark:text-slate-500 hover:text-gray-600 transition-colors"
+                    className="tf-auth-reveal"
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showConfirmPassword ? <EyeOff style={{ width: 17, height: 17 }} /> : <Eye style={{ width: 17, height: 17 }} />}
                   </button>
                 </div>
               </div>
 
               {/* Password Requirements */}
-              <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg p-4 space-y-2">
-                <p className="text-sm font-medium text-gray-700 dark:text-slate-300">Password Requirements:</p>
-                <div className="space-y-1">
+              <div className="tf-auth-panel" style={{ marginBottom: 18 }}>
+                <p style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tf-ink-muted)', margin: '0 0 10px' }}>
+                  Password requirements
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   {[
                     { label: 'At least 8 characters', check: checks.length },
                     { label: 'One uppercase letter', check: checks.uppercase },
@@ -439,9 +487,14 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                     { label: 'One number', check: checks.number },
                     { label: 'One special character', check: checks.special },
                   ].map((req, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <CheckCircle className={`w-4 h-4 ${req.check ? 'text-green-600' : 'text-gray-300 dark:text-slate-500'}`} />
-                      <span className={`text-sm ${req.check ? 'text-green-700' : 'text-gray-600 dark:text-slate-400'}`}>
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <CheckCircle style={{
+                        width: 15,
+                        height: 15,
+                        flexShrink: 0,
+                        color: req.check ? 'var(--tf-success)' : 'var(--tf-border-strong)',
+                      }} />
+                      <span style={{ fontSize: 12.5, color: req.check ? 'var(--tf-ink-muted)' : 'var(--tf-ink-subtle)' }}>
                         {req.label}
                       </span>
                     </div>
@@ -452,15 +505,15 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
               <button
                 type="submit"
                 disabled={isLoading || strength < 5}
-                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                className={`tf-auth-btn${isLoading ? ' tf-auth-btn--busy' : ''}`}
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Resetting Password...
+                    <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
+                    Resetting password…
                   </>
                 ) : (
-                  'Reset Password'
+                  'Reset password'
                 )}
               </button>
             </form>
@@ -468,49 +521,49 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
 
           {/* First-time login: block reset, guide to temporary password */}
           {step === 'firstLogin' && (
-            <div className="space-y-5">
-              <div className="flex flex-col items-center text-center gap-3">
-                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center">
-                  <KeyRound className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+            <div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14, marginBottom: 18 }}>
+                <div className="tf-auth-feature-icon" style={{ width: 48, height: 48 }}>
+                  <KeyRound style={{ width: 22, height: 22 }} />
                 </div>
-                <p className="text-gray-700 dark:text-slate-300 text-sm leading-relaxed">
+                <p style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', lineHeight: 1.6, margin: 0 }}>
                   {firstLoginMessage ||
-                    'This looks like your first time signing in. Please log in with the temporary password from your invite email, then set your own password.'}
+                    'This looks like your first time signing in. Please sign in with the temporary password from your invite email, then set your own password.'}
                 </p>
               </div>
 
               {tempSentAgain ? (
-                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-start gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-green-800 dark:text-green-300">
-                    A new temporary password is on its way to <strong>{email}</strong>. Your previous
-                    temporary password no longer works — use the newest one.
-                  </p>
+                <div className="tf-auth-alert tf-auth-alert--success">
+                  <CheckCircle style={{ width: 17, height: 17 }} />
+                  <span>
+                    A new temporary password is on its way to <strong style={{ fontWeight: 600 }}>{email}</strong>.
+                    Your previous temporary password no longer works — use the newest one.
+                  </span>
                 </div>
               ) : (
                 <>
-                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-amber-800 dark:text-amber-300">
-                      Note: clicking <strong>Send Again</strong> will invalidate your previous
+                  <div className="tf-auth-alert">
+                    <AlertCircle style={{ width: 16, height: 16 }} />
+                    <span>
+                      Clicking <strong style={{ fontWeight: 600 }}>Send again</strong> invalidates your previous
                       temporary password. Only the newest one will work.
-                    </p>
+                    </span>
                   </div>
                   <button
                     type="button"
                     onClick={handleSendAgain}
                     disabled={isLoading}
-                    className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                    className={`tf-auth-btn${isLoading ? ' tf-auth-btn--busy' : ''}`}
                   >
                     {isLoading ? (
                       <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Sending...
+                        <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
+                        Sending…
                       </>
                     ) : (
                       <>
-                        <Send className="w-4 h-4" />
-                        Send Again
+                        <Send style={{ width: 15, height: 15 }} />
+                        Send again
                       </>
                     )}
                   </button>
@@ -520,102 +573,121 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full py-3 text-gray-600 dark:text-slate-400 hover:text-gray-800 font-medium transition-colors flex items-center justify-center gap-2"
+                className="tf-auth-btn tf-auth-btn--outline"
+                style={{ marginTop: 10, borderColor: 'var(--tf-border)', color: 'var(--tf-ink-muted)' }}
               >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Login
+                <ArrowLeft style={{ width: 15, height: 15 }} />
+                Back to sign in
               </button>
             </div>
           )}
 
           {/* Account Suspended: tenant suspended by super admin */}
           {step === 'accountSuspended' && (
-            <div className="space-y-5">
-              <div className="flex flex-col items-center text-center gap-3">
-                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                  <ShieldOff className="w-8 h-8 text-red-600 dark:text-red-400" />
+            <div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14, marginBottom: 18 }}>
+                <div
+                  className="tf-auth-feature-icon"
+                  style={{ width: 48, height: 48, background: 'var(--tf-danger-tint)', color: 'var(--tf-danger)' }}
+                >
+                  <ShieldOff style={{ width: 22, height: 22 }} />
                 </div>
-                <div className="space-y-2">
-                  <p className="text-gray-800 dark:text-slate-200 font-medium">
-                    Your organization's account has been suspended
+                <div>
+                  <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--tf-ink)', margin: '0 0 6px' }}>
+                    Your organization&apos;s account has been suspended
                   </p>
-                  <p className="text-gray-600 dark:text-slate-400 text-sm leading-relaxed">
-                    This account was suspended by the platform administrator. Password reset and login are currently unavailable for all users in this organization.
+                  <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', lineHeight: 1.6, margin: 0 }}>
+                    This account was suspended by the platform administrator. Password reset and sign-in
+                    are currently unavailable for all users in this organization.
                   </p>
                 </div>
               </div>
 
-              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-800 dark:text-red-300 font-medium mb-1">What to do next</p>
-                <p className="text-sm text-red-700 dark:text-red-400">
-                  Please contact <strong>TalentFlow support</strong> to resolve the suspension and restore access to your account.
-                </p>
+              <div className="tf-auth-alert tf-auth-alert--danger" style={{ display: 'block' }}>
+                <div className="tf-auth-alert-title" style={{ marginBottom: 2 }}>What to do next</div>
+                <div className="tf-auth-alert-body">
+                  Please contact <strong style={{ fontWeight: 600 }}>TalentFlow support</strong> to resolve
+                  the suspension and restore access to your account.
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full py-3 text-gray-600 dark:text-slate-400 hover:text-gray-800 font-medium transition-colors flex items-center justify-center gap-2"
+                className="tf-auth-btn tf-auth-btn--outline"
+                style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink-muted)' }}
               >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Login
+                <ArrowLeft style={{ width: 15, height: 15 }} />
+                Back to sign in
               </button>
             </div>
           )}
 
           {/* User Deactivated: user deactivated by tenant admin */}
           {step === 'userDeactivated' && (
-            <div className="space-y-5">
-              <div className="flex flex-col items-center text-center gap-3">
-                <div className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center">
-                  <UserX className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+            <div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14, marginBottom: 18 }}>
+                <div
+                  className="tf-auth-feature-icon"
+                  style={{ width: 48, height: 48, background: 'var(--tf-surface-sunken)', color: 'var(--tf-warning)' }}
+                >
+                  <UserX style={{ width: 22, height: 22 }} />
                 </div>
-                <div className="space-y-2">
-                  <p className="text-gray-800 dark:text-slate-200 font-medium">
+                <div>
+                  <p style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--tf-ink)', margin: '0 0 6px' }}>
                     Your account has been deactivated
                   </p>
-                  <p className="text-gray-600 dark:text-slate-400 text-sm leading-relaxed">
-                    A workspace administrator has deactivated your account. You won't be able to reset your password until the account is reactivated.
+                  <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', lineHeight: 1.6, margin: 0 }}>
+                    A workspace administrator has deactivated your account. You won&apos;t be able to reset
+                    your password until the account is reactivated.
                   </p>
                 </div>
               </div>
 
-              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <p className="text-sm text-amber-800 dark:text-amber-300 font-medium mb-1">What to do next</p>
-                <p className="text-sm text-amber-700 dark:text-amber-400">
-                  Please contact your <strong>organization administrator</strong> to reactivate your account. Once reactivated, you'll be able to reset your password.
-                </p>
+              <div className="tf-auth-alert" style={{ display: 'block' }}>
+                <div className="tf-auth-alert-title" style={{ marginBottom: 2 }}>What to do next</div>
+                <div className="tf-auth-alert-body">
+                  Please contact your <strong style={{ fontWeight: 600 }}>organization administrator</strong> to
+                  reactivate your account. Once reactivated, you&apos;ll be able to reset your password.
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full py-3 text-gray-600 dark:text-slate-400 hover:text-gray-800 font-medium transition-colors flex items-center justify-center gap-2"
+                className="tf-auth-btn tf-auth-btn--outline"
+                style={{ borderColor: 'var(--tf-border)', color: 'var(--tf-ink-muted)' }}
               >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Login
+                <ArrowLeft style={{ width: 15, height: 15 }} />
+                Back to sign in
               </button>
             </div>
           )}
 
           {/* Step 4: Success */}
           {step === 'success' && (
-            <div className="text-center py-8 space-y-6">
-              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                <CheckCircle className="w-12 h-12 text-green-600" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-slate-50">All Set!</h3>
-                <p className="text-gray-600 dark:text-slate-400">
-                  Your password has been reset successfully. <br />
-                  Redirecting to login...
-                </p>
-              </div>
-              <button
-                onClick={onClose}
-                className="py-3 px-6 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg font-medium hover:from-blue-700 hover:to-indigo-800 transition-all"
+            <div style={{ textAlign: 'center', padding: '16px 0' }}>
+              <div
+                className="tf-auth-feature-icon"
+                style={{
+                  width: 52,
+                  height: 52,
+                  margin: '0 auto 18px',
+                  background: 'var(--tf-success-tint)',
+                  color: 'var(--tf-success-ink)',
+                }}
               >
-                Return to Login
+                <CheckCircle style={{ width: 26, height: 26 }} />
+              </div>
+              <h3 style={{ fontSize: 18, fontWeight: 650, letterSpacing: '-0.015em', color: 'var(--tf-ink)', margin: '0 0 6px' }}>
+                All set
+              </h3>
+              <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', lineHeight: 1.6, margin: '0 0 22px' }}>
+                Your password has been reset successfully.<br />
+                Redirecting to sign in…
+              </p>
+              <button onClick={onClose} className="tf-auth-btn">
+                Return to sign in
               </button>
             </div>
           )}
