@@ -155,6 +155,12 @@ export interface JDExtractedParams {
    *  WFO/WFH, facilities, anything under an "Additional Details" heading). Null when
    *  the JD says nothing of the kind; never invented to fill the field. */
   additional_details?: string | null;
+  /** Inferred by extraction from the title, responsibilities and industry - the prompt
+   *  carries a nine-sector list so a plant, ward or store JD gets a department from its
+   *  own sector rather than a technology one. Was extracted and then discarded twice
+   *  over: the backend response_model had no such field, and Step 2 overwrote it with
+   *  ''. Both fixed; keep the two in sync. */
+  department?: string;
   /** Provenance for every duplicate group collapsed during extraction. Empty when
    *  nothing merged. See JDMergeTrailEntry. */
   merge_trail?: JDMergeTrailEntry[];

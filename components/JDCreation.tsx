@@ -217,6 +217,28 @@ const normalizeExtractedEmploymentType = (
     : undefined;
 };
 
+/** JD22 - which Additional Details text survives an extraction.
+ *
+ *  `current`  what is in the box right now
+ *  `lastAutoFilled`  what extraction last put there (see extractionFilledAdditionalDetails)
+ *  `incoming`  what this extraction produced
+ *
+ *  Hand-written text always wins; extraction's own leftovers never do. The two are told
+ *  apart by comparing against what extraction last wrote, so re-extracting the SAME JD
+ *  still cannot overwrite a sentence the recruiter typed, while extracting a DIFFERENT
+ *  JD no longer inherits the previous one's shift timings. */
+const resolveAdditionalDetails = (
+  current: string | undefined,
+  lastAutoFilled: string,
+  incoming: string | undefined,
+): string => {
+  const currentText = current ?? '';
+  if (!currentText.trim()) return incoming || '';
+  // Untouched since extraction wrote it -> it is not the recruiter's, so it can be replaced.
+  if (currentText === lastAutoFilled) return incoming || '';
+  return currentText;
+};
+
 const roleTokenPattern = /[A-Za-z][A-Za-z0-9#+./-]*/g;
 
 const normalizeRoleToken = (value: string): string =>
@@ -1931,6 +1953,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // published edit and version fork - because all four run through this same call.
   const forceFreshExtraction = useRef(false);
 
+  // JD22 - the last Additional Details value EXTRACTION put in the box, so a later
+  // extraction can tell its own leftovers from something a person typed.
+  //
+  // The rule "the recruiter's text always wins, extraction only fills an empty box"
+  // protects hand-written text, but with nothing recording where the current text came
+  // from it also protected the PREVIOUS JD's auto-filled text: uploading JD A and then
+  // JD B left A's shift timings sitting in B's box, and B's own were discarded as the
+  // loser of a conflict that never involved a human. Comparing against this ref keeps
+  // both halves honest - text that differs from what extraction last wrote was touched
+  // by the recruiter and is untouchable; text that matches is extraction's own and may
+  // be replaced by a newer extraction.
+  const extractionFilledAdditionalDetails = useRef('');
+
   // What the recruiter is CURRENTLY typing in the experience From/To boxes, before it
   // is normalized. null = not editing, so the boxes show the canonical stored value.
   //
@@ -2786,14 +2821,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // WFO/WFH, facilities). What the RECRUITER typed always wins: extraction fills
         // this box only while it is still empty, so re-running extraction can never
         // overwrite a sentence someone wrote by hand.
-        additionalDetails: prev.additionalDetails?.trim()
-          ? prev.additionalDetails
-          : (params.additional_details || ''),
+        additionalDetails: resolveAdditionalDetails(
+          prev.additionalDetails,
+          extractionFilledAdditionalDetails.current,
+          params.additional_details,
+        ),
         // Skills only: comment merges rest on judgement, so their reasons are vaguer, and
         // a vague explanation erodes trust faster than none.
         mergeTrail: (params.merge_trail || []).filter((e: JDMergeTrailEntry) => e.kind === 'skill'),
         };
       });
+
+      // Record what extraction just auto-filled, so a LATER extraction can tell this
+      // text apart from something the recruiter typed. Set outside the state updater:
+      // React may invoke an updater more than once, and a ref write belongs where it
+      // runs exactly once per extraction.
+      extractionFilledAdditionalDetails.current = params.additional_details || '';
 
       // Log what was pre-filled and trigger validation
       if (params.salary_min || params.salary_max) {
@@ -3487,7 +3530,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industryType: industryValue, // Only from extraction, no fallback - user must select if not extracted
         // Use API's mandatory flag for industry
         industryTypeRequired: params.industry_mandatory || false,
-        department: isEditMode ? extractedData.department : '',
+        // Extraction's answer, not a blank. The prompt carries a nine-sector section
+        // teaching the model to infer a department ("Nursing", "Site Execution", "Front
+        // Office", ...) and it answers well, but this line discarded it unconditionally
+        // and every extracted JD saved with department = null. Same edit-mode fallback
+        // as the fields around it, so a recruiter's own value is never overwritten.
+        department: params.department || (isEditMode ? extractedData.department : ''),
         allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
         employmentType: normalizeExtractedEmploymentType(params.job_type) || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: (params.work_mode as 'onsite' | 'remote' | 'hybrid' | 'field_based') || (isEditMode ? extractedData.workModel : 'onsite'),
@@ -3525,9 +3573,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // it is filled from extraction only while the box is empty. Carrying `prev`
         // over otherwise is also what makes the text survive moving between steps
         // (JD22 req 3).
-        additionalDetails: extractedData.additionalDetails?.trim()
-          ? extractedData.additionalDetails
-          : (params.additional_details || ''),
+        additionalDetails: resolveAdditionalDetails(
+          extractedData.additionalDetails,
+          extractionFilledAdditionalDetails.current,
+          params.additional_details,
+        ),
         mergeTrail: (params.merge_trail || []).filter((e: JDMergeTrailEntry) => e.kind === 'skill'),
         internalRecruiterComments: isEditMode ? extractedData.internalRecruiterComments : [],
         // JD09: Extract certifications and domain keywords
@@ -3542,6 +3592,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         codingRequired: false,
         suggestedLanguages: [],
       };
+
+      // Record what extraction just auto-filled, so a LATER extraction can tell this
+      // text apart from something the recruiter typed. See resolveAdditionalDetails.
+      extractionFilledAdditionalDetails.current = params.additional_details || '';
 
       // FIRST-RENDER DE-DUPLICATION.
       // The cross-list dedupe used to run only on the Step 2 -> Step 3 transition, and
@@ -4687,6 +4741,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
             salary_currency: extractedData.salaryCurrency,
             compensation_type: extractedData.compensationType,
+            // JD22. The rewrite deletes anything not handed to it, so without this the
+            // regenerated BODY loses every shift / WFO / travel line the recruiter wrote.
+            // Sent from Step 2 state rather than left to the stored value, because this
+            // call runs BEFORE the save below - the DB copy is a version behind.
+            additional_details: extractedData.additionalDetails?.trim()
+              ? extractedData.additionalDetails
+              : null,
           };
 
           const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
@@ -5092,6 +5153,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             salary_max: parseSalaryInput(extractedData.salaryTo) ?? null,
             salary_currency: extractedData.salaryCurrency,
             compensation_type: extractedData.compensationType,
+            // JD22. The rewrite deletes anything not handed to it, so without this the
+            // regenerated BODY loses every shift / WFO / travel line the recruiter wrote.
+            // Sent from Step 2 state rather than left to the stored value, because this
+            // call runs BEFORE the save below - the DB copy is a version behind.
+            additional_details: extractedData.additionalDetails?.trim()
+              ? extractedData.additionalDetails
+              : null,
           };
           const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
           publishDescription = reformattedJD.description;
