@@ -49,7 +49,9 @@ export interface JDCreate {
   /** JD22 - recruiter free text about the job (shift timings, WFO/WFH, anything
    *  extraction missed). Shown to candidates and in every JD view; never an input
    *  to resume scoring, assessment generation or the AI interview. */
-  additional_details?: string;
+  //  `null` is how an EMPTIED box is sent: the backend applies updates with
+  //  exclude_unset, so omitting the key preserves the stored text instead of clearing it.
+  additional_details?: string | null;
   must_have_comments?: string[];
   nice_to_have_comments?: string[];
   coding_required?: boolean;

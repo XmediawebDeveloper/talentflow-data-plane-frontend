@@ -199,6 +199,24 @@ const TITLE_JOB_TYPE_PATTERN = /\b(?:full[\s-]?time|part[\s-]?time|internship|te
 const TITLE_VACANCY_PATTERN = /\b(?:hiring\s+\d+|(?:no\.?\s+of\s+)?vacanc(?:y|ies)\s*:?\s*\d+|(?:no\.?\s+of\s+)?openings?\s*:?\s*\d+|\d+\s+positions?\s+available)\b/i;
 const TITLE_SALARY_PATTERN = /(?:₹|\$|USD\b|INR\b|Rs\.?)\s*\d|(?:\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|per\s*annum|per\s*month|per\s*year|ctc|package|k\b|m\b))|(?:(?:salary|sal|compensation|ctc|package|pay|remuneration)\s*(?:is|of|from|:|\s)\s*(?:₹|\$|USD\b|INR\b|Rs\.?)?\s*\d)/i;
 
+/** Extraction's job_type vocabulary is wider than this form's Employment Type list: the
+ *  backend also returns `permanent`, which no <option> here carries. An unmatched value
+ *  leaves the select rendering BLANK, so the recruiter sees an empty required-looking
+ *  field on a JD that plainly said what it was - and "permanent" is how a large share of
+ *  JDs outside software describe a full-time job. Anything else unrecognised falls back
+ *  to the form's own default rather than blanking the control. */
+const EMPLOYMENT_TYPE_OPTIONS = ['full_time', 'part_time', 'contract', 'internship', 'temporary'] as const;
+const normalizeExtractedEmploymentType = (
+  value: unknown,
+): ExtractedData['employmentType'] | undefined => {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  const code = value.trim().toLowerCase();
+  if (code === 'permanent') return 'full_time';
+  return (EMPLOYMENT_TYPE_OPTIONS as readonly string[]).includes(code)
+    ? (code as ExtractedData['employmentType'])
+    : undefined;
+};
+
 const roleTokenPattern = /[A-Za-z][A-Za-z0-9#+./-]*/g;
 
 const normalizeRoleToken = (value: string): string =>
@@ -2719,8 +2737,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
         roleFamily: params.role_family || (isEditMode ? prev.roleFamily : undefined),
         roleFamilyConfidence: params.role_family_confidence ?? (isEditMode ? prev.roleFamilyConfidence : undefined),
-        employmentType: prev.employmentType,
-        workModel: prev.workModel,
+        // Extraction's answer WINS, exactly as on the upload/manual path below. These two
+        // read `prev` unconditionally, so a generated JD saying "remote, 6-month contract"
+        // was still filed as Onsite / Full-time - the two fields the model had just read
+        // out of the text were the only ones thrown away. The backend already refuses to
+        // invent either (sanitize_extracted_jd_params erases a work_mode or job_type the
+        // source text never states), so a value that arrives here is one the JD stated.
+        employmentType: normalizeExtractedEmploymentType(params.job_type) || (isEditMode ? prev.employmentType : 'full_time'),
+        workModel: (params.work_mode as ExtractedData['workModel']) || (isEditMode ? prev.workModel : 'onsite'),
         // Pre-fill salary from AI extraction
         // A null bound from extraction is an ANSWER - "this JD states no maximum" - not a
         // gap to be papered over with the previous value. Falling back to `prev` here meant
@@ -3465,7 +3489,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industryTypeRequired: params.industry_mandatory || false,
         department: isEditMode ? extractedData.department : '',
         allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
-        employmentType: (params.job_type as 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary') || (isEditMode ? extractedData.employmentType : 'full_time'),
+        employmentType: normalizeExtractedEmploymentType(params.job_type) || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: (params.work_mode as 'onsite' | 'remote' | 'hybrid' | 'field_based') || (isEditMode ? extractedData.workModel : 'onsite'),
         // Pre-fill salary from AI extraction
         // A null bound from extraction is an ANSWER - "this JD states no maximum" - not a
@@ -4786,7 +4810,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         employment_type: extractedData.employmentType,
         remote_type: extractedData.workModel,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
-        additional_details: extractedData.additionalDetails || undefined,
+        // JD22. NULL, not undefined, when the box is empty: the backend updates with
+        // exclude_unset, so an omitted key leaves the stored text in place and CLEARING
+        // the box could never take effect - the recruiter deleted the shift/WFO lines,
+        // saved, and every JD view kept showing the old ones.
+        additional_details: extractedData.additionalDetails?.trim() ? extractedData.additionalDetails : null,
         allow_overqualified: extractedData.allowOverqualified,
         certifications: extractedData.certifications,
         domain_keywords: extractedData.domainKeywords,
@@ -5106,7 +5134,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_currency: extractedData.salaryCurrency,
         job_level: experiencePayload.jobLevel,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
-        additional_details: extractedData.additionalDetails || undefined,
+        // JD22. NULL, not undefined, when the box is empty: the backend updates with
+        // exclude_unset, so an omitted key leaves the stored text in place and CLEARING
+        // the box could never take effect - the recruiter deleted the shift/WFO lines,
+        // saved, and every JD view kept showing the old ones.
+        additional_details: extractedData.additionalDetails?.trim() ? extractedData.additionalDetails : null,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
         nice_to_have_comments: extractedData.niceToHaveComments,
@@ -5401,7 +5433,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_currency: extractedData.salaryCurrency,
         job_level: experiencePayload.jobLevel,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
-        additional_details: extractedData.additionalDetails || undefined,
+        // JD22. NULL, not undefined, when the box is empty: the backend updates with
+        // exclude_unset, so an omitted key leaves the stored text in place and CLEARING
+        // the box could never take effect - the recruiter deleted the shift/WFO lines,
+        // saved, and every JD view kept showing the old ones.
+        additional_details: extractedData.additionalDetails?.trim() ? extractedData.additionalDetails : null,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
         nice_to_have_comments: extractedData.niceToHaveComments,
