@@ -3301,6 +3301,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           ) : scoredResumes.length === 0 ? (
             <TabEmptyState
               icon={Users}
+              imageSrc="/scored-resumes-empty-state.png"
+              imageAlt="Scored resumes illustration"
               title="No Scored Resumes"
               description="Score resumes against this job description to see the candidates here."
               action={canScoreResumesFromTab ? (
@@ -4048,6 +4050,8 @@ function AIMatchTabContent({
     return (
       <TabEmptyState
         icon={Brain}
+        imageSrc="/ai-talent-match-empty-state.png"
+        imageAlt="AI talent match illustration"
         title="No AI Talent Match Results"
         description="Run an AI Talent Match session to find the best candidates for this role."
         action={canRunAiMatch ? (

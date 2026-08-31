@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, ShieldAlert, Lock, HelpCircle } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ChevronDown, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, FileArchive, Users, Info, ClipboardCheck, UserPlus, Sparkles, RefreshCw, Ban, Brain, Edit2, Lightbulb, ShieldAlert, Lock, HelpCircle } from 'lucide-react';
 import Link from 'next/link';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -999,6 +999,10 @@ export default function MyResumesPage() {
   // ZIP download confirmation modal state
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+
+  // Archive confirmation modal state (bulk archive only — per-row archive stays instant)
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isArchivingResumes, setIsArchivingResumes] = useState(false);
 
   // Assessment modal state
   const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
@@ -2339,6 +2343,13 @@ export default function MyResumesPage() {
     } catch (error) {
       toast.error('Failed to archive resumes');
     }
+  };
+
+  const handleConfirmBulkArchive = async () => {
+    setIsArchivingResumes(true);
+    await handleArchiveResumes(selectedResumes);
+    setIsArchivingResumes(false);
+    setIsArchiveModalOpen(false);
   };
 
   // Handle unarchive resumes - clears is_archived and restores each resume
@@ -3897,7 +3908,7 @@ export default function MyResumesPage() {
             onDelete={canDeleteMyResumes ? () => handleDeleteResumes(selectedResumes) : undefined}
             folders={folders.filter(f => f.id !== 'all')}
             onAssessment={!isArchivedContext && hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? handleAssessment : undefined}
-            onArchive={!isArchivedContext && canArchiveMyResumes ? () => handleArchiveResumes(selectedResumes) : undefined}
+            onArchive={!isArchivedContext && canArchiveMyResumes ? () => setIsArchiveModalOpen(true) : undefined}
             onUnarchive={isArchivedContext && canArchiveMyResumes ? () => handleUnarchiveResumes(selectedResumes) : undefined}
             onAITalentMatch={!isArchivedContext && hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? handleAITalentMatch : undefined}
             // No `my_resumes:ai_interview` action code exists yet, so this
@@ -4877,41 +4888,67 @@ export default function MyResumesPage() {
           />
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
               {/* Header */}
-              <div className="flex items-center gap-4 p-6 border-b border-gray-200">
-                <div className="w-12 h-12 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                  <Archive className="w-6 h-6 text-brand-blue" />
+              <div className="flex items-start justify-between gap-4 p-6 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-brand-blue/10 rounded-2xl flex items-center justify-center flex-shrink-0">
+                    <FileArchive className="w-7 h-7 text-brand-blue" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 tracking-tight">Download as ZIP</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">Multiple files selected</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Download as ZIP</h3>
-                  <p className="text-sm text-gray-500">Multiple files selected</p>
-                </div>
+                <button
+                  onClick={() => !isDownloadingZip && setIsZipDownloadModalOpen(false)}
+                  disabled={isDownloadingZip}
+                  className="p-1 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
               {/* Content */}
-              <div className="p-6">
-                <p className="text-gray-700">
-                  You have selected <span className="font-semibold text-gray-900">{selectedResumes.length} candidates</span>.
-                </p>
-                <p className="text-gray-600 mt-2">
+              <div className="p-6 flex items-center gap-4 border-b border-gray-200">
+                <div className="w-16 h-16 bg-brand-blue/5 rounded-2xl flex items-center justify-center flex-shrink-0">
+                  <Users className="w-7 h-7 text-brand-blue" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-brand-blue">
+                    {selectedResumes.length}
+                    <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    All selected resumes will be downloaded and packed in a ZIP file.
+                  </p>
+                </div>
+              </div>
+
+              {/* Info */}
+              <div className="flex items-center gap-3 px-6 py-4">
+                <div className="w-7 h-7 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Info className="w-4 h-4 text-brand-blue" />
+                </div>
+                <p className="text-sm text-gray-700">
                   Do you want to download all selected resumes as a ZIP file?
                 </p>
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200">
+              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-2xl border-t border-gray-200">
                 <button
                   onClick={() => setIsZipDownloadModalOpen(false)}
                   disabled={isDownloadingZip}
-                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleZipDownload}
                   disabled={isDownloadingZip}
-                  className="flex items-center gap-2 px-4 py-2 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-5 py-2.5 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isDownloadingZip ? (
                     <>
@@ -4922,6 +4959,96 @@ export default function MyResumesPage() {
                     <>
                       <Download className="w-4 h-4" />
                       Continue
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Archive Resumes Confirmation Modal */}
+      {isArchiveModalOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
+            onClick={() => !isArchivingResumes && setIsArchiveModalOpen(false)}
+          />
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4 p-6 border-b border-gray-200">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Archive className="w-7 h-7 text-brand-blue" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 tracking-tight">Archive Resumes</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">Move selected resumes to archive</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => !isArchivingResumes && setIsArchiveModalOpen(false)}
+                  disabled={isArchivingResumes}
+                  className="p-1 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 flex items-center gap-4 border-b border-gray-200">
+                <div className="w-16 h-16 bg-brand-blue/5 rounded-2xl flex items-center justify-center flex-shrink-0">
+                  <Users className="w-7 h-7 text-brand-blue" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-brand-blue">
+                    {selectedResumes.length}
+                    <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    The selected resumes will be moved to archive and hidden from the active list.
+                  </p>
+                </div>
+              </div>
+
+              {/* Info */}
+              <div className="flex items-center gap-3 px-6 py-4">
+                <div className="w-7 h-7 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Info className="w-4 h-4 text-brand-blue" />
+                </div>
+                <p className="text-sm text-gray-700">
+                  Are you sure you want to archive all selected resumes?
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-2xl border-t border-gray-200">
+                <button
+                  onClick={() => setIsArchiveModalOpen(false)}
+                  disabled={isArchivingResumes}
+                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmBulkArchive}
+                  disabled={isArchivingResumes}
+                  className="flex items-center gap-2 px-5 py-2.5 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isArchivingResumes ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Archiving...
+                    </>
+                  ) : (
+                    <>
+                      <Archive className="w-4 h-4" />
+                      Archive
                     </>
                   )}
                 </button>
