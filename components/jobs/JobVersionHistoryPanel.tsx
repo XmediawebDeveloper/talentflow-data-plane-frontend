@@ -184,13 +184,10 @@ interface JobVersionHistoryPanelProps {
    * version alone.
    */
   statusOverrides?: Record<string, string>;
-<<<<<<< HEAD
   /** Drop still-drafted versions from the chain — see resolveVersionHistoryRows. */
   publishedOnly?: boolean;
-=======
   /** Host-specific columns, inserted after the shared ones and before Action. */
   extraColumns?: ExtraVersionColumn[];
->>>>>>> 448c55cb1e9b0937d5f97aafa32fe179e0a331fc
 }
 
 /**
@@ -225,11 +222,8 @@ export default function JobVersionHistoryPanel({
   onRowClick,
   staticRows = false,
   statusOverrides,
-<<<<<<< HEAD
   publishedOnly = false,
-=======
   extraColumns = [],
->>>>>>> 448c55cb1e9b0937d5f97aafa32fe179e0a331fc
 }: JobVersionHistoryPanelProps) {
   const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy, extraColumns);
   /* Which versions this table lists: the WHOLE chain — v1, v2 … up to and
@@ -268,12 +262,8 @@ export default function JobVersionHistoryPanel({
      pick. A read-only table has no such clash, which is why this is gated on
      selection mode rather than applied everywhere. */
   const jobVersions = resolveVersionHistoryRows(job, versions, {
-<<<<<<< HEAD
-    excludeId: onSelectVersion ? job.id : undefined,
-    publishedOnly,
-=======
     excludeId: onSelectVersion && !keepLatestWhenSelectable ? job.id : undefined,
->>>>>>> 448c55cb1e9b0937d5f97aafa32fe179e0a331fc
+    publishedOnly,
   });
 
   return (
