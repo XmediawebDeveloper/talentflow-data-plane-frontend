@@ -2344,6 +2344,7 @@ export default function ResumeScoringPage({
                       versionScoredBy={versionLineage.versionScoredBy}
                       onCardClick={openVersionDetails}
                       renderAction={renderVersionAction}
+                      publishedOnly
                     />
                   ) : (
                     <JobVersionHistoryPanel
@@ -2355,6 +2356,7 @@ export default function ResumeScoringPage({
                       versionScoredBy={versionLineage.versionScoredBy}
                       onRowClick={openVersionDetails}
                       renderAction={renderVersionAction}
+                      publishedOnly
                     />
                   )}
                 </div>

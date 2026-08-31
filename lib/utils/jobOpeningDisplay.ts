@@ -352,7 +352,7 @@ export interface ResolvedVersionRow extends JDLineageVersion {
 export const resolveVersionHistoryRows = (
   job: Pick<Job, 'id' | 'versionNumber'>,
   versions: JDLineageVersion[] | undefined,
-  options?: { excludeId?: string },
+  options?: { excludeId?: string; publishedOnly?: boolean },
 ): ResolvedVersionRow[] => {
   const lineageVersions = versions ?? [];
   const latestVersionNumber = lineageVersions.reduce(
@@ -370,6 +370,12 @@ export const resolveVersionHistoryRows = (
          above this history that duplicates its own version — excluded only
          there, via excludeId, so a read-only table isn't missing a row. */
       if (options?.excludeId && v.id === options.excludeId) return false;
+      /* Resume Scoring's history is about what a candidate can be scored
+         against, so a still-drafted version — never live, nothing to score
+         — is noise there. Gated behind an option rather than applied
+         everywhere: Job Openings' own history is a job's full edit trail,
+         where a draft in progress is exactly what a recruiter expects to see. */
+      if (options?.publishedOnly && (v.status || '').toLowerCase() === 'draft') return false;
       return true;
     })
     .sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1))

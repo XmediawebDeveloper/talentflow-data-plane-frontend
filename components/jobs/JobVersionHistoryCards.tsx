@@ -39,6 +39,8 @@ interface JobVersionHistoryCardsProps {
   onCardClick?: (versionId: string) => void;
   /** Where a version's title links to. Defaults to its Job Details page. */
   versionHref?: (versionId: string) => string;
+  /** Drop still-drafted versions from the chain — see resolveVersionHistoryRows. */
+  publishedOnly?: boolean;
 }
 
 /**
@@ -64,8 +66,9 @@ export default function JobVersionHistoryCards({
   renderAction,
   onCardClick,
   versionHref = (id) => `/recruitment/job-details?id=${id}`,
+  publishedOnly = false,
 }: JobVersionHistoryCardsProps) {
-  const jobVersions = resolveVersionHistoryRows(job, versions);
+  const jobVersions = resolveVersionHistoryRows(job, versions, { publishedOnly });
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">

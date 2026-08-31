@@ -138,6 +138,8 @@ interface JobVersionHistoryPanelProps {
    * version alone.
    */
   statusOverrides?: Record<string, string>;
+  /** Drop still-drafted versions from the chain — see resolveVersionHistoryRows. */
+  publishedOnly?: boolean;
 }
 
 /**
@@ -169,6 +171,7 @@ export default function JobVersionHistoryPanel({
   onRowClick,
   staticRows = false,
   statusOverrides,
+  publishedOnly = false,
 }: JobVersionHistoryPanelProps) {
   const columns = buildColumns(!!onSelectVersion, !!renderAction, !!versionScoredBy);
   /* Which versions this table lists: the WHOLE chain — v1, v2 … up to and
@@ -208,6 +211,7 @@ export default function JobVersionHistoryPanel({
      selection mode rather than applied everywhere. */
   const jobVersions = resolveVersionHistoryRows(job, versions, {
     excludeId: onSelectVersion ? job.id : undefined,
+    publishedOnly,
   });
 
   return (
