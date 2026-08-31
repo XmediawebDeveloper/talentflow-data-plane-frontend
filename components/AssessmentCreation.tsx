@@ -1,19 +1,31 @@
 'use client';
 
-import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, Lock } from 'lucide-react';
+import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown } from 'lucide-react';
 import type { HRTopic } from '@/lib/services/assessmentService';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import { assessmentService, jdService } from '@/lib/services';
 import api from '@/lib/services/api';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
-import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import JDVersionHistory from '@/components/JDVersionHistory';
+import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
+import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
+import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
+import ListPagination from '@/components/ListPagination';
+import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
+import {
+  groupByLineage,
+  jobSearchMatcher,
+  lineageKey,
+  mapJDStatus,
+  mapJDToJob,
+  sortJobs,
+} from '@/lib/utils/jobOpeningDisplay';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -30,10 +42,167 @@ const filterCompilable = (langs: string[] | undefined | null): string[] => {
   if (!Array.isArray(langs)) return [];
   return langs.filter(l => l && COMPILABLE_LANGUAGES_LOWER.has(String(l).trim().toLowerCase()));
 };
-const normalizeSearchValue = (value?: string | null) => (value || '').toLowerCase().trim();
-const normalizeIdentifier = (value?: string | null) => normalizeSearchValue(value).replace(/[^a-z0-9]/g, '');
-const normalizeTitleSearch = (value?: string | null) =>
-  normalizeSearchValue(value).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * The JD picker's radio groups. Exactly one JD version is ever selected: the
+ * "Latest Version" radio on a job card, or one of the v1 / v2 / v3 … rows in
+ * that job's expanded Version History.
+ *
+ * The cards share this name outright, so the browser enforces one ticked card.
+ * Each expanded history takes `${JD_RADIO_GROUP}-${lineage}` instead: its
+ * latest row and the card above it are two radios for the SAME pick (the table
+ * keeps the latest row for its Assessment column), and a single native group
+ * would let only one of them stay checked. Selection state is the authority
+ * across groups — every other lineage's radios are disabled while a pick is
+ * held, so a second one can't be made in the first place.
+ */
+const JD_RADIO_GROUP = 'assessment-jd-version-selection';
+
+/**
+ * The green badge a JD VERSION carries once it has an assessment — on the job
+ * card and on every version row, so "created" reads identically wherever it
+ * appears. A version without one renders nothing.
+ *
+ * The date is shown where it is known (it arrives with the lineage fetch the
+ * version history makes), because "created 12 Aug" answers the next question
+ * a recruiter asks after "created".
+ */
+function AssessmentStatusBadge({
+  created,
+  createdAt,
+}: {
+  created: boolean;
+  createdAt?: string;
+}) {
+  /* Nothing at all where the version is still free: the Create action beside
+     it already says so, and a "Not Created" chip on every untouched version was
+     noise on the rows that are the normal case. */
+  if (!created) return null;
+  return (
+    <span
+      className="px-2 sm:px-2.5 py-1 bg-green-100 text-green-700 ring-1 ring-green-200 rounded text-xs inline-flex items-center gap-1 whitespace-nowrap"
+      title={createdAt ? `Assessment created ${formatISTDate(createdAt)}` : undefined}
+    >
+      <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
+      Assessment Created
+      {createdAt && (
+        <span className="text-[11px] font-normal text-green-700/80">· {formatISTDate(createdAt)}</span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * The Version History table's Assessment cell.
+ *
+ * Both states are stated outright — "Created" and "Not Created" — unlike the
+ * card's badge above, which renders nothing on a free version. In a column
+ * every row answers the same question, so a blank cell there reads as missing
+ * data rather than as an answer, and "which versions can I still build
+ * against" is exactly what this table is scanned for.
+ *
+ * No date: the row carries Posted On and Last Updated already, and the created
+ * date belongs to the assessment rather than to the version this table lists.
+ */
+function AssessmentCreatedLabel({ created }: { created: boolean }) {
+  return (
+    <span
+      className={`px-2 sm:px-2.5 py-1 rounded text-xs inline-flex items-center gap-1 whitespace-nowrap ring-1 ${
+        created
+          ? 'bg-green-100 text-green-700 ring-green-200'
+          : 'bg-slate-100 text-slate-500 ring-slate-200'
+      }`}
+    >
+      {created && <CheckCircle2 className="w-3 h-3 flex-shrink-0" />}
+      {created ? 'Created' : 'Not Created'}
+    </span>
+  );
+}
+
+/**
+ * Whether an assessment can be built against a JD VERSION: only a published
+ * one can. A Draft is still being written, and an Archived or Disabled version
+ * is out of service — an assessment authored against any of them would be
+ * pinned to a JD no candidate will ever be sent.
+ *
+ * An allowlist rather than a list of excluded statuses, so a status this file
+ * has never heard of can only ever be treated as not publishable.
+ *
+ * Republished counts, and needs no case of its own: "Republished" is a DISPLAY
+ * label `getDisplayStatus` derives from a published version whose
+ * current_version has passed 1 — the record's own status is still `published`.
+ * The literal spelling is accepted anyway, so a status string that ever does
+ * arrive that way is read as what it means rather than as unpublished.
+ *
+ * Read off the version's own status — the version rows carry theirs, so this
+ * answers per row rather than per job. Compared case-insensitively because the
+ * lineage rows arrive with the raw DB status while the Job type holds the
+ * capitalised form.
+ */
+const isPublishedVersion = (job: Job): boolean => {
+  const status = String(job.status || '').toLowerCase();
+  return status === 'published' || status === 'republished';
+};
+
+/** Same page size the Job Openings page reads the JD list in. */
+const JD_BATCH_SIZE = 100;
+
+/**
+ * Every JD version this recruiter can see — unfiltered, and paged to the end.
+ *
+ * EVERY VERSION, deliberately. Asking the endpoint for `status: 'published'`
+ * instead looks like the cheaper way to get a published list, and it is wrong
+ * in exactly one way that shows: it strips a lineage's draft v2 before the
+ * versions can be collapsed, so the published v1 stands in as the latest. The
+ * card then reads "Published · v1" while its own Version History — which is
+ * fed by the lineage endpoint and does see the v2 — badges "v2 LATEST · Draft"
+ * two lines below it. Same bug, same fix, as the Apply to Job dialog's list.
+ *
+ * Any status test therefore belongs AFTER the lineage collapse, on the full
+ * list (see `availableJobs`), never in this request.
+ */
+const fetchAllJdVersions = async () => {
+  const firstPage = await jdService.list({ page: 1, page_size: JD_BATCH_SIZE, source: 'my-jds' });
+  const items = [...firstPage.items];
+  const totalPages = Math.max(
+    firstPage.total_pages || Math.ceil(firstPage.total / JD_BATCH_SIZE),
+    1,
+  );
+  for (let page = 2; page <= totalPages; page += 1) {
+    const nextPage = await jdService.list({ page, page_size: JD_BATCH_SIZE, source: 'my-jds' });
+    items.push(...nextPage.items);
+  }
+  return items;
+};
+
+/**
+ * The Add button's two questions, in one place, so the card and every version
+ * row answer them identically: is this version live, and is it still free.
+ * Enabled only where both say yes; otherwise the button stays put and the
+ * reason becomes its tooltip.
+ */
+const addButtonState = (versionNumber: number | undefined, published: boolean, created: boolean) => {
+  if (!published) {
+    return {
+      enabled: false,
+      label: `v${versionNumber ?? 1} is not published — an assessment can only be created against a published or republished version`,
+    };
+  }
+  if (created) {
+    return {
+      enabled: false,
+      label: `v${versionNumber ?? 1} already has an assessment`,
+    };
+  }
+  return { enabled: true, label: `Create an assessment against v${versionNumber ?? 1}` };
+};
+
+/**
+ * The Add button's inert skin: the same box, size and radius as the live one,
+ * so the column keeps its shape whatever the row's status. Only the fill
+ * changes, which is what makes "you cannot use this one" readable at a glance.
+ */
+const ADD_BUTTON_DISABLED = 'bg-slate-200 text-slate-400 ring-slate-300/60 shadow-none cursor-not-allowed';
 
 // Dynamic import to break circular dependency chain that causes TDZ error
 // when navigating to Assessment Results (AssessmentCreation → JDCreation creates
@@ -176,6 +345,40 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<any>(null);
   const [jdSearch, setJdSearch] = useState('');
+  /* JD picker paging. The page is stored WITH the search it belongs to — the
+     same trick the Apply to Job dialog uses — so a new query starts back at
+     page one by comparison rather than by an effect that resets it a render
+     later (which would flash one page of the wrong rows). */
+  const [jdPageState, setJdPageState] = useState({ query: '', page: 1 });
+  const [jdItemsPerPage, setJdItemsPerPage] = useState(10);
+  const jdListRef = useRef<HTMLDivElement>(null);
+  /* Version history for the picker's rows — the same hook and endpoints behind
+     the Job Openings list's own "View Versions", so the history opened here is
+     the history that page shows. */
+  const jdLineage = useJobVersionLineage();
+  /* The job whose full Version History popup is open — the Job Details page's
+     own modal, opened by the eye on a row. */
+  const [versionHistoryFor, setVersionHistoryFor] = useState<Job | null>(null);
+  /* The JD VERSION the recruiter has ticked in the picker — the card's radio
+     picks the latest, a Version History row picks an older one. Held with the
+     LINEAGE it belongs to rather than as a bare record, because that is what
+     makes "one version at a time, across every job" answerable: every other
+     lineage's radios go inert while this is set. Nothing about the selection
+     is sent anywhere, so it keeps the record rather than an id. */
+  const [jdPick, setJdPick] = useState<{ lineage: string; job: Job } | null>(null);
+  /* Tick a version, or let go of the one already ticked by clicking it again —
+     which is what re-enables every other job's versions. */
+  const pickJdVersion = (job: Job, lineage: string) =>
+    setJdPick(prev => (prev?.job.id === job.id ? null : { job, lineage }));
+  /* The assessments already created in a lineage, keyed by lineage and then by
+     the JD VERSION id each was created against.
+     
+     This is the version-specific half of "one assessment per JD version": the
+     mount-time index (jdsWithAssessments) answers whether a version has one,
+     and this answers WHICH assessment and WHEN — the created date the version
+     rows show. Fetched once per job, when its versions are first opened. */
+  const [lineageAssessments, setLineageAssessments] = useState<Record<string, Record<string, { id: string; createdAt?: string; title?: string }>>>({});
+  const [loadingLineageAssessments, setLoadingLineageAssessments] = useState<Record<string, boolean>>({});
 
   // Helper function to update step and URL
   const setStep = (newStep: 'select-jd' | 'configure' | 'preview', jobId?: string) => {
@@ -912,24 +1115,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
     // Refresh the jobs list to include the new JD
     try {
-      const response = await jdService.list({ status: 'published', page_size: 100, source: 'my-jds' });
-      if (response?.items?.length > 0) {
-        const mappedJobs: Job[] = response.items.map((jd: any) => ({
-          id: jd.id,
-          title: jd.title,
-          currentVersion: jd.current_version,  // republish counter -> the vN badge
-          description: jd.description || '',
-          department: jd.department || 'General',
-          location: jd.location || '',
-          experience: jd.job_level || 'Mid-Level',
-          experience_min: jd.experience_min,
-          experience_max: jd.experience_max,
-          skills: jd.must_have_skills || [],
-          status: 'Published' as const,
-          created: jd.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-          applicants: jd.applicants_count || 0,
-          daysActive: 0,
-          requiredMatch: 70,
+      /* The same read as on mount — every version, through the shared mapper.
+         The hand-rolled mapping this replaced stamped `status: 'Published'` on
+         every row it built, which was survivable only while the request itself
+         was published-filtered; over the full list it would have marked every
+         draft version published and put each one on a card of its own. */
+      const items = await fetchAllJdVersions();
+      if (items.length > 0) {
+        const mappedJobs: Job[] = items.map((jd: any) => ({
+          ...mapJDToJob(jd),
           coding_required: jd.coding_required || false,
           supported_languages: jd.supported_languages || [],
         }));
@@ -957,8 +1151,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       setIsLoadingJobs(true);
       try {
         // Fetch both JDs and JDs with assessments in parallel
-        const [jdResponse, jdsWithAssessmentsResponse] = await Promise.all([
-          jdService.list({ status: 'published', page_size: 100, source: 'my-jds' }),
+        const [jdItems, jdsWithAssessmentsResponse] = await Promise.all([
+          fetchAllJdVersions(),
           assessmentService.getJDsWithAssessments(),
         ]);
 
@@ -966,53 +1160,42 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         setJdsWithAssessments(new Set(jdsWithAssessmentsResponse));
         console.log('[TalentFlow] JDs with existing assessments:', jdsWithAssessmentsResponse.length);
 
-        if (jdResponse?.items?.length > 0) {
-          const mappedJobs: Job[] = jdResponse.items.map((jd: any) => ({
-            id: jd.id,
-            job_id: jd.job_id || '',
-            title: jd.title,
-            currentVersion: jd.current_version,  // republish counter -> the vN badge
-            description: jd.description || '',
-            department: jd.department || 'General',
-            location: jd.location || '',
-            experience: jd.job_level || 'Mid-Level',
-            skills: jd.must_have_skills || [],
-            status: 'Published',
-            postedDate: jd.published_at || jd.created_at,
-            postedBy: jd.created_by_name || 'Unknown',
-            applicants: jd.applicants_count || 0,
-            daysActive: 0,
-            requiredMatch: 70,
+        if (jdItems.length > 0) {
+          /* The shared mapper, the same one the Job Openings list and the
+             Apply to Job dialog build their rows from — so this picker shows
+             the same fields, formatted the same way, rather than a partial
+             hand-rolled copy that was missing the lineage version, the work
+             mode, the last-updated stamp and the formatted experience line.
+             The two fields it does not carry are the coding-round inputs this
+             flow needs, kept alongside it. */
+          const mappedJobs: Job[] = jdItems.map((jd: any) => ({
+            ...mapJDToJob(jd),
             coding_required: jd.coding_required || false,
             supported_languages: jd.supported_languages || [],
-            industry_type: jd.industry_type || 'Technology',
-            employmentType: jd.employment_type || 'full_time',
-            creation_method: jd.creation_method || 'manual',
-            experience_min: jd.experience_min,
-            experience_max: jd.experience_max,
           }));
           setLocalJobs(mappedJobs);
         }
 
-        /* The pre-selected JD may not be in that list at all.
+        /* The pre-selected JD may still not be in that list.
          *
-         * The list above is `status: 'published'`, i.e. the CURRENT version of
-         * each job. A job republished to v3 leaves v1 and v2 as their own JD
-         * rows that the list no longer returns — so arriving from the
-         * Assessments page's Job Version History with `?jd_id=<v2's id>` found
-         * nothing to select, and the recruiter was dropped on the JD picker
-         * being asked to choose the job they had just clicked.
+         * Rarer now the read is unfiltered and paged to the end — a superseded
+         * v2 is returned like any other row — but `source: 'my-jds'` still
+         * scopes it to this recruiter's own JDs, and arriving from the
+         * Assessments page's Job Version History with `?jd_id=<v2's id>` for
+         * someone else's job would find nothing to select, dropping the
+         * recruiter on the JD picker being asked to choose the job they had
+         * just clicked.
          *
          * Fetched by id and merged in, so the auto-select effect below resolves
-         * it like any other. Deliberately merged into `localJobs` only: the
-         * picker's own list is filtered to Published (`availableJobs`), so a
-         * superseded version becomes selectable-by-link without being offered
-         * as a fresh choice to everyone else.
+         * it like any other. Merged into `localJobs` only: it joins its
+         * lineage's bucket in `availableJobs`, where the collapse decides
+         * whether it is that job's latest version rather than this merge
+         * asserting it.
          *
          * A failure here is not fatal — the flow falls through to the picker,
          * which is exactly where it used to land. */
         const wantedJdId = preSelectedJobId || urlJdId;
-        const alreadyListed = jdResponse?.items?.some((jd) => jd.id === wantedJdId);
+        const alreadyListed = jdItems.some((jd) => jd.id === wantedJdId);
         if (wantedJdId && !alreadyListed) {
           try {
             const jd = await jdService.get(wantedJdId);
@@ -1026,10 +1209,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               location: jd.location || '',
               experience: jd.job_level || 'Mid-Level',
               skills: jd.must_have_skills || [],
-              /* Its real status, not a forced 'Published': `availableJobs`
-                 keys the picker off this, and claiming a superseded version is
-                 published would put it back in everyone's list. */
-              status: (String(jd.status || '').toLowerCase() === 'published' ? 'Published' : 'Closed') as Job['status'],
+              /* Its real status, through the shared mapper — the card displays
+                 this, and every control on the card is gated on it. The
+                 two-way `published ? 'Published' : 'Closed'` this replaced was
+                 written when the picker was published-filtered and the only
+                 question was in-or-out; it would now show a Draft, Disabled or
+                 Archived version as "Closed" on the card. */
+              status: mapJDStatus(jd.status),
               postedDate: jd.published_at || jd.created_at,
               postedBy: jd.created_by_name || 'Unknown',
               applicants: 0,
@@ -1220,6 +1406,95 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   // Check if job title/description indicates a coding role
+  /**
+   * The assessments already created against a job's JD versions.
+   *
+   * ONE REQUEST PER JOB, made when its version history is first opened: the
+   * list endpoint answers for a whole lineage, so a job's three versions cost
+   * one call however many of them are inspected. Keyed by the JD VERSION id
+   * each assessment was created against — that is the association the whole
+   * feature rests on (Job → JD version → assessment), and the reason the check
+   * below can say v3 is taken while v2 and v1 are free.
+   *
+   * A failure leaves no entry, so reopening retries rather than caching the
+   * failure as "this job has no assessments".
+   */
+  const loadLineageAssessments = async (lineage: string, jdId: string) => {
+    if (lineageAssessments[lineage] || loadingLineageAssessments[lineage]) return;
+    setLoadingLineageAssessments(prev => ({ ...prev, [lineage]: true }));
+    try {
+      const response = await assessmentService.list({ jd_id: jdId, page_size: 50 });
+      const byVersion: Record<string, { id: string; createdAt?: string; title?: string }> = {};
+      for (const row of response.items || []) {
+        if (!row?.jd_id) continue;
+        /* Several assessments can share a JD version (an assessment cloned to
+           v2, v3). The FIRST created one dates the version — that is when this
+           version stopped being available. */
+        const existing = byVersion[row.jd_id];
+        if (!existing || (row.created_at && existing.createdAt && row.created_at < existing.createdAt)) {
+          byVersion[row.jd_id] = { id: row.id, createdAt: row.created_at, title: row.title };
+        }
+      }
+      setLineageAssessments(prev => ({ ...prev, [lineage]: byVersion }));
+    } catch (error) {
+      console.log('[TalentFlow] Failed to load assessments for JD lineage:', error);
+    } finally {
+      setLoadingLineageAssessments(prev => ({ ...prev, [lineage]: false }));
+    }
+  };
+
+  /** The assessment created against ONE JD version, if the lineage is loaded. */
+  const assessmentForVersion = (lineage: string, versionId: string) =>
+    lineageAssessments[lineage]?.[versionId];
+
+  /**
+   * Whether ONE JD VERSION already has an assessment — the business rule is
+   * one per version, never one per job, so this is keyed on the version's own
+   * JD id and never on the job.
+   *
+   * Two sources, in order. The lineage's own assessments WIN once fetched:
+   * they are the actual records, each naming the JD version it was created
+   * against, so they answer per version by construction. Until then the
+   * mount-time index of JDs-with-assessments stands in, so a card is right the
+   * moment it renders rather than blank until something is expanded.
+   */
+  const versionHasAssessment = (lineage: string, versionId: string) => {
+    const fetched = lineageAssessments[lineage];
+    if (fetched) return !!fetched[versionId];
+    return jdsWithAssessments.has(versionId);
+  };
+
+  /** Open or close a job's version history, loading both halves on first open. */
+  const toggleJdVersions = (job: Job) => {
+    const lineage = lineageKey(job);
+    jdLineage.toggle(lineage, job.id);
+    void loadLineageAssessments(lineage, job.id);
+  };
+
+  /**
+   * Create an assessment for ONE JD version.
+   *
+   * The version's own JD record supplies the coding inputs rather than the
+   * card's: the card carries the LATEST version, and configuring v2's
+   * assessment from v3's skills would be a different job's answer. The record
+   * is already fetched by the version panel; before it lands the card's own
+   * values stand in, which is what they were before this existed.
+   */
+  const handleCreateForVersion = (versionJob: Job) => {
+    const detail = jdLineage.versionDetails[versionJob.id];
+    handleJobSelect(
+      detail
+        ? {
+            ...versionJob,
+            description: detail.description ?? versionJob.description,
+            skills: detail.must_have_skills ?? versionJob.skills,
+            coding_required: detail.coding_required ?? versionJob.coding_required,
+            supported_languages: detail.supported_languages ?? versionJob.supported_languages,
+          }
+        : versionJob,
+    );
+  };
+
   const isCodingRole = (job: Job): boolean => {
     const codingRolePatterns = [
       /developer/i,
@@ -1238,7 +1513,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   const handleJobSelect = (job: Job) => {
-    if (jdsWithAssessments.has(job.id)) {
+    /* One assessment per JD VERSION: the check is the version's own JD id,
+       resolved through the lineage's actual assessments where they have been
+       fetched. A job whose v3 is taken still creates freely against v2. */
+    if (versionHasAssessment(lineageKey(job), job.id)) {
       redirectForExistingAssessment(job.id);
       return;
     }
@@ -1747,8 +2025,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           percentage: section.percentage,
           topics: section.topics,
           questions: Math.ceil((resultAssessment.duration_minutes * section.percentage) / 100 / 2),
-          difficulty: selectedJob?.experience === 'Senior' || selectedJob?.experience === 'Lead' ? 'Advanced' :
-                     selectedJob?.experience === 'Mid-Level' ? 'Intermediate' : 'Basic',
+          /* Read from the JD's own seniority field. It used to read
+             `experience`, which the picker's list mapping happened to fill
+             with the job level; that list now carries the shared mapping,
+             where `experience` is the formatted years line ("3+ years") and
+             the level lives on `experience_level`. The old field is still
+             consulted, so a job coming from a host that maps it the old way
+             keeps its difficulty. */
+          difficulty: (() => {
+            const level = String(selectedJob?.experience_level || selectedJob?.experience || '').toLowerCase();
+            if (level.includes('senior') || level.includes('lead') || level.includes('architect') || level.includes('management')) return 'Advanced';
+            if (level.includes('mid')) return 'Intermediate';
+            return 'Basic';
+          })(),
           estimatedTime: Math.ceil((resultAssessment.duration_minutes * section.percentage) / 100),
         })),
         status: saveAsDraft ? 'Draft' : 'Active',
@@ -1929,30 +2218,64 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const hasZeroPercentageEnabled = enabledSections.some(s => s.percentage === 0);
   const isPercentageValid = totalPercentage === 100 && hasAtLeastOneEnabled && !hasZeroPercentageEnabled;
 
-  // Use localJobs which includes newly created JDs. We hard-filter to
-  // Published-only here so drafts never reach the JD picker — case-
-  // insensitive so any stray `'published'` from a status string that
-  // wasn't normalized upstream still passes, and any `'draft'` /
-  // `'closed'` / `'archived'` is explicitly excluded.
-  const availableJobs = (localJobs.length > 0 ? localJobs : jobs).filter(j => {
-    const s = String(j.status || '').toLowerCase();
-    return s === 'published';
-  });
-  const searchQuery = normalizeSearchValue(jdSearch);
-  const titleSearchQuery = normalizeTitleSearch(jdSearch);
-  const searchTerms = titleSearchQuery.split(/\s+/).filter(Boolean);
-  const normalizedSearchIdentifier = normalizeIdentifier(jdSearch);
-  const filteredAvailableJobs = availableJobs.filter(job => {
-    if (!searchQuery) return true;
+  /* Read from `localJobs`, which is the fetched list plus any JD created or
+     resolved by link during this visit.
 
-    const normalizedTitle = normalizeTitleSearch(job.title);
-    const matchesTitle = searchTerms.length > 0 && searchTerms.every(term => normalizedTitle.includes(term));
-    const matchesIdentifier = normalizedSearchIdentifier
-      ? normalizeIdentifier(job.job_id).includes(normalizedSearchIdentifier)
-      : false;
+     Version rows per lineage, newest version first inside each bucket — the
+     Job Openings list's own grouping, and what the "View Versions" test below
+     counts, exactly as that list counts it. */
+  const jdVersionGroups = groupByLineage(localJobs.length > 0 ? localJobs : jobs);
 
-    return matchesTitle || matchesIdentifier;
-  });
+  /* ONE ROW PER JOB, not per job version — and the row is that lineage's
+     LATEST version, whatever its status.
+
+     `bucket[0]` is the latest by SEQUENCE (`byLatestVersion`: version number,
+     then created_at — status is not a term in it), so a job whose v2 is a
+     draft over a published v1 is listed as "v2 · Draft". Not as v1: an older
+     published version standing in for the latest is the divergence a recruiter
+     actually sees, because the Version History below the card is fed by the
+     lineage endpoint and badges the true latest — the card read "Published ·
+     v1" while its own table two lines down read "v2 LATEST · Draft".
+
+     NO STATUS TEST AT ALL, which is the part that changed. `getPublishedJobs`
+     keeps a lineage only where the LATEST version is published — right for
+     counting published jobs, wrong for a picker, because it drops a re-drafted,
+     disabled or archived job entirely and takes its still-live older versions
+     with it. Those are exactly the jobs a recruiter comes here looking for: the
+     assessment they want to build is against the v1 that is still published,
+     and hiding the whole lineage because v2 is a draft leaves them no route to
+     it. Every job is listed, on its real latest version, with its real status.
+
+     The card's own controls carry the rule instead of the list carrying it: a
+     representative that is not published fails `isPublishedVersion`, so its
+     radio and its Add go inert with the reason in their tooltip, while View
+     Versions stays live and offers an Add per row. A lineage with nothing
+     published anywhere is then a card that says so on every control, which is
+     an answer — where omitting it was silence. */
+  const availableJobs = Array.from(jdVersionGroups.values(), (bucket) => bucket[0]);
+  const jdSearchQuery = jdSearch.trim().toLowerCase();
+  /* The shared matcher: JD number, role, department, location — the same
+     fields, and the same separator-insensitive number matching, the Apply to
+     Job dialog searches. */
+  const filteredAvailableJobs = sortJobs(
+    availableJobs.filter(jobSearchMatcher(jdSearch)),
+    'date',
+    'desc',
+  );
+  const jdTotalPages = Math.max(1, Math.ceil(filteredAvailableJobs.length / jdItemsPerPage));
+  const jdCurrentPage = jdPageState.query === jdSearchQuery ? jdPageState.page : 1;
+  /* A shrinking result set can leave the current page past the end; clamp on
+     read so the rows never come back empty while the page number still points
+     somewhere. */
+  const jdSafePage = Math.min(jdCurrentPage, jdTotalPages);
+  const pagedAvailableJobs = filteredAvailableJobs.slice(
+    (jdSafePage - 1) * jdItemsPerPage,
+    jdSafePage * jdItemsPerPage,
+  );
+  /* The pick is held outside the list, so it survives paging and searching —
+     and every card on screen can be inert because of a job that is not. Where
+     that happens the picker says so, and offers the way out. */
+  const jdPickOnThisPage = !!jdPick && pagedAvailableJobs.some(job => lineageKey(job) === jdPick.lineage);
 
   // Plan feature gate: assessment creation not available on current plan
   useEffect(() => {
@@ -2067,114 +2390,223 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   <p className="text-sm sm:text-base text-gray-500">Loading job descriptions...</p>
                 </div>
               ) : (
-              <div className="space-y-3">
-                <div className="mb-5">
-                  <input
-                    type="text"
-                    placeholder="Search by JD ID or title..."
-                    value={jdSearch}
-                    onChange={e => setJdSearch(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-gray-200 bg-white rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                  />
+              <div className="space-y-3" ref={jdListRef}>
+                {/* Search Jobs — the Apply to Job dialog's own field, down to
+                    the label, the icon and what it searches. */}
+                <div className="mb-4">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Search Jobs</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search by JD number, role, department or location..."
+                      value={jdSearch}
+                      onChange={e => setJdSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 bg-white rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    />
+                  </div>
                 </div>
-                {/* `availableJobs` is already Published-only (filtered above)
-                    — this map renders all of them as the JD picker. */}
-                {filteredAvailableJobs.map(job => {
-                  // Check if this JD already has an assessment (1:1 relationship)
-                  const hasExistingAssessment = jdsWithAssessments.has(job.id);
 
-                  // Format experience range
-                  const expRange = job.experience_min && job.experience_max
-                    ? `${job.experience_min}-${job.experience_max} years`
-                    : job.experience_min
-                      ? `${job.experience_min}+ years`
-                      : job.experience || 'Not specified';
+                {/* The count follows the search, so it always describes exactly
+                    what is listed — no total beside it, nothing hardcoded. */}
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs sm:text-sm font-medium text-gray-700">
+                    Select a Job Opening
+                    {filteredAvailableJobs.length > 0 && (
+                      <span className="ml-2 font-normal text-gray-500">
+                        &mdash; {filteredAvailableJobs.length} available
+                      </span>
+                    )}
+                  </span>
+                  {/* The only unconditional way back to "nothing selected".
+                      Clicking the ticked radio also lets go of it, but that
+                      radio can be a page or a search away — and while it is
+                      held, every other job's versions are inert. */}
+                  {jdPick && (
+                    <button
+                      type="button"
+                      onClick={() => setJdPick(null)}
+                      className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
+                    >
+                      Clear Selection
+                    </button>
+                  )}
+                </div>
 
-                  // Format posted date
-                  const postedDate = job.postedDate ? formatISTDate(job.postedDate) : 'N/A';
+                {/* Say what the pick is when it isn't on screen — otherwise a
+                    list of cards greyed out by a job on another page reads as
+                    the picker having broken. */}
+                {jdPick && !jdPickOnThisPage && (
+                  <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/5 px-3 py-2 text-xs text-gray-700">
+                    <CheckCircle2 className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                    <span>
+                      Selected: <span className="font-medium">
+                        {jdPick.job.job_id ? `${jdPick.job.job_id} · ` : ''}{jdPick.job.title}
+                        {' '}(v{jdPick.job.versionNumber ?? 1})
+                      </span>
+                      {' '}(on another page)
+                    </span>
+                  </div>
+                )}
+                {/* One row per published JOB — `availableJobs` is collapsed to
+                    the latest version of each lineage, so a job republished to
+                    v3 is one row showing v3, and v2 and v1 live behind View
+                    Versions. The row itself is the Job Openings list's own, via
+                    the shared JobOpeningSummary. */}
+                {pagedAvailableJobs.map(job => {
+                  const versionKey = lineageKey(job);
+                  const versionsExpanded = jdLineage.isExpanded(versionKey);
+
+                  /* Version-specific, always: an assessment on v3 says nothing
+                     about v2. The card speaks for the version it shows — the
+                     latest — and every other version answers for itself in the
+                     history below. */
+                  const latestHasAssessment = versionHasAssessment(versionKey, job.id);
+                  const latestAssessment = assessmentForVersion(versionKey, job.id);
+                  /* Two states, not one: `isPicked` is "this card's own latest
+                     version is the pick" (the card radio), while
+                     `lineageSelected` is "some version of this job is the pick"
+                     — which is what keeps the card reading as chosen when the
+                     pick came out of its Version History. */
+                  const isPicked = jdPick?.job.id === job.id;
+                  const lineageSelected = jdPick?.lineage === versionKey;
+                  const pickedVersionOfThisJob = lineageSelected && !isPicked ? jdPick!.job : null;
+                  /* One version at a time, across the whole list: while a
+                     version of ANOTHER job is ticked, this job's versions —
+                     the latest on the card and every row of its history — go
+                     inert, so the picker can never hold two answers. Clearing
+                     or moving that pick releases them again. */
+                  const blockedByOtherPick = !!jdPick && !lineageSelected;
+                  const otherPickReason = blockedByOtherPick
+                    ? `v${jdPick!.job.versionNumber ?? 1} of "${jdPick!.job.title}" is selected — clear it to choose a version here`
+                    : undefined;
+                  /* The card's radio speaks for the latest version, so it is
+                     off where that version already has an assessment, where
+                     another job holds the pick, and where the version is not
+                     published — an assessment can only be built against a
+                     published or republished version, which is the rule its Add
+                     button and every history row already state. Now that the
+                     card can legitimately show a DRAFT latest (a re-drafted
+                     job), leaving it out here would offer a pick the next step
+                     refuses. The job's published version is one click away in
+                     View Versions. */
+                  const latestPublished = isPublishedVersion(job);
+                  const latestSelectable = !latestHasAssessment && !blockedByOtherPick && latestPublished;
+                  /* Names the version's ACTUAL status — Draft, Disabled,
+                     Archived, Closed — rather than assuming a draft, since any
+                     of them can be a lineage's latest and each is a different
+                     thing to read on a card. Then names the way through, which
+                     is the same one in every case: the published version this
+                     job still has is a row in its own View Versions. */
+                  const latestUnpublishedReason = `v${job.versionNumber ?? 1} is ${String(job.status || 'not published').toLowerCase()} — open View Versions to build against a published version`;
+                  /* The card's Add acts on the version the card shows, so it
+                     answers the same published-only rule its version rows do —
+                     stated here rather than assumed from the list being
+                     published-filtered, so a card whose representative is a
+                     draft (a JD resolved by link, a newly created one merged
+                     in) cannot offer an assessment it could not carry. */
+                  const latestAdd = addButtonState(
+                    job.versionNumber,
+                    isPublishedVersion(job),
+                    latestHasAssessment,
+                  );
 
                   return (
                     <div
                       key={job.id}
-                      onClick={() => !hasExistingAssessment && handleJobSelect(job)}
-                      className={`w-full text-left p-3 sm:p-5 border rounded-xl transition-all ${
-                        hasExistingAssessment
-                          ? 'border-gray-100 bg-slate-50 opacity-60 cursor-not-allowed'
-                          : 'border-gray-100 hover:border-brand-blue/30 hover:bg-brand-blue/[0.02] hover:shadow-md hover:shadow-brand-blue/10 cursor-pointer bg-white'
+                      /* Hovering the card says what it can do, in priority
+                         order: the reason it is inert if it is, then — for a
+                         latest version that cannot be built against — what View
+                         Versions is FOR. That last case is the one worth
+                         spelling out. The card shows a Draft, Disabled or
+                         Archived version with its real status, so the controls
+                         beside it are correctly off, and without a word about
+                         it the card reads as a dead end rather than as a job
+                         whose other versions are one click away.
+
+                         `title` rather than a styled popover, matching the
+                         Job Openings card and every other control in this
+                         picker — the same idiom, so a hover behaves the same
+                         wherever a recruiter tries it. */
+                      title={
+                        blockedByOtherPick
+                          ? otherPickReason
+                          : !latestPublished
+                            ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
+                            : 'View Versions opens this job’s version history — every version of this job, and the one to build the assessment against.'
+                      }
+                      aria-disabled={blockedByOtherPick}
+                      className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${
+                        blockedByOtherPick
+                          ? 'bg-gray-50 border-gray-200 opacity-60'
+                          : lineageSelected
+                            ? 'bg-brand-blue/5 border-brand-blue/40 shadow-sm shadow-brand-blue/10'
+                            : 'bg-white border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                       }`}
                     >
-                      <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
-                        {/* Icon */}
-                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                          <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
-                        </div>
+                      <div className="flex items-start gap-2 sm:gap-4">
+                        {/* A radio, because exactly one JD version is built
+                            against. Wrapped in its own label rather than the
+                            whole card: the card carries a versions toggle and
+                            buttons, and a label around those would swallow
+                            their clicks.
 
-                        {/* Content */}
+                            Off where THIS version already has an assessment —
+                            the version history beside it stays open to every
+                            sibling version that does not — and off while
+                            another job holds the pick. */}
+                        <label
+                          className={`flex items-center pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                          title={
+                            blockedByOtherPick
+                              ? otherPickReason
+                              : latestHasAssessment
+                                ? `v${job.versionNumber ?? 1} already has an assessment — open View Versions to build against another version`
+                                : !latestPublished
+                                  ? latestUnpublishedReason
+                                  : `Select the latest version (v${job.versionNumber ?? 1})`
+                          }
+                        >
+                          <input
+                            type="radio"
+                            name={JD_RADIO_GROUP}
+                            checked={isPicked}
+                            disabled={!latestSelectable}
+                            onChange={() => latestSelectable && pickJdVersion(job, versionKey)}
+                            /* Clicking the ticked one lets go of it. */
+                            onClick={() => isPicked && pickJdVersion(job, versionKey)}
+                            className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40 flex-shrink-0 disabled:cursor-not-allowed"
+                          />
+                          <span className="sr-only">Select the latest version of {job.title}</span>
+                        </label>
+
                         <div className="flex-1 min-w-0">
-                          {/* Title Row */}
-                          <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            {job.job_id && (
-                              <span className="px-2 py-0.5 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-xs font-medium">
-                                {job.job_id}
-                              </span>
-                            )}
-                            <h3 className="text-sm sm:text-base text-gray-900 font-medium truncate">
-                              {job.title}
-                            </h3>
-                            {/* Version from the JD row's own `current_version`. A JD
-                                that has never been republished carries no value, and
-                                that IS v1 — the same reading JDListPage and the JD
-                                header use, so the number matches wherever it shows. */}
-                            <span className="flex-shrink-0 px-2 py-0.5 bg-gray-100 text-gray-700 ring-1 ring-gray-200 rounded-full text-xs font-medium">
-                              v{job.currentVersion ?? 1}
-                            </span>
-                            <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                              Published
-                            </span>
-                            {job.creation_method === 'ai_generated' && (
-                              <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-xs flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 bg-brand-cyan rounded-full"></span>
-                                AI
-                              </span>
-                            )}
+                          {/* Clicking the headline ticks the job, so the whole
+                              block is a target without a <label> wrapping the
+                              controls beside it. */}
+                          <div
+                            onClick={() => latestSelectable && pickJdVersion(job, versionKey)}
+                            className={latestSelectable ? 'cursor-pointer' : 'cursor-default'}
+                          >
+                            <JobOpeningSummary job={job} metaSingleLine />
                           </div>
 
-                          {/* Details Row */}
-                          <div className="flex items-center gap-2 sm:gap-4 text-xs text-gray-500 flex-wrap">
-                            <span className="flex items-center gap-1">
-                              <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                              {job.industry_type || 'Technology'}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                              {job.location}
-                            </span>
-                            <span className="flex items-center gap-1 hidden sm:flex">
-                              <Clock className="w-3.5 h-3.5" />
-                              {job.employmentType || 'full_time'}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                              {expRange}
-                            </span>
-                            <span className="flex items-center gap-1 hidden sm:flex">
-                              <Calendar className="w-3.5 h-3.5" />
-                              Posted {postedDate}
-                            </span>
-                            <span className="flex items-center gap-1 hidden md:flex">
-                              <User className="w-3.5 h-3.5" />
-                              By {job.postedBy || 'Unknown'}
-                            </span>
-                            <span className="flex items-center gap-1 hidden md:flex">
-                              <Users className="w-3.5 h-3.5" />
-                              {job.applicants || 0} applicants
-                            </span>
-                          </div>
-                          <JDVersionHistory jdId={job.id} version={job.currentVersion} className="mt-2" />
+                          {/* The headline above describes the LATEST version,
+                              so when the pick is an older one, name it —
+                              otherwise a highlighted card would imply the
+                              assessment is going to the version on display. */}
+                          {pickedVersionOfThisJob && (
+                            <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-brand-blue/10 px-2 py-1 text-xs font-medium text-brand-blue">
+                              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                              v{pickedVersionOfThisJob.versionNumber ?? 1} selected, chosen from Version History
+                            </p>
+                          )}
                         </div>
 
-                        {/* Right side - Coding badge and Select button */}
+                        {/* Right side — the coding round this JD implies, the
+                            assessment state of the version this card would
+                            build against, its action, and the eye that reads
+                            the full version history. */}
                         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                           {(() => {
                             // Mirror the same detection that handleJobSelect
@@ -2212,19 +2644,210 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               </span>
                             );
                           })()}
-                          {hasExistingAssessment ? (
-                            <span className="px-2 sm:px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span className="hidden sm:inline">Assessment Created</span>
-                              <span className="sm:hidden">Created</span>
-                            </span>
-                          ) : (
-                            <button className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-xs transition-all">
-                              Select
-                            </button>
-                          )}
+
+                          {/* Assessment status for the version this card acts
+                              on. Green where one exists, neutral where the
+                              version is still free — and it names the version
+                              whenever that is not the latest, so the badge can
+                              never be read as a statement about the job. */}
+                          <AssessmentStatusBadge
+                            created={latestHasAssessment}
+                            createdAt={latestAssessment?.createdAt}
+                          />
+
+                          {/* Create Assessment — always on the card, live only
+                              where the version it acts on is published (or
+                              republished) AND still free. It goes inert rather
+                              than disappearing on a version that already has
+                              one: a button that vanishes reads as this job
+                              having no action at all, where a greyed one beside
+                              a "Created" badge says exactly why. The version
+                              history stays open either way. */}
+                          {/* The action is the plus — same size and shape as
+                              the eye beside it, with the words in its label and
+                              tooltip where a screen reader and a hover find
+                              them. */}
+                          <button
+                            type="button"
+                            disabled={!latestAdd.enabled}
+                            onClick={() => latestAdd.enabled && handleCreateForVersion(job)}
+                            className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all flex-shrink-0 ${
+                              latestAdd.enabled
+                                ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-white/10'
+                                : ADD_BUTTON_DISABLED
+                            }`}
+                            aria-label={latestAdd.label}
+                            title={latestAdd.label}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* A button, not a link: the popup reads a version
+                              without navigating away from a half-made
+                              assessment. */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setVersionHistoryFor(job);
+                            }}
+                            className="h-7 w-7 flex items-center justify-center bg-white text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                            aria-label="View version history"
+                            title="View version history"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
+
+                      {/* View Versions — the card's bottom-right corner, on its
+                          own single horizontal row so it clears the details
+                          above it whatever they wrap to.
+
+                          UNCONDITIONAL, and never disabled — not when the
+                          latest version already has an assessment, and not when
+                          that version is a Draft, Disabled or Archived one. An
+                          assessment on the latest version says nothing about
+                          the versions below it, and this is the only way to
+                          reach them: disabling it in exactly those cases would
+                          hide the versions still available to build against,
+                          which are the reason the card is still listed. A job
+                          with one version opens onto that version, which is an
+                          answer rather than a dead end.
+
+                          Note this differs from the Job Openings card, which
+                          hides the button on a single-version job. Here the
+                          list is collapsed to one row per lineage and the
+                          button is the only route to the rest, so it is always
+                          offered. */}
+                      <div className="mt-3 flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleJdVersions(job);
+                          }}
+                          aria-expanded={versionsExpanded}
+                          className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
+                            versionsExpanded
+                              ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10'
+                              : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                          }`}
+                          title={
+                            versionsExpanded
+                              ? 'Hide version history'
+                              : 'View version history — every version of this job, and the one to build the assessment against'
+                          }
+                        >
+                          {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+
+                      {/* Version history, expanded in place — the same panel
+                          the Job Openings list opens, newest version first,
+                          with the latest marked. Two things are added for this
+                          surface: an Assessment column, and a radio per row so
+                          an older version can be the one built against. */}
+                      {versionsExpanded && (
+                        <JobVersionHistoryPanel
+                          job={job}
+                          versions={jdLineage.lineages[versionKey]}
+                          loading={jdLineage.isLoading(versionKey) || !!loadingLineageAssessments[versionKey]}
+                          versionDetails={jdLineage.versionDetails}
+                          versionApplicants={jdLineage.versionApplicants}
+                          openInNewTab
+                          staticRows
+                          /* A radio per version row, so an older version can be
+                             the one built against — the card's own radio is the
+                             latest, these are v1, v2, v3 … under it.
+                             `keepLatestWhenSelectable` holds the latest row in
+                             the table anyway, because the Assessment column and
+                             the per-version Create action beside it have to
+                             answer for v3 next to v2 and v1. That leaves the
+                             latest represented by two radios (the card's and
+                             its own row's), which is why this table gets its
+                             OWN radio group: one native group can hold only one
+                             checked input, so sharing the card's would strip the
+                             tick off whichever rendered first. Exclusivity is
+                             state's job here, not the browser's. */
+                          onSelectVersion={(versionJob) => pickJdVersion(versionJob, versionKey)}
+                          selectedVersionId={jdPick?.job.id ?? null}
+                          keepLatestWhenSelectable
+                          radioGroupName={`${JD_RADIO_GROUP}-${versionKey}`}
+                          selectHint={(versionJob) =>
+                            `Select v${versionJob.versionNumber ?? 1}`
+                          }
+                          /* A version that already has an assessment can't be
+                             built against again — the same rule the card
+                             applies to the latest. Drafts are fine: an
+                             assessment is authored against a JD, not applied to
+                             it, so the panel's published-only default is
+                             replaced rather than added to. */
+                          versionSelectionState={(versionJob) =>
+                            versionHasAssessment(versionKey, versionJob.id)
+                              ? `v${versionJob.versionNumber ?? 1} already has an assessment`
+                              : null
+                          }
+                          /* Expanding another job while a pick is held shows its
+                             versions, inert — the card above it is inert for the
+                             same reason, and an expandable back door around the
+                             one-at-a-time rule would be worse than a greyed
+                             table. */
+                          selectionDisabled={blockedByOtherPick}
+                          selectionDisabledReason={otherPickReason}
+                          extraColumns={[
+                            {
+                              label: 'Assessment',
+                              minW: 'min-w-[120px]',
+                              /* One column, one fact: does THIS version have an
+                                 assessment. Created or Not Created, never a
+                                 date — the row already carries its dates, and
+                                 the answer the recruiter is scanning for here
+                                 is which versions are still free. */
+                              render: (versionJob) => (
+                                <AssessmentCreatedLabel
+                                  created={versionHasAssessment(versionKey, versionJob.id)}
+                                />
+                              ),
+                            },
+                          ]}
+                          /* The per-version action: build against THIS version.
+                             On every row, whatever its status — and live only
+                             where the Assessment column beside it reads "Not
+                             Created" AND the version is published or
+                             republished. A Draft, Archived or Disabled version
+                             cannot carry an assessment, and one that has an
+                             assessment
+                             cannot take a second; in both cases the button
+                             stays put and greys, so the column keeps its shape
+                             and the row states the rule instead of quietly
+                             dropping its only action. */
+                          renderAction={(versionJob) => {
+                            const add = addButtonState(
+                              versionJob.versionNumber,
+                              isPublishedVersion(versionJob),
+                              versionHasAssessment(versionKey, versionJob.id),
+                            );
+                            return (
+                              <button
+                                type="button"
+                                disabled={!add.enabled}
+                                onClick={() => add.enabled && handleCreateForVersion(versionJob)}
+                                className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all ${
+                                  add.enabled
+                                    ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-white/10'
+                                    : ADD_BUTTON_DISABLED
+                                }`}
+                                aria-label={add.label}
+                                title={add.label}
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            );
+                          }}
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -2251,6 +2874,25 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     )}
                   </div>
                 )}
+
+                {/* Pagination — the shared control, so the page sizes, the
+                    page-number run and the "Showing X to Y of N" line behave as
+                    they do on the Job Openings list and in the Apply to Job
+                    dialog. Clicking a page scrolls the rows back to the top. */}
+                {filteredAvailableJobs.length > 0 && (
+                  <ListPagination
+                    currentPage={jdSafePage}
+                    itemsPerPage={jdItemsPerPage}
+                    totalItems={filteredAvailableJobs.length}
+                    onPageChange={(page) => setJdPageState({ query: jdSearchQuery, page })}
+                    onItemsPerPageChange={(size) => {
+                      setJdItemsPerPage(size);
+                      setJdPageState({ query: jdSearchQuery, page: 1 });
+                    }}
+                    itemLabel="published jobs"
+                    scrollContainerRef={jdListRef}
+                  />
+                )}
               </div>
               )}
             </div>
@@ -2258,6 +2900,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             </div>
           </div>
         </div>
+
+        {/* The Job Details page's Version History popup, unchanged and
+            unwrapped — one implementation, so the version history read here is
+            the one that page shows. */}
+        {versionHistoryFor && (
+          <JDVersionHistoryModal
+            isOpen
+            onClose={() => setVersionHistoryFor(null)}
+            jdId={versionHistoryFor.id}
+            jdTitle={versionHistoryFor.title}
+          />
+        )}
 
         {/* Full-screen JD Creation Modal */}
         {showJDCreation && (

@@ -78,3 +78,10 @@ export function virtualCameraMessage(label: string): string {
   const device = label ? `"${label}"` : 'an unrecognized virtual device';
   return `Virtual/phone camera detected (${device}). Please switch to your laptop's built-in camera or a standard USB webcam to continue.`;
 }
+
+/**
+ * Candidate-facing message shown wherever an unsupported camera is selected
+ * or attempted (dropdown, Run Check, mid-interview switch detection) — kept
+ * as a single exported string so all three call sites show identical text.
+ */
+export const INVALID_CAMERA_SELECTION_MESSAGE = 'Please select a valid camera.';

@@ -273,6 +273,41 @@ export default function StepIdentity({
     if (phase === 'photo_ready') startCamera();
   }, [phase, startCamera]);
 
+  // Camera liveness while the candidate is framing themselves.
+  //
+  // startCamera() runs once per entry into photo_ready, so a camera unplugged
+  // WHILE framing left the preview frozen on its last frame with nothing ever
+  // re-acquiring it: the live face poll would keep failing against a dead
+  // image, Capture stayed disabled, and the candidate was stuck on a screen
+  // that looked like it was still working. Re-acquire as soon as the track
+  // dies — `devicechange` catches the replug immediately, and the slow poll
+  // covers drivers that never fire it.
+  useEffect(() => {
+    if (phase !== 'photo_ready') return;
+    let cancelled = false;
+    let inFlight = false;
+    const check = async () => {
+      if (cancelled || inFlight) return;
+      const track = streamRef.current?.getVideoTracks?.()[0];
+      if (track && track.readyState === 'live') return;
+      inFlight = true;
+      try {
+        console.warn('[Identity] Preview camera is not live — re-acquiring');
+        await startCamera();
+      } finally {
+        inFlight = false;
+      }
+    };
+    const onDeviceChange = () => { void check(); };
+    navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
+    const id = setInterval(() => { void check(); }, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
+    };
+  }, [phase, startCamera]);
+
   // Live face check while the candidate frames themselves (photo_ready only).
   // Polls ~every 400ms and drives `liveFaceStatus`, which gates the Capture
   // button: it's enabled ONLY with exactly one face correctly placed in the
@@ -372,6 +407,29 @@ export default function StepIdentity({
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
+
+    // ── LIVE CAMERA GATE ───────────────────────────────────────────────────
+    // A <video> keeps painting its LAST frame after the camera track ends, so
+    // unplugging the camera leaves the candidate's face frozen on screen and
+    // drawImage() below would happily save that stale frame as the identity
+    // photo. That is an integrity hole, not just a UX one: the still would look
+    // perfectly valid and pass every face check on it.
+    //
+    // The countdown auto-capture runs through here too, so gating this one
+    // function covers both the manual click and the timed capture.
+    const _camTrack = streamRef.current?.getVideoTracks?.()[0];
+    const _camLive = !!_camTrack && _camTrack.readyState === 'live' && !_camTrack.muted;
+    if (!_camLive || video.readyState < 2 || !video.videoWidth) {
+      console.warn('[Identity] Capture blocked — camera not live', {
+        hasTrack: !!_camTrack,
+        readyState: _camTrack?.readyState,
+        muted: _camTrack?.muted,
+        videoReadyState: video.readyState,
+      });
+      setFaceError('Your camera is not available. Reconnect it and wait for the preview to return before taking the photo.');
+      setPhase('photo_ready');
+      return;
+    }
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -774,11 +832,11 @@ export default function StepIdentity({
             {/* Left: Video feed */}
             <div className="relative bg-gray-900 rounded-xl aspect-video overflow-hidden flex items-center justify-center">
               {phase !== 'captured' && (
-                <video ref={videoRef} muted playsInline className="w-full h-full object-cover" />
+                <video ref={videoRef} muted playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
               )}
               {phase === 'captured' && photoPreview && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={photoPreview} alt="Captured identity photo" className="w-full h-full object-cover" />
+                <img src={photoPreview} alt="Captured identity photo" className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
               )}
               {cameraError && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white gap-2">

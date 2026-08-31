@@ -279,17 +279,41 @@ export default function StepSamplePractice({
 
     const initMedia = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
-        });
+        // Camera and microphone are opened INDEPENDENTLY and then combined.
+        //
+        // A single getUserMedia({video, audio}) is all-or-nothing: on a machine
+        // whose camera and mic are both peripherals, an unplugged MIC made the
+        // whole call throw and took the working CAMERA down with it — the
+        // preview went dead over a camera that was fine. Requesting each device
+        // on its own means one missing device never hides or disables the other.
+        const openOne = async (constraints: MediaStreamConstraints) => {
+          try { return await navigator.mediaDevices.getUserMedia(constraints); }
+          catch { return null; }
+        };
+        const camStream = await openOne({ video: true });
+        const micStream = await openOne({ audio: true });
         if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
+          camStream?.getTracks().forEach((t) => t.stop());
+          micStream?.getTracks().forEach((t) => t.stop());
           return;
         }
+        const videoTracks = camStream?.getVideoTracks() ?? [];
+        const audioTracks = micStream?.getAudioTracks() ?? [];
+        if (videoTracks.length === 0 && audioTracks.length === 0) {
+          console.error('[Practice] Neither camera nor microphone could be opened');
+          setMicReady(false);
+          return;
+        }
+        const stream = new MediaStream([...videoTracks, ...audioTracks]);
         mediaStreamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
-        setMicReady(true);
+        // Only claim the mic is ready when there actually IS one — this gates
+        // the practice recording UI.
+        setMicReady(audioTracks.length > 0);
+        if (audioTracks.length === 0) {
+          console.warn('[Practice] Camera opened but microphone is unavailable');
+          return;  // no audio track → nothing to analyse below
+        }
 
         // Audio analyser for level meter
         const AudioContextImpl: typeof AudioContext =
@@ -321,7 +345,54 @@ export default function StepSamplePractice({
       }
     };
 
-    initMedia();
+    // Re-acquire when a device is unplugged mid-practice.
+    //
+    // initMedia() runs ONCE on mount, so before this an unplugged camera froze
+    // the preview and an unplugged mic left a dead track behind — the level
+    // meter flatlined, the practice recording captured silence, and nothing
+    // ever recovered when the candidate plugged the device back in. Re-running
+    // initMedia gives a fresh stream, a fresh preview and a fresh analyser.
+    //
+    // Skipped while actually recording: swapping the stream under a live
+    // MediaRecorder is what destroys a recording (see the interview's own
+    // track-swap rule), and the recording guard already refuses to start on a
+    // dead mic. The recheck lands as soon as the take finishes.
+    let healInFlight = false;
+    const healIfDead = async () => {
+      if (cancelled || healInFlight) return;
+      if (mediaRecorderRef.current?.state === 'recording') return;
+      if (videoRecorderRef.current?.state === 'recording') return;
+      const s = mediaStreamRef.current;
+      const camLive = !!s?.getVideoTracks().some(t => t.readyState === 'live');
+      const micLive = !!s?.getAudioTracks().some(t => t.readyState === 'live');
+      if (camLive && micLive) return;
+      healInFlight = true;
+      try {
+        console.warn(`[Practice] Device lost (camera=${camLive} mic=${micLive}) — re-acquiring`);
+        s?.getTracks().forEach(t => t.stop());
+        mediaStreamRef.current = null;
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
+        }
+        analyserRef.current = null;
+        try { await audioContextRef.current?.close(); } catch { /* ignore */ }
+        audioContextRef.current = null;
+        await initMedia();
+      } finally {
+        healInFlight = false;
+      }
+    };
+    const onDeviceChange = () => { void healIfDead(); };
+    navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
+    const healId = setInterval(() => { void healIfDead(); }, 1500);
+
+    // Share healInFlight with the FIRST acquire too, so the watcher can't race
+    // it and fire a second getUserMedia while the initial one is still open.
+    // (This also means a mount-time failure — arriving here with the device
+    // already unplugged — is retried by the watcher rather than being terminal.)
+    healInFlight = true;
+    void initMedia().finally(() => { healInFlight = false; });
 
     if (!window.speechSynthesis) {
       setTtsSupported(false);
@@ -329,6 +400,8 @@ export default function StepSamplePractice({
 
     return () => {
       cancelled = true;
+      clearInterval(healId);
+      navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
@@ -756,9 +829,20 @@ export default function StepSamplePractice({
     if (mediaRecorderRef.current?.state === 'recording') return;
     if (!mediaStreamRef.current?.active) return;
 
-    // Audio-only stream for recording
-    const audioTracks = mediaStreamRef.current.getAudioTracks();
-    if (audioTracks.length === 0) return;
+    // Audio-only stream for recording. The track must be LIVE, not merely
+    // present: an unplugged mic leaves an 'ended' track sitting in the stream,
+    // so a bare length check passes and MediaRecorder happily records silence.
+    // That matters beyond the practice playback — this turn also tops up the
+    // candidate's enrolled voiceprint (stage=practice, below), and averaging a
+    // silent sample into it degrades voice identity verification for the whole
+    // interview. `mediaStreamRef.current.active` is no help either: it stays
+    // true while ANY track lives, so a dead mic beside a live camera reads
+    // healthy.
+    const audioTracks = mediaStreamRef.current.getAudioTracks().filter(t => t.readyState === 'live');
+    if (audioTracks.length === 0) {
+      console.warn('[Practice] Recording blocked — no live microphone track');
+      return;
+    }
 
     const audioStream = new MediaStream(audioTracks);
     audioChunksRef.current = [];
@@ -1072,7 +1156,7 @@ export default function StepSamplePractice({
               <span className="text-[10px] font-medium tracking-wide uppercase text-[#64748B]">You</span>
             </div>
             <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
-              <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${showReplay ? 'hidden' : ''}`} />
+              <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${showReplay ? 'hidden' : ''}`} style={{ transform: 'scaleX(-1)' }} />
               {showReplay && recordedVideoUrl && (
                 <video ref={replayVideoRef} src={recordedVideoUrl} controls playsInline controlsList="nodownload nopictureinpicture" disablePictureInPicture onContextMenu={(e) => e.preventDefault()} className="w-full h-full object-cover" />
               )}

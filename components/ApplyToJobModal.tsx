@@ -37,6 +37,17 @@ interface ApplyToJobModalProps {
   stayOnCurrentPage?: boolean;
   /** Overrides the confirm button's label — "Run AI Talent Match" and friends. */
   confirmLabel?: string;
+  /**
+   * Run the dialog as a JOB PICKER: the Candidates Selected panel is dropped
+   * and the confirm needs only a job.
+   *
+   * For flows that choose the JOB FIRST and the candidates after it — Resume
+   * Scoring picks the job, then opens its own resume selection. Everything
+   * else is untouched: the same shell, header, search, job cards, version
+   * history, pagination and footer, so the picker reads as the dialog it is.
+   * `onApply` is then called with an empty resume list.
+   */
+  jobOnly?: boolean;
   /** Replaces the Next Steps list when a flow ends somewhere different. */
   nextSteps?: string[];
 }
@@ -52,6 +63,7 @@ export default function ApplyToJobModal({
   stayOnCurrentPage = false,
   confirmLabel,
   nextSteps,
+  jobOnly = false,
 }: ApplyToJobModalProps) {
   // Default titles based on mode
   const defaultTitle =
@@ -101,7 +113,9 @@ export default function ApplyToJobModal({
 
   const submittedIdFor = (resume: Resume) => versionChoice[resume.id]?.id || resume.id;
 
-  const canSubmit = !!selection && includedResumes.length > 0;
+  /* A job picker has no candidates to require — the flow that opened it picks
+     them next. Everywhere else both halves are still needed. */
+  const canSubmit = !!selection && (jobOnly || includedResumes.length > 0);
 
   const handleApply = async () => {
     if (canSubmit) {
@@ -114,6 +128,15 @@ export default function ApplyToJobModal({
          a version IS a JD record with its own id, so an older version chosen
          from the history is submitted as itself, not as its lineage's latest. */
       const picked = selection!.job;
+
+      /* A job picker hands the choice back and closes: there is nothing to
+         submit yet, so the confirm must not sit in a pending state pretending
+         there is. */
+      if (jobOnly) {
+        setIsApplying(false);
+        onApply([], [picked.id], [picked]);
+        return;
+      }
 
       // Simulate API call
       setTimeout(() => {
@@ -214,7 +237,17 @@ export default function ApplyToJobModal({
         {/* Footer */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 shrink-0">
           <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-            {includedResumes.length === 0
+            {jobOnly
+              ? !selection
+                ? 'Select one job to continue'
+                : (
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                    Selected: {selection.job.job_id ? `${selection.job.job_id} · ` : ''}
+                    {selection.job.title} (v{selection.job.versionNumber ?? 1})
+                  </span>
+                )
+              : includedResumes.length === 0
               ? 'Select at least one candidate to continue'
               : !selection
                 ? 'Select one job to continue'

@@ -781,6 +781,14 @@ function isMetaAssistantTurn(content: string): boolean {
     'concludes our interview', 'concludes the interview', 'concludes this interview',
     'pleasure speaking with you', 'best of luck with the next steps',
     'best of luck in the next steps',
+    // DETERMINISTIC farewell used on auto-close ("That brings us to the end of
+    // the interview. Thank you for your time, and all the best."). Its exact
+    // words were absent here ("and all the best" ≠ the listed "wish you all the
+    // best"), so the closing turn was counted as a real question → transcript
+    // Q-count out-voted a complete 15-row history → the farewell rendered as a
+    // phantom Q16 in an HR round that does not exist (user report 2026-08-28).
+    'end of the interview', 'brings us to the end', 'thank you for your time',
+    'thank you for participating', 'thanks for your time',
   ];
   return META.some(m => t.includes(m));
 }

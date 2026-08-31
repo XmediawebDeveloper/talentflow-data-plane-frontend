@@ -220,7 +220,7 @@ export default function BulkActionsBar({
         className={`w-full text-left py-2 text-sm text-foreground hover:bg-accent/50 rounded-md transition-colors flex items-center gap-2 ${isOpen ? 'bg-accent/50' : ''}`}
         style={{ width: 'calc(100% - 8px)', paddingLeft: 12 + depth * 16, paddingRight: 8, marginLeft: 4, marginRight: 4 }}
       >
-        <FolderInput className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        <FolderInput className="w-4 h-4 text-brand-orange flex-shrink-0" />
         <span className="truncate flex-1">{folder.name}</span>
         <span className="flex-shrink-0 text-xs text-muted-foreground">({folder.count})</span>
         {hasChildren && (
@@ -337,9 +337,9 @@ export default function BulkActionsBar({
                                 style={{ width: 'calc(100% - 8px)' }}
                               >
                                 {folder.name === 'Archived Resumes' ? (
-                                  <Archive className="w-4 h-4 text-muted-foreground" />
+                                  <Archive className="w-4 h-4 text-amber-600" />
                                 ) : (
-                                  <FolderRoot className="w-4 h-4 text-muted-foreground" />
+                                  <FolderRoot className="w-4 h-4 text-brand-cyan" />
                                 )}
                                 <span className="flex-1 truncate text-left">
                                   {folder.name.toLowerCase() === 'root' ? 'Root (Default)' : folder.name}

@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Resume as SharedResume } from '@/lib/types/types';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
@@ -96,6 +97,37 @@ interface Job {
   industry_type?: string;
   remote_type?: string;
 }
+
+/**
+ * The Apply to Job dialog's `Job` → this page's own.
+ *
+ * The dialog reads the JD list through the shared `mapJDToJob`, which names
+ * these fields the way the Job type does (`currentVersion`, `postedDate`,
+ * `postedBy`, `workMode`); the summary on this page reads the API's own
+ * snake_case names. Only a rename — no field is invented, and one the record
+ * does not carry stays undefined so its chip simply doesn't render.
+ *
+ * `current_version` takes the LINEAGE version first: that is the number the
+ * dialog showed beside the job the user just picked, and a pick from a job's
+ * version history is a specific version rather than the lineage's latest.
+ */
+const toPageJob = (job: LineageJob): Job => ({
+  id: job.id,
+  title: job.title,
+  location: job.location || '',
+  department: job.department || '',
+  status: job.status,
+  applicants: job.applicants ?? 0,
+  employmentType: job.employmentType,
+  experience: job.experience,
+  job_id: job.job_id,
+  current_version: job.versionNumber ?? job.currentVersion,
+  published_at: job.postedDate,
+  created_by_name: job.postedBy,
+  creation_method: job.creation_method,
+  industry_type: job.industry_type,
+  remote_type: job.workMode,
+});
 
 interface Resume {
   id: string;
@@ -2317,13 +2349,13 @@ export default function ResumeScoringPage({
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => openVersionProgress(versionJob.id, versionJob.title)}>
+                    <DropdownMenuItem className="group" onSelect={() => openVersionProgress(versionJob.id, versionJob.title)}>
                       <Eye className="w-4 h-4" />
-                      View Progress
+                      <span className={MENU_ITEM_SCALE_CLASS}>View Progress</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => openVersionDetails(versionJob.id)}>
+                    <DropdownMenuItem className="group" onSelect={() => openVersionDetails(versionJob.id)}>
                       <FileText className="w-4 h-4" />
-                      View Details
+                      <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
