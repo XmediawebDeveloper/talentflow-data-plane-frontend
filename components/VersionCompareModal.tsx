@@ -40,6 +40,8 @@ interface VersionCompareModalProps {
   subtitle?: string;
   /** JD descriptions are markdown; render them with the same markdown path as the individual version view. */
   contentFormat?: 'plain' | 'markdown';
+  /** Lets a comparison opened from another modal stack above its parent. */
+  zIndexClassName?: string;
 }
 
 /** Lines we treat as résumé section headings, so the diff keeps the document's
@@ -72,7 +74,7 @@ const isSectionHeader = (trimmed: string) => {
  * that side's changes tinted; or unified, one column with additions and
  * removals inline.
  */
-export default function VersionCompareModal({ older, newer, onClose, title, subtitle, contentFormat = 'plain' }: VersionCompareModalProps) {
+export default function VersionCompareModal({ older, newer, onClose, title, subtitle, contentFormat = 'plain', zIndexClassName = 'z-50' }: VersionCompareModalProps) {
   const olderLabel = older.label || `Version ${older.version || '?'}`;
   const newerLabel = newer.label || `Version ${newer.version || '?'}`;
   const [viewMode, setViewMode] = useState<'side-by-side' | 'unified'>('side-by-side');
@@ -167,7 +169,7 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center ${zIndexClassName} p-4`}>
       <div className={`bg-white rounded-2xl shadow-2xl w-full ${viewMode === 'side-by-side' ? 'max-w-7xl' : 'max-w-4xl'} h-[85dvh] flex flex-col overflow-hidden transition-all duration-300`}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
