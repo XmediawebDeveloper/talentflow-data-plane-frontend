@@ -5,7 +5,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTheme } from 'next-themes';
 import {
   X, Check, Sparkles, Building2, Users, Zap, Loader2, AlertCircle, ArrowLeft
 } from 'lucide-react';
@@ -107,8 +106,6 @@ const getIconForPlan = (planName: string, tier: string) => {
 
 export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: PlanSelectionModalProps) {
   const router = useRouter();
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
 
   // Handle close - redirect to pricing if no close handler provided
   const handleClose = () => {
@@ -310,11 +307,10 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
   return (
     <div
       onClick={handleOverlayClick}
-      className="fixed inset-0 flex items-center justify-center p-2 sm:p-4"
+      className="tf-auth-scope fixed inset-0 flex items-center justify-center p-2 sm:p-4"
       style={{
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: 'rgba(16, 24, 40, 0.55)',
         zIndex: 9999,
-        backdropFilter: 'blur(4px)',
         cursor: 'pointer',
       }}
     >
@@ -322,8 +318,9 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-[95vw] sm:max-w-[90vw] lg:max-w-[1400px] rounded-xl sm:rounded-2xl md:rounded-3xl"
         style={{
-          backgroundColor: isDark ? '#1F2937' : '#ffffff',
-          boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.6)' : '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          backgroundColor: 'var(--tf-surface)',
+          border: '1px solid var(--tf-border)',
+          boxShadow: 'var(--tf-shadow)',
           maxHeight: '90vh',
           overflow: 'hidden',
           display: 'flex',
@@ -335,8 +332,8 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
         <div
           className="px-4 py-4 sm:px-6 sm:py-5 md:px-8 md:py-6 shrink-0"
           style={{
-            borderBottom: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`,
-            background: isDark ? 'linear-gradient(135deg, #1F2937 0%, #1e2a3b 100%)' : 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%)',
+            borderBottom: '1px solid var(--tf-border)',
+            background: 'var(--tf-surface-subtle)',
             position: 'relative',
             flexShrink: 0,
           }}
@@ -351,26 +348,26 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
               right: '12px',
               borderRadius: '50%',
               border: 'none',
-              backgroundColor: isDark ? '#374151' : '#F3F4F6',
+              backgroundColor: 'var(--tf-surface-sunken)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               transition: 'background-color 0.2s',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = isDark ? '#4B5563' : '#E5E7EB')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = isDark ? '#374151' : '#F3F4F6')}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--tf-border)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--tf-surface-sunken)')}
             aria-label="Close and go to pricing page" title="Close and go to pricing page"
           >
-            <X className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }} />
+            <X className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: 'var(--tf-ink-subtle)' }} />
           </button>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pr-10 sm:pr-12">
             <div>
-              <h2 className="text-lg sm:text-xl md:text-2xl" style={{ fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: '4px' }}>
+              <h2 className="text-lg sm:text-xl md:text-2xl" style={{ fontWeight: 700, color: 'var(--tf-ink)', marginBottom: '4px' }}>
                 Choose Your Plan
               </h2>
-              <p className="text-xs sm:text-sm" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>
+              <p className="text-xs sm:text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>
                 Select a plan to continue. You can upgrade or change anytime.
               </p>
             </div>
@@ -381,9 +378,9 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                color: '#2563EB',
+                color: 'var(--tf-brand)',
                 background: 'transparent',
-                border: '1px solid #2563EB',
+                border: '1px solid var(--tf-brand-border)',
                 borderRadius: '8px',
                 cursor: 'pointer',
               }}
@@ -395,7 +392,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
 
           {/* Billing Toggle */}
           <div className="flex items-center gap-2 sm:gap-3 mt-3 sm:mt-4 flex-wrap">
-            <span className="text-xs sm:text-sm" style={{ fontWeight: !isYearly ? 600 : 400, color: !isYearly ? (isDark ? '#F9FAFB' : '#111827') : (isDark ? '#9CA3AF' : '#6B7280') }}>
+            <span className="text-xs sm:text-sm" style={{ fontWeight: !isYearly ? 600 : 400, color: !isYearly ? ('var(--tf-ink)') : ('var(--tf-ink-subtle)') }}>
               Monthly
             </span>
             <button
@@ -407,7 +404,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                 borderRadius: '12px',
                 border: 'none',
                 cursor: 'pointer',
-                backgroundColor: isYearly ? '#2563EB' : (isDark ? '#4B5563' : '#D1D5DB'),
+                backgroundColor: isYearly ? 'var(--tf-brand)' : ('var(--tf-border-strong)'),
                 transition: 'background-color 0.2s',
                 flexShrink: 0,
               }}
@@ -420,19 +417,19 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                   width: '18px',
                   height: '18px',
                   borderRadius: '50%',
-                  backgroundColor: '#ffffff',
+                  backgroundColor: 'var(--tf-surface)',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                   transition: 'left 0.2s',
                 }}
               />
             </button>
-            <span className="text-xs sm:text-sm" style={{ fontWeight: isYearly ? 600 : 400, color: isYearly ? (isDark ? '#F9FAFB' : '#111827') : (isDark ? '#9CA3AF' : '#6B7280') }}>
+            <span className="text-xs sm:text-sm" style={{ fontWeight: isYearly ? 600 : 400, color: isYearly ? ('var(--tf-ink)') : ('var(--tf-ink-subtle)') }}>
               Yearly
             </span>
             <span className="text-[10px] sm:text-xs" style={{
               fontWeight: 500,
-              color: '#059669',
-              backgroundColor: '#D1FAE5',
+              color: 'var(--tf-success-ink)',
+              backgroundColor: 'var(--tf-success-tint)',
               padding: '2px 8px',
               borderRadius: '12px',
             }}>
@@ -447,18 +444,18 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
         >
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-10 sm:py-16 tf-loader-center tf-loader-center--compact">
-              <Loader2 className="w-8 h-8 sm:w-10 sm:h-10" style={{ color: '#2563EB', animation: 'spin 1s linear infinite' }} />
-              <p className="mt-3 sm:mt-4 text-xs sm:text-sm" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Loading plans...</p>
+              <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 tf-auth-spin" style={{ color: 'var(--tf-brand)' }} />
+              <p className="mt-3 sm:mt-4 text-xs sm:text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>Loading plans...</p>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-10 sm:py-16">
-              <AlertCircle className="w-10 h-10 sm:w-12 sm:h-12" style={{ color: '#DC2626' }} />
-              <p className="mt-3 sm:mt-4 text-xs sm:text-sm" style={{ color: '#DC2626', fontWeight: 500 }}>{error}</p>
+              <AlertCircle className="w-10 h-10 sm:w-12 sm:h-12" style={{ color: 'var(--tf-danger)' }} />
+              <p className="mt-3 sm:mt-4 text-xs sm:text-sm" style={{ color: 'var(--tf-danger)', fontWeight: 500 }}>{error}</p>
               <button
                 onClick={() => window.location.reload()}
                 className="mt-3 sm:mt-4 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm"
                 style={{
-                  backgroundColor: '#2563EB',
+                  backgroundColor: 'var(--tf-brand)',
                   color: '#fff',
                   border: 'none',
                   borderRadius: '8px',
@@ -488,11 +485,11 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                     className="p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl"
                     style={{
                       position: 'relative',
-                      border: isSelected ? '2px solid #2563EB' : `2px solid ${isDark ? '#374151' : '#E5E7EB'}`,
-                      backgroundColor: isSelected ? (isDark ? 'rgba(37,99,235,0.15)' : '#EFF6FF') : (isDark ? '#111827' : '#ffffff'),
+                      border: isSelected ? '2px solid var(--tf-brand)' : '2px solid var(--tf-border)',
+                      backgroundColor: isSelected ? ('var(--tf-brand-tint)') : ('var(--tf-surface)'),
                       cursor: 'pointer',
                       transition: 'all 0.2s',
-                      boxShadow: isSelected ? (isDark ? '0 4px 12px rgba(37, 99, 235, 0.3)' : '0 4px 12px rgba(37, 99, 235, 0.15)') : 'none',
+                      boxShadow: isSelected ? ('var(--tf-shadow-sm)') : 'none',
                     }}
                   >
                     {/* Selection indicator */}
@@ -503,36 +500,36 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                         top: '10px',
                         right: '10px',
                         borderRadius: '50%',
-                        border: isSelected ? 'none' : `2px solid ${isDark ? '#4B5563' : '#D1D5DB'}`,
-                        backgroundColor: isSelected ? '#2563EB' : 'transparent',
+                        border: isSelected ? 'none' : '2px solid var(--tf-border-strong)',
+                        backgroundColor: isSelected ? 'var(--tf-brand)' : 'transparent',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
                     >
-                      {isSelected && <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: '#ffffff' }} />}
+                      {isSelected && <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: 'var(--tf-brand-on)' }} />}
                     </div>
 
                     {/* Plan badge */}
                     <div
                       className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-md mb-2 sm:mb-3"
                       style={{
-                        backgroundColor: isFreeTrial ? (isDark ? 'rgba(16,185,129,0.15)' : '#D1FAE5') : (isDark ? '#374151' : '#F3F4F6'),
+                        backgroundColor: isFreeTrial ? ('var(--tf-success-tint)') : ('var(--tf-surface-sunken)'),
                       }}
                     >
-                      <IconComponent className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: isFreeTrial ? '#059669' : (isDark ? '#9CA3AF' : '#4B5563') }} />
-                      <span className="text-[10px] sm:text-xs" style={{ fontWeight: 600, color: isFreeTrial ? '#059669' : (isDark ? '#9CA3AF' : '#4B5563') }}>
+                      <IconComponent className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: isFreeTrial ? 'var(--tf-success-ink)' : ('var(--tf-ink-muted)') }} />
+                      <span className="text-[10px] sm:text-xs" style={{ fontWeight: 600, color: isFreeTrial ? 'var(--tf-success-ink)' : ('var(--tf-ink-muted)') }}>
                         {String(plan.planTier || plan.name || '')}
                       </span>
                     </div>
 
                     {/* Plan name */}
-                    <h3 className="text-sm sm:text-base md:text-lg" style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827', marginBottom: '4px' }}>
+                    <h3 className="text-sm sm:text-base md:text-lg" style={{ fontWeight: 600, color: 'var(--tf-ink)', marginBottom: '4px' }}>
                       {String(plan.name || '')}
                     </h3>
 
                     {/* Description */}
-                    <p className="text-[11px] sm:text-xs md:text-[13px] mb-2 sm:mb-3" style={{ color: isDark ? '#9CA3AF' : '#6B7280', minHeight: '28px' }}>
+                    <p className="text-[11px] sm:text-xs md:text-[13px] mb-2 sm:mb-3" style={{ color: 'var(--tf-ink-subtle)', minHeight: '28px' }}>
                       {String(plan.description || '')}
                     </p>
 
@@ -540,28 +537,28 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                     <div className="mb-3 sm:mb-4">
                       {isFreeTrial ? (
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                          <span className="text-xl sm:text-2xl md:text-[28px]" style={{ fontWeight: 700, color: '#059669' }}>Free</span>
-                          <span className="text-xs sm:text-sm" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>for {plan.trialDays} days</span>
+                          <span className="text-xl sm:text-2xl md:text-[28px]" style={{ fontWeight: 700, color: 'var(--tf-success-ink)' }}>Free</span>
+                          <span className="text-xs sm:text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>for {plan.trialDays} days</span>
                         </div>
                       ) : displayPrice !== null ? (
                         <div>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', flexWrap: 'wrap' }}>
-                            <span className="text-xl sm:text-2xl md:text-[28px]" style={{ fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>
+                            <span className="text-xl sm:text-2xl md:text-[28px]" style={{ fontWeight: 700, color: 'var(--tf-ink)' }}>
                               {formatCurrency(displayPrice, plan.currency)}
                             </span>
-                            <span className="text-[11px] sm:text-sm" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>
+                            <span className="text-[11px] sm:text-sm" style={{ color: 'var(--tf-ink-subtle)' }}>
                               /{isYearly ? 'year' : 'month'}
                             </span>
                           </div>
                           {isYearly && plan.monthlyPrice && plan.yearlyPrice && (plan.monthlyPrice * 12) > plan.yearlyPrice && plan.discountPercentage && (
                             <div className="flex items-center gap-1.5 sm:gap-2 mt-1 flex-wrap">
-                              <span className="text-[11px] sm:text-[13px]" style={{ color: '#9CA3AF', textDecoration: 'line-through' }}>
+                              <span className="text-[11px] sm:text-[13px]" style={{ color: 'var(--tf-ink-faint)', textDecoration: 'line-through' }}>
                                 {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
                               </span>
                               <span className="text-[10px] sm:text-[11px]" style={{
                                 fontWeight: 600,
-                                color: '#059669',
-                                backgroundColor: '#D1FAE5',
+                                color: 'var(--tf-success-ink)',
+                                backgroundColor: 'var(--tf-success-tint)',
                                 padding: '2px 6px',
                                 borderRadius: '4px',
                               }}>
@@ -571,7 +568,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                           )}
                         </div>
                       ) : (
-                        <span className="text-sm sm:text-base md:text-lg" style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>Contact Sales</span>
+                        <span className="text-sm sm:text-base md:text-lg" style={{ fontWeight: 600, color: 'var(--tf-ink)' }}>Contact Sales</span>
                       )}
                     </div>
 
@@ -587,42 +584,42 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                         RU: displayQuotas.RU ?? displayQuotas.resume_uploads ?? displayQuotas.resume_storage,
                       };
                       return (
-                        <div style={{ borderTop: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`, paddingTop: '12px', marginBottom: '12px' }}>
+                        <div style={{ borderTop: '1px solid var(--tf-border)', paddingTop: '12px', marginBottom: '12px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
                             {formatQuota(normalizedQuotas.max_seats) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Users</span>
-                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.max_seats)}</span>
+                                <span style={{ color: 'var(--tf-ink-subtle)' }}>Users</span>
+                                <span style={{ fontWeight: 600, color: 'var(--tf-ink)' }}>{formatQuota(normalizedQuotas.max_seats)}</span>
                               </div>
                             )}
                             {formatQuota(normalizedQuotas.max_jobs) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Jobs</span>
-                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.max_jobs)}</span>
+                                <span style={{ color: 'var(--tf-ink-subtle)' }}>Jobs</span>
+                                <span style={{ fontWeight: 600, color: 'var(--tf-ink)' }}>{formatQuota(normalizedQuotas.max_jobs)}</span>
                               </div>
                             )}
                             {formatQuota(normalizedQuotas.RS) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Resume Scores</span>
-                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.RS)}</span>
+                                <span style={{ color: 'var(--tf-ink-subtle)' }}>Resume Scores</span>
+                                <span style={{ fontWeight: 600, color: 'var(--tf-ink)' }}>{formatQuota(normalizedQuotas.RS)}</span>
                               </div>
                             )}
                             {formatQuota(normalizedQuotas.AS) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Assessments</span>
-                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.AS)}</span>
+                                <span style={{ color: 'var(--tf-ink-subtle)' }}>Assessments</span>
+                                <span style={{ fontWeight: 600, color: 'var(--tf-ink)' }}>{formatQuota(normalizedQuotas.AS)}</span>
                               </div>
                             )}
                             {formatQuota(normalizedQuotas.RU) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Resume Storage</span>
-                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.RU)}</span>
+                                <span style={{ color: 'var(--tf-ink-subtle)' }}>Resume Storage</span>
+                                <span style={{ fontWeight: 600, color: 'var(--tf-ink)' }}>{formatQuota(normalizedQuotas.RU)}</span>
                               </div>
                             )}
                             {formatQuota(normalizedQuotas.AIU) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>AI Interviews</span>
-                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.AIU)}</span>
+                                <span style={{ color: 'var(--tf-ink-subtle)' }}>AI Interviews</span>
+                                <span style={{ fontWeight: 600, color: 'var(--tf-ink)' }}>{formatQuota(normalizedQuotas.AIU)}</span>
                               </div>
                             )}
                           </div>
@@ -635,8 +632,8 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                       <div>
                         {plan.features.slice(0, expandedFeatures === plan.id ? undefined : 3).map((feature, idx) => (
                           <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                            <Check style={{ width: '14px', height: '14px', color: '#10B981', flexShrink: 0 }} />
-                            <span style={{ fontSize: '12px', color: isDark ? '#9CA3AF' : '#4B5563' }}>
+                            <Check style={{ width: '14px', height: '14px', color: 'var(--tf-success)', flexShrink: 0 }} />
+                            <span style={{ fontSize: '12px', color: 'var(--tf-ink-muted)' }}>
                               {typeof feature === 'string' ? feature : (feature as any)?.feature_name || String(feature)}
                             </span>
                           </div>
@@ -649,7 +646,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                             }}
                             style={{
                               fontSize: '12px',
-                              color: '#2563EB',
+                              color: 'var(--tf-brand)',
                               background: 'none',
                               border: 'none',
                               padding: 0,
@@ -676,23 +673,23 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
           className="shrink-0"
           style={{
             padding: '20px 32px',
-            borderTop: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`,
-            backgroundColor: isDark ? '#374151' : '#F9FAFB',
+            borderTop: '1px solid var(--tf-border)',
+            backgroundColor: 'var(--tf-surface-subtle)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexShrink: 0,
           }}
         >
-          <div style={{ fontSize: '13px', color: isDark ? '#9CA3AF' : '#6B7280', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ fontSize: '13px', color: 'var(--tf-ink-subtle)', display: 'flex', alignItems: 'center', gap: '6px' }}>
             {selectedPlanId === 'free_trial' ? (
               <>
-                <Sparkles style={{ width: '14px', height: '14px', color: '#059669', flexShrink: 0 }} />
+                <Sparkles style={{ width: '14px', height: '14px', color: 'var(--tf-success-ink)', flexShrink: 0 }} />
                 <span>You&apos;re selecting the <strong>Free Trial</strong>. No credit card required.</span>
               </>
             ) : selectedPlanId ? (
               <>
-                <Check style={{ width: '14px', height: '14px', color: '#2563EB', flexShrink: 0 }} />
+                <Check style={{ width: '14px', height: '14px', color: 'var(--tf-brand)', flexShrink: 0 }} />
                 <span>You&apos;ve selected a paid plan. Payment will be collected after signup.</span>
               </>
             ) : (
@@ -702,25 +699,12 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
           <button
             onClick={handleConfirmSelection}
             disabled={!selectedPlanId || isProcessing}
-            style={{
-              padding: '12px 32px',
-              fontSize: '16px',
-              fontWeight: 600,
-              color: '#ffffff',
-              background: selectedPlanId ? 'linear-gradient(to right, #2563EB, #4338CA)' : (isDark ? '#4B5563' : '#D1D5DB'),
-              border: 'none',
-              borderRadius: '12px',
-              cursor: selectedPlanId ? 'pointer' : 'not-allowed',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: selectedPlanId ? '0 4px 12px rgba(37, 99, 235, 0.3)' : 'none',
-              transition: 'all 0.2s',
-            }}
+            className={`tf-auth-btn tf-auth-btn--auto${isProcessing ? ' tf-auth-btn--busy' : ''}`}
+            style={{ padding: '0 32px', flexShrink: 0 }}
           >
             {isProcessing ? (
               <>
-                <Loader2 style={{ width: '18px', height: '18px', animation: 'spin 1s linear infinite' }} />
+                <Loader2 className="tf-auth-spin" style={{ width: '17px', height: '17px' }} />
                 Processing...
               </>
             ) : (

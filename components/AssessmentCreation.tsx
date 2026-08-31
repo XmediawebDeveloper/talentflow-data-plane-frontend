@@ -19,7 +19,8 @@ import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import ListPagination from '@/components/ListPagination';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import {
-  groupByLineage,
+  buildAssessmentJobList,
+  isSelectableVersion,
   jobSearchMatcher,
   lineageKey,
   mapJDStatus,
@@ -119,30 +120,15 @@ function AssessmentCreatedLabel({ created }: { created: boolean }) {
   );
 }
 
-/**
- * Whether an assessment can be built against a JD VERSION: only a published
- * one can. A Draft is still being written, and an Archived or Disabled version
- * is out of service — an assessment authored against any of them would be
- * pinned to a JD no candidate will ever be sent.
- *
- * An allowlist rather than a list of excluded statuses, so a status this file
- * has never heard of can only ever be treated as not publishable.
- *
- * Republished counts, and needs no case of its own: "Republished" is a DISPLAY
- * label `getDisplayStatus` derives from a published version whose
- * current_version has passed 1 — the record's own status is still `published`.
- * The literal spelling is accepted anyway, so a status string that ever does
- * arrive that way is read as what it means rather than as unpublished.
- *
- * Read off the version's own status — the version rows carry theirs, so this
- * answers per row rather than per job. Compared case-insensitively because the
- * lineage rows arrive with the raw DB status while the Job type holds the
- * capitalised form.
- */
-const isPublishedVersion = (job: Job): boolean => {
-  const status = String(job.status || '').toLowerCase();
-  return status === 'published' || status === 'republished';
-};
+/* The two questions this picker asks about a JD version — "should it be shown?"
+   (everything but Draft) and "can a NEW assessment be built against it?"
+   (Published/Republished only) — now live together in
+   lib/utils/jobOpeningDisplay, beside the list rule that calls them, so the
+   list and the per-control gates below cannot drift into disagreeing.
+
+   The local `isPublishedVersion` was the second question under a name that read
+   like the first; the gates below call `isSelectableVersion` directly now, so
+   which question a control is asking is legible at the call site. */
 
 /** Same page size the Job Openings page reads the JD list in. */
 const JD_BATCH_SIZE = 100;
@@ -1452,17 +1438,26 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
    * one per version, never one per job, so this is keyed on the version's own
    * JD id and never on the job.
    *
-   * Two sources, in order. The lineage's own assessments WIN once fetched:
-   * they are the actual records, each naming the JD version it was created
-   * against, so they answer per version by construction. Until then the
-   * mount-time index of JDs-with-assessments stands in, so a card is right the
-   * moment it renders rather than blank until something is expanded.
+   * Two sources, and the answer is their UNION rather than the fetched one
+   * winning. Both are evidence that an assessment exists: the mount-time index
+   * (`jdsWithAssessments`) is the complete set of JD versions that have one,
+   * fetched once for every job at once; `lineageAssessments` is the richer
+   * per-job detail — WHICH assessment and WHEN — fetched lazily the first time
+   * a job's versions are opened.
+   *
+   * "Fetched wins" could answer `false` for a version that does have an
+   * assessment, in two ways: the lazy map is fetched with ONE version's `jd_id`
+   * on the assumption the endpoint replies for the whole lineage, so any
+   * narrowing there silently blanks the siblings; and a failed request leaves
+   * no entry at all. Either would offer a second assessment on a version that
+   * already has one — the opposite of the one-per-version rule, and a mapping
+   * error at exactly the version level this feature has to get right.
+   *
+   * A union is the fail-closed direction: the worst a stale `true` does is
+   * refuse a second assessment on a version, which is refused anyway.
    */
-  const versionHasAssessment = (lineage: string, versionId: string) => {
-    const fetched = lineageAssessments[lineage];
-    if (fetched) return !!fetched[versionId];
-    return jdsWithAssessments.has(versionId);
-  };
+  const versionHasAssessment = (lineage: string, versionId: string) =>
+    jdsWithAssessments.has(versionId) || !!lineageAssessments[lineage]?.[versionId];
 
   /** Open or close a job's version history, loading both halves on first open. */
   const toggleJdVersions = (job: Job) => {
@@ -2219,40 +2214,39 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const isPercentageValid = totalPercentage === 100 && hasAtLeastOneEnabled && !hasZeroPercentageEnabled;
 
   /* Read from `localJobs`, which is the fetched list plus any JD created or
-     resolved by link during this visit.
-
-     Version rows per lineage, newest version first inside each bucket — the
-     Job Openings list's own grouping, and what the "View Versions" test below
-     counts, exactly as that list counts it. */
-  const jdVersionGroups = groupByLineage(localJobs.length > 0 ? localJobs : jobs);
+     resolved by link during this visit. Every version of every job, unfiltered
+     — the draft test below runs per version INSIDE each lineage, so a status
+     filter applied up here would remove the very versions the collapse needs
+     in order to pick the right representative. */
+  const allJdVersions = localJobs.length > 0 ? localJobs : jobs;
 
   /* ONE ROW PER JOB, not per job version — and the row is that lineage's
-     LATEST version, whatever its status.
+     LATEST NON-DRAFT version.
 
-     `bucket[0]` is the latest by SEQUENCE (`byLatestVersion`: version number,
-     then created_at — status is not a term in it), so a job whose v2 is a
-     draft over a published v1 is listed as "v2 · Draft". Not as v1: an older
-     published version standing in for the latest is the divergence a recruiter
-     actually sees, because the Version History below the card is fed by the
-     lineage endpoint and badges the true latest — the card read "Published ·
-     v1" while its own table two lines down read "v2 LATEST · Draft".
+     Draft is the only status that costs a version its place here. It is
+     unfinished work: nothing downstream can be built against it, and a job
+     that is nothing BUT drafts has no row at all (`buildAssessmentJobList`
+     returns nothing for it). Every other status keeps its row, Disabled and
+     Archived included — that a job is archived is the answer a recruiter came
+     to this list for, and hiding it just reads as the job having gone missing.
 
-     NO STATUS TEST AT ALL, which is the part that changed. `getPublishedJobs`
-     keeps a lineage only where the LATEST version is published — right for
-     counting published jobs, wrong for a picker, because it drops a re-drafted,
-     disabled or archived job entirely and takes its still-live older versions
-     with it. Those are exactly the jobs a recruiter comes here looking for: the
-     assessment they want to build is against the v1 that is still published,
-     and hiding the whole lineage because v2 is a draft leaves them no route to
-     it. Every job is listed, on its real latest version, with its real status.
+     Latest NON-DRAFT rather than latest outright is what stops a fresh draft
+     displacing a live version: a v4 draft raised over a published v3 is
+     skipped, so the card keeps reading "v3 · Published" until v4 is itself
+     published. The v4 is not lost — View Versions below lists the entire
+     lineage, drafts included, and refuses to select them.
 
-     The card's own controls carry the rule instead of the list carrying it: a
-     representative that is not published fails `isPublishedVersion`, so its
-     radio and its Add go inert with the reason in their tooltip, while View
-     Versions stays live and offers an Add per row. A lineage with nothing
-     published anywhere is then a card that says so on every control, which is
-     an answer — where omitting it was silence. */
-  const availableJobs = Array.from(jdVersionGroups.values(), (bucket) => bucket[0]);
+     What this list does NOT decide is whether the row can be PICKED. Status
+     controls that separately, on the controls themselves: `isSelectableVersion`
+     lets only Published and Republished through, so a visible Disabled or
+     Archived card renders with its real status badge and an inert radio whose
+     tooltip says why. Visibility and selection are two questions here, never
+     one test doing double duty.
+
+     Assessments do not enter into it at all. Whether a version already has one
+     decides whether a SECOND can be created against it (the one-per-version
+     rule the controls below apply), never whether the version is shown. */
+  const availableJobs = buildAssessmentJobList(allJdVersions);
   const jdSearchQuery = jdSearch.trim().toLowerCase();
   /* The shared matcher: JD number, role, department, location — the same
      fields, and the same separator-insensitive number matching, the Apply to
@@ -2262,6 +2256,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     'date',
     'desc',
   );
+  /* The number printed above the list counts JOB OPENINGS — distinct Job IDs —
+     never job versions. `availableJobs` already holds one row per lineage, so
+     this is that list's length; it is derived from the lineage keys rather than
+     assumed, so a change that ever let two versions of one job into the list
+     could not silently inflate the count into a version count. */
+  const jdJobOpeningCount = new Set(filteredAvailableJobs.map(lineageKey)).size;
   const jdTotalPages = Math.max(1, Math.ceil(filteredAvailableJobs.length / jdItemsPerPage));
   const jdCurrentPage = jdPageState.query === jdSearchQuery ? jdPageState.page : 1;
   /* A shrinking result set can leave the current page past the end; clamp on
@@ -2490,8 +2490,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                      job), leaving it out here would offer a pick the next step
                      refuses. The job's published version is one click away in
                      View Versions. */
-                  const latestPublished = isPublishedVersion(job);
-                  const latestSelectable = !latestHasAssessment && !blockedByOtherPick && latestPublished;
+                  const latestSelectableStatus = isSelectableVersion(job);
+                  const latestSelectable = !latestHasAssessment && !blockedByOtherPick && latestSelectableStatus;
                   /* Names the version's ACTUAL status — Draft, Disabled,
                      Archived, Closed — rather than assuming a draft, since any
                      of them can be a lineage's latest and each is a different
@@ -2507,7 +2507,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                      in) cannot offer an assessment it could not carry. */
                   const latestAdd = addButtonState(
                     job.versionNumber,
-                    isPublishedVersion(job),
+                    isSelectableVersion(job),
                     latestHasAssessment,
                   );
 
@@ -2531,7 +2531,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       title={
                         blockedByOtherPick
                           ? otherPickReason
-                          : !latestPublished
+                          : !latestSelectableStatus
                             ? `${latestUnpublishedReason}. View Versions opens this job's full version history.`
                             : 'View Versions opens this job’s version history — every version of this job, and the one to build the assessment against.'
                       }
@@ -2562,7 +2562,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               ? otherPickReason
                               : latestHasAssessment
                                 ? `v${job.versionNumber ?? 1} already has an assessment — open View Versions to build against another version`
-                                : !latestPublished
+                                : !latestSelectableStatus
                                   ? latestUnpublishedReason
                                   : `Select the latest version (v${job.versionNumber ?? 1})`
                           }
@@ -2778,17 +2778,38 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           selectHint={(versionJob) =>
                             `Select v${versionJob.versionNumber ?? 1}`
                           }
-                          /* A version that already has an assessment can't be
-                             built against again — the same rule the card
-                             applies to the latest. Drafts are fine: an
-                             assessment is authored against a JD, not applied to
-                             it, so the panel's published-only default is
-                             replaced rather than added to. */
-                          versionSelectionState={(versionJob) =>
-                            versionHasAssessment(versionKey, versionJob.id)
-                              ? `v${versionJob.versionNumber ?? 1} already has an assessment`
-                              : null
-                          }
+                          /* Two reasons a version row cannot be picked, and the
+                             radio states whichever applies — the same two the
+                             Add button one column over already enforced.
+
+                             Already has an assessment: one per version, so it
+                             cannot take a second.
+
+                             Not Published or Republished: a Draft is unfinished
+                             and a Disabled or Archived version is out of
+                             service, so no new assessment can be built against
+                             any of them. All three stay VISIBLE here — this
+                             table is where a recruiter reads what happened to a
+                             job's versions, so a draft or an archived row
+                             showing its real status is the point of it. Only
+                             the radio goes.
+
+                             This row used to be selectable whatever its status,
+                             which let the radio hand a draft to the Configure
+                             step that its own Add button, two columns across,
+                             refused — the same row disagreeing with itself. The
+                             specific reason comes first: a version that has an
+                             assessment AND is archived is more usefully
+                             explained by the assessment. */
+                          versionSelectionState={(versionJob) => {
+                            if (versionHasAssessment(versionKey, versionJob.id)) {
+                              return `v${versionJob.versionNumber ?? 1} already has an assessment`;
+                            }
+                            if (!isSelectableVersion(versionJob)) {
+                              return `v${versionJob.versionNumber ?? 1} is ${String(versionJob.status || 'not published').toLowerCase()} — an assessment can only be created against a published or republished version`;
+                            }
+                            return null;
+                          }}
                           /* Expanding another job while a pick is held shows its
                              versions, inert — the card above it is inert for the
                              same reason, and an expandable back door around the
@@ -2826,7 +2847,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           renderAction={(versionJob) => {
                             const add = addButtonState(
                               versionJob.versionNumber,
-                              isPublishedVersion(versionJob),
+                              isSelectableVersion(versionJob),
                               versionHasAssessment(versionKey, versionJob.id),
                             );
                             return (
