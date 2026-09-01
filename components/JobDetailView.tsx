@@ -1235,6 +1235,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           scorePercentage: Number((item.overall_score || 0).toFixed(1)),  // Keep 1 decimal for consistency
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by || item.scored_by_name || 'System',
+          // Was missing here — every row on this tab fell back to
+          // getScoringSourceLabel's default bucket regardless of where it was
+          // actually scored from, since `source` never made it onto the
+          // object at all.
+          source: item.source || 'database',
           experience: item.experience_years ? `${item.experience_years} years` : undefined,
           education: item.education,
           certifications: item.certifications || [],
@@ -3301,6 +3306,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           ) : scoredResumes.length === 0 ? (
             <TabEmptyState
               icon={Users}
+              imageSrc="/scored-resumes-empty-state.png"
+              imageAlt="Scored resumes illustration"
               title="No Scored Resumes"
               description="Score resumes against this job description to see the candidates here."
               action={canScoreResumesFromTab ? (
@@ -3318,6 +3325,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               resumes={scoredResumes}
               jobTitle={job.title}
               jobId={job.id}
+              jobCode={job.job_id}
               availableUnits={15}
               initialMatchStatus={scoredResumesMatchFilter}
               // Same gate and target as the Score Resumes quick action — opens
@@ -4048,6 +4056,8 @@ function AIMatchTabContent({
     return (
       <TabEmptyState
         icon={Brain}
+        imageSrc="/ai-talent-match-empty-state.png"
+        imageAlt="AI talent match illustration"
         title="No AI Talent Match Results"
         description="Run an AI Talent Match session to find the best candidates for this role."
         action={canRunAiMatch ? (

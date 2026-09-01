@@ -86,6 +86,42 @@ export interface TopicSuggestionResponse {
   source: string;
 }
 
+/** One bucket's capacity judgement (AIU99 AC 2). */
+export interface ClusterCapacityBucket {
+  status: 'below' | 'within' | 'exceeds';
+  unique_skills: number;
+  questions: number;
+  floor?: number;
+  ceiling?: number;
+  /** Set on `exceeds` — true when the bucket could not be reduced further
+   *  without dropping a competency that has no substitute. The honest fix is
+   *  more questions or fewer skills, not a quieter reduction. */
+  coverage_locked?: boolean;
+}
+
+/**
+ * What refinement judged and did (AIU99 AC 2 / AC 8).
+ *
+ * `before` is the verdict on the recruiter's own configuration; the top-level
+ * `mth`/`nth` describe the result. Everything else exists so a reduction is
+ * never invisible: which buckets were actually refined, which skills had to be
+ * put back to protect coverage, which were dropped without the model
+ * accounting for them, and which retained skills changed priority band (and so
+ * changed scoring weight).
+ */
+export interface ClusterCapacityReport {
+  mth: ClusterCapacityBucket;
+  nth: ClusterCapacityBucket;
+  before?: { mth: ClusterCapacityBucket; nth: ClusterCapacityBucket };
+  refinement_applied?: { mth: boolean; nth: boolean };
+  coverage_restored?: { mth: string[]; nth: string[] };
+  coverage_at_risk?: { mth: string[]; nth: string[] };
+  priority_drift?: {
+    mth: { skill: string; from: number; to: number }[];
+    nth: { skill: string; from: number; to: number }[];
+  };
+}
+
 export interface PublishedJD {
   id: string;
   job_id?: string;
@@ -940,7 +976,11 @@ export const aiInterviewService = {
 
   /**
    * Refine existing clusters — applies skill relevance + question-limit rules.
-   * Server returns refined clusters per bucket (capacity field unused here).
+   * Server returns refined clusters per bucket plus the `capacity` verdict
+   * (AIU99 AC 2/AC 8): what the recruiter's own configuration was judged to be,
+   * whether refinement actually ran, and which skills were restored or left
+   * unverified. The caller is expected to surface this — a reduction from 52
+   * skills to 28 is not something to apply silently.
    */
   async refineClusters(args: {
     mthClusters: { id?: string; name: string; priority: number; skills: string[]; reason?: string }[];
@@ -980,6 +1020,7 @@ export const aiInterviewService = {
   }): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
+    capacity?: ClusterCapacityReport;
   }> {
     try {
       const response = await api.post('/ai-interview/refine-clusters', {

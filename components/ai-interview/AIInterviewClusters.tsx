@@ -11,7 +11,11 @@ import { toast } from 'sonner';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
-import type { AIInterviewResponse, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
+import type {
+  AIInterviewResponse,
+  AIInterviewRoundConfig,
+  ClusterCapacityReport,
+} from '@/lib/services/aiInterviewService';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import {
@@ -85,6 +89,65 @@ function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
     return { mthMinutes: 16, nthMinutes: 8, hrMinutes: 6, mthMaxClusters: 3, nthMaxClusters: 2, mthQuestions: 8, nthQuestions: 4, hrQuestions: 3 };
   }
   return { mthMinutes: 20, nthMinutes: 0, hrMinutes: 10, mthMaxClusters: 3, nthMaxClusters: 0, mthQuestions: 10, nthQuestions: 0, hrQuestions: 5 };
+}
+
+/**
+ * Tell the recruiter what refinement judged and did (AIU99 AC 2 / AC 8).
+ *
+ * The backend has always returned this verdict and the frontend has always
+ * discarded it, so a config whose 52 Must-Have skills were reduced to 28 looked
+ * identical to one that needed no reduction. Three things are worth a message,
+ * in descending order of how much they should worry the recruiter:
+ *
+ *   1. coverage_at_risk — skills dropped that we could NOT verify are still
+ *      covered. This is the one that can cost an interview a competency.
+ *   2. coverage_locked  — the bucket is over capacity and cannot be reduced
+ *      without losing a competency outright. Needs a human decision: more
+ *      questions, or fewer skills.
+ *   3. a plain reduction — informational, but never silent again.
+ */
+function reportCapacityToRecruiter(cap: ClusterCapacityReport): void {
+  const buckets: { key: 'mth' | 'nth'; label: string }[] = [
+    { key: 'mth', label: 'Must-To-Have' },
+    { key: 'nth', label: 'Nice-To-Have' },
+  ];
+  for (const { key, label } of buckets) {
+    const after = cap[key];
+    const before = cap.before?.[key];
+    if (!after || !after.questions) continue;
+
+    const atRisk = cap.coverage_at_risk?.[key] ?? [];
+    const restored = cap.coverage_restored?.[key] ?? [];
+
+    if (atRisk.length > 0) {
+      const shown = atRisk.slice(0, 3).join(', ');
+      toast.warning(
+        `${label}: ${atRisk.length} skill(s) were removed without a clear replacement` +
+          ` — ${shown}${atRisk.length > 3 ? `, +${atRisk.length - 3} more` : ''}.` +
+          ` Review the clusters, or allow more questions to keep them.`,
+        { duration: 12000 },
+      );
+    }
+    if (after.status === 'exceeds' && after.coverage_locked) {
+      toast.warning(
+        `${label}: ${after.unique_skills} skills for ${after.questions} questions` +
+          ` (recommended max ${after.ceiling}). Further reduction would drop a skill` +
+          ` with no equivalent, so nothing more was removed. Add questions or trim skills.`,
+        { duration: 12000 },
+      );
+    } else if (before && before.unique_skills > after.unique_skills) {
+      toast.info(
+        `${label}: ${before.unique_skills} skills refined to ${after.unique_skills}` +
+          ` for ${after.questions} questions` +
+          (restored.length ? ` (${restored.length} kept to protect coverage)` : ''),
+        { duration: 8000 },
+      );
+    } else if (before?.status === 'within' && cap.refinement_applied?.[key] === false) {
+      // AC 3 — say so explicitly, so "nothing changed" reads as a decision
+      // rather than a failure.
+      toast.info(`${label}: skills already fit ${after.questions} questions — left unchanged`);
+    }
+  }
 }
 
 // Priority labels come from lib/constants/aiInterviewPriority (P1-P3 scale).
@@ -1363,6 +1426,9 @@ export default function AIInterviewClusters() {
       //                            via equivalent-skill normalization)
       let mthExpanded: SkillEntry[] | null = null;
       let nthExpanded: SkillEntry[] | null = null;
+      // AIU99 AC 8 — persisted alongside the clusters so the verdict survives a
+      // reload and the recruiter can still see why their skill list shrank.
+      let capacityReport: ClusterCapacityReport | undefined;
       let applyRefine = false;
       // When true, refine is allowed to MERGE/RENAME skills (overflow case).
       // When false (expansion case), refine must preserve recruiter input verbatim.
@@ -1689,6 +1755,13 @@ export default function AIInterviewClusters() {
               reason: c.reason || '',
             }));
           }
+          // AIU99 AC 2 / AC 8 — the verdict was always computed server-side and
+          // always thrown away here, so a recruiter whose 52 skills became 28
+          // was never told. Keep it for persistence and tell them what happened.
+          if (refineResult.capacity) {
+            capacityReport = refineResult.capacity;
+            reportCapacityToRecruiter(refineResult.capacity);
+          }
         } catch (refineErr) {
           // Non-fatal — keep raw generated clusters
           console.error('[CLUSTER-DEBUG] /refine-clusters FAILED — keeping raw generate output', refineErr);
@@ -1792,6 +1865,9 @@ export default function AIInterviewClusters() {
             : {};
           si.nth_enabled_snapshot = nthEnabled;
           si.hr_enabled_snapshot = hrEnabled;
+          // AIU99 AC 8 — persist the refinement verdict. Without this the only
+          // record that 52 skills became 28 is a server log line.
+          if (capacityReport) si.cluster_capacity = capacityReport;
 
           // Also update rounds_config topics/weights using the new cluster data
           const PRIORITY_WEIGHT: Record<number, number> = { 3: 60, 2: 40, 1: 20 };

@@ -42,8 +42,17 @@ export default function CreateAssessmentPage() {
     const fetchData = async () => {
       try {
         // Fetch jobs and topic settings in parallel.
-        // Probe for total then pull all so the JD selector lists every published JD.
-        const jdParams = { status: 'published' as const, source: 'my-jds' as const };
+        // Probe for total then pull all so the JD selector sees every JD version.
+        //
+        // NO status filter, deliberately — this seeds the very list AssessmentCreation
+        // then re-derives with `buildAssessmentJobList`, whose rule is "hide drafts,
+        // show everything else". Asking for `status: 'published'` here contradicted
+        // that in both directions: it dropped the Disabled and Archived versions the
+        // list is now required to show, and it stripped a lineage's draft v4 before
+        // the collapse could see it, which is the difference between "v3 is the
+        // latest non-draft" and "v3 is the latest, full stop". The seed therefore
+        // painted a list the component was about to replace with a different one.
+        const jdParams = { source: 'my-jds' as const };
         const [jobsResponse, topicsResponse] = await Promise.allSettled([
           jdService.list({ ...jdParams, page_size: 1 }).then((probe) =>
             probe.total > probe.items.length

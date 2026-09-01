@@ -290,6 +290,99 @@ export const collapseToLatestVersions = (list: Job[]): Job[] =>
 export const getPublishedJobs = (allVersions: Job[]): Job[] =>
   collapseToLatestVersions(allVersions).filter(job => job.status === 'Published');
 
+/* ── Create Assessment: visibility vs selection ────────────────────────────
+   The assessment picker answers TWO questions about a JD version, and they are
+   deliberately different questions with different answers. Conflating them is
+   the bug this section exists to prevent, in both directions: a status filter
+   written once hides versions a recruiter needs to see, and a visibility test
+   reused as a selection test offers picks the next step refuses.
+
+     VISIBILITY  — is this version worth showing at all?
+                   Draft is not: it is unfinished, and nothing downstream can
+                   be built against it. EVERY other status is, including
+                   Disabled and Archived, because seeing that a job is archived
+                   is the answer a recruiter came for. Hiding it just looks
+                   like the job is missing.
+
+     SELECTION   — can a NEW assessment be created against it?
+                   Published and Republished only. Disabled and Archived are
+                   out of service, so an assessment authored against one would
+                   be pinned to a JD no candidate will ever be sent.
+
+   Whether the version already HAS an assessment is a third, separate thing: it
+   is a reason the existing record must be preserved and surfaced, never a
+   reason to change either answer above. An archived version with an assessment
+   is visible (because it is not a draft) and unselectable (because it is
+   archived) — its assessment does not buy it selectability, and its archived
+   status does not cost it visibility. */
+
+/**
+ * Is this version a Draft — the one status the assessment list hides?
+ *
+ * Compared case-insensitively: lineage rows arrive with the raw DB status while
+ * the `Job` type holds the capitalised form.
+ */
+export const isDraftVersion = (job: Pick<Job, 'status'>): boolean =>
+  String(job.status || '').toLowerCase() === 'draft';
+
+/**
+ * Can a NEW assessment be created against this JD version? Published and
+ * Republished only.
+ *
+ * An allowlist rather than a list of excluded statuses, so a status this app
+ * has never heard of can only ever be treated as not selectable.
+ *
+ * Republished needs care in BOTH directions. It is not a stored status: the
+ * record's own status is `published`, and `getDisplayStatus` derives the label
+ * from a publish counter that has passed 1. So the `published` test already
+ * covers every republished version, and the literal is accepted as well — that
+ * way a republished version can never be mistaken for an unselectable one just
+ * because its label was compared instead of its status.
+ */
+export const isSelectableVersion = (job: Pick<Job, 'status'>): boolean => {
+  const status = String(job.status || '').toLowerCase();
+  return status === 'published' || status === 'republished';
+};
+
+/**
+ * The version of a lineage that represents it in the Create Assessment main
+ * list — its latest NON-DRAFT version, or `null` when it has none.
+ *
+ * `bucket` arrives newest-version-first (see `groupByLineage`), so the first
+ * non-draft entry is that version and no sort is repeated here.
+ *
+ * Latest NON-DRAFT rather than latest outright is what stops a fresh draft
+ * displacing a live version: a v4 draft raised over a published v3 is skipped
+ * and the card keeps reading "v3 · Published" until v4 is itself published. The
+ * draft is not lost — View Versions lists the whole lineage, drafts included,
+ * and simply refuses to select them.
+ *
+ * `null` (rather than `bucket[0]`) removes a job that is nothing but drafts:
+ * there is no version of it to show, so there is no row.
+ */
+export const assessmentListRepresentative = (bucket: Job[]): Job | null =>
+  bucket.find(version => !isDraftVersion(version)) ?? null;
+
+/**
+ * The Create Assessment job list: one row per job, each on its latest non-draft
+ * version, with draft-only jobs dropped.
+ *
+ * Pass the FULL, unfiltered version list. The draft test runs per version
+ * INSIDE each lineage, so filtering by status upstream would remove the very
+ * versions the collapse needs in order to pick the right representative.
+ *
+ * Takes no account of assessments, by design — see the note above. Visibility
+ * here is a pure function of status.
+ */
+export const buildAssessmentJobList = (allVersions: Job[]): Job[] => {
+  const reps: Job[] = [];
+  groupByLineage(allVersions).forEach(bucket => {
+    const rep = assessmentListRepresentative(bucket);
+    if (rep) reps.push(rep);
+  });
+  return reps;
+};
+
 export type JobSortBy = 'date' | 'applicants' | 'title' | 'status' | 'industry';
 export type JobSortOrder = 'asc' | 'desc';
 
@@ -406,6 +499,32 @@ export const jobSearchMatcher = (query: string): ((job: Job) => boolean) => {
   };
 };
 
+/**
+ * Whether ONE version belongs in a `publishedOnly`-filtered Resume Scoring
+ * history: never a draft; an archived or disabled version only if it was
+ * actually scored (missing/zero count reads as "never scored" — nothing
+ * invented). Published and any other status pass through unconditionally.
+ *
+ * Shared by `resolveVersionHistoryRows` below (JDLineageVersion rows, the
+ * table/cards' own data) and `JobOpeningPickerList`'s "does this lineage have
+ * anything worth a View Versions button" check, which counts from its
+ * already-fetched Job-shaped siblings rather than a fresh lineage fetch — two
+ * different input shapes needing the identical rule so the button's guess
+ * never drifts from what the table it opens actually shows.
+ */
+export const isVersionVisibleForScoring = (
+  status: string | undefined,
+  versionId: string,
+  versionApplicants: Record<string, number> | undefined,
+): boolean => {
+  const normalized = (status || '').toLowerCase();
+  if (normalized === 'draft') return false;
+  if (normalized === 'archived' || normalized === 'disabled') {
+    return (versionApplicants?.[versionId] ?? 0) > 0;
+  }
+  return true;
+};
+
 export interface ResolvedVersionRow extends JDLineageVersion {
   /** The live version of the lineage — the flag is preferred, the version
    *  number backstops a lineage row that omits it. */
@@ -426,7 +545,21 @@ export interface ResolvedVersionRow extends JDLineageVersion {
 export const resolveVersionHistoryRows = (
   job: Pick<Job, 'id' | 'versionNumber'>,
   versions: JDLineageVersion[] | undefined,
-  options?: { excludeId?: string },
+  options?: {
+    excludeId?: string;
+    publishedOnly?: boolean;
+    /**
+     * Resumes scored per version id — only consulted under `publishedOnly`,
+     * to decide whether an ARCHIVED or DISABLED version is worth listing. A
+     * version a recruiter archived or disabled without ever scoring anyone
+     * against it has nothing for Resume Scoring's history to show; one that
+     * was scored before being archived/disabled is exactly the past activity
+     * that history exists to surface. Missing or zero counts as "no
+     * candidates" — never invented, since an uncounted version reads the
+     * same as a genuinely empty one here.
+     */
+    versionApplicants?: Record<string, number>;
+  },
 ): ResolvedVersionRow[] => {
   const lineageVersions = versions ?? [];
   const latestNumber = latestVersionNumber(lineageVersions, job.versionNumber ?? 1);
@@ -441,6 +574,15 @@ export const resolveVersionHistoryRows = (
          above this history that duplicates its own version — excluded only
          there, via excludeId, so a read-only table isn't missing a row. */
       if (options?.excludeId && v.id === options.excludeId) return false;
+      /* Resume Scoring's history is about what a candidate can be scored
+         against, so a still-drafted version — never live, nothing to score —
+         and an archived/disabled one nobody ever scored are both noise
+         there. Gated behind an option rather than applied everywhere: Job
+         Openings' own history is a job's full edit trail, where a draft in
+         progress is exactly what a recruiter expects to see. */
+      if (options?.publishedOnly && !isVersionVisibleForScoring(v.status, v.id, options.versionApplicants)) {
+        return false;
+      }
       return true;
     })
     .sort((a, b) => (b.version_number ?? 1) - (a.version_number ?? 1))

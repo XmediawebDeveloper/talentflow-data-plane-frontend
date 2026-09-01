@@ -49,7 +49,9 @@ export interface JDCreate {
   /** JD22 - recruiter free text about the job (shift timings, WFO/WFH, anything
    *  extraction missed). Shown to candidates and in every JD view; never an input
    *  to resume scoring, assessment generation or the AI interview. */
-  additional_details?: string;
+  //  `null` is how an EMPTIED box is sent: the backend applies updates with
+  //  exclude_unset, so omitting the key preserves the stored text instead of clearing it.
+  additional_details?: string | null;
   must_have_comments?: string[];
   nice_to_have_comments?: string[];
   coding_required?: boolean;
@@ -153,6 +155,12 @@ export interface JDExtractedParams {
    *  WFO/WFH, facilities, anything under an "Additional Details" heading). Null when
    *  the JD says nothing of the kind; never invented to fill the field. */
   additional_details?: string | null;
+  /** Inferred by extraction from the title, responsibilities and industry - the prompt
+   *  carries a nine-sector list so a plant, ward or store JD gets a department from its
+   *  own sector rather than a technology one. Was extracted and then discarded twice
+   *  over: the backend response_model had no such field, and Step 2 overwrote it with
+   *  ''. Both fixed; keep the two in sync. */
+  department?: string;
   /** Provenance for every duplicate group collapsed during extraction. Empty when
    *  nothing merged. See JDMergeTrailEntry. */
   merge_trail?: JDMergeTrailEntry[];

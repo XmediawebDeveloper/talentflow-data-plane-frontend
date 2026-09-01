@@ -1,7 +1,7 @@
 'use client';
 
-import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, FolderOpen, HardDrive, ChevronLeft, ChevronRight, Check, Ban, ShieldX, Info, Loader2 } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, Check, Ban, ShieldX, Info, Loader2, User, Mail, Folder, UserPlus } from 'lucide-react';
+import { useState, useEffect, useMemo, ComponentType } from 'react';
 import { resumeService } from '@/lib/services';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
@@ -61,9 +61,11 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
   // Only show modal for versions with changes (exact duplicates are auto-rejected)
   const hasOnlyExactDuplicates = versionsWithChanges.length === 0;
 
-  const [currentVersionIndex, setCurrentVersionIndex] = useState(0);
+  const [currentVersionIndex] = useState(0);
   const [resolutions, setResolutions] = useState<Map<number, 'discard' | 'overwrite' | 'version'>>(new Map());
   const [selectedAction, setSelectedAction] = useState<'discard' | 'overwrite' | 'version' | null>(null);
+  // Toggles the field-by-field diff table below the comparison cards.
+  const [showCompare, setShowCompare] = useState(false);
   /* Resolving hits the server (overwrite/version uploads), so the parent keeps
      this modal mounted until that finishes. Rather than a "Processing
      duplicate resolution..." toast floating over the dialog, the Confirm
@@ -84,23 +86,24 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
   const [existingUploaders, setExistingUploaders] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!hasOnlyExactDuplicates || exactDuplicates.length === 0) return;
+    const allDuplicates = [...exactDuplicates, ...versionsWithChanges];
+    if (allDuplicates.length === 0) return;
     let cancelled = false;
 
     Promise.all(
-      exactDuplicates.map(async ({ file }) => {
+      allDuplicates.map(async ({ file }) => {
         const detail: any = await resumeService.get(file.existingResume.id).catch(() => null);
         return [file.existingResume.id, detail?.uploaded_by_name || ''] as const;
       }),
     ).then(pairs => {
       if (cancelled) return;
-      setExistingUploaders(Object.fromEntries(pairs.filter(([, name]) => name)));
+      setExistingUploaders(prev => ({ ...prev, ...Object.fromEntries(pairs.filter(([, name]) => name)) }));
     });
 
     return () => {
       cancelled = true;
     };
-  }, [hasOnlyExactDuplicates, exactDuplicates]);
+  }, [exactDuplicates, versionsWithChanges]);
 
   const { user } = useAuth();
   const currentUserName =
@@ -223,22 +226,6 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
     setResolutions(newResolutions);
   };
 
-  const handleNext = () => {
-    if (currentVersionIndex < versionsWithChanges.length - 1) {
-      const nextIndex = currentVersionIndex + 1;
-      setCurrentVersionIndex(nextIndex);
-      setSelectedAction(resolutions.get(versionsWithChanges[nextIndex].originalIndex) || null);
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentVersionIndex > 0) {
-      const prevIndex = currentVersionIndex - 1;
-      setCurrentVersionIndex(prevIndex);
-      setSelectedAction(resolutions.get(versionsWithChanges[prevIndex].originalIndex) || null);
-    }
-  };
-
   const handleConfirm = () => {
     // Save current selection if not already saved
     if (currentVersion && selectedAction && !resolutions.has(currentVersion.originalIndex)) {
@@ -266,8 +253,17 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
      down the card. Flex and stock widths rather than an arbitrary grid
      template — the arbitrary class wasn't generated, which left `grid` with no
      columns and stacked the three parts one per line. */
-  const DetailRow = ({ label, value }: { label: string; value: string }) => (
-    <div className="flex items-start gap-2 py-2 text-sm">
+  const DetailRow = ({
+    icon: Icon,
+    label,
+    value,
+  }: {
+    icon?: ComponentType<{ className?: string }>;
+    label: string;
+    value: string;
+  }) => (
+    <div className="flex items-start gap-2 py-2.5 text-sm">
+      {Icon && <Icon className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />}
       <span className="w-28 flex-shrink-0 text-gray-500">{label}</span>
       <span className="flex-shrink-0 text-gray-400">:</span>
       <span className="min-w-0 flex-1 text-gray-900 break-words">{value || '-'}</span>
@@ -477,87 +473,140 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
             </div>
           </div>
 
-          {/* Comparison Grid */}
-          <div className="grid grid-cols-2 gap-6 mb-6">
-            {/* Existing Resume */}
-            <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 bg-gray-100 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700">
-                <h4 className="font-medium text-gray-900 dark:text-slate-50 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-                  Existing Resume
-                </h4>
-              </div>
-              <div className="p-4 space-y-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <FolderOpen className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                  <span className="text-gray-600 dark:text-slate-400">Location:</span>
-                  <span className="text-gray-900 dark:text-slate-50">{currentDuplicate.existingResume.folder_path || 'My Resumes'}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                  <span className="text-gray-600 dark:text-slate-400">Upload Date:</span>
-                  <span className="text-gray-900 dark:text-slate-50">{formatISTDate(currentDuplicate.existingResume.upload_date)}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <HardDrive className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                  <span className="text-gray-600 dark:text-slate-400">File Size:</span>
-                  <span className="text-gray-900 dark:text-slate-50">{formatFileSize(currentDuplicate.existingResume.file_size)}</span>
-                </div>
-                {currentDuplicate.existingResume.version > 1 && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <GitBranch className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                    <span className="text-gray-600 dark:text-slate-400">Version:</span>
-                    <span className="text-gray-900 dark:text-slate-50">v{currentDuplicate.existingResume.version}</span>
-                  </div>
-                )}
-                <button
-                  onClick={() => handlePreviewExisting(
-                    currentDuplicate.existingResume.id,
-                    currentDuplicate.existingResume.candidate_name,
-                    currentDuplicate.existingResume.file_name,
-                  )}
-                  className="mt-2 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Eye className="w-4 h-4" />
-                  Preview Existing
-                </button>
-              </div>
-            </div>
-
-            {/* New Resume */}
-            <div className="border border-blue-200 rounded-xl overflow-hidden bg-blue-50/30">
-              <div className="px-4 py-3 bg-blue-100 border-b border-blue-200">
-                <h4 className="font-medium text-blue-900 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-blue-600" />
-                  New Resume (Uploading)
-                </h4>
-              </div>
-              <div className="p-4 space-y-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                  <span className="text-gray-600 dark:text-slate-400">File Name:</span>
-                  <span className="text-gray-900 dark:text-slate-50 truncate">{currentDuplicate.file.name}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                  <span className="text-gray-600 dark:text-slate-400">Upload Date:</span>
-                  <span className="text-gray-900 dark:text-slate-50">{formatISTDate(new Date().toISOString())}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <HardDrive className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                  <span className="text-gray-600 dark:text-slate-400">File Size:</span>
-                  <span className="text-gray-900 dark:text-slate-50">{formatFileSize(currentDuplicate.file.size)}</span>
-                </div>
-                <button
-                  onClick={() => handlePreviewNew(currentDuplicate.file, currentDuplicate.existingResume.candidate_name)}
-                  className="mt-2 w-full px-4 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Eye className="w-4 h-4" />
-                  Preview New
-                </button>
-              </div>
-            </div>
+          {/* Compare Selected — toggles a field-by-field diff table for the
+              comparison cards below. */}
+          <div className="mb-6 flex justify-end">
+            <button
+              onClick={() => setShowCompare(v => !v)}
+              className="px-4 py-2 text-sm font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 transition-colors flex items-center gap-2 cursor-pointer"
+            >
+              <GitBranch className="w-4 h-4" />
+              {showCompare ? 'Hide Comparison' : 'Compare Selected'}
+            </button>
           </div>
+
+          {/* Comparison Cards — every row is bound to live data (existing
+              resume record, the file being uploaded, the signed-in user, and
+              the target folder). */}
+          {(() => {
+            const existing = currentDuplicate.existingResume;
+            const existingLocation = existing.folder_path || existing.folder_name || 'root';
+            const uploadLocation = targetFolderPath || existingLocation;
+
+            return (
+              <div className="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Existing */}
+                <div className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden flex flex-col">
+                  <div className="px-5 py-3.5 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-gray-700 dark:text-slate-300" />
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Existing Resume</h3>
+                  </div>
+                  <div className="px-5 py-1 flex-1 divide-y divide-gray-100 dark:divide-slate-800">
+                    <DetailRow icon={User} label="Candidate" value={existing.candidate_name} />
+                    <DetailRow icon={Mail} label="Email" value={existing.email} />
+                    <DetailRow icon={Folder} label="Location" value={existingLocation} />
+                    <DetailRow icon={Calendar} label="Upload Date" value={formatISTDate(existing.upload_date)} />
+                    <DetailRow icon={UserPlus} label="Upload By" value={existingUploaders[existing.id] || '-'} />
+                    <DetailRow icon={FileText} label="File Name" value={existing.file_name} />
+                    <DetailRow icon={Info} label="File Size" value={formatFileSize(existing.file_size)} />
+                    {existing.version > 1 && (
+                      <DetailRow icon={GitBranch} label="Version" value={`v${existing.version}`} />
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handlePreviewExisting(existing.id, existing.candidate_name, existing.file_name)}
+                    className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-50 hover:bg-blue-100 text-brand-blue font-medium text-sm transition-colors cursor-pointer"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Preview Existing
+                  </button>
+                </div>
+
+                {/* New */}
+                <div className="rounded-xl border border-brand-blue/30 overflow-hidden flex flex-col">
+                  <div className="px-5 py-3.5 bg-brand-blue/5 border-b border-brand-blue/20 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-brand-blue" />
+                    <h3 className="text-base font-semibold text-brand-blue">New Resume (Uploading)</h3>
+                  </div>
+                  <div className="px-5 py-1 flex-1 divide-y divide-gray-100 dark:divide-slate-800">
+                    <DetailRow icon={User} label="Candidate" value={existing.candidate_name} />
+                    <DetailRow icon={Mail} label="Email" value={existing.email} />
+                    <DetailRow icon={Folder} label="Location" value={uploadLocation} />
+                    <DetailRow icon={Calendar} label="Upload Date" value={uploadAttemptedAt} />
+                    <DetailRow icon={UserPlus} label="Upload By" value={currentUserName} />
+                    <DetailRow icon={FileText} label="File Name" value={currentDuplicate.file.name} />
+                    <DetailRow icon={Info} label="File Size" value={formatFileSize(currentDuplicate.file.size)} />
+                  </div>
+                  <button
+                    onClick={() => handlePreviewNew(currentDuplicate.file, existing.candidate_name)}
+                    className="flex items-center justify-center gap-2 px-5 py-3 bg-blue-50 hover:bg-blue-100 text-brand-blue font-medium text-sm transition-colors cursor-pointer"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Preview New
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {showCompare && (() => {
+            const existing = currentDuplicate.existingResume;
+            const existingLocation = existing.folder_path || existing.folder_name || 'root';
+            const uploadLocation = targetFolderPath || existingLocation;
+            const rows: { label: string; existingValue: string; newValue: string }[] = [
+              { label: 'Candidate', existingValue: existing.candidate_name, newValue: existing.candidate_name },
+              { label: 'Email', existingValue: existing.email, newValue: existing.email },
+              { label: 'Location', existingValue: existingLocation, newValue: uploadLocation },
+              { label: 'Upload Date', existingValue: formatISTDate(existing.upload_date), newValue: uploadAttemptedAt },
+              { label: 'Upload By', existingValue: existingUploaders[existing.id] || '-', newValue: currentUserName },
+              { label: 'File Name', existingValue: existing.file_name, newValue: currentDuplicate.file.name },
+              { label: 'File Size', existingValue: formatFileSize(existing.file_size), newValue: formatFileSize(currentDuplicate.file.size) },
+            ];
+
+            return (
+              <div className="mb-6 border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300">
+                      <th className="px-4 py-2.5 text-left font-medium">Field</th>
+                      <th className="px-4 py-2.5 text-left font-medium">Existing Resume</th>
+                      <th className="px-4 py-2.5 text-left font-medium">New Resume</th>
+                      <th className="px-4 py-2.5 text-left font-medium">Match?</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                    {rows.map(row => {
+                      const isSame = row.existingValue === row.newValue;
+                      return (
+                        <tr key={row.label}>
+                          <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 whitespace-nowrap">{row.label}</td>
+                          <td className="px-4 py-2.5 text-gray-900 dark:text-slate-50 break-words">{row.existingValue || '-'}</td>
+                          <td className="px-4 py-2.5 text-gray-900 dark:text-slate-50 break-words">{row.newValue || '-'}</td>
+                          <td className="px-4 py-2.5 whitespace-nowrap">
+                            {isSame ? (
+                              <span className="inline-flex items-center gap-1 text-green-600">
+                                <Check className="w-3.5 h-3.5" /> Same
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-red-600">
+                                <X className="w-3.5 h-3.5" /> Different
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {existing.version > 1 && (
+                      <tr>
+                        <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400 whitespace-nowrap">Version</td>
+                        <td className="px-4 py-2.5 text-gray-900 dark:text-slate-50" colSpan={3}>v{existing.version}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
 
           {/* Content Differences */}
           {currentDuplicate.contentDifferences.length > 0 && (
@@ -586,13 +635,13 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
               onClick={() => handleSelectAction('discard')}
               className={`w-full p-4 border-2 rounded-xl text-left transition-all ${
                 selectedAction === 'discard'
-                  ? 'border-gray-800 bg-gray-50 dark:bg-slate-800/50'
+                  ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
               }`}
             >
               <div className="flex items-start gap-4">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                  selectedAction === 'discard' ? 'bg-gray-800 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
+                  selectedAction === 'discard' ? 'bg-blue-500 text-white' : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
                 }`}>
                   <Trash2 className="w-5 h-5" />
                 </div>
@@ -600,7 +649,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                   <div className="flex items-center justify-between">
                     <h5 className="font-semibold text-gray-900 dark:text-slate-50">1. Discard New Resume</h5>
                     {selectedAction === 'discard' && (
-                      <Check className="w-5 h-5 text-gray-800" />
+                      <Check className="w-5 h-5 text-blue-500" />
                     )}
                   </div>
                   <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
@@ -727,43 +776,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
-          {/* Navigation */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handlePrevious}
-              disabled={currentVersionIndex === 0}
-              className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Previous
-            </button>
-            <button
-              onClick={handleNext}
-              disabled={currentVersionIndex === versionsWithChanges.length - 1}
-              className="px-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-            >
-              Next
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Progress */}
-          <div className="flex items-center gap-2">
-            {versionsWithChanges.map(({ originalIndex }, index) => (
-              <div
-                key={originalIndex}
-                className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                  resolutions.has(originalIndex) || (index === currentVersionIndex && selectedAction)
-                    ? 'bg-green-500'
-                    : index === currentVersionIndex
-                    ? 'bg-gray-800'
-                    : 'bg-gray-300'
-                }`}
-              />
-            ))}
-          </div>
-
+        <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
           {/* Actions */}
           <div className="flex items-center gap-3">
             <button

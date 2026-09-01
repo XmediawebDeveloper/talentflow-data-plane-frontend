@@ -5,7 +5,6 @@
 // Any changes made here must also be applied to complete-payment/page.tsx and vice versa.
 
 import { useState, useEffect, useRef } from 'react';
-import { useTheme } from 'next-themes';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
@@ -16,6 +15,8 @@ import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import PlanSelectionModal from './PlanSelectionModal';
+import { AUTH_THEME_CSS } from './authTheme';
+import AuthBrandPanel from './AuthBrandPanel';
 import type { TermsAndConditions } from '@/lib/types/terms';
 // Auto-login support after paid signup payment — see handlePaymentSubmit.
 import { setTokens, clearTokens } from '@/lib/services/api';
@@ -108,7 +109,6 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const [companyNameError, setCompanyNameError] = useState('');
   const [adminNameError, setAdminNameError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
 
   // OTP state (inline, not popup)
@@ -183,13 +183,6 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     setShowTermsConsentModal(false);
     await completeRegistration(termsId);
   };
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   // Fetch trial days from API
   useEffect(() => {
@@ -1066,106 +1059,10 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
   };
 
-  const { resolvedTheme } = useTheme();
-  const isDark = resolvedTheme === 'dark';
-
-  // Styles
-  const containerStyle: React.CSSProperties = {
-    minHeight: '100vh',
-    background: isDark
-      ? 'linear-gradient(135deg, #111827 0%, #1F2937 50%, #1E1B4B 100%)'
-      : 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '16px',
-    position: 'relative',
-    overflow: 'hidden',
-  };
-
-  const contentStyle: React.CSSProperties = {
-    position: 'relative',
-    width: '100%',
-    maxWidth: '1200px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '48px',
-  };
-
-  const leftSideStyle: React.CSSProperties = {
-    display: isMobile ? 'none' : 'flex',
-    flex: 1,
-    flexDirection: 'column',
-    justifyContent: 'center',
-  };
-
-  const logoContainerStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    marginBottom: '24px',
-  };
-
-  const logoBoxStyle: React.CSSProperties = {
-    width: '56px',
-    height: '56px',
-    background: 'linear-gradient(135deg, #2563EB, #4338CA)',
-    borderRadius: '16px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
-  };
-
-  const formContainerStyle: React.CSSProperties = {
-    width: isMobile ? '100%' : '520px',
-    flexShrink: 0,
-  };
-
-  const formCardStyle: React.CSSProperties = {
-    backgroundColor: isDark ? '#1F2937' : '#ffffff',
-    borderRadius: '24px',
-    boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' : '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
-    padding: isMobile ? '32px' : '40px',
-    border: isDark ? '1px solid #374151' : '1px solid #F3F4F6',
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    paddingLeft: '48px',
-    paddingRight: '16px',
-    paddingTop: '12px',
-    paddingBottom: '12px',
-    border: isDark ? '1px solid #4B5563' : '1px solid #D1D5DB',
-    borderRadius: '12px',
-    fontSize: '16px',
-    color: isDark ? '#F9FAFB' : '#111827',
-    backgroundColor: isDark ? '#374151' : '#F9FAFB',
-    outline: 'none',
-    boxSizing: 'border-box',
-    transition: 'all 0.2s',
-  };
-
-  const submitButtonStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '14px 24px',
-    background: 'linear-gradient(to right, #2563EB, #4338CA)',
-    color: '#ffffff',
-    fontSize: '16px',
-    fontWeight: 500,
-    borderRadius: '12px',
-    border: 'none',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
-    transition: 'all 0.2s',
-  };
-
-  // Verification step removed - now handled inline in the form
+  // The Sign Up card is wider than Login's (it carries two-column fields), which
+  // is the only geometry that differs between the two pages — everything else
+  // comes from the shared tokens in authTheme.ts.
+  const formWidthVar = { ['--tf-form-width' as string]: '520px' } as React.CSSProperties;
 
   // Helper function to format currency with up to 2 decimal places
   const formatCurrency = (amount: number, currency: string): string => {
@@ -1207,191 +1104,216 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     };
 
     return (
-      <div style={containerStyle}>
-        {/* Background Blobs */}
-        <div style={{ position: 'absolute', top: 80, left: 40, width: 288, height: 288, backgroundColor: '#93C5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
-        <div style={{ position: 'absolute', top: 160, right: 40, width: 288, height: 288, backgroundColor: '#C4B5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
+      <div className="tf-auth">
+        <style>{AUTH_THEME_CSS}</style>
 
-        <div style={{ ...formCardStyle, maxWidth: 600, margin: '0 auto', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }}>
-          {/* Header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-            <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #2563EB, #4338CA)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <CreditCard style={{ width: 24, height: 24, color: '#ffffff' }} />
-            </div>
-            <div>
-              <h2 style={{ fontSize: 24, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: 4 }}>Complete Your Purchase</h2>
-              <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14 }}>Your account is ready. Complete payment to activate your plan.</p>
-            </div>
-          </div>
-
-          {error && (
-            <div style={{ marginBottom: 24, padding: 16, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2', border: isDark ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid #FECACA', borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-              <span style={{ fontSize: 14, color: isDark ? '#FCA5A5' : '#991B1B' }}>{error}</span>
-            </div>
-          )}
-
-          {/* Plan Summary Card */}
-          <div style={{ backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: 16, padding: 24, marginBottom: 24, border: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div className="tf-auth-main" style={{ ['--tf-form-width' as string]: '600px' } as React.CSSProperties}>
+          <div className="tf-auth-card" style={{ maxHeight: '88vh', overflowY: 'auto' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
+              <div className="tf-auth-feature-icon" style={{ width: 42, height: 42 }}>
+                <CreditCard style={{ width: 20, height: 20 }} />
+              </div>
               <div>
+                <h2 className="tf-auth-title" style={{ fontSize: 21, marginBottom: 2 }}>Complete your purchase</h2>
+                <p className="tf-auth-subtitle" style={{ marginBottom: 0 }}>
+                  Your account is ready. Complete payment to activate your plan.
+                </p>
+              </div>
+            </div>
+
+            {error && (
+              <div className="tf-auth-alert tf-auth-alert--danger">
+                <AlertCircle style={{ width: 17, height: 17 }} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Plan Summary Card */}
+            <div className="tf-auth-panel" style={{ padding: 20, marginBottom: 20 }}>
+              <div style={{ marginBottom: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 20, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{selectedPlanDetails.plan_name}</span>
-                  <span style={{ backgroundColor: isDark ? 'rgba(37, 99, 235, 0.2)' : '#DBEAFE', color: isDark ? '#93C5FD' : '#1D4ED8', fontSize: 12, fontWeight: 500, padding: '2px 8px', borderRadius: 12 }}>
+                  <span style={{ fontSize: 17, fontWeight: 650, color: 'var(--tf-ink)', letterSpacing: '-0.01em' }}>
+                    {selectedPlanDetails.plan_name}
+                  </span>
+                  <span style={{
+                    background: 'var(--tf-brand-tint-solid)',
+                    color: 'var(--tf-brand-ink)',
+                    fontSize: 11.5,
+                    fontWeight: 600,
+                    letterSpacing: '0.02em',
+                    textTransform: 'uppercase',
+                    padding: '2px 8px',
+                    borderRadius: 999,
+                  }}>
                     {selectedPlanDetails.plan_tier}
                   </span>
                 </div>
-                <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14 }}>{selectedPlanDetails.description}</p>
+                <p style={{ color: 'var(--tf-ink-subtle)', fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
+                  {selectedPlanDetails.description}
+                </p>
               </div>
-            </div>
 
-            {/* Price Display with GST Breakdown */}
-            <div style={{ padding: '16px 0', borderTop: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB', borderBottom: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Billing:</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>
-                  {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
-                </span>
-              </div>
-              {/* Strikethrough price and Save badge for annual plans */}
-              {billingInterval === 'ANNUAL' && selectedPlanDetails.monthly_price && (selectedPlanDetails.monthly_price * 12) > selectedPlanDetails.base_price && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
-                  <span style={{ fontSize: 14, color: '#9CA3AF', textDecoration: 'line-through' }}>
-                    {formatCurrency(selectedPlanDetails.monthly_price * 12, selectedPlanDetails.currency)}
+              {/* Price Display with GST Breakdown */}
+              <div style={{ padding: '14px 0', borderTop: '1px solid var(--tf-border)', borderBottom: '1px solid var(--tf-border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)' }}>Billing</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--tf-ink)' }}>
+                    {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
                   </span>
-                  {selectedPlanDetails.discount_percentage && selectedPlanDetails.discount_percentage > 0 && (
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '2px 8px',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7',
-                      color: '#15803D',
-                      borderRadius: 12
-                    }}>
-                      Save {Math.round(selectedPlanDetails.discount_percentage)}%
+                </div>
+                {/* Strikethrough price and Save badge for annual plans */}
+                {billingInterval === 'ANNUAL' && selectedPlanDetails.monthly_price && (selectedPlanDetails.monthly_price * 12) > selectedPlanDetails.base_price && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 13.5, color: 'var(--tf-ink-faint)', textDecoration: 'line-through' }}>
+                      {formatCurrency(selectedPlanDetails.monthly_price * 12, selectedPlanDetails.currency)}
                     </span>
-                  )}
+                    {selectedPlanDetails.discount_percentage && selectedPlanDetails.discount_percentage > 0 && (
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '2px 8px',
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        background: 'var(--tf-success-tint)',
+                        color: 'var(--tf-success-ink)',
+                        borderRadius: 999,
+                      }}>
+                        Save {Math.round(selectedPlanDetails.discount_percentage)}%
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <span style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)' }}>Plan price</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--tf-ink)' }}>
+                    {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)' }}>GST (18%)</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--tf-ink)' }}>
+                    {formatCurrency(Math.round(selectedPlanDetails.base_price * 0.18 * 100) / 100, selectedPlanDetails.currency)}
+                  </span>
+                </div>
+                <div style={{ height: 1, background: 'var(--tf-border)', marginBottom: 12 }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--tf-ink)' }}>Total</span>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: 26, fontWeight: 650, letterSpacing: '-0.02em', color: 'var(--tf-ink)' }}>
+                      {formatCurrency(Math.round((selectedPlanDetails.base_price * 1.18) * 100) / 100, selectedPlanDetails.currency)}
+                    </span>
+                    <span style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', marginLeft: 4 }}>
+                      /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Included Seats */}
+              {selectedPlanDetails.included_seats && (
+                <div style={{
+                  marginTop: 14,
+                  padding: '10px 12px',
+                  background: 'var(--tf-brand-tint)',
+                  border: '1px solid var(--tf-brand-border)',
+                  borderRadius: 'var(--tf-radius-sm)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <span style={{ fontSize: 13.5, color: 'var(--tf-brand-ink)', fontWeight: 500 }}>Included team seats</span>
+                  <span style={{ fontSize: 15, fontWeight: 650, color: 'var(--tf-brand-ink)' }}>{selectedPlanDetails.included_seats}</span>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Plan Price:</span>
-                <span style={{ fontSize: 14, fontWeight: 500, color: isDark ? '#F9FAFB' : '#111827' }}>
-                  {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>GST (18%):</span>
-                <span style={{ fontSize: 14, fontWeight: 500, color: isDark ? '#F9FAFB' : '#111827' }}>
-                  {formatCurrency(Math.round(selectedPlanDetails.base_price * 0.18 * 100) / 100, selectedPlanDetails.currency)}
-                </span>
-              </div>
-              <div style={{ height: 1, backgroundColor: isDark ? '#4B5563' : '#E5E7EB', marginBottom: 8 }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 16, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>Total:</span>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: 28, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>
-                    {formatCurrency(Math.round((selectedPlanDetails.base_price * 1.18) * 100) / 100, selectedPlanDetails.currency)}
-                  </span>
-                  <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', marginLeft: 4 }}>
-                    /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
-                  </span>
-                </div>
-              </div>
             </div>
 
-            {/* Included Seats */}
-            {selectedPlanDetails.included_seats && (
-              <div style={{ marginTop: 12, padding: 12, backgroundColor: isDark ? 'rgba(67, 56, 202, 0.2)' : '#EEF2FF', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 14, color: '#4338CA', fontWeight: 500 }}>Included Team Seats</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: '#4338CA' }}>{selectedPlanDetails.included_seats}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Plan Quotas */}
-          {selectedPlanDetails.quotas && Object.keys(selectedPlanDetails.quotas).length > 0 && (
-            <div style={{ marginBottom: 24 }}>
-              <h4 style={{ fontSize: 14, fontWeight: 600, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 12 }}>Plan Quotas:</h4>
-              <div style={{ backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: 12, padding: 16, border: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  {Object.entries(selectedPlanDetails.quotas)
-                    .filter(([key, value]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key) && value !== 0 && value !== null && value !== undefined)
-                    .map(([key, value]) => (
-                    <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: isDark ? '#1F2937' : '#ffffff', borderRadius: 8, border: isDark ? '1px solid #374151' : '1px solid #E5E7EB' }}>
-                      <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280' }}>{getQuotaLabel(key)}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuotaValue(key, value)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Features List */}
-          {selectedPlanDetails.features && selectedPlanDetails.features.length > 0 && (
-            <div style={{ marginBottom: 24 }}>
-              <h4 style={{ fontSize: 14, fontWeight: 600, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 12 }}>Included Features:</h4>
-              <div style={{ backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: 12, padding: 16, border: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  {selectedPlanDetails.features
-                    .filter(f => f.is_enabled)
-                    .map((feature, index) => (
-                      <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
-                        <Check style={{ width: 16, height: 16, color: '#10B981', flexShrink: 0 }} />
-                        <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#4B5563' }}>{feature.feature_name}</span>
+            {/* Plan Quotas */}
+            {selectedPlanDetails.quotas && Object.keys(selectedPlanDetails.quotas).length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--tf-ink-muted)', margin: '0 0 10px' }}>Plan quotas</h4>
+                <div className="tf-auth-panel">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {Object.entries(selectedPlanDetails.quotas)
+                      .filter(([key, value]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key) && value !== 0 && value !== null && value !== undefined)
+                      .map(([key, value]) => (
+                      <div key={key} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        padding: '8px 12px',
+                        background: 'var(--tf-surface)',
+                        borderRadius: 'var(--tf-radius-sm)',
+                        border: '1px solid var(--tf-border)',
+                      }}>
+                        <span style={{ fontSize: 12.5, color: 'var(--tf-ink-subtle)' }}>{getQuotaLabel(key)}</span>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tf-ink)' }}>{formatQuotaValue(key, value)}</span>
                       </div>
                     ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Account Summary */}
-          <div style={{ backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4', borderRadius: 12, padding: 16, marginBottom: 24, border: isDark ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid #BBF7D0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <CheckCircle style={{ width: 18, height: 18, color: '#16A34A' }} />
-              <span style={{ fontSize: 14, fontWeight: 600, color: '#166534' }}>Account Details Confirmed</span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13, color: '#166534' }}>
-              <div><strong>Company:</strong> {form.companyName}</div>
-              <div><strong>Name:</strong> {form.adminName}</div>
-              <div><strong>Email:</strong> {form.adminEmail}</div>
-              <div><strong>Phone:</strong> {form.phoneNumber}</div>
-            </div>
-          </div>
-
-          {/* Complete Purchase Button */}
-          <button
-            onClick={handlePaymentSubmit}
-            disabled={paymentProcessing || razorpayProcessing}
-            style={{
-              ...submitButtonStyle,
-              opacity: (paymentProcessing || razorpayProcessing) ? 0.7 : 1,
-              cursor: (paymentProcessing || razorpayProcessing) ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {paymentProcessing || razorpayProcessing ? (
-              <>
-                <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
-                Processing Payment...
-              </>
-            ) : (
-              <>
-                <CreditCard style={{ width: 20, height: 20 }} />
-                Pay & Activate - {formatCurrency(Math.round((selectedPlanDetails.base_price * 1.18) * 100) / 100, selectedPlanDetails.currency)}
-              </>
             )}
-          </button>
 
-          {/* Security Notice */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 13 }}>
-            <ShieldCheck style={{ width: 16, height: 16 }} />
-            <span>Secure payment processing</span>
+            {/* Features List */}
+            {selectedPlanDetails.features && selectedPlanDetails.features.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--tf-ink-muted)', margin: '0 0 10px' }}>Included features</h4>
+                <div className="tf-auth-panel">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {selectedPlanDetails.features
+                      .filter(f => f.is_enabled)
+                      .map((feature, index) => (
+                        <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+                          <Check style={{ width: 15, height: 15, color: 'var(--tf-brand-ink)', flexShrink: 0 }} />
+                          <span style={{ fontSize: 12.5, color: 'var(--tf-ink-muted)' }}>{feature.feature_name}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Account Summary */}
+            <div className="tf-auth-alert tf-auth-alert--success" style={{ display: 'block', marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <CheckCircle style={{ width: 16, height: 16 }} />
+                <span style={{ fontWeight: 600 }}>Account details confirmed</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12.5 }}>
+                <div><strong style={{ fontWeight: 600 }}>Company:</strong> {form.companyName}</div>
+                <div><strong style={{ fontWeight: 600 }}>Name:</strong> {form.adminName}</div>
+                <div><strong style={{ fontWeight: 600 }}>Email:</strong> {form.adminEmail}</div>
+                <div><strong style={{ fontWeight: 600 }}>Phone:</strong> {form.phoneNumber}</div>
+              </div>
+            </div>
+
+            {/* Complete Purchase Button */}
+            <button
+              onClick={handlePaymentSubmit}
+              disabled={paymentProcessing || razorpayProcessing}
+              className={`tf-auth-btn${paymentProcessing || razorpayProcessing ? ' tf-auth-btn--busy' : ''}`}
+            >
+              {paymentProcessing || razorpayProcessing ? (
+                <>
+                  <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
+                  Processing payment…
+                </>
+              ) : (
+                <>
+                  <CreditCard style={{ width: 17, height: 17 }} />
+                  Pay and activate — {formatCurrency(Math.round((selectedPlanDetails.base_price * 1.18) * 100) / 100, selectedPlanDetails.currency)}
+                </>
+              )}
+            </button>
+
+            {/* Security Notice */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 14, color: 'var(--tf-ink-subtle)', fontSize: 12.5 }}>
+              <ShieldCheck style={{ width: 15, height: 15 }} />
+              <span>Secure payment processing</span>
+            </div>
           </div>
         </div>
-
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -1399,48 +1321,56 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   // Success Step UI
   if (step === 'success') {
     return (
-      <div style={containerStyle}>
-        <div style={{ ...formCardStyle, maxWidth: 480, margin: '0 auto', textAlign: 'center' }}>
-          <div style={{ width: 80, height: 80, borderRadius: '50%', backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-            <CheckCircle style={{ width: 40, height: 40, color: '#16A34A' }} />
-          </div>
-          <h2 style={{ fontSize: 28, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 }}>Welcome to TalentFlow!</h2>
-          <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: 16 }}>Your account has been created successfully.</p>
+      <div className="tf-auth">
+        <style>{AUTH_THEME_CSS}</style>
 
-          {/* Show plan info */}
-          {freeTrialAcknowledged && (
-            <div style={{
-              padding: 16,
-              backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4',
-              borderRadius: 12,
-              border: isDark ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid #BBF7D0',
-              marginBottom: 24,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
-                <Sparkles style={{ width: 20, height: 20, color: '#059669' }} />
-                <span style={{ fontSize: 16, fontWeight: 600, color: '#166534' }}>
-                  {trialDays}-{trialDays === 1 ? 'Day' : 'Days'} Free Trial Activated
-                </span>
-              </div>
-              <p style={{ fontSize: 14, color: '#15803D' }}>
-                Explore all premium features. Upgrade anytime from your dashboard.
-              </p>
+        <div className="tf-auth-main">
+          <div className="tf-auth-card" style={{ textAlign: 'center' }}>
+            <div
+              className="tf-auth-feature-icon"
+              style={{
+                width: 52,
+                height: 52,
+                margin: '0 auto 20px',
+                background: 'var(--tf-success-tint)',
+                color: 'var(--tf-success-ink)',
+              }}
+            >
+              <CheckCircle style={{ width: 26, height: 26 }} />
             </div>
-          )}
+            <h2 className="tf-auth-title">Welcome to TalentFlow</h2>
+            <p className="tf-auth-subtitle" style={{ marginBottom: 20 }}>Your account has been created successfully.</p>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: isDark ? '#9CA3AF' : '#6B7280' }}>
-            <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
-            Redirecting to login...
+            {/* Show plan info */}
+            {freeTrialAcknowledged && (
+              <div className="tf-auth-alert tf-auth-alert--success" style={{ display: 'block', textAlign: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4 }}>
+                  <Sparkles style={{ width: 17, height: 17 }} />
+                  <span style={{ fontWeight: 600 }}>
+                    {trialDays}-{trialDays === 1 ? 'day' : 'day'} free trial activated
+                  </span>
+                </div>
+                <p style={{ margin: 0, opacity: 0.85 }}>
+                  Explore all premium features. Upgrade anytime from your dashboard.
+                </p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--tf-ink-subtle)', fontSize: 13.5 }}>
+              <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
+              Redirecting to sign in…
+            </div>
           </div>
         </div>
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   // Main Form UI
   return (
-    <div style={containerStyle}>
+    <div className="tf-auth tf-auth--split">
+      <style>{AUTH_THEME_CSS}</style>
+
       {/* Plan Selection Modal - shown when no plan in URL */}
       <PlanSelectionModal
         isOpen={showPlanModal}
@@ -1448,232 +1378,169 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         onClose={() => router.push('/pricing')}
       />
 
-      {/* Background Blobs */}
-      <div style={{ position: 'absolute', top: 80, left: 40, width: 288, height: 288, backgroundColor: '#93C5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
-      <div style={{ position: 'absolute', top: 160, right: 40, width: 288, height: 288, backgroundColor: '#C4B5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
-      <div style={{ position: 'absolute', bottom: -32, left: '50%', width: 288, height: 288, backgroundColor: '#A5B4FC', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
+      <div className="tf-auth-shell">
+        {/* Left column — the same shared brand panel Login uses, so the two
+            screens read as one product. */}
+        <AuthBrandPanel
+          onBackToPublic={onBackToPublic}
+          label="TalentFlow sign up overview"
+          headline={<>
+            Start your<br />
+            <span className="tf-accent">recruitment journey</span>
+          </>}
+          lede={<>
+            Create your organization&apos;s recruitment workspace in minutes and start
+            hiring smarter with AI-powered tools.
+          </>}
+        />
 
-      <div style={contentStyle}>
-        {/* Left Side - Branding */}
-        <div style={leftSideStyle}>
-          <div style={logoContainerStyle}>
-            <div style={logoBoxStyle}>
-              <Briefcase style={{ width: 28, height: 28, color: '#ffffff' }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 32, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>TalentFlow</div>
-              <div style={{ fontSize: 14, color: '#2563EB' }}>Recruitment Platform</div>
-            </div>
-          </div>
-
-          <h2 style={{ fontSize: 48, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', lineHeight: 1.2, marginBottom: 24 }}>
-            Start Your<br />
-            <span style={{ background: 'linear-gradient(to right, #2563EB, #4338CA)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Recruitment Journey</span>
-          </h2>
-
-          <p style={{ fontSize: 18, color: isDark ? '#9CA3AF' : '#6B7280', lineHeight: 1.6, marginBottom: 32, maxWidth: 480 }}>
-            Create your organization's recruitment workspace in minutes. Start hiring smarter today with AI-powered tools.
-          </p>
-
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <CheckCircle style={{ width: 20, height: 20, color: '#16A34A' }} />
-              </div>
-              <div>
-                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>{trialDays}-{trialDays === 1 ? 'Day' : 'Days'} Free Trial</div>
-                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>No credit card required</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: isDark ? 'rgba(37, 99, 235, 0.2)' : '#DBEAFE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ShieldCheck style={{ width: 20, height: 20, color: '#2563EB' }} />
-              </div>
-              <div>
-                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>Business Email Verification</div>
-                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Secure account setup</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Building2 style={{ width: 20, height: 20, color: '#7C3AED' }} />
-              </div>
-              <div>
-                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>Isolated Workspace</div>
-                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Secure, dedicated database for your data</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Side - Form */}
-        <div style={formContainerStyle}>
-          <div style={formCardStyle}>
+        {/* Right column — the form */}
+        <div className="tf-auth-main" style={formWidthVar}>
+          <div className="tf-auth-card">
             {/* Back Button */}
             {onBackToPublic && (
-              <button type="button" onClick={onBackToPublic} style={{ display: 'flex', alignItems: 'center', gap: 8, color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer' }}>
-                <ArrowLeft style={{ width: 16, height: 16 }} />
-                <span>Back to Home</span>
+              <button type="button" onClick={onBackToPublic} className="tf-auth-back">
+                <ArrowLeft style={{ width: 15, height: 15 }} />
+                <span>Back to home</span>
               </button>
             )}
 
-            {/* Mobile Logo */}
-            {isMobile && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 32 }}>
-                <div style={{ ...logoBoxStyle, width: 48, height: 48 }}>
-                  <Briefcase style={{ width: 24, height: 24, color: '#ffffff' }} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>TalentFlow</div>
-                  <div style={{ fontSize: 12, color: '#2563EB' }}>Recruitment Platform</div>
-                </div>
+            {/* Compact lockup — only rendered visibly on narrow viewports */}
+            <div className="tf-auth-lockup tf-auth-lockup--card">
+              <div className="tf-auth-brandmark tf-auth-brandmark--sm">
+                <Briefcase style={{ width: 19, height: 19 }} />
               </div>
-            )}
+              <div>
+                <div className="tf-auth-wordmark" style={{ fontSize: 18 }}>TalentFlow</div>
+                <div className="tf-auth-wordmark-sub">Recruitment Platform</div>
+              </div>
+            </div>
 
-            <h2 style={{ fontSize: 28, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 }}>Create Account</h2>
-            <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: 16 }}>Set up your recruitment workspace</p>
+            <h2 className="tf-auth-title">Create account</h2>
+            <p className="tf-auth-subtitle">Set up your recruitment workspace.</p>
 
             {/* Selected Plan Indicator */}
             {(freeTrialAcknowledged || selectedPlanDetails) && (
               <div
+                className="tf-auth-panel"
                 style={{
-                  marginBottom: 24,
-                  padding: 16,
-                  borderRadius: 12,
-                  backgroundColor: freeTrialAcknowledged
-                    ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4')
-                    : (isDark ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF'),
-                  border: freeTrialAcknowledged
-                    ? `1px solid ${isDark ? 'rgba(16, 185, 129, 0.3)' : '#BBF7D0'}`
-                    : `1px solid ${isDark ? 'rgba(37, 99, 235, 0.3)' : '#BFDBFE'}`,
+                  marginBottom: 22,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  gap: 12,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
-                      backgroundColor: freeTrialAcknowledged
-                        ? (isDark ? 'rgba(16, 185, 129, 0.2)' : '#D1FAE5')
-                        : (isDark ? 'rgba(37, 99, 235, 0.2)' : '#DBEAFE'),
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {freeTrialAcknowledged ? (
-                      <Sparkles style={{ width: 20, height: 20, color: '#059669' }} />
-                    ) : (
-                      <CreditCard style={{ width: 20, height: 20, color: '#2563EB' }} />
-                    )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                  <div className="tf-auth-feature-icon">
+                    {freeTrialAcknowledged
+                      ? <Sparkles style={{ width: 18, height: 18 }} />
+                      : <CreditCard style={{ width: 18, height: 18 }} />}
                   </div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: freeTrialAcknowledged ? (isDark ? '#6EE7B7' : '#166534') : (isDark ? '#93C5FD' : '#1E40AF') }}>
-                      {freeTrialAcknowledged ? `Free Trial (${trialDays} days)` : selectedPlanDetails?.plan_name}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--tf-ink)' }}>
+                      {freeTrialAcknowledged ? `Free trial (${trialDays} days)` : selectedPlanDetails?.plan_name}
                     </div>
-                    <div style={{ fontSize: 12, color: freeTrialAcknowledged ? (isDark ? '#6EE7B7' : '#15803D') : '#3B82F6' }}>
-                      {freeTrialAcknowledged ? 'No credit card required' : `${formatCurrency(selectedPlanDetails?.base_price || 0, selectedPlanDetails?.currency || 'INR')} / ${billingInterval === 'ANNUAL' ? 'year' : 'month'}`}
+                    <div style={{ fontSize: 12.5, color: 'var(--tf-ink-subtle)' }}>
+                      {freeTrialAcknowledged
+                        ? 'No credit card required'
+                        : `${formatCurrency(selectedPlanDetails?.base_price || 0, selectedPlanDetails?.currency || 'INR')} / ${billingInterval === 'ANNUAL' ? 'year' : 'month'}`}
                     </div>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowPlanModal(true)}
-                  style={{
-                    padding: '6px 12px',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: freeTrialAcknowledged ? (isDark ? '#6EE7B7' : '#166534') : (isDark ? '#93C5FD' : '#1E40AF'),
-                    backgroundColor: 'transparent',
-                    border: freeTrialAcknowledged
-                      ? `1px solid ${isDark ? 'rgba(16, 185, 129, 0.4)' : '#86EFAC'}`
-                      : `1px solid ${isDark ? 'rgba(37, 99, 235, 0.4)' : '#93C5FD'}`,
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                  }}
+                  className="tf-auth-btn tf-auth-btn--outline tf-auth-btn--auto tf-auth-btn--sm"
+                  style={{ flexShrink: 0 }}
                 >
-                  Change Plan
+                  Change plan
                 </button>
               </div>
             )}
 
             {error && (
-              <div style={{ marginBottom: 24, padding: 16, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2', border: isDark ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid #FECACA', borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-                <span style={{ fontSize: 14, color: isDark ? '#FCA5A5' : '#991B1B' }}>{error}</span>
+              <div className="tf-auth-alert tf-auth-alert--danger">
+                <AlertCircle style={{ width: 17, height: 17 }} />
+                <span>{error}</span>
               </div>
             )}
 
             <form onSubmit={handleSubmit}>
               {/* Company Name */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>Company Name</label>
-                <div style={{ position: 'relative' }}>
-                  <Building2 style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
+              <div className="tf-auth-field">
+                <label className="tf-auth-label" htmlFor="tf-signup-company">Company name</label>
+                <div className="tf-auth-control">
+                  <span className="tf-auth-control-icon">
+                    <Building2 style={{ width: 17, height: 17 }} />
+                  </span>
                   <input
+                    id="tf-signup-company"
                     type="text"
                     value={form.companyName}
                     onChange={handleChange('companyName')}
                     placeholder="Acme Corporation"
                     required
                     maxLength={100}
-                    style={{ ...inputStyle, borderColor: companyNameError ? '#EF4444' : (isDark ? '#4B5563' : '#D1D5DB') }}
+                    className={`tf-auth-input${companyNameError ? ' is-invalid' : ''}`}
                   />
                 </div>
                 {companyNameError && (
-                  <p style={{ marginTop: 4, fontSize: 12, color: '#EF4444' }}>{companyNameError}</p>
+                  <p className="tf-auth-field-error">
+                    <AlertCircle style={{ width: 13, height: 13 }} />
+                    {companyNameError}
+                  </p>
                 )}
               </div>
 
               {/* Admin Name */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>Your Name</label>
-                <div style={{ position: 'relative' }}>
-                  <User style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
+              <div className="tf-auth-field">
+                <label className="tf-auth-label" htmlFor="tf-signup-name">Your name</label>
+                <div className="tf-auth-control">
+                  <span className="tf-auth-control-icon">
+                    <User style={{ width: 17, height: 17 }} />
+                  </span>
                   <input
+                    id="tf-signup-name"
                     type="text"
                     value={form.adminName}
                     onChange={handleChange('adminName')}
                     placeholder="John Smith"
                     required
                     maxLength={100}
-                    style={{ ...inputStyle, borderColor: adminNameError ? '#EF4444' : (isDark ? '#4B5563' : '#D1D5DB') }}
+                    className={`tf-auth-input${adminNameError ? ' is-invalid' : ''}`}
                   />
                 </div>
                 {adminNameError && (
-                  <p style={{ marginTop: 4, fontSize: 12, color: '#EF4444' }}>{adminNameError}</p>
+                  <p className="tf-auth-field-error">
+                    <AlertCircle style={{ width: 13, height: 13 }} />
+                    {adminNameError}
+                  </p>
                 )}
               </div>
 
               {/* Work Email with OTP */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>
-                  Work Email <span style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: 400 }}>(Business email only)</span>
+              <div className="tf-auth-field">
+                <label className="tf-auth-label" htmlFor="tf-signup-email">
+                  Work email <span className="tf-auth-label-note">(business email only)</span>
                 </label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <Mail style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <div className="tf-auth-control" style={{ flex: 1 }}>
+                    <span className="tf-auth-control-icon">
+                      <Mail style={{ width: 17, height: 17 }} />
+                    </span>
                     <input
+                      id="tf-signup-email"
                       type="email"
                       value={form.adminEmail}
                       onChange={handleChange('adminEmail')}
                       placeholder="john@acme.com"
                       required
                       disabled={otpSent}
-                      style={{
-                        ...inputStyle,
-                        borderColor: otpVerified ? '#10B981' : emailError ? '#EF4444' : (isDark ? '#4B5563' : '#D1D5DB'),
-                        backgroundColor: otpSent
-                          ? (otpVerified ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4') : (isDark ? '#374151' : '#F9FAFB'))
-                          : (isDark ? '#374151' : '#F9FAFB'),
-                      }}
+                      className={`tf-auth-input${otpVerified ? ' is-valid tf-auth-input--reveal' : emailError ? ' is-invalid' : ''}`}
                     />
                     {otpVerified && (
-                      <CheckCircle style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#10B981' }} />
+                      <CheckCircle style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', width: 17, height: 17, color: 'var(--tf-success)' }} />
                     )}
                   </div>
                   {!otpVerified && (
@@ -1681,52 +1548,40 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                       type="button"
                       onClick={handleGetOtp}
                       disabled={!isEmailValidForOtp() || isSendingOtp || otpSent}
-                      style={{
-                        padding: '12px 20px',
-                        background: otpSent ? '#10B981' : isEmailValidForOtp() ? 'linear-gradient(to right, #2563EB, #4338CA)' : (isDark ? '#374151' : '#E5E7EB'),
-                        color: otpSent || isEmailValidForOtp() ? '#fff' : '#9CA3AF',
-                        fontSize: 14,
-                        fontWeight: 500,
-                        borderRadius: 12,
-                        border: 'none',
-                        cursor: !isEmailValidForOtp() || isSendingOtp ? 'not-allowed' : 'pointer',
-                        opacity: isSendingOtp ? 0.7 : 1,
-                        whiteSpace: 'nowrap',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                      }}
+                      className={`tf-auth-btn tf-auth-btn--auto${otpSent || isSendingOtp ? ' tf-auth-btn--busy' : ''}`}
+                      style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
                     >
                       {isSendingOtp ? (
                         <>
-                          <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />
-                          Sending...
+                          <Loader2 className="tf-auth-spin" style={{ width: 15, height: 15 }} />
+                          Sending…
                         </>
                       ) : otpSent ? (
                         <>
-                          <CheckCircle style={{ width: 16, height: 16 }} />
-                          OTP Sent
+                          <CheckCircle style={{ width: 15, height: 15 }} />
+                          Code sent
                         </>
                       ) : (
-                        'Get OTP'
+                        'Get code'
                       )}
                     </button>
                   )}
                 </div>
                 {emailError && (
-                  <p style={{ marginTop: 6, fontSize: 13, color: '#DC2626', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <AlertCircle style={{ width: 14, height: 14 }} />
+                  <p className="tf-auth-field-error">
+                    <AlertCircle style={{ width: 13, height: 13 }} />
                     {emailError}
                   </p>
                 )}
 
                 {/* Inline OTP Input */}
                 {otpSent && !otpVerified && (
-                  <div style={{ marginTop: 16, padding: 16, backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#F0F9FF', borderRadius: 12, border: isDark ? '1px solid rgba(37, 99, 235, 0.3)' : '1px solid #BAE6FD' }}>
-                    <p style={{ fontSize: 13, color: isDark ? '#93C5FD' : '#0369A1', marginBottom: 12 }}>
-                      Enter the 6-digit code sent to <strong>{form.adminEmail}</strong>
+                  <div className="tf-auth-panel" style={{ marginTop: 14 }}>
+                    <p style={{ fontSize: 13, color: 'var(--tf-ink-muted)', margin: '0 0 12px', textAlign: 'center' }}>
+                      Enter the 6-digit code sent to{' '}
+                      <strong style={{ color: 'var(--tf-ink)', fontWeight: 600 }}>{form.adminEmail}</strong>
                     </p>
-                    <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
+                    <div className="tf-auth-otp-row" style={{ marginBottom: 12 }}>
                       {otpCode.map((digit, index) => (
                         <input
                           key={index}
@@ -1738,60 +1593,35 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                           onChange={(e) => handleOtpChange(index, e.target.value)}
                           onKeyDown={(e) => handleOtpKeyDown(index, e)}
                           disabled={isVerifying}
-                          style={{
-                            width: 44,
-                            height: 48,
-                            textAlign: 'center',
-                            fontSize: 20,
-                            fontWeight: 600,
-                            color: isDark ? '#F9FAFB' : '#111827',
-                            border: isDark ? '2px solid #4B5563' : '2px solid #D1D5DB',
-                            borderRadius: 8,
-                            outline: 'none',
-                            transition: 'all 0.2s',
-                            backgroundColor: isVerifying ? (isDark ? '#374151' : '#F3F4F6') : (isDark ? '#1F2937' : '#fff'),
-                          }}
-                          onFocus={(e) => { e.target.style.borderColor = '#2563EB'; }}
-                          onBlur={(e) => { e.target.style.borderColor = isDark ? '#4B5563' : '#D1D5DB'; }}
+                          aria-label={`Digit ${index + 1} of 6`}
+                          className="tf-auth-otp"
+                          style={{ width: 40, height: 46, fontSize: 18 }}
                         />
                       ))}
                     </div>
                     {isVerifying && (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#2563EB', fontSize: 13 }}>
-                        <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />
-                        Verifying...
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--tf-brand-ink)', fontSize: 12.5, marginBottom: 10 }}>
+                        <Loader2 className="tf-auth-spin" style={{ width: 15, height: 15 }} />
+                        Verifying…
                       </div>
                     )}
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 14, fontSize: 13 }}>
                       <button
                         type="button"
                         onClick={handleResendOtp}
                         disabled={isSendingOtp || resendTimer > 0}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: resendTimer > 0 ? '#9CA3AF' : '#2563EB',
-                          fontWeight: 500,
-                          cursor: resendTimer > 0 ? 'default' : 'pointer',
-                          fontSize: 13,
-                        }}
+                        className="tf-auth-link"
                       >
-                        {isSendingOtp ? 'Sending...' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend Code'}
+                        {isSendingOtp ? 'Sending…' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend code'}
                       </button>
-                      <span style={{ color: isDark ? '#4B5563' : '#D1D5DB' }}>|</span>
+                      <span aria-hidden="true" style={{ color: 'var(--tf-border-strong)' }}>|</span>
                       <button
                         type="button"
                         onClick={handleChangeEmail}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#DC2626',
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                          fontSize: 13,
-                        }}
+                        className="tf-auth-link"
+                        style={{ color: 'var(--tf-ink-muted)' }}
                       >
-                        Change Email
+                        Change email
                       </button>
                     </div>
                   </div>
@@ -1799,69 +1629,80 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
                 {/* OTP Verified Success */}
                 {otpVerified && (
-                  <p style={{ marginTop: 8, fontSize: 13, color: '#059669', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <CheckCircle style={{ width: 14, height: 14 }} />
+                  <p className="tf-auth-field-success">
+                    <CheckCircle style={{ width: 13, height: 13 }} />
                     Email verified successfully
                   </p>
                 )}
               </div>
 
               {/* Phone Number */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>Phone Number</label>
-                <div style={{ position: 'relative' }}>
-                  <Phone style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
+              <div className="tf-auth-field">
+                <label className="tf-auth-label" htmlFor="tf-signup-phone">Phone number</label>
+                <div className="tf-auth-control">
+                  <span className="tf-auth-control-icon">
+                    <Phone style={{ width: 17, height: 17 }} />
+                  </span>
                   <input
+                    id="tf-signup-phone"
                     type="tel"
                     value={form.phoneNumber}
                     onChange={handleChange('phoneNumber')}
                     placeholder="+91 98765 43210"
                     required
-                    style={inputStyle}
+                    className="tf-auth-input"
                   />
                 </div>
               </div>
 
               {/* Passwords */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>Password</label>
-                  <div style={{ position: 'relative' }}>
-                    <Lock style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
+              <div className="tf-auth-grid-2">
+                <div className="tf-auth-field">
+                  <label className="tf-auth-label" htmlFor="tf-signup-password">Password</label>
+                  <div className="tf-auth-control">
+                    <span className="tf-auth-control-icon">
+                      <Lock style={{ width: 17, height: 17 }} />
+                    </span>
                     <input
+                      id="tf-signup-password"
                       type={showPassword ? 'text' : 'password'}
                       value={form.password}
                       onChange={handleChange('password')}
-                      placeholder="Min 8 chars"
+                      placeholder="Min 8 characters"
                       required
-                      style={{
-                        ...inputStyle,
-                        paddingRight: 40,
-                        borderColor: form.password ? (passwordStrength === 5 ? '#10B981' : passwordStrength >= 3 ? '#F59E0B' : '#EF4444') : (isDark ? '#4B5563' : '#D1D5DB'),
-                      }}
+                      className={`tf-auth-input tf-auth-input--reveal${form.password ? (passwordStrength === 5 ? ' is-valid' : passwordStrength >= 3 ? '' : ' is-invalid') : ''}`}
                     />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="tf-auth-reveal"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
                       {showPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
                     </button>
                   </div>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>Confirm Password</label>
-                  <div style={{ position: 'relative' }}>
-                    <Lock style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
+                <div className="tf-auth-field">
+                  <label className="tf-auth-label" htmlFor="tf-signup-confirm">Confirm password</label>
+                  <div className="tf-auth-control">
+                    <span className="tf-auth-control-icon">
+                      <Lock style={{ width: 17, height: 17 }} />
+                    </span>
                     <input
+                      id="tf-signup-confirm"
                       type={showConfirmPassword ? 'text' : 'password'}
                       value={form.confirmPassword}
                       onChange={handleChange('confirmPassword')}
-                      placeholder="Confirm password"
+                      placeholder="Re-enter password"
                       required
-                      style={{
-                        ...inputStyle,
-                        paddingRight: 40,
-                        borderColor: form.confirmPassword ? (passwordsMatch ? '#10B981' : '#EF4444') : (isDark ? '#4B5563' : '#D1D5DB'),
-                      }}
+                      className={`tf-auth-input tf-auth-input--reveal${form.confirmPassword ? (passwordsMatch ? ' is-valid' : ' is-invalid') : ''}`}
                     />
-                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="tf-auth-reveal"
+                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
                       {showConfirmPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
                     </button>
                   </div>
@@ -1870,14 +1711,10 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
               {/* Password Requirements - Live Validation */}
               {(form.password || form.confirmPassword) && (
-                <div style={{
-                  marginBottom: 16,
-                  padding: 16,
-                  backgroundColor: isDark ? '#374151' : '#F9FAFB',
-                  border: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB',
-                  borderRadius: 12
-                }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 10 }}>Password Requirements:</p>
+                <div className="tf-auth-panel" style={{ marginBottom: 18 }}>
+                  <p style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tf-ink-muted)', margin: '0 0 10px' }}>
+                    Password requirements
+                  </p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
                     {[
                       { label: 'At least 8 characters', check: passwordChecks.length },
@@ -1889,45 +1726,54 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     ].map((req, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <CheckCircle style={{
-                          width: 16,
-                          height: 16,
-                          color: req.check ? '#10B981' : (isDark ? '#4B5563' : '#D1D5DB'),
-                          transition: 'color 0.2s'
+                          width: 15,
+                          height: 15,
+                          flexShrink: 0,
+                          color: req.check ? 'var(--tf-success)' : 'var(--tf-border-strong)',
+                          transition: 'color 0.2s',
                         }} />
                         <span style={{
-                          fontSize: 13,
-                          color: req.check ? '#059669' : (isDark ? '#9CA3AF' : '#6B7280'),
-                          transition: 'color 0.2s'
+                          fontSize: 12.5,
+                          color: req.check ? 'var(--tf-ink-muted)' : 'var(--tf-ink-subtle)',
+                          transition: 'color 0.2s',
                         }}>
                           {req.label}
                         </span>
                       </div>
                     ))}
                   </div>
+
                   {/* Strength Bar */}
-                  <div style={{ marginTop: 12 }}>
+                  <div style={{ marginTop: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>Password Strength</span>
+                      <span style={{ fontSize: 12, color: 'var(--tf-ink-subtle)' }}>Password strength</span>
                       <span style={{
                         fontSize: 12,
                         fontWeight: 600,
-                        color: passwordStrength <= 2 ? '#EF4444' : passwordStrength <= 3 ? '#F59E0B' : passwordStrength <= 4 ? '#3B82F6' : '#10B981'
+                        color: passwordStrength <= 2
+                          ? 'var(--tf-danger)'
+                          : passwordStrength <= 3
+                            ? 'var(--tf-warning)'
+                            : passwordStrength <= 4
+                              ? 'var(--tf-brand-ink)'
+                              : 'var(--tf-success-ink)',
                       }}>
-                        {passwordStrength === 0 ? 'Too Weak' : passwordStrength <= 2 ? 'Weak' : passwordStrength <= 3 ? 'Fair' : passwordStrength <= 4 ? 'Good' : 'Strong'}
+                        {passwordStrength === 0 ? 'Too weak' : passwordStrength <= 2 ? 'Weak' : passwordStrength <= 3 ? 'Fair' : passwordStrength <= 4 ? 'Good' : 'Strong'}
                       </span>
                     </div>
-                    <div style={{
-                      height: 6,
-                      backgroundColor: isDark ? '#4B5563' : '#E5E7EB',
-                      borderRadius: 3,
-                      overflow: 'hidden'
-                    }}>
+                    <div style={{ height: 5, background: 'var(--tf-surface-sunken)', border: '1px solid var(--tf-border)', borderRadius: 999, overflow: 'hidden' }}>
                       <div style={{
                         height: '100%',
                         width: `${(passwordStrength / 5) * 100}%`,
-                        backgroundColor: passwordStrength <= 2 ? '#EF4444' : passwordStrength <= 3 ? '#F59E0B' : passwordStrength <= 4 ? '#3B82F6' : '#10B981',
-                        borderRadius: 3,
-                        transition: 'all 0.3s ease'
+                        background: passwordStrength <= 2
+                          ? 'var(--tf-danger)'
+                          : passwordStrength <= 3
+                            ? 'var(--tf-warning)'
+                            : passwordStrength <= 4
+                              ? 'var(--tf-brand)'
+                              : 'var(--tf-success)',
+                        borderRadius: 999,
+                        transition: 'width 0.3s ease, background-color 0.3s ease',
                       }} />
                     </div>
                   </div>
@@ -1938,81 +1784,114 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               <button
                 type="submit"
                 disabled={isLoading || !isFormComplete}
-                style={{
-                  ...submitButtonStyle,
-                  opacity: isLoading || !isFormComplete ? 0.5 : 1,
-                  cursor: isLoading || !isFormComplete ? 'not-allowed' : 'pointer',
-                }}
+                className={`tf-auth-btn${isLoading ? ' tf-auth-btn--busy' : ''}`}
+                style={{ marginTop: 4 }}
               >
                 {isLoading ? (
                   <>
-                    <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
-                    Creating your workspace...
+                    <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
+                    Creating your workspace…
                   </>
                 ) : !otpVerified ? (
                   <>
-                    Verify Email First
-                    <Mail style={{ width: 20, height: 20 }} />
+                    <Mail style={{ width: 17, height: 17 }} />
+                    Verify email first
                   </>
                 ) : (
                   <>
-                    <FileText style={{ width: 20, height: 20 }} />
-                    View Terms & Conditions
+                    <FileText style={{ width: 17, height: 17 }} />
+                    Review terms and continue
                   </>
                 )}
               </button>
             </form>
 
             {/* Footer */}
-            <div style={{ marginTop: 24, paddingTop: 24, borderTop: isDark ? '1px solid #374151' : '1px solid #E5E7EB', textAlign: 'center' }}>
-              <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#4B5563' }}>
-                Already have an account?{' '}
-                <button onClick={onSwitchToLogin} style={{ color: '#2563EB', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer' }}>
-                  Sign In
-                </button>
-              </span>
+            <div className="tf-auth-footer">
+              Already have an account?{' '}
+              <button type="button" onClick={onSwitchToLogin} className="tf-auth-link">
+                Sign in
+              </button>
             </div>
           </div>
 
-          <div style={{ marginTop: 24, textAlign: 'center', fontSize: 14, color: '#9CA3AF' }}>
-            © 2026 TalentFlow. All rights reserved.
-          </div>
+          <div className="tf-auth-legal">© 2026 TalentFlow. All rights reserved.</div>
         </div>
       </div>
-
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
 
       {/* Terms Consent Modal */}
       {showTermsConsentModal && (
         <div
-          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.65)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(16, 24, 40, 0.55)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 20, width: '100%', maxWidth: 720, maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: isDark ? '0 25px 60px rgba(0,0,0,0.5)' : '0 25px 60px rgba(0,0,0,0.3)' }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Review legal documents"
+            style={{
+              background: 'var(--tf-surface)',
+              border: '1px solid var(--tf-border)',
+              borderRadius: 'var(--tf-radius)',
+              boxShadow: 'var(--tf-shadow)',
+              width: '100%',
+              maxWidth: 720,
+              maxHeight: '92vh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
           >
             {/* Header */}
-            <div style={{ padding: '20px 24px', background: 'linear-gradient(135deg, #2563EB, #4338CA)', borderRadius: '20px 20px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+            <div style={{
+              padding: '18px 22px',
+              borderBottom: '1px solid var(--tf-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexShrink: 0,
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 42, height: 42, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <FileText style={{ width: 20, height: 20, color: '#fff' }} />
+                <div className="tf-auth-feature-icon">
+                  <FileText style={{ width: 18, height: 18 }} />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: 18, fontWeight: 700, color: '#fff', margin: 0 }}>Review Legal Documents</h2>
-                  <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', margin: 0 }}>Accept both documents to create your account</p>
+                  <h2 style={{ fontSize: 16.5, fontWeight: 650, letterSpacing: '-0.01em', color: 'var(--tf-ink)', margin: 0 }}>
+                    Review legal documents
+                  </h2>
+                  <p style={{ fontSize: 12.5, color: 'var(--tf-ink-subtle)', margin: '2px 0 0' }}>
+                    Accept both documents to create your account
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowTermsConsentModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.8)', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-               aria-label="Close">
-                <X style={{ width: 20, height: 20 }} />
+                className="tf-auth-reveal"
+                style={{ position: 'static', transform: 'none', width: 28, height: 28 }}
+                aria-label="Close"
+              >
+                <X style={{ width: 18, height: 18 }} />
               </button>
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', borderBottom: isDark ? '1px solid #374151' : '1px solid #E5E7EB', backgroundColor: isDark ? '#374151' : '#F9FAFB', flexShrink: 0 }}>
+            <div style={{
+              display: 'flex',
+              borderBottom: '1px solid var(--tf-border)',
+              background: 'var(--tf-surface-subtle)',
+              flexShrink: 0,
+            }}>
               {([
                 { key: 'terms' as const, label: 'Terms & Conditions', Icon: FileText, agreed: agreedToTerms },
                 { key: 'privacy' as const, label: 'Privacy Policy', Icon: Shield, agreed: agreedToPrivacy },
@@ -2023,92 +1902,137 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                   onClick={() => { setActiveTermsTab(key); setVisitedTabs(prev => new Set([...prev, key])); }}
                   style={{
                     flex: 1,
-                    padding: '13px 16px',
+                    padding: '12px 16px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 8,
-                    fontSize: 14,
-                    fontWeight: activeTermsTab === key ? 600 : 400,
-                    color: activeTermsTab === key ? '#2563EB' : (isDark ? '#9CA3AF' : '#6B7280'),
-                    backgroundColor: 'transparent',
+                    fontFamily: 'inherit',
+                    fontSize: 13.5,
+                    fontWeight: activeTermsTab === key ? 600 : 500,
+                    color: activeTermsTab === key ? 'var(--tf-brand-ink)' : 'var(--tf-ink-subtle)',
+                    background: 'transparent',
                     border: 'none',
-                    borderBottom: activeTermsTab === key ? '2px solid #2563EB' : '2px solid transparent',
+                    borderBottom: activeTermsTab === key ? '2px solid var(--tf-brand)' : '2px solid transparent',
+                    marginBottom: -1,
                     cursor: 'pointer',
-                    transition: 'all 0.2s',
+                    transition: 'color 0.15s ease, border-color 0.15s ease',
                   }}
                 >
                   <Icon style={{ width: 15, height: 15 }} />
                   {label}
-                  {agreed && <CheckCircle style={{ width: 14, height: 14, color: '#10B981' }} />}
+                  {agreed && <CheckCircle style={{ width: 14, height: 14, color: 'var(--tf-success)' }} />}
                 </button>
               ))}
             </div>
 
             {/* Document Content */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px' }}>
               {termsConsentLoading ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 16 }}>
-                  <Loader2 style={{ width: 40, height: 40, color: '#2563EB', animation: 'spin 1s linear infinite' }} />
-                  <p style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', margin: 0 }}>Loading documents...</p>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 14 }}>
+                  <Loader2 className="tf-auth-spin" style={{ width: 28, height: 28, color: 'var(--tf-brand-ink)' }} />
+                  <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', margin: 0 }}>Loading documents…</p>
                 </div>
               ) : activeTermsTab === 'terms' ? (
                 termsConsentContent.terms ? (
-                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.terms.content_html }} style={{ fontSize: 14, color: isDark ? '#D1D5DB' : '#374151', lineHeight: 1.7 }} />
+                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.terms.content_html }} style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', lineHeight: 1.7 }} />
                 ) : (
-                  <p style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', padding: 40 }}>Terms & Conditions content is currently unavailable. You may still proceed.</p>
+                  <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', textAlign: 'center', padding: 40 }}>Terms &amp; Conditions content is currently unavailable. You may still proceed.</p>
                 )
               ) : (
                 termsConsentContent.privacy ? (
-                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.privacy.content_html }} style={{ fontSize: 14, color: isDark ? '#D1D5DB' : '#374151', lineHeight: 1.7 }} />
+                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.privacy.content_html }} style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', lineHeight: 1.7 }} />
                 ) : (
-                  <p style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', padding: 40 }}>Privacy Policy content is currently unavailable. You may still proceed.</p>
+                  <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', textAlign: 'center', padding: 40 }}>Privacy Policy content is currently unavailable. You may still proceed.</p>
                 )
               )}
             </div>
 
             {/* Footer — Checkboxes + Create Account */}
-            <div style={{ padding: '20px 24px', borderTop: isDark ? '2px solid #374151' : '2px solid #E5E7EB', backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: '0 0 20px 20px', flexShrink: 0 }}>
+            <div style={{
+              padding: '18px 22px',
+              borderTop: '1px solid var(--tf-border)',
+              background: 'var(--tf-surface-subtle)',
+              flexShrink: 0,
+            }}>
               {/* Acceptance Checkboxes */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
                 {/* Terms & Conditions checkbox — enabled only after content has loaded */}
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: termsConsentLoading ? 'not-allowed' : 'pointer', padding: '10px 12px', backgroundColor: termsConsentLoading ? (isDark ? '#374151' : '#F3F4F6') : agreedToTerms ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4') : (isDark ? '#1F2937' : '#fff'), border: `1px solid ${termsConsentLoading ? (isDark ? '#4B5563' : '#E5E7EB') : agreedToTerms ? (isDark ? 'rgba(16, 185, 129, 0.3)' : '#86EFAC') : (isDark ? '#4B5563' : '#D1D5DB')}`, borderRadius: 10, transition: 'all 0.2s', opacity: termsConsentLoading ? 0.6 : 1 }}>
+                <label
+                  className="tf-auth-check"
+                  style={{
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    padding: '10px 12px',
+                    background: agreedToTerms ? 'var(--tf-brand-tint)' : 'var(--tf-surface)',
+                    border: `1px solid ${agreedToTerms ? 'var(--tf-brand-border)' : 'var(--tf-border)'}`,
+                    borderRadius: 'var(--tf-radius-sm)',
+                    cursor: termsConsentLoading ? 'not-allowed' : 'pointer',
+                    opacity: termsConsentLoading ? 0.6 : 1,
+                    transition: 'background-color 0.15s ease, border-color 0.15s ease',
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={agreedToTerms}
                     disabled={termsConsentLoading}
                     onChange={(e) => setAgreedToTerms(e.target.checked)}
-                    style={{ marginTop: 2, width: 17, height: 17, cursor: termsConsentLoading ? 'not-allowed' : 'pointer', accentColor: '#2563EB', flexShrink: 0 }}
+                    style={{ marginTop: 1 }}
                   />
-                  <span style={{ fontSize: 14, color: isDark ? '#D1D5DB' : '#374151', lineHeight: 1.5 }}>
+                  <span style={{ lineHeight: 1.5 }}>
                     I have read and agree to the{' '}
-                    <button type="button" onClick={(e) => { e.preventDefault(); setActiveTermsTab('terms'); setVisitedTabs(prev => new Set([...prev, 'terms' as const])); }} style={{ color: '#2563EB', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, textDecoration: 'underline' }}>
-                      Terms & Conditions
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setActiveTermsTab('terms'); setVisitedTabs(prev => new Set([...prev, 'terms' as const])); }}
+                      className="tf-auth-link"
+                      style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}
+                    >
+                      Terms &amp; Conditions
                     </button>
                   </span>
-                  {agreedToTerms && <CheckCircle style={{ width: 18, height: 18, color: '#10B981', flexShrink: 0, marginLeft: 'auto' }} />}
+                  {agreedToTerms && <CheckCircle style={{ width: 16, height: 16, color: 'var(--tf-success)', flexShrink: 0, marginLeft: 'auto' }} />}
                 </label>
 
                 {/* Privacy Policy checkbox — disabled until content loads and user clicks the Privacy Policy tab */}
                 <label
+                  className="tf-auth-check"
                   title={termsConsentLoading ? 'Please wait for documents to load' : !visitedTabs.has('privacy') ? 'Please read the Privacy Policy tab first' : undefined}
-                  style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: termsConsentLoading || !visitedTabs.has('privacy') ? 'not-allowed' : 'pointer', padding: '10px 12px', backgroundColor: (termsConsentLoading || !visitedTabs.has('privacy')) ? (isDark ? '#374151' : '#F3F4F6') : agreedToPrivacy ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4') : (isDark ? '#1F2937' : '#fff'), border: `1px solid ${(termsConsentLoading || !visitedTabs.has('privacy')) ? (isDark ? '#4B5563' : '#E5E7EB') : agreedToPrivacy ? (isDark ? 'rgba(16, 185, 129, 0.3)' : '#86EFAC') : (isDark ? '#4B5563' : '#D1D5DB')}`, borderRadius: 10, transition: 'all 0.2s', opacity: termsConsentLoading || !visitedTabs.has('privacy') ? 0.6 : 1 }}
+                  style={{
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    padding: '10px 12px',
+                    background: agreedToPrivacy ? 'var(--tf-brand-tint)' : 'var(--tf-surface)',
+                    border: `1px solid ${agreedToPrivacy ? 'var(--tf-brand-border)' : 'var(--tf-border)'}`,
+                    borderRadius: 'var(--tf-radius-sm)',
+                    cursor: termsConsentLoading || !visitedTabs.has('privacy') ? 'not-allowed' : 'pointer',
+                    opacity: termsConsentLoading || !visitedTabs.has('privacy') ? 0.6 : 1,
+                    transition: 'background-color 0.15s ease, border-color 0.15s ease',
+                  }}
                 >
                   <input
                     type="checkbox"
                     checked={agreedToPrivacy}
                     disabled={termsConsentLoading || !visitedTabs.has('privacy')}
                     onChange={(e) => setAgreedToPrivacy(e.target.checked)}
-                    style={{ marginTop: 2, width: 17, height: 17, cursor: termsConsentLoading || !visitedTabs.has('privacy') ? 'not-allowed' : 'pointer', accentColor: '#2563EB', flexShrink: 0 }}
+                    style={{ marginTop: 1 }}
                   />
-                  <span style={{ fontSize: 14, color: visitedTabs.has('privacy') ? (isDark ? '#D1D5DB' : '#374151') : '#9CA3AF', lineHeight: 1.5 }}>
+                  <span style={{ lineHeight: 1.5 }}>
                     I have read and agree to the{' '}
-                    <button type="button" onClick={(e) => { e.preventDefault(); setActiveTermsTab('privacy'); setVisitedTabs(prev => new Set([...prev, 'privacy' as const])); }} style={{ color: '#2563EB', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, textDecoration: 'underline' }}>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setActiveTermsTab('privacy'); setVisitedTabs(prev => new Set([...prev, 'privacy' as const])); }}
+                      className="tf-auth-link"
+                      style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}
+                    >
                       Privacy Policy
                     </button>
-                    {!visitedTabs.has('privacy') && <span style={{ fontSize: 12, color: '#F59E0B', marginLeft: 6, fontWeight: 500 }}>← Read first</span>}
+                    {!visitedTabs.has('privacy') && (
+                      <span style={{ fontSize: 12, color: 'var(--tf-warning)', marginLeft: 6, fontWeight: 500 }}>
+                        Read this tab first
+                      </span>
+                    )}
                   </span>
-                  {agreedToPrivacy && <CheckCircle style={{ width: 18, height: 18, color: '#10B981', flexShrink: 0, marginLeft: 'auto' }} />}
+                  {agreedToPrivacy && <CheckCircle style={{ width: 16, height: 16, color: 'var(--tf-success)', flexShrink: 0, marginLeft: 'auto' }} />}
                 </label>
               </div>
 
@@ -2117,33 +2041,17 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 type="button"
                 onClick={handleCreateAccount}
                 disabled={!agreedToTerms || !agreedToPrivacy || isLoading || termsConsentLoading}
-                style={{
-                  width: '100%',
-                  padding: '14px 24px',
-                  background: agreedToTerms && agreedToPrivacy && !termsConsentLoading ? 'linear-gradient(135deg, #2563EB, #4338CA)' : (isDark ? '#374151' : '#E5E7EB'),
-                  color: agreedToTerms && agreedToPrivacy && !termsConsentLoading ? '#ffffff' : '#9CA3AF',
-                  fontSize: 16,
-                  fontWeight: 600,
-                  borderRadius: 12,
-                  border: 'none',
-                  cursor: agreedToTerms && agreedToPrivacy && !isLoading && !termsConsentLoading ? 'pointer' : 'not-allowed',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                  transition: 'all 0.3s',
-                  boxShadow: agreedToTerms && agreedToPrivacy && !termsConsentLoading ? '0 8px 30px rgba(37, 99, 235, 0.35)' : 'none',
-                }}
+                className={`tf-auth-btn${isLoading ? ' tf-auth-btn--busy' : ''}`}
               >
                 {isLoading ? (
                   <>
-                    <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
-                    Creating your workspace...
+                    <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
+                    Creating your workspace…
                   </>
                 ) : (
                   <>
-                    <ArrowRight style={{ width: 20, height: 20 }} />
-                    Create Account
+                    Create account
+                    <ArrowRight style={{ width: 17, height: 17 }} />
                   </>
                 )}
               </button>
