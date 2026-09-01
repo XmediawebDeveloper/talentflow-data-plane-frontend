@@ -438,16 +438,26 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               ...resume,
               // Store the actual resume ID (different from score ID!)
               resumeId: actualResumeId,
-              // Scoring-specific data
-              scorePercentage: Number((completeResumeData.overall_score || 0).toFixed(1)),  // Keep 1 decimal for consistency
+              /* Scoring-specific data. `resume` (the row that was actually
+                 clicked, e.g. from the scored-resumes list) is kept as the
+                 source of truth for the score itself — it's what the user
+                 just saw and picked. `completeResumeData` here comes from a
+                 SEPARATE jobId-scoped lookup matched only by score id, and
+                 a candidate scored more than once against the same job (or
+                 across job versions) can have that lookup land on the wrong
+                 attempt's record, silently swapping in a different score
+                 than the one the user clicked (seen live: a 100% row opening
+                 to show 85%). Only fall back to the refetched value when the
+                 original genuinely has none. */
+              scorePercentage: resume.scorePercentage ?? Number((completeResumeData.overall_score || 0).toFixed(1)),
               criteriaScores: completeResumeData.criteria_scores || {},
               scoreBreakdown: completeResumeData.score_breakdown || [],
-              aiSummary: completeResumeData.ai_summary,
-              strengths: completeResumeData.strengths || [],
-              gaps: completeResumeData.gaps || [],
-              scoredDate: completeResumeData.created_at,
-              matchStatus: completeResumeData.match_status,
-              scoredBy: completeResumeData.scored_by || completeResumeData.scored_by_name || resume.scoredBy || 'System',
+              aiSummary: resume.aiSummary || completeResumeData.ai_summary,
+              strengths: resume.strengths?.length ? resume.strengths : (completeResumeData.strengths || []),
+              gaps: resume.gaps?.length ? resume.gaps : (completeResumeData.gaps || []),
+              scoredDate: resume.scoredDate || completeResumeData.created_at,
+              matchStatus: resume.matchStatus || completeResumeData.match_status,
+              scoredBy: resume.scoredBy || completeResumeData.scored_by || completeResumeData.scored_by_name || 'System',
               // Full resume data for Personal Info tab (prioritize full resume over scored resume)
               // Note: Backend returns snake_case, we map to camelCase for frontend
               candidateName: fr?.candidate_name || resume.candidateName,
