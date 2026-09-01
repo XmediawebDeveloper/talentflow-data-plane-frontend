@@ -786,17 +786,21 @@ export default function StepSystemCheck({
   // for "this machine has a built-in mic to fall back to." Desktops typically
   // have no built-in mic (the headset IS the only device), so this naturally
   // only kicks in on machines that do.
-  //   - Alternate found  → switch to it silently, check stays 'pass' (no popup).
+  //   - Alternate found  → switch to it silently; check reports 'pass' only
+  //                        when this run WAS the explicit check (see
+  //                        `viaExplicitCheck` below) — otherwise the row is
+  //                        left for Run Check/Retry to confirm, same as every
+  //                        other silent device change (no popup either way).
   //   - None found       → fail the check and show the reconnect popup.
   // NOTE: this never sets micDisconnectedPopup itself — only the live watch
   // effect below does that (see its handleDisconnect), because it's the only
   // caller that KNOWS this is a genuine regression (the mic was passing and
   // just died). This function is also called from runMicrophone's plain
-  // failure path — used by the very first "Run Check", a manual Retry click,
-  // AND the auto-select-single-device effect that fires silently the moment
-  // the System Check page loads, before the candidate has done anything. If
-  // this set the popup on every failure, that background auto-select attempt
-  // alone could pop the reconnect modal before checks even ran once.
+  // failure path — used by the very first "Run Check" and a manual Retry
+  // click, where reporting 'pass' is correct because Run Check/Retry IS what
+  // the candidate just clicked. If this set the popup on every failure, a
+  // background retry attempt alone could pop the reconnect modal before
+  // checks even ran once.
   //
   // `allowFallback: false` disables the silent switch entirely and forces the
   // plain-failure path. Used when the mic dies mid voice-verification: the
@@ -804,9 +808,18 @@ export default function StepSystemCheck({
   // so quietly re-pointing them at the laptop's built-in mic and carrying on
   // would enroll the WRONG device. That case has to surface as a real "no
   // microphone" stop, exactly like a machine with no fallback at all.
+  //
+  // `viaExplicitCheck` marks that THIS call is itself running as part of an
+  // explicit "Run Check" / "Retry" click (i.e. called from runMicrophone).
+  // Only then may a successful fallback report 'pass' — mirroring the rule
+  // markAudioChecksUnverified documents for every other audio check: no check
+  // may pass as a side effect of a device merely being plugged in. The other
+  // caller, the live-disconnect watcher, runs completely in the background
+  // (no candidate action) and must not silently claim a pass on its behalf.
   const tryMicFallbackOrFail = useCallback(async (
     deadDeviceId: string,
     allowFallback = true,
+    viaExplicitCheck = false,
   ): Promise<boolean> => {
     let fallbackDeviceId: string | null = null;
     try {
@@ -824,10 +837,17 @@ export default function StepSystemCheck({
       const analyser = await ensureAudioAnalyser();
       if (analyser) {
         setMicStreamReady(true);
-        updateSystemCheck('microphone', {
-          status: 'pass',
-          detail: 'Microphone active — switched to built-in microphone after headset disconnected',
-        });
+        if (viaExplicitCheck) {
+          updateSystemCheck('microphone', {
+            status: 'pass',
+            detail: 'Microphone active — switched to built-in microphone after headset disconnected',
+          });
+        } else if (checksCompleted) {
+          updateSystemCheck('microphone', { status: 'fail', detail: 'Click Retry to verify this microphone' });
+        }
+        // else: Run Check hasn't completed a first pass yet — leave the row at
+        // its current 'pending' state, same as markAudioChecksUnverified does
+        // before the first run.
         void refreshDeviceLists();
         return true;
       }
@@ -841,7 +861,7 @@ export default function StepSystemCheck({
       detail: 'No microphone detected — please connect a microphone',
     });
     return false;
-  }, [ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists]);
+  }, [ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists, checksCompleted]);
 
   // ── Individual checks — each self-contained so it can run standalone (retry) ──
   const runDevice = useCallback(async () => {
@@ -933,7 +953,10 @@ export default function StepSystemCheck({
       // of WHICH path discovered it: the live track-ended watcher, a manual
       // "Retry" click, or the initial "Run Check" running mid-outage.
       if (selectedMicIdRef.current) {
-        await tryMicFallbackOrFail(selectedMicIdRef.current);
+        // true, true: allow the silent device fallback AND report 'pass' if it
+        // works — legitimate here because runMicrophone only ever runs as part
+        // of an explicit "Run Check" or "Retry" click (see call sites below).
+        await tryMicFallbackOrFail(selectedMicIdRef.current, true, true);
       } else {
         setMicStreamReady(false);
         updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
@@ -1660,20 +1683,32 @@ export default function StepSystemCheck({
     // up the newly-active fallback device's track.
   }, [phase, micStreamReady, selectedMicId, updateSystemCheck, tryMicFallbackOrFail]);
 
-  // While the reconnect popup is showing, try to recover automatically the
-  // moment the OS reports a device change (headset plugged back in) — no
-  // button for the candidate to click, matching how the in-interview
-  // headset-disconnect pause also auto-resumes on reconnect. Uses
-  // ensureAudioAnalyser directly (not the full runMicrophone) so a still-
-  // disconnected retry fails silently instead of flashing "checking..." /
-  // "access denied" over the reconnect message every couple of seconds.
+  // While the reconnect popup is showing, poll for the OS reporting the
+  // device back (headset plugged back in) so the popup itself clears and
+  // Voice Verification becomes usable again without a button click for THAT.
+  // Uses ensureAudioAnalyser directly (not the full runMicrophone) so a
+  // still-disconnected retry fails silently instead of flashing "checking..."
+  // / "access denied" over the reconnect message every couple of seconds.
+  //
+  // What this must NOT do is silently flip the "microphone" System Checks row
+  // to 'pass' — that's exactly the case markAudioChecksUnverified's comment
+  // above rules out for every other audio check: "Neither check may run —
+  // let alone pass — as a side effect of a device merely being selected or
+  // plugged in... verification happens solely on an explicit 'Run Check'
+  // (first run) or per-row 'Retry' click." A replug is exactly that kind of
+  // side effect, so it surfaces the same "Click Retry to verify this
+  // microphone" prompt markAudioChecksUnverified uses instead of reporting a
+  // pass the candidate never asked this screen to record.
   useEffect(() => {
     if (!micDisconnectedPopup) return;
     const tryRecover = async () => {
       const analyser = await ensureAudioAnalyser();
       if (!analyser || !selectedMicIdRef.current) return; // still gone — stay quiet
       setMicStreamReady(true);
-      updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone active' });
+      setMicDisconnectedPopup(false);
+      if (checksCompleted) {
+        updateSystemCheck('microphone', { status: 'fail', detail: 'Click Retry to verify this microphone' });
+      }
       void refreshDeviceLists();
     };
     if (navigator.mediaDevices?.addEventListener) {
@@ -1687,7 +1722,7 @@ export default function StepSystemCheck({
       }
       clearInterval(poll);
     };
-  }, [micDisconnectedPopup, ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists]);
+  }, [micDisconnectedPopup, ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists, checksCompleted]);
 
   // Clear the popup the moment the check is passing again (auto-recovery
   // above, or the candidate manually re-selecting a device from the dropdown).
