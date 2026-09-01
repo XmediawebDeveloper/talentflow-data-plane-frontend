@@ -5363,8 +5363,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     if (hasUnsavedData() && !isPublished) {
       console.log('[DEBUG] Saving draft before navigating back...');
-      // Auto save as draft
-      await handleSaveDraft();
+      // Auto save as draft; navigateAfter=false because we navigate below via onClose/onBack
+      await handleSaveDraft(false);
       console.log('[DEBUG] Draft save completed, now navigating back');
     } else {
       console.log('[DEBUG] No unsaved data or already published, skipping save');
@@ -5383,8 +5383,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setShowUnsavedDialog(false);
     setIsNavigatingBack(true);
 
-    // Save draft first
-    await handleSaveDraft();
+    // Save draft first; navigateAfter=false because we navigate to pendingNavigation below
+    await handleSaveDraft(false);
 
     // Then navigate to the stored URL
     if (pendingNavigation) {
@@ -5443,7 +5443,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   };
 
   // Save JD as draft
-  const handleSaveDraft = async () => {
+  // navigateAfter: when true (default), navigates to /recruitment/job-openings on success.
+  // Callers that already own their own post-save navigation (e.g. the unsaved-changes dialog,
+  // or handleBackClick) must pass false to avoid firing two competing router.push() calls.
+  const handleSaveDraft = async (navigateAfter: boolean = true) => {
     const trimmedJobTitle = jobTitle.trim();
 
     // Validate job title has at least 1 non-space character
@@ -5575,8 +5578,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           : `"${jobTitle}" has been saved as draft.`,
       });
 
-      // Navigate to job openings page after saving draft
-      router.push('/recruitment/job-openings');
+      // Navigate to job openings page after saving draft, unless the caller owns navigation
+      if (navigateAfter) {
+        router.push('/recruitment/job-openings');
+      }
     } catch (error) {
       console.error('[ERROR] Failed to save draft:', error);
       setIsSavingDraft(false);
@@ -8977,7 +8982,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </button>
                 {/* JD12: Save as Draft button */}
                 <button
-                  onClick={handleSaveDraft}
+                  onClick={() => handleSaveDraft()}
                   disabled={isSavingDraft || isJDInUse}
                   title={isJDInUse ? 'This JD is in use and cannot be modified' : ''}
                   className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 text-sm"

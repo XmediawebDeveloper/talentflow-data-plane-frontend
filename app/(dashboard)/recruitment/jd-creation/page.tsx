@@ -506,7 +506,23 @@ function JDCreationContent() {
         <JDCreation
           // Remount fresh per edit-target / per "Create JD" click so the cached
           // route segment never carries a prior draft's in-progress state.
-          key={jdId ?? (freshParam ? `new-${freshParam}` : 'new')}
+          //
+          // `freshParam` takes priority over `jdId` here: within one "Create JD"
+          // session, `ensureJDCreationUrl` attaches `id=` to the URL for the
+          // first time right after Step 1's AI extraction saves the new draft
+          // (id was null when this component mounted). If `jdId` won that
+          // priority, the key would flip the instant `id=` appeared and remount
+          // JDCreation mid-transition — wiping the just-set `step='extract'`
+          // state back to its blank, step-1 default for a frame or two before
+          // the parent's re-fetch of the freshly-saved JD repopulated it. Since
+          // `freshParam` (the per-click nonce from the "Create JD" entry point)
+          // never changes for the lifetime of one session, pinning the key to
+          // it keeps this same in-progress draft mounted as `id`/`stage` are
+          // attached to the URL. It only falls back to `jdId` when there's no
+          // `freshParam` at all - i.e. entering directly on an existing JD's
+          // `?id=...` link (e.g. "Edit" from the JD list) - where switching to
+          // a different `id` really is a different target and must remount.
+          key={freshParam ? `new-${freshParam}` : (jdId ?? 'new')}
           onBack={handleViewAllJobs}
           onPublish={handleJDPublish}
           editingJD={memoizedEditingJD}
