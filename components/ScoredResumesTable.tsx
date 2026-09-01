@@ -30,11 +30,18 @@ import {
    than that page's hand-rolled absolute dropdown. The `!` overrides beat the
    dropdown-menu primitive's own default item styling (accent bg, rounded-sm,
    muted-foreground icons). */
-const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
+// !outline-none: globals.css's `[tabindex]:focus-visible:not([tabindex="-1"])`
+// rule outranks the item's own plain `outline-hidden` on specificity, so when
+// Radix moves native focus onto the highlighted item (mouse hover included,
+// not just keyboard) that global rule painted a visible ring around it. The
+// `data-[highlighted]` background above is this item's own focus indicator;
+// !important is what it takes to actually beat that global selector.
+const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
 const DEFAULT_COLUMNS = [
   { id: 'candidateName', label: 'Candidate Name', enabled: true },
+  { id: 'jobVersion', label: 'Job Version', enabled: true },
   { id: 'jobTitle', label: 'Job Title', enabled: true }, // Always show job title
   { id: 'email', label: 'Email', enabled: true },
   { id: 'phone', label: 'Phone', enabled: true },
@@ -44,7 +51,7 @@ const DEFAULT_COLUMNS = [
   { id: 'education', label: 'Education', enabled: false },
   { id: 'certifications', label: 'Certifications', enabled: false },
   { id: 'scoredDate', label: 'Scored By / Date', enabled: true },
-  { id: 'version', label: 'Version', enabled: true },
+  { id: 'version', label: 'Resume Version', enabled: true },
 ];
 
 interface ScoredResume {
@@ -67,6 +74,10 @@ interface ScoredResume {
   // Version info
   version?: number;
   resumeVersion?: number;
+  // The JD's own version at scoring time (distinct from the resume's own
+  // version above) — only meaningful in the cross-job "All Candidates" list,
+  // where the same job title can repeat once per JD version.
+  jobVersion?: number;
   // Source and status fields
   source?: 'my-resumes' | 'database' | string;
   status?: 'completed' | 'failed' | 'processing' | 'queued' | string;
@@ -511,6 +522,8 @@ Best regards`);
         return resume.candidateName || '';
       case 'jobTitle':
         return resume.jobTitle || '';
+      case 'jobVersion':
+        return resume.jobVersion ? `v${resume.jobVersion}` : '';
       case 'version':
         return `v${resume.version || resume.resumeVersion || 1}`;
       case 'email':
@@ -1091,6 +1104,18 @@ Best regards`);
                       </td>
                     );
                   }
+                  if (col.id === 'jobVersion') {
+                    // The JD's own version at scoring time — only set in the
+                    // cross-job "All Candidates" list, where the same job
+                    // title repeats once per JD version. Absent (and so
+                    // blank) in a single-job table, which is already scoped
+                    // to one version.
+                    return (
+                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+                        <span className="text-sm text-gray-700">{resume.jobVersion ? `v${resume.jobVersion}` : '-'}</span>
+                      </td>
+                    );
+                  }
                   if (col.id === 'version') {
                     const ver = resume.version || resume.resumeVersion || 1;
                     return (
@@ -1311,7 +1336,7 @@ Best regards`);
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="end"
-                      className="w-52 !rounded-lg !border !border-gray-200 !bg-white !py-1 !px-0 !shadow-xl"
+                      className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
                     >
                       <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => onViewCandidate && onViewCandidate(resume)}>
                         <Eye className="w-4 h-4 text-menu-icon-view" />

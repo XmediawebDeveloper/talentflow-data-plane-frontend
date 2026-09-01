@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronsUpDown, MoreVertical, Info, PieChart } from 'lucide-react';
+import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -466,6 +466,62 @@ export default function ResumeScoringPage({
 
   // Scoring History Modal
   const [historyModalItem, setHistoryModalItem] = useState<ScoredResumeData | null>(null);
+  const [isRefreshingHistoryModal, setIsRefreshingHistoryModal] = useState(false);
+
+  /* Refetches full scores for every JD version in this job's LINEAGE, not
+     just the one representative version historyModalItem itself is — the
+     modal aggregates across the whole lineage (see the modal render below),
+     so a stale scoredHistory entry for any other version in it would
+     under-count the modal even though the rest of the page looks current.
+     Guarded against overlapping calls the same way Assessments' Track
+     Invites refresh button is. */
+  const refreshHistoryModalData = async (item: ScoredResumeData) => {
+    if (isRefreshingHistoryModal || !onLoadJdScores) return;
+    const groupKey = resolveHistoryGroupKey(item);
+    const lineageItems = scoredHistory.filter((h) => resolveHistoryGroupKey(h) === groupKey);
+    setIsRefreshingHistoryModal(true);
+    try {
+      await Promise.all(lineageItems.map((h) => onLoadJdScores(h.jobId, h.jobTitle)));
+    } finally {
+      setIsRefreshingHistoryModal(false);
+    }
+  };
+
+  // Pending filter inputs (Search/Scored By/Version/Status) for the modal's
+  // toolbar — committed into `appliedHistoryFilters` only on Apply, per the
+  // mockup's Reset/Apply pair, rather than filtering live on every keystroke.
+  const [historyFilterSearch, setHistoryFilterSearch] = useState('');
+  const [historyFilterScoredBy, setHistoryFilterScoredBy] = useState('all');
+  const [historyFilterVersion, setHistoryFilterVersion] = useState('all');
+  const [historyFilterStatus, setHistoryFilterStatus] = useState<'all' | 'exact' | 'partial' | 'nomatch'>('all');
+  const [appliedHistoryFilters, setAppliedHistoryFilters] = useState({
+    search: '', scoredBy: 'all', version: 'all', status: 'all' as 'all' | 'exact' | 'partial' | 'nomatch',
+  });
+  // Which group row's resumes are expanded open (Action column's chevron) —
+  // one at a time, keyed by version||scoredBy||date so it survives filtering.
+  const [expandedHistoryGroupKey, setExpandedHistoryGroupKey] = useState<string | null>(null);
+
+  const resetHistoryModalFilters = () => {
+    setHistoryFilterSearch('');
+    setHistoryFilterScoredBy('all');
+    setHistoryFilterVersion('all');
+    setHistoryFilterStatus('all');
+    setAppliedHistoryFilters({ search: '', scoredBy: 'all', version: 'all', status: 'all' });
+    setExpandedHistoryGroupKey(null);
+  };
+
+  // Every time the modal opens for a job, pull its latest scores — the same
+  // "always fresh on open" behaviour Track Invites follows — rather than
+  // showing whatever scoredHistory happened to hold from the last full list
+  // load. Keyed on the job id alone (not the item object, recreated every
+  // render) so this fires once per open, including re-opening the same job
+  // after closing, but not on unrelated re-renders while it stays open.
+  useEffect(() => {
+    if (!historyModalItem) return;
+    refreshHistoryModalData(historyModalItem);
+    resetHistoryModalFilters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyModalItem?.jobId]);
 
   // Drill-in for the two action cards: list (Job-grouped + Global view) stays
   // hidden until either card is clicked.
@@ -665,6 +721,10 @@ export default function ResumeScoringPage({
       // Convert to ScoredResumesTable format
       const converted = response.items.map((item: any) => ({
         id: item.id,
+        // Was missing here — every row's "View Resume" action (and Share)
+        // is gated on this field, so without it neither ever showed up in
+        // View All Candidates even though the resume itself exists.
+        resumeId: item.resume_id || item.resumeId || '',
         candidateName: item.candidate_name || 'Unknown',
         email: item.email || '',
         phone: item.phone || '',
@@ -692,6 +752,9 @@ export default function ResumeScoringPage({
         // Version tracking
         version: item.resume_version || 1,
         resumeVersion: item.resume_version || 1,
+        // The JD's own version this candidate was scored against — rows here
+        // span every job, so the same title can repeat once per JD version.
+        jobVersion: item.jd_current_version || 1,
       }));
 
       setGlobalScoredResumes(converted);
@@ -714,6 +777,33 @@ export default function ResumeScoringPage({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGlobalView]);
+
+  /* Each row's `jobVersion` above is seeded from `jd_current_version` — that
+     JD document's own republish counter, not its position in the lineage
+     (v1/v2/v3), so it reads back as 1 for a version that was never itself
+     republished even when it's, say, the lineage's v7. Prefetch the real
+     lineage (same endpoint/hook the "View by Job" history rows use) for
+     every distinct JD this global list actually scored against, so the
+     table can resolve the true version_number below once it lands. */
+  const globalLineageFilterTargets = useMemo(
+    () => Array.from(new Set(globalScoredResumes.map(r => r.jdId).filter(Boolean)))
+      .map(jdId => ({ key: jdId, jobId: jdId })),
+    [globalScoredResumes],
+  );
+  useEffect(() => {
+    if (globalLineageFilterTargets.length > 0) {
+      ensureHistoryFilterLineages(globalLineageFilterTargets);
+    }
+  }, [globalLineageFilterTargets, ensureHistoryFilterLineages]);
+  // Re-stamps each row's `jobVersion` with the resolved lineage number once
+  // it lands, without waiting on a second full fetch of the resume list.
+  const globalScoredResumesWithVersion = useMemo(
+    () => globalScoredResumes.map((r) => {
+      const lineageNumber = r.jdId ? versionLineage.filterLineages[r.jdId]?.find(v => v.id === r.jdId)?.version_number : undefined;
+      return lineageNumber ? { ...r, jobVersion: lineageNumber } : r;
+    }),
+    [globalScoredResumes, versionLineage.filterLineages],
+  );
 
   /**
    * Guards the prefetch below to one run per mount, and gets reset by
@@ -1615,7 +1705,47 @@ export default function ResumeScoringPage({
 
   // View History Details
   if (viewMode === 'details' && selectedHistoryItem) {
-    const scoredResumesData = convertToScoredResumesFormat(selectedHistoryItem);
+    // Version badge next to the job title — same lineage data the "View by
+    // Job" list rows already prefetch (see historyLineageFilterTargets
+    // above), so this reads the true lineage version_number rather than the
+    // JD document's own republish counter. When the lineage has more than
+    // one version worth showing, the badge becomes a menu whose entries
+    // navigate straight to that version's own scoring page (goToVersion),
+    // rather than expanding an inline list in place.
+    const detailsLineageEntry = resolveHistoryLineageEntry(selectedHistoryItem);
+    const detailsVersionNumber = detailsLineageEntry?.version_number ?? selectedHistoryItem.jdCurrentVersion;
+    // Every row in this table belongs to the one job version the page is
+    // scoped to, so the Job Version column reads the same value the header
+    // badge above it shows — never blank, unlike the cross-job "All
+    // Candidates" list where it varies per row.
+    const scoredResumesData = convertToScoredResumesFormat(selectedHistoryItem)
+      .map(r => ({ ...r, jobVersion: detailsVersionNumber }));
+    const detailsFilterLineage = versionLineage.filterLineages[selectedHistoryItem.jobId];
+    const detailsVersionRows = detailsFilterLineage
+      ? resolveVersionHistoryRows(
+          { id: selectedHistoryItem.jobId, versionNumber: detailsVersionNumber },
+          detailsFilterLineage,
+          { publishedOnly: true, versionApplicants: versionLineage.versionApplicants },
+        )
+      : [];
+    const goToVersion = (versionId: string, versionTitle: string) => {
+      if (versionId === selectedHistoryItem.jobId) return;
+      const stub: ScoredResumeData = {
+        id: versionId,
+        jobId: versionId,
+        jobTitle: versionTitle,
+        scoredAt: new Date(),
+        source: 'database',
+        totalScored: 0,
+        scoredResumes: [],
+      };
+      setSelectedHistoryItem(stub);
+      setSelectedScoredResumes([]);
+      setSelectedStatusFilter('all');
+      onLoadJdScores?.(versionId, versionTitle);
+      try { localStorage.setItem('lastViewedScoringJdId', versionId); } catch (e) {}
+      router.push(`/recruitment/resume-scoring?jd_id=${versionId}`);
+    };
 
     return (
       <main className="flex-1 overflow-x-hidden bg-slate-50">
@@ -1664,7 +1794,44 @@ export default function ResumeScoringPage({
                   <Target className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1 tracking-tight">{selectedHistoryItem.jobTitle}</h1>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{selectedHistoryItem.jobTitle}</h1>
+                    {detailsVersionNumber && detailsVersionNumber >= 1 && (
+                      detailsVersionRows.length > 1 ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="Switch version"
+                              title="Switch version"
+                              className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue transition-colors flex-shrink-0"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
+                              v{detailsVersionNumber}
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="start" className="w-44">
+                            {detailsVersionRows.map(v => (
+                              <DropdownMenuItem
+                                key={v.id}
+                                className="group"
+                                disabled={v.id === selectedHistoryItem.jobId}
+                                onSelect={() => goToVersion(v.id, v.title || selectedHistoryItem.jobTitle)}
+                              >
+                                <span className={MENU_ITEM_SCALE_CLASS}>v{v.version_number}{v.isLatest ? ' · Latest' : ''}</span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        <span className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 flex-shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
+                          v{detailsVersionNumber}
+                        </span>
+                      )
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
@@ -2124,7 +2291,7 @@ export default function ResumeScoringPage({
               </div>
             ) : (
               <ScoredResumesTable
-                resumes={globalScoredResumes}
+                resumes={globalScoredResumesWithVersion}
                 jobTitle="All Jobs"
                 jobId="global"
                 availableUnits={availableASUnits ?? 10}
@@ -3036,29 +3203,76 @@ export default function ResumeScoringPage({
         const isExactMatch = (r: any) => r.matchStatus === 'Exact Match' || r.matchStatus === 'exact_match';
         const isPartialMatch = (r: any) => r.matchStatus === 'Partial Match' || r.matchStatus === 'partial_match';
         const isNoMatch = (r: any) => !isExactMatch(r) && !isPartialMatch(r);
-        const allResumes = historyModalItem.scoredResumes || [];
 
-        /* The JD version every resume here was scored against — ONE value
-           for the whole modal, not per row. `historyModalItem.scoredResumes`
-           only ever holds one job version's scores: the history list groups
-           raw scores by jd_id first (one ScoredResumeData per version), and
-           collapsing to "one card per job" (collapseHistoryToLatestVersions)
-           picks a single winning version's whole record rather than merging
-           several versions' resumes together — so there's nothing to group
-           by version here. `r.version`/`r.resumeVersion` on each resume is
+        /* historyModalItem is one job's REPRESENTATIVE version — the winning
+           record collapseHistoryToLatestVersions picked for its card. Its own
+           `scoredResumes` is only that one version's scores, so pulling the
+           modal's data from it alone silently drops every other version ever
+           scored in this job's lineage (undercounting "Total Resumes
+           Scored", and hiding those versions' rows entirely). Pull every raw
+           scoredHistory record that belongs to the SAME lineage instead —
+           resolveHistoryGroupKey is the exact grouping key the card
+           collapsing step itself uses, so this is guaranteed to be the full
+           set collapseHistoryToLatestVersions chose from, not a guess. */
+        const modalGroupKey = resolveHistoryGroupKey(historyModalItem);
+        const historyModalLineageItems = scoredHistory.filter(
+          (h) => resolveHistoryGroupKey(h) === modalGroupKey,
+        );
+
+        /* Each lineage item's own real version_number (from its lineage
+           entry, falling back to the republish counter while that fetch
+           hasn't landed) — resolved once per item and stamped onto every
+           resume it contributed, so a resume is never attributed to the
+           wrong JD version. `r.version`/`r.resumeVersion` on a resume is
            `resume_version` — the CANDIDATE's own uploaded-resume revision,
-           not the job's — using it as if it were the JD version (and as a
-           grouping key) was the bug: it fragmented one job's resumes into
-           spurious extra rows and showed the wrong number in each.
-           Resolved the same way the list row's own badge is (see
-           resolveHistoryLineageEntry above): the version_number from this
-           JD's own lineage entry, falling back to the republish counter
-           only while that fetch hasn't landed yet. */
-        const modalVersionNumber = resolveHistoryLineageEntry(historyModalItem)?.version_number
-          ?? historyModalItem.jdCurrentVersion
-          ?? 1;
+           not the job's — so it's never used for this. */
+        const versionNumberForItem = (item: ScoredResumeData): number =>
+          resolveHistoryLineageEntry(item)?.version_number ?? item.jdCurrentVersion ?? 1;
+
+        const allResumes = historyModalLineageItems.flatMap((item) => {
+          const versionNumber = versionNumberForItem(item);
+          return (item.scoredResumes || []).map((r: any) => ({ ...r, __versionNumber: versionNumber, __jobId: item.jobId }));
+        });
+
+        // Jumps straight to a candidate's own scoring detail page — the JD
+        // version its group belongs to (never historyModalItem, which is
+        // only the lineage's representative version) so the page's own
+        // prev/next pager and jobId context match the resume being opened.
+        const goToHistoryResume = (r: any) => {
+          const sourceItem = historyModalLineageItems.find((h) => h.jobId === r.__jobId) || historyModalItem;
+          setSelectedHistoryItem(sourceItem);
+          setSelectedCandidateForView(r);
+          setViewMode('candidateView');
+          setHistoryModalItem(null);
+          router.push(`/recruitment/resume-scoring?jd_id=${sourceItem.jobId}&score_id=${r.id}`, { scroll: false });
+        };
+
+        // Filter dropdown options — built from the FULL (unfiltered) resume
+        // set so picking one filter never hides another filter's own options.
+        const distinctHistoryScorers = Array.from(new Set(allResumes.map((r: any) => r.scoredBy || 'System'))).sort();
+        const distinctHistoryVersions = Array.from(new Set(allResumes.map((r: any) => r.__versionNumber as number))).sort((a, b) => b - a);
+
+        // The APPLIED filters narrow which resumes feed the table's rows —
+        // Match Summary and the Job Version Average panel stay on the full,
+        // unfiltered set below, so they always read as "this job's whole
+        // history" regardless of what the table itself is currently showing.
+        const filteredHistoryResumes = allResumes.filter((r: any) => {
+          if (appliedHistoryFilters.version !== 'all' && String(r.__versionNumber) !== appliedHistoryFilters.version) return false;
+          if (appliedHistoryFilters.scoredBy !== 'all' && (r.scoredBy || 'System') !== appliedHistoryFilters.scoredBy) return false;
+          if (appliedHistoryFilters.status === 'exact' && !isExactMatch(r)) return false;
+          if (appliedHistoryFilters.status === 'partial' && !isPartialMatch(r)) return false;
+          if (appliedHistoryFilters.status === 'nomatch' && !isNoMatch(r)) return false;
+          if (appliedHistoryFilters.search.trim()) {
+            const q = appliedHistoryFilters.search.trim().toLowerCase();
+            const scorer = (r.scoredBy || 'System').toLowerCase();
+            const email = (r.scoredByEmail || '').toLowerCase();
+            if (!scorer.includes(q) && !email.includes(q)) return false;
+          }
+          return true;
+        });
 
         const groups: {
+          version: number;
           scoredBy: string;
           scoredByEmail?: string;
           date: string;
@@ -3067,24 +3281,29 @@ export default function ResumeScoringPage({
           partialCount: number;
           noMatchCount: number;
           totalScore: number;
+          resumes: any[];
         }[] = [];
         const seen = new Map<string, number>();
-        allResumes.forEach((r: any) => {
+        filteredHistoryResumes.forEach((r: any) => {
           const scorer = r.scoredBy || 'System';
           const rawDate = r.scoredDate || r.created_at || historyModalItem.scoredAt;
           const day = formatISTDate(rawDate);
-          const key = `${scorer}||${day}`;
+          // Version is part of the key — the same scorer scoring the same day
+          // against two different JD versions is two distinct sessions, not one.
+          const key = `${r.__versionNumber}||${scorer}||${day}`;
           const score = Number(r.overall_score ?? r.scorePercentage ?? 0);
           if (seen.has(key)) {
             const g = groups[seen.get(key)!];
             g.count++;
             g.totalScore += score;
+            g.resumes.push(r);
             if (isExactMatch(r)) g.exactCount++;
             else if (isPartialMatch(r)) g.partialCount++;
             else g.noMatchCount++;
           } else {
             seen.set(key, groups.length);
             groups.push({
+              version: r.__versionNumber,
               scoredBy: scorer,
               scoredByEmail: r.scoredByEmail && r.scoredByEmail.includes('@') ? r.scoredByEmail : undefined,
               date: day,
@@ -3093,9 +3312,12 @@ export default function ResumeScoringPage({
               partialCount: isPartialMatch(r) ? 1 : 0,
               noMatchCount: isNoMatch(r) ? 1 : 0,
               totalScore: score,
+              resumes: [r],
             });
           }
         });
+        // Newest version and, within a version, newest day first.
+        groups.sort((a, b) => b.version - a.version || b.date.localeCompare(a.date));
 
         const summary = {
           total: allResumes.length,
@@ -3104,11 +3326,40 @@ export default function ResumeScoringPage({
           noMatch: allResumes.filter(isNoMatch).length,
         };
 
+        // Average score per JD version, across the FULL (unfiltered) set —
+        // a "how has this job trended version over version" reference panel,
+        // independent of whatever the table's own filters narrow to.
+        const versionScoreLists = new Map<number, number[]>();
+        allResumes.forEach((r: any) => {
+          const list = versionScoreLists.get(r.__versionNumber) || [];
+          list.push(Number(r.overall_score ?? r.scorePercentage ?? 0));
+          versionScoreLists.set(r.__versionNumber, list);
+        });
+        const versionAverages = Array.from(versionScoreLists.entries())
+          .map(([version, scores]) => ({
+            version,
+            avg: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+          }))
+          .sort((a, b) => b.version - a.version);
+        const VERSION_ACCENTS = [
+          { dot: 'bg-blue-600', bar: 'bg-blue-600' },
+          { dot: 'bg-green-600', bar: 'bg-green-600' },
+          { dot: 'bg-orange-500', bar: 'bg-orange-500' },
+          { dot: 'bg-purple-600', bar: 'bg-purple-600' },
+          { dot: 'bg-brand-cyan', bar: 'bg-brand-cyan' },
+          { dot: 'bg-pink-500', bar: 'bg-pink-500' },
+        ];
+
         const sortHeaderIcon = <ChevronsUpDown className="w-3 h-3 text-gray-400 dark:text-slate-500" />;
+        // Shared between the header row and every body row so columns can
+        // never drift out of alignment with each other.
+        const historyGridCols = 'grid-cols-[60px_1.5fr_1.0fr_0.8fr_1.5fr_0.8fr_56px]';
+        const historySelectClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue';
+        const historyLabelClass = 'block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5';
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-5xl max-h-[90dvh] flex flex-col tf-round-edges">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[96vw] sm:max-w-6xl max-h-[94dvh] flex flex-col tf-round-edges">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-11 h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -3122,107 +3373,201 @@ export default function ResumeScoringPage({
                     </p>
                   </div>
                 </div>
-                <button onClick={() => setHistoryModalItem(null)} className="p-1.5 border border-gray-200 dark:border-slate-700 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors" aria-label="Close">
-                  <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                </button>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {/* Refetches this job's full lineage of scores in place — the
+                      popup stays open, the icon spins while the request runs,
+                      and the guard in refreshHistoryModalData drops repeat
+                      clicks until it settles. Same pattern as the Track
+                      Invites popup's own manual Refresh button. */}
+                  <button
+                    onClick={() => refreshHistoryModalData(historyModalItem)}
+                    disabled={isRefreshingHistoryModal}
+                    title="Fetch the latest scoring history"
+                    aria-label="Refresh"
+                    className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingHistoryModal ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline">{isRefreshingHistoryModal ? 'Refreshing...' : 'Refresh'}</span>
+                  </button>
+                  <button onClick={() => setHistoryModalItem(null)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
+                    <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
+                  </button>
+                </div>
               </div>
 
-              {/* The shell is the dialog's only scroller. */}
+              {/* The dialog's own scroller. Splitting fixed chrome from an
+                  independently-scrolling table (tried twice above) kept
+                  starving the table/side-panel of space on a real, modest
+                  window and either clipped or bled content — with one
+                  scroller for everything below the header, the table still
+                  gets its own internal ~4-row scroll (below), and this outer
+                  one only ever engages as the fallback for a window too
+                  short to fit the rest, instead of silently cutting it. */}
               <div className="flex-1 min-h-0 overflow-y-auto">
-                <div className="px-6 pt-5">
-                  <p className="text-sm font-bold text-gray-900 dark:text-slate-100 mb-3">Match Summary</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                        <FileText className="w-4 h-4 text-brand-blue" />
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">Total Resumes Scored</div>
-                        <div className="text-xl font-bold text-brand-blue">{summary.total}</div>
-                      </div>
+              <div className="px-6 pt-5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                    <div className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">Exact Match</div>
-                        <div className="text-xl font-bold text-green-600">{summary.exact}</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">Total Resumes Scored</div>
+                      <div className="text-xl font-bold text-brand-blue">{summary.total}</div>
                     </div>
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
-                        <PieChart className="w-4 h-4 text-orange-500" />
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">Partial Match</div>
-                        <div className="text-xl font-bold text-orange-500">{summary.partial}</div>
-                      </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                    <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
+                      <CheckCircle className="w-4 h-4 text-green-600" />
                     </div>
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
-                        <XCircle className="w-4 h-4 text-red-500" />
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">No Match</div>
-                        <div className="text-xl font-bold text-red-500">{summary.noMatch}</div>
-                      </div>
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">Exact Match</div>
+                      <div className="text-xl font-bold text-green-600">{summary.exact}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                    <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                      <PieChart className="w-4 h-4 text-orange-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">Partial Match</div>
+                      <div className="text-xl font-bold text-orange-500">{summary.partial}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                    <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
+                      <XCircle className="w-4 h-4 text-red-500" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">No Match</div>
+                      <div className="text-xl font-bold text-red-500">{summary.noMatch}</div>
                     </div>
                   </div>
                 </div>
+              </div>
 
-                {groups.length === 0 ? (
-                  <div className="px-6 py-10 text-center text-sm text-gray-400 dark:text-slate-500">No scoring history available.</div>
-                ) : (
-                  <div className="px-6">
-                    {/* Vertical scroll only — a fixed layout with explicit
-                        column widths means the header and body cells share
-                        the exact same grid regardless of content, so nothing
-                        pushes the table wider than the dialog and forces a
-                        horizontal scrollbar. Sticky is set on each <th>
-                        itself rather than the <thead> — more reliably
-                        supported than a sticky thead across browsers. */}
-                    <div className="max-h-[360px] overflow-y-auto overflow-x-hidden rounded-lg border border-gray-100 dark:border-slate-700/60">
-                      <table className="w-full text-sm table-fixed">
-                        <colgroup>
-                          <col className="w-[9%]" />
-                          <col className="w-[26%]" />
-                          <col className="w-[14%]" />
-                          <col className="w-[12%]" />
-                          <col className="w-[25%]" />
-                          <col className="w-[14%]" />
-                        </colgroup>
-                        <thead>
-                          <tr>
-                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-left px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">Version</th>
-                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-left px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">Scored By</th>
-                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-left px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">
-                              <span className="inline-flex items-center gap-1">Date {sortHeaderIcon}</span>
-                            </th>
-                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-center px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">
-                              <span className="inline-flex items-center justify-center gap-1">Resumes {sortHeaderIcon}</span>
-                            </th>
-                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-left px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">
-                              <span className="inline-flex items-center gap-1">Status {sortHeaderIcon}</span>
-                            </th>
-                            <th className="sticky top-0 z-10 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 text-center px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100">
-                              <span className="inline-flex items-center justify-center gap-1">Average Score {sortHeaderIcon}</span>
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-                          {groups.map((g, i) => (
-                            <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
-                              <td className="px-4 py-3.5 align-middle">
-                                <span className="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
-                                  v{modalVersionNumber}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3.5 align-middle">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-8 h-8 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                                    <span className="text-xs font-semibold text-brand-blue">{g.scoredBy.charAt(0).toUpperCase()}</span>
-                                  </div>
+              {/* Filter toolbar — Reset/Apply rather than live filtering, so
+                  picking several filters in a row doesn't reshuffle the table
+                  after every click. */}
+              <div className="px-6 pt-4">
+                <div className="p-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))_auto] gap-3 items-end">
+                    <div>
+                      <label className={historyLabelClass}>Search</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={historyFilterSearch}
+                          onChange={(e) => setHistoryFilterSearch(e.target.value)}
+                          placeholder="Search by scorer, email, etc..."
+                          className={`${historySelectClass} pl-9`}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={historyLabelClass}>Scored By</label>
+                      <select value={historyFilterScoredBy} onChange={(e) => setHistoryFilterScoredBy(e.target.value)} className={historySelectClass}>
+                        <option value="all">All Scorers</option>
+                        {distinctHistoryScorers.map((s) => (
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={historyLabelClass}>Version</label>
+                      <select value={historyFilterVersion} onChange={(e) => setHistoryFilterVersion(e.target.value)} className={historySelectClass}>
+                        <option value="all">All Versions</option>
+                        {distinctHistoryVersions.map((v) => (
+                          <option key={v} value={String(v)}>v{v}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={historyLabelClass}>Status</label>
+                      <select value={historyFilterStatus} onChange={(e) => setHistoryFilterStatus(e.target.value as typeof historyFilterStatus)} className={historySelectClass}>
+                        <option value="all">All Status</option>
+                        <option value="exact">Exact Match</option>
+                        <option value="partial">Partial Match</option>
+                        <option value="nomatch">No Match</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={resetHistoryModalFilters}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"
+                      >
+                        Reset
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAppliedHistoryFilters({
+                            search: historyFilterSearch,
+                            scoredBy: historyFilterScoredBy,
+                            version: historyFilterVersion,
+                            status: historyFilterStatus,
+                          });
+                          setExpandedHistoryGroupKey(null);
+                        }}
+                        className="px-4 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Table + side panel. items-start (rather than flex's default
+                  stretch) means each side sizes to its own content — the
+                  side panel never gets force-stretched to the table's height
+                  and then clipped, since it carries no scrollbar of its own. */}
+              <div className="flex flex-col lg:flex-row items-start gap-5 px-6 py-4">
+                <div className="w-full lg:flex-1 lg:min-w-0 flex flex-col rounded-lg border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+                  {groups.length === 0 ? (
+                    <div className="flex-1 flex items-center justify-center py-10 text-center text-sm text-gray-400 dark:text-slate-500">
+                      {allResumes.length === 0 ? 'No scoring history available.' : 'No scoring history matches these filters.'}
+                    </div>
+                  ) : (
+                    <>
+                      {/* A CSS grid rather than a <table>: header and body rows
+                          share the exact same `historyGridCols` track list, so
+                          every column lines up pixel-for-pixel regardless of
+                          how much a cell's own content wants. */}
+                      <div className={`grid ${historyGridCols} shrink-0 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60`}>
+                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">Version</div>
+                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">Scored By</div>
+                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">
+                          <span className="inline-flex items-center justify-center gap-1">Date {sortHeaderIcon}</span>
+                        </div>
+                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">
+                          <span className="inline-flex items-center justify-center gap-1">Resumes {sortHeaderIcon}</span>
+                        </div>
+                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">
+                          <span className="inline-flex items-center justify-center gap-1">Status {sortHeaderIcon}</span>
+                        </div>
+                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">
+                          <span className="inline-flex items-center justify-center gap-1">Average Score {sortHeaderIcon}</span>
+                        </div>
+                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">Action</div>
+                      </div>
+                      {/* ~4 rows at their normal ~76-84px height; scrolls its
+                          own overflow for the rest. Self-contained (not a
+                          flex-1 child fighting siblings for space) now that
+                          the dialog's outer body is the one that scrolls if
+                          the window is too short for everything else. */}
+                      <div className="max-h-[340px] overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700">
+                        {groups.map((g) => {
+                          const groupKey = `${g.version}||${g.scoredBy}||${g.date}`;
+                          const isExpanded = expandedHistoryGroupKey === groupKey;
+                          return (
+                            <div key={groupKey}>
+                              <div className={`grid ${historyGridCols} hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors`}>
+                                <div className="px-4 py-3.5 flex items-center justify-center">
+                                  <span className="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                                    v{g.version}
+                                  </span>
+                                </div>
+                                <div className="px-4 py-3.5 flex items-center justify-center min-w-0 text-center">
                                   <div className="min-w-0">
                                     <div className="text-gray-900 dark:text-slate-100 font-semibold truncate">{g.scoredBy}</div>
                                     {g.scoredByEmail && (
@@ -3230,52 +3575,128 @@ export default function ResumeScoringPage({
                                     )}
                                   </div>
                                 </div>
-                              </td>
-                              <td className="px-4 py-3.5 align-middle whitespace-nowrap">
-                                <div className="flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
-                                  <Calendar className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
-                                  {g.date}
+                                <div className="px-4 py-3.5 flex items-center justify-center whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
+                                    <Calendar className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
+                                    {g.date}
+                                  </div>
                                 </div>
-                              </td>
-                              <td className="px-4 py-3.5 align-middle text-center">
-                                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-brand-blue/10 text-brand-blue font-bold text-sm">{g.count}</span>
-                                <div className="text-[11px] text-gray-500 dark:text-slate-500 mt-0.5">Resume{g.count === 1 ? '' : 's'} Scored</div>
-                              </td>
-                              <td className="px-4 py-3.5 align-middle">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="inline-flex flex-col items-center px-2 py-1 rounded-lg bg-green-50 dark:bg-green-900/20 min-w-[52px]">
-                                    <span className="text-[10px] font-medium text-green-700 dark:text-green-400">Exact</span>
-                                    <span className="text-sm font-bold text-green-700 dark:text-green-400">{g.exactCount}</span>
-                                  </span>
-                                  <span className="inline-flex flex-col items-center px-2 py-1 rounded-lg bg-orange-50 dark:bg-orange-900/20 min-w-[52px]">
-                                    <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400">Partial</span>
-                                    <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{g.partialCount}</span>
-                                  </span>
-                                  <span className="inline-flex flex-col items-center px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 min-w-[52px]">
-                                    <span className="text-[10px] font-medium text-red-600 dark:text-red-400">No Match</span>
-                                    <span className="text-sm font-bold text-red-600 dark:text-red-400">{g.noMatchCount}</span>
-                                  </span>
+                                <div className="px-4 py-3.5 flex flex-col items-center justify-center text-center">
+                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-brand-blue/10 text-brand-blue font-bold text-sm">{g.count}</span>
+                                  <div className="text-[11px] text-gray-500 dark:text-slate-500 mt-0.5">Resume{g.count === 1 ? '' : 's'} Scored</div>
                                 </div>
-                              </td>
-                              <td className="px-4 py-3.5 align-middle text-center">
-                                <span className="text-lg font-bold text-brand-blue">{Math.round(g.totalScore / g.count)}</span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
+                                <div className="px-4 py-3.5 flex items-center justify-center">
+                                  <div className="flex items-center gap-1.5">
+                                    {/* h-10 + whitespace-nowrap on every badge — "No Match"
+                                        wrapping to two lines inside a 52px-wide badge while
+                                        "Exact"/"Partial" stayed on one is what made these
+                                        three look like different-height cards. */}
+                                    <span className="inline-flex flex-col items-center justify-center h-10 px-2 py-1 rounded-lg bg-green-50 dark:bg-green-900/20 min-w-[56px]">
+                                      <span className="text-[10px] font-medium text-green-700 dark:text-green-400 whitespace-nowrap">Exact</span>
+                                      <span className="text-sm font-bold text-green-700 dark:text-green-400">{g.exactCount}</span>
+                                    </span>
+                                    <span className="inline-flex flex-col items-center justify-center h-10 px-2 py-1 rounded-lg bg-orange-50 dark:bg-orange-900/20 min-w-[56px]">
+                                      <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400 whitespace-nowrap">Partial</span>
+                                      <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{g.partialCount}</span>
+                                    </span>
+                                    <span className="inline-flex flex-col items-center justify-center h-10 px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 min-w-[56px]">
+                                      <span className="text-[10px] font-medium text-red-600 dark:text-red-400 whitespace-nowrap">No Match</span>
+                                      <span className="text-sm font-bold text-red-600 dark:text-red-400">{g.noMatchCount}</span>
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="px-4 py-3.5 flex items-center justify-center text-center">
+                                  <span className="text-lg font-bold text-brand-blue">{Math.round(g.totalScore / g.count)}</span>
+                                </div>
+                                <div className="px-4 py-3.5 flex items-center justify-center">
+                                  <button
+                                    onClick={() => g.count === 1 ? goToHistoryResume(g.resumes[0]) : setExpandedHistoryGroupKey(isExpanded ? null : groupKey)}
+                                    className="p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
+                                    aria-label={g.count === 1 ? 'View resume' : (isExpanded ? 'Collapse resumes' : 'View resumes')}
+                                    title={g.count === 1 ? 'View resume' : (isExpanded ? 'Collapse resumes' : 'View resumes')}
+                                  >
+                                    <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${g.count > 1 && isExpanded ? 'rotate-90' : ''}`} />
+                                  </button>
+                                </div>
+                              </div>
+                              {g.count > 1 && isExpanded && (
+                                <div className="px-4 py-3 bg-gray-50/70 dark:bg-slate-800/40 border-t border-gray-100 dark:border-slate-700/60 space-y-1.5">
+                                  {g.resumes.map((r: any, idx: number) => (
+                                    <button
+                                      key={r.id || r.resumeId || idx}
+                                      type="button"
+                                      onClick={() => goToHistoryResume(r)}
+                                      className="w-full flex items-center justify-between gap-3 text-xs sm:text-sm px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-colors text-left"
+                                    >
+                                      <span className="text-gray-800 dark:text-slate-200 font-medium truncate">{r.candidateName || r.candidate_name || 'Unknown'}</span>
+                                      <div className="flex items-center gap-2 flex-shrink-0">
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                          isExactMatch(r) ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                                            : isPartialMatch(r) ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400'
+                                              : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
+                                        }`}>
+                                          {isExactMatch(r) ? 'Exact' : isPartialMatch(r) ? 'Partial' : 'No Match'}
+                                        </span>
+                                        <span className="text-gray-500 dark:text-slate-400 font-semibold w-9 text-right">{Math.round(Number(r.overall_score ?? r.scorePercentage ?? 0))}%</span>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
 
-                <div className="px-6 pt-4 pb-5">
-                  <div className="flex items-start gap-2.5 p-3.5 bg-brand-blue/[0.05] rounded-xl">
-                    <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
-                    <p className="text-sm text-gray-600 dark:text-slate-400">
-                      Match status is based on the comparison of candidate resumes with the job description.
-                    </p>
+                {/* Job Version Average — average score per JD version,
+                    independent of the table's own filters (see
+                    versionAverages). No internal scroll: a lineage tops out
+                    at a handful of versions, so this always fits in full. */}
+                <div className="w-full lg:w-[300px] lg:flex-shrink-0 rounded-lg border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+                  <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-gray-900 dark:text-slate-100">Job Version Average</p>
+                      <p className="text-[11px] text-gray-500 dark:text-slate-500">Average score by version</p>
+                    </div>
+                    <TrendingUp className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                  </div>
+                  <div className="p-4 space-y-4">
+                    {versionAverages.length === 0 ? (
+                      <div className="text-center text-xs text-gray-400 dark:text-slate-500 py-6">No data yet.</div>
+                    ) : (
+                      versionAverages.map((v, idx) => {
+                        const accent = VERSION_ACCENTS[idx % VERSION_ACCENTS.length];
+                        return (
+                          <div key={v.version}>
+                            <div className="flex items-center justify-between gap-2 mb-1.5">
+                              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-800 dark:text-slate-200">
+                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${accent.dot}`} />
+                                v{v.version}
+                              </span>
+                              <span className="text-sm font-bold text-gray-900 dark:text-slate-100">{v.avg}%</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                              <div className={`h-full rounded-full ${accent.bar}`} style={{ width: `${Math.min(100, Math.max(0, v.avg))}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
+              </div>
+
+              <div className="px-6 pb-4">
+                <div className="flex items-start gap-2.5 p-3.5 bg-brand-blue/[0.05] rounded-xl">
+                  <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-gray-600 dark:text-slate-400">
+                    Match status is based on the comparison of candidate resumes with the job description.
+                  </p>
+                </div>
+              </div>
               </div>
 
               <div className="flex justify-end px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 shrink-0">
