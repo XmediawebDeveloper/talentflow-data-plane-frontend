@@ -356,15 +356,15 @@ export default function Login({ onBackToPublic }: LoginProps) {
       <style>{AUTH_THEME_CSS}</style>
 
       <div className="tf-auth-shell">
-        {/* Left column — shared brand panel (logo, headline, AI illustration,
-            trust strip). Reduced but still present on mobile. */}
+        {/* Left column — shared brand panel (logo, headline, AI illustration).
+            Reduced but still present on mobile. */}
         <AuthBrandPanel
           onBackToPublic={onBackToPublic}
           label="TalentFlow sign in overview"
           eyebrow="AI-Powered Recruitment."
           headline={<>
             Smarter Hiring.<br />
-            <span className="tf-accent">Better Outcomes.</span>
+            Better Outcomes.
           </>}
           lede={<>
             Our AI-driven platform helps you create jobs, screen, assess,

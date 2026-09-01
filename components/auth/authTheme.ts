@@ -164,17 +164,16 @@ export const AUTH_THEME_CSS = `
   z-index: 1;
 }
 
-/* Logo at the top of the page, copy in the middle, trust row on the baseline.
-   Two auto margins absorb the slack -- no absolute positioning, so nothing can
-   overlap on a short viewport. */
+/* Logo at the top of the page, the copy and illustration centred in the slack
+   below it. Two auto margins absorb the slack -- no absolute positioning, so
+   nothing can overlap on a short viewport. */
 .tf-auth-headline {
   margin-top: auto;
 }
-.tf-login-proof-row {
-  margin-top: auto;
-}
+/* Width of the login card. The shell grid caps its track at the base 560px, so
+   this is what the card actually renders at -- 70px narrower than that cap. */
 .tf-auth--login .tf-auth-main {
-  --tf-form-width: 600px;
+  --tf-form-width: 490px;
 }
 .tf-auth--login .tf-auth-card {
   padding: clamp(22px, 2vw, 30px);
@@ -229,9 +228,6 @@ export const AUTH_THEME_CSS = `
    headline group still sits mid-column (see .tf-auth-headline). */
 .tf-auth-eyebrow {
   margin: auto 0 8px;
-  font-size: clamp(13px, 1vw, 15px);
-  font-weight: 700;
-  letter-spacing: 0.01em;
   color: var(--tf-brand-ink);
 }
 .tf-auth-eyebrow + .tf-auth-headline {
@@ -240,12 +236,17 @@ export const AUTH_THEME_CSS = `
 
 .tf-auth-headline {
   max-width: 620px;
-  font-size: clamp(32px, 3.3vw, 48px);
-  font-weight: 800;
-  line-height: 1.05;
-  letter-spacing: 0;
   color: var(--tf-ink);
   margin: 0 0 18px;
+}
+/* The eyebrow and the headline read as one continuous statement, so they share
+   a single type scale: neither line is set larger or heavier than the other. */
+.tf-auth-eyebrow,
+.tf-auth-headline {
+  font-size: clamp(20px, 1.9vw, 26px);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
 }
 .tf-auth-headline .tf-accent {
   background: var(--tf-grad);
@@ -263,10 +264,10 @@ export const AUTH_THEME_CSS = `
 }
 
 /* AI-recruitment illustration. Scales with the column; the auto margins on
-   .tf-auth-headline / .tf-login-proof-row do the vertical distribution. */
+   .tf-auth-headline / .tf-hero-art do the vertical distribution. */
 .tf-hero-art {
   width: min(560px, 100%, 54vh);
-  margin: 2px 0 0;
+  margin: 2px 0 auto;
 }
 .tf-hero-art img {
   display: block;
@@ -294,55 +295,6 @@ export const AUTH_THEME_CSS = `
   border-radius: var(--tf-radius-md);
   border: 1px solid var(--tf-border);
   filter: saturate(0.94) brightness(0.96);
-}
-
-.tf-login-proof-row {
-  width: min(560px, 100%);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  margin-top: 20px;
-  border: 1px solid var(--tf-border);
-  border-radius: var(--tf-radius-md);
-  overflow: hidden;
-  background: var(--tf-border);
-  box-shadow: var(--tf-shadow-sm);
-}
-.tf-login-proof {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-  padding: 16px 18px;
-  background: color-mix(in srgb, var(--tf-surface) 84%, transparent);
-}
-.tf-login-proof-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--tf-brand-on);
-}
-.tf-login-proof-icon--teal {
-  background: var(--tf-brand-teal);
-}
-.tf-login-proof-icon--blue {
-  background: var(--tf-brand);
-}
-.tf-login-proof-title {
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--tf-ink);
-}
-.tf-login-proof-copy {
-  margin-top: 3px;
-  font-size: 13px;
-  line-height: 1.35;
-  color: var(--tf-ink-subtle);
 }
 
 .tf-auth-features {
@@ -385,7 +337,7 @@ export const AUTH_THEME_CSS = `
   border-radius: var(--tf-radius);
   box-shadow: var(--tf-shadow);
   padding: 28px;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 .tf-auth-title {
   font-size: clamp(21px, 1.6vw, 26px);
@@ -453,15 +405,15 @@ export const AUTH_THEME_CSS = `
   font-weight: 700;
 }
 .tf-auth-field {
-  margin-bottom: 13px;
+  margin-bottom: 18px;
 }
 .tf-auth-label {
   display: block;
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 700;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--tf-ink);
-  margin-bottom: 6px;
+  margin-bottom: 9px;
 }
 .tf-auth-label-note {
   font-weight: 400;
@@ -485,7 +437,7 @@ export const AUTH_THEME_CSS = `
   width: 100%;
   height: 46px;
   padding: 0 14px 0 42px;
-  font-size: 14px;
+  font-size: 15px;
   font-family: inherit;
   color: var(--tf-ink);
   background: var(--tf-surface);
@@ -607,7 +559,7 @@ export const AUTH_THEME_CSS = `
   justify-content: center;
   gap: 10px;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: 0;
   color: var(--tf-brand-on);
@@ -666,7 +618,7 @@ export const AUTH_THEME_CSS = `
 }
 .tf-auth-btn--sm {
   min-height: 40px;
-  font-size: 13.5px;
+  font-size: 14.5px;
   padding: 0 14px;
 }
 .tf-auth-link {
@@ -833,18 +785,919 @@ export const AUTH_THEME_CSS = `
   animation-delay: 0.3s;
 }
 
+/* ---------------------------------------------------------------------------
+   Reset-password dialog (ForgotPasswordModal).
+
+   Its own namespace rather than a reskin of .tf-auth-card: this surface is
+   wider, roomier and carries three things that exist nowhere else -- a header
+   illustration, an input whose leading icon sits in its own divided cell, and a
+   help panel under the actions. Sharing the card's classes would have meant
+   editing the login form to style a dialog.
+   --------------------------------------------------------------------------- */
+.tf-fp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(16, 24, 40, 0.55);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.tf-fp-modal {
+  position: relative;
+  width: 100%;
+  max-width: 580px;
+  max-height: calc(100dvh - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--tf-surface);
+  border: 1px solid var(--tf-border);
+  border-radius: var(--tf-radius);
+  box-shadow: var(--tf-shadow);
+}
+.tf-fp-body {
+  padding: 32px;
+  overflow-y: auto;
+}
+
+/* Close sits over the header instead of in its flow, so the title and the
+   illustration can each take the width they need. */
+.tf-fp-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tf-ink-muted);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.tf-fp-close:hover {
+  background: var(--tf-surface-sunken);
+  color: var(--tf-ink);
+}
+.tf-fp-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--tf-ring);
+}
+
+.tf-fp-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding-right: 44px;
+}
+.tf-fp-title {
+  font-size: clamp(24px, 2.3vw, 29px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--tf-ink);
+  margin: 0;
+}
+.tf-fp-subtitle {
+  max-width: 32ch;
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--tf-ink-muted);
+  margin: 12px 0 0;
+}
+/* Verification step leads with a badge instead of the header illustration. */
+.tf-fp-head--badge {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 16px;
+}
+.tf-fp-head--badge .tf-fp-subtitle {
+  max-width: none;
+  margin-top: 6px;
+}
+.tf-fp-badge {
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--tf-brand-tint);
+  color: var(--tf-brand);
+}
+.tf-fp-subtitle-em {
+  color: var(--tf-brand-ink);
+  font-weight: 600;
+}
+
+/* Illustration + two-line prompt above the code fields. */
+.tf-fp-prompt {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.tf-fp-prompt-title {
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--tf-ink);
+  margin: 0;
+}
+.tf-fp-prompt-copy {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--tf-ink-muted);
+  margin: 4px 0 0;
+}
+
+/* Resend line: clock, copy, and the countdown picked out in brand blue. */
+.tf-fp-resend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 20px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tf-ink-muted);
+}
+.tf-fp-resend-icon {
+  color: var(--tf-brand);
+  display: flex;
+  flex-shrink: 0;
+}
+.tf-fp-resend-time {
+  color: var(--tf-brand-ink);
+  font-weight: 700;
+}
+.tf-fp-hint--inline {
+  align-items: center;
+}
+.tf-fp-hint--inline .tf-fp-hint-copy {
+  margin: 0;
+}
+.tf-fp-rule {
+  height: 1px;
+  background: var(--tf-border);
+  margin: 24px 0 26px;
+}
+
+/* Header illustration. Fills come from here so the artwork tracks the theme. */
+.tf-fp-art {
+  width: 132px;
+  flex-shrink: 0;
+  margin-top: -4px;
+}
+.tf-fp-art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.tf-fp-art .fp-blob {
+  fill: var(--tf-brand-tint);
+}
+.tf-fp-art .fp-paper {
+  fill: var(--tf-surface);
+  stroke: var(--tf-border);
+}
+.tf-fp-art .fp-line {
+  fill: var(--tf-border);
+}
+.tf-fp-art .fp-lock {
+  fill: var(--tf-brand-on);
+}
+.tf-fp-art .fp-lock-shackle {
+  fill: none;
+  stroke: var(--tf-brand-on);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.tf-fp-art .fp-env-back {
+  fill: color-mix(in srgb, var(--tf-brand) 20%, var(--tf-surface));
+}
+.tf-fp-art .fp-env-front {
+  fill: color-mix(in srgb, var(--tf-brand) 38%, var(--tf-surface));
+}
+.tf-fp-art .fp-spark,
+.tf-fp-art .fp-plane {
+  fill: color-mix(in srgb, var(--tf-brand) 32%, var(--tf-surface));
+}
+.tf-fp-art .fp-swirl,
+.tf-fp-art .fp-burst {
+  fill: none;
+  stroke: color-mix(in srgb, var(--tf-brand) 30%, var(--tf-surface));
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.tf-fp-art .fp-swirl {
+  stroke-dasharray: 2 4;
+}
+.tf-fp-art .fp-code {
+  fill: var(--tf-brand);
+}
+.tf-fp-art .fp-env-flap {
+  fill: none;
+  stroke: color-mix(in srgb, var(--tf-brand) 30%, var(--tf-surface));
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+}
+.tf-fp-art--sm {
+  width: 104px;
+  margin-top: 0;
+}
+.tf-fp-art .fp-swirl-ring {
+  fill: none;
+  stroke: color-mix(in srgb, var(--tf-brand) 26%, var(--tf-surface));
+  stroke-width: 1.6;
+}
+
+.tf-fp-field {
+  margin-bottom: 20px;
+}
+.tf-fp-label {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--tf-ink);
+  margin-bottom: 10px;
+}
+
+/* The leading icon lives in a divided cell of its own, so the control reads as
+   two joined halves rather than an input with something floating inside it. */
+.tf-fp-control {
+  display: flex;
+  align-items: stretch;
+  height: 50px;
+  overflow: hidden;
+  background: var(--tf-surface);
+  border: 1.5px solid color-mix(in srgb, var(--tf-brand) 55%, var(--tf-surface));
+  border-radius: var(--tf-radius-md);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.tf-fp-control:focus-within {
+  border-color: var(--tf-brand);
+  box-shadow: 0 0 0 4px var(--tf-ring);
+}
+.tf-fp-control-icon {
+  width: 50px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tf-brand);
+  background: var(--tf-surface-subtle);
+  border-right: 1.5px solid color-mix(in srgb, var(--tf-brand) 55%, var(--tf-surface));
+}
+.tf-fp-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 16px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--tf-ink);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+.tf-fp-input::placeholder {
+  color: var(--tf-ink-subtle);
+}
+
+/* Reveal toggle for the password fields. Sits as the trailing flex cell of
+   .tf-fp-control, mirroring the leading icon cell -- unlike .tf-auth-reveal,
+   which is absolutely positioned over a plain input. */
+.tf-fp-reveal {
+  width: 46px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--tf-ink-subtle);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.tf-fp-reveal:hover,
+.tf-fp-reveal:focus-visible {
+  outline: none;
+  color: var(--tf-brand);
+}
+
+.tf-fp-btn {
+  width: 100%;
+  min-height: 56px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  border-radius: var(--tf-radius-md);
+  cursor: pointer;
+  transition: filter 0.15s ease, background-color 0.15s ease, box-shadow 0.2s ease, opacity 0.15s ease;
+}
+.tf-fp-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--tf-ring);
+}
+.tf-fp-btn:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.tf-fp-btn--primary {
+  color: var(--tf-brand-on);
+  background: var(--tf-grad);
+  border: 1px solid transparent;
+  box-shadow: 0 18px 30px -22px rgba(15, 60, 153, 0.75);
+}
+.tf-fp-btn--primary:hover:not(:disabled) {
+  filter: saturate(1.06) brightness(1.06);
+}
+.tf-fp-btn--ghost {
+  margin-top: 14px;
+  color: var(--tf-brand-ink);
+  background: var(--tf-surface);
+  border: 1.5px solid color-mix(in srgb, var(--tf-brand) 42%, var(--tf-surface));
+}
+.tf-fp-btn--ghost:hover:not(:disabled) {
+  background: var(--tf-brand-tint);
+}
+
+.tf-fp-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 20px;
+  padding: 16px 18px;
+  background: var(--tf-surface-sunken);
+  border-radius: var(--tf-radius-md);
+}
+.tf-fp-hint-icon {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--tf-brand-on);
+  background: var(--tf-brand);
+  border-radius: 50%;
+}
+.tf-fp-hint-title {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--tf-ink);
+  margin: 0;
+}
+.tf-fp-hint-copy {
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--tf-ink-muted);
+  margin: 3px 0 0;
+}
+.tf-fp-hint-strong {
+  font-weight: 700;
+  color: var(--tf-brand-ink);
+}
+
+@media (max-width: 560px) {
+  .tf-fp-body {
+    padding: 22px 18px;
+  }
+  .tf-fp-close {
+    top: 12px;
+    right: 12px;
+    width: 34px;
+    height: 34px;
+  }
+  .tf-fp-head {
+    padding-right: 34px;
+    gap: 12px;
+  }
+  .tf-fp-art {
+    width: 84px;
+  }
+  .tf-fp-title {
+    font-size: 22px;
+  }
+  .tf-fp-subtitle {
+    font-size: 14.5px;
+    margin-top: 8px;
+  }
+  .tf-fp-rule {
+    margin: 18px 0 20px;
+  }
+  .tf-fp-btn {
+    min-height: 50px;
+    font-size: 15.5px;
+  }
+}
+
+/* --- OTP success choreography ----------------------------------------------
+   The six inputs are absolutely positioned inside a fixed-size stage and moved
+   only with transforms, so each phase is a compositor transition rather than a
+   layout reflow. Nothing rotates as a group: every cell travels to another
+   cell's slot on its own, carrying a small anti-clockwise tilt while it moves,
+   so the six read as exchanging places.
+
+   The 3x2 grid is treated as a ring walked anti-clockwise (0-3-4-5-2-1). Each
+   swap phase advances every cell one place around that ring, which is what
+   makes the six trade slots without any two landing on the same one. Offsets
+   are written against --otp-w/--otp-h/--otp-gap so the narrow-screen cell size
+   stays in step.
+
+   Source order matters: the row rules and the merge rules have equal
+   specificity, so merge must come last to win the tie.
+   -------------------------------------------------------------------------- */
+.tf-otp-stage {
+  --otp-w: 56px;
+  --otp-h: 68px;
+  --otp-gap: 10px;
+  --otp-x: calc(var(--otp-w) + var(--otp-gap));
+  --otp-y: calc(var(--otp-h) + var(--otp-gap));
+  position: relative;
+  height: var(--otp-h);
+  transition: height 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tf-otp-stage--grid,
+.tf-otp-stage--swap1,
+.tf-otp-stage--swap2 {
+  height: calc(2 * var(--otp-h) + var(--otp-gap));
+}
+/* Plain positioning layer -- it carries no transform of its own, so the group
+   never turns as one object. */
+.tf-otp-rotor {
+  position: absolute;
+  inset: 0;
+}
+/* Sized from the stage's own vars rather than .tf-auth-otp's defaults, so the
+   dialog can run larger fields without moving Login's code row. */
+.tf-otp-stage .tf-auth-otp {
+  width: var(--otp-w);
+  height: var(--otp-h);
+  font-size: 24px;
+}
+.tf-otp-stage .tf-auth-otp::placeholder {
+  color: var(--tf-border-strong);
+  font-weight: 500;
+}
+.tf-otp-cell {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease,
+    border-color 0.15s ease, box-shadow 0.15s ease;
+}
+/* The travel between slots is the slow part: long enough to follow an
+   individual cell across the grid, eased at both ends so each one sets down
+   rather than arriving abruptly. */
+.tf-otp-stage--swap1 .tf-otp-cell,
+.tf-otp-stage--swap2 .tf-otp-cell {
+  transition-duration: 0.9s, 0.35s, 0.15s, 0.15s;
+  transition-timing-function: cubic-bezier(0.45, 0, 0.25, 1);
+}
+.tf-otp-cell:nth-child(1) {
+  transform: translate(calc(-50% - 2.5 * var(--otp-x)), -50%);
+}
+.tf-otp-cell:nth-child(2) {
+  transform: translate(calc(-50% - 1.5 * var(--otp-x)), -50%);
+}
+.tf-otp-cell:nth-child(3) {
+  transform: translate(calc(-50% - 0.5 * var(--otp-x)), -50%);
+}
+.tf-otp-cell:nth-child(4) {
+  transform: translate(calc(-50% + 0.5 * var(--otp-x)), -50%);
+}
+.tf-otp-cell:nth-child(5) {
+  transform: translate(calc(-50% + 1.5 * var(--otp-x)), -50%);
+}
+.tf-otp-cell:nth-child(6) {
+  transform: translate(calc(-50% + 2.5 * var(--otp-x)), -50%);
+}
+.tf-otp-stage--grid .tf-otp-cell:nth-child(1) {
+  transform: translate(calc(-50% - 1 * var(--otp-x)), calc(-50% - 0.5 * var(--otp-y)));
+}
+.tf-otp-stage--grid .tf-otp-cell:nth-child(2) {
+  transform: translate(calc(-50%), calc(-50% - 0.5 * var(--otp-y)));
+}
+.tf-otp-stage--grid .tf-otp-cell:nth-child(3) {
+  transform: translate(calc(-50% + 1 * var(--otp-x)), calc(-50% - 0.5 * var(--otp-y)));
+}
+.tf-otp-stage--grid .tf-otp-cell:nth-child(4) {
+  transform: translate(calc(-50% - 1 * var(--otp-x)), calc(-50% + 0.5 * var(--otp-y)));
+}
+.tf-otp-stage--grid .tf-otp-cell:nth-child(5) {
+  transform: translate(calc(-50%), calc(-50% + 0.5 * var(--otp-y)));
+}
+.tf-otp-stage--grid .tf-otp-cell:nth-child(6) {
+  transform: translate(calc(-50% + 1 * var(--otp-x)), calc(-50% + 0.5 * var(--otp-y)));
+}
+.tf-otp-stage--swap1 .tf-otp-cell:nth-child(1) {
+  transform: translate(calc(-50% - 1 * var(--otp-x)), calc(-50% + 0.5 * var(--otp-y))) rotate(-8deg);
+}
+.tf-otp-stage--swap1 .tf-otp-cell:nth-child(2) {
+  transform: translate(calc(-50% - 1 * var(--otp-x)), calc(-50% - 0.5 * var(--otp-y))) rotate(-8deg);
+}
+.tf-otp-stage--swap1 .tf-otp-cell:nth-child(3) {
+  transform: translate(calc(-50%), calc(-50% - 0.5 * var(--otp-y))) rotate(-8deg);
+}
+.tf-otp-stage--swap1 .tf-otp-cell:nth-child(4) {
+  transform: translate(calc(-50%), calc(-50% + 0.5 * var(--otp-y))) rotate(-8deg);
+}
+.tf-otp-stage--swap1 .tf-otp-cell:nth-child(5) {
+  transform: translate(calc(-50% + 1 * var(--otp-x)), calc(-50% + 0.5 * var(--otp-y))) rotate(-8deg);
+}
+.tf-otp-stage--swap1 .tf-otp-cell:nth-child(6) {
+  transform: translate(calc(-50% + 1 * var(--otp-x)), calc(-50% - 0.5 * var(--otp-y))) rotate(-8deg);
+}
+.tf-otp-stage--swap2 .tf-otp-cell:nth-child(1) {
+  transform: translate(calc(-50%), calc(-50% + 0.5 * var(--otp-y))) rotate(-16deg);
+}
+.tf-otp-stage--swap2 .tf-otp-cell:nth-child(2) {
+  transform: translate(calc(-50% - 1 * var(--otp-x)), calc(-50% + 0.5 * var(--otp-y))) rotate(-16deg);
+}
+.tf-otp-stage--swap2 .tf-otp-cell:nth-child(3) {
+  transform: translate(calc(-50% - 1 * var(--otp-x)), calc(-50% - 0.5 * var(--otp-y))) rotate(-16deg);
+}
+.tf-otp-stage--swap2 .tf-otp-cell:nth-child(4) {
+  transform: translate(calc(-50% + 1 * var(--otp-x)), calc(-50% + 0.5 * var(--otp-y))) rotate(-16deg);
+}
+.tf-otp-stage--swap2 .tf-otp-cell:nth-child(5) {
+  transform: translate(calc(-50% + 1 * var(--otp-x)), calc(-50% - 0.5 * var(--otp-y))) rotate(-16deg);
+}
+.tf-otp-stage--swap2 .tf-otp-cell:nth-child(6) {
+  transform: translate(calc(-50%), calc(-50% - 0.5 * var(--otp-y))) rotate(-16deg);
+}
+.tf-otp-stage--merge .tf-otp-cell,
+.tf-otp-stage--done .tf-otp-cell {
+  transform: translate(-50%, -50%) scale(0.5) rotate(-24deg);
+  opacity: 0;
+}
+
+/* The single field the six collapse into. */
+.tf-otp-merged {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(6 * var(--otp-w) + 5 * var(--otp-gap));
+  max-width: 100%;
+  height: var(--otp-h);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--tf-success-tint);
+  border: 1px solid var(--tf-success-border);
+  border-radius: var(--tf-radius-md);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.92);
+  pointer-events: none;
+  transition: opacity 0.45s ease, transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tf-otp-stage--merge .tf-otp-merged,
+.tf-otp-stage--done .tf-otp-merged {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+.tf-otp-tick {
+  color: var(--tf-success);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.35s ease 0.12s,
+    transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) 0.12s;
+}
+.tf-otp-stage--done .tf-otp-tick {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@media (max-width: 420px) {
+  .tf-otp-stage {
+    --otp-w: 44px;
+    --otp-h: 56px;
+    --otp-gap: 8px;
+  }
+  .tf-fp-prompt {
+    gap: 12px;
+  }
+  .tf-fp-art--sm {
+    width: 76px;
+  }
+  .tf-fp-badge {
+    width: 48px;
+    height: 48px;
+  }
+}
+
+/* --- Create-new-password step ----------------------------------------------
+   The reference sets this step apart from the email step: a larger header
+   badge, controls whose leading icon is an inset rounded tile rather than a
+   full-height divided cell, a strength meter under the first field, and a
+   requirements panel with a decorative lock behind the checklist.
+   -------------------------------------------------------------------------- */
+.tf-fp-badge--lg {
+  width: 76px;
+  height: 76px;
+}
+
+/* Control variant: 56px tall, hairline border, icon inset as its own tile. */
+.tf-fp-control--tile {
+  height: 56px;
+  padding: 0 8px;
+  align-items: center;
+  border-width: 1.5px;
+  border-color: var(--tf-border);
+}
+.tf-fp-control--tile:focus-within {
+  border-color: var(--tf-brand);
+}
+.tf-fp-control--tile .tf-fp-control-icon {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: var(--tf-radius-sm);
+  background: var(--tf-surface-sunken);
+  color: var(--tf-brand);
+}
+.tf-fp-control--tile .tf-fp-input {
+  padding: 0 14px;
+  letter-spacing: 0.02em;
+}
+.tf-fp-control--tile .tf-fp-reveal {
+  width: 44px;
+}
+
+/* Requirements panel */
+.tf-pw-req {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 22px;
+  padding: 18px;
+  background: var(--tf-surface-sunken);
+  border: 1px solid var(--tf-border);
+  border-radius: var(--tf-radius-md);
+}
+.tf-pw-req-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.tf-pw-req-shield {
+  flex-shrink: 0;
+  color: var(--tf-brand);
+  margin-top: 1px;
+}
+.tf-pw-req-title {
+  font-size: 16.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--tf-ink);
+  margin: 0;
+}
+.tf-pw-req-sub {
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--tf-ink-subtle);
+  margin: 3px 0 0;
+}
+.tf-pw-req-list {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tf-pw-req-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--tf-ink-muted);
+}
+.tf-pw-req-mark {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--tf-brand-on);
+  background: var(--tf-border-strong);
+  transition: background-color 0.2s ease;
+}
+.tf-pw-req-item.is-met .tf-pw-req-mark {
+  background: var(--tf-success);
+}
+
+/* Decorative lock, behind the checklist. */
+.tf-pw-art {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  z-index: 0;
+  width: 150px;
+  pointer-events: none;
+}
+.tf-pw-art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.tf-pw-art .pw-cloud {
+  fill: color-mix(in srgb, var(--tf-brand) 6%, var(--tf-surface-sunken));
+}
+.tf-pw-art .pw-lock {
+  fill: color-mix(in srgb, var(--tf-brand) 18%, var(--tf-surface-sunken));
+}
+.tf-pw-art .pw-lock-hole {
+  fill: color-mix(in srgb, var(--tf-brand) 32%, var(--tf-surface-sunken));
+}
+.tf-pw-art .pw-shackle {
+  fill: none;
+  stroke: color-mix(in srgb, var(--tf-brand) 18%, var(--tf-surface-sunken));
+  stroke-width: 11;
+  stroke-linecap: round;
+}
+.tf-pw-art .pw-badge {
+  fill: var(--tf-brand);
+}
+.tf-pw-art .pw-badge-tick {
+  fill: none;
+  stroke: var(--tf-brand-on);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tf-pw-art .pw-spark {
+  fill: color-mix(in srgb, var(--tf-brand) 14%, var(--tf-surface-sunken));
+}
+
+/* Reassurance line under the submit. */
+.tf-pw-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--tf-ink-faint);
+}
+.tf-pw-note-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--tf-ink-subtle);
+}
+
+@media (max-width: 560px) {
+  .tf-fp-badge--lg {
+    width: 56px;
+    height: 56px;
+  }
+  .tf-pw-art {
+    width: 108px;
+    opacity: 0.7;
+  }
+}
+
+/* --- Password-reset success step -------------------------------------------
+   Centred column: success mark, headline, two lines of copy, a tinted
+   reassurance pill, the return action, and the redirect countdown.
+   -------------------------------------------------------------------------- */
+.tf-ok {
+  text-align: center;
+}
+.tf-ok-art {
+  width: 140px;
+  margin: 4px auto 0;
+}
+.tf-ok-art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.tf-ok-art .ok-disc {
+  fill: var(--tf-success-tint);
+}
+.tf-ok-art .ok-ring,
+.tf-ok-art .ok-tick {
+  fill: none;
+  stroke: var(--tf-success);
+  stroke-width: 5.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tf-ok-art .ok-spark {
+  fill: color-mix(in srgb, var(--tf-success) 34%, var(--tf-surface));
+}
+.tf-ok-title {
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--tf-ink);
+  margin: 18px 0 0;
+}
+.tf-ok-copy {
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--tf-ink-muted);
+  margin: 10px 0 0;
+}
+/* Hugs its content rather than filling the column, as in the reference. */
+.tf-ok-panel {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 100%;
+  margin-top: 18px;
+  padding: 12px 22px;
+  font-size: 15px;
+  line-height: 1.4;
+  text-align: left;
+  color: var(--tf-ink-muted);
+  background: var(--tf-success-tint);
+  border: 1px solid color-mix(in srgb, var(--tf-success) 16%, var(--tf-surface));
+  border-radius: var(--tf-radius-sm);
+}
+.tf-ok-panel-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--tf-success);
+}
+.tf-ok-btn {
+  margin-top: 20px;
+}
+.tf-ok-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 15px 0 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--tf-ink-muted);
+}
+.tf-ok-note-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--tf-brand);
+}
+.tf-ok-note-count {
+  font-weight: 700;
+  color: var(--tf-brand-ink);
+}
+
+@media (max-width: 560px) {
+  .tf-ok-art {
+    width: 116px;
+  }
+  .tf-ok-title {
+    font-size: 21px;
+  }
+  .tf-ok-copy,
+  .tf-ok-panel,
+  .tf-ok-note {
+    font-size: 14.5px;
+  }
+}
+
 @media (max-width: 1120px) {
   .tf-auth-shell {
     gap: 34px;
     grid-template-columns: minmax(0, 1fr) minmax(420px, 540px);
   }
-  .tf-auth-headline {
-    font-size: 44px;
-  }
 }
 
-/* Tightest two-column band: the column is narrow enough that the lede and the
-   trust-card titles each wrap onto an extra line (~45px more than at 1120px).
+/* Tightest two-column band: the column is narrow enough that the lede wraps
+   onto an extra line.
    Give the illustration a smaller share so a 768px-tall window still fits. */
 @media (min-width: 1024px) and (max-width: 1119px) {
   .tf-hero-art {
@@ -877,18 +1730,19 @@ export const AUTH_THEME_CSS = `
   }
   .tf-auth--split .tf-auth-eyebrow {
     margin: 0 0 6px;
-    font-size: 13px;
   }
   .tf-auth--split .tf-auth-headline {
     margin-top: 0;
     margin-bottom: 12px;
-    font-size: 26px;
+  }
+  .tf-auth--split .tf-auth-eyebrow,
+  .tf-auth--split .tf-auth-headline {
+    font-size: 20px;
   }
   /* The lede repeats what the card already says once stacked; drop it and let
      the illustration carry the brand moment instead. */
   .tf-auth--split .tf-auth-lede,
-  .tf-auth--split .tf-auth-features,
-  .tf-auth--split .tf-login-proof-row {
+  .tf-auth--split .tf-auth-features {
     display: none;
   }
   .tf-auth--split .tf-hero-art {
@@ -961,9 +1815,6 @@ export const AUTH_THEME_CSS = `
     grid-template-columns: 1fr;
     gap: 0;
   }
-  .tf-login-proof-row {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 420px) {
@@ -985,8 +1836,9 @@ export const AUTH_THEME_CSS = `
   .tf-auth--split .tf-hero-art {
     width: min(260px, 80vw);
   }
+  .tf-auth--split .tf-auth-eyebrow,
   .tf-auth--split .tf-auth-headline {
-    font-size: 23px;
+    font-size: 18px;
   }
 }
 

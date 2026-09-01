@@ -179,6 +179,16 @@ interface JobVersionHistoryPanelProps {
   statusOverrides?: Record<string, string>;
   /** Drop still-drafted versions from the chain — see resolveVersionHistoryRows. */
   publishedOnly?: boolean;
+  /**
+   * Render the job role as plain text instead of a link to Job Details.
+   *
+   * Opt-in, so every surface that reads this table as a way INTO a job keeps
+   * its navigation untouched. Create Assessment opts in: there the table is a
+   * picker mid-task, and a link out of a half-made assessment is a trapdoor
+   * rather than a route. The Eye action in the same row is how a version gets
+   * read there — in a popup, without leaving the page.
+   */
+  plainTitle?: boolean;
   /** Host-specific columns, inserted after the shared ones and before Action. */
   extraColumns?: ExtraVersionColumn[];
   /**
@@ -226,6 +236,7 @@ export default function JobVersionHistoryPanel({
   staticRows = false,
   statusOverrides,
   publishedOnly = false,
+  plainTitle = false,
   extraColumns = [],
   stickyVersionColumn = false,
 }: JobVersionHistoryPanelProps) {
@@ -481,20 +492,34 @@ export default function JobVersionHistoryPanel({
                     >
                       {/* The job role pops on row hover — a gentle scale from
                           the left edge. Scoped to this span so the sticky
-                          Action column is unaffected. */}
-                      <Link
-                        href={versionHref(version.id)}
-                        target={openInNewTab ? '_blank' : undefined}
-                        rel={openInNewTab ? 'noopener noreferrer' : undefined}
-                        onClick={(e) => e.stopPropagation()}
-                        className="block h-full w-full py-2.5 px-3 hover:text-brand-blue hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
-                      >
-                        <span className={`inline-block max-w-full truncate ${
-                          staticRows ? '' : 'transform-gpu transition-transform duration-200 ease-out origin-left group-hover:scale-105'
-                        }`}>
-                          {version.title || detail?.title || '—'}
+                          Action column is unaffected.
+
+                          Under `plainTitle` the same cell renders without the
+                          link: identical padding and truncation, so the column
+                          keeps its metrics and only the navigation goes. */}
+                      {plainTitle ? (
+                        <span className="block h-full w-full py-2.5 px-3">
+                          <span className={`inline-block max-w-full truncate ${
+                            staticRows ? '' : 'transform-gpu transition-transform duration-200 ease-out origin-left group-hover:scale-105'
+                          }`}>
+                            {version.title || detail?.title || '—'}
+                          </span>
                         </span>
-                      </Link>
+                      ) : (
+                        <Link
+                          href={versionHref(version.id)}
+                          target={openInNewTab ? '_blank' : undefined}
+                          rel={openInNewTab ? 'noopener noreferrer' : undefined}
+                          onClick={(e) => e.stopPropagation()}
+                          className="block h-full w-full py-2.5 px-3 hover:text-brand-blue hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
+                        >
+                          <span className={`inline-block max-w-full truncate ${
+                            staticRows ? '' : 'transform-gpu transition-transform duration-200 ease-out origin-left group-hover:scale-105'
+                          }`}>
+                            {version.title || detail?.title || '—'}
+                          </span>
+                        </Link>
+                      )}
                     </td>
                     <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                       <div className="flex flex-col items-start gap-1">
