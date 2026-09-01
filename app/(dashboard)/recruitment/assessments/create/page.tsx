@@ -45,13 +45,12 @@ export default function CreateAssessmentPage() {
         // Probe for total then pull all so the JD selector sees every JD version.
         //
         // NO status filter, deliberately — this seeds the very list AssessmentCreation
-        // then re-derives with `buildAssessmentJobList`, whose rule is "hide drafts,
-        // show everything else". Asking for `status: 'published'` here contradicted
-        // that in both directions: it dropped the Disabled and Archived versions the
-        // list is now required to show, and it stripped a lineage's draft v4 before
-        // the collapse could see it, which is the difference between "v3 is the
-        // latest non-draft" and "v3 is the latest, full stop". The seed therefore
-        // painted a list the component was about to replace with a different one.
+        // then re-derives with `buildAssessmentJobList`, whose rule is "one row per
+        // job, on its latest Published or Republished version". Asking the API for
+        // `status: 'published'` would not shortcut that: the collapse has to see a
+        // lineage's archived and draft versions to know they are NEWER than the live
+        // one it picks, and View Versions lists every one of them with its real
+        // status. A pre-filtered seed painted a list the component then replaced.
         const jdParams = { source: 'my-jds' as const };
         const [jobsResponse, topicsResponse] = await Promise.allSettled([
           jdService.list({ ...jdParams, page_size: 1 }).then((probe) =>

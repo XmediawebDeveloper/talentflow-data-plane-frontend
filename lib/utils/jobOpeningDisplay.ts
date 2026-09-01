@@ -297,33 +297,31 @@ export const getPublishedJobs = (allVersions: Job[]): Job[] =>
    written once hides versions a recruiter needs to see, and a visibility test
    reused as a selection test offers picks the next step refuses.
 
-     VISIBILITY  — is this version worth showing at all?
-                   Draft is not: it is unfinished, and nothing downstream can
-                   be built against it. EVERY other status is, including
-                   Disabled and Archived, because seeing that a job is archived
-                   is the answer a recruiter came for. Hiding it just looks
-                   like the job is missing.
+     MAIN LIST   — which ONE version of a job represents it in the picker?
+                   Its latest LIVE version: the highest-numbered Published or
+                   Republished one. A newer Archived, Disabled or Draft version
+                   does not take that place — the job is still live at the
+                   version below it, and that is the version an assessment
+                   would be built against. A job with no live version at all
+                   therefore has no row.
 
-     SELECTION   — can a NEW assessment be created against it?
+     VERSION HISTORY — which versions are listed under it?
+                   All of them, newest first, each showing its real status:
+                   Published, Republished, Disabled, Archived and Draft alike.
+                   This is where a recruiter reads what happened to a job.
+
+     SELECTION   — can a NEW assessment be created against a version?
                    Published and Republished only. Disabled and Archived are
                    out of service, so an assessment authored against one would
-                   be pinned to a JD no candidate will ever be sent.
+                   be pinned to a JD no candidate will ever be sent, and a
+                   Draft is unfinished.
 
-   Whether the version already HAS an assessment is a third, separate thing: it
-   is a reason the existing record must be preserved and surfaced, never a
-   reason to change either answer above. An archived version with an assessment
-   is visible (because it is not a draft) and unselectable (because it is
-   archived) — its assessment does not buy it selectability, and its archived
-   status does not cost it visibility. */
-
-/**
- * Is this version a Draft — the one status the assessment list hides?
- *
- * Compared case-insensitively: lineage rows arrive with the raw DB status while
- * the `Job` type holds the capitalised form.
- */
-export const isDraftVersion = (job: Pick<Job, 'status'>): boolean =>
-  String(job.status || '').toLowerCase() === 'draft';
+   Whether the version already HAS an assessment is a further, separate thing:
+   it is a reason the existing record must be preserved and surfaced, never a
+   reason to change any answer above. An archived version with an assessment is
+   listed in that job's version history showing "Archived", and is not
+   selectable — its assessment does not buy it selectability, and its archived
+   status does not remove the assessment already built against it. */
 
 /**
  * Can a NEW assessment be created against this JD version? Published and
@@ -346,28 +344,39 @@ export const isSelectableVersion = (job: Pick<Job, 'status'>): boolean => {
 
 /**
  * The version of a lineage that represents it in the Create Assessment main
- * list — its latest NON-DRAFT version, or `null` when it has none.
+ * list — its latest LIVE version, or `null` when it has none.
+ *
+ * Live means Published or Republished, which is deliberately the same test the
+ * radio uses (`isSelectableVersion`): the row a recruiter sees in this list is
+ * always a row they can actually build an assessment against.
  *
  * `bucket` arrives newest-version-first (see `groupByLineage`), so the first
- * non-draft entry is that version and no sort is repeated here.
+ * live entry is the latest one and no sort is repeated here.
  *
- * Latest NON-DRAFT rather than latest outright is what stops a fresh draft
- * displacing a live version: a v4 draft raised over a published v3 is skipped
- * and the card keeps reading "v3 · Published" until v4 is itself published. The
- * draft is not lost — View Versions lists the whole lineage, drafts included,
- * and simply refuses to select them.
+ * Latest LIVE rather than highest-numbered is what stops a version that is no
+ * longer in service from standing in for a job that is: v3 archived over a
+ * published v2 leaves the card reading "v2 · Published", because v2 is where
+ * the job is still live and v2 is what an assessment would be built against.
+ * The same skip covers a v4 draft raised over a published v3. Republished
+ * needs no special case — its stored status is `published`.
  *
- * `null` (rather than `bucket[0]`) removes a job that is nothing but drafts:
- * there is no version of it to show, so there is no row.
+ * The skipped versions are not lost: View Versions lists the entire lineage,
+ * newest first, each row showing its real status.
+ *
+ * `null` (rather than `bucket[0]`) removes a job with no live version at all —
+ * one that is nothing but drafts, or whose every version has been archived or
+ * disabled. There is no version of it an assessment could be built against, so
+ * there is no row.
  */
 export const assessmentListRepresentative = (bucket: Job[]): Job | null =>
-  bucket.find(version => !isDraftVersion(version)) ?? null;
+  bucket.find(version => isSelectableVersion(version)) ?? null;
 
 /**
- * The Create Assessment job list: one row per job, each on its latest non-draft
- * version, with draft-only jobs dropped.
+ * The Create Assessment job list: one row per job, each on its latest live
+ * (Published or Republished) version, with jobs that have no live version
+ * dropped.
  *
- * Pass the FULL, unfiltered version list. The draft test runs per version
+ * Pass the FULL, unfiltered version list. The status test runs per version
  * INSIDE each lineage, so filtering by status upstream would remove the very
  * versions the collapse needs in order to pick the right representative.
  *

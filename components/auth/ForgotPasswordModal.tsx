@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Mail, Lock, Eye, EyeOff, CheckCircle, ArrowLeft, Loader2, AlertCircle, KeyRound, Send, ShieldOff, UserX } from 'lucide-react';
+import { X, Mail, Lock, Eye, EyeOff, CheckCircle, ArrowLeft, Loader2, AlertCircle, KeyRound, Send, ShieldOff, UserX, Check, Clock, LogIn } from 'lucide-react';
 import authService from '@/lib/services/authService';
 import { detectSubdomain } from '@/lib/utils/subdomain';
+import ResetPasswordArt from './ResetPasswordArt';
+import VerifyCodeArt from './VerifyCodeArt';
+import PasswordLockArt from './PasswordLockArt';
+import ResetSuccessArt from './ResetSuccessArt';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
@@ -11,6 +15,7 @@ interface ForgotPasswordModalProps {
 }
 
 type ModalStep = 'email' | 'otp' | 'password' | 'success' | 'firstLogin' | 'accountSuspended' | 'userDeactivated';
+type OtpPhase = 'idle' | 'grid' | 'swap1' | 'swap2' | 'merge' | 'done';
 
 export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordModalProps) {
   const [step, setStep] = useState<ModalStep>('email');
@@ -30,6 +35,54 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
   const [tempSentAgain, setTempSentAgain] = useState(false);
 
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Seconds shown on the success step. Display only -- the redirect itself is
+  // the 3s setTimeout in handlePasswordSubmit, which is unchanged.
+  const [redirectIn, setRedirectIn] = useState(3);
+
+  useEffect(() => {
+    if (step !== 'success') return;
+    const id = setInterval(() => setRedirectIn((n) => (n > 0 ? n - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [step]);
+
+  // Success choreography for the OTP step. The phase drives .tf-otp-stage--*;
+  // every visual is CSS, this only decides when each phase begins.
+  const [otpPhase, setOtpPhase] = useState<OtpPhase>('idle');
+  const otpTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearOtpTimers = () => {
+    otpTimers.current.forEach(clearTimeout);
+    otpTimers.current = [];
+  };
+
+  // Drop any pending phase changes if the dialog unmounts mid-sequence.
+  useEffect(() => clearOtpTimers, []);
+
+  /**
+   * Runs row -> grid -> two rounds of cell-for-cell swaps -> merge -> tick,
+   * then hands over to `onDone`. The offsets are cumulative milliseconds and
+   * each one clears the CSS transition it follows, so no phase starts before
+   * the last has settled (the swaps travel for 0.9s each).
+   */
+  const runOtpSuccess = (onDone: () => void) => {
+    const reduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Reduced motion: the theme already collapses every transition to ~0s, so
+    // hold each phase just long enough to read rather than replaying the turn.
+    const at = reduced
+      ? { swap1: 0, swap2: 0, merge: 0, done: 0, handover: 700 }
+      : { swap1: 700, swap2: 1700, merge: 2700, done: 3300, handover: 4200 };
+
+    clearOtpTimers();
+    setOtpPhase('grid');
+    (['swap1', 'swap2', 'merge', 'done'] as const).forEach((phase) => {
+      otpTimers.current.push(setTimeout(() => setOtpPhase(phase), at[phase]));
+    });
+    otpTimers.current.push(setTimeout(onDone, at.handover));
+  };
 
   // The tenant this reset is scoped to — taken from the login page URL (subdomain / ?org=).
   const getTenantSubdomain = (): string | null =>
@@ -57,6 +110,8 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
         setResendTimer(0);
         setFirstLoginMessage('');
         setTempSentAgain(false);
+        setOtpPhase('idle');
+        setRedirectIn(3);
       }, 300);
     }
   }, [isOpen]);
@@ -181,10 +236,11 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
     try {
       const response = await authService.verifyResetOTP(email, otpValue, getTenantSubdomain());
       setResetToken(response.reset_token);
-      setStep('password');
+      runOtpSuccess(() => setStep('password'));
     } catch (err: any) {
       setError(err.message || 'Invalid verification code');
       setOtpCode(['', '', '', '', '', '']);
+      setOtpPhase('idle');
       otpRefs.current[0]?.focus();
     } finally {
       setIsLoading(false);
@@ -210,6 +266,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
 
     try {
       await authService.resetPassword(resetToken, newPassword);
+      setRedirectIn(3);
       setStep('success');
       setTimeout(() => {
         onClose();
@@ -242,10 +299,10 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
   if (!isOpen) return null;
 
   // Copy for the header, kept in one place so the two lines never drift apart.
-  const HEADINGS: Record<ModalStep, { title: string; subtitle: string }> = {
-    email:            { title: 'Reset your password',   subtitle: 'We’ll send you a verification code' },
-    otp:              { title: 'Enter verification code', subtitle: `Code sent to ${email}` },
-    password:         { title: 'Create new password',    subtitle: 'Choose a strong password' },
+  const HEADINGS: Record<ModalStep, { title: string; subtitle: React.ReactNode }> = {
+    email:            { title: 'Reset your password',   subtitle: 'We’ll send you a verification code to securely reset your password.' },
+    otp:              { title: 'Enter verification code', subtitle: <>Code sent to <span className="tf-fp-subtitle-em">{email}</span></> },
+    password:         { title: 'Create new password',    subtitle: 'Choose a strong password to keep your account secure.' },
     success:          { title: 'Password reset',         subtitle: 'You can now sign in with your new password' },
     firstLogin:       { title: 'Finish setting up your account', subtitle: 'This is your first sign-in' },
     accountSuspended: { title: 'Account suspended',      subtitle: 'Password reset is unavailable' },
@@ -254,66 +311,69 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
   const heading = HEADINGS[step];
 
   return (
-    <div
-      className="tf-auth-scope"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(16, 24, 40, 0.55)',
-        zIndex: 50,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-      }}
-    >
+    <div className="tf-auth-scope tf-fp-overlay">
       <div
         role="dialog"
         aria-modal="true"
         aria-label={heading.title}
-        style={{
-          background: 'var(--tf-surface)',
-          border: '1px solid var(--tf-border)',
-          borderRadius: 'var(--tf-radius)',
-          boxShadow: 'var(--tf-shadow)',
-          width: '100%',
-          maxWidth: 440,
-          maxHeight: 'calc(100dvh - 2rem)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
+        className="tf-fp-modal"
       >
-        {/* Header */}
-        <div style={{
-          padding: '20px 22px',
-          borderBottom: '1px solid var(--tf-border)',
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 12,
-          flexShrink: 0,
-        }}>
-          <div>
-            <h2 style={{ fontSize: 18, fontWeight: 650, letterSpacing: '-0.015em', color: 'var(--tf-ink)', margin: 0 }}>
-              {heading.title}
-            </h2>
-            <p style={{ fontSize: 13, color: 'var(--tf-ink-subtle)', margin: '3px 0 0' }}>
-              {heading.subtitle}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="tf-auth-reveal"
-            style={{ position: 'static', transform: 'none', width: 28, height: 28, flexShrink: 0 }}
-            aria-label="Close"
-          >
-            <X style={{ width: 18, height: 18 }} />
-          </button>
-        </div>
+        <button onClick={onClose} className="tf-fp-close" aria-label="Close">
+          <X style={{ width: 20, height: 20 }} />
+        </button>
 
-        {/* Content */}
-        <div style={{ padding: 22, flex: 1, overflowY: 'auto' }}>
+        <div className="tf-fp-body">
+          {/* Header */}
+          <div
+            className={`tf-fp-head${
+              step === 'otp' || step === 'password' ? ' tf-fp-head--badge' : ''
+            }`}
+          >
+            {step === 'otp' && (
+              <span className="tf-fp-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="32" height="32">
+                  <path fill="currentColor" d="M12 2l7.5 2.7v6.1c0 4.9-3.2 8.4-7.5 9.6-4.3-1.2-7.5-4.7-7.5-9.6V4.7z" />
+                  <path
+                    d="M8.6 11.9l2.4 2.4 4.4-4.4"
+                    fill="none"
+                    stroke="#fff"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            )}
+            {step === 'password' && (
+              <span className="tf-fp-badge tf-fp-badge--lg" aria-hidden="true">
+                <svg viewBox="0 0 40 40" width="40" height="40">
+                  <path
+                    className="fp-spark"
+                    d="M6 8l1.1 2.8L9.9 12l-2.8 1.1L6 15.9l-1.1-2.8L2.1 12l2.8-1.1z"
+                  />
+                  <circle className="fp-spark" cx="34" cy="27" r="1.8" />
+                  <path
+                    fill="currentColor"
+                    d="M20 5l10 3.6v8.1c0 6.6-4.3 11.2-10 12.8-5.7-1.6-10-6.2-10-12.8V8.6z"
+                  />
+                  <rect x="16.2" y="17.4" width="7.6" height="7" rx="1.6" fill="#fff" />
+                  <path
+                    d="M17.8 17.4v-2.3a2.2 2.2 0 0 1 4.4 0v2.3"
+                    fill="none"
+                    stroke="#fff"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </span>
+            )}
+            <div>
+              <h2 className="tf-fp-title">{heading.title}</h2>
+              <p className="tf-fp-subtitle">{heading.subtitle}</p>
+            </div>
+            {step === 'email' && <ResetPasswordArt />}
+          </div>
+          <div className="tf-fp-rule" />
           {/* Error Message */}
           {error && (
             <div className="tf-auth-alert tf-auth-alert--danger">
@@ -325,11 +385,11 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
           {/* Step 1: Email Entry */}
           {step === 'email' && (
             <form onSubmit={handleEmailSubmit}>
-              <div className="tf-auth-field">
-                <label className="tf-auth-label" htmlFor="tf-fp-email">Email address</label>
-                <div className="tf-auth-control">
-                  <span className="tf-auth-control-icon">
-                    <Mail style={{ width: 17, height: 17 }} />
+              <div className="tf-fp-field">
+                <label className="tf-fp-label" htmlFor="tf-fp-email">Email address</label>
+                <div className="tf-fp-control">
+                  <span className="tf-fp-control-icon">
+                    <Mail style={{ width: 19, height: 19 }} />
                   </span>
                   <input
                     id="tf-fp-email"
@@ -337,7 +397,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@company.com"
-                    className="tf-auth-input"
+                    className="tf-fp-input"
                     required
                   />
                 </div>
@@ -346,74 +406,118 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
               <button
                 type="submit"
                 disabled={isLoading || !email}
-                className={`tf-auth-btn${isLoading ? ' tf-auth-btn--busy' : ''}`}
+                className="tf-fp-btn tf-fp-btn--primary"
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
+                    <Loader2 className="tf-auth-spin" style={{ width: 19, height: 19 }} />
                     Sending code…
                   </>
                 ) : (
-                  'Send verification code'
+                  <>
+                    <Send style={{ width: 19, height: 19 }} />
+                    Send verification code
+                  </>
                 )}
               </button>
 
               <button
                 type="button"
                 onClick={onClose}
-                className="tf-auth-btn tf-auth-btn--outline"
-                style={{ marginTop: 10, borderColor: 'var(--tf-border)', color: 'var(--tf-ink-muted)' }}
+                className="tf-fp-btn tf-fp-btn--ghost"
               >
+                <ArrowLeft style={{ width: 19, height: 19 }} />
                 Back to sign in
               </button>
+
+              <div className="tf-fp-hint">
+                <span className="tf-fp-hint-icon" aria-hidden="true">i</span>
+                <div>
+                  <p className="tf-fp-hint-title">Didn&apos;t receive the code?</p>
+                  <p className="tf-fp-hint-copy">
+                    Check your spam or junk folder. The code will expire in{' '}
+                    <span className="tf-fp-hint-strong">10 minutes</span>.
+                  </p>
+                </div>
+              </div>
             </form>
           )}
 
           {/* Step 2: OTP Verification */}
           {step === 'otp' && (
             <div>
-              <p style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', textAlign: 'center', margin: '0 0 16px' }}>
-                Enter the 6-digit code we sent to your email
-              </p>
-              <div className="tf-auth-otp-row" onPaste={handleOtpPaste}>
-                {otpCode.map((digit, index) => (
-                  <input
-                    key={index}
-                    /* Block body so the callback returns undefined. React 19 treats a
-                       ref callback's return value as a cleanup function, and the concise
-                       arrow returned the assigned element. */
-                    ref={(el) => { otpRefs.current[index] = el; }}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleOtpChange(index, e.target.value)}
-                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                    aria-label={`Digit ${index + 1} of 6`}
-                    className="tf-auth-otp"
-                  />
-                ))}
+              <div className="tf-fp-prompt">
+                <VerifyCodeArt />
+                <div>
+                  <p className="tf-fp-prompt-title">Enter the 6-digit code we sent to your email</p>
+                  <p className="tf-fp-prompt-copy">Please check your inbox and enter the code below.</p>
+                </div>
+              </div>
+              <div className={`tf-otp-stage tf-otp-stage--${otpPhase}`}>
+                <div className="tf-otp-rotor" onPaste={handleOtpPaste}>
+                  {otpCode.map((digit, index) => (
+                    <input
+                      key={index}
+                      /* Block body so the callback returns undefined. React 19 treats a
+                         ref callback's return value as a cleanup function, and the concise
+                         arrow returned the assigned element. */
+                      ref={(el) => { otpRefs.current[index] = el; }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleOtpChange(index, e.target.value)}
+                      onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                      aria-label={`Digit ${index + 1} of 6`}
+                      placeholder="–"
+                      className="tf-auth-otp tf-otp-cell"
+                      readOnly={otpPhase !== 'idle'}
+                    />
+                  ))}
+                </div>
+                <div
+                  className="tf-otp-merged"
+                  role="status"
+                  aria-label={otpPhase === 'done' ? 'Verification code accepted' : undefined}
+                >
+                  <Check className="tf-otp-tick" style={{ width: 26, height: 26 }} />
+                </div>
               </div>
 
-              <div style={{ textAlign: 'center', marginTop: 16 }}>
-                <button
-                  type="button"
-                  onClick={handleResendOtp}
-                  disabled={resendTimer > 0 || isLoading}
-                  className="tf-auth-link"
-                  style={{ fontSize: 13.5 }}
-                >
-                  {resendTimer > 0 ? `Resend code in ${resendTimer}s` : 'Resend code'}
-                </button>
+              <div className="tf-fp-resend">
+                <span className="tf-fp-resend-icon" aria-hidden="true">
+                  <Clock style={{ width: 18, height: 18 }} />
+                </span>
+                {resendTimer > 0 ? (
+                  <span>
+                    Resend code in <span className="tf-fp-resend-time">{resendTimer}s</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={isLoading}
+                    className="tf-auth-link"
+                    style={{ fontSize: 15 }}
+                  >
+                    Resend code
+                  </button>
+                )}
+              </div>
+
+              <div className="tf-fp-hint tf-fp-hint--inline">
+                <span className="tf-fp-hint-icon" aria-hidden="true">i</span>
+                <p className="tf-fp-hint-copy">
+                  Didn&apos;t receive the code? Check your spam or junk folder.
+                </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => setStep('email')}
-                className="tf-auth-btn tf-auth-btn--outline"
-                style={{ marginTop: 18, borderColor: 'var(--tf-border)', color: 'var(--tf-ink-muted)' }}
+                className="tf-fp-btn tf-fp-btn--ghost"
               >
-                <ArrowLeft style={{ width: 15, height: 15 }} />
+                <ArrowLeft style={{ width: 19, height: 19 }} />
                 Change email
               </button>
             </div>
@@ -422,11 +526,11 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
           {/* Step 3: New Password */}
           {step === 'password' && (
             <form onSubmit={handlePasswordSubmit}>
-              <div className="tf-auth-field">
-                <label className="tf-auth-label" htmlFor="tf-fp-new">New password</label>
-                <div className="tf-auth-control">
-                  <span className="tf-auth-control-icon">
-                    <Lock style={{ width: 17, height: 17 }} />
+              <div className="tf-fp-field">
+                <label className="tf-fp-label" htmlFor="tf-fp-new">New password</label>
+                <div className="tf-fp-control tf-fp-control--tile">
+                  <span className="tf-fp-control-icon">
+                    <Lock style={{ width: 19, height: 19 }} />
                   </span>
                   <input
                     id="tf-fp-new"
@@ -434,25 +538,25 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Enter new password"
-                    className="tf-auth-input tf-auth-input--reveal"
+                    className="tf-fp-input"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="tf-auth-reveal"
+                    className="tf-fp-reveal"
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showPassword ? <EyeOff style={{ width: 17, height: 17 }} /> : <Eye style={{ width: 17, height: 17 }} />}
+                    {showPassword ? <EyeOff style={{ width: 19, height: 19 }} /> : <Eye style={{ width: 19, height: 19 }} />}
                   </button>
                 </div>
               </div>
 
-              <div className="tf-auth-field">
-                <label className="tf-auth-label" htmlFor="tf-fp-confirm">Confirm password</label>
-                <div className="tf-auth-control">
-                  <span className="tf-auth-control-icon">
-                    <Lock style={{ width: 17, height: 17 }} />
+              <div className="tf-fp-field">
+                <label className="tf-fp-label" htmlFor="tf-fp-confirm">Confirm password</label>
+                <div className="tf-fp-control tf-fp-control--tile">
+                  <span className="tf-fp-control-icon">
+                    <Lock style={{ width: 19, height: 19 }} />
                   </span>
                   <input
                     id="tf-fp-confirm"
@@ -460,43 +564,57 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm new password"
-                    className="tf-auth-input tf-auth-input--reveal"
+                    className="tf-fp-input"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="tf-auth-reveal"
+                    className="tf-fp-reveal"
                     aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showConfirmPassword ? <EyeOff style={{ width: 17, height: 17 }} /> : <Eye style={{ width: 17, height: 17 }} />}
+                    {showConfirmPassword ? <EyeOff style={{ width: 19, height: 19 }} /> : <Eye style={{ width: 19, height: 19 }} />}
                   </button>
                 </div>
               </div>
 
-              {/* Password Requirements */}
-              <div className="tf-auth-panel" style={{ marginBottom: 18 }}>
-                <p style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tf-ink-muted)', margin: '0 0 10px' }}>
-                  Password requirements
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div className="tf-pw-req">
+                <PasswordLockArt />
+                <div className="tf-pw-req-head">
+                  <span className="tf-pw-req-shield" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="30" height="30">
+                      <path fill="currentColor" d="M12 2l7.5 2.7v6.1c0 4.9-3.2 8.4-7.5 9.6-4.3-1.2-7.5-4.7-7.5-9.6V4.7z" />
+                      <path
+                        d="M8.6 11.9l2.4 2.4 4.4-4.4"
+                        fill="none"
+                        stroke="#fff"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </span>
+                  <div>
+                    <p className="tf-pw-req-title">Password requirements</p>
+                    <p className="tf-pw-req-sub">Your password must include:</p>
+                  </div>
+                </div>
+                <div className="tf-pw-req-list">
                   {[
                     { label: 'At least 8 characters', check: checks.length },
-                    { label: 'One uppercase letter', check: checks.uppercase },
-                    { label: 'One lowercase letter', check: checks.lowercase },
-                    { label: 'One number', check: checks.number },
-                    { label: 'One special character', check: checks.special },
-                  ].map((req, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <CheckCircle style={{
-                        width: 15,
-                        height: 15,
-                        flexShrink: 0,
-                        color: req.check ? 'var(--tf-success)' : 'var(--tf-border-strong)',
-                      }} />
-                      <span style={{ fontSize: 12.5, color: req.check ? 'var(--tf-ink-muted)' : 'var(--tf-ink-subtle)' }}>
-                        {req.label}
+                    { label: 'One uppercase letter (A-Z)', check: checks.uppercase },
+                    { label: 'One lowercase letter (a-z)', check: checks.lowercase },
+                    { label: 'One number (0-9)', check: checks.number },
+                    { label: 'One special character (!@#$%^&*)', check: checks.special },
+                  ].map((req) => (
+                    <div
+                      key={req.label}
+                      className={`tf-pw-req-item${req.check ? ' is-met' : ''}`}
+                    >
+                      <span className="tf-pw-req-mark" aria-hidden="true">
+                        <Check style={{ width: 14, height: 14 }} strokeWidth={3} />
                       </span>
+                      <span>{req.label}</span>
                     </div>
                   ))}
                 </div>
@@ -505,17 +623,37 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
               <button
                 type="submit"
                 disabled={isLoading || strength < 5}
-                className={`tf-auth-btn${isLoading ? ' tf-auth-btn--busy' : ''}`}
+                className="tf-fp-btn tf-fp-btn--primary"
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
+                    <Loader2 className="tf-auth-spin" style={{ width: 19, height: 19 }} />
                     Resetting password…
                   </>
                 ) : (
-                  'Reset password'
+                  <>
+                    <Lock style={{ width: 19, height: 19 }} />
+                    Reset password
+                  </>
                 )}
               </button>
+
+              <p className="tf-pw-note">
+                <span className="tf-pw-note-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="16" height="16">
+                    <path fill="currentColor" d="M12 2l7.5 2.7v6.1c0 4.9-3.2 8.4-7.5 9.6-4.3-1.2-7.5-4.7-7.5-9.6V4.7z" />
+                    <path
+                      d="M8.6 11.9l2.4 2.4 4.4-4.4"
+                      fill="none"
+                      stroke="#fff"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </span>
+                Your password is encrypted and stored securely.
+              </p>
             </form>
           )}
 
@@ -666,29 +804,45 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
 
           {/* Step 4: Success */}
           {step === 'success' && (
-            <div style={{ textAlign: 'center', padding: '16px 0' }}>
-              <div
-                className="tf-auth-feature-icon"
-                style={{
-                  width: 52,
-                  height: 52,
-                  margin: '0 auto 18px',
-                  background: 'var(--tf-success-tint)',
-                  color: 'var(--tf-success-ink)',
-                }}
-              >
-                <CheckCircle style={{ width: 26, height: 26 }} />
-              </div>
-              <h3 style={{ fontSize: 18, fontWeight: 650, letterSpacing: '-0.015em', color: 'var(--tf-ink)', margin: '0 0 6px' }}>
-                All set
-              </h3>
-              <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', lineHeight: 1.6, margin: '0 0 22px' }}>
-                Your password has been reset successfully.<br />
-                Redirecting to sign in…
+            <div className="tf-ok">
+              <ResetSuccessArt />
+
+              <h3 className="tf-ok-title">All set!</h3>
+              <p className="tf-ok-copy">
+                Your password has been reset successfully.
+                <br />
+                You will be redirected to sign in shortly.
               </p>
-              <button onClick={onClose} className="tf-auth-btn">
+
+              <div className="tf-ok-panel">
+                <span className="tf-ok-panel-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="24" height="24">
+                    <path fill="currentColor" d="M12 2l7.5 2.7v6.1c0 4.9-3.2 8.4-7.5 9.6-4.3-1.2-7.5-4.7-7.5-9.6V4.7z" />
+                    <rect x="9.6" y="11.4" width="4.8" height="4.4" rx="1" fill="#fff" />
+                    <path
+                      d="M10.6 11.4v-1.5a1.4 1.4 0 0 1 2.8 0v1.5"
+                      fill="none"
+                      stroke="#fff"
+                      strokeWidth="1.1"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </span>
+                Your account is now more secure.
+              </div>
+
+              <button onClick={onClose} className="tf-fp-btn tf-fp-btn--primary tf-ok-btn">
+                <LogIn style={{ width: 20, height: 20 }} />
                 Return to sign in
               </button>
+
+              <p className="tf-ok-note">
+                <span className="tf-ok-note-icon" aria-hidden="true">
+                  <Clock style={{ width: 19, height: 19 }} />
+                </span>
+                Redirecting automatically in{' '}
+                <span className="tf-ok-note-count">{redirectIn}</span> seconds...
+              </p>
             </div>
           )}
         </div>
