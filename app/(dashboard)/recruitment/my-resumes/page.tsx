@@ -3452,8 +3452,22 @@ export default function MyResumesPage() {
             error: 'You do not have permission to upload resumes. Please contact your administrator.',
           };
         }
+        // Check for AI parsing service unavailable (503 Service Unavailable) -
+        // e.g. RU_OPENAI_API_KEY not configured on the backend.
+        else if (error?.response?.status === 503) {
+          const detail = error?.response?.data?.detail;
+          return {
+            success: false,
+            error: detail?.message || 'Resume upload is temporarily unavailable. Please try again later or contact your administrator.',
+          };
+        }
         else {
-          return { success: false, error: `Failed to upload ${files[0].name}` };
+          // Fall back to whatever reason the backend gave, even for status
+          // codes not explicitly handled above, instead of a generic message
+          // that hides why the upload actually failed.
+          const detail = error?.response?.data?.detail;
+          const backendMessage = typeof detail === 'string' ? detail : detail?.message;
+          return { success: false, error: backendMessage || `Failed to upload ${files[0].name}` };
         }
       }
     }
