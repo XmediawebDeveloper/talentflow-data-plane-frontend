@@ -1219,9 +1219,16 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                   console.error('[PORTAL] Auto-retry failed:', retryErr);
                 }
               }
-              // Auto-refresh page instead of showing error
-              console.log('[PORTAL] Generation failed after retry - auto-refreshing page');
-              window.location.reload();
+              // Generation failed even after a retry - this is a real (often
+              // configuration) failure, not a transient blip. Reloading here
+              // would just restart the same doomed generation cycle forever,
+              // leaving the candidate looking at an endless "Preparing your
+              // assessment..." spinner with no indication anything is wrong.
+              console.log('[PORTAL] Generation failed after retry - showing error');
+              if (isMountedRef.current) {
+                setError('We were unable to prepare your assessment. Please contact your recruiter for assistance.');
+                setStepSafe('error');
+              }
               return;
             }
           }
@@ -1319,6 +1326,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
               });
 
               setStepSafe('assessment');
+              return;
+            }
+
+            if (checkStatus.status === 'failed') {
+              console.log('[PORTAL] Fallback generation failed - showing error');
+              if (isMountedRef.current) {
+                setError('We were unable to prepare your assessment. Please contact your recruiter for assistance.');
+                setStepSafe('error');
+              }
               return;
             }
           }
