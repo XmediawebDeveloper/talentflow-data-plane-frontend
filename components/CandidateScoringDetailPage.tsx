@@ -578,6 +578,18 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     return 'text-red-600';
   };
 
+  // Same three colors as the Match Status badge next to it, so the one
+  // overall score reads as that status rather than its own score-threshold
+  // scale — unlike getScoreColor above, which stays threshold-based for the
+  // Score Table tab's many individual criteria, none of which carry their
+  // own match status to key off.
+  const getOverallScoreColor = (matchStatus: string) => {
+    const normalized = matchStatus?.toLowerCase().replace(/[_\s]/g, '');
+    if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'text-green-600';
+    if (normalized === 'partialmatch') return 'text-[#ef7213]';
+    return 'text-red-600';
+  };
+
   const getScoreBgColor = (score: number) => {
     if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
     if (score >= 70) return 'bg-gray-100 border-gray-300 text-gray-700';
@@ -1183,7 +1195,7 @@ Best regards`);
           {/* Score Display - Compact */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-gray-50 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200">
             <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-              <div className={`text-2xl sm:text-3xl font-bold ${getScoreColor(fullResumeData.scorePercentage)}`}>{fullResumeData.scorePercentage}%</div>
+              <div className={`text-2xl sm:text-3xl font-bold ${getOverallScoreColor(fullResumeData.matchStatus || resume.matchStatus)}`}>{fullResumeData.scorePercentage}%</div>
               <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
                 {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
               </span>
@@ -1418,6 +1430,7 @@ Best regards`);
             <DetailedScorecardTab
               resume={{
                 scorePercentage: fullResumeData.scorePercentage,
+                matchStatus: fullResumeData.matchStatus || resume.matchStatus,
                 scoredDate: fullResumeData.scoredDate,
                 scoredBy: fullResumeData.scoredBy,
                 detailedScores: detailedScores,

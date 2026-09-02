@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2, AlertCircle, Zap, ClipboardList } from 'lucide-react';
+import { ArrowLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2, AlertCircle, Zap, ClipboardList } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -10,10 +10,11 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { jdService, JDLineageVersion, JDUsageStatus } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
+import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
 import { Tooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
-import ConfirmationDialog from './ConfirmationDialog';
+import AITalentMatchConfirmModal from './AITalentMatchConfirmModal';
 import ResumeUploadModal from './ResumeUploadModal';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import { resumeService } from '@/lib/services/resumeService';
@@ -3813,14 +3814,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
       {/* Confirm before running AI Talent Match. No is the do-nothing path —
           the panel never mounts, so no run starts and no units are spent. */}
-      <ConfirmationDialog
+      <AITalentMatchConfirmModal
         isOpen={showAIMatchConfirm}
-        type="info"
-        icon={FileText}
-        title="Find matching candidates from the Resume Database?"
-        message={`AI Talent Match will scan your resume database against "${job.title}" and rank the closest candidates.`}
-        confirmText="Yes"
-        cancelText="No"
+        jobTitle={formatJobVersionLabel(job)}
         onConfirm={confirmAITalentMatch}
         onCancel={() => setShowAIMatchConfirm(false)}
       />

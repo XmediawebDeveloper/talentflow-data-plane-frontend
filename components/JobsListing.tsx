@@ -23,6 +23,7 @@ import {
   collapseToLatestVersions,
   groupByLineage,
   sortJobs,
+  formatJobVersionLabel,
 } from '@/lib/utils/jobOpeningDisplay';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
@@ -35,7 +36,7 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import ConfirmationDialog from '@/components/ConfirmationDialog';
+import AITalentMatchConfirmModal from '@/components/AITalentMatchConfirmModal';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
    absolutely positioned menu — Radix portals it out of the scroll container. */
@@ -1956,14 +1957,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       {/* Confirm before running AI Talent Match — same copy, layout and
           Yes/No behavior as the Job Details page's AI Talent Match confirm.
           No is the do-nothing path: closing this never calls onAIMatch. */}
-      <ConfirmationDialog
+      <AITalentMatchConfirmModal
         isOpen={!!aiMatchConfirmJob}
-        type="info"
-        icon={FileText}
-        title="Find matching candidates from the Resume Database?"
-        message={`AI Talent Match will scan your resume database against "${aiMatchConfirmJob?.title}" and rank the closest candidates.`}
-        confirmText="Yes"
-        cancelText="No"
+        jobTitle={aiMatchConfirmJob ? formatJobVersionLabel(aiMatchConfirmJob) : ''}
         onConfirm={confirmAIMatch}
         onCancel={() => setAiMatchConfirmJob(null)}
       />

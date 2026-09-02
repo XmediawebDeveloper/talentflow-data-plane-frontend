@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw } from 'lucide-react';
+import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, ArrowUp, ArrowDown } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -20,7 +20,7 @@ import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
-import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate, toISODateIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
@@ -201,6 +201,15 @@ interface ScoredResumeData {
     completed: number;
     failed: number;
   };
+  /**
+   * Set only by `goToHistoryResume`, below — the day (YYYY-MM-DD, IST) that
+   * scoring session ran on, applied as the "details" view's date filter so
+   * landing there from one session in the Scoring History modal shows just
+   * that day's resumes. Every other path builds its own `ScoredResumeData`
+   * without this field, so it naturally reads as unset (no filter) instead of
+   * needing to be reset at each of those call sites.
+   */
+  scoredDateFilter?: string;
 }
 
 /**
@@ -497,17 +506,12 @@ export default function ResumeScoringPage({
   const [appliedHistoryFilters, setAppliedHistoryFilters] = useState({
     search: '', scoredBy: 'all', version: 'all', status: 'all' as 'all' | 'exact' | 'partial' | 'nomatch',
   });
-  // Which group row's resumes are expanded open (Action column's chevron) —
-  // one at a time, keyed by version||scoredBy||date so it survives filtering.
-  const [expandedHistoryGroupKey, setExpandedHistoryGroupKey] = useState<string | null>(null);
-
   const resetHistoryModalFilters = () => {
     setHistoryFilterSearch('');
     setHistoryFilterScoredBy('all');
     setHistoryFilterVersion('all');
     setHistoryFilterStatus('all');
     setAppliedHistoryFilters({ search: '', scoredBy: 'all', version: 'all', status: 'all' });
-    setExpandedHistoryGroupKey(null);
   };
 
   // Every time the modal opens for a job, pull its latest scores — the same
@@ -653,6 +657,12 @@ export default function ResumeScoringPage({
 
   // Global view state (view all scored resumes across all JDs)
   const [isGlobalView, setIsGlobalView] = useState(false);
+  /* Which of the two global cards opened this view — "View All Candidates"
+     groups rows by email (one cluster per person, see ScoredResumesTable's
+     own `groupByEmail`); "Total Resumes Scored" shows the identical
+     underlying rows but flat, one row per scoring event in plain
+     newest-first order, un-grouped. */
+  const [globalListMode, setGlobalListMode] = useState<'candidates' | 'events'>('candidates');
   const [globalScoredResumes, setGlobalScoredResumes] = useState<any[]>([]);
   const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
@@ -671,7 +681,7 @@ export default function ResumeScoringPage({
   useListStatePersistence(
     'resume-scoring',
     {
-      isGlobalView, globalSearchQuery, historyViewMode,
+      isGlobalView, globalListMode, globalSearchQuery, historyViewMode,
       historySearchQuery, historyCreatedBy, historyScoredFrom, historyScoredTo,
       historyLocation, historyJobType, historyIndustry,
       historyCurrentPage, historyItemsPerPage,
@@ -687,6 +697,7 @@ export default function ResumeScoringPage({
     },
     (s) => {
       if (typeof s.isGlobalView === 'boolean') setIsGlobalView(s.isGlobalView);
+      if (s.globalListMode === 'candidates' || s.globalListMode === 'events') setGlobalListMode(s.globalListMode);
       if (typeof s.globalSearchQuery === 'string') setGlobalSearchQuery(s.globalSearchQuery);
       if (s.historyViewMode === 'grid' || s.historyViewMode === 'list') setHistoryViewMode(s.historyViewMode);
       if (typeof s.historySearchQuery === 'string') historySearch.setQuery(s.historySearchQuery);
@@ -713,10 +724,16 @@ export default function ResumeScoringPage({
   const fetchGlobalScoredResumes = async ({ silent = false }: { silent?: boolean } = {}) => {
     setIsLoadingGlobal(true);
     try {
-      const response = await scoringService.getAllScoredResumes({
-        page: 1,
-        page_size: 100,
-      });
+      // Probe for the real total, then pull everything in one request — the
+      // same pattern every other list on this page uses (see e.g. the JD
+      // page's own scored-resumes fetch). A flat `page_size: 100` here used
+      // to silently cap this list at 100 rows with no pagination to reach
+      // the rest, so "Total Resumes Scored"/"View All Candidates" undercounted
+      // against the real total the moment more than 100 resumes existed.
+      const probe = await scoringService.getAllScoredResumes({ page: 1, page_size: 1 });
+      const response = probe.total > (probe.items || []).length
+        ? await scoringService.getAllScoredResumes({ page: 1, page_size: probe.total })
+        : probe;
 
       // Convert to ScoredResumesTable format
       const converted = response.items.map((item: any) => ({
@@ -853,7 +870,7 @@ export default function ResumeScoringPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyLoading, isGlobalView, globalScoredResumes.length, isLoadingGlobal]);
 
-  const openScoringListView = (globalView: boolean) => {
+  const openScoringListView = (globalView: boolean, mode: 'candidates' | 'events' = 'candidates') => {
     if (globalView) {
       if (!isGlobalView) {
         // No fetch here — the effect above owns it, and it only fires when the
@@ -862,6 +879,7 @@ export default function ResumeScoringPage({
         setIsGlobalView(true);
         setSelectedScoredResumes([]);
       }
+      setGlobalListMode(mode);
     } else if (isGlobalView) {
       setIsGlobalView(false);
       setSelectedScoredResumes([]);
@@ -1897,6 +1915,7 @@ export default function ResumeScoringPage({
           jobTitle={selectedHistoryItem.jobTitle}
           jobId={selectedHistoryItem.jobId}
           jobCode={selectedHistoryItem.jdJobId}
+          initialScoredDate={selectedHistoryItem.scoredDateFilter ?? ''}
           availableUnits={availableASUnits ?? 10}
           /* Nothing published on this JD → nothing to invite to, so the row's
              Invite goes disabled rather than opening a menu that dead-ends. */
@@ -2004,6 +2023,73 @@ export default function ResumeScoringPage({
 
   // View History List
   if (viewMode === 'history') {
+    // "Total Resumes Scored" stat card — every scoring event counted
+    // separately: the same candidate scored against two different jobs, or
+    // with two different resume versions against two different jobs (a job
+    // only ever holds one active score per candidate, so a version can't be
+    // double-counted within the SAME job), each add to this total.
+    // scoredHistory already has one entry per JD version, not collapsed to
+    // one per job lineage, so this sum already spans every version.
+    const allScoredResumeRows = scoredHistory.flatMap(item => item.scoredResumes || []);
+    const totalResumesScored = allScoredResumeRows.length;
+    // "View All Candidates" — distinct people, not scoring events: the count
+    // this card showed used to just equal totalResumesScored above (same
+    // formula), which read as a bug once "Total Resumes Scored" existed
+    // side by side with an identical number. Deduped by resume id (falling
+    // back to email, then name, for the rare row missing one) so one
+    // candidate scored against several jobs — or several resume versions —
+    // still counts once here.
+    const distinctCandidateCount = new Set(
+      allScoredResumeRows.map((r: any) => r.resumeId || r.resume_id || r.candidateEmail || r.email || r.candidateName)
+    ).size;
+    const scoreOf = (r: any): number => Number(r.overall_score ?? r.scorePercentage ?? 0);
+    const averageScorePercent = allScoredResumeRows.length > 0
+      ? Math.round(allScoredResumeRows.reduce((sum, r: any) => sum + scoreOf(r), 0) / allScoredResumeRows.length)
+      : 0;
+
+    // Trend chips — real, computed from each resume's own scored date: this
+    // rolling 30 days against the 30 days right before it. `null` (chip
+    // omitted, never faked) when there's no full prior window to compare
+    // against yet.
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const daysAgo = (r: any): number => {
+      const t = new Date(r.scoredDate || r.created_at || 0).getTime();
+      return isNaN(t) ? Infinity : (now - t) / DAY_MS;
+    };
+    const last30Rows = allScoredResumeRows.filter((r: any) => daysAgo(r) <= 30);
+    const prev30Rows = allScoredResumeRows.filter((r: any) => daysAgo(r) > 30 && daysAgo(r) <= 60);
+    const totalScoredTrendPercent = prev30Rows.length > 0
+      ? Math.round(((last30Rows.length - prev30Rows.length) / prev30Rows.length) * 100)
+      : null;
+    const avgScoreOf = (rows: any[]): number | null =>
+      rows.length > 0 ? rows.reduce((sum, r) => sum + scoreOf(r), 0) / rows.length : null;
+    const last30Avg = avgScoreOf(last30Rows);
+    const prev30Avg = avgScoreOf(prev30Rows);
+    // Percentage-POINT delta (76% vs 68% → +8), not a percent-of-percent
+    // change — matches how a score/rate metric normally reads.
+    const avgScoreTrendPoints = (last30Avg !== null && prev30Avg !== null)
+      ? Math.round(last30Avg - prev30Avg)
+      : null;
+
+    const renderTrendChip = (delta: number | null, suffix: string) => {
+      if (delta === null) return undefined;
+      const isUp = delta >= 0;
+      return (
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium ${
+            isUp
+              ? 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-400'
+              : 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-400'
+          }`}>
+            {isUp ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+            {Math.abs(delta)}{suffix}
+          </span>
+          <span className="text-xs text-gray-500 dark:text-slate-500">vs last 30 days</span>
+        </div>
+      );
+    };
+
     // Create a processing entry from batchProgress if it exists
     let processingEntry: ScoredResumeData | null = null;
     if (batchProgress && batchProgress.jobId && (batchProgress.queued > 0 || batchProgress.processing > 0)) {
@@ -2238,8 +2324,12 @@ export default function ResumeScoringPage({
               </div>
             )}
 
-            {/* Action cards — "View by Job" and "View All Candidates" as two
-                separate cards. Clicking either opens its list view. */}
+            {/* Action cards — "View by Job", "View All Candidates" and
+                "Total Resumes Scored" all open a list view on click.
+                "Average Score" alone stays a read-only summary (no click
+                target — there's no natural list a raw average would open
+                onto). Both scored-resume cards carry a real trend chip
+                comparing the last 30 days against the 30 days before it. */}
             <StatsCardGrid className="mb-0">
               <StatsCard
                 tone="neutral"
@@ -2253,14 +2343,35 @@ export default function ResumeScoringPage({
               />
               <StatsCard
                 tone="neutral"
-                active={pageView === 'list' && isGlobalView}
+                active={pageView === 'list' && isGlobalView && globalListMode === 'candidates'}
                 showClickArrow
                 icon={Users}
                 label="View All Candidates"
-                value={scoredHistory.reduce((sum, item) => sum + item.totalScored, 0)}
+                value={distinctCandidateCount}
                 sparkline={false}
-                onClick={() => openScoringListView(true)}
+                onClick={() => openScoringListView(true, 'candidates')}
               />
+              <StatsCard
+                tone="neutral"
+                active={pageView === 'list' && isGlobalView && globalListMode === 'events'}
+                showClickArrow
+                icon={FileText}
+                label="Total Resumes Scored"
+                value={totalResumesScored.toLocaleString()}
+                sparkline={false}
+                onClick={() => openScoringListView(true, 'events')}
+              >
+                {renderTrendChip(totalScoredTrendPercent, '%')}
+              </StatsCard>
+              <StatsCard
+                tone="neutral"
+                icon={TrendingUp}
+                label="Average Score"
+                value={`${averageScorePercent}%`}
+                sparkline={false}
+              >
+                {renderTrendChip(avgScoreTrendPoints, '%')}
+              </StatsCard>
             </StatsCardGrid>
           </div>
 
@@ -2310,6 +2421,10 @@ export default function ResumeScoringPage({
                 }}
                 onSelectAll={(ids) => setSelectedScoredResumes(ids)}
                 isGlobalView={true}
+                /* "View All Candidates" clusters rows by email; "Total
+                   Resumes Scored" shows the identical rows flat, one per
+                   scoring event, in plain newest-first order. */
+                groupByEmail={globalListMode === 'candidates'}
               />
             )}
           </div>
@@ -3234,17 +3349,29 @@ export default function ResumeScoringPage({
           return (item.scoredResumes || []).map((r: any) => ({ ...r, __versionNumber: versionNumber, __jobId: item.jobId }));
         });
 
-        // Jumps straight to a candidate's own scoring detail page — the JD
-        // version its group belongs to (never historyModalItem, which is
-        // only the lineage's representative version) so the page's own
+        // Opens the JD version's own scoring page ("View History Details" —
+        // breadcrumb Dashboard > Resume Scoring > {jobTitle}) rather than
+        // jumping straight into the candidate's detail page. Landing one
+        // level up like this keeps the trail at three crumbs instead of
+        // surfacing the candidate's name as a fourth ("... > {jobTitle} >
+        // {candidateName}"); the resume is one click away in that table.
+        // The JD version its group belongs to (never historyModalItem, which
+        // is only the lineage's representative version) so the page's own
         // prev/next pager and jobId context match the resume being opened.
         const goToHistoryResume = (r: any) => {
           const sourceItem = historyModalLineageItems.find((h) => h.jobId === r.__jobId) || historyModalItem;
-          setSelectedHistoryItem(sourceItem);
-          setSelectedCandidateForView(r);
-          setViewMode('candidateView');
+          // Same day this resume was scored, IST — applied as the details
+          // page's date filter so it opens showing just that scoring
+          // session instead of the JD's whole history.
+          const scoredDateFilter = toISODateIST(r.scoredDate || r.created_at || historyModalItem.scoredAt);
+          setSelectedHistoryItem({ ...sourceItem, scoredDateFilter: scoredDateFilter || undefined });
+          setSelectedScoredResumes([]);
+          setSelectedStatusFilter('all');
+          setViewMode('details');
           setHistoryModalItem(null);
-          router.push(`/recruitment/resume-scoring?jd_id=${sourceItem.jobId}&score_id=${r.id}`, { scroll: false });
+          onLoadJdScores?.(sourceItem.jobId, sourceItem.jobTitle);
+          try { localStorage.setItem('lastViewedScoringJdId', sourceItem.jobId); } catch (e) {}
+          router.push(`/recruitment/resume-scoring?jd_id=${sourceItem.jobId}`, { scroll: false });
         };
 
         // Filter dropdown options — built from the FULL (unfiltered) resume
@@ -3506,7 +3633,6 @@ export default function ResumeScoringPage({
                             version: historyFilterVersion,
                             status: historyFilterStatus,
                           });
-                          setExpandedHistoryGroupKey(null);
                         }}
                         className="px-4 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
                       >
@@ -3533,7 +3659,7 @@ export default function ResumeScoringPage({
                           share the exact same `historyGridCols` track list, so
                           every column lines up pixel-for-pixel regardless of
                           how much a cell's own content wants. */}
-                      <div className={`grid ${historyGridCols} shrink-0 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60`}>
+                      <div className={`grid ${historyGridCols} shrink-0 bg-brand-sky dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700/60`}>
                         <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">Version</div>
                         <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">Scored By</div>
                         <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">
@@ -3558,7 +3684,6 @@ export default function ResumeScoringPage({
                       <div className="max-h-[340px] overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700">
                         {groups.map((g) => {
                           const groupKey = `${g.version}||${g.scoredBy}||${g.date}`;
-                          const isExpanded = expandedHistoryGroupKey === groupKey;
                           return (
                             <div key={groupKey}>
                               <div className={`grid ${historyGridCols} hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors`}>
@@ -3609,40 +3734,19 @@ export default function ResumeScoringPage({
                                   <span className="text-lg font-bold text-brand-blue">{Math.round(g.totalScore / g.count)}</span>
                                 </div>
                                 <div className="px-4 py-3.5 flex items-center justify-center">
+                                  {/* Always a direct link to this session's JD scoring page
+                                      (filtered to this day) — never an inline expand/collapse,
+                                      regardless of how many resumes the session scored. */}
                                   <button
-                                    onClick={() => g.count === 1 ? goToHistoryResume(g.resumes[0]) : setExpandedHistoryGroupKey(isExpanded ? null : groupKey)}
+                                    onClick={() => goToHistoryResume(g.resumes[0])}
                                     className="p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
-                                    aria-label={g.count === 1 ? 'View resume' : (isExpanded ? 'Collapse resumes' : 'View resumes')}
-                                    title={g.count === 1 ? 'View resume' : (isExpanded ? 'Collapse resumes' : 'View resumes')}
+                                    aria-label="View job scores"
+                                    title="View job scores"
                                   >
-                                    <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${g.count > 1 && isExpanded ? 'rotate-90' : ''}`} />
+                                    <ChevronRight className="w-4 h-4" />
                                   </button>
                                 </div>
                               </div>
-                              {g.count > 1 && isExpanded && (
-                                <div className="px-4 py-3 bg-gray-50/70 dark:bg-slate-800/40 border-t border-gray-100 dark:border-slate-700/60 space-y-1.5">
-                                  {g.resumes.map((r: any, idx: number) => (
-                                    <button
-                                      key={r.id || r.resumeId || idx}
-                                      type="button"
-                                      onClick={() => goToHistoryResume(r)}
-                                      className="w-full flex items-center justify-between gap-3 text-xs sm:text-sm px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-colors text-left"
-                                    >
-                                      <span className="text-gray-800 dark:text-slate-200 font-medium truncate">{r.candidateName || r.candidate_name || 'Unknown'}</span>
-                                      <div className="flex items-center gap-2 flex-shrink-0">
-                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                          isExactMatch(r) ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                                            : isPartialMatch(r) ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400'
-                                              : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'
-                                        }`}>
-                                          {isExactMatch(r) ? 'Exact' : isPartialMatch(r) ? 'Partial' : 'No Match'}
-                                        </span>
-                                        <span className="text-gray-500 dark:text-slate-400 font-semibold w-9 text-right">{Math.round(Number(r.overall_score ?? r.scorePercentage ?? 0))}%</span>
-                                      </div>
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           );
                         })}
