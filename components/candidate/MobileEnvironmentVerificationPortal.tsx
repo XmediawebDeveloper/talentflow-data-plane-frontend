@@ -179,6 +179,29 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   // via matchMedia rather than window.orientation (deprecated/non-standard)
   // so it also follows foldables/tablets correctly.
   const [isPortrait, setIsPortrait] = useState(false);
+  // Programmatic rotate: Fullscreen + Screen Orientation Lock (Android
+  // Chrome/Firefox only — iOS Safari implements neither) forces the OS to
+  // rotate the display even when the candidate's manual rotation-lock switch
+  // is on, since the lock only blocks orientation changes from the physical
+  // sensor, not an explicit page-requested lock. The rotation-lock hint text
+  // next to this button is shown unconditionally (not only after a failed
+  // tap) — there's no API to read the OS rotation-lock state directly, and a
+  // first-time candidate is more likely to notice and act on guidance that's
+  // visible immediately than on something that only appears after they've
+  // already tried and failed once. Wrapped in try/catch because both calls
+  // throw (not reject-with-value) on unsupported browsers.
+  const handleRotateTap = async () => {
+    try {
+      const el = document.documentElement;
+      if (!document.fullscreenElement) {
+        await el.requestFullscreen();
+      }
+      await (screen.orientation as unknown as { lock: (o: string) => Promise<void> }).lock('landscape');
+    } catch {
+      // Unsupported (e.g. iOS Safari) or blocked — the always-visible hint
+      // text below the button already covers this case.
+    }
+  };
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -908,6 +931,18 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           <p className="text-sm text-[#94a3b8] max-w-xs">
             Environment verification must be recorded in landscape mode. Turn your phone sideways to continue.
           </p>
+          <button
+            type="button"
+            onClick={() => { void handleRotateTap(); }}
+            className="mt-1 px-6 py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
+          >
+            ⟳ Rotate my screen
+          </button>
+          <p className="text-xs text-amber-300 max-w-xs leading-relaxed">
+            Didn't rotate? Your phone's <strong>rotation lock</strong> is probably on. Open your control
+            centre / notification shade and tap the rotation-lock icon to turn it off, then turn your
+            phone sideways again.
+          </p>
           <style>{`
             @keyframes tf-rotate-device {
               0%, 100% { transform: rotate(0deg); }
@@ -1007,14 +1042,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           otherwise the stream has nowhere to attach to and the preview
           stays black even though recording is happening. Hidden outside
           the aligning/recording phases via `hidden` rather than unmounted. */}
-      <div className={`w-full max-w-2xl landscape:max-w-sm space-y-4 landscape:space-y-2 ${(phase === 'aligning' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
-        <div className="relative">
+      <div className={`w-full max-w-2xl landscape:max-w-none landscape:w-[92vw] landscape:flex landscape:flex-col landscape:items-center space-y-4 landscape:space-y-1.5 ${(phase === 'aligning' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+        <div className="relative landscape:inline-block">
           <video
             ref={videoRef}
             autoPlay
             muted
             playsInline
-            className="w-full aspect-video rounded-xl bg-black object-cover"
+            className="w-full landscape:w-auto landscape:h-[62dvh] aspect-video rounded-xl bg-black object-cover"
           />
           {phase === 'aligning' && !canRecord && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 rounded-xl px-4 text-center">
@@ -1053,7 +1088,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               type="button"
               onClick={handleRecordClick}
               disabled={recordClicked}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl bg-red-500 text-white font-medium text-sm shadow-lg shadow-black/40 hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
+              className="absolute bottom-4 right-4 px-6 py-3 rounded-xl bg-red-500 text-white font-medium text-sm shadow-lg shadow-black/40 hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {recordClicked ? 'Recording…' : '● Record'}
             </button>
@@ -1066,7 +1101,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               Screen aligned
             </div>
           ) : (
-            <p className="text-sm leading-relaxed text-[#94a3b8]">
+            <p className="text-sm leading-relaxed text-[#94a3b8] landscape:max-w-sm">
               Waiting for your laptop screen to be clearly visible and centered in the camera…
             </p>
           )
@@ -1091,7 +1126,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               Recording
               <span className="text-white font-mono">· {recordingCountdown}s</span>
             </div>
-            <p className="text-sm leading-relaxed">
+            <p className="text-sm leading-relaxed landscape:max-w-sm">
               {phase === 'recording_screen'
                 ? 'Focus your camera on your laptop screen/display. Keep it centered and hold steady — do not move yet.'
                 : 'Slowly turn the mobile from left to right and right to left, keeping your laptop screen visible while capturing your workspace, surrounding area, and any nearby devices.'}
