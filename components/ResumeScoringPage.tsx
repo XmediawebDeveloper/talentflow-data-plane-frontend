@@ -1,5 +1,6 @@
 "use client";
 
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -2624,9 +2625,7 @@ export default function ResumeScoringPage({
                         {/* Title row — matches JD list card */}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           {item.jdJobId && (
-                            <span className="inline-flex h-7 items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20 flex-shrink-0">
-                              {item.jdJobId}
-                            </span>
+                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{item.jdJobId}</JobIdBadge>
                           )}
                           <h3
                             className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate cursor-pointer hover:text-brand-blue transition-colors"
@@ -2877,9 +2876,7 @@ export default function ResumeScoringPage({
                         {/* job_id + title */}
                         <div className="flex items-center gap-2 mb-3">
                           {item.jdJobId && (
-                            <span className="inline-flex h-7 items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20">
-                              {item.jdJobId}
-                            </span>
+                            <JobIdBadge className="inline-flex h-7 items-center">{item.jdJobId}</JobIdBadge>
                           )}
                           <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 line-clamp-2">
                             {item.jobTitle}
@@ -3781,9 +3778,7 @@ export default function ResumeScoringPage({
                   {/* Row 1: JD ID + title + badges */}
                   <div className="flex items-center gap-1.5 flex-wrap mb-1">
                     {selectedJobData.job_id && (
-                      <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs font-bold font-mono border border-brand-blue/20">
-                        {selectedJobData.job_id}
-                      </span>
+                      <JobIdBadge>{selectedJobData.job_id}</JobIdBadge>
                     )}
                     <span className="font-semibold text-gray-900 dark:text-slate-50 text-sm">{selectedJobData.title}</span>
                     <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">

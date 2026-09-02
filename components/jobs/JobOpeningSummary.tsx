@@ -1,5 +1,6 @@
 'use client';
 
+import JobIdBadge from './JobIdBadge';
 import {
   Briefcase,
   Building2,
@@ -127,9 +128,7 @@ export default function JobOpeningSummary({
     <>
       <div className="flex flex-wrap items-center gap-2 mb-2">
         {job.job_id && (
-          <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20 flex-shrink-0">
-            {job.job_id}
-          </span>
+          <JobIdBadge className="flex-shrink-0">{job.job_id}</JobIdBadge>
         )}
         <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">
           {job.title}

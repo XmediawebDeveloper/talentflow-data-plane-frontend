@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
+import JDDisableModal from '@/components/JDDisableModal';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -55,10 +56,14 @@ export default function JobOpeningsPage() {
     jobTitle: string;
     usageDetails: string[];
   }>({ open: false, jobTitle: '', usageDetails: [] });
+  /* `disabling` keeps the confirmation on screen — buttons locked, spinner on
+     the action — while the status write is in flight, rather than closing on
+     click and leaving the row unchanged until the response lands. */
   const [disableDialog, setDisableDialog] = useState<{
     open: boolean;
     job: Job | null;
-  }>({ open: false, job: null });
+    disabling: boolean;
+  }>({ open: false, job: null, disabling: false });
   const router = useRouter();
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
@@ -348,15 +353,18 @@ export default function JobOpeningsPage() {
   const markVersionStatus = (versionId: string, status: string) =>
     setVersionStatusOverrides(prev => ({ ...prev, [versionId]: status }));
 
+  const closeDisableDialog = () => setDisableDialog({ open: false, job: null, disabling: false });
+
   const handleDisableJob = (job: Job) => {
     // Show confirmation dialog instead of directly disabling
-    setDisableDialog({ open: true, job });
+    setDisableDialog({ open: true, job, disabling: false });
   };
 
   const confirmDisableJob = async () => {
     const job = disableDialog.job;
-    if (!job) return;
+    if (!job || disableDialog.disabling) return;
 
+    setDisableDialog(prev => ({ ...prev, disabling: true }));
     try {
       await jdService.updateStatus(job.id, 'disabled');
       setJobs(prev => prev.map(j =>
@@ -364,10 +372,12 @@ export default function JobOpeningsPage() {
       ));
       markVersionStatus(job.id, 'disabled');
       toast.info(`"${job.title}" has been disabled`);
+      closeDisableDialog();
     } catch (error) {
       toast.error('Failed to disable job');
-    } finally {
-      setDisableDialog({ open: false, job: null });
+      // Stay open so the recruiter can retry — closing here would look like
+      // the disable went through.
+      setDisableDialog(prev => ({ ...prev, disabling: false }));
     }
   };
 
@@ -585,54 +595,15 @@ export default function JobOpeningsPage() {
       </AlertDialog>
 
       {/* Disable Job Confirmation Dialog */}
-      <AlertDialog open={disableDialog.open} onOpenChange={(open) => setDisableDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
-          <AlertDialogHeader>
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
-              </div>
-              <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-base sm:text-lg font-semibold text-gray-900">
-                  Disable Job Description?
-                </AlertDialogTitle>
-                <AlertDialogDescription className="mt-2 text-xs sm:text-sm text-gray-600">
-                  Are you sure you want to disable <span className="font-medium text-gray-800">&quot;{disableDialog.job?.title}&quot;</span>?
-                </AlertDialogDescription>
-              </div>
-            </div>
-          </AlertDialogHeader>
-
-          <div className="mt-3 sm:mt-4 ml-0 sm:ml-16">
-            <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">
-              If you disable this JD, it will be removed from:
-            </p>
-            <ul className="list-disc list-inside text-xs sm:text-sm text-gray-600 space-y-1">
-              <li>Resume Scoring</li>
-              <li>Assessment Generation</li>
-              <li>AI Talent Match</li>
-            </ul>
-            <p className="mt-2.5 sm:mt-3 text-xs sm:text-sm text-gray-500">
-              You can re-enable this JD later if needed.
-            </p>
-          </div>
-
-          <AlertDialogFooter className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
-            <button
-              onClick={() => setDisableDialog({ open: false, job: null })}
-              className="px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Cancel
-            </button>
-            <AlertDialogAction
-              onClick={confirmDisableJob}
-              className="bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm"
-            >
-              Yes, Disable
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <JDDisableModal
+        open={disableDialog.open}
+        jobTitle={disableDialog.job?.title ?? ''}
+        jdNumber={disableDialog.job?.job_id}
+        version={disableDialog.job?.versionNumber}
+        disabling={disableDialog.disabling}
+        onCancel={closeDisableDialog}
+        onConfirm={confirmDisableJob}
+      />
     </div>
   );
 }

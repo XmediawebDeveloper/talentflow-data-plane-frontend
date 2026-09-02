@@ -1,5 +1,6 @@
 'use client';
 
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { ArrowLeft, Briefcase, Plus, Loader2, Building2, MapPin, Clock, TrendingUp, Calendar, User, Target, Sparkles } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -149,9 +150,7 @@ export default function ResumeScoringJDSelection() {
                       {/* Title row */}
                       <div className="flex items-center gap-2 flex-wrap">
                         {jd.job_id && (
-                          <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-brand-blue text-white rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                            {jd.job_id}
-                          </span>
+                          <JobIdBadge>{jd.job_id}</JobIdBadge>
                         )}
                         <h3 className="font-semibold text-gray-900 truncate tracking-tight">{jd.title}</h3>
                         <span className="flex items-center gap-1 px-2 py-0.5 text-xs text-green-700 bg-green-100 rounded-full ring-1 ring-green-200">

@@ -2280,29 +2280,57 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const allJdVersions = localJobs.length > 0 ? localJobs : jobs;
 
   /* ONE ROW PER JOB, not per job version — and the row is that lineage's
-     LATEST LIVE version: the highest-numbered Published or Republished one.
+     NEWEST PUBLISHED VERSION THAT DOES NOT ALREADY HAVE AN ASSESSMENT.
 
-     A newer version in any other status does not take that place. v3 archived
-     over a published v2 leaves the card reading "v2 · Published", because v2
-     is where the job is still live and v2 is what an assessment would be built
-     against; the same skip covers a v4 draft raised over a published v3. This
-     is a "latest live" rule, not a "highest number" one.
+     Two independent tests, applied to every candidate version as the bucket is
+     walked from newest to oldest:
 
-     A job with no live version at all — nothing but drafts, or every version
-     archived or disabled — has no row (`buildAssessmentJobList` returns
-     nothing for it). The versions still exist and the job is still reachable
-     from Job Openings; it simply has nothing an assessment could be built
-     against, which is the only question this list answers.
+       status      — Published or Republished. A newer version in any other
+                     status does not take the row. v3 archived over a published
+                     v2 leaves the card reading "v2 · Published", because v2 is
+                     where the job is still live and v2 is what an assessment
+                     would be built against; the same skip covers a v4 draft
+                     raised over a published v3. A "latest live" rule, not a
+                     "highest number" one.
+       assessment  — none built against it yet. One assessment per version is
+                     the rule the controls below already enforce, so a
+                     published version that is spoken for cannot be the row a
+                     recruiter is asked to start from; the list moves DOWN to
+                     the next published version instead. Create the assessment
+                     for v3 and this list opens on v2 next time, then v1 —
+                     no refresh beyond the picker's own mount-time fetch.
 
-     The skipped versions are not lost: View Versions below lists the entire
-     lineage, newest first — Published, Republished, Disabled, Archived and
-     Draft alike, each showing its real status — and refuses to select the ones
-     that are not live.
+     Falling through a taken version never relaxes the status test: v3 taken
+     with v4 archived above it goes to v2, never up to v4.
 
-     Assessments do not enter into it. Whether a version already has one
-     decides whether a SECOND can be created against it (the one-per-version
-     rule the controls below apply), never whether the version is shown. */
-  const availableJobs = buildAssessmentJobList(allJdVersions);
+     A job with no version passing both — nothing but drafts, every version
+     archived or disabled, or every published version already assessed — has no
+     row (`buildAssessmentJobList` returns nothing for it), and a list left
+     empty that way lands on the picker's existing empty state. The versions
+     still exist and the job is still reachable from Job Openings; it simply
+     has nothing a NEW assessment could be built against, which is the only
+     question this list answers.
+
+     The skipped versions are not lost, and this is what View Versions is for:
+     it lists the entire lineage below, newest first — Published, Republished,
+     Disabled, Archived and Draft alike, the already-assessed ones included,
+     each showing its real status and its existing assessment — and refuses to
+     select only the ones that cannot carry a new one. Nothing about that
+     panel changes here.
+
+     `versionHasAssessment` is the same union — mount-time index plus the lazily
+     fetched per-lineage detail — that the card controls and every history row
+     below are gated on, so the version this list opens on and the version its
+     radio will accept can never disagree. */
+  const availableJobs = buildAssessmentJobList(allJdVersions, version =>
+    versionHasAssessment(lineageKey(version), version.id),
+  );
+  /* Does this recruiter have ANY published version at all? Only the empty
+     state reads it, to tell "you have not published a job yet" apart from "you
+     have, and every published version is already assessed" — two empty lists
+     with opposite ways out. Asked with the SAME status test the list is built
+     from, so the two cannot drift apart on what counts as published. */
+  const hasAnyPublishedVersion = allJdVersions.some(isSelectableVersion);
   const jdSearchQuery = jdSearch.trim().toLowerCase();
   /* The shared matcher: JD number, role, department, location — the same
      fields, and the same separator-insensitive number matching, the Apply to
@@ -2981,16 +3009,36 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   );
                 })}
 
+                {/* The empty state this list already had, now told apart into
+                    the TWO ways the list can be empty of jobs, because after
+                    this change they need different advice and the old single
+                    line would be wrong for one of them:
+
+                      no published version anywhere → the original case, and
+                        the original words. Publishing a job is the way out.
+                      published versions exist, all assessed → "publish a Job
+                        first" would be nonsense to a recruiter who has
+                        published several. A NEW VERSION is the way out.
+
+                    `hasAnyPublishedVersion` reads the raw versions through the
+                    same status test the list itself uses, so the two can never
+                    disagree about what "published" means. */}
                 {filteredAvailableJobs.length === 0 && (
                   <div className="text-center py-8 sm:py-12 text-gray-500">
                     <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
                     <p className="text-sm sm:text-base">
-                      {availableJobs.length === 0 ? 'No published jobs available' : 'No matching job descriptions found'}
+                      {availableJobs.length > 0
+                        ? 'No matching job descriptions found'
+                        : hasAnyPublishedVersion
+                          ? 'No jobs available for a new assessment'
+                          : 'No published jobs available'}
                     </p>
                     <p className="text-xs sm:text-sm mt-1">
-                      {availableJobs.length === 0
-                        ? 'Create and publish a Job first to create assessments'
-                        : 'Try searching with a JD ID like JD-450 or a title like senior python developer'}
+                      {availableJobs.length > 0
+                        ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
+                        : hasAnyPublishedVersion
+                          ? 'Every published job version already has an assessment. Publish a new version of a job to create another one.'
+                          : 'Create and publish a Job first to create assessments'}
                     </p>
                     {canCreateJd && availableJobs.length === 0 && (
                       <button

@@ -1,6 +1,7 @@
 'use client';
 
-import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Zap, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX } from 'lucide-react';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef } from 'react';
@@ -35,9 +36,9 @@ import { assessmentService } from '@/lib/services';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
-import { AlertTriangle, RefreshCw, Send, Ban, Layers } from 'lucide-react';
-import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
-import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
+import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, HelpCircle, ChevronDown, Radar } from 'lucide-react';
+import { stripVersionFromTitle, countAssessmentTopics } from '@/lib/utils/assessmentUtils';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -403,20 +404,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   /**
-   * Whether the job version on this card is the job's LIVE one, for the LATEST
-   * badge.
-   *
-   * Written as the version-history table writes it — `jobVersion ===
-   * newestJobVersion`, against the number that table is handed — so exactly one
-   * version is badged and it is the same one in both places. (`>=` cannot
-   * differ, since the resolved number takes this row's own version as its
-   * floor; equality is the honest spelling of the comparison, not a change to
-   * it.)
-   */
-  const isLatestJobVersion = (assessment: { jd_id?: string; jd_short_id?: string; jd_version?: number }) =>
-    (assessment.jd_version ?? 1) === getLatestJobVersion(assessment);
-
-  /**
    * Fetch every listed job's lineage, so the LATEST badge is answered from the
    * JD itself rather than from what the assessments happen to reveal.
    *
@@ -510,6 +497,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   const COMPLETED_PAGE_SIZE = 20;
 
+  /* Which summary card reads as the active one — restored with the section.
+     All three open the unfiltered list, so they light together once it is
+     showing; the list's own tabs are what narrow it from there. */
+  const isOverviewCardActive = (tab: typeof activeTab) => pageView === 'list' && activeTab === tab;
+
   const openAssessmentsList = (tab: 'all' | 'active' | 'draft' | 'completed' | 'completed-candidates' | 'archived' = 'all') => {
     try {
       window.sessionStorage.removeItem('listScroll:assessments');
@@ -523,7 +515,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setListScrollRequest((request) => request + 1);
   };
 
-  const isOverviewCardActive = (tab: typeof activeTab) => pageView === 'list' && activeTab === tab;
 
   // Proctoring settings from API
   const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings | null>(null);
@@ -1974,6 +1965,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * "the draft assessments" — and the version panel fetches the lineage
    * unfiltered, so opening it still shows every version whatever its status.
    */
+  /* The key every version of one job collapses onto. Extracted because the
+     per-job totals below have to bucket by exactly the same rule the rows are
+     built with — two copies of `jd_short_id || jd_id || __unlinked__` would be
+     one edit away from a row whose counts belong to a different job. */
+  const lineageKeyOf = (a: { jd_short_id?: string; jd_id?: string; id: string }) =>
+    a.jd_short_id || a.jd_id || `__unlinked__:${a.id}`;
+
   const collapsedAssessments = (() => {
     const byLineage = new Map<string, (typeof filteredAssessments)[number]>();
 
@@ -2011,7 +2009,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     };
 
     for (const assessment of filteredAssessments) {
-      const key = assessment.jd_short_id || assessment.jd_id || `__unlinked__:${assessment.id}`;
+      const key = lineageKeyOf(assessment);
       const current = byLineage.get(key);
       if (!current || isNewerVersion(assessment, current)) {
         byLineage.set(key, assessment);
@@ -2021,6 +2019,71 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   })();
 
   const assessmentResultCount = collapsedAssessments.length;
+
+  /**
+   * Per-job totals for the Job List rows, bucketed by lineage.
+   *
+   * Summed over `filteredAssessments` — the same set the rows are collapsed
+   * from — so the counts always describe what the current tab and filters
+   * select. On the Draft tab a job's "Assessments" is its draft count, which
+   * is the honest reading of a row that is only on screen because it has one.
+   */
+  const jobRowTotals = (() => {
+    const totals = new Map<string, { assessments: number; topics: number; invitations: number }>();
+    for (const assessment of filteredAssessments) {
+      const key = lineageKeyOf(assessment);
+      const entry = totals.get(key) ?? { assessments: 0, topics: 0, invitations: 0 };
+      entry.assessments += 1;
+      entry.topics += countAssessmentTopics(assessment);
+      entry.invitations += assessment.invitations_count ?? 0;
+      totals.set(key, entry);
+    }
+    return totals;
+  })();
+
+  /**
+   * How many versions this job has.
+   *
+   * The fetched lineage is the authority and is what the version panel lists,
+   * so the row's count and the panel's row count agree. Until it lands (or if
+   * the fetch failed) the highest known version number stands in — the same
+   * number the LATEST badge is decided from, via the existing helper.
+   */
+  const getJobVersionCount = (assessment: { jd_id?: string; jd_short_id?: string; jd_version?: number }) =>
+    getJobLineageRows(assessment)?.length ?? getLatestJobVersion(assessment);
+
+  /** The four figures a Job List row reports, in the order it shows them. */
+  const getJobRowMetrics = (assessment: {
+    id: string;
+    jd_id?: string;
+    jd_short_id?: string;
+    jd_version?: number;
+  }) => {
+    const totals = jobRowTotals.get(lineageKeyOf(assessment))
+      ?? { assessments: 0, topics: 0, invitations: 0 };
+    return [
+      { key: 'job-versions', icon: Layers, value: getJobVersionCount(assessment), label: 'Job Versions' },
+      { key: 'assessments', icon: ClipboardList, value: totals.assessments, label: 'Assessments' },
+      { key: 'questions', icon: HelpCircle, value: totals.topics, label: 'Total Questions' },
+      { key: 'invitations', icon: Send, value: totals.invitations, label: 'Invitations Sent' },
+    ];
+  };
+
+  /* Header tiles. Counted over every loaded assessment rather than the
+     filtered set: these describe the account, not the current tab. */
+  const overviewJobLineages = (() => {
+    const byLineage = new Map<string, (typeof assessments)[number]>();
+    for (const assessment of assessments) {
+      const key = lineageKeyOf(assessment);
+      if (!byLineage.has(key)) byLineage.set(key, assessment);
+    }
+    return [...byLineage.values()];
+  })();
+  const totalJobs = overviewJobLineages.length;
+  const totalJobVersions = overviewJobLineages.reduce(
+    (sum, assessment) => sum + getJobVersionCount(assessment),
+    0,
+  );
 
   const visibleAssessments = collapsedAssessments.slice(
     (assessmentCurrentPage - 1) * assessmentItemsPerPage,
@@ -2058,8 +2121,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * card is the latest version, and the panel lists that version too), and
    * keying on the id alone opened both dropdowns at once.
    */
-  const renderAssessmentMenu = (assessment: any, menuKey: string = assessment.id) => (
-    <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+  const QUICK_ACTION_BASE =
+    'h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 border rounded-md transition-all';
+  const QUICK_ACTION_DISABLED =
+    'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed';
+
+  /* `variant` is the trigger's chrome, not its behaviour:
+       'default' — the borderless 32px button the Job List row carries;
+       'compact' — the 28px bordered square the Assessment Versions table's
+                   Share / Track / Result icons use, so the menu sits in that
+                   Action column as a fourth peer rather than an odd one out.
+     No `ml-auto` on the wrapper any more. Inside a content-width action
+     cluster it did nothing; inside the version table's Action cell it pushed
+     the menu to the far edge, away from the three icons it belongs with. */
+  const renderAssessmentMenu = (
+    assessment: any,
+    menuKey: string = assessment.id,
+    variant: 'default' | 'compact' = 'default',
+  ) => (
+    <div className="flex items-center gap-1.5 flex-shrink-0">
       {/* Three Dots Menu */}
       <div className="relative">
         <button
@@ -2074,9 +2154,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             }
             setOpenMenuId(willOpen ? menuKey : null);
           }}
-          className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all"
+          aria-label="More actions"
+          title="More actions"
+          className={
+            variant === 'compact'
+              ? `${QUICK_ACTION_BASE} text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-400`
+              : 'p-2 bg-white rounded-lg hover:bg-gray-50 transition-all'
+          }
         >
-          <MoreVertical className="w-4 h-4 text-gray-600" />
+          <MoreVertical className={variant === 'compact' ? 'w-3.5 h-3.5' : 'w-4 h-4 text-gray-600'} />
         </button>
 
       {/* Dropdown Menu */}
@@ -2276,11 +2362,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * Track appears at all - so a change to any of them cannot land on the card
    * and miss the history, or the other way round.
    */
-  const renderAssessmentQuickActions = (assessment: ReturnType<typeof mapAssessmentFromApi>) => (
-    <div className="flex items-center gap-2 flex-nowrap">
-      {/* Share via Email Button — disabled for Draft (must
-          publish first), Archived (out of circulation), and
-          once invites have been revoked (assessment sealed). */}
+  /* Icon-only, on the Assessment Versions table's Action column — its only
+     caller. The chrome is the job-openings row's icon-button (that page is the
+     house reference for this control): a 28px square, the action's own colour
+     at /40 on the border, hovering to a /10 tint and a solid border. Colours
+     come from the dashboard's own action palette — Share is `--menu-icon-share`
+     (brand-teal), and Results keeps the brand-blue it has always been.
+
+     Every handler, guard, toast and disabled rule below is unchanged; only the
+     label moved into `aria-label`/`title`, which now carry it for both screen
+     readers and hover. */
+  const renderAssessmentQuickActions = (assessment: ReturnType<typeof mapAssessmentFromApi>) => {
+    /* The create -> share -> track/results chain, read off the record itself.
+     *
+     * `invitations_count` is the backend's own count of invitations sent for
+     * this assessment (AssessmentResponse.invitations_count, surfaced by
+     * mapAssessmentFromApi as both `invitations_count` and `candidates`), so
+     * "has it been shared with anyone" is answered by the data rather than by
+     * any local flag. Zero means nobody has been invited yet, which is what
+     * gates Track and Results below. */
+    const invitationsSent = assessment.invitations_count ?? assessment.candidates ?? 0;
+    const hasBeenShared = invitationsSent > 0;
+
+    return (
+    <div className="flex items-center gap-1.5 flex-nowrap">
+      {/* Share via Email.
+          Every row in this table IS a created assessment, so the "created
+          successfully" precondition is met by definition. What decides whether
+          a created assessment can be shared is unchanged: a Draft has nothing
+          published to send, an Archived one is out of circulation, and one
+          whose invites were revoked is sealed until it is duplicated. */}
       {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
         const shareBlockedReason =
           assessment.status === 'Draft' ? 'Publish assessment first to share' :
@@ -2307,52 +2418,76 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               setShowShareModal(true);
             }}
             disabled={isShareBlocked}
-            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg transition-all text-xs whitespace-nowrap ${
+            className={`${QUICK_ACTION_BASE} ${
               isShareBlocked
-                ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                ? QUICK_ACTION_DISABLED
+                : 'text-brand-teal border-brand-teal/40 hover:bg-brand-teal/10 hover:border-brand-teal'
             }`}
+            aria-label={shareBlockedReason || 'Share via email'}
             title={shareBlockedReason || 'Share via email'}
           >
-            <Mail className="w-3.5 h-3.5" />
-            Share
+            <Send className="w-3.5 h-3.5" />
           </button>
         );
       })()}
 
-      {/* Track Invites Button */}
-      {assessment.candidates > 0 && (
-        <button
-          onClick={() => handleTrackInvites(assessment)}
-          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-all text-xs whitespace-nowrap"
-          aria-label="Track invitation status" title="Track invitation status"
-        >
-          <Mail className="w-3.5 h-3.5" />
-          <span className="hidden xl:inline">Track Invites ({assessment.candidates})</span>
-          <span className="xl:hidden">Track ({assessment.candidates})</span>
-        </button>
-      )}
+      {/* Track Invites — enabled once the assessment has been shared with at
+          least one candidate. It used to be omitted entirely at zero
+          invitations, which left the Action column a control short and gave the
+          reader nothing to explain why; it is now always present and disabled
+          until there is something to track. */}
+      <button
+        onClick={() => handleTrackInvites(assessment)}
+        disabled={!hasBeenShared}
+        className={`${QUICK_ACTION_BASE} ${
+          hasBeenShared
+            ? 'text-brand-cyan border-brand-cyan/40 hover:bg-brand-cyan/10 hover:border-brand-cyan'
+            : QUICK_ACTION_DISABLED
+        }`}
+        aria-label={hasBeenShared ? `Track invitation status (${invitationsSent})` : 'Share the assessment to track invitations'}
+        title={hasBeenShared ? `Track invitation status (${invitationsSent})` : 'Share the assessment to track invitations'}
+      >
+        <Radar className="w-3.5 h-3.5" />
+      </button>
 
-      {/* View Results Button — disabled for Draft (no candidates yet). */}
+      {/* View Results — also gated on having been shared: with no invitation
+          sent there is no attempt to score, so the results page would open
+          empty. This subsumes the old Draft-only check (a Draft cannot have
+          been shared, so it fails this test too) while additionally covering a
+          published assessment nobody has been invited to yet. The Draft
+          early-return in the handler is kept as a belt. */}
       <button
         onClick={(e) => {
           e.stopPropagation();
           if (assessment.status === 'Draft') return;
           router.push(`/recruitment/assessments/${assessment.id}/results`);
         }}
-        disabled={assessment.status === 'Draft'}
-        title={assessment.status === 'Draft' ? 'Publish the assessment to view results' : ''}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs whitespace-nowrap ${
-          assessment.status === 'Draft'
-            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+        disabled={!hasBeenShared}
+        aria-label={
+          hasBeenShared
+            ? 'View results'
+            : assessment.status === 'Draft'
+            ? 'Publish the assessment to view results'
+            : 'Share the assessment to view results'
+        }
+        title={
+          hasBeenShared
+            ? 'View results'
+            : assessment.status === 'Draft'
+            ? 'Publish the assessment to view results'
+            : 'Share the assessment to view results'
+        }
+        className={`${QUICK_ACTION_BASE} ${
+          hasBeenShared
+            ? 'text-brand-blue border-brand-blue/40 hover:bg-brand-blue/10 hover:border-brand-blue'
+            : QUICK_ACTION_DISABLED
         }`}
       >
         <BarChart className="w-3.5 h-3.5" />
-        Results
       </button>
     </div>
-  );
+    );
+  };
 
   return (
     <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
@@ -2515,65 +2650,40 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div>
         )}
 
-        {/* AI-Powered Assessments Banner */}
-        <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 shadow-sm shadow-brand-blue/10">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-1 tracking-tight">AI-Powered Assessments</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
-                Create customized skill assessments linked to job descriptions. AI automatically generates relevant questions based on job requirements. Track candidate performance, completion rates, and pass/fail statistics.
-              </p>
-            </div>
-          </div>
-        </div>
+        {/* Summary — the previous view's own section, restored: the shared
+            StatsCard / StatsCardGrid from /recruitment/job-openings (the master
+            reference those tokens were extracted from), the same
+            `space-y-3 sm:space-y-4 mb-4 sm:mb-6` shell, the same neutral tone,
+            and the same click-through into the list that the four cards it
+            replaced carried. Only the metrics differ: this page's subject is
+            jobs and their versions, so it counts those.
 
-        {/* Stats Cards - Two Rows */}
+            Every figure is derived above from loaded data — `totalJobs` and
+            `totalJobVersions` from the assessment lineages and each job's
+            fetched version history, `stats.total_assessments` from the stats
+            endpoint. Nothing here is a literal. */}
         <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
-          {/* Row 1: Historical Metrics (Total Created, Total Deleted, Units Used) - HIDDEN */}
-          {/* <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Plus className="w-3.5 h-3.5 text-gray-700" />
-                </div>
-                <span className="text-xs text-gray-500">Total Created</span>
-              </div>
-              <div className="text-xl font-semibold text-gray-900">
-                {isLoadingStats ? '...' : stats.total_ever_created.toLocaleString()}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-lg bg-red-100 flex items-center justify-center">
-                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                </div>
-                <span className="text-xs text-gray-500">Total Deleted</span>
-              </div>
-              <div className="text-xl font-semibold text-gray-900">
-                {isLoadingStats ? '...' : stats.total_deleted.toLocaleString()}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Zap className="w-3.5 h-3.5 text-gray-700" />
-                </div>
-                <span className="text-xs text-gray-500">Units Used</span>
-              </div>
-              <div className="text-xl font-semibold text-gray-900">
-                {isLoadingStats ? '...' : `${stats.units_consumed}/${totalUnits}`}
-              </div>
-              <div className="text-[10px] text-gray-400 mt-0.5">{Math.max(0, totalUnits - stats.units_consumed)} remaining</div>
-            </div>
-          </div> */}
-
-          {/* Row 2: Current State Metrics — click a card to drill into the matching list */}
-          <StatsCardGrid>
+          <StatsCardGrid columns={3}>
+            <StatsCard
+              tone="neutral"
+              active={isOverviewCardActive('all')}
+              showClickArrow
+              icon={Briefcase}
+              label="Total Jobs"
+              value={totalJobs.toLocaleString()}
+              sparkline={false}
+              onClick={() => openAssessmentsList('all')}
+            />
+            <StatsCard
+              tone="neutral"
+              active={isOverviewCardActive('all')}
+              showClickArrow
+              icon={Layers}
+              label="Total Job Versions"
+              value={totalJobVersions.toLocaleString()}
+              sparkline={false}
+              onClick={() => openAssessmentsList('all')}
+            />
             <StatsCard
               tone="neutral"
               active={isOverviewCardActive('all')}
@@ -2583,36 +2693,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               value={isLoadingStats ? '...' : stats.total_assessments.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('all')}
-            />
-            <StatsCard
-              tone="neutral"
-              active={isOverviewCardActive('active')}
-              showClickArrow
-              icon={Play}
-              label="Active"
-              value={isLoadingStats ? '...' : stats.active_assessments.toLocaleString()}
-              sparkline={false}
-              onClick={() => openAssessmentsList('active')}
-            />
-            <StatsCard
-              tone="neutral"
-              active={isOverviewCardActive('completed-candidates')}
-              showClickArrow
-              icon={Users}
-              label="Candidates Assessed"
-              value={isLoadingStats ? '...' : stats.total_candidates_completed.toLocaleString()}
-              sparkline={false}
-              onClick={() => openAssessmentsList('completed-candidates')}
-            />
-            <StatsCard
-              tone="neutral"
-              active={isOverviewCardActive('draft')}
-              showClickArrow
-              icon={Pencil}
-              label="Drafts"
-              value={isLoadingStats ? '...' : stats.draft_assessments.toLocaleString()}
-              sparkline={false}
-              onClick={() => openAssessmentsList('draft')}
             />
           </StatsCardGrid>
         </div>
@@ -2625,7 +2705,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6">
             <div className="relative">
-              <div className="flex gap-3 sm:gap-5 overflow-x-auto pr-16 sm:pr-20 scrollbar-hide">
+              <div className="flex gap-3 sm:gap-5 overflow-x-auto scrollbar-hide">
                 <button
                   onClick={() => setActiveTab('all')}
                   className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
@@ -2730,31 +2810,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   Settings
                 </button>
               </div>
-              {/* List/Grid View Toggle - positioned absolute right so tabs get full scroll width */}
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1 border border-gray-200 dark:border-slate-700 rounded-lg p-1 bg-white dark:bg-slate-900">
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-1.5 rounded transition-colors ${
-                    viewMode === 'list'
-                      ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
-                      : 'text-gray-400 hover:text-brand-blue'
-                  }`}
-                  aria-label="List View" title="List View"
-                >
-                  <List className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded transition-colors ${
-                    viewMode === 'grid'
-                      ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
-                      : 'text-gray-400 hover:text-brand-blue'
-                  }`}
-                  aria-label="Grid View" title="Grid View"
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
-              </div>
             </div>
           </div>
 
@@ -2781,7 +2836,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <ListCountBadge
                       filtered={filteredAssessments.length}
                       total={assessments.length}
-                      noun="assessment"
+                      noun="job"
                     />
                   }
                 />
@@ -2873,6 +2928,43 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     {assessmentSearch.trim() ? ` "${assessmentSearch.trim()}"` : ' your filters'}
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Job List header — the section title and the view toggle, which
+                moved here off the tabs bar. It only renders for the tabs that
+                actually list jobs, so Settings and the log tabs no longer carry
+                a view switch that does nothing for them. */}
+            {!['completed-candidates', 'audit', 'consent', 'settings'].includes(activeTab) && (
+              <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
+                <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                  Job List{' '}
+                  <span className="font-normal text-gray-500 dark:text-slate-500">({assessmentResultCount})</span>
+                </h2>
+                <div className="flex items-center gap-1 border border-gray-200 dark:border-slate-700 rounded-lg p-1 bg-white dark:bg-slate-900 flex-shrink-0">
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`p-1.5 rounded transition-colors ${
+                      viewMode === 'list'
+                        ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
+                        : 'text-gray-400 hover:text-brand-blue'
+                    }`}
+                    aria-label="List View" title="List View"
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`p-1.5 rounded transition-colors ${
+                      viewMode === 'grid'
+                        ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
+                        : 'text-gray-400 hover:text-brand-blue'
+                    }`}
+                    aria-label="Grid View" title="Grid View"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             )}
 
@@ -3747,28 +3839,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                     {/* Grid Card Title */}
                     <div className="mb-3">
-                      {/* Line 1: the JOB is the primary item - JD-025 Senior Software
-                          Engineer [Job v3] [LATEST] [AI] [Active]. The assessment this
-                          card acts on is named on line 2: a recruiter reading this list
-                          is looking for a job first, and which assessment version answers
-                          to it is the question View Versions opens. */}
+                      {/* Line 1: the JOB, and it is now the only thing named on the
+                          card - JD-025 Senior Software Engineer [AI] [Active]. A
+                          recruiter reading this list is looking for a job first, and one
+                          row is one job.
+
+                          The assessment's OWN name used to sit on a line of its own
+                          below. It was near enough the job's title in every real case
+                          ("Senior Software Engineer - Assessment") to be a second copy
+                          of the line above it rather than a second fact, so the card
+                          says the job once and stops. The card still ACTS on that
+                          assessment - Share, Results and the menu are unchanged, and its
+                          full title is on the detail page and in View Versions.
+
+                          Nothing about job or assessment VERSION here either - not the
+                          two "vN" badges, and not the LATEST pill that qualified the job
+                          one, which had lost its referent once the version it qualified
+                          was gone.
+
+                          View Versions is where versions are read. It still lists every
+                          one of them with its number and still badges its own newest row
+                          LATEST, off `getLatestJobVersion`, which is kept for exactly
+                          that. Only rendering left this card - no data behind these
+                          rows, and no lineage fetch, changed. */}
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         {assessment.jd_short_id && (
-                          <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue text-white rounded text-xs font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                            {assessment.jd_short_id}
-                          </span>
+                          <JobIdBadge className="inline-flex items-center">{assessment.jd_short_id}</JobIdBadge>
                         )}
                         <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 line-clamp-1">
                           {assessment.job?.title || stripVersionFromTitle(assessment.title)}
                         </h3>
-                        <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35 whitespace-nowrap">
-                          Job v{assessment.job?.version || assessment.jd_version || 1}
-                        </span>
-                        {isLatestJobVersion(assessment) && (
-                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10 whitespace-nowrap">
-                            Latest
-                          </span>
-                        )}
                         {assessment.sections && (
                           <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs flex items-center gap-1 flex-shrink-0 ring-1 ring-brand-blue/20">
                             <Sparkles className="w-3 h-3" />
@@ -3792,18 +3892,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </span>
                       </div>
 
-                      {/* Line 2: the assessment itself - the child of the job above,
-                          and what this card's actions operate on. */}
-                      <div className="flex items-center gap-2 flex-wrap text-xs text-gray-700 dark:text-slate-300 font-medium mb-1.5">
-                        <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35 whitespace-nowrap">
-                          Assessment v{assessment.version ?? 1}
-                        </span>
-                        <span className="max-w-[160px] truncate">
-                          {stripVersionFromTitle(assessment.title) || 'Assessment'}
-                        </span>
-                      </div>
-
-                      {/* Line 3: created by + Created date + Last Updated */}
+                      {/* Line 2: created by + Created date + Last Updated */}
                       <div className="text-xs text-gray-600 dark:text-slate-400 mb-1.5 line-clamp-2">
                         {assessment.created_by_name && (
                           <span>created by: {assessment.created_by_name}</span>
@@ -3818,7 +3907,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         )}
                       </div>
 
-                      {/* Line 4: 30 min 1 Invitations Sent */}
+                      {/* Line 3: 30 min 1 Invitations Sent */}
                       <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-slate-500">
                         <span>{assessment.duration}</span>
                         <span>{assessment.candidates} Invitations</span>
@@ -4025,8 +4114,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
                             currentAssessmentId={assessment.id}
                             latestJobVersion={getLatestJobVersion(assessment)}
-                            fallbackJobTitle={assessment.job?.title}
-                            onRowClick={(versionId) => router.push(`/recruitment/assessments/${versionId}`)}
+                              onRowClick={(versionId) => router.push(`/recruitment/assessments/${versionId}`)}
                             onCreateAssessment={handleCreateAssessmentForJobVersion}
                             /* Same actions the list view's rows get, so a job
                                version reads the same in either view. */
@@ -4038,7 +4126,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               return (
                                 <>
                                   {renderAssessmentQuickActions(mapped)}
-                                  {renderAssessmentMenu(mapped, `version:${version.id}`)}
+                                  {renderAssessmentMenu(mapped, `version:${version.id}`, 'compact')}
                                 </>
                               );
                             }}
@@ -4051,7 +4139,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
             ) : (
               /* List View */
-              <div className="space-y-3 sm:space-y-4">
+              <div className="space-y-3">
                 {visibleAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
@@ -4067,124 +4155,90 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         router.push(`/recruitment/assessments/${assessment.id}`);
                       }
                     }}
-                    /* `relative` + a raised z-index while this row's ⋮ menu is
+                    /* `relative` + a raised z-index while this row's menu is
                        open. Every other row lifts on hover via
                        `hover:-translate-y-0.5`, and a transform makes that row
-                       its own stacking context — which paints it, and its white
+                       its own stacking context - which paints it, and its white
                        background, straight over the open dropdown. Raising the
                        owning row above its siblings keeps the menu on top. */
-                    className={`p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 ${
+                    className={`p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 ${
                       openMenuId === assessment.id ? 'relative z-30' : 'relative'
                     }`}
                   >
-                    <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
-                      {/* Icon */}
-                      <div className="hidden md:flex items-center gap-2 flex-shrink-0">
-                        <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center">
-                          <FileText className="h-4 w-4 text-brand-blue" />
+                    {/* One row = one JOB. The list has always collapsed to one
+                        row per job lineage (see `collapsedAssessments`); what
+                        the row now reports is that lineage's totals rather than
+                        only the representative assessment's own figures.
+
+                        Share / Track Invites / Results moved off the row. They
+                        act on ONE assessment, and a job row is not one
+                        assessment - they are rendered per version inside View
+                        Versions, which already carried them. */}
+                    <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:gap-4">
+                      {/* Identity - icon, Job ID, title */}
+                      <div className="flex items-center gap-2.5 min-w-0 xl:w-[360px] xl:flex-shrink-0">
+                        <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <Briefcase className="h-4 w-4 text-brand-blue" />
                         </div>
+                        {assessment.jd_short_id && (
+                          /* The Job Openings chip, not the solid blue one this
+                             row used to carry - same JD id, one house style. */
+                          <JobIdBadge className="flex-shrink-0">{assessment.jd_short_id}</JobIdBadge>
+                        )}
+                        <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
+                          {assessment.job?.title || stripVersionFromTitle(assessment.title)}
+                        </h3>
                       </div>
 
-                      {/* Assessment Info */}
-                      <div className="flex-1 min-w-0">
-                          {/* Line 1: the JOB is the primary item - JD-025 Senior Software
-                              Engineer [Job v3] [LATEST] [AI] [Active]. The assessment this
-                              card acts on is named on line 2: a recruiter reading this list
-                              is looking for a job first, and which assessment version answers
-                              to it is the question View Versions opens. */}
-                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                            {assessment.jd_short_id && (
-                              <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue text-white rounded text-xs font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                                {assessment.jd_short_id}
-                              </span>
-                            )}
-                            <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50">
-                              {assessment.job?.title || stripVersionFromTitle(assessment.title)}
-                            </h3>
-                            <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35 whitespace-nowrap">
-                              Job v{assessment.job?.version || assessment.jd_version || 1}
-                            </span>
-                            {isLatestJobVersion(assessment) && (
-                              <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10 whitespace-nowrap">
-                                Latest
-                              </span>
-                            )}
-                            {assessment.sections && (
-                              <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs flex items-center gap-1 flex-shrink-0 ring-1 ring-brand-blue/20">
-                                <Sparkles className="w-3 h-3" />
-                                AI
-                              </span>
-                            )}
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${
-                                assessment.status === 'Active'
-                                  ? 'bg-green-100 text-green-700 ring-green-200'
-                                  : assessment.status === 'Draft'
-                                  ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
-                                  : assessment.status === 'Archived'
-                                  ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
-                                  : assessment.status === 'Completed'
-                                  ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
-                                  : assessment.status === 'Paused'
-                                  ? 'bg-slate-200 text-gray-600 ring-gray-300'
-                                  : 'bg-slate-100 text-gray-700 ring-gray-200'
-                              }`}
-                            >
-                              {assessment.status}
-                            </span>
+                      {/* Status of the job's newest assessment - the row's
+                          representative, unchanged from before. */}
+                      {/* Boxed to a fixed width so the metric columns start
+                          on the same line in every row - the pill's own width
+                          varies with the word inside it. */}
+                      <div className="flex-shrink-0 xl:w-[104px]">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${
+                          assessment.status === 'Active'
+                            ? 'bg-green-100 text-green-700 ring-green-200'
+                            : assessment.status === 'Draft'
+                            ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+                            : assessment.status === 'Archived'
+                            ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+                            : assessment.status === 'Completed'
+                            ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                            : assessment.status === 'Paused'
+                            ? 'bg-slate-200 text-gray-600 ring-gray-300'
+                            : 'bg-slate-100 text-gray-700 ring-gray-200'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
+                        {assessment.status}
+                      </span>
+                      </div>
+
+                      {/* Totals for the job. Two columns on a phone, four in a
+                          divided row once there is width for them. */}
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 xl:flex-1 xl:min-w-0">
+                        {getJobRowMetrics(assessment).map(({ key, icon: MetricIcon, value, label }) => (
+                          <div
+                            key={key}
+                            className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <MetricIcon className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />
+                              <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{value}</span>
+                            </div>
+                            <p className="text-[11px] text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
                           </div>
+                        ))}
+                      </div>
 
-                          {/* Line 2: the assessment itself - the child of the job above,
-                              and what this card's actions operate on. */}
-                          <div className="flex items-center gap-2 flex-wrap text-xs text-gray-700 dark:text-slate-300 font-medium mb-1.5">
-                            <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35 whitespace-nowrap">
-                              Assessment v{assessment.version ?? 1}
-                            </span>
-                            <span className="truncate">
-                              {stripVersionFromTitle(assessment.title) || 'Assessment'}
-                            </span>
-                          </div>
-
-                          {/* Line 3: created by: abishekd • Created: 9 Feb 2026 at 06:46 pm Last Updated: <date> */}
-                          <div className="text-xs text-gray-600 dark:text-slate-400 mb-1.5">
-                            {assessment.created_by_name && (
-                              <span>created by: {assessment.created_by_name}</span>
-                            )}
-                            {assessment.created_at && (
-                              <span className={assessment.created_by_name ? " ml-1" : ""}>
-                                {assessment.created_by_name ? "• " : ""}Created: {formatISTDate(assessment.created_at)} at {formatISTTime(assessment.created_at)}
-                              </span>
-                            )}
-                            {assessment.updated_at && (
-                              <span className="ml-2">Last Updated: {formatISTDate(assessment.updated_at)} at {formatISTTime(assessment.updated_at)}</span>
-                            )}
-                          </div>
-
-                          {/* Line 4: 30 min 1 Invitations Sent */}
-                          <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-slate-500">
-                            <span>{assessment.duration}</span>
-                            <span>{assessment.candidates} Invitations Sent</span>
-                          </div>
-                        </div>
-                      {/* /Assessment Info */}
-
-                      {/* Actions — Share, Track Invites, Results, Menu in a straight line at the top */}
-                      <div className="flex flex-col items-end gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                        {/* Action Buttons — straight line, no wrap, top-aligned */}
-                        {renderAssessmentQuickActions(assessment)}
-
-                        {/* Three Dots Menu group */}
-                        {renderAssessmentMenu(assessment)}
-                        {/* View Versions — right corner, under the action row,
-                            mirroring the Job Openings list.
-
-                            This replaced a second control that showed the JOB
-                            DESCRIPTION's versions alone (`JDVersionHistory`,
-                            still used by Resume Scoring, AI Talent Match and AI
-                            Interviews). Two buttons both reading "View Versions"
-                            on one card was the problem, and the panel below is a
-                            superset of what that one showed: every job version,
-                            plus the assessment actually authored against it. */}
+                      {/* Actions */}
+                      <div
+                        className="flex items-center gap-2 flex-shrink-0 self-start xl:self-auto xl:ml-auto"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Trigger only - the panel it opens is untouched. */}
                         {hasVersionHistory(assessment) && (
                           <button
                             type="button"
@@ -4196,16 +4250,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             }}
                             aria-expanded={openVersionsFor === assessment.id}
                             title={openVersionsFor === assessment.id ? 'Hide version history' : 'View version history'}
-                            className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all ${
+                            className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                               openVersionsFor === assessment.id
                                 ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
-                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800'
+                                : 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
                             }`}
                           >
-                            <Layers className="w-3.5 h-3.5" />
                             {openVersionsFor === assessment.id ? 'Hide' : 'View'} Versions
+                            <ChevronDown
+                              className={`w-3.5 h-3.5 transition-transform ${
+                                openVersionsFor === assessment.id ? 'rotate-180' : ''
+                              }`}
+                            />
                           </button>
                         )}
+
+                        {/* Same destination the row click has: the job's
+                            newest assessment. */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/recruitment/assessments/${assessment.id}`);
+                          }}
+                          className="h-8 w-8 flex items-center justify-center bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-300 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
+                          aria-label="View assessment" title="View assessment"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+
+                        {renderAssessmentMenu(assessment)}
                       </div>
                     </div>
                     {/* Expanded in place, below the card's own content and
@@ -4223,7 +4297,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
                           currentAssessmentId={assessment.id}
                           latestJobVersion={getLatestJobVersion(assessment)}
-                          fallbackJobTitle={assessment.job?.title}
                           onRowClick={(versionId) => router.push(`/recruitment/assessments/${versionId}`)}
                           /* Every version gets the card's own menu, keyed
                              separately so opening one row's does not also open
@@ -4247,7 +4320,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             return (
                               <>
                                 {renderAssessmentQuickActions(mapped)}
-                                {renderAssessmentMenu(mapped, `version:${version.id}`)}
+                                {renderAssessmentMenu(mapped, `version:${version.id}`, 'compact')}
                               </>
                             );
                           }}
@@ -4266,7 +4339,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 totalItems={assessmentResultCount}
                 onPageChange={setAssessmentCurrentPage}
                 onItemsPerPageChange={setAssessmentItemsPerPage}
-                itemLabel="assessments"
+                itemLabel="jobs"
               />
             )}
           </div>
