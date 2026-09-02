@@ -345,6 +345,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   /* The job whose full Version History popup is open — the Job Details page's
      own modal, opened by the eye on a row. */
   const [versionHistoryFor, setVersionHistoryFor] = useState<Job | null>(null);
+  /**
+   * Version number the history popup opens straight into, or null to open on
+   * the list.
+   *
+   * The two Eyes on this screen ask different questions and the modal already
+   * answers both: the card's Eye means "what happened to this job", so it opens
+   * on the list; a version row's Eye means "show me THIS version", so it opens
+   * on that version's detail via the modal's own `initialVersionNumber`. Held
+   * beside `versionHistoryFor` rather than read off it, because the card's Job
+   * carries a versionNumber too and reading that would silently change the
+   * card Eye's behaviour.
+   */
+  const [versionHistoryVersion, setVersionHistoryVersion] = useState<number | null>(null);
   /* The JD VERSION the recruiter has ticked in the picker — the card's radio
      picks the latest, a Version History row picks an older one. Held with the
      LINEAGE it belongs to rather than as a bare record, because that is what
@@ -1507,6 +1520,52 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     return codingRolePatterns.some(pattern => pattern.test(titleAndDesc));
   };
 
+  /**
+   * Does this JD imply a coding round?
+   *
+   * The stored flag first, then the same skill-based fallback `handleJobSelect`
+   * applies — a "Test Engineer" JD listing Java as a required skill comes back
+   * from the AI extractor with coding_required=false on a title bias, while
+   * selecting it would still auto-enable the coding round. Reading the flag
+   * alone would print "No" on a row that is about to get a coding assessment.
+   *
+   * One helper for the card badge and the version column, so the two cannot
+   * drift into contradicting each other about the same JD.
+   */
+  const codingRequiredFor = (source: Job): boolean => {
+    if (source.coding_required === true) return true;
+    const detectionInput: string[] = [
+      ...((source.skills as string[]) || []),
+      source.title || '',
+      source.description || '',
+    ];
+    if (detectionInput.length === 0) return false;
+    return (
+      detectProgrammingLanguagesFromSkills(detectionInput).length > 0 && isCodingRole(source)
+    );
+  };
+
+  /**
+   * The Job-shaped view of ONE version, for questions whose answer differs
+   * between versions.
+   *
+   * `versionJob` from the history panel spreads the CARD's job, so its skills,
+   * description and coding_required still belong to the card's version. Where a
+   * per-version detail has been fetched, those fields are taken from it — a v2
+   * that never asked for coding must not read as coding just because v3 does.
+   */
+  const versionJobWithDetail = (versionJob: Job): Job => {
+    const detail = jdLineage.versionDetails[versionJob.id];
+    if (!detail) return versionJob;
+    return {
+      ...versionJob,
+      title: detail.title || versionJob.title,
+      description: detail.description || versionJob.description,
+      skills: [...(detail.must_have_skills || []), ...(detail.nice_to_have_skills || [])],
+      coding_required: detail.coding_required ?? versionJob.coding_required,
+    };
+  };
+
   const handleJobSelect = (job: Job) => {
     /* One assessment per JD VERSION: the check is the version's own JD id,
        resolved through the lineage's actual assessments where they have been
@@ -2215,35 +2274,32 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   /* Read from `localJobs`, which is the fetched list plus any JD created or
      resolved by link during this visit. Every version of every job, unfiltered
-     — the draft test below runs per version INSIDE each lineage, so a status
+     — the status test below runs per version INSIDE each lineage, so a status
      filter applied up here would remove the very versions the collapse needs
      in order to pick the right representative. */
   const allJdVersions = localJobs.length > 0 ? localJobs : jobs;
 
   /* ONE ROW PER JOB, not per job version — and the row is that lineage's
-     LATEST NON-DRAFT version.
+     LATEST LIVE version: the highest-numbered Published or Republished one.
 
-     Draft is the only status that costs a version its place here. It is
-     unfinished work: nothing downstream can be built against it, and a job
-     that is nothing BUT drafts has no row at all (`buildAssessmentJobList`
-     returns nothing for it). Every other status keeps its row, Disabled and
-     Archived included — that a job is archived is the answer a recruiter came
-     to this list for, and hiding it just reads as the job having gone missing.
+     A newer version in any other status does not take that place. v3 archived
+     over a published v2 leaves the card reading "v2 · Published", because v2
+     is where the job is still live and v2 is what an assessment would be built
+     against; the same skip covers a v4 draft raised over a published v3. This
+     is a "latest live" rule, not a "highest number" one.
 
-     Latest NON-DRAFT rather than latest outright is what stops a fresh draft
-     displacing a live version: a v4 draft raised over a published v3 is
-     skipped, so the card keeps reading "v3 · Published" until v4 is itself
-     published. The v4 is not lost — View Versions below lists the entire
-     lineage, drafts included, and refuses to select them.
+     A job with no live version at all — nothing but drafts, or every version
+     archived or disabled — has no row (`buildAssessmentJobList` returns
+     nothing for it). The versions still exist and the job is still reachable
+     from Job Openings; it simply has nothing an assessment could be built
+     against, which is the only question this list answers.
 
-     What this list does NOT decide is whether the row can be PICKED. Status
-     controls that separately, on the controls themselves: `isSelectableVersion`
-     lets only Published and Republished through, so a visible Disabled or
-     Archived card renders with its real status badge and an inert radio whose
-     tooltip says why. Visibility and selection are two questions here, never
-     one test doing double duty.
+     The skipped versions are not lost: View Versions below lists the entire
+     lineage, newest first — Published, Republished, Disabled, Archived and
+     Draft alike, each showing its real status — and refuses to select the ones
+     that are not live.
 
-     Assessments do not enter into it at all. Whether a version already has one
+     Assessments do not enter into it. Whether a version already has one
      decides whether a SECOND can be created against it (the one-per-version
      rule the controls below apply), never whether the version is shown. */
   const availableJobs = buildAssessmentJobList(allJdVersions);
@@ -2609,28 +2665,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                             the full version history. */}
                         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                           {(() => {
-                            // Mirror the same detection that handleJobSelect
-                            // uses, so the badge matches what configuration
-                            // will actually do. A "Test Engineer" JD listing
-                            // Java as a required skill ended up flagged
-                            // No Coding because the AI extractor set
-                            // coding_required=false based on the title bias,
-                            // but the skill-based detection on selection
-                            // would still auto-enable the coding round.
-                            let codingDetected = job.coding_required === true;
-                            if (!codingDetected) {
-                              const cardDetectionInput: string[] = [
-                                ...((job.skills as string[]) || []),
-                                job.title || '',
-                                job.description || '',
-                              ];
-                              if (cardDetectionInput.length > 0) {
-                                const detected = detectProgrammingLanguagesFromSkills(cardDetectionInput);
-                                if (detected.length > 0 && isCodingRole(job)) {
-                                  codingDetected = true;
-                                }
-                              }
-                            }
+                            // Same detection `handleJobSelect` uses, so the
+                            // badge matches what configuration will actually
+                            // do — and the same helper the version rows below
+                            // call, so a card and its own v3 row cannot
+                            // disagree. See `codingRequiredFor`.
+                            const codingDetected = codingRequiredFor(job);
                             return codingDetected ? (
                               <span className="px-2 sm:px-2.5 py-1 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded text-xs flex items-center gap-1">
                                 <Code className="w-3 h-3" />
@@ -2684,11 +2724,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
                           {/* A button, not a link: the popup reads a version
                               without navigating away from a half-made
-                              assessment. */}
+                              assessment. Opens on the LIST — this Eye is about
+                              the job's history, not one version of it. */}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setVersionHistoryVersion(null);
                               setVersionHistoryFor(job);
                             }}
                             className="h-7 w-7 flex items-center justify-center bg-white text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
@@ -2758,6 +2800,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           versionApplicants={jdLineage.versionApplicants}
                           openInNewTab
                           staticRows
+                          /* The role name is plain text here. This table is a
+                             picker mid-task: navigating to Job Details would
+                             abandon a half-made assessment, and the Eye in the
+                             same row already reads the version without leaving
+                             the page. */
+                          plainTitle
                           /* A radio per version row, so an older version can be
                              the one built against — the card's own radio is the
                              latest, these are v1, v2, v3 … under it.
@@ -2819,6 +2867,37 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           selectionDisabledReason={otherPickReason}
                           extraColumns={[
                             {
+                              label: 'Coding Required',
+                              minW: 'min-w-[130px]',
+                              /* Whether THIS version implies a coding round,
+                                 read from the version's own fetched detail
+                                 rather than the card's — the same question the
+                                 card badge answers, through the same helper.
+                                 Yes/No rather than the card's Coding/No Coding
+                                 chip: in a table of one-word cells a plain
+                                 verdict scans faster than a repeated noun. */
+                              render: (versionJob) => {
+                                const needsCoding = codingRequiredFor(versionJobWithDetail(versionJob));
+                                return (
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ring-1 ${
+                                      needsCoding
+                                        ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+                                        : 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700'
+                                    }`}
+                                    title={
+                                      needsCoding
+                                        ? `v${versionJob.versionNumber ?? 1} implies a coding round`
+                                        : `v${versionJob.versionNumber ?? 1} does not imply a coding round`
+                                    }
+                                  >
+                                    <Code className="w-3 h-3" />
+                                    {needsCoding ? 'Yes' : 'No'}
+                                  </span>
+                                );
+                              },
+                            },
+                            {
                               label: 'Assessment',
                               minW: 'min-w-[120px]',
                               /* One column, one fact: does THIS version have an
@@ -2851,20 +2930,49 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               versionHasAssessment(versionKey, versionJob.id),
                             );
                             return (
-                              <button
-                                type="button"
-                                disabled={!add.enabled}
-                                onClick={() => add.enabled && handleCreateForVersion(versionJob)}
-                                className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all ${
-                                  add.enabled
-                                    ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-white/10'
-                                    : ADD_BUTTON_DISABLED
-                                }`}
-                                aria-label={add.label}
-                                title={add.label}
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={!add.enabled}
+                                  onClick={() => add.enabled && handleCreateForVersion(versionJob)}
+                                  className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all ${
+                                    add.enabled
+                                      ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-white/10'
+                                      : ADD_BUTTON_DISABLED
+                                  }`}
+                                  aria-label={add.label}
+                                  title={add.label}
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* The card's own Eye, on every version row —
+                                    same button, same classes, same popup. Never
+                                    disabled: reading a version is unrelated to
+                                    whether an assessment can be built against
+                                    it, so an Archived, Disabled or Draft row
+                                    opens exactly like a published one. Pointed
+                                    at THIS version's id, so the popup opens on
+                                    the row's own version rather than the
+                                    card's. */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    /* Both together: the id fetches this
+                                       version's lineage, the number selects
+                                       this version inside it, so the popup
+                                       opens showing v2 and nothing else. */
+                                    setVersionHistoryVersion(versionJob.versionNumber ?? 1);
+                                    setVersionHistoryFor(versionJob);
+                                  }}
+                                  className="h-7 w-7 flex items-center justify-center bg-white text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                                  aria-label={`View v${versionJob.versionNumber ?? 1} details`}
+                                  title={`View v${versionJob.versionNumber ?? 1} details`}
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              </>
                             );
                           }}
                         />
@@ -2928,9 +3036,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         {versionHistoryFor && (
           <JDVersionHistoryModal
             isOpen
-            onClose={() => setVersionHistoryFor(null)}
+            onClose={() => {
+              setVersionHistoryFor(null);
+              setVersionHistoryVersion(null);
+            }}
             jdId={versionHistoryFor.id}
             jdTitle={versionHistoryFor.title}
+            initialVersionNumber={versionHistoryVersion ?? undefined}
           />
         )}
 
