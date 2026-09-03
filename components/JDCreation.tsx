@@ -3008,6 +3008,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           if (response?.description) {
             setGeneratedJD(response.description);
 
+            // Job Title names a different tech stack than the AI Prompt's own
+            // requirements (e.g. title "Frontend Developer" with "Java, Spring
+            // Boot, Microservices" as requirements) - see
+            // detect_title_tech_stack_mismatch in openai_service.py. The
+            // description itself was still generated with the Job Title kept as
+            // the source of truth; this only warns the recruiter to double-check
+            // before publishing.
+            if (response.role_mismatch_warning) {
+              toast.warning({
+                title: 'Job Title / Requirements Mismatch',
+                description: response.role_mismatch_warning,
+              });
+            }
+
             // If the stream finished AFTER the user already advanced past Step 1
             // (e.g. they clicked Next as soon as text streaming completed), do NOT
             // re-fill Step 2 or show a "generated / click Next" toast — the extraction
