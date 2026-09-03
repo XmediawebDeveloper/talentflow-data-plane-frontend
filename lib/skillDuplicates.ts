@@ -83,6 +83,14 @@ const GENERIC_QUALIFIER_WORDS = [
   // software-flavoured descriptors (still descriptors, not subjects)
   'programming', 'program', 'coding', 'code', 'scripting', 'script',
   'development', 'develop', 'dev', 'engineering', 'framework', 'library', 'stack',
+  // CREDENTIAL markers — mirrors backend addition. "AWS Certification"/"AWS
+  // Certified" names the same platform skill as "AWS" with proof attached;
+  // narrower than the software-descriptor set above since it names the ACT
+  // of being certified, never a body of knowledge in its own right.
+  'certification', 'certifications', 'certified', 'certificate', 'certificates',
+  'credential', 'credentials', 'credentialed',
+  'license', 'licenses', 'licensed', 'licence', 'licences', 'licenced',
+  'accreditation', 'accredited', 'qualification', 'qualifications', 'qualified',
 ];
 // DELIBERATELY EXCLUDED, keep them out: 'standard(s)', 'policy', 'protocol',
 // 'guideline', 'system(s)', 'technology', 'operation(s)', 'administration',
