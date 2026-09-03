@@ -922,6 +922,41 @@ export const aiInterviewService = {
     }
   },
 
+  /** Deterministic duplicate backstop for clusters loaded from a SAVED config.
+   *
+   *  `/generate-clusters` and `/refine-clusters` both guarantee "no duplicate
+   *  skills" on their own output — but a cluster the Clusters page restores
+   *  from `special_instructions.mth_clusters`/`nth_clusters` on mount never
+   *  passed through either endpoint just now; it's whatever was saved,
+   *  possibly before this guard existed at all. This re-runs the same
+   *  deterministic check (no LLM, no re-clustering) so historical data gets
+   *  the same guarantee before it's shown.
+   *
+   *  Fails open — returns the INPUT unchanged on any error, so a load-time
+   *  cleanup call can never block the page from rendering.
+   */
+  async dedupeClusters(args: {
+    mthClusters: any[];
+    nthClusters: any[];
+  }): Promise<{ mthClusters: any[]; nthClusters: any[] }> {
+    if (!args.mthClusters?.length && !args.nthClusters?.length) {
+      return { mthClusters: args.mthClusters || [], nthClusters: args.nthClusters || [] };
+    }
+    try {
+      const response = await api.post(
+        '/ai-interview/dedupe-clusters',
+        { mth_clusters: args.mthClusters || [], nth_clusters: args.nthClusters || [] },
+        { timeout: 6000 },
+      );
+      return {
+        mthClusters: response.data?.mth_clusters ?? args.mthClusters ?? [],
+        nthClusters: response.data?.nth_clusters ?? args.nthClusters ?? [],
+      };
+    } catch {
+      return { mthClusters: args.mthClusters || [], nthClusters: args.nthClusters || [] };
+    }
+  },
+
   async generateClusters(
     mthSkills: string[],
     nthSkills: string[],
