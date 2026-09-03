@@ -430,6 +430,24 @@ const isEnglishOnly = (text: string): boolean => {
   return !hasNonEnglishLatinMarkers(text);
 };
 
+// Heads-up only: the backend already swap-corrects an inverted "Minimum Salary: X /
+// Maximum Salary: Y" pair before it ever reaches the AI, so this never blocks
+// generation - it just tells the recruiter their typed figures look swapped before
+// they submit.
+const detectInvertedLabelledSalary = (text: string): boolean => {
+  const minMatch = text.match(/minimum\s*salary\s*[:\-]?\s*([\d.,]+)/i);
+  const maxMatch = text.match(/maximum\s*salary\s*[:\-]?\s*([\d.,]+)/i);
+  if (!minMatch || !maxMatch) {
+    return false;
+  }
+  const minVal = parseFloat(minMatch[1].replace(/,/g, ''));
+  const maxVal = parseFloat(maxMatch[1].replace(/,/g, ''));
+  if (Number.isNaN(minVal) || Number.isNaN(maxVal)) {
+    return false;
+  }
+  return minVal > maxVal;
+};
+
 const JOB_TITLE_ENGLISH_ONLY_MESSAGE = 'Job title must be written in English only. Other languages are not supported.';
 
 const showJobTitleValidationToast = (validationError: string): void => {
@@ -6080,6 +6098,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           {aiPrompt.trim().length}/{VALIDATION.AI_PROMPT.max}
                         </p>
                       </div>
+                      {detectInvertedLabelledSalary(aiPrompt) && (
+                        <div className="flex items-center gap-2 p-3 mt-2 bg-amber-50 border border-amber-200 rounded-lg">
+                          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                          <p className="text-xs text-amber-800">
+                            Minimum Salary looks higher than Maximum Salary - double-check these figures before generating.
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Quota Warning */}
