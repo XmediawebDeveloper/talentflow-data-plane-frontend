@@ -1435,6 +1435,49 @@ export default function AIInterviewConfig() {
           }
         }
 
+        // De-dupe a raw skill-name list before it ever becomes Configure state.
+        // `addSkill()` below runs the same semantic check, but only for a skill
+        // typed through "+ Add" — it was never reachable for skills that arrive
+        // pre-populated from `jd.must_have_skills` / `jd.nice_to_have_skills`
+        // (JD extraction can independently produce "REST API" and "RESTful API"
+        // as separate bullets) or from a previously-saved `jd_skills`/
+        // `custom_skills` list (legacy configs saved before this guard existed).
+        // Order-preserving, first occurrence wins — same contract as the
+        // backend's `_dedupe_skills_semantic`. Declared here, above the
+        // rounds_config branch, so every branch below (fresh JD, draft without
+        // rounds yet, and restored rounds) shares one definition.
+        const dedupeSkillNames = (names: string[] = []) => {
+          const kept: string[] = [];
+          for (const raw of names) {
+            if (typeof raw !== 'string' || !raw.trim()) continue;
+            const name = raw.trim();
+            if (closestDuplicate(kept.map(k => ({ name: k })), k => k.name, name)) continue;
+            kept.push(name);
+          }
+          return kept;
+        };
+        const toSkillEntries = (skills: string[] = []) =>
+          dedupeSkillNames(skills).map(s => ({ name: s, comment: '', type: 'Skill' as SkillType }));
+
+        // CROSS-CATEGORY guard: the same semantic skill can independently land
+        // in both `jd.must_have_skills` and `jd.nice_to_have_skills` (JD
+        // extraction runs per-section with no shared view). Must-Have wins —
+        // mirrors the backend's `_strip_cross_section_duplicates`. Every branch
+        // below resolves MTH before NTH, so `mthClaimedNames` is always populated
+        // by the time an NTH list is built.
+        let mthClaimedNames: string[] = [];
+        const toMthSkillEntries = (skills: string[] = []) => {
+          const entries = toSkillEntries(skills);
+          mthClaimedNames = entries.map(e => e.name);
+          return entries;
+        };
+        const toNthSkillEntries = (skills: string[] = []) => {
+          const deduped = dedupeSkillNames(skills).filter(
+            name => !closestDuplicate(mthClaimedNames.map(n => ({ name: n })), k => k.name, name),
+          );
+          return deduped.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType }));
+        };
+
         if (existingDraft?.rounds_config?.length) {
           // Restore state from saved draft
           const mthRound = existingDraft.rounds_config.find((r: AIInterviewRoundConfig) => r.type === 'must_have_skills');
@@ -1515,9 +1558,6 @@ export default function AIInterviewConfig() {
             loadedSiRef.current.nth_skills_snapshot = nthMainSkills;
           }
 
-          const toSkillEntries = (skills: string[] = []) =>
-            skills.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType }));
-
           // Capture original rounds_config skills so auto-save can preserve
           // the AI-expanded list when main_skills haven't changed.
           loadedRoundsRef.current = {
@@ -1532,8 +1572,8 @@ export default function AIInterviewConfig() {
             const draftSkills = mthMainSkills ?? [...(mthRound.jd_skills || []), ...(mthRound.custom_skills || [])];
             setMth({
               skills: draftSkills.length > 0
-                ? toSkillEntries(draftSkills)
-                : (jd.must_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? []),
+                ? toMthSkillEntries(draftSkills)
+                : (toMthSkillEntries(jd.must_have_skills ?? [])),
               clusters: [],
               percentage: mthRound.percentage ?? DEFAULT_PCT.mth,
               enabled: true,
@@ -1541,7 +1581,7 @@ export default function AIInterviewConfig() {
           } else {
             setMth(prev => ({
               ...prev,
-              skills: jd.must_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
+              skills: toMthSkillEntries(jd.must_have_skills ?? []),
             }));
           }
 
@@ -1549,8 +1589,8 @@ export default function AIInterviewConfig() {
             const draftSkills = nthMainSkills ?? [...(nthRound.jd_skills || []), ...(nthRound.custom_skills || [])];
             setNth({
               skills: draftSkills.length > 0
-                ? toSkillEntries(draftSkills)
-                : (jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? []),
+                ? toNthSkillEntries(draftSkills)
+                : (toNthSkillEntries(jd.nice_to_have_skills ?? [])),
               clusters: [],
               percentage: nthRound.percentage ?? DEFAULT_PCT.nth,
               enabled: nthRound.enabled !== false,
@@ -1565,8 +1605,8 @@ export default function AIInterviewConfig() {
               ...prev,
               enabled: false,
               skills: (nthMainSkills && nthMainSkills.length > 0)
-                ? toSkillEntries(nthMainSkills)
-                : (jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? []),
+                ? toNthSkillEntries(nthMainSkills)
+                : (toNthSkillEntries(jd.nice_to_have_skills ?? [])),
             }));
           }
 
@@ -1661,23 +1701,23 @@ export default function AIInterviewConfig() {
           // JD defaults. Mode + SI-backed settings were already restored above.
           setMth(prev => ({
             ...prev,
-            skills: jd.must_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
+            skills: toMthSkillEntries(jd.must_have_skills ?? []),
           }));
           setNth(prev => ({
             ...prev,
             enabled: (jd.nice_to_have_skills?.length ?? 0) > 0,
-            skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
+            skills: toNthSkillEntries(jd.nice_to_have_skills ?? []),
           }));
         } else {
           // No existing config at all — populate from JD defaults
           setMth(prev => ({
             ...prev,
-            skills: jd.must_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
+            skills: toMthSkillEntries(jd.must_have_skills ?? []),
           }));
           setNth(prev => ({
             ...prev,
             enabled: (jd.nice_to_have_skills?.length ?? 0) > 0,
-            skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
+            skills: toNthSkillEntries(jd.nice_to_have_skills ?? []),
           }));
         }
 
