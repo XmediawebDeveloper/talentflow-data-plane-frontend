@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, ArrowUp, ArrowDown } from 'lucide-react';
+import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -496,6 +496,37 @@ export default function ResumeScoringPage({
     }
   };
 
+  /* "Show All Versions" beside the version badge on a job's own scoring page: lists every
+     version's scored resumes for that job instead of only the version the
+     page is scoped to. Held as the jobId it was switched on for, so moving to
+     another version — or another job — drops back to that version's own list
+     without an effect to reset it. */
+  const [allVersionsJobId, setAllVersionsJobId] = useState<string | null>(null);
+  const [isLoadingAllVersions, setIsLoadingAllVersions] = useState(false);
+  /* Scores are fetched per JD version on demand, so a version nobody has
+     opened yet sits in scoredHistory with an empty scoredResumes and would
+     silently contribute no rows. Pull the missing ones in when the toggle
+     goes on, using the same per-version fetch the Scoring History modal's
+     refresh uses. */
+  const showAllVersionsFor = async (item: ScoredResumeData) => {
+    setAllVersionsJobId(item.jobId);
+    if (!onLoadJdScores) return;
+    const groupKey = resolveHistoryGroupKey(item);
+    const pending = scoredHistory.filter(
+      (h) =>
+        resolveHistoryGroupKey(h) === groupKey &&
+        h.jobId !== item.jobId &&
+        (h.scoredResumes?.length ?? 0) === 0,
+    );
+    if (pending.length === 0) return;
+    setIsLoadingAllVersions(true);
+    try {
+      await Promise.all(pending.map((h) => onLoadJdScores(h.jobId, h.jobTitle)));
+    } finally {
+      setIsLoadingAllVersions(false);
+    }
+  };
+
   // Pending filter inputs (Search/Scored By/Version/Status) for the modal's
   // toolbar — committed into `appliedHistoryFilters` only on Apply, per the
   // mockup's Reset/Apply pair, rather than filtering live on every keystroke.
@@ -532,6 +563,12 @@ export default function ResumeScoringPage({
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const [listScrollRequest, setListScrollRequest] = useState(0);
+  // Same pair for the "Score Resumes" job list, scrolled to when that view is
+  // opened. The anchor lives inside JobOpeningPickerList, right above its
+  // first job card.
+  const jobPickerListRef = useRef<HTMLDivElement | null>(null);
+  const [jobPickerScrollRequest, setJobPickerScrollRequest] = useState(0);
+  const requestJobPickerScroll = () => setJobPickerScrollRequest((request) => request + 1);
   // Whether the floating Progress Tables icon has revealed its label.
   const [showProgressLabel, setShowProgressLabel] = useState(false);
 
@@ -540,6 +577,14 @@ export default function ResumeScoringPage({
   const [progressData, setProgressData] = useState<ScoringProgressItem[]>([]);
   const [filterByJobId, setFilterByJobId] = useState<string | undefined>(undefined);
   const [showJobTitleColumn, setShowJobTitleColumn] = useState(false);
+  /* The "View Progress" popup on a job row in View by Job spans the job's
+     WHOLE lineage, so its rows need Job ID / Job Title / Score columns of
+     their own. Every other opener (a single version, Progress Tables) keeps
+     the narrow layout, so each one sets this explicitly. */
+  const [progressSpansJob, setProgressSpansJob] = useState(false);
+  /* The jobId whose lineage progress is currently being fetched - that row's
+     eye button shows a spinner and stops re-firing while it loads. */
+  const [loadingProgressJobId, setLoadingProgressJobId] = useState<string | null>(null);
   const [isBulkProgressMinimized, setIsBulkProgressMinimized] = useState(false);
 
   // Hide global floating widget when BulkScoringProgressModal is open and NOT minimized
@@ -657,7 +702,7 @@ export default function ResumeScoringPage({
 
   // Global view state (view all scored resumes across all JDs)
   const [isGlobalView, setIsGlobalView] = useState(false);
-  /* Which of the two global cards opened this view — "View All Candidates"
+  /* Which of the two global cards opened this view — "View by Candidates"
      groups rows by email (one cluster per person, see ScoredResumesTable's
      own `groupByEmail`); "Total Resumes Scored" shows the identical
      underlying rows but flat, one row per scoring event in plain
@@ -728,7 +773,7 @@ export default function ResumeScoringPage({
       // same pattern every other list on this page uses (see e.g. the JD
       // page's own scored-resumes fetch). A flat `page_size: 100` here used
       // to silently cap this list at 100 rows with no pagination to reach
-      // the rest, so "Total Resumes Scored"/"View All Candidates" undercounted
+      // the rest, so "Total Resumes Scored"/"View by Candidates" undercounted
       // against the real total the moment more than 100 resumes existed.
       const probe = await scoringService.getAllScoredResumes({ page: 1, page_size: 1 });
       const response = probe.total > (probe.items || []).length
@@ -740,7 +785,7 @@ export default function ResumeScoringPage({
         id: item.id,
         // Was missing here — every row's "View Resume" action (and Share)
         // is gated on this field, so without it neither ever showed up in
-        // View All Candidates even though the resume itself exists.
+        // View by Candidates even though the resume itself exists.
         resumeId: item.resume_id || item.resumeId || '',
         candidateName: item.candidate_name || 'Unknown',
         email: item.email || '',
@@ -783,7 +828,7 @@ export default function ResumeScoringPage({
     }
   };
 
-  // Load the global candidates list whenever the "View All Candidates" view is
+  // Load the global candidates list whenever the "View by Candidates" view is
   // active but its data isn't loaded yet. This covers the case where the view
   // was restored from persistence (returning to this page) — previously only
   // the click handler fetched, so a restored global view showed empty. Guarded
@@ -843,7 +888,7 @@ export default function ResumeScoringPage({
   };
 
   /**
-   * Warm the "View All Candidates" list in the background, so clicking that card
+   * Warm the "View by Candidates" list in the background, so clicking that card
    * renders rows instead of a spinner.
    *
    * The card shows its count from `scoredHistory`, which is already loaded — so
@@ -900,6 +945,21 @@ export default function ResumeScoringPage({
     return () => window.cancelAnimationFrame(frame);
   }, [listScrollRequest, pageView, isGlobalView]);
 
+  /* Opening the job picker puts its FIRST JOB at the top of the viewport —
+     the same anchor-div + request-counter pattern the candidates list above
+     uses, so entering "Score Resumes" lands on the jobs themselves instead of
+     mid-page at whatever offset the previous view was scrolled to. A counter
+     rather than a boolean, so a second request scrolls again. */
+  useEffect(() => {
+    if (jobPickerScrollRequest === 0) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      jobPickerListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [jobPickerScrollRequest]);
+
   // Handle initial JD ID from URL - auto-open scored resumes view or start new scoring
   useEffect(() => {
     // Only handle initialJdId once
@@ -916,6 +976,7 @@ export default function ResumeScoringPage({
       setSelectedResumes([]);
       setIsWaitingForInitialJd(false);
       setInitialJdHandled(true);
+      requestJobPickerScroll();
       return;
     }
 
@@ -1736,8 +1797,6 @@ export default function ResumeScoringPage({
     // scoped to, so the Job Version column reads the same value the header
     // badge above it shows — never blank, unlike the cross-job "All
     // Candidates" list where it varies per row.
-    const scoredResumesData = convertToScoredResumesFormat(selectedHistoryItem)
-      .map(r => ({ ...r, jobVersion: detailsVersionNumber }));
     const detailsFilterLineage = versionLineage.filterLineages[selectedHistoryItem.jobId];
     const detailsVersionRows = detailsFilterLineage
       ? resolveVersionHistoryRows(
@@ -1746,6 +1805,30 @@ export default function ResumeScoringPage({
           { publishedOnly: true, versionApplicants: versionLineage.versionApplicants },
         )
       : [];
+    const versionNumberOf = (item: ScoredResumeData) =>
+      resolveHistoryLineageEntry(item)?.version_number ?? item.jdCurrentVersion;
+    /* Every scored version of this job, newest version first. selectedHistoryItem
+       itself is only prepended when scoredHistory has no entry for it yet —
+       goToVersion parks a stub here while that version's scores load. */
+    const detailsGroupKey = resolveHistoryGroupKey(selectedHistoryItem);
+    const lineageScoredItems = [
+      ...(scoredHistory.some(h => h.jobId === selectedHistoryItem.jobId) ? [] : [selectedHistoryItem]),
+      ...scoredHistory.filter(h => resolveHistoryGroupKey(h) === detailsGroupKey),
+    ].sort((a, b) => (versionNumberOf(b) ?? 0) - (versionNumberOf(a) ?? 0));
+    const showingAllVersions = allVersionsJobId === selectedHistoryItem.jobId;
+    /* Offered only when there is another version to fold in — on a job scored
+       at one version only, "Show All Versions" would re-render the same list. */
+    const canShowAllVersions = detailsVersionRows.length > 1 || lineageScoredItems.length > 1;
+    const lineageTotalScored = lineageScoredItems.reduce((sum, item) => sum + (item.totalScored || 0), 0);
+    const scoredResumesData = showingAllVersions
+      /* Each row keeps its OWN version in the Job Version column here, the way
+         the cross-job candidates list does — unlike the single-version list
+         below, where every row shares the header's version. */
+      ? lineageScoredItems.flatMap(item =>
+          convertToScoredResumesFormat(item).map(r => ({ ...r, jobVersion: versionNumberOf(item) }))
+        )
+      : convertToScoredResumesFormat(selectedHistoryItem)
+          .map(r => ({ ...r, jobVersion: detailsVersionNumber }));
     const goToVersion = (versionId: string, versionTitle: string) => {
       if (versionId === selectedHistoryItem.jobId) return;
       const stub: ScoredResumeData = {
@@ -1849,6 +1932,39 @@ export default function ResumeScoringPage({
                         </span>
                       )
                     )}
+                    {/* "Show All Versions" — every version's scored resumes
+                        for this job in one table, instead of only the version
+                        the page is scoped to. Sits beside the version badge
+                        because it answers the same question the badge asks:
+                        which version's candidates am I looking at. */}
+                    {canShowAllVersions && (
+                      <button
+                        type="button"
+                        aria-pressed={showingAllVersions}
+                        title={
+                          showingAllVersions
+                            ? 'Showing candidates from every version — switch back to this version only'
+                            : 'Show candidates from every version of this job'
+                        }
+                        onClick={() =>
+                          showingAllVersions
+                            ? setAllVersionsJobId(null)
+                            : showAllVersionsFor(selectedHistoryItem)
+                        }
+                        className={`inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors flex-shrink-0 ${
+                          showingAllVersions
+                            ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/15'
+                            : 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue'
+                        }`}
+                      >
+                        {isLoadingAllVersions ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Layers className="w-3 h-3" />
+                        )}
+                        Show All Versions
+                      </button>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
                     <span className="flex items-center gap-1">
@@ -1857,7 +1973,9 @@ export default function ResumeScoringPage({
                     </span>
                     <span className="flex items-center gap-1">
                       <FileText className="w-3.5 h-3.5" />
-                      {selectedHistoryItem.totalScored} candidates scored
+                      {showingAllVersions
+                        ? `${lineageTotalScored} candidates scored across ${lineageScoredItems.length} versions`
+                        : `${selectedHistoryItem.totalScored} candidates scored`}
                     </span>
                   </div>
                 </div>
@@ -1944,7 +2062,11 @@ export default function ResumeScoringPage({
           <BulkScoringProgressModal
             progressData={progressData}
             onClose={() => setShowProgressModal(false)}
+            filterByJobId={filterByJobId}
             showJobTitleColumn={showJobTitleColumn}
+            showJobColumns={progressSpansJob}
+            showScoreColumn={progressSpansJob}
+            showScoredByColumn={progressSpansJob}
             minimized={isBulkProgressMinimized}
             onMinimize={() => {
               setIsBulkProgressMinimized(true);
@@ -2032,7 +2154,7 @@ export default function ResumeScoringPage({
     // one per job lineage, so this sum already spans every version.
     const allScoredResumeRows = scoredHistory.flatMap(item => item.scoredResumes || []);
     const totalResumesScored = allScoredResumeRows.length;
-    // "View All Candidates" — distinct people, not scoring events: the count
+    // "View by Candidates" — distinct people, not scoring events: the count
     // this card showed used to just equal totalResumesScored above (same
     // formula), which read as a bug once "Total Resumes Scored" existed
     // side by side with an identical number. Deduped by resume id (falling
@@ -2046,49 +2168,6 @@ export default function ResumeScoringPage({
     const averageScorePercent = allScoredResumeRows.length > 0
       ? Math.round(allScoredResumeRows.reduce((sum, r: any) => sum + scoreOf(r), 0) / allScoredResumeRows.length)
       : 0;
-
-    // Trend chips — real, computed from each resume's own scored date: this
-    // rolling 30 days against the 30 days right before it. `null` (chip
-    // omitted, never faked) when there's no full prior window to compare
-    // against yet.
-    const DAY_MS = 24 * 60 * 60 * 1000;
-    const now = Date.now();
-    const daysAgo = (r: any): number => {
-      const t = new Date(r.scoredDate || r.created_at || 0).getTime();
-      return isNaN(t) ? Infinity : (now - t) / DAY_MS;
-    };
-    const last30Rows = allScoredResumeRows.filter((r: any) => daysAgo(r) <= 30);
-    const prev30Rows = allScoredResumeRows.filter((r: any) => daysAgo(r) > 30 && daysAgo(r) <= 60);
-    const totalScoredTrendPercent = prev30Rows.length > 0
-      ? Math.round(((last30Rows.length - prev30Rows.length) / prev30Rows.length) * 100)
-      : null;
-    const avgScoreOf = (rows: any[]): number | null =>
-      rows.length > 0 ? rows.reduce((sum, r) => sum + scoreOf(r), 0) / rows.length : null;
-    const last30Avg = avgScoreOf(last30Rows);
-    const prev30Avg = avgScoreOf(prev30Rows);
-    // Percentage-POINT delta (76% vs 68% → +8), not a percent-of-percent
-    // change — matches how a score/rate metric normally reads.
-    const avgScoreTrendPoints = (last30Avg !== null && prev30Avg !== null)
-      ? Math.round(last30Avg - prev30Avg)
-      : null;
-
-    const renderTrendChip = (delta: number | null, suffix: string) => {
-      if (delta === null) return undefined;
-      const isUp = delta >= 0;
-      return (
-        <div className="mt-1.5 flex items-center gap-1.5">
-          <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium ${
-            isUp
-              ? 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-400'
-              : 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-400'
-          }`}>
-            {isUp ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-            {Math.abs(delta)}{suffix}
-          </span>
-          <span className="text-xs text-gray-500 dark:text-slate-500">vs last 30 days</span>
-        </div>
-      );
-    };
 
     // Create a processing entry from batchProgress if it exists
     let processingEntry: ScoredResumeData | null = null;
@@ -2225,6 +2304,7 @@ export default function ResumeScoringPage({
                     }))
                   );
                   setProgressData(allProgressData);
+                  setProgressSpansJob(false);
                   setShowJobTitleColumn(true);
                   setFilterByJobId(undefined);
                   setShowProgressModal(true);
@@ -2247,6 +2327,7 @@ export default function ResumeScoringPage({
                   setSelectedJob('');
                   setResumeSource(null);
                   setSelectedResumes([]);
+                  requestJobPickerScroll();
                 }}
                 className="px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
               >
@@ -2304,6 +2385,8 @@ export default function ResumeScoringPage({
                       }))
                     );
                     setProgressData(allProgressData);
+                    setProgressSpansJob(false);
+                  setProgressSpansJob(false);
                     setShowJobTitleColumn(true);
                     setFilterByJobId(undefined);
                     setShowProgressModal(true);
@@ -2324,12 +2407,11 @@ export default function ResumeScoringPage({
               </div>
             )}
 
-            {/* Action cards — "View by Job", "View All Candidates" and
+            {/* Action cards — "View by Job", "View by Candidates" and
                 "Total Resumes Scored" all open a list view on click.
                 "Average Score" alone stays a read-only summary (no click
                 target — there's no natural list a raw average would open
-                onto). Both scored-resume cards carry a real trend chip
-                comparing the last 30 days against the 30 days before it. */}
+                onto). */}
             <StatsCardGrid className="mb-0">
               <StatsCard
                 tone="neutral"
@@ -2346,7 +2428,7 @@ export default function ResumeScoringPage({
                 active={pageView === 'list' && isGlobalView && globalListMode === 'candidates'}
                 showClickArrow
                 icon={Users}
-                label="View All Candidates"
+                label="View by Candidates"
                 value={distinctCandidateCount}
                 sparkline={false}
                 onClick={() => openScoringListView(true, 'candidates')}
@@ -2360,18 +2442,14 @@ export default function ResumeScoringPage({
                 value={totalResumesScored.toLocaleString()}
                 sparkline={false}
                 onClick={() => openScoringListView(true, 'events')}
-              >
-                {renderTrendChip(totalScoredTrendPercent, '%')}
-              </StatsCard>
+              />
               <StatsCard
                 tone="neutral"
                 icon={TrendingUp}
                 label="Average Score"
                 value={`${averageScorePercent}%`}
                 sparkline={false}
-              >
-                {renderTrendChip(avgScoreTrendPoints, '%')}
-              </StatsCard>
+              />
             </StatsCardGrid>
           </div>
 
@@ -2421,7 +2499,7 @@ export default function ResumeScoringPage({
                 }}
                 onSelectAll={(ids) => setSelectedScoredResumes(ids)}
                 isGlobalView={true}
-                /* "View All Candidates" clusters rows by email; "Total
+                /* "View by Candidates" clusters rows by email; "Total
                    Resumes Scored" shows the identical rows flat, one per
                    scoring event, in plain newest-first order. */
                 groupByEmail={globalListMode === 'candidates'}
@@ -2623,11 +2701,89 @@ export default function ResumeScoringPage({
                 try { localStorage.setItem('lastViewedScoringJdId', versionId); } catch (e) {}
                 router.push(`/recruitment/resume-scoring?jd_id=${versionId}`);
               };
+              /* "View Progress" on the job row itself — the whole job, not
+                 only the version this representative row happens to be:
+                 every published version in the lineage is fetched and the
+                 rows shown together, each carrying its own Job ID, Job Title
+                 and version. The per-version menu below keeps its
+                 single-version popup. */
+              const openWholeJobProgress = async () => {
+                const lineageRows = filterLineageForItem
+                  ? resolveVersionHistoryRows(
+                      { id: item.jobId, versionNumber: displayVersionNumber },
+                      filterLineageForItem,
+                      { publishedOnly: true, versionApplicants: versionLineage.versionApplicants },
+                    )
+                  : [];
+                /* No lineage fetched yet (or a job with a single version):
+                   fall back to this row's own version, so the button never
+                   dead-ends while the prefetch is still in flight. */
+                const versions = lineageRows.length > 0
+                  ? lineageRows.map(v => ({
+                      id: v.id,
+                      title: v.title || item.jobTitle,
+                      code: v.job_id || historyLineageEntry?.job_id || item.jdJobId,
+                      versionNumber: v.version_number,
+                    }))
+                  : [{
+                      id: item.jobId,
+                      title: item.jobTitle,
+                      code: historyLineageEntry?.job_id || item.jdJobId,
+                      versionNumber: displayVersionNumber,
+                    }];
+                setLoadingProgressJobId(item.jobId);
+                try {
+                  const perVersion = await Promise.all(versions.map(async (version) => {
+                    const probe = await scoringService.getJDScoredResumes(version.id, { page_size: 1 });
+                    const response = probe.total > (probe.items || []).length
+                      ? await scoringService.getJDScoredResumes(version.id, { page_size: probe.total })
+                      : probe;
+                    return (response.items || []).map((resume: any) => ({
+                      /* Keyed by version AND resume: the same candidate can be
+                         scored against several versions of one job, and those
+                         are separate rows here. */
+                      id: version.id + '-' + (resume.resume_id || ''),
+                      resumeId: resume.resume_id || '',
+                      candidateName: resume.candidate_name || 'Unknown',
+                      email: resume.candidate_email || resume.email,
+                      resumeVersion: resume.resume_version,
+                      jobTitle: version.title,
+                      jobId: version.id,
+                      jobCode: version.code,
+                      jobVersion: version.versionNumber,
+                      scoredBy: resume.scored_by_name || resume.scored_by || 'AI Resume Scorer',
+                      source: 'Internal DB' as const,
+                      status: (resume.status === 'failed' || resume.error_message) ? 'Failed' as const : 'Scored successfully' as const,
+                      errorReason: resume.error_message || resume.error_reason,
+                      scoredDateTime: resume.created_at ? new Date(resume.created_at) : undefined,
+                      matchResult: convertMatchStatus(resume.match_status),
+                      score: resume.overall_score || 0,
+                    }));
+                  }));
+                  const allProgressItems: ScoringProgressItem[] = perVersion
+                    .flat()
+                    .sort((a, b) => (b.scoredDateTime?.getTime() ?? 0) - (a.scoredDateTime?.getTime() ?? 0));
+                  setProgressData(allProgressItems);
+                  /* Deliberately unfiltered: these rows span several JD ids,
+                     so filtering to one would empty most of the table. */
+                  setFilterByJobId(undefined);
+                  setShowJobTitleColumn(false);
+                  setProgressSpansJob(true);
+                  setShowProgressModal(true);
+                } catch (error) {
+                  console.error('[ResumeScoringPage] Failed to load job progress:', error);
+                  toast.error('Failed to load scoring progress for this job');
+                } finally {
+                  setLoadingProgressJobId(null);
+                }
+              };
               // "View Progress" for one specific version — fetches that
               // version's own scored resumes (never the representative row's
               // `item.scoredResumes`, which belongs to a different JD id) and
               // opens the same BulkScoringProgressModal the main list uses.
-              const openVersionProgress = async (versionId: string, versionTitle: string) => {
+              const openVersionProgress = async (versionJob: LineageJob) => {
+                const versionId = versionJob.id;
+                const versionTitle = versionJob.title || item.jobTitle;
                 try {
                   const probe = await scoringService.getJDScoredResumes(versionId, { page_size: 1 });
                   const response = probe.total > (probe.items || []).length
@@ -2637,8 +2793,13 @@ export default function ResumeScoringPage({
                     id: resume.resume_id || '',
                     resumeId: resume.resume_id || '',
                     candidateName: resume.candidate_name || 'Unknown',
+                    email: resume.candidate_email || resume.email,
+                    resumeVersion: resume.resume_version,
+                    scoredBy: resume.scored_by_name || resume.scored_by || 'AI Resume Scorer',
                     jobTitle: versionTitle,
                     jobId: versionId,
+                    jobCode: versionJob.job_id || historyLineageEntry?.job_id || item.jdJobId,
+                    jobVersion: versionJob.versionNumber,
                     source: 'Internal DB' as const,
                     status: (resume.status === 'failed' || resume.error_message) ? 'Failed' as const : 'Scored successfully' as const,
                     errorReason: resume.error_message || resume.error_reason,
@@ -2649,6 +2810,7 @@ export default function ResumeScoringPage({
                   setProgressData(allProgressItems);
                   setFilterByJobId(versionId);
                   setShowJobTitleColumn(false);
+                  setProgressSpansJob(false);
                   setShowProgressModal(true);
                 } catch (error) {
                   console.error('[ResumeScoringPage] Failed to load version progress:', error);
@@ -2669,7 +2831,7 @@ export default function ResumeScoringPage({
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem className="group" onSelect={() => openVersionProgress(versionJob.id, versionJob.title)}>
+                    <DropdownMenuItem className="group" onSelect={() => openVersionProgress(versionJob)}>
                       <Eye className="w-4 h-4" />
                       <span className={MENU_ITEM_SCALE_CLASS}>View Progress</span>
                     </DropdownMenuItem>
@@ -2848,43 +3010,15 @@ export default function ResumeScoringPage({
                       <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
                         <div className="flex items-center gap-1.5 self-end">
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Show progress in BulkScoringProgressModal
-                              const resumes = item.scoredResumes || [];
-                              const allProgressItems: ScoringProgressItem[] = resumes.map((resume: any) => ({
-                                id: resume.resumeId || resume.id || '',
-                                resumeId: resume.resumeId || resume.id || '',
-                                candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
-                                jobTitle: item.jobTitle,
-                                jobId: item.jobId,
-                                // This resume's own source, not the JD's aggregate — a
-                                // job scored from both My Resumes and the internal
-                                // database would otherwise show every row under one source.
-                                source: resume.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
-                                status: (resume.status === 'failed' || resume.errorReason) ? 'Failed' as const : 'Scored successfully' as const,
-                                errorReason: resume.errorReason || resume.error_reason,
-                                // Each candidate's own scored date, not the job's
-                                // aggregate `scoredAt` (see note above).
-                                scoredDateTime: resume.scoredDate ? new Date(resume.scoredDate) : new Date(item.scoredAt),
-                                matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
-                                             : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
-                                             : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
-                                             : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
-                                             : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
-                                             : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
-                                score: resume.overall_score || resume.scorePercentage || resume.score || 0,
-                              }));
-                              setProgressData(allProgressItems);
-                              setFilterByJobId(item.jobId);
-                              setShowJobTitleColumn(false);
-                              setShowProgressModal(true);
-                            }}
+                            onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
+                            disabled={loadingProgressJobId === item.jobId}
                             aria-label="View Progress"
-                            title="View Progress"
-                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors"
+                            title="View Progress (every version of this job)"
+                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                           >
-                            <Eye className="w-4 h-4" />
+                            {loadingProgressJobId === item.jobId
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <Eye className="w-4 h-4" />}
                           </button>
                           <button
                             onClick={(e) => {
@@ -2892,6 +3026,13 @@ export default function ResumeScoringPage({
                               setSelectedHistoryItem(item);
                               setViewMode('details');
                               onLoadJdScores?.(item.jobId, item.jobTitle);
+                              /* Arriving from the job row opens the job as a
+                                 whole: "Show All Versions" starts on, so the
+                                 table lists every version's candidates (and
+                                 the sibling versions' scores are pulled in).
+                                 The per-version rows below still open their
+                                 own single version. */
+                              showAllVersionsFor(item);
                               try {
                                 localStorage.setItem('lastViewedScoringJdId', item.jobId);
                               } catch (e) {}
@@ -3089,48 +3230,28 @@ export default function ResumeScoringPage({
                       <div className="mt-4 flex flex-col gap-2 w-full">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const resumes = item.scoredResumes || [];
-                              const allProgressItems: ScoringProgressItem[] = resumes.map((resume: any) => ({
-                                id: resume.resumeId || resume.id || '',
-                                resumeId: resume.resumeId || resume.id || '',
-                                candidateName: resume.candidateName || resume.candidate_name || resume.name || 'Unknown',
-                                jobTitle: item.jobTitle,
-                                jobId: item.jobId,
-                                // This resume's own source, not the JD's aggregate — a
-                                // job scored from both My Resumes and the internal
-                                // database would otherwise show every row under one source.
-                                source: resume.source === 'my-resumes' ? 'My Resumes' as const : 'Internal DB' as const,
-                                status: (resume.status === 'failed' || resume.errorReason) ? 'Failed' as const : 'Scored successfully' as const,
-                                errorReason: resume.errorReason || resume.error_reason,
-                                // Each candidate's own scored date, not the job's
-                                // aggregate `scoredAt` (see note above).
-                                scoredDateTime: resume.scoredDate ? new Date(resume.scoredDate) : new Date(item.scoredAt),
-                                matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
-                                             : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
-                                             : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
-                                             : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
-                                             : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
-                                             : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
-                                score: resume.overall_score || resume.scorePercentage || resume.score || 0,
-                              }));
-                              setProgressData(allProgressItems);
-                              setFilterByJobId(item.jobId);
-                              setShowJobTitleColumn(false);
-                              setShowProgressModal(true);
-                            }}
+                            onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
+                            disabled={loadingProgressJobId === item.jobId}
                             aria-label="View Progress"
-                            title="View Progress"
-                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors"
+                            title="View Progress (every version of this job)"
+                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                           >
-                            <Eye className="w-4 h-4" />
+                            {loadingProgressJobId === item.jobId
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <Eye className="w-4 h-4" />}
                           </button>
                           <button
                             onClick={() => {
                               setSelectedHistoryItem(item);
                               setViewMode('details');
                               onLoadJdScores?.(item.jobId, item.jobTitle);
+                              /* Arriving from the job row opens the job as a
+                                 whole: "Show All Versions" starts on, so the
+                                 table lists every version's candidates (and
+                                 the sibling versions' scores are pulled in).
+                                 The per-version rows below still open their
+                                 own single version. */
+                              showAllVersionsFor(item);
                               try {
                                 localStorage.setItem('lastViewedScoringJdId', item.jobId);
                               } catch (e) {
@@ -3178,7 +3299,7 @@ export default function ResumeScoringPage({
           />
           </>
         ) : historyLoading && scoredHistory.length === 0 ? (
-          /* Same treatment as View All Candidates above — no card, centred in
+          /* Same treatment as View by Candidates above — no card, centred in
              the space the list will occupy. */
           <div className="tf-loader-center">
             <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
@@ -3242,7 +3363,11 @@ export default function ResumeScoringPage({
           <BulkScoringProgressModal
             progressData={progressData}
             onClose={() => setShowProgressModal(false)}
+            filterByJobId={filterByJobId}
             showJobTitleColumn={showJobTitleColumn}
+            showJobColumns={progressSpansJob}
+            showScoreColumn={progressSpansJob}
+            showScoredByColumn={progressSpansJob}
             minimized={isBulkProgressMinimized}
             onMinimize={() => {
               setIsBulkProgressMinimized(true);
@@ -3866,6 +3991,7 @@ export default function ResumeScoringPage({
         </div>
 
         <JobOpeningPickerList
+          listAnchorRef={jobPickerListRef}
           selection={pickerSelection}
           onSelectionChange={handleJobPicked}
           onProceed={canRunScoring ? () => setShowResumeSelectionModal(true) : undefined}

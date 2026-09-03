@@ -23,6 +23,14 @@ interface ListPaginationProps {
    * so every existing list keeps the size it has.
    */
   compact?: boolean;
+  /**
+   * Render the bar even for a list short enough to fit on one page. For a
+   * fixed surface — a dialog whose footer would otherwise appear and vanish
+   * as rows are filtered — where a steady "Rows per page … 1–3 of 3" reads
+   * better than a control that comes and goes. Off by default, so every
+   * existing list keeps hiding it on short lists.
+   */
+  alwaysShow?: boolean;
 }
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 40, 100];
@@ -36,8 +44,9 @@ export default function ListPagination({
   itemLabel = 'records',
   scrollContainerRef,
   compact = false,
+  alwaysShow = false,
 }: ListPaginationProps) {
-  if (totalItems <= 5) return null;
+  if (totalItems <= 5 && !alwaysShow) return null;
 
   /* One place per dimension, so the two builds can't drift: shell padding,
      label type scale, the select, and the page/step buttons. */

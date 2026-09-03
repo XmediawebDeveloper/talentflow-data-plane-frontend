@@ -110,7 +110,7 @@ export interface ScoredResume {
   jobTitle?: string;
   jdId?: string;
   /** The readable job code (e.g. "JD-151") this row's score belongs to —
-   *  only set in the global "View All Candidates" view, where rows span
+   *  only set in the global "View by Candidates" view, where rows span
    *  different jobs. In a single-job view every row shares the host's own
    *  `jobId` prop instead, so this stays unset there. */
   jobCode?: string;
@@ -144,7 +144,7 @@ interface ScoredResumesTableProps {
    * than the flat, mixed-candidate order the rows arrive in. Meaningful only
    * when there's more than one row per person to begin with — i.e. a
    * cross-job list — so it defaults off and a host opts in explicitly (the
-   * Resume Scoring "View All Candidates" card does; its sibling "Total
+   * Resume Scoring "View by Candidates" card does; its sibling "Total
    * Resumes Scored" card deliberately doesn't, showing the identical rows
    * as a flat per-scoring-event list instead).
    */
@@ -518,6 +518,21 @@ Best regards`);
     });
   };
 
+  /* A candidate scored against many jobs would otherwise stretch the grouped
+     row to the height of their whole job list, so the "Job Titles" cell shows
+     the first two and folds the rest behind a "+N more" badge. Clicking the
+     badge expands that one candidate's list (and collapses it again). */
+  const JOB_TITLE_PREVIEW_COUNT = 2;
+  const [expandedTitleKeys, setExpandedTitleKeys] = useState<Set<string>>(new Set());
+  const toggleTitlesExpanded = (key: string) => {
+    setExpandedTitleKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const dateOf = (r: ScoredResume) => new Date(r.scoredDate).getTime() || 0;
   const candidateGroups = useMemo(() => {
     const groups = new Map<string, ScoredResume[]>();
@@ -789,7 +804,7 @@ Best regards`);
   };
 
   /* One job code per selected resume, prefixed onto the download filename —
-     that resume's own `jobCode` (set in the global "View All Candidates"
+     that resume's own `jobCode` (set in the global "View by Candidates"
      view, which spans many jobs) or else this table's single host job. Two
      or more distinct codes collapse to a "first-last" range rather than
      listing every one, so a bulk download across many jobs still gets a
@@ -947,6 +962,250 @@ Best regards`);
   };
 
   /**
+   * One table cell for a customizable column — shared by the flat "Total
+   * Scored Resumes" table and the grouped view's expanded per-candidate
+   * sub-table, so both show exactly the same columns, in the same order and
+   * with the same formatting, instead of the sub-table carrying its own
+   * hand-rolled four.
+   */
+  const renderResumeCell = (col: { id: string; label: string }, resume: ScoredResume) => {
+    if (col.id === 'candidateName') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          {onViewCandidate ? (
+            <button
+              onClick={() => onViewCandidate(resume)}
+              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
+            >
+              {resume.candidateName}
+            </button>
+          ) : (
+            <div className="text-sm text-gray-900">{resume.candidateName}</div>
+          )}
+        </td>
+      );
+    }
+    if (col.id === 'jobTitle') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <div className="text-sm text-gray-700 font-medium">{resume.jobTitle || '-'}</div>
+        </td>
+      );
+    }
+    if (col.id === 'jobVersion') {
+      // The JD's own version at scoring time — only set in the
+      // cross-job "All Candidates" list, where the same job
+      // title repeats once per JD version. Absent (and so
+      // blank) in a single-job table, which is already scoped
+      // to one version.
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <span className="text-sm text-gray-700">{resume.jobVersion ? `v${resume.jobVersion}` : '-'}</span>
+        </td>
+      );
+    }
+    if (col.id === 'version') {
+      const ver = resume.version || resume.resumeVersion || 1;
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
+            v{ver}
+          </span>
+        </td>
+      );
+    }
+    if (col.id === 'email') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <div className="flex items-center gap-1 text-sm text-gray-600">
+            <Mail className="w-3.5 h-3.5" />
+            {resume.email}
+          </div>
+        </td>
+      );
+    }
+    if (col.id === 'phone') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <div className="flex items-start gap-1 text-sm text-gray-600">
+            <Phone className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <div className="flex flex-col gap-0.5">
+              {(() => {
+                const numbers = splitPhoneNumbers(resume.phone, 2);
+                return numbers.length > 0
+                  ? numbers.map((num, i) => <span key={i} className="whitespace-nowrap">{num}</span>)
+                  : <span className="whitespace-nowrap">-</span>;
+              })()}
+            </div>
+          </div>
+        </td>
+      );
+    }
+    if (col.id === 'matchStatus') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${
+            resume.matchStatus === 'Exact Match'
+              ? 'bg-green-100 text-green-700 border-green-300'
+              : resume.matchStatus === 'Partial Match'
+              ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
+              : 'bg-red-100 text-red-700 border-red-300'
+          }`}>
+            {resume.matchStatus}
+          </span>
+        </td>
+      );
+    }
+    if (col.id === 'scorePercentage') {
+      // Same three colors as the Match Status badge, so the
+      // score reads as that status at a glance instead of its
+      // own separate (and previously inconsistent) scale.
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <div className={`text-xl font-semibold ${
+            resume.matchStatus === 'Exact Match'
+              ? 'text-green-700'
+              : resume.matchStatus === 'Partial Match'
+              ? 'text-[#ef7213]'
+              : 'text-red-700'
+          }`}>
+            {resume.scorePercentage}%
+          </div>
+        </td>
+      );
+    }
+    if (col.id === 'experience') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <div className="text-sm text-gray-600">{resume.experience || 'N/A'}</div>
+        </td>
+      );
+    }
+    if (col.id === 'education') {
+      const educationDisplay = typeof resume.education === 'string'
+        ? resume.education
+        : Array.isArray(resume.education) && resume.education.length > 0
+          ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
+          : 'N/A';
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle min-w-[180px]">
+          <div className="text-sm text-gray-600">{educationDisplay}</div>
+        </td>
+      );
+    }
+    if (col.id === 'certifications') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle min-w-[200px]">
+          <div className="text-sm text-gray-600">
+            {resume.certifications && resume.certifications.length > 0
+              ? resume.certifications.map(cert =>
+                  typeof cert === 'string' ? cert : (cert?.name || '')
+                ).join(', ')
+              : 'N/A'}
+          </div>
+        </td>
+      );
+    }
+    if (col.id === 'scoredDate') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <div className="text-sm text-gray-900">{resume.scoredBy}</div>
+          <div className="flex items-center gap-1 text-xs text-gray-500">
+            <Calendar className="w-3 h-3" />
+            <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
+          </div>
+        </td>
+      );
+    }
+    return null;
+  };
+
+  /**
+   * The Invitation cell for one resume — shared with the grouped view's
+   * expanded sub-table so that table carries the same Invitation column the
+   * flat one does.
+   */
+  // Every row gets the button, whatever its match status, so a scored
+  // candidate can always be invited. The menu carries the two things a
+  // candidate can be invited to; each entry is gated by its own permission and
+  // by whether that section exists on this JD, rather than hiding the whole
+  // control. Neither configured → the button is disabled.
+  const renderInviteCell = (resume: ScoredResume) => (
+  <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+    {(canCreateAssessments || onInviteAIInterview) ? (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-label="Invite"
+            disabled={inviteDisabled}
+            title={inviteDisabled ? inviteDisabledTitle : 'Invite'}
+            className="px-3 py-1.5 text-xs text-white rounded-md transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md bg-brand-blue hover:bg-brand-blue-2 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:bg-brand-blue"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            Invite
+            <ChevronDown className="w-3 h-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="w-48 !rounded-lg !border !border-gray-200 !bg-white !py-1 !px-0 !shadow-xl"
+        >
+          {canCreateAssessments && (
+            <DropdownMenuItem
+              className={scoredResumesMenuItemClass}
+              /* Off unless this JD has a published assessment —
+                 and assessment invites spend a unit, so the entry
+                 also goes quiet when there are none left rather
+                 than opening a form that cannot be submitted. */
+              disabled={!canInviteAssessment || availableUnits === 0}
+              title={
+                !canInviteAssessment
+                  ? 'No published assessment for this job yet'
+                  : availableUnits === 0
+                    ? 'No assessment units available'
+                    : undefined
+              }
+              onSelect={() => {
+                setInviteCandidate(resume);
+                setShowInviteModal(true);
+              }}
+            >
+              <FileText className="w-4 h-4 text-menu-icon-view" />
+              <span className={MENU_ITEM_SCALE_CLASS}>Assessment</span>
+            </DropdownMenuItem>
+          )}
+          {onInviteAIInterview && (
+            <DropdownMenuItem
+              className={scoredResumesMenuItemClass}
+              /* Same rule on the interview side: nothing live on
+                 this JD means nothing to invite the candidate to. */
+              disabled={!canInviteAIInterview}
+              title={
+                !canInviteAIInterview
+                  ? 'No published AI interview for this job yet'
+                  : undefined
+              }
+              onSelect={() =>
+                onInviteAIInterview({
+                  name: resume.candidateName || 'Unknown',
+                  email: resume.email || '',
+                  resumeId: resume.resumeId,
+                })
+              }
+            >
+              <Video className="w-4 h-4 text-menu-icon-share" />
+              <span className={MENU_ITEM_SCALE_CLASS}>AI Interview</span>
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ) : (
+      <span className="text-xs text-gray-400">-</span>
+    )}
+  </td>
+  );
+
+  /**
    * The Actions dropdown's items for one resume — factored out so the
    * grouped-by-candidate view's cluster-level menu (applied to that
    * candidate's most recent score) can offer the exact same actions as the
@@ -994,14 +1253,6 @@ Best regards`);
       )}
     </>
   );
-
-  // Score pill color, matched to the same three colors the Match Status
-  // badge and Score % column use throughout this table.
-  const matchStatusColor = (matchStatus: string): { ring: string; text: string; bg: string } => {
-    if (matchStatus === 'Exact Match') return { ring: 'border-green-300', text: 'text-green-700', bg: 'bg-green-50' };
-    if (matchStatus === 'Partial Match') return { ring: 'border-[#ef7213]/40', text: 'text-[#ef7213]', bg: 'bg-[#ef7213]/10' };
-    return { ring: 'border-red-300', text: 'text-red-700', bg: 'bg-red-50' };
-  };
 
   // A stable color per candidate for the grouped view's avatar initials —
   // hashed from their own key so the same person always lands on the same
@@ -1266,7 +1517,7 @@ Best regards`);
       </div>
 
       {/* "Group by: Candidate" control — only offered by hosts that opted
-          into grouping via the `groupByEmail` prop (the "View All Candidates"
+          into grouping via the `groupByEmail` prop (the "View by Candidates"
           card). `isGrouped` is this table's own on/off switch; the prop only
           sets its starting value each time the host hands this table a
           differently-scoped list. */}
@@ -1318,6 +1569,8 @@ Best regards`);
                   const primary = rows[0];
                   const isExpanded = expandedGroupKeys.has(key);
                   const distinctTitles = Array.from(new Set(rows.map((r) => r.jobTitle).filter(Boolean))) as string[];
+                  const titlesExpanded = expandedTitleKeys.has(key);
+                  const hiddenTitleCount = Math.max(0, distinctTitles.length - JOB_TITLE_PREVIEW_COUNT);
                   const avatar = avatarColorFor(key);
                   return (
                     <Fragment key={key}>
@@ -1364,9 +1617,19 @@ Best regards`);
                         </td>
                         <td className="px-4 py-4 align-top">
                           <div className="space-y-0.5">
-                            {distinctTitles.map((title, i) => (
+                            {(titlesExpanded ? distinctTitles : distinctTitles.slice(0, JOB_TITLE_PREVIEW_COUNT)).map((title, i) => (
                               <div key={i} className="text-sm text-gray-700">{title}</div>
                             ))}
+                            {hiddenTitleCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleTitlesExpanded(key); }}
+                                title={distinctTitles.slice(JOB_TITLE_PREVIEW_COUNT).join(', ')}
+                                className="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 hover:text-gray-800 transition-colors whitespace-nowrap"
+                              >
+                                {titlesExpanded ? 'Show less' : `+${hiddenTitleCount} more`}
+                              </button>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-4 align-top whitespace-nowrap">
@@ -1393,46 +1656,47 @@ Best regards`);
                       {isExpanded && (
                         <tr key={`${key}-detail`}>
                           <td colSpan={6} className="p-0 bg-gray-50/60">
-                            <div className="px-4 sm:px-6 py-3">
-                              <table className="w-full">
+                            {/* Same columns as the flat "Total Scored
+                                Resumes" table — including whatever the user
+                                turned on in Customize Columns — so expanding a
+                                candidate shows their scores at full detail
+                                rather than a reduced set. */}
+                            <div className="px-4 sm:px-6 py-3 overflow-x-auto">
+                              <table className="w-full min-w-[1100px] table-auto">
                                 <thead>
                                   <tr className="border-b border-gray-200">
-                                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Version</th>
-                                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Job Title</th>
-                                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Score</th>
-                                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Screened On</th>
-                                    <th className="text-left py-2 px-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">Actions</th>
+                                    {enabledColumns.map((col) => (
+                                      <th key={col.id} className="text-left py-2 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
+                                        {col.label}
+                                      </th>
+                                    ))}
+                                    <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Invitation</th>
+                                    <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wide">Actions</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
-                                  {rows.map((row) => {
-                                    const colors = matchStatusColor(row.matchStatus);
-                                    return (
-                                      <tr key={row.id} className="bg-white">
-                                        <td className="py-2.5 px-3 text-sm text-gray-700 whitespace-nowrap">v{row.jobVersion || row.version || row.resumeVersion || 1}</td>
-                                        <td className="py-2.5 px-3 text-sm text-gray-900">{row.jobTitle || '-'}</td>
-                                        <td className="py-2.5 px-3">
-                                          <div className="flex items-center gap-2">
-                                            <span className={`inline-flex items-center justify-center w-9 h-9 rounded-full border-2 font-semibold text-sm ${colors.bg} ${colors.ring} ${colors.text}`}>
-                                              {row.scorePercentage}
-                                            </span>
-                                            <span className={`text-sm font-medium ${colors.text}`}>{row.matchStatus}</span>
-                                          </div>
-                                        </td>
-                                        <td className="py-2.5 px-3 text-sm text-gray-700 whitespace-nowrap">{formatIST(row.scoredDate)}</td>
-                                        <td className="py-2.5 px-3">
-                                          <button
-                                            onClick={(e) => { e.stopPropagation(); onViewCandidate && onViewCandidate(row); }}
-                                            aria-label="View"
-                                            title="View"
-                                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-500 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                                          >
-                                            <Eye className="w-4 h-4" />
-                                          </button>
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
+                                  {rows.map((row) => (
+                                    <tr key={row.id} className="bg-white">
+                                      {enabledColumns.map((col) => renderResumeCell(col, row))}
+                                      {renderInviteCell(row)}
+                                      <td className="py-2.5 px-4 align-middle" onClick={(e) => e.stopPropagation()}>
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <button
+                                              aria-label="Actions"
+                                              title="Actions"
+                                              className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                                            >
+                                              <MoreVertical className="w-4 h-4 text-gray-600" />
+                                            </button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                                            {renderActionsMenuItems(row)}
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </td>
+                                    </tr>
+                                  ))}
                                 </tbody>
                               </table>
                             </div>
@@ -1506,236 +1770,10 @@ Best regards`);
                   </button>
                 </td>
 
-                {enabledColumns.map((col) => {
-                  if (col.id === 'candidateName') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        {onViewCandidate ? (
-                          <button
-                            onClick={() => onViewCandidate(resume)}
-                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
-                          >
-                            {resume.candidateName}
-                          </button>
-                        ) : (
-                          <div className="text-sm text-gray-900">{resume.candidateName}</div>
-                        )}
-                      </td>
-                    );
-                  }
-                  if (col.id === 'jobTitle') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="text-sm text-gray-700 font-medium">{resume.jobTitle || '-'}</div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'jobVersion') {
-                    // The JD's own version at scoring time — only set in the
-                    // cross-job "All Candidates" list, where the same job
-                    // title repeats once per JD version. Absent (and so
-                    // blank) in a single-job table, which is already scoped
-                    // to one version.
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <span className="text-sm text-gray-700">{resume.jobVersion ? `v${resume.jobVersion}` : '-'}</span>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'version') {
-                    const ver = resume.version || resume.resumeVersion || 1;
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
-                          v{ver}
-                        </span>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'email') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <Mail className="w-3.5 h-3.5" />
-                          {resume.email}
-                        </div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'phone') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="flex items-start gap-1 text-sm text-gray-600">
-                          <Phone className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                          <div className="flex flex-col gap-0.5">
-                            {(() => {
-                              const numbers = splitPhoneNumbers(resume.phone, 2);
-                              return numbers.length > 0
-                                ? numbers.map((num, i) => <span key={i} className="whitespace-nowrap">{num}</span>)
-                                : <span className="whitespace-nowrap">-</span>;
-                            })()}
-                          </div>
-                        </div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'matchStatus') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${
-                          resume.matchStatus === 'Exact Match'
-                            ? 'bg-green-100 text-green-700 border-green-300'
-                            : resume.matchStatus === 'Partial Match'
-                            ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
-                            : 'bg-red-100 text-red-700 border-red-300'
-                        }`}>
-                          {resume.matchStatus}
-                        </span>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'scorePercentage') {
-                    // Same three colors as the Match Status badge, so the
-                    // score reads as that status at a glance instead of its
-                    // own separate (and previously inconsistent) scale.
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className={`text-xl font-semibold ${
-                          resume.matchStatus === 'Exact Match'
-                            ? 'text-green-700'
-                            : resume.matchStatus === 'Partial Match'
-                            ? 'text-[#ef7213]'
-                            : 'text-red-700'
-                        }`}>
-                          {resume.scorePercentage}%
-                        </div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'experience') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="text-sm text-gray-600">{resume.experience || 'N/A'}</div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'education') {
-                    const educationDisplay = typeof resume.education === 'string'
-                      ? resume.education
-                      : Array.isArray(resume.education) && resume.education.length > 0
-                        ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
-                        : 'N/A';
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle min-w-[180px]">
-                        <div className="text-sm text-gray-600">{educationDisplay}</div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'certifications') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle min-w-[200px]">
-                        <div className="text-sm text-gray-600">
-                          {resume.certifications && resume.certifications.length > 0
-                            ? resume.certifications.map(cert =>
-                                typeof cert === 'string' ? cert : (cert?.name || '')
-                              ).join(', ')
-                            : 'N/A'}
-                        </div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'scoredDate') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{resume.scoredBy}</div>
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                          <Calendar className="w-3 h-3" />
-                          <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
-                        </div>
-                      </td>
-                    );
-                  }
-                  return null;
-                })}
+                {enabledColumns.map((col) => renderResumeCell(col, resume))}
 
-                {/* Invite Column — every row gets the button, whatever its
-                    match status, so a scored candidate can always be invited.
-                    The menu carries the two things a candidate can be invited
-                    to; each entry is gated by its own permission and by whether
-                    that section exists on this JD, rather than hiding the whole
-                    control. Neither configured → the button is disabled. */}
-                <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                  {(canCreateAssessments || onInviteAIInterview) ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          aria-label="Invite"
-                          disabled={inviteDisabled}
-                          title={inviteDisabled ? inviteDisabledTitle : 'Invite'}
-                          className="px-3 py-1.5 text-xs text-white rounded-md transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md bg-brand-blue hover:bg-brand-blue-2 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:bg-brand-blue"
-                        >
-                          <UserPlus className="w-3.5 h-3.5" />
-                          Invite
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="start"
-                        className="w-48 !rounded-lg !border !border-gray-200 !bg-white !py-1 !px-0 !shadow-xl"
-                      >
-                        {canCreateAssessments && (
-                          <DropdownMenuItem
-                            className={scoredResumesMenuItemClass}
-                            /* Off unless this JD has a published assessment —
-                               and assessment invites spend a unit, so the entry
-                               also goes quiet when there are none left rather
-                               than opening a form that cannot be submitted. */
-                            disabled={!canInviteAssessment || availableUnits === 0}
-                            title={
-                              !canInviteAssessment
-                                ? 'No published assessment for this job yet'
-                                : availableUnits === 0
-                                  ? 'No assessment units available'
-                                  : undefined
-                            }
-                            onSelect={() => {
-                              setInviteCandidate(resume);
-                              setShowInviteModal(true);
-                            }}
-                          >
-                            <FileText className="w-4 h-4 text-menu-icon-view" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>Assessment</span>
-                          </DropdownMenuItem>
-                        )}
-                        {onInviteAIInterview && (
-                          <DropdownMenuItem
-                            className={scoredResumesMenuItemClass}
-                            /* Same rule on the interview side: nothing live on
-                               this JD means nothing to invite the candidate to. */
-                            disabled={!canInviteAIInterview}
-                            title={
-                              !canInviteAIInterview
-                                ? 'No published AI interview for this job yet'
-                                : undefined
-                            }
-                            onSelect={() =>
-                              onInviteAIInterview({
-                                name: resume.candidateName || 'Unknown',
-                                email: resume.email || '',
-                                resumeId: resume.resumeId,
-                              })
-                            }
-                          >
-                            <Video className="w-4 h-4 text-menu-icon-share" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>AI Interview</span>
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  ) : (
-                    <span className="text-xs text-gray-400">-</span>
-                  )}
-                </td>
+                {renderInviteCell(resume)}
+
 
                 {/* Actions Column */}
                 <td className="py-3 px-4 align-middle whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
