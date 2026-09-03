@@ -856,10 +856,19 @@ export default function StepSystemCheck({
     }
 
     setMicStreamReady(false);
-    updateSystemCheck('microphone', {
-      status: 'fail',
-      detail: 'No microphone detected — please connect a microphone',
-    });
+    // Same rule as the recovered branch above: only an explicit Run
+    // Check/Retry click (viaExplicitCheck) or a regression AFTER the first
+    // full pass (checksCompleted) may write to the System Checks row. A
+    // disconnect caught by the background live-track watcher before Run
+    // Check has ever completed must not — the row stays at its current
+    // 'pending' state; the Voice Verification panel above is what tells the
+    // candidate their mic died, not this checklist.
+    if (viaExplicitCheck || checksCompleted) {
+      updateSystemCheck('microphone', {
+        status: 'fail',
+        detail: 'No microphone detected — please connect a microphone',
+      });
+    }
     return false;
   }, [ensureAudioAnalyser, updateSystemCheck, refreshDeviceLists, checksCompleted]);
 
@@ -1400,6 +1409,21 @@ export default function StepSystemCheck({
 
   // Retry a SINGLE check — reruns only that row (face/multiple share one detector).
   const retryCheck = useCallback(async (id: string) => {
+    // The Microphone row is special: its proactive stream can die (and its
+    // row can reach 'fail') from a disconnect DURING Voice Verification,
+    // before the candidate has ever completed a first "Run Check" pass —
+    // see the live-disconnect watcher above, which is armed the moment
+    // micStreamReady goes true, well before checksCompleted. Letting a
+    // per-row Retry click re-verify (and pass) the row at that point would
+    // let the Microphone check pass outside the real "Run Check" flow this
+    // whole component exists to gate — the candidate never ran the actual
+    // Run Check sequence, they just happened to click a Retry that appeared
+    // on a row that failed for an unrelated reason. So before the first
+    // "Run Check" has completed once, Microphone Retry is a no-op; the
+    // candidate must fix the device (via the Voice Verification panel) and
+    // go through handleRunChecks, which is the only path allowed to hand
+    // out the row's very first pass.
+    if (id === 'microphone' && !checksCompleted) return;
     checksCancelledRef.current = false;
     switch (id) {
       case 'device': await runDevice(); break;
@@ -1413,7 +1437,7 @@ export default function StepSystemCheck({
       case 'face':
       case 'multiple': await runFaceMultiple(); break;
     }
-  }, [runDevice, runWebcam, runMicrophone, runInternet, runAiEngine, runWebsocket, runLighting, runNoise, runFaceMultiple]);
+  }, [runDevice, runWebcam, runMicrophone, runInternet, runAiEngine, runWebsocket, runLighting, runNoise, runFaceMultiple, checksCompleted]);
 
   // Mark camera-dependent checks as unverified after the selected camera
   // changes — same rule and reason as markAudioChecksUnverified below:
@@ -1496,10 +1520,20 @@ export default function StepSystemCheck({
       }
       setMicStreamReady(false);
       markAudioChecksUnverified();
+      // A failed/disconnected voice-verification attempt leaves the "Record
+      // again" button gated on micReadyForVoice (== micStreamReady), which we
+      // just set false above and which nothing else will ever flip back to
+      // true — the only path that re-acquires the stream is startVoiceEnroll,
+      // reachable only by clicking that now-disabled button. Reset to 'idle'
+      // so the unconditionally-enabled "Start recording" button takes over
+      // for the newly selected device instead of a dead-ended "Record again".
+      if (voiceEnrollStatus === 'failed' || voiceEnrollStatus === 'disconnected') {
+        setVoiceEnrollStatus('idle');
+      }
     } finally {
       setIsSwitchingDevice(false);
     }
-  }, [isSwitchingDevice, selectedMicId, markAudioChecksUnverified]);
+  }, [isSwitchingDevice, selectedMicId, markAudioChecksUnverified, voiceEnrollStatus]);
 
   // Keep the dropdown options current if the candidate plugs/unplugs a device
   // mid-check (e.g. connects a USB webcam after the page already loaded).
@@ -2622,15 +2656,21 @@ export default function StepSystemCheck({
                       {check.status === 'fail' && (
                         <>
                           <XCircle className="w-5 h-5 text-red-500" />
-                          <button
-                            type="button"
-                            onClick={() => retryCheck(check.id)}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-md px-2 py-1 transition-colors"
-                            title={`Retry ${check.label}`}
-                          >
-                            <RefreshCw className="w-3 h-3" />
-                            Retry
-                          </button>
+                          {/* Microphone can only get its first pass from the real
+                              "Run Check" flow (see retryCheck's guard above) — before
+                              that's ever completed once, a per-row Retry here would be
+                              a dead click, so it's hidden rather than shown disabled. */}
+                          {(check.id !== 'microphone' || checksCompleted) && (
+                            <button
+                              type="button"
+                              onClick={() => retryCheck(check.id)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-md px-2 py-1 transition-colors"
+                              title={`Retry ${check.label}`}
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              Retry
+                            </button>
+                          )}
                         </>
                       )}
                       {check.status === 'checking' && (
