@@ -1,6 +1,6 @@
 import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap, Loader2, Monitor, Ban } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -103,11 +103,25 @@ export default function AssessmentDetailsView({
   breadcrumbItems,
 }: AssessmentDetailsViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
   const { isTenantAdmin, user } = useAuth();
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'newversions' | 'info' | 'viewjd'>('overview');
+  type DetailsTab = 'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'newversions' | 'info' | 'viewjd';
+  /* `?tab=` lets another screen deep-link to one of these tabs — the All
+     Assessments table's "View History" action lands on `versions` directly,
+     rather than dropping the reader on Overview to hunt for it. Read once as
+     the INITIAL value, not synced: the tab strip is the owner from then on, so
+     clicking a tab does not have to write to the URL to survive a re-render.
+     An unrecognised value falls through to 'overview'. */
+  const requestedTab = searchParams.get('tab');
+  const initialTab: DetailsTab = ([
+    'overview', 'sections', 'analytics', 'activity', 'versions', 'newversions', 'info', 'viewjd',
+  ] as const).includes(requestedTab as DetailsTab)
+    ? (requestedTab as DetailsTab)
+    : 'overview';
+  const [activeTab, setActiveTab] = useState<DetailsTab>(initialTab);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityPage, setActivityPage] = useState(1);

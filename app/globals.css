@@ -242,6 +242,30 @@
   --score-low: #ef4444;
   --score-low-bg: #fee2e2;
 
+  /* ── Invite / attempt status tokens ─────────────────────────────────────
+     One semantic colour per status in the invite lifecycle, so a status reads
+     the same wherever it is drawn — the badge in an invite table, the status
+     filter on the Assessments page's Invitation Status tab, anything added
+     next. These were the same four colours before, spelled out as literal
+     Tailwind classes in each component, which is how they would have drifted.
+
+     Three of the four alias the brand palette rather than restating a hex,
+     because that is what the badges were already using. Completed's green has
+     no brand equivalent, so it carries the value the badges already drew it
+     with (Tailwind green-700). Terminal failure states (Invite Failed,
+     Bounced, Terminated) are NOT here — they are still per-component reds;
+     tokenise them when something needs to share them.
+
+     Used through the utilities in @theme below: text-status-completed,
+     bg-status-completed/10, ring-status-completed/20, … Alpha modifiers work
+     because these resolve to plain colour values. Dark values are in the
+     .dark block — the same colours the badges' `dark:` variants used to name
+     one by one. */
+  --status-invited: var(--brand-blue);
+  --status-expired: var(--brand-orange-deep);
+  --status-progress: var(--brand-cyan);
+  --status-completed: #15803d;
+
   /* ── Brand palette (logo-based) ─────────────────────────────────────── */
   /* Deep blue family (primary brand) */
   --brand-blue: #0f3c99;
@@ -528,6 +552,14 @@
   --color-brand-peach: var(--brand-peach);
   --color-brand-sky: var(--brand-sky);
 
+  /* Invite / attempt status utilities — text-status-completed,
+     bg-status-expired/10, ring-status-progress/20, and so on. See the token
+     definitions in :root above (and their dark values in .dark). */
+  --color-status-invited: var(--status-invited);
+  --color-status-expired: var(--status-expired);
+  --color-status-progress: var(--status-progress);
+  --color-status-completed: var(--status-completed);
+
   /* Three-dot (⋮) menu icon utilities — text-menu-icon-view,
      text-menu-icon-archive, etc. See the token definitions in :root above. */
   --color-menu-icon-view: var(--menu-icon-view);
@@ -626,6 +658,22 @@
   --score-medium-bg: rgba(245, 158, 11, 0.15);
   --score-low: #f87171;
   --score-low-bg: rgba(239, 68, 68, 0.15);
+
+  /* Invite / attempt status tokens — dark mode. Listed explicitly rather than
+     left to alias the brand tokens: --brand-* keep their light values in dark
+     mode (it is the `.dark .text-brand-*` utility overrides further down that
+     lift them), so a status token pointing at var(--brand-blue) would render
+     the deep light-mode blue on a dark page.
+
+     Each value is the one the invite badges' own `dark:` variants already
+     used, so nothing about how a status looks in dark mode changes:
+     .dark .text-brand-blue (#93c5fd), .dark .text-brand-orange-deep
+     (#fdba74), .dark .text-brand-cyan (#67e8f9) and .dark .text-green-700
+     (#4ade80). */
+  --status-invited: #93c5fd;
+  --status-expired: #fdba74;
+  --status-progress: #67e8f9;
+  --status-completed: #4ade80;
 
   /* Marketing palette — dark side. Only the tokens that actually flip are
      listed; the fixed ones (navy band, solid buttons, cyan/amber fills) keep
