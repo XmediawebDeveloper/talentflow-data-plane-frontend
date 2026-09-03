@@ -670,6 +670,14 @@ interface ExtractedData {
   educationRequired: boolean;
   experience: string;
   experienceRequired: boolean;
+  /** RS20: Job Hopping toggle. Auto-defaults from `experience` (>= 3 years -> true)
+   *  via the useEffect near parseExperienceYearsString, but the recruiter can
+   *  override it with the checkbox next to the Experience field. Whatever value
+   *  is on screen at save time is what gets sent as job_hopping_enabled -
+   *  editing Experience again afterwards recomputes and overwrites it. Optional
+   *  so the few places that build a partial ExtractedData literal before the
+   *  effect has run don't need to supply it. */
+  jobHoppingEnabled?: boolean;
   industryType: string;
   roleFamily?: string;
   roleFamilyConfidence?: number;
@@ -1454,6 +1462,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     educationRequired: false,
     experience: '',
     experienceRequired: false,
+    jobHoppingEnabled: false,
     industryType: '',
     roleFamily: undefined,
     roleFamilyConfidence: undefined,
@@ -2187,6 +2196,30 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       to: range.experienceMax !== undefined ? String(range.experienceMax) : '',
     };
   };
+
+  // RS20: Job Hopping auto-default, kept in sync with the backend's
+  // app/utils/job_hopping.py (same >= 3 years rule, same numeric-only
+  // comparison - no string/regex parsing, so it can't hit the decimal-parsing
+  // bug the old backend skip logic had). Recomputes live whenever the
+  // recruiter changes Experience, which is "always live-recompute": the
+  // checkbox below reflects the current experience-derived default unless the
+  // recruiter clicks it, and clicking it only holds until Experience next
+  // changes - there is no separate persisted "manual override" state.
+  const jobHoppingAutoDefault = (() => {
+    const { from, to } = parseExperienceYearsString(extractedData.experience);
+    const min = from === '' ? 0 : Number(from);
+    const max = to === '' ? 0 : Number(to);
+    return Math.max(min, max) >= 3;
+  })();
+
+  useEffect(() => {
+    setExtractedData(prev =>
+      prev.jobHoppingEnabled === jobHoppingAutoDefault
+        ? prev
+        : { ...prev, jobHoppingEnabled: jobHoppingAutoDefault }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extractedData.experience]);
 
   const deriveExperienceCodeFromYears = (min?: number | null, max?: number | null): string => {
     const value =
@@ -3552,6 +3585,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience: experienceValue || (isEditMode ? extractedData.experience : ''),
         // Use API's mandatory flag for experience
         experienceRequired: params.experience_mandatory || false,
+        // RS20: computed here (not left to the useEffect) because the save right
+        // after extraction reads this `extraction` object directly, before state
+        // has re-rendered - same reason `experience` above resolves its own
+        // fallback instead of reading extractedData.experience blindly.
+        jobHoppingEnabled: (() => {
+          const resolvedExperience = experienceValue || (isEditMode ? extractedData.experience : '');
+          const range = inferExperienceRangeFromCustomValue(resolvedExperience);
+          return Math.max(range.experienceMin ?? 0, range.experienceMax ?? 0) >= 3;
+        })(),
         industryType: industryValue, // Only from extraction, no fallback - user must select if not extracted
         // Use API's mandatory flag for industry
         industryTypeRequired: params.industry_mandatory || false,
@@ -3791,6 +3833,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extraction.educationRequired || false,
         industry_mandatory: extraction.industryTypeRequired || false,
         location_mandatory: extraction.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extraction.jobHoppingEnabled ?? true,
       };
 
       console.log('[TalentFlow] Saving JD with coding fields:', {
@@ -4926,6 +4970,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extractedData.educationRequired || false,
         industry_mandatory: extractedData.industryTypeRequired || false,
         location_mandatory: extractedData.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extractedData.jobHoppingEnabled ?? true,
       };
 
       console.log('[TalentFlow] Saving JD at review stage with coding fields:', {
@@ -5264,6 +5310,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extractedData.educationRequired || false,
         industry_mandatory: extractedData.industryTypeRequired || false,
         location_mandatory: extractedData.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extractedData.jobHoppingEnabled ?? true,
       };
 
       console.log('[DEBUG] handleConfirmPublish - editingId:', editingId, 'isEditingDraft:', isEditingDraft);
@@ -5567,6 +5615,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extractedData.educationRequired || false,
         industry_mandatory: extractedData.industryTypeRequired || false,
         location_mandatory: extractedData.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extractedData.jobHoppingEnabled ?? true,
       };
 
       console.log('[DEBUG] SAVING JD - Mandatory flags being sent:', {
@@ -6963,6 +7013,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {validationErrors.experience}
                     </p>
                   )}
+                  {/* RS20: Job Hopping toggle. Defaults from Experience (>= 3 years ->
+                      on) and re-defaults every time Experience changes; the recruiter
+                      can override it here for this save only. */}
+                  <label className={`flex items-center gap-1.5 mt-1 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(extractedData.jobHoppingEnabled)}
+                      onChange={(e) => {
+                        setExtractedData(prev => ({ ...prev, jobHoppingEnabled: e.target.checked }));
+                        markExtractedDataModified();
+                      }}
+                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                      disabled={isRegenerating}
+                    />
+                    <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                      Evaluate Job Hopping
+                    </span>
+                  </label>
                 </div>
 
                 {/* Education field REMOVED 2026-08-20.
