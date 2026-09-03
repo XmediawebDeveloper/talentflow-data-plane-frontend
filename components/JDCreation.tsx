@@ -2808,12 +2808,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Preserved only in edit mode, exactly like workModel/education/industryType above:
         // a FRESH extraction replaces Step 2 (see forceFreshExtraction), so it must be able
         // to replace a bound with nothing.
+        //
+        // EXCEPT when the backend says salary_mixed_period: true - the JD states a
+        // mixed-period salary ("12,000 per month to 4 LPA") and null here is a
+        // CONFIDENT answer that no single bound can be stated, not "extraction found
+        // nothing." Falling back to `prev` in that case left a stale min/max sitting
+        // in the Salary boxes (and, on save, in the JD) for exactly the salaries the
+        // backend had deliberately left unbounded.
         salaryFrom: params.salary_min != null
           ? (sanitizeExtractedSalary(params.salary_min) || '')
-          : (isEditMode ? (prev.salaryFrom || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (prev.salaryFrom || '') : ''),
         salaryTo: params.salary_max != null
           ? (sanitizeExtractedSalary(params.salary_max) || '')
-          : (isEditMode ? (prev.salaryTo || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (prev.salaryTo || '') : ''),
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || prev.salaryCurrency),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
         // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
@@ -3567,12 +3574,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Preserved only in edit mode, exactly like workModel/education/industryType above:
         // a FRESH extraction replaces Step 2 (see forceFreshExtraction), so it must be able
         // to replace a bound with nothing.
+        //
+        // EXCEPT when the backend says salary_mixed_period: true - the JD states a
+        // mixed-period salary ("12,000 per month to 4 LPA") and null here is a
+        // CONFIDENT answer that no single bound can be stated, not "extraction found
+        // nothing." Falling back to the previous value in that case left a stale
+        // min/max sitting in the Salary boxes (and, on save, in the JD) for exactly
+        // the salaries the backend had deliberately left unbounded.
         salaryFrom: params.salary_min != null
           ? (sanitizeExtractedSalary(params.salary_min) || '')
-          : (isEditMode ? (extractedData.salaryFrom || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (extractedData.salaryFrom || '') : ''),
         salaryTo: params.salary_max != null
           ? (sanitizeExtractedSalary(params.salary_max) || '')
-          : (isEditMode ? (extractedData.salaryTo || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (extractedData.salaryTo || '') : ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || extractedData.salaryCurrency),
         // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
