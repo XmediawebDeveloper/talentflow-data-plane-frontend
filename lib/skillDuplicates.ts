@@ -15,8 +15,12 @@
 const SKILL_STOPWORDS = new Set([
   'a', 'an', 'the', 'of', 'in', 'on', 'to', 'and', 'or', 'for', 'with', 'using',
   'your', 'their', 'this', 'that', 'these', 'those', 'is', 'are', 'be',
-  'knowledge', 'understanding', 'familiarity', 'experience', 'ability',
-  'skill', 'skills', 'proficiency', 'expertise', 'awareness', 'exposure',
+  'knowledge', 'knowledgeable', 'know', 'known', 'knowing',
+  'understanding', 'understand', 'understands', 'understood',
+  'familiarity', 'familiar', 'experience', 'experienced', 'ability',
+  'skill', 'skills', 'skilled', 'proficiency', 'proficient',
+  'expertise', 'expert', 'awareness', 'aware', 'exposure', 'exposed',
+  'versed', 'adept', 'competent', 'competency', 'capable', 'conversant',
   'hands', 'on', 'handson', 'working', 'work', 'basic', 'strong', 'good',
   'solid', 'excellent', 'demonstrated', 'proven', 'practical', 'deep',
   'advanced', 'fundamental', 'fundamentals', 'concepts', 'concept', 'principles',
@@ -53,6 +57,8 @@ const SKILL_ALIASES: Record<string, string> = {
   cicd: 'continuous integration continuous deployment',
   ms: 'microsoft', js: 'javascript', ts: 'typescript', k8s: 'kubernetes',
   oop: 'object oriented programming', ml: 'machine learning', ai: 'artificial intelligence',
+  // TRUNCATION, not an acronym — no rule derives this from initials.
+  postgres: 'postgresql',
   csharp: 'c sharp', 'c#': 'c sharp', 'c++': 'c plus plus', dotnet: 'dot net',
   // NOTE 'cpp' is deliberately NOT listed — it is recovered by RULE: the initialism
   // check also builds initials from the alias-EXPANDED words, so 'c++' → "c plus
@@ -198,7 +204,7 @@ const DERIVATIONAL_SUFFIXES = [
   'ational', 'ization', 'isation', 'ation', 'ition', 'ution',
   'ement', 'ment', 'ness', 'ility', 'ity',
   'ance', 'ence', 'ancy', 'ency', 'ion',
-  'ate', 'ise', 'ize', 'ify', 'e',
+  'ate', 'ise', 'ize', 'ify', 'ful', 'e',
 ];
 
 /** Reduce a token to a root shared by its noun and verb forms — configuration /
@@ -242,8 +248,24 @@ export function skillContentTokens(skill: string): Set<string> {
  *  ordinary word could act as an accidental acronym — "Test Case Design and
  *  Execution" contains 'test', which is exactly the initials of "Testing
  *  Environment Setup Tools". */
+/** Drop a trailing "(ABBR)" that just restates the phrase's own acronym.
+ *  Mirrors backend `_strip_self_acronym_parenthetical`.
+ *
+ *  "Software Testing Life Cycle (STLC)" is written this way constantly — left
+ *  in, "(STLC)" becomes its own token and corrupts initials computation: 4
+ *  content words + itself = 'stlcs', which no longer equals the very acronym
+ *  ('stlc') the parenthetical was announcing — so "STLC" stopped matching the
+ *  parenthetical form while it kept matching the bare phrase, which is
+ *  backwards. Requires the parenthesised token to be short (2-8 letters) AND
+ *  written in CAPS in the original text, so a genuine qualifier in parens is
+ *  left alone. */
+function stripSelfAcronymParenthetical(phrase: string): string {
+  return (phrase || '').trim().replace(/\(\s*[A-Z][A-Z0-9]{1,7}\s*\)\s*$/, '').trim();
+}
+
 export function skillInitialismMatch(a: string, b: string): { hit: boolean; exact: boolean } {
-  for (const [short, long] of [[a, b], [b, a]] as [string, string][]) {
+  for (const [short, longRaw] of [[a, b], [b, a]] as [string, string][]) {
+    const long = stripSelfAcronymParenthetical(longRaw);
     const lt = skillTokenSequence(long, false);
     // NOTE: no early `lt.length < 2` bail. "C++" is a SINGLE token yet still has an
     // initialism via its alias expansion ("c plus plus" → 'cpp'), so the candidate
