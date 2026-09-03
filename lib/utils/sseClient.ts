@@ -18,6 +18,12 @@ export interface SSECompleteEvent {
   title: string;
   description: string;
   extracted_params: any;
+  /** Set when the Job Title names a different tech stack than the AI Prompt's
+   *  requirements (e.g. title "Frontend Developer" with "Java, Spring Boot,
+   *  Microservices" as requirements) - see detect_title_tech_stack_mismatch in
+   *  openai_service.py. The title is still kept as the source of truth for the
+   *  generated description; this only flags the mismatch for the recruiter. */
+  role_mismatch_warning?: string;
 }
 
 export interface SSEErrorEvent {
@@ -43,7 +49,7 @@ export interface SSECallbacks {
   onChunk?: (content: string) => void;
   onTitle?: (title: string) => void;
   onTextComplete?: () => void;  // Called when text streaming is done, before param extraction
-  onComplete?: (data: { title: string; description: string; extracted_params: any }) => void;
+  onComplete?: (data: { title: string; description: string; extracted_params: any; role_mismatch_warning?: string }) => void;
   onError?: (message: string, errorCode?: string) => void;
   onConnected?: () => void;
 }
@@ -164,7 +170,8 @@ export class JDStreamClient {
                 callbacks.onComplete?.({
                   title: data.title,
                   description: data.description,
-                  extracted_params: data.extracted_params
+                  extracted_params: data.extracted_params,
+                  role_mismatch_warning: data.role_mismatch_warning
                 });
                 return true; // Signal completion
 

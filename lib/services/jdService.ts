@@ -199,6 +199,9 @@ export interface JDGenerateResponse {
   title: string;
   description: string;
   extracted_params?: JDExtractedParams;
+  /** Set when the Job Title names a different tech stack than the AI Prompt's
+   *  requirements - see SSECompleteEvent in sseClient.ts. */
+  role_mismatch_warning?: string;
 }
 
 export interface JDTitleValidationResponse {
@@ -582,7 +585,8 @@ export const jdService = {
           callbacks.onComplete({
             title: data.title,
             description: data.description,
-            extracted_params: data.extracted_params
+            extracted_params: data.extracted_params,
+            role_mismatch_warning: data.role_mismatch_warning
           });
         },
         onError: callbacks.onError
