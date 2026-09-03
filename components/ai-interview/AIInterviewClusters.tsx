@@ -1106,26 +1106,47 @@ export default function AIInterviewClusters() {
           }
           return next;
         };
+        let mthRestored: any[] = [];
         if (si.mth_clusters?.length) {
           const mthMax = isFlexibleMode ? 3 : timedAllocation.mthMaxClusters;
           const mthTrimmed = trimAndRedistribute(si.mth_clusters as any[], mthMax);
-          const mthRestored = foldDistOnLoad(
+          mthRestored = foldDistOnLoad(
             mthTrimmed.map((c: any) => ({ ...c, priority: normalizePriority(c.priority) })),
             _distRows.mth_questions,
           );
-          setMthClusters(mthRestored);
-          // Intentionally NOT auto-expanding — cluster cards stay collapsed by default per UX spec
         }
+        let nthRestored: any[] = [];
         if (si.nth_clusters?.length) {
           const nthMax = isFlexibleMode ? 2 : timedAllocation.nthMaxClusters;
           // nthEnabledForTimed=false means NHS is disabled — always clear saved clusters
           const nthTrimmed = !nthEnabledForTimed
             ? []
             : trimAndRedistribute(si.nth_clusters as any[], nthMax);
-          const nthRestored = foldDistOnLoad(
+          nthRestored = foldDistOnLoad(
             nthTrimmed.map((c: any) => ({ ...c, priority: normalizePriority(c.priority) })),
             _distRows.nth_questions,
           );
+        }
+        // LOAD-TIME DUPLICATE BACKSTOP: these clusters come straight from the
+        // database, not from a fresh /generate-clusters or /refine-clusters
+        // call, so they never passed through the guarantee those endpoints
+        // give their own output — this can be historical data saved before a
+        // dedup fix even existed. Re-run the same deterministic check (fails
+        // open — returns the input unchanged on any error) before the
+        // recruiter ever sees a stale duplicate re-appear on every visit.
+        if (mthRestored.length > 0 || nthRestored.length > 0) {
+          const cleaned = await aiInterviewService.dedupeClusters({
+            mthClusters: mthRestored,
+            nthClusters: nthRestored,
+          });
+          mthRestored = cleaned.mthClusters;
+          nthRestored = cleaned.nthClusters;
+        }
+        if (mthRestored.length > 0) {
+          setMthClusters(mthRestored);
+          // Intentionally NOT auto-expanding — cluster cards stay collapsed by default per UX spec
+        }
+        if (nthRestored.length > 0) {
           setNthClusters(nthRestored);
           // Intentionally NOT auto-expanding — cluster cards stay collapsed by default per UX spec
         }
