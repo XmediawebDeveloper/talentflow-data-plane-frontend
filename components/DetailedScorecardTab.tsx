@@ -1,5 +1,6 @@
-import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp } from 'lucide-react';
+import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info } from 'lucide-react';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { Tooltip } from '@/components/ui/tooltip';
 
 interface DetailedScores {
   titleMatch: number;
@@ -29,6 +30,10 @@ interface ScoreBreakdownItem {
 
 interface ScoredResumeDetail {
   scorePercentage: number;
+  // Per-candidate breakdown of how scorePercentage was derived - shown as a
+  // tooltip so the Weighted Score never looks like a plain average of the
+  // Required/Preferred percentages shown beside it.
+  scoreFormula?: string;
   scoredDate: string;
   scoredBy: string;
   detailedScores: DetailedScores;
@@ -292,15 +297,38 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     <div className="space-y-4">
       {/* Score Summary Header - Compact */}
       <div className="flex items-center gap-4 text-sm">
-        <span className="text-gray-700">Overall Score:</span>
+        <span className="text-gray-700 flex items-center gap-1">
+          Weighted Score:
+          {resume.scoreFormula && (
+            <Tooltip content={resume.scoreFormula} position="bottom">
+              <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
+            </Tooltip>
+          )}
+        </span>
         <span className={`text-2xl font-bold ${resume.scorePercentage >= 70 ? 'text-green-600' : resume.scorePercentage >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
           {resume.scorePercentage}%
         </span>
         <span className="text-gray-400">|</span>
         {summaryData && (
           <>
-            <span className="text-gray-700">Required: <span className="font-semibold text-gray-900">{summaryData.requiredPercentage.toFixed(0)}%</span></span>
-            <span className="text-gray-700">Preferred: <span className="font-semibold text-gray-900">{summaryData.preferredPercentage.toFixed(0)}%</span></span>
+            <span className="text-gray-700 flex items-center gap-1">
+              Required: <span className="font-semibold text-gray-900">{summaryData.requiredPercentage.toFixed(0)}%</span>
+              <Tooltip
+                content={`${summaryData.requiredTotal}/${summaryData.requiredMax} = ${summaryData.requiredPercentage.toFixed(0)}% - plain average of Required (essential) criteria scores, no pass/fail threshold applied. This differs from the Weighted Score, which gives full or zero credit per criterion at the 7-point cliff.`}
+                position="bottom"
+              >
+                <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
+              </Tooltip>
+            </span>
+            <span className="text-gray-700 flex items-center gap-1">
+              Preferred: <span className="font-semibold text-gray-900">{summaryData.preferredPercentage.toFixed(0)}%</span>
+              <Tooltip
+                content={`${summaryData.preferredTotal}/${summaryData.preferredMax} = ${summaryData.preferredPercentage.toFixed(0)}% - plain average of Preferred (non-essential) criteria scores, no pass/fail threshold applied. This differs from the Weighted Score, which gives full or zero credit per criterion at the 7-point cliff.`}
+                position="bottom"
+              >
+                <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
+              </Tooltip>
+            </span>
             <span className="text-gray-600">|</span>
           </>
         )}
