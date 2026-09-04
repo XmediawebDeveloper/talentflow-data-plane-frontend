@@ -683,7 +683,10 @@ interface ExtractedData {
   roleFamilyConfidence?: number;
   industryTypeRequired: boolean;
   department: string;
-  allowOverqualified: boolean;
+  /** Required recruiter choice, not a plain default-off toggle: null means "not yet
+   *  answered" and blocks leaving Step 2 (see getValidationStatus/handlePublish). Only
+   *  true/false are valid saved values - null must never reach the save payload. */
+  allowOverqualified: boolean | null;
   employmentType: 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary';
   workModel: 'onsite' | 'remote' | 'hybrid' | 'field_based';
   salaryFrom: string;
@@ -1468,7 +1471,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     roleFamilyConfidence: undefined,
     industryTypeRequired: false,
     department: '',
-    allowOverqualified: false,
+    allowOverqualified: null,
     employmentType: 'full_time',
     workModel: 'onsite',
     salaryFrom: '',
@@ -1642,6 +1645,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     experience?: string;
     industryType?: string;
     salaryRange?: string;
+    allowOverqualified?: string;
   }>({});
   const [jobTitleServerValidationError, setJobTitleServerValidationError] = useState('');
   const [jobTitleServerValidatedValue, setJobTitleServerValidatedValue] = useState('');
@@ -2865,7 +2869,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           city: loc.state ? `${loc.city}, ${loc.state}` : (loc.city || ''),
           radius: '50'
         })) : (isEditMode ? prev.locations : []),
-        allowOverqualified: isEditMode ? prev.allowOverqualified : false,
+        allowOverqualified: isEditMode ? prev.allowOverqualified : null,
         // Forced OFF: the 'Requires a hands-on coding assessment' control was removed
         // from JD creation, so nothing can clear a wrongly-extracted true. Leaving it
         // set would let jd_analyzer.validate_for_assessment() block assessment creation
@@ -3617,7 +3621,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // and every extracted JD saved with department = null. Same edit-mode fallback
         // as the fields around it, so a recruiter's own value is never overwritten.
         department: params.department || (isEditMode ? extractedData.department : ''),
-        allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
+        allowOverqualified: isEditMode ? extractedData.allowOverqualified : null,
         employmentType: normalizeExtractedEmploymentType(params.job_type) || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: (params.work_mode as 'onsite' | 'remote' | 'hybrid' | 'field_based') || (isEditMode ? extractedData.workModel : 'onsite'),
         // Pre-fill salary from AI extraction
@@ -4704,6 +4708,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       experience?: string;
       industryType?: string;
       locations?: string;
+      allowOverqualified?: string;
     } = {};
 
     // Must have at least one must-have skill
@@ -4735,6 +4740,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (extractedData.locationsRequired && (!extractedData.locations || extractedData.locations.length === 0)) {
       missingFields.push('At least one Location');
       errors.locations = 'Location is marked as required but no locations added';
+    }
+
+    // Allow Overqualified Candidates is a required Yes/No choice - the recruiter must
+    // pick one before proceeding. null means not yet answered.
+    if (extractedData.allowOverqualified === null || extractedData.allowOverqualified === undefined) {
+      missingFields.push('Allow Overqualified Candidates (Yes/No)');
+      errors.allowOverqualified = 'Please select Yes or No for Allow Overqualified Candidates';
     }
 
     // Set validation errors for inline display
@@ -5074,6 +5086,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const industryValue = extractedData.industryType?.trim() || '';
     if (!industryValue) {
       missingFields.push('Industry Type');
+    }
+
+    // Allow Overqualified Candidates is a required Yes/No choice, not a default-off
+    // toggle - the recruiter must pick one before Step 2 can be left. null is "not
+    // yet answered"; true/false are both valid, complete answers.
+    if (extractedData.allowOverqualified === null || extractedData.allowOverqualified === undefined) {
+      missingFields.push('Allow Overqualified Candidates (Yes/No)');
     }
 
     // Validate salary range
@@ -5884,7 +5903,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           niceToHaveComments: effectiveEditingJD.nice_to_have_comments || [],
           certifications: effectiveEditingJD.certifications || [],
           domainKeywords: effectiveEditingJD.domain_keywords || [],
-          allowOverqualified: effectiveEditingJD.allow_overqualified ?? false,
+          // Preserve the recruiter's actual saved answer; only a JD that genuinely
+          // never had this field set (predates the column) falls back to null,
+          // which re-triggers the required-choice gate on this edit.
+          allowOverqualified: effectiveEditingJD.allow_overqualified ?? null,
           employmentType: (effectiveEditingJD.employment_type as ExtractedData['employmentType']) || 'full_time',
           workModel: (effectiveEditingJD.remote_type as ExtractedData['workModel']) || 'onsite',
           locations: effectiveEditingJD.locations?.map(loc => ({
@@ -8330,24 +8352,61 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
-              {/* Allow Overqualified Candidates */}
-              <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-                <div className="flex items-center justify-between">
+              {/* Allow Overqualified Candidates - REQUIRED choice, not a default-off
+                  toggle. Scoring reads this (evaluate_experience_level in
+                  odoo_scoring.py) so an unanswered field is not a safe silent default
+                  in either direction - the recruiter must pick Yes or No before
+                  leaving Step 2 (enforced in getValidationStatus/handlePublish). */}
+              <div className={`mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg border ${
+                validationErrors.allowOverqualified
+                  ? 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-800'
+                  : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
+              }`}>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
-                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">Allow Overqualified Candidates</h3>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Accept candidates who exceed the required qualifications</p>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+                      Allow Overqualified Candidates <span className="text-red-500">*</span>
+                    </h3>
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                      Should candidates who significantly exceed this role's experience requirement be scored favorably, or treated as a mismatch?
+                    </p>
                   </div>
-                  <label className={`relative inline-flex items-center ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(extractedData.allowOverqualified)}
-                      onChange={(e) => { setExtractedData(prev => ({ ...prev, allowOverqualified: e.target.checked })); markExtractedDataModified(); }}
-                      className="sr-only peer"
-                      disabled={isRegenerating}
-                    />
-                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-blue/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
-                  </label>
+                  <div className="flex items-center gap-2" role="radiogroup" aria-label="Allow Overqualified Candidates">
+                    {([
+                      { label: 'Yes', value: true },
+                      { label: 'No', value: false },
+                    ] as const).map((opt) => {
+                      const isSelected = extractedData.allowOverqualified === opt.value;
+                      return (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          disabled={isRegenerating}
+                          onClick={() => {
+                            setExtractedData(prev => ({ ...prev, allowOverqualified: opt.value }));
+                            setValidationErrors(prev => ({ ...prev, allowOverqualified: undefined }));
+                            markExtractedDataModified();
+                          }}
+                          className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                            isSelected
+                              ? 'bg-brand-blue text-white border-brand-blue'
+                              : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40'
+                          } ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+                {validationErrors.allowOverqualified && (
+                  <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {validationErrors.allowOverqualified}
+                  </p>
+                )}
               </div>
 
               {/* Certifications & Domain Keywords - HIDDEN as per requirement */}
