@@ -152,7 +152,7 @@ export default function ResumeScoringJDSelection() {
                         {jd.job_id && (
                           <JobIdBadge>{jd.job_id}</JobIdBadge>
                         )}
-                        <h3 className="font-semibold text-gray-900 truncate tracking-tight">{jd.title}</h3>
+                        <h3 className="font-semibold text-gray-900 truncate min-w-0 tracking-tight" title={jd.title}>{jd.title}</h3>
                         <span className="flex items-center gap-1 px-2 py-0.5 text-xs text-green-700 bg-green-100 rounded-full ring-1 ring-green-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                           Published

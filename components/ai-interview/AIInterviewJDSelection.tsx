@@ -177,7 +177,7 @@ export default function AIInterviewJDSelection() {
                         {jd.job_id && (
                           <JobIdBadge>{jd.job_id}</JobIdBadge>
                         )}
-                        <h3 className="font-semibold text-gray-900 truncate tracking-tight">{jd.title}</h3>
+                        <h3 className="font-semibold text-gray-900 truncate min-w-0 tracking-tight" title={jd.title}>{jd.title}</h3>
                         {/* Version from the JD row's own `current_version`. A JD
                             that has never been republished carries no value, and
                             that IS v1 — the same reading JDListPage and the JD

@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { ChevronDown, Plus, RefreshCw } from 'lucide-react';
+import { ChevronDown, Eye, Plus, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
@@ -46,6 +46,10 @@ export interface AssessmentVersionRow {
   updated_at?: string;
   created_by_name?: string;
   invitations_count?: number;
+  /** Attempts the candidates actually finished, as the backend counts them
+   *  (`completed_count` on AssessmentResponse) - the same field each
+   *  assessment's own pass rate is computed against. */
+  completed_count?: number;
   /** The JOB version this assessment was authored against. The join key. */
   jd_version?: number;
   /* The configured sections, counted for the Questions column. Read through
@@ -88,6 +92,25 @@ interface AssessmentVersionHistoryPanelProps {
    */
   onCreateAssessment?: (jobVersionId: string, jobVersion: number) => void;
   /**
+   * Read ONE job version — its own description, pay, location and the rest —
+   * given that version's own JD id.
+   *
+   * Gated on the same id as `onCreateAssessment` and for the same reason: a
+   * version is a JD row of its own, so the id is what makes the popup open on
+   * the row that was clicked rather than on the job's current version. Omit the
+   * handler and the eye is not offered.
+   */
+  onViewJobVersion?: (jobVersionId: string, jobVersion: number) => void;
+  /**
+   * A control for the WHOLE job, pinned to the top-right of this panel's
+   * "Job Versions (N)" heading — where the Job List row's eye now lives, so
+   * the thing that reads the job's versions sits on the table that lists them.
+   *
+   * A slot rather than a button of its own: the panel does not know what the
+   * host wants to open, and the host already owns the popup and its state.
+   */
+  headerAction?: ReactNode;
+  /**
    * The trailing controls for one assessment — the host's own three-dot menu
    * and quick actions. Given that assessment's record so the host's existing
    * per-assessment handlers work unchanged. Omit it and the Actions column
@@ -99,12 +122,18 @@ interface AssessmentVersionHistoryPanelProps {
 /* The list's own status vocabulary for ASSESSMENTS, not the raw DB one: the
    rows above this panel say Active / Draft / Completed / Archived, and a row
    saying "Published" for the same state would read as a different thing. */
-const ASSESSMENT_STATUS_LABELS: Record<string, string> = {
+export const ASSESSMENT_STATUS_LABELS: Record<string, string> = {
   published: 'Active',
   closed: 'Completed',
   archived: 'Archived',
   draft: 'Draft',
 };
+
+/** One assessment status, in the list's own words. Unknown reads as Draft, as
+ *  it has since this table was a flat list. Exported with the chips below so
+ *  the tracking popup states neither a second time. */
+export const assessmentStatusLabel = (status?: string): string =>
+  ASSESSMENT_STATUS_LABELS[String(status || '').toLowerCase()] || 'Draft';
 
 const STATUS_STYLES: Record<string, { chip: string; dot: string }> = {
   Active: { chip: 'bg-green-100 text-green-700 ring-green-200', dot: 'bg-green-500' },
@@ -133,7 +162,7 @@ const STATUS_STYLES: Record<string, { chip: string; dot: string }> = {
  * above, and `mapAssessmentFromApi` in the assessments list). Two entities, two
  * sets of words — conflating them is what went wrong here.
  */
-function JobStatusChip({ status, currentVersion }: { status?: string; currentVersion?: number }) {
+export function JobStatusChip({ status, currentVersion }: { status?: string; currentVersion?: number }) {
   const raw = (status || '').trim();
   /* No status known yet (the JD lineage request is still in flight) - a dash,
      rather than asserting a state the table has not been told. */
@@ -162,6 +191,7 @@ const JOB_COLUMNS: { label: string; minW: string }[] = [
   { label: 'Assessments', minW: 'min-w-[110px]' },
   { label: 'Questions', minW: 'min-w-[100px]' },
   { label: 'Invitations Sent', minW: 'min-w-[120px]' },
+  { label: 'Completed', minW: 'min-w-[120px]' },
 ];
 
 /* Inner table: the same shape minus Assessments — an assessment version is
@@ -190,9 +220,12 @@ interface JobVersionGroup {
    *  are exactly what its Assessment Versions table adds up to. */
   totalQuestions: number;
   totalInvitations: number;
+  /** Finished attempts across this version's assessments - read beside the
+   *  invitations it is a subset of: sent, then completed. */
+  totalCompleted: number;
 }
 
-function StatusChip({ label }: { label: string }) {
+export function StatusChip({ label }: { label: string }) {
   const tone = STATUS_STYLES[label] || STATUS_STYLES.Unknown;
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs ring-1 whitespace-nowrap ${tone.chip}`}>
@@ -214,7 +247,7 @@ function StatusChip({ label }: { label: string }) {
  * cyan for an assessment one) plus each table's own heading are what tell them
  * apart.
  */
-function VersionChip({ kind, version }: { kind: 'job' | 'assessment'; version?: number }) {
+export function VersionChip({ kind, version }: { kind: 'job' | 'assessment'; version?: number }) {
   const isJob = kind === 'job';
   return (
     <span
@@ -229,7 +262,7 @@ function VersionChip({ kind, version }: { kind: 'job' | 'assessment'; version?: 
   );
 }
 
-function LatestBadge() {
+export function LatestBadge() {
   return (
     <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
       Latest
@@ -267,6 +300,8 @@ export default function AssessmentVersionHistoryPanel({
   currentAssessmentId,
   onRowClick,
   onCreateAssessment,
+  onViewJobVersion,
+  headerAction,
   renderAction,
 }: AssessmentVersionHistoryPanelProps) {
   /* Which job versions have their assessment table open. Local to the panel:
@@ -283,7 +318,7 @@ export default function AssessmentVersionHistoryPanel({
     });
   };
 
-  const jobColumns = [...JOB_COLUMNS, { label: 'Actions', minW: 'min-w-[190px]' }];
+  const jobColumns = [...JOB_COLUMNS, { label: 'Actions', minW: 'min-w-[230px]' }];
   const assessmentRows = assessments ?? [];
 
   /* Which job versions to print.
@@ -356,6 +391,7 @@ export default function AssessmentVersionHistoryPanel({
       assessments: versionAssessments,
       totalQuestions: versionAssessments.reduce((sum, a) => sum + countAssessmentTopics(a), 0),
       totalInvitations: versionAssessments.reduce((sum, a) => sum + (a.invitations_count ?? 0), 0),
+      totalCompleted: versionAssessments.reduce((sum, a) => sum + (a.completed_count ?? 0), 0),
     };
   });
 
@@ -377,11 +413,14 @@ export default function AssessmentVersionHistoryPanel({
            inner table is open — an expanded list has to be readable without
            fighting a fixed window. */
         <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 overflow-hidden">
-          <div className="px-3 sm:px-4 pt-3 pb-2">
+          {/* Heading left, the host's control right - the table's own top
+              corner, above the rows it acts on. */}
+          <div className="px-3 sm:px-4 pt-3 pb-2 flex items-center justify-between gap-2">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
               Job Versions{' '}
               <span className="font-normal text-gray-500 dark:text-slate-400">({groups.length})</span>
             </h4>
+            {headerAction && <div className="flex-shrink-0">{headerAction}</div>}
           </div>
 
           <div
@@ -391,7 +430,7 @@ export default function AssessmentVersionHistoryPanel({
                 : ''
             }`}
           >
-            <table className="w-full min-w-[1080px] text-left">
+            <table className="w-full min-w-[1200px] text-left">
               <thead>
                 {/* The bottom hairline is an inset shadow, not border-b —
                     collapsed-table borders detach from sticky cells and would
@@ -474,6 +513,9 @@ export default function AssessmentVersionHistoryPanel({
                         <td className="py-3 px-3 whitespace-nowrap align-middle">
                           <MetricCell value={group.totalInvitations} label={group.totalInvitations === 1 ? 'Invitation' : 'Invitations'} />
                         </td>
+                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                          <MetricCell value={group.totalCompleted} label={group.totalCompleted === 1 ? 'Candidate' : 'Candidates'} />
+                        </td>
                         {/* Actions — pinned right so it stays reachable while
                             the table scrolls sideways. Opaque background (plus
                             a hover tint matching the row's translucent one) so
@@ -485,6 +527,25 @@ export default function AssessmentVersionHistoryPanel({
                             ordinary last column reached by scrolling. */}
                         <td className={`py-3 px-3 whitespace-nowrap align-middle lg:sticky lg:right-0 lg:z-[5] lg:shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:lg:shadow-[-1px_0_0_0_#334155] ${stickyTint}`}>
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            {/* Read THIS version. Never disabled and never
+                                conditional on the assessment state beside it:
+                                reading a job version is unrelated to whether
+                                one can be built against it, so an Archived,
+                                Disabled or Draft row opens exactly like a
+                                published one. Same button, same popup, as the
+                                eye on the Create Assessment picker's own
+                                version rows. */}
+                            {onViewJobVersion && group.jobVersionId && (
+                              <button
+                                type="button"
+                                onClick={() => onViewJobVersion(group.jobVersionId!, group.jobVersion)}
+                                aria-label={`View job V${group.jobVersion} details`}
+                                title={`View job V${group.jobVersion} details`}
+                                className="h-8 w-8 flex items-center justify-center rounded-lg border border-brand-blue/40 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             {hasAssessments ? (
                               <button
                                 type="button"
@@ -576,8 +637,7 @@ export default function AssessmentVersionHistoryPanel({
                                         <tbody>
                                           {group.assessments.map((assessment) => {
                                             const isCurrent = !!currentAssessmentId && assessment.id === currentAssessmentId;
-                                            const statusLabel =
-                                              ASSESSMENT_STATUS_LABELS[String(assessment.status || '').toLowerCase()] || 'Draft';
+                                            const statusLabel = assessmentStatusLabel(assessment.status);
                                             const questions = countAssessmentTopics(assessment);
                                             const invitations = assessment.invitations_count ?? 0;
                                             return (

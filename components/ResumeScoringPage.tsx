@@ -2628,7 +2628,8 @@ export default function ResumeScoringPage({
                             <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{item.jdJobId}</JobIdBadge>
                           )}
                           <h3
-                            className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate cursor-pointer hover:text-brand-blue transition-colors"
+                            className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
+                            title={item.jobTitle}
                             onClick={() => {
                               setSelectedHistoryItem(item);
                               setViewMode('details');
@@ -2878,7 +2879,10 @@ export default function ResumeScoringPage({
                           {item.jdJobId && (
                             <JobIdBadge className="inline-flex h-7 items-center">{item.jdJobId}</JobIdBadge>
                           )}
-                          <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 line-clamp-2">
+                          <h3
+                            className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 line-clamp-2 min-w-0"
+                            title={item.jobTitle}
+                          >
                             {item.jobTitle}
                           </h3>
                         </div>

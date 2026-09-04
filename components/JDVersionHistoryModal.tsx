@@ -219,7 +219,10 @@ function VersionHeaderCard({ version, action }: { version: JDHistoryVersion; act
                 {version.job_id}
               </span>
             )}
-            <h3 className="font-normal text-gray-900 dark:text-slate-50 text-sm sm:text-base truncate">
+            <h3
+              className="font-normal text-gray-900 dark:text-slate-50 text-sm sm:text-base truncate min-w-0"
+              title={version.title}
+            >
               {version.title}
             </h3>
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${versionStatusBadgeClass(statusText)}`}>

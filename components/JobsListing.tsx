@@ -1240,7 +1240,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         {job.job_id && (
                           <JobIdBadge>{job.job_id}</JobIdBadge>
                         )}
-                        <h3 className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2">
+                        {/* Two lines on a card, one line in a row - a card
+                            gives the name its own width, a row shares it. Full
+                            name on hover either way. */}
+                        <h3
+                          className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 min-w-0"
+                          title={job.title}
+                        >
                           {job.title}
                         </h3>
                       </div>

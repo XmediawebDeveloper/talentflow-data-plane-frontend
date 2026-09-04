@@ -323,7 +323,10 @@ export default function AITalentMatchPageJobsList({
                       {job.jobId && (
                         <JobIdBadge>{job.jobId}</JobIdBadge>
                       )}
-                      <h3 className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 flex-1 min-w-0">
+                      <h3
+                        className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 flex-1 min-w-0"
+                        title={job.title}
+                      >
                         {job.title}
                       </h3>
                     </div>
@@ -437,7 +440,7 @@ export default function AITalentMatchPageJobsList({
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             {job.jobId && <JobIdBadge>{job.jobId}</JobIdBadge>}
-                            <h3 className="truncate text-sm font-semibold text-gray-900 sm:text-base">{job.title}</h3>
+                            <h3 className="min-w-0 truncate text-sm font-semibold text-gray-900 sm:text-base" title={job.title}>{job.title}</h3>
                             {job.currentVersion && <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">{job.currentVersion > 1 ? 'Republished' : 'Published'}</span>}
                           </div>
                           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-gray-600">

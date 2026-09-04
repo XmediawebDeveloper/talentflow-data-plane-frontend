@@ -130,7 +130,17 @@ export default function JobOpeningSummary({
         {job.job_id && (
           <JobIdBadge className="flex-shrink-0">{job.job_id}</JobIdBadge>
         )}
-        <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">
+        {/* The job name takes whatever the row leaves it and truncates there,
+            with the whole name in `title` for a hover. `min-w-0` is what makes
+            that happen: a flex item will not shrink below its content width
+            without it, so the name would otherwise push the status pill beside
+            it off the row instead of truncating. The same three rules apply
+            wherever a job name is drawn - see the Job Name cell in
+            components/assessments/AllAssessmentsTable, where they were settled. */}
+        <h3
+          className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
+          title={job.title}
+        >
           {job.title}
         </h3>
         <span className={`px-2 py-0.5 rounded-full text-xs ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-1.5 flex-shrink-0`}>

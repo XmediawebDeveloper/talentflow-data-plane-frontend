@@ -17,6 +17,7 @@ import AssessmentAuditTrail from './AssessmentAuditTrail';
 import ConsentLogs from './compliance/ConsentLogs';
 import AssessmentPreviewModal from './AssessmentPreviewModal';
 import AssessmentEditModal from './AssessmentEditModal';
+import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
 import {
   DropdownMenu,
@@ -50,8 +51,8 @@ import { scoringService } from '@/lib/services/scoringService';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
-import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, HelpCircle, ChevronDown, Radar } from 'lucide-react';
-import { stripVersionFromTitle, countAssessmentTopics } from '@/lib/utils/assessmentUtils';
+import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar } from 'lucide-react';
+import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
@@ -60,7 +61,7 @@ import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
 import AllAssessmentsTable from '@/components/assessments/AllAssessmentsTable';
-import AssessmentVersionHistoryPanel, { type AssessmentVersionRow } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import AssessmentVersionHistoryPanel, { VersionChip, type AssessmentVersionRow } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
 
@@ -251,6 +252,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [selectedAssessmentForDetails, setSelectedAssessmentForDetails] = useState<any>(null);
   // Track Invites modal state
   const [showTrackInvitesModal, setShowTrackInvitesModal] = useState(false);
+  /* Set when the tracking popup was opened from a Job List row's Track rather
+     than from one assessment: the SAME popup, scoped to every assessment of
+     the job instead of one.
+
+     It holds the job's assessments rather than looking them up as it goes,
+     because every load in the popup fans out across them and a list resolved
+     once at open time cannot change under a page turn. `selectedAssessmentForTracking`
+     is still set alongside it - to the row's own representative - so every
+     existing read of that (the Refresh guard, the result-details fallback) keeps
+     working unchanged. */
+  const [trackingJob, setTrackingJob] = useState<{
+    jobId?: string;
+    jobTitle: string;
+    jdId: string;
+    assessments: any[];
+  } | null>(null);
   const [selectedAssessmentForTracking, setSelectedAssessmentForTracking] = useState<any>(null);
   const [trackingInvitations, setTrackingInvitations] = useState<any[]>([]);
   const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
@@ -338,6 +355,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      cards of one lineage read and fill the same cache entry — expanding V2
      after V1 costs no second request. */
   const [openVersionsFor, setOpenVersionsFor] = useState<string | null>(null);
+  /* The job the Version History popup is open on, and which version of it the
+     popup should land on.
+
+     `versionNumber` is held here rather than read off `jdId` because the two
+     answer different questions: the id fetches the lineage, the number picks a
+     version inside it. Null opens the popup on the LIST of versions - which is
+     what the Job List row's eye wants, since that eye is about the job - while
+     a number opens straight onto that version, which is what each Job Versions
+     row's own eye wants.
+
+     Same popup, same props, as the Create Assessment picker's eye
+     (`versionHistoryFor` / `versionHistoryVersion` in AssessmentCreation) and
+     as the Job Details page's own Version History, so a job version reads the
+     same wherever it is opened from. */
+  const [jobDetailsPopup, setJobDetailsPopup] = useState<{
+    jdId: string;
+    jdTitle: string;
+    versionNumber: number | null;
+  } | null>(null);
+  const openJobDetails = (jdId: string, jdTitle: string, versionNumber: number | null = null) =>
+    setJobDetailsPopup({ jdId, jdTitle, versionNumber });
   /* The JOB half of the history. Same hook the Job Openings list and the Apply
      to Job dialog use, so the job versions a recruiter reads here are the ones
      they read there, from the same endpoints - lineage plus the per-version JD
@@ -866,7 +904,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const openTrackedInviteResult = (invitation: any) => {
     if (!selectedAssessmentForTracking) return;
     if (!opensTrackedDetails(invitation)) return;
-    const base = `/recruitment/assessments/${selectedAssessmentForTracking.id}/results/details`;
+    /* The invite's OWN assessment where the row carries one - in job scope the
+       table holds invites from several, and the representative's id would open
+       the wrong assessment's result. */
+    const resultAssessmentId = invitation._assessment_id || selectedAssessmentForTracking.id;
+    const base = `/recruitment/assessments/${resultAssessmentId}/results/details`;
     const cid = invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : '';
     const name = invitation.candidate_name ? `&candidate_name=${encodeURIComponent(invitation.candidate_name)}` : '';
     router.push(`${base}?candidate_id=${invitation.attempt_id}${cid}${name}`);
@@ -1272,9 +1314,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackingInvitations]);
 
+  /* Which score columns the tracking table carries.
+     In job scope the answer is "any assessment of this job runs that round":
+     dropping a column because the row's representative has no coding round
+     would hide the coding scores of a sibling version that does. Reading one
+     assessment, it is that assessment's own rule, unchanged. */
+  const trackingTechEnabled = trackingJob
+    ? trackingJob.assessments.some((scoped) => scoped.technical_enabled ?? true)
+    : (selectedAssessmentForTracking?.technical_enabled ?? true);
+  const trackingCodingEnabled = trackingJob
+    ? trackingJob.assessments.some((scoped) => !!scoped.coding_enabled)
+    : !!selectedAssessmentForTracking?.coding_enabled;
+
   const closeTrackInvitesModal = () => {
     setShowTrackInvitesModal(false);
     setSelectedAssessmentForTracking(null);
+    setTrackingJob(null);
     setTrackingInvitations([]);
     setTrackingCurrentPage(1);
     setTrackingTotalItems(0);
@@ -1354,8 +1409,59 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
+  /* Which assessment - and so which JOB VERSION - one invite belongs to.
+     Stamped on the row because a job-scoped table holds invites from several
+     assessments and the record itself does not say which. `_assessment_id` is
+     the field the row actions already read (resend, revoke, edit email, open
+     result), so stamping it is what makes them act on the invite's own
+     assessment rather than on the row the popup was opened from. */
+  const stampJobScopedInvite = (invitation: any, scoped: any) => ({
+    ...invitation,
+    _assessment_id: scoped.id,
+    _assessment_short_id: scoped.short_id,
+    _assessment_title: scoped.title,
+    _assessment_version: scoped.version ?? 1,
+    _jd_version: scoped.jd_version ?? 1,
+  });
+
+  /* Newest invite first, across assessments - the order the single-assessment
+     endpoint returns, kept after the merge so a job-scoped page reads the same
+     way round. */
+  const inviteRecency = (invitation: any) =>
+    new Date(invitation.sent_at || invitation.created_at || 0).getTime();
+
+  /* One page per assessment is enough to merge from: a job's assessments are
+     few (the create flow caps them at 3 per job version), and the merged list
+     is then paged in the browser at the popup's own page size. */
+  const JOB_TRACKING_FETCH_SIZE = 200;
+
   const loadTrackingInvitationSummary = async (assessment: any) => {
     try {
+      if (trackingJob) {
+        /* Job scope: the same summary call per assessment, added up. The
+           endpoint has no job-wide mode, and the cards must describe every
+           version the popup is showing. */
+        const summaries = await Promise.all(
+          trackingJob.assessments.map(async (scoped) => {
+            try {
+              return await assessmentService.listInvitations(scoped.id, { page: 1, page_size: 1 });
+            } catch {
+              return null;
+            }
+          }),
+        );
+        const sum = (read: (response: any) => number) =>
+          summaries.reduce((total, response) => total + (response ? read(response) : 0), 0);
+        setInvitationStats({
+          total: sum((r) => r.total || 0),
+          expired: sum((r) => r.expired || 0),
+          started: sum((r) => r.started || 0),
+          completed: sum((r) => r.completed || 0),
+          failed: sum((r) => r.failed || 0),
+          terminated: sum((r) => r.terminated || 0),
+        });
+        return;
+      }
       const response = await assessmentService.listInvitations(assessment.id, {
         page: 1,
         page_size: 1,
@@ -1384,11 +1490,50 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const loadTrackingInvitations = async (assessment: any, page: number, filters: InviteFilterState) => {
     setIsLoadingInvitations(true);
     try {
-      const response = await assessmentService.listInvitations(assessment.id, {
+      const query = {
         status: filters.status !== 'all' ? filters.status : undefined,
         search: filters.search.trim() || undefined,
         invite_date_from: filters.dateFrom || undefined,
         invite_date_to: filters.dateTo || undefined,
+      };
+      if (trackingJob) {
+        /* Job scope: one request per assessment of the job, merged into one
+           list. Every filter still goes to the server - the endpoint applies
+           them per assessment exactly as it does for one - so only the paging
+           happens here, over the merged result. A failed request for one
+           assessment contributes nothing rather than emptying the table. */
+        const perAssessment = await Promise.all(
+          trackingJob.assessments.map(async (scoped) => {
+            try {
+              const scopedResponse = await assessmentService.listInvitations(scoped.id, {
+                ...query,
+                page: 1,
+                page_size: JOB_TRACKING_FETCH_SIZE,
+              });
+              return (scopedResponse.items || []).map((invitation: any) =>
+                stampJobScopedInvite(invitation, scoped),
+              );
+            } catch (error) {
+              console.error('Failed to load invitations for assessment', scoped.id, error);
+              return [];
+            }
+          }),
+        );
+        const merged = perAssessment.flat().sort((a, b) => inviteRecency(b) - inviteRecency(a));
+        const totalPages = Math.max(1, Math.ceil(merged.length / INVITATIONS_PAGE_SIZE));
+        const currentPage = Math.min(Math.max(1, page), totalPages);
+        setTrackingInvitations(
+          merged.slice((currentPage - 1) * INVITATIONS_PAGE_SIZE, currentPage * INVITATIONS_PAGE_SIZE),
+        );
+        setTrackingTotalItems(merged.length);
+        setTrackingTotalPages(totalPages);
+        /* A filter that empties the last page pulls the popup back onto a page
+           that exists, as the single-assessment path does below. */
+        if (currentPage !== page) setTrackingCurrentPage(currentPage);
+        return;
+      }
+      const response = await assessmentService.listInvitations(assessment.id, {
+        ...query,
         page,
         page_size: INVITATIONS_PAGE_SIZE,
       });
@@ -1851,12 +1996,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
     loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters);
-  }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingCurrentPage, trackingFilters]);
+  }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingJob, trackingCurrentPage, trackingFilters]);
 
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
     loadTrackingInvitationSummary(selectedAssessmentForTracking);
-  }, [showTrackInvitesModal, selectedAssessmentForTracking]);
+  }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingJob]);
 
   // Load settings data when settings tab is active
   useEffect(() => {
@@ -2290,10 +2435,50 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Track Invites - Load invitations for an assessment
   const handleTrackInvites = async (assessment: any) => {
+    // One assessment - the popup's original scope. Cleared explicitly so a
+    // per-assessment Track after a job-wide one is not still job-scoped.
+    setTrackingJob(null);
     setSelectedAssessmentForTracking(assessment);
     setShowTrackInvitesModal(true);
     setTrackingFilters(EMPTY_INVITE_FILTERS);
     setTrackingCurrentPage(1);
+  };
+
+  /**
+   * Track for a whole JOB, from a Job List row — the same popup, reading every
+   * assessment of the job rather than one, with each row stating which job
+   * version its assessment belongs to.
+   *
+   * The job's assessments are resolved here, once, before the popup opens: from
+   * the lineage cache the row's version panel fills, or by the same request that
+   * fills it. The row's own assessment stands in if that comes back empty, so
+   * Track always opens on something.
+   */
+  const handleTrackJob = async (assessment: any) => {
+    const jdId = assessment?.jd_id;
+    if (!jdId) return;
+    let rows: any[] = (assessmentLineages[jdId] as any[]) || [];
+    if (!rows.length) {
+      try {
+        const response = await assessmentService.list({ jd_id: jdId, page_size: 50 });
+        rows = response.items || [];
+        setAssessmentLineages(prev => ({ ...prev, [jdId]: rows as AssessmentVersionRow[] }));
+      } catch (error) {
+        console.error('Failed to load the job\'s assessments for tracking:', error);
+        rows = [];
+      }
+    }
+    setTrackingJob({
+      jobId: assessment.jd_short_id,
+      jobTitle: assessment.job?.title || stripVersionFromTitle(assessment.title),
+      jdId,
+      assessments: rows.length ? rows : [assessment],
+    });
+    setSelectedAssessmentForTracking(assessment);
+    setTrackingFilters(EMPTY_INVITE_FILTERS);
+    setTrackingCurrentPage(1);
+    setTrackingSelectedIds(new Set());
+    setShowTrackInvitesModal(true);
   };
 
   const isValidInviteEmail = (email: string) =>
@@ -2443,8 +2628,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (!isValidInviteEmail(newEmailValue)) return;
     setIsSendingChangeEmail(true);
     try {
+      /* The invite's own assessment where the row carries one, the pinned one
+         otherwise - the same rule resend and revoke follow, and what keeps this
+         correct when the popup is scoped to a whole job. */
+      const assessmentId = invitation._assessment_id || selectedAssessmentForTracking?.id;
       await api.patch(
-        `/assessments/${selectedAssessmentForTracking.id}/invitations/${invitation.id}/update-email`,
+        `/assessments/${assessmentId}/invitations/${invitation.id}/update-email`,
         { new_email: newEmailValue.trim() }
       );
       setEditingEmailId(null);
@@ -2742,13 +2931,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * is the honest reading of a row that is only on screen because it has one.
    */
   const jobRowTotals = (() => {
-    const totals = new Map<string, { assessments: number; topics: number; invitations: number }>();
+    const totals = new Map<string, { assessments: number; invitations: number; completed: number }>();
     for (const assessment of filteredAssessments) {
       const key = lineageKeyOf(assessment);
-      const entry = totals.get(key) ?? { assessments: 0, topics: 0, invitations: 0 };
+      const entry = totals.get(key) ?? { assessments: 0, invitations: 0, completed: 0 };
       entry.assessments += 1;
-      entry.topics += countAssessmentTopics(assessment);
       entry.invitations += assessment.invitations_count ?? 0;
+      /* Attempts the candidates actually finished, as the backend counts them
+         (`completed_count` on AssessmentResponse, carried through
+         `mapAssessmentFromApi`) - the same field the assessment's own pass rate
+         is computed against. Summed over the job's assessments so it reads as
+         the pair of the invitations beside it: sent, then finished. */
+      entry.completed += assessment.completed_count ?? 0;
       totals.set(key, entry);
     }
     return totals;
@@ -2765,7 +2959,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const getJobVersionCount = (assessment: { jd_id?: string; jd_short_id?: string; jd_version?: number }) =>
     getJobLineageRows(assessment)?.length ?? getLatestJobVersion(assessment);
 
-  /** The four figures a Job List row reports, in the order it shows them. */
+  /**
+   * The four figures a Job List row reports, in the order it shows them.
+   *
+   * `iconClass` is a global colour utility from app/globals.css - no value is
+   * written here. Four families far enough apart to tell at a glance, which is
+   * why brand-teal is not among them: at #099ab6 against brand-cyan's #079cc4
+   * it is the same colour in a 16px glyph. Each carries its light and dark
+   * value in the stylesheet, so no `dark:` variant is needed:
+   *
+   *   Job Versions  brand-blue   the job-version blue, as the version chips
+   *                              in the panel below already use.
+   *   Assessments   brand-cyan   the assessment cyan, from the same pair.
+   *   Invitations   brand-orange outbound.
+   *   Completed     menu-icon-activate - the palette's only green, and the one
+   *                              a finished thing reads as. Named for the menu
+   *                              action it was minted for; it is the token, not
+   *                              a new colour.
+   */
   const getJobRowMetrics = (assessment: {
     id: string;
     jd_id?: string;
@@ -2773,12 +2984,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     jd_version?: number;
   }) => {
     const totals = jobRowTotals.get(lineageKeyOf(assessment))
-      ?? { assessments: 0, topics: 0, invitations: 0 };
+      ?? { assessments: 0, invitations: 0, completed: 0 };
     return [
-      { key: 'job-versions', icon: Layers, value: getJobVersionCount(assessment), label: 'Job Versions' },
-      { key: 'assessments', icon: ClipboardList, value: totals.assessments, label: 'Assessments' },
-      { key: 'questions', icon: HelpCircle, value: totals.topics, label: 'Total Questions' },
-      { key: 'invitations', icon: Send, value: totals.invitations, label: 'Invitations Sent' },
+      { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(assessment), label: 'Job Versions' },
+      { key: 'assessments', icon: ClipboardList, iconClass: 'text-brand-cyan', value: totals.assessments, label: 'Assessments' },
+      { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: totals.invitations, label: 'Invitations Sent' },
+      { key: 'completed', icon: ClipboardCheck, iconClass: 'text-menu-icon-activate', value: totals.completed, label: 'Completed' },
     ];
   };
 
@@ -3744,9 +3955,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             { key: 'jobs', label: 'Total Jobs', short: 'Jobs' },
             { key: 'all', label: 'All Assessments', short: 'All' },
             { key: 'active', label: 'Active' },
-            { key: 'completed-candidates', label: 'Candidate Results', short: 'Results' },
             { key: 'draft', label: 'Draft' },
             { key: 'archived', label: 'Archived' },
+            { key: 'completed-candidates', label: 'Candidate Results', short: 'Results' },
             { key: 'invitation-status', label: 'Invitation Status', short: 'Invites' },
             { key: 'audit', label: 'Activity Logs', short: 'Activity', icon: Activity, adminOnly: true },
             { key: 'consent', label: 'Consent Logs', short: 'Consent', icon: FileCheck, adminOnly: true },
@@ -5556,7 +5767,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         {assessment.jd_short_id && (
                           <JobIdBadge className="inline-flex items-center">{assessment.jd_short_id}</JobIdBadge>
                         )}
-                        <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 line-clamp-1">
+                        <h3
+                          className="text-sm font-medium text-gray-900 dark:text-slate-50 line-clamp-2 min-w-0"
+                          title={assessment.job?.title || stripVersionFromTitle(assessment.title)}
+                        >
                           {assessment.job?.title || stripVersionFromTitle(assessment.title)}
                         </h3>
                         {assessment.sections && (
@@ -5806,6 +6020,43 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             latestJobVersion={getLatestJobVersion(assessment)}
                               onRowClick={(versionId) => router.push(`/recruitment/assessments/${versionId}`)}
                             onCreateAssessment={handleCreateAssessmentForJobVersion}
+                            headerAction={
+                              /* The job version details popup, pinned to the
+                                 table's top-right corner. Opens on the version
+                                 LIST, from which any one version can be read;
+                                 each row's own eye opens a single version
+                                 directly.
+
+                                 Gated on `jd_id` - a row with no job behind it
+                                 (the `__unlinked__` case) has no job to open,
+                                 and the panel simply gets no header control. */
+                              assessment.jd_id ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openJobDetails(
+                                      assessment.jd_id!,
+                                      assessment.job?.title || stripVersionFromTitle(assessment.title),
+                                    );
+                                  }}
+                                  className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                                  aria-label="View job version details"
+                                  title="View job version details"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              ) : undefined
+                            }
+                            /* Opens the same popup the header eye opens, landing
+                               on THIS version rather than on the version list. */
+                            onViewJobVersion={(jobVersionId, jobVersion) =>
+                              openJobDetails(
+                                jobVersionId,
+                                assessment.job?.title || stripVersionFromTitle(assessment.title),
+                                jobVersion,
+                              )
+                            }
                             /* Same actions the list view's rows get, so a job
                                version reads the same in either view. */
                             renderAction={(version) => {
@@ -5833,26 +6084,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {visibleAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
-                    onClick={() => {
-                      if (assessment.status === 'Draft') {
-                        if (!canUpdateAssessment) {
-                          toast.error('You do not have permission to edit assessments');
-                          return;
-                        }
-                        // For drafts, open edit modal to continue editing
-                        handleEditAssessment(assessment);
-                      } else {
-                        router.push(`/recruitment/assessments/${assessment.id}`);
-                      }
-                    }}
-                    /* `relative` + a raised z-index while this row's menu is
-                       open. Every other row lifts on hover via
-                       `hover:-translate-y-0.5`, and a transform makes that row
-                       its own stacking context - which paints it, and its white
-                       background, straight over the open dropdown. Raising the
-                       owning row above its siblings keeps the menu on top. */
-                    className={`p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 ${
-                      openMenuId === assessment.id ? 'relative z-30' : 'relative'
+                    /* The row is one JOB, so clicking it opens that job's
+                       version history in place - the same thing the View
+                       Versions button beside it does, through the same
+                       handler, so the two can never disagree about what a
+                       click on this row means.
+
+                       It used to navigate: to the representative assessment,
+                       or to the edit modal when that assessment was a Draft.
+                       Both were the row acting as ONE assessment, which is
+                       exactly what a job row is not - and it meant a recruiter
+                       scanning the list was taken off the page by a click they
+                       had aimed at a job. The assessments are still one step
+                       away, listed per job version inside the panel this now
+                       opens, each with its own row and its own actions.
+
+                       Gated on `hasVersionHistory` (the row having a `jd_id`),
+                       which is the same test the View Versions button renders
+                       on: a row with no job behind it has no history to open,
+                       and it drops the pointer cursor and the lift so it does
+                       not offer a click that would do nothing. */
+                    onClick={() => hasVersionHistory(assessment) && toggleAssessmentVersions(assessment)}
+                    /* `relative` only. The raised z-index this carried was
+                       for the row's own three-dot dropdown, which is gone -
+                       the menus that remain belong to the version panel's
+                       assessment rows and are keyed `version:<id>`, so they
+                       never matched this test anyway. */
+                    className={`relative p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
+                      hasVersionHistory(assessment)
+                        ? 'cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
+                        : 'cursor-default'
                     }`}
                   >
                     {/* One row = one JOB. The list has always collapsed to one
@@ -5875,7 +6136,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                              row used to carry - same JD id, one house style. */
                           <JobIdBadge className="flex-shrink-0">{assessment.jd_short_id}</JobIdBadge>
                         )}
-                        <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
+                        <h3
+                          className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
+                          title={assessment.job?.title || stripVersionFromTitle(assessment.title)}
+                        >
                           {assessment.job?.title || stripVersionFromTitle(assessment.title)}
                         </h3>
                       </div>
@@ -5909,13 +6173,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {/* Totals for the job. Two columns on a phone, four in a
                           divided row once there is width for them. */}
                       <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 xl:flex-1 xl:min-w-0">
-                        {getJobRowMetrics(assessment).map(({ key, icon: MetricIcon, value, label }) => (
+                        {getJobRowMetrics(assessment).map(({ key, icon: MetricIcon, iconClass, value, label }) => (
                           <div
                             key={key}
                             className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0"
                           >
                             <div className="flex items-center gap-1.5">
-                              <MetricIcon className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />
+                              <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
                               <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{value}</span>
                             </div>
                             <p className="text-[11px] text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
@@ -5933,8 +6197,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <button
                             type="button"
                             onClick={(e) => {
-                              /* The card itself opens the assessment; a click
-                                 meant for the history must not also navigate. */
+                              /* The row toggles the same panel, so the click is
+                                 stopped here rather than letting it bubble and
+                                 toggle twice - which would leave the panel shut
+                                 on the very click that asked for it. */
                               e.stopPropagation();
                               toggleAssessmentVersions(assessment);
                             }}
@@ -5955,29 +6221,99 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </button>
                         )}
 
-                        {/* Same destination the row click has: the job's
-                            newest assessment. */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/recruitment/assessments/${assessment.id}`);
-                          }}
-                          className="h-8 w-8 flex items-center justify-center bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-300 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
-                          aria-label="View assessment" title="View assessment"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        {/* Track - the assessment history of this job, read
+                            along its job versions: V3, V2, V1 down the popup,
+                            each naming the assessments built against it.
 
-                        {renderAssessmentMenu(assessment)}
+                            Beside View Versions because the two answer
+                            neighbouring questions from the same two caches, and
+                            it opens them the same way: the panel is the working
+                            table with the per-assessment actions, this is the
+                            read-only overview - and the only one of the two
+                            that can show a version nothing was ever built for.
+
+                            Gated on `hasVersionHistory` (a `jd_id`), the same
+                            test View Versions and the row click use. The click
+                            is stopped so it does not also toggle the panel.
+
+                            Radar is the glyph Track Invites already uses on
+                            this page, so "track" reads the same wherever it
+                            appears; brand-cyan is the assessment colour, which
+                            is what this popup is about. */}
+                        {hasVersionHistory(assessment) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleTrackJob(assessment);
+                            }}
+                            className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all bg-white dark:bg-slate-900 text-brand-cyan border-brand-cyan/30 hover:bg-brand-cyan/5"
+                            aria-label="Track the assessments created for this job's versions"
+                            title="Track the assessments created for this job's versions"
+                          >
+                            <Radar className="w-3.5 h-3.5" />
+                            Track
+                          </button>
+                        )}
+
+                        {/* Result - the scores for the assessment this row
+                            represents (the job's newest, the same one the row
+                            click and the menu act on), on the page the
+                            per-assessment Results button already opens.
+
+                            Gated the way that button is: with no invitation
+                            sent there is no attempt to score, so the results
+                            page would open empty. It greys with the reason in
+                            its tooltip rather than disappearing, so the row
+                            keeps its shape and says why.
+
+                            brand-blue, which Results has always been on this
+                            page, against Track's cyan beside it. */}
+                        {(() => {
+                          const invitationsSent =
+                            assessment.invitations_count ?? assessment.candidates ?? 0;
+                          const hasBeenShared = invitationsSent > 0;
+                          const reason = hasBeenShared
+                            ? 'View results'
+                            : assessment.status === 'Draft'
+                              ? 'Publish the assessment to view results'
+                              : 'Share the assessment to view results';
+                          return (
+                            <button
+                              type="button"
+                              disabled={!hasBeenShared}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!hasBeenShared) return;
+                                router.push(`/recruitment/assessments/${assessment.id}/results`);
+                              }}
+                              className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                                hasBeenShared
+                                  ? 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
+                                  : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                              }`}
+                              aria-label={reason}
+                              title={reason}
+                            >
+                              <BarChart className="w-3.5 h-3.5" />
+                              Result
+                            </button>
+                          );
+                        })()}
+
+                        {/* The eye moved onto the Job Versions panel's own
+                            heading - it reads the job's versions, so it sits on
+                            the table that lists them rather than in this
+                            cluster. See `headerAction` below. */}
                       </div>
                     </div>
                     {/* Expanded in place, below the card's own content and
                         across its full width — the version table needs the
                         room, and hanging it off the right-hand action column
                         would box it into a third of the card. Click is stopped
-                        here: the card navigates, and a click on a version row
-                        must not be read as a click on the card behind it. */}
+                        here: a click on a version row must not bubble to the
+                        row behind it, which would collapse the panel it was
+                        aimed at. */}
                     {openVersionsFor === assessment.id && assessment.jd_id && (
                       <div onClick={(e) => e.stopPropagation()}>
                         <AssessmentVersionHistoryPanel
@@ -5996,6 +6332,43 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                              reads the mapped shape (status wording, the
                              revoked-invites seal, the clone flags). */
                           onCreateAssessment={handleCreateAssessmentForJobVersion}
+                            headerAction={
+                            /* The job version details popup, pinned to the
+                               table's top-right corner. Opens on the version
+                               LIST, from which any one version can be read;
+                               each row's own eye opens a single version
+                               directly.
+
+                               Gated on `jd_id` - a row with no job behind it
+                               (the `__unlinked__` case) has no job to open,
+                               and the panel simply gets no header control. */
+                            assessment.jd_id ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                e.stopPropagation();
+                                openJobDetails(
+                                assessment.jd_id!,
+                                assessment.job?.title || stripVersionFromTitle(assessment.title),
+                                );
+                                }}
+                                className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                                aria-label="View job version details"
+                                title="View job version details"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            ) : undefined
+                          }
+                          /* Opens the same popup the header eye opens, landing on
+                             THIS version rather than on the version list. */
+                          onViewJobVersion={(jobVersionId, jobVersion) =>
+                            openJobDetails(
+                              jobVersionId,
+                              assessment.job?.title || stripVersionFromTitle(assessment.title),
+                              jobVersion,
+                            )
+                          }
                           /* Invite / Track / Results and the same menu the card
                              carries, against THIS row's assessment. The lineage
                              rows come back raw from the API, so they run through
@@ -6158,6 +6531,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         />
       )}
       
+      {/* Job Version History popup - the Job Details page's own, unwrapped, so
+          the job read from this list is the one that page shows. Opened by the
+          Job List row's eye (on the version list) and by each Job Versions
+          row's eye (on that version). */}
+      {jobDetailsPopup && (
+        <JDVersionHistoryModal
+          isOpen
+          onClose={() => setJobDetailsPopup(null)}
+          jdId={jobDetailsPopup.jdId}
+          jdTitle={jobDetailsPopup.jdTitle}
+          initialVersionNumber={jobDetailsPopup.versionNumber ?? undefined}
+        />
+      )}
+
       {/* Edit Assessment Modal */}
       {showEditModal && selectedAssessmentForEdit && (
         <AssessmentEditModal
@@ -6196,7 +6583,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <span className="hidden sm:inline">Assessments - Invite Status Tracking</span>
                       <span className="sm:hidden">Invite Status</span>
                     </h2>
-                    <p className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{selectedAssessmentForTracking.title}</p>
+                    {/* What the popup is scoped to. A job names itself and
+                        says how many versions are in the table, so the reader
+                        knows the rows below span more than one assessment; a
+                        single assessment names itself, as before. */}
+                    {trackingJob ? (
+                      <p
+                        className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate"
+                        title={`${trackingJob.jobId ? trackingJob.jobId + ' - ' : ''}${trackingJob.jobTitle}`}
+                      >
+                        {trackingJob.jobId ? `${trackingJob.jobId} - ` : ''}
+                        {trackingJob.jobTitle}
+                        {' '}
+                        <span className="text-gray-400 dark:text-slate-600">
+                          - all job versions ({trackingJob.assessments.length} assessment
+                          {trackingJob.assessments.length === 1 ? '' : 's'})
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{selectedAssessmentForTracking.title}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -6337,7 +6743,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <p className="text-xs sm:text-sm">
                     {trackingHasActiveFilters
                       ? 'No invitations match the current filters.'
-                      : 'No invitations found for this assessment.'}
+                      : trackingJob
+                        ? 'No invitations found for any version of this job.'
+                        : 'No invitations found for this assessment.'}
                   </p>
                 </div>
               ) : (
@@ -6359,6 +6767,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <tr className="border-b border-gray-200 dark:border-slate-700">
                         <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
+                        {/* Job scope only: with invites from several
+                            assessments in one table, the row has to say which
+                            job version its assessment belongs to - that is the
+                            whole point of tracking a job rather than an
+                            assessment. Reading one assessment there is nothing
+                            to disambiguate, so neither column is there.
+
+                            TWO columns, not one compound cell: a job version
+                            and an assessment version are separate facts about
+                            the row - the job was republished, the assessment
+                            was re-authored - and they do not move together.
+                            Side by side in this order they still read as the
+                            relationship they are: this assessment version, on
+                            that job version. */}
+                        {trackingJob && (
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Job Version</th>
+                        )}
+                        {trackingJob && (
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assessment Version</th>
+                        )}
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                         {/* hidden md:table-cell mirrors this column's <td>. Without
@@ -6371,10 +6799,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             the Results page. Showing a "Coding Score" column
                             for a JD without a coding round produced a
                             permanent "—" column that confused recruiters. */}
-                        {(selectedAssessmentForTracking?.technical_enabled ?? true) && (
+                        {trackingTechEnabled && (
                           <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
                         )}
-                        {selectedAssessmentForTracking?.coding_enabled && (
+                        {trackingCodingEnabled && (
                           <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
                         )}
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider tf-sticky-col">Actions</th>
@@ -6443,6 +6871,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {invitation.candidate_display_id || '-'}
                               </span>
                             </td>
+                            {/* The job version this invite's assessment was
+                                built against - the version panel's own blue
+                                chip, so V2 reads the same wherever a recruiter
+                                meets it. */}
+                            {trackingJob && (
+                              <td className="py-3 px-4 align-top">
+                                <VersionChip kind="job" version={invitation._jd_version} />
+                              </td>
+                            )}
+                            {/* The assessment version, in the panel's cyan -
+                                the version and nothing else. The assessment's
+                                own id sat under it and was noise in a column
+                                asked for a version; the assessment is named in
+                                the row's actions and on the page it opens. */}
+                            {trackingJob && (
+                              <td className="py-3 px-4 align-top">
+                                <VersionChip kind="assessment" version={invitation._assessment_version} />
+                              </td>
+                            )}
                             <td className="py-3 px-4 align-top">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm flex-shrink-0">
@@ -6552,7 +6999,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 treat its absence as "show the score if it
                                 exists" so the popup keeps parity with the
                                 Results page. */}
-                            {(selectedAssessmentForTracking?.technical_enabled ?? true) && (() => {
+                            {trackingTechEnabled && (() => {
                               const techReady =
                                 invitation.technical_score != null
                                 && invitation.scoring_status !== 'processing'
@@ -6574,7 +7021,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 </td>
                               );
                             })()}
-                            {selectedAssessmentForTracking?.coding_enabled && (() => {
+                            {trackingCodingEnabled && (() => {
                               const codingReady =
                                 invitation.coding_score != null
                                 && invitation.scoring_status !== 'processing'

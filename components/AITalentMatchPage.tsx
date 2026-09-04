@@ -3134,7 +3134,10 @@ export default function AITalentMatchPage({
                           )}
                           <JDVersionHistory jdId={item.jobId} version={jobData?.currentVersion} />
                         </div>
-                        <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1 group-hover:text-brand-blue transition-colors">
+                        <h3
+                          className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1 truncate group-hover:text-brand-blue transition-colors"
+                          title={item.jobTitle}
+                        >
                           {item.jobTitle}
                         </h3>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
