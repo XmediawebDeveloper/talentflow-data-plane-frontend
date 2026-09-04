@@ -175,6 +175,12 @@ export interface JDExtractedParams {
   salary_max?: number | null;
   salary_currency?: string;
   compensation_type?: 'yearly' | 'monthly' | 'hourly' | 'daily';
+  /** True when salary_min/salary_max are null because the JD states a mixed-period
+   *  salary ("12,000 per month to 4 LPA") that the backend deliberately left
+   *  unbounded, rather than because extraction simply found no salary at all. Used
+   *  to override the edit-mode "keep the previous Salary boxes on a null" fallback in
+   *  JDCreation.tsx, which otherwise cannot tell the two cases apart. */
+  salary_mixed_period?: boolean;
   must_have_comments?: string[];
   nice_to_have_comments?: string[];
   // "Mandatory" flags returned by the AI extraction endpoint indicating which
@@ -193,6 +199,9 @@ export interface JDGenerateResponse {
   title: string;
   description: string;
   extracted_params?: JDExtractedParams;
+  /** Set when the Job Title names a different tech stack than the AI Prompt's
+   *  requirements - see SSECompleteEvent in sseClient.ts. */
+  role_mismatch_warning?: string;
 }
 
 export interface JDTitleValidationResponse {
@@ -576,7 +585,8 @@ export const jdService = {
           callbacks.onComplete({
             title: data.title,
             description: data.description,
-            extracted_params: data.extracted_params
+            extracted_params: data.extracted_params,
+            role_mismatch_warning: data.role_mismatch_warning
           });
         },
         onError: callbacks.onError

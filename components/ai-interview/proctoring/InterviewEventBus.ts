@@ -17,6 +17,7 @@ export type ProctoringEventType =
   | 'multiple_voices'
   | 'camera_disabled'
   | 'microphone_disabled'
+  | 'microphone_switched'
   | 'camera_obstructed'
   | 'screenshot_attempt'
   | 'screen_recording_attempt'
@@ -70,6 +71,7 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   multiple_voices: 'Multiple voices detected. Please ensure you are alone.',
   camera_disabled: 'Camera has been disabled. Please enable your camera to continue.',
   microphone_disabled: 'Microphone has been disabled. Please enable your microphone.',
+  microphone_switched: 'Your microphone changed to another connected device.',
   camera_obstructed: 'Camera appears to be blocked. Please ensure your face is visible.',
   screenshot_attempt: 'Screenshot attempt detected. Screenshots are not allowed.',
   screen_recording_attempt: 'Screen recording detected. Recording is not allowed.',
@@ -112,6 +114,7 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'minor' | 'moderate' | 'severe
   // Severe (3 pts) — strong integrity signals
   camera_disabled:          'severe',
   microphone_disabled:      'severe',
+  microphone_switched:      'moderate',
   multiple_faces:           'severe',
   face_identity_changed:    'severe',
   voice_identity_changed:   'severe',

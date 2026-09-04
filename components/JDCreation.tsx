@@ -670,12 +670,23 @@ interface ExtractedData {
   educationRequired: boolean;
   experience: string;
   experienceRequired: boolean;
+  /** RS20: Job Hopping toggle. Auto-defaults from `experience` (>= 3 years -> true)
+   *  via the useEffect near parseExperienceYearsString, but the recruiter can
+   *  override it with the checkbox next to the Experience field. Whatever value
+   *  is on screen at save time is what gets sent as job_hopping_enabled -
+   *  editing Experience again afterwards recomputes and overwrites it. Optional
+   *  so the few places that build a partial ExtractedData literal before the
+   *  effect has run don't need to supply it. */
+  jobHoppingEnabled?: boolean;
   industryType: string;
   roleFamily?: string;
   roleFamilyConfidence?: number;
   industryTypeRequired: boolean;
   department: string;
-  allowOverqualified: boolean;
+  /** Required recruiter choice, not a plain default-off toggle: null means "not yet
+   *  answered" and blocks leaving Step 2 (see getValidationStatus/handlePublish). Only
+   *  true/false are valid saved values - null must never reach the save payload. */
+  allowOverqualified: boolean | null;
   employmentType: 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary';
   workModel: 'onsite' | 'remote' | 'hybrid' | 'field_based';
   salaryFrom: string;
@@ -1454,12 +1465,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     educationRequired: false,
     experience: '',
     experienceRequired: false,
+    jobHoppingEnabled: false,
     industryType: '',
     roleFamily: undefined,
     roleFamilyConfidence: undefined,
     industryTypeRequired: false,
     department: '',
-    allowOverqualified: false,
+    allowOverqualified: null,
     employmentType: 'full_time',
     workModel: 'onsite',
     salaryFrom: '',
@@ -1633,6 +1645,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     experience?: string;
     industryType?: string;
     salaryRange?: string;
+    allowOverqualified?: string;
   }>({});
   const [jobTitleServerValidationError, setJobTitleServerValidationError] = useState('');
   const [jobTitleServerValidatedValue, setJobTitleServerValidatedValue] = useState('');
@@ -2187,6 +2200,30 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       to: range.experienceMax !== undefined ? String(range.experienceMax) : '',
     };
   };
+
+  // RS20: Job Hopping auto-default, kept in sync with the backend's
+  // app/utils/job_hopping.py (same >= 3 years rule, same numeric-only
+  // comparison - no string/regex parsing, so it can't hit the decimal-parsing
+  // bug the old backend skip logic had). Recomputes live whenever the
+  // recruiter changes Experience, which is "always live-recompute": the
+  // checkbox below reflects the current experience-derived default unless the
+  // recruiter clicks it, and clicking it only holds until Experience next
+  // changes - there is no separate persisted "manual override" state.
+  const jobHoppingAutoDefault = (() => {
+    const { from, to } = parseExperienceYearsString(extractedData.experience);
+    const min = from === '' ? 0 : Number(from);
+    const max = to === '' ? 0 : Number(to);
+    return Math.max(min, max) >= 3;
+  })();
+
+  useEffect(() => {
+    setExtractedData(prev =>
+      prev.jobHoppingEnabled === jobHoppingAutoDefault
+        ? prev
+        : { ...prev, jobHoppingEnabled: jobHoppingAutoDefault }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extractedData.experience]);
 
   const deriveExperienceCodeFromYears = (min?: number | null, max?: number | null): string => {
     const value =
@@ -2808,12 +2845,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Preserved only in edit mode, exactly like workModel/education/industryType above:
         // a FRESH extraction replaces Step 2 (see forceFreshExtraction), so it must be able
         // to replace a bound with nothing.
+        //
+        // EXCEPT when the backend says salary_mixed_period: true - the JD states a
+        // mixed-period salary ("12,000 per month to 4 LPA") and null here is a
+        // CONFIDENT answer that no single bound can be stated, not "extraction found
+        // nothing." Falling back to `prev` in that case left a stale min/max sitting
+        // in the Salary boxes (and, on save, in the JD) for exactly the salaries the
+        // backend had deliberately left unbounded.
         salaryFrom: params.salary_min != null
           ? (sanitizeExtractedSalary(params.salary_min) || '')
-          : (isEditMode ? (prev.salaryFrom || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (prev.salaryFrom || '') : ''),
         salaryTo: params.salary_max != null
           ? (sanitizeExtractedSalary(params.salary_max) || '')
-          : (isEditMode ? (prev.salaryTo || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (prev.salaryTo || '') : ''),
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || prev.salaryCurrency),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
         // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
@@ -2825,7 +2869,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           city: loc.state ? `${loc.city}, ${loc.state}` : (loc.city || ''),
           radius: '50'
         })) : (isEditMode ? prev.locations : []),
-        allowOverqualified: isEditMode ? prev.allowOverqualified : false,
+        allowOverqualified: isEditMode ? prev.allowOverqualified : null,
         // Forced OFF: the 'Requires a hands-on coding assessment' control was removed
         // from JD creation, so nothing can clear a wrongly-extracted true. Leaving it
         // set would let jd_analyzer.validate_for_assessment() block assessment creation
@@ -2967,6 +3011,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           // Then set final content
           if (response?.description) {
             setGeneratedJD(response.description);
+
+            // Job Title names a different tech stack than the AI Prompt's own
+            // requirements (e.g. title "Frontend Developer" with "Java, Spring
+            // Boot, Microservices" as requirements) - see
+            // detect_title_tech_stack_mismatch in openai_service.py. The
+            // description itself was still generated with the Job Title kept as
+            // the source of truth; this only warns the recruiter to double-check
+            // before publishing.
+            if (response.role_mismatch_warning) {
+              toast.warning({
+                title: 'Job Title / Requirements Mismatch',
+                description: response.role_mismatch_warning,
+              });
+            }
 
             // If the stream finished AFTER the user already advanced past Step 1
             // (e.g. they clicked Next as soon as text streaming completed), do NOT
@@ -3545,6 +3603,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience: experienceValue || (isEditMode ? extractedData.experience : ''),
         // Use API's mandatory flag for experience
         experienceRequired: params.experience_mandatory || false,
+        // RS20: computed here (not left to the useEffect) because the save right
+        // after extraction reads this `extraction` object directly, before state
+        // has re-rendered - same reason `experience` above resolves its own
+        // fallback instead of reading extractedData.experience blindly.
+        jobHoppingEnabled: (() => {
+          const resolvedExperience = experienceValue || (isEditMode ? extractedData.experience : '');
+          const range = inferExperienceRangeFromCustomValue(resolvedExperience);
+          return Math.max(range.experienceMin ?? 0, range.experienceMax ?? 0) >= 3;
+        })(),
         industryType: industryValue, // Only from extraction, no fallback - user must select if not extracted
         // Use API's mandatory flag for industry
         industryTypeRequired: params.industry_mandatory || false,
@@ -3554,7 +3621,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // and every extracted JD saved with department = null. Same edit-mode fallback
         // as the fields around it, so a recruiter's own value is never overwritten.
         department: params.department || (isEditMode ? extractedData.department : ''),
-        allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
+        allowOverqualified: isEditMode ? extractedData.allowOverqualified : null,
         employmentType: normalizeExtractedEmploymentType(params.job_type) || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: (params.work_mode as 'onsite' | 'remote' | 'hybrid' | 'field_based') || (isEditMode ? extractedData.workModel : 'onsite'),
         // Pre-fill salary from AI extraction
@@ -3567,12 +3634,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Preserved only in edit mode, exactly like workModel/education/industryType above:
         // a FRESH extraction replaces Step 2 (see forceFreshExtraction), so it must be able
         // to replace a bound with nothing.
+        //
+        // EXCEPT when the backend says salary_mixed_period: true - the JD states a
+        // mixed-period salary ("12,000 per month to 4 LPA") and null here is a
+        // CONFIDENT answer that no single bound can be stated, not "extraction found
+        // nothing." Falling back to the previous value in that case left a stale
+        // min/max sitting in the Salary boxes (and, on save, in the JD) for exactly
+        // the salaries the backend had deliberately left unbounded.
         salaryFrom: params.salary_min != null
           ? (sanitizeExtractedSalary(params.salary_min) || '')
-          : (isEditMode ? (extractedData.salaryFrom || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (extractedData.salaryFrom || '') : ''),
         salaryTo: params.salary_max != null
           ? (sanitizeExtractedSalary(params.salary_max) || '')
-          : (isEditMode ? (extractedData.salaryTo || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (extractedData.salaryTo || '') : ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || extractedData.salaryCurrency),
         // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
@@ -3777,6 +3851,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extraction.educationRequired || false,
         industry_mandatory: extraction.industryTypeRequired || false,
         location_mandatory: extraction.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extraction.jobHoppingEnabled ?? true,
       };
 
       console.log('[TalentFlow] Saving JD with coding fields:', {
@@ -4632,6 +4708,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       experience?: string;
       industryType?: string;
       locations?: string;
+      allowOverqualified?: string;
     } = {};
 
     // Must have at least one must-have skill
@@ -4663,6 +4740,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (extractedData.locationsRequired && (!extractedData.locations || extractedData.locations.length === 0)) {
       missingFields.push('At least one Location');
       errors.locations = 'Location is marked as required but no locations added';
+    }
+
+    // Allow Overqualified Candidates is a required Yes/No choice - the recruiter must
+    // pick one before proceeding. null means not yet answered.
+    if (extractedData.allowOverqualified === null || extractedData.allowOverqualified === undefined) {
+      missingFields.push('Allow Overqualified Candidates (Yes/No)');
+      errors.allowOverqualified = 'Please select Yes or No for Allow Overqualified Candidates';
     }
 
     // Set validation errors for inline display
@@ -4912,6 +4996,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extractedData.educationRequired || false,
         industry_mandatory: extractedData.industryTypeRequired || false,
         location_mandatory: extractedData.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extractedData.jobHoppingEnabled ?? true,
       };
 
       console.log('[TalentFlow] Saving JD at review stage with coding fields:', {
@@ -5000,6 +5086,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const industryValue = extractedData.industryType?.trim() || '';
     if (!industryValue) {
       missingFields.push('Industry Type');
+    }
+
+    // Allow Overqualified Candidates is a required Yes/No choice, not a default-off
+    // toggle - the recruiter must pick one before Step 2 can be left. null is "not
+    // yet answered"; true/false are both valid, complete answers.
+    if (extractedData.allowOverqualified === null || extractedData.allowOverqualified === undefined) {
+      missingFields.push('Allow Overqualified Candidates (Yes/No)');
     }
 
     // Validate salary range
@@ -5250,6 +5343,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extractedData.educationRequired || false,
         industry_mandatory: extractedData.industryTypeRequired || false,
         location_mandatory: extractedData.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extractedData.jobHoppingEnabled ?? true,
       };
 
       console.log('[DEBUG] handleConfirmPublish - editingId:', editingId, 'isEditingDraft:', isEditingDraft);
@@ -5553,6 +5648,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extractedData.educationRequired || false,
         industry_mandatory: extractedData.industryTypeRequired || false,
         location_mandatory: extractedData.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extractedData.jobHoppingEnabled ?? true,
       };
 
       console.log('[DEBUG] SAVING JD - Mandatory flags being sent:', {
@@ -5806,7 +5903,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           niceToHaveComments: effectiveEditingJD.nice_to_have_comments || [],
           certifications: effectiveEditingJD.certifications || [],
           domainKeywords: effectiveEditingJD.domain_keywords || [],
-          allowOverqualified: effectiveEditingJD.allow_overqualified ?? false,
+          // Preserve the recruiter's actual saved answer; only a JD that genuinely
+          // never had this field set (predates the column) falls back to null,
+          // which re-triggers the required-choice gate on this edit.
+          allowOverqualified: effectiveEditingJD.allow_overqualified ?? null,
           employmentType: (effectiveEditingJD.employment_type as ExtractedData['employmentType']) || 'full_time',
           workModel: (effectiveEditingJD.remote_type as ExtractedData['workModel']) || 'onsite',
           locations: effectiveEditingJD.locations?.map(loc => ({
@@ -6949,6 +7049,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {validationErrors.experience}
                     </p>
                   )}
+                  {/* RS20: Job Hopping toggle. Defaults from Experience (>= 3 years ->
+                      on) and re-defaults every time Experience changes; the recruiter
+                      can override it here for this save only. */}
+                  <label className={`flex items-center gap-1.5 mt-1 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(extractedData.jobHoppingEnabled)}
+                      onChange={(e) => {
+                        setExtractedData(prev => ({ ...prev, jobHoppingEnabled: e.target.checked }));
+                        markExtractedDataModified();
+                      }}
+                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                      disabled={isRegenerating}
+                    />
+                    <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                      Evaluate Job Hopping
+                    </span>
+                  </label>
                 </div>
 
                 {/* Education field REMOVED 2026-08-20.
@@ -8234,24 +8352,61 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
-              {/* Allow Overqualified Candidates */}
-              <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-                <div className="flex items-center justify-between">
+              {/* Allow Overqualified Candidates - REQUIRED choice, not a default-off
+                  toggle. Scoring reads this (evaluate_experience_level in
+                  odoo_scoring.py) so an unanswered field is not a safe silent default
+                  in either direction - the recruiter must pick Yes or No before
+                  leaving Step 2 (enforced in getValidationStatus/handlePublish). */}
+              <div className={`mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg border ${
+                validationErrors.allowOverqualified
+                  ? 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-800'
+                  : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
+              }`}>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
-                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">Allow Overqualified Candidates</h3>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Accept candidates who exceed the required qualifications</p>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+                      Allow Overqualified Candidates <span className="text-red-500">*</span>
+                    </h3>
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                      Should candidates who significantly exceed this role's experience requirement be scored favorably, or treated as a mismatch?
+                    </p>
                   </div>
-                  <label className={`relative inline-flex items-center ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(extractedData.allowOverqualified)}
-                      onChange={(e) => { setExtractedData(prev => ({ ...prev, allowOverqualified: e.target.checked })); markExtractedDataModified(); }}
-                      className="sr-only peer"
-                      disabled={isRegenerating}
-                    />
-                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-blue/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
-                  </label>
+                  <div className="flex items-center gap-2" role="radiogroup" aria-label="Allow Overqualified Candidates">
+                    {([
+                      { label: 'Yes', value: true },
+                      { label: 'No', value: false },
+                    ] as const).map((opt) => {
+                      const isSelected = extractedData.allowOverqualified === opt.value;
+                      return (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          disabled={isRegenerating}
+                          onClick={() => {
+                            setExtractedData(prev => ({ ...prev, allowOverqualified: opt.value }));
+                            setValidationErrors(prev => ({ ...prev, allowOverqualified: undefined }));
+                            markExtractedDataModified();
+                          }}
+                          className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                            isSelected
+                              ? 'bg-brand-blue text-white border-brand-blue'
+                              : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40'
+                          } ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+                {validationErrors.allowOverqualified && (
+                  <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {validationErrors.allowOverqualified}
+                  </p>
+                )}
               </div>
 
               {/* Certifications & Domain Keywords - HIDDEN as per requirement */}
@@ -8514,9 +8669,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             <div className="flex flex-col-reverse sm:flex-row justify-between items-stretch sm:items-center mt-6 sm:mt-8 gap-3 sm:gap-0">
               <div className="flex gap-2 sm:gap-3">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setStep('create');
                     setHasProceededToExtract(false);  // Re-enable regenerate button when going back
+
+                    // Persist the stage reversion immediately - the debounced (2s) JD06
+                    // autosave effect also does this, but a refresh that lands before the
+                    // debounce fires would otherwise reload the JD at 'extract' (the stage
+                    // Next saved to the server) instead of 'create'.
+                    if (editingId) {
+                      try {
+                        await jdService.update(editingId, { creation_stage: 'create' });
+                        ensureJDCreationUrl(editingId, 'create');
+                      } catch (error) {
+                        console.error('[TalentFlow] Failed to save create stage on Back:', error);
+                      }
+                    }
                   }}
                   className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
                 >
