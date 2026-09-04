@@ -85,3 +85,57 @@ export function deviceMissingMessage(missing: Exclude<MissingDevice, null>): str
     `${itThem}, then try again — the interview cannot start without ` +
     `${missing === 'both' ? 'both' : itThem}.`;
 }
+
+/* ── Verified device set ───────────────────────────────────────────────────
+ * The microphones that were present and working when the candidate passed the
+ * system check. The interview pins ONE device and treats a change as a
+ * proctoring event, but a change to a mic from THIS set is an acceptable
+ * fallback: the candidate had it connected before the interview began, so it
+ * cannot be a device introduced mid-interview to reroute audio.
+ *
+ * Anything not in this set — a virtual audio cable plugged in after the start,
+ * say — still pauses the interview exactly as before.
+ *
+ * Stored per interview token in sessionStorage: it must survive the reload
+ * between the pre-interview steps and the interview UI, but must NOT leak
+ * across interviews or browser sessions.
+ */
+const verifiedAudioKey = (token: string) => `tf_verified_audio_inputs_${token}`;
+
+/** Device ids of every audio input currently enumerable (labels need permission). */
+export async function enumerateAudioInputIds(): Promise<string[]> {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices
+      .filter(d => d.kind === 'audioinput' && d.deviceId
+        && d.deviceId !== 'default' && d.deviceId !== 'communications')
+      .map(d => d.deviceId);
+  } catch {
+    return [];
+  }
+}
+
+/** Record the mics verified at system-check time, for the interview to trust later. */
+export function saveVerifiedAudioInputs(token: string, ids: string[]): void {
+  try {
+    if (typeof window === 'undefined' || ids.length === 0) return;
+    window.sessionStorage.setItem(verifiedAudioKey(token), JSON.stringify(ids));
+  } catch { /* storage unavailable — the interview just falls back to strict pinning */ }
+}
+
+/**
+ * The mics verified at system-check time. An EMPTY set means "unknown", and
+ * every caller must treat that as "no fallback allowed" — failing closed, so a
+ * storage failure can never silently weaken the device pinning.
+ */
+export function loadVerifiedAudioInputs(token: string): Set<string> {
+  try {
+    if (typeof window === 'undefined') return new Set();
+    const raw = window.sessionStorage.getItem(verifiedAudioKey(token));
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? new Set(parsed.filter((x): x is string => typeof x === 'string')) : new Set();
+  } catch {
+    return new Set();
+  }
+}
