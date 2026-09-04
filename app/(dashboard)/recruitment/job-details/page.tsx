@@ -6,10 +6,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import JobDetailView from '@/components/JobDetailView';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
+import ArchiveJobModal from '@/components/ArchiveJobModal';
 import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
+import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { toast } from 'sonner';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -413,13 +415,33 @@ function JobDetailsContent() {
     }
   };
 
-  const handleArchive = async (job: Job) => {
+  /* Archiving asks first, exactly as it does on the Job Openings list — the
+     same `ArchiveJobModal`, so the consequences a recruiter reads do not depend
+     on which screen they started from. `handleArchive` is what
+     `JobDetailView` receives, so it can only ever open the confirm. */
+  const [archiveDialog, setArchiveDialog] = useState<{
+    open: boolean;
+    job: Job | null;
+    busy: boolean;
+  }>({ open: false, job: null, busy: false });
+
+  const handleArchive = (job: Job) => {
+    setArchiveDialog({ open: true, job, busy: false });
+  };
+
+  const confirmArchive = async () => {
+    const job = archiveDialog.job;
+    if (!job) return;
+    setArchiveDialog(prev => ({ ...prev, busy: true }));
     try {
       await jdService.updateStatus(job.id, 'archived');
       toast.success(`"${job.title}" has been archived`);
+      setArchiveDialog({ open: false, job: null, busy: false });
       fetchJobDetails();
     } catch (error) {
       toast.error('Failed to archive job');
+      /* Left open on failure — closing it would look like the archive worked. */
+      setArchiveDialog(prev => ({ ...prev, busy: false }));
     }
   };
 
@@ -551,6 +573,15 @@ function JobDetailsContent() {
           </div>
         </div>
       )}
+
+      {/* Archive confirm — the same component the Job Openings list renders. */}
+      <ArchiveJobModal
+        isOpen={archiveDialog.open}
+        jobLabel={archiveDialog.job ? formatJobVersionLabel(archiveDialog.job) : ''}
+        isLoading={archiveDialog.busy}
+        onConfirm={confirmArchive}
+        onCancel={() => setArchiveDialog({ open: false, job: null, busy: false })}
+      />
 
       <JDEditBlockedModal
         open={!!editBlock}

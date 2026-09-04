@@ -613,3 +613,20 @@ export const resolveVersionHistoryRows = (
       isLatest: v.is_latest_version || (v.version_number ?? 1) >= latestNumber,
     }));
 };
+
+/**
+ * A job title cut to fit a table column: at most 25 characters, with an
+ * ellipsis standing in for the rest.
+ *
+ * CSS truncation was doing this by column width, so the same job read as a
+ * different length in every table it appeared in, and a narrow viewport could
+ * cut it to a couple of words. A character budget is the same everywhere.
+ *
+ * Pair it with a `title` attribute carrying the full string — this hides text,
+ * so there has to be a way to see it.
+ */
+export const truncateJobTitle = (title?: string | null, max = 25): string => {
+  if (!title) return '-';
+  const trimmed = title.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max).trimEnd()}...` : trimmed;
+};

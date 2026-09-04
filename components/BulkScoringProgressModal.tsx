@@ -1,10 +1,11 @@
-import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, SlidersHorizontal, ChevronDown, Eye, FileText } from 'lucide-react';
+import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, SlidersHorizontal, ChevronDown, Eye } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import ListPagination from '@/components/ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
+import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 
 // Utility function to format date to IST (Asia/Kolkata timezone)
 function formatDateTimeIST(date: Date | string | undefined): { date: string; time: string } {
@@ -47,7 +48,7 @@ export interface ScoringProgressItem {
 // number and the verdict beside it read as one statement.
 const SCORE_TEXT_CLASS: Record<string, string> = {
   'Exact Match': 'text-base font-semibold text-green-700',
-  'Partial Match': 'text-base font-semibold text-[#ef7213]',
+  'Partial Match': 'text-base font-semibold text-brand-orange-deep',
   'No Match': 'text-base font-semibold text-red-700',
 };
 
@@ -69,6 +70,17 @@ interface BulkScoringProgressModalProps {
   showScoredByColumn?: boolean;
   onRetryFailed?: (item: ScoringProgressItem) => Promise<void>; // Added: Retry failed individual
   onMinimize?: () => void; // Called when user minimizes — parent should call setMainPanelOpen(false)
+  /**
+   * Re-pull the rows behind this popup. Renders a refresh button beside close
+   * when given, and nothing when not — a button that cannot refresh anything is
+   * worse than no button.
+   *
+   * The popup renders whatever `progressData` its host holds, and a run that
+   * finished while it was minimised (or a score corrected elsewhere) leaves that
+   * array stale with no way to ask for the current state short of closing and
+   * reopening.
+   */
+  onRefresh?: () => void | Promise<void>;
   minimized?: boolean; // Allow parent to control minimized state (for restore)
 }
 
@@ -82,6 +94,7 @@ export default function BulkScoringProgressModal({
   showScoredByColumn = false,
   onRetryFailed,
   onMinimize,
+  onRefresh,
   minimized = false,
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
@@ -103,6 +116,7 @@ export default function BulkScoringProgressModal({
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
   const [bulkRetrying, setBulkRetrying] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [isMinimizedInternal, setIsMinimizedInternal] = useState(false);
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [completedTimes, setCompletedTimes] = useState<number[]>([]);
@@ -238,13 +252,20 @@ export default function BulkScoringProgressModal({
       ? progressData.filter(item => item.jobId === filterByJobId)
       : progressData;
     if (scoped.length === 0) return null;
-    const codes = new Set(scoped.map(item => item.jobCode || item.jobId));
-    if (codes.size !== 1) return null;
+    /* Grouped on the internal id, which every row carries — the readable code
+       is what gets DISPLAYED, but it is optional, so grouping on it would treat
+       a whole run of code-less rows as one anonymous job. */
+    const ids = new Set(scoped.map(item => item.jobId));
+    if (ids.size !== 1) return null;
     const versions = new Set(
       scoped.map(item => item.jobVersion).filter((v): v is number => v !== undefined)
     );
     return {
-      code: scoped[0].jobCode || scoped[0].jobId,
+      /* The JD's human code only. It used to fall back to `jobId`, which is an
+         internal uuid — so a caller that did not carry the code put
+         "2f6a0dc3-1fbc-49dc-be42-6728a9010aaa" in the header where "JD-164"
+         belongs. No code means no chip. */
+      code: scoped[0].jobCode || null,
       title: scoped[0].jobTitle,
       /* One version names itself; several mean the popup is the whole job,
          which is exactly what "All Versions" says. */
@@ -394,7 +415,7 @@ export default function BulkScoringProgressModal({
         displayText = 'Exact Match';
         break;
       case 'Partial Match':
-        badgeClass = 'bg-yellow-100 text-yellow-700 border-yellow-300';
+        badgeClass = 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/30';
         icon = <TrendingUp className="w-3 h-3" />;
         displayText = 'Partial Match';
         break;
@@ -420,9 +441,23 @@ export default function BulkScoringProgressModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-7xl h-[calc(100dvh-1.5rem)] sm:h-[calc(100dvh-3rem)] max-h-[880px] flex flex-col overflow-hidden">
+        {/* A DEFINITE height, not just a max-height. `flex-1` can only hand out
+            space a parent actually has, and a content-sized dialog has none to
+            hand out — so the table region either collapsed to a couple of rows
+            with dead space under the pager, or, with a pixel floor to stop that,
+            refused to shrink and overflowed the dialog. Overflowing is what put
+            the rows and the scrollbar under everything below them:
+            `TableScrollbars` measures each shell with `getBoundingClientRect()`
+            and paints its bar as a body-level overlay, which does not clip to
+            ancestors, so a shell taller than the dialog draws a bar taller than
+            the dialog too.
+
+            Capped at 880px so it does not stretch absurdly on a tall monitor;
+            `h` and `max-h` together still resolve to a definite height. */}
         {/* Header with Overall Progress */}
-        <div className="p-4 sm:p-5 border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 rounded-t-2xl shrink-0">
+        <div className="border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 rounded-t-2xl shrink-0">
+          <div className="p-4 sm:p-5">
           {/* Top row: icon+title and action buttons */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -444,7 +479,7 @@ export default function BulkScoringProgressModal({
                       Bulk scoring progress
                     </span>
                   )}
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 text-xs">
+                  <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                     {completedCount + skippedCount + failedCount}/{totalResumes} resumes processed
                   </span>
                 </div>
@@ -473,10 +508,29 @@ export default function BulkScoringProgressModal({
             {/* Action buttons - always visible */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {isAllComplete && (
-                <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-500/30 rounded-full text-xs font-medium">
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 ring-1 ring-green-200 dark:ring-green-500/30 rounded-full text-xs font-medium">
                   <CheckCircle2 className="w-3 h-3" />
                   Complete
                 </div>
+              )}
+              {onRefresh && (
+                <button
+                  onClick={async () => {
+                    if (refreshing) return;
+                    setRefreshing(true);
+                    try {
+                      await onRefresh();
+                    } finally {
+                      setRefreshing(false);
+                    }
+                  }}
+                  disabled={refreshing}
+                  className="w-8 h-8 flex items-center justify-center text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50"
+                  aria-label="Refresh"
+                  title="Refresh"
+                >
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                </button>
               )}
               <button
                 onClick={() => { setIsMinimizedInternal(true); onMinimize?.(); }}
@@ -486,13 +540,25 @@ export default function BulkScoringProgressModal({
               >
                 <Minus className="w-4 h-4" />
               </button>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
-                aria-label="Close modal"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              {/* Close appears only once every row has settled. While work is
+                  still queued or running, Minimise is the way out — closing
+                  mid-run reads as "cancel this", which it never did, and it
+                  dismisses the only place the run's results are shown.
+
+                  `|| totalResumes === 0` is not a nicety: `isAllComplete`
+                  requires `totalResumes > 0`, so without it a popup opened with
+                  no rows (the "Preparing…" state, or a run that yielded
+                  nothing) would have no close button at all and no rows that
+                  could ever settle to grow one. */}
+              {(isAllComplete || totalResumes === 0) && (
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 flex items-center justify-center text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                  aria-label="Close modal"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -511,29 +577,54 @@ export default function BulkScoringProgressModal({
               </div>
             )}
           </div>
+          </div>
+
+          {/* Progress bar, edge to edge under the header — the one place the
+              run's overall state is readable at a glance without counting.
+              Skipped rows count as processed: they are work that will not
+              happen, so leaving them out strands the bar short of the end on a
+              run that is finished. */}
+          <div className="h-1.5 w-full bg-gray-100 dark:bg-slate-800">
+            <div
+              className={`h-full transition-[width] duration-500 ease-out ${isAllComplete ? 'bg-green-500' : 'bg-brand-blue'}`}
+              style={{
+                width: `${totalResumes > 0
+                  ? Math.round(((completedCount + skippedCount + failedCount) / totalResumes) * 100)
+                  : 0}%`,
+              }}
+            />
+          </div>
         </div>
 
-        {/* Everything between the pinned header and footer scrolls as one
-            column. Without it, expanding the Filters panel (or simply a short
-            window) squeezed the table region below to a sliver and clipped
-            whatever was in it, since the shell itself is overflow-hidden. The
-            blocks below keep their natural height (shrink-0) and the table
-            region keeps a floor, so this only actually scrolls once the stack
-            no longer fits. */}
+        {/* With rows, nothing here overflows and this never actually scrolls:
+            the chips, filters and pager keep their natural height (shrink-0)
+            and the table region takes exactly what is left, so the table shell
+            inside it is the dialog's only scroller. That matters beyond tidiness
+            — `TableScrollbars` redraws each shell's bar as a body-level overlay
+            measured from `getBoundingClientRect()`, and an overlay does not clip
+            to ancestors, so a shell resolving taller than its visible strip drew
+            a bar that ran on under the header and the footer.
+
+            It stays scrollable for the EMPTY state, which is shrink-0 and taller
+            than the region rows would have occupied; boxing that in clipped the
+            illustration and the button under it. */}
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-        {/* Stat cards - one per status, each a filter toggle. Card rather
-            than pill: the count is the thing being read, so it gets the size,
-            with the status as its label and a plain-language caption under
-            it. */}
-        <div className="px-3 sm:px-5 py-3 sm:py-4 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+        {/* Status chips — one per status, each still a filter toggle. Chips
+            rather than the six large cards this used to carry: the run's shape
+            is already in the header (the processed count and the bar), so this
+            row only has to name the buckets and stay out of the table's way.
+            Total is gone from here for the same reason — the header states it.
+
+            `Loader2` only spins while something is actually processing; a
+            permanently spinning icon on a finished run reads as still working. */}
+        <div className="px-3 sm:px-5 py-3 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             {[
-              { key: 'all', label: 'Total', caption: 'All resumes', count: totalResumes, icon: <FileText className="w-5 h-5" />, iconClass: 'bg-brand-blue/10 text-brand-blue' },
-              { key: 'queued', label: 'Queue', caption: 'Waiting to start', count: queuedCount, icon: <Clock className="w-5 h-5" />, iconClass: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300' },
-              { key: 'in-progress', label: 'Processing', caption: 'In progress', count: inProgressCount, icon: <Loader2 className={`w-5 h-5 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />, iconClass: 'bg-brand-blue/10 text-brand-blue' },
-              { key: 'completed', label: 'Done', caption: 'Completed', count: completedCount, icon: <CheckCircle2 className="w-5 h-5" />, iconClass: 'bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400' },
-              { key: 'skipped', label: 'Skipped', caption: 'Already scored', count: skippedCount, icon: <CheckCircle2 className="w-5 h-5" />, iconClass: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400' },
-              { key: 'failed', label: 'Failed', caption: 'Needs attention', count: failedCount, icon: <XCircle className="w-5 h-5" />, iconClass: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' },
+              { key: 'queued', label: 'Queue', count: queuedCount, icon: <Clock className="w-4 h-4" />, tone: 'text-blue-600 dark:text-blue-300' },
+              { key: 'in-progress', label: 'Processing', count: inProgressCount, icon: <Loader2 className={`w-4 h-4 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />, tone: 'text-brand-blue' },
+              { key: 'completed', label: 'Done', count: completedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-green-600 dark:text-green-400' },
+              { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-amber-600 dark:text-amber-400' },
+              { key: 'failed', label: 'Failed', count: failedCount, icon: <XCircle className="w-4 h-4" />, tone: 'text-red-600 dark:text-red-400' },
             ].map(stat => {
               const isActive = statusFilter === stat.key;
               return (
@@ -541,27 +632,16 @@ export default function BulkScoringProgressModal({
                   key={stat.key}
                   onClick={() => setStatusFilter(isActive ? 'all' : stat.key)}
                   aria-pressed={isActive}
-                  title={
-                    stat.key === 'all'
-                      ? 'Show every resume in this run'
-                      : isActive
-                        ? `Showing ${stat.label} only - click to clear`
-                        : `Show ${stat.label} only`
-                  }
-                  className={`flex items-center gap-3 rounded-xl border p-2.5 sm:p-3 text-left transition-all hover:shadow-md ${
+                  title={isActive ? `Showing ${stat.label} only - click to clear` : `Show ${stat.label} only`}
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-all ${
                     isActive
                       ? 'border-brand-blue/40 ring-2 ring-brand-blue/20 bg-brand-blue/[0.05]'
-                      : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30'
+                      : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:shadow-sm'
                   }`}
                 >
-                  <span className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${stat.iconClass}`}>
-                    {stat.icon}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 truncate">{stat.label}</span>
-                    <span className="block text-xl sm:text-2xl font-bold leading-tight text-gray-900 dark:text-slate-50">{stat.count}</span>
-                    <span className="block text-[11px] text-gray-500 dark:text-slate-500 truncate">{stat.caption}</span>
-                  </span>
+                  <span className={`flex-shrink-0 ${stat.tone}`}>{stat.icon}</span>
+                  <span className="text-gray-600 dark:text-slate-400">{stat.label}:</span>
+                  <span className="font-bold text-gray-900 dark:text-slate-50 tabular-nums">{stat.count}</span>
                 </button>
               );
             })}
@@ -794,7 +874,11 @@ export default function BulkScoringProgressModal({
             dropped and the region above scrolls it instead. */}
         <div className={`flex flex-col px-3 sm:px-5 pb-3 sm:pb-5 ${
           filteredData.length > 0
-            ? 'flex-1 min-h-[420px] overflow-hidden'
+            /* No pixel floor is needed now the dialog has a real height: this
+               takes every pixel left after the header, chips, filters and
+               pager, which is both larger than any floor worth setting and
+               guaranteed to fit. */
+            ? 'flex-1 min-h-0 overflow-hidden'
             /* shrink-0, not flex-1: a flex child is free to shrink below its
                content, which is what let the empty state get squeezed and
                clipped instead of pushing the scroll region. */
@@ -841,7 +925,7 @@ export default function BulkScoringProgressModal({
                               <span className="font-mono text-xs font-semibold text-brand-blue">{item.jobCode || item.jobId}</span>
                             </td>
                             <td className="py-3 px-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900 dark:text-slate-50">{item.jobTitle || '-'}</div>
+                              <div className="text-sm text-gray-900 dark:text-slate-50" title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</div>
                             </td>
                             <td className="py-3 px-4 whitespace-nowrap">
                               {item.jobVersion !== undefined ? (
@@ -860,12 +944,15 @@ export default function BulkScoringProgressModal({
                             {item.email && (
                               <div className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[240px]">{item.email}</div>
                             )}
-                            {/* The job title only doubles as a caption here when
-                                it has no column of its own. */}
-                            {item.jobTitle && !filterByJobId && !showJobColumns && (
+                            {/* The job title doubles as a caption ONLY for a table
+                                that spans several jobs. One job means the header
+                                already names it, so repeating it on every row
+                                pushed the candidate's email out of the space it
+                                belongs in. */}
+                            {item.jobTitle && !filterByJobId && !showJobColumns && !scopedToJobTitle && (
                               <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
                                 <Target className="w-3 h-3 flex-shrink-0" />
-                                <span className="truncate max-w-[260px]">{item.jobTitle}</span>
+                                <span title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</span>
                               </div>
                             )}
                           </div>
@@ -976,7 +1063,7 @@ export default function BulkScoringProgressModal({
                         {showJobColumns && (
                           <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500 mb-0.5">
                             <span className="font-mono font-semibold text-brand-blue">{item.jobCode || item.jobId}</span>
-                            <span className="truncate">{item.jobTitle}</span>
+                            <span title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</span>
                             {item.jobVersion !== undefined && (
                               <span className="inline-flex items-center px-1.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30">
                                 v{item.jobVersion}
@@ -988,10 +1075,10 @@ export default function BulkScoringProgressModal({
                         {item.email && (
                           <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{item.email}</div>
                         )}
-                        {item.jobTitle && !filterByJobId && !showJobColumns && (
+                        {item.jobTitle && !filterByJobId && !showJobColumns && !scopedToJobTitle && (
                           <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 mt-0.5">
                             <Target className="w-3 h-3 flex-shrink-0" />
-                            <span className="truncate">{item.jobTitle}</span>
+                            <span title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</span>
                           </div>
                         )}
                       </div>
@@ -1142,8 +1229,9 @@ export default function BulkScoringProgressModal({
 
         </div>
 
-        {/* No footer: the header's X closes this, and a footer bar of its own
-            was only ever repeating that while eating height the table needs. */}
+        {/* No footer. The header's X is the only close, and a footer bar of
+            its own repeated it while taking height off the table — which is
+            what pushed the rows and the overlay scrollbar under it. */}
       </div>
     </div>
   );

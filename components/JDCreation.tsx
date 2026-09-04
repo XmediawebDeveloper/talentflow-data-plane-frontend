@@ -1,6 +1,7 @@
 'use client';
 
 import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, ArrowRight, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Briefcase } from 'lucide-react';
+import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -9206,39 +9207,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         </div>
       </div>
 
-      {/* Unsaved Changes Dialog */}
-      <Dialog open={showUnsavedDialog} onOpenChange={(open) => !open && handleCancelDialog()}>
-        <DialogContent className="p-4 sm:p-6 gap-3 sm:gap-4">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Unsaved Changes</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
-              You have unsaved changes. Would you like to save them as a draft before leaving?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button
-              onClick={handleDiscardAndNavigate}
-              className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
-            >
-              Discard Changes
-            </button>
-            <button
-              onClick={handleSaveAndNavigate}
-              disabled={isSavingDraft}
-              className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
-            >
-              {isSavingDraft ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Draft'
-              )}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Unsaved Changes — the shared prompt, so this flow and AI Interview
+          config cannot drift apart in wording or in what the buttons do. */}
+      <UnsavedChangesModal
+        isOpen={showUnsavedDialog}
+        onClose={handleCancelDialog}
+        onDiscard={handleDiscardAndNavigate}
+        onSave={handleSaveAndNavigate}
+        isSaving={isSavingDraft}
+      />
 
       {/* Cancel JD Creation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={(open) => !open && setShowCancelDialog(false)}>

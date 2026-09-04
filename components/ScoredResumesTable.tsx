@@ -1,4 +1,6 @@
 import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, Target, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronDown, ChevronRight, Video, BarChart3 } from 'lucide-react';
+import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult } from '@/lib/utils/matchStatus';
+import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
@@ -140,6 +142,15 @@ interface ScoredResumesTableProps {
   onSelectAll?: (resumeIds: string[]) => void;
   isGlobalView?: boolean; // Show job title column in global view
   /**
+   * The heading above the search box. Defaults to "Scored Resumes".
+   *
+   * The Resume Scoring page shows six different lists through this one table —
+   * per-job, per-candidate, all events, and one per match verdict — and a fixed
+   * heading named none of them, so the card looked identical whichever pill was
+   * selected. The host passes the selected section's name instead.
+   */
+  title?: string;
+  /**
    * Cluster rows by candidate email (one visual group per person) rather
    * than the flat, mixed-candidate order the rows arrive in. Meaningful only
    * when there's more than one row per person to begin with — i.e. a
@@ -188,6 +199,7 @@ export default function ScoredResumesTable({
   onSelectResume,
   onSelectAll,
   isGlobalView = false,
+  title = 'Scored Resumes',
   groupByEmail = false,
   onScoreResumes,
   onInviteAIInterview,
@@ -988,7 +1000,11 @@ Best regards`);
     if (col.id === 'jobTitle') {
       return (
         <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-          <div className="text-sm text-gray-700 font-medium">{resume.jobTitle || '-'}</div>
+          {/* Capped at 25 characters so the column is the same width in every
+              table; the tooltip carries the full title. */}
+          <div className="text-sm text-gray-700 font-medium" title={resume.jobTitle || undefined}>
+            {truncateJobTitle(resume.jobTitle)}
+          </div>
         </td>
       );
     }
@@ -1044,13 +1060,7 @@ Best regards`);
     if (col.id === 'matchStatus') {
       return (
         <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-          <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${
-            resume.matchStatus === 'Exact Match'
-              ? 'bg-green-100 text-green-700 border-green-300'
-              : resume.matchStatus === 'Partial Match'
-              ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
-              : 'bg-red-100 text-red-700 border-red-300'
-          }`}>
+          <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
             {resume.matchStatus}
           </span>
         </td>
@@ -1063,11 +1073,7 @@ Best regards`);
       return (
         <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
           <div className={`text-xl font-semibold ${
-            resume.matchStatus === 'Exact Match'
-              ? 'text-green-700'
-              : resume.matchStatus === 'Partial Match'
-              ? 'text-[#ef7213]'
-              : 'text-red-700'
+            MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
           }`}>
             {resume.scorePercentage}%
           </div>
@@ -1281,7 +1287,7 @@ Best regards`);
           the list lives in the toolbar below, and everything that acts on a
           selection lives in its own row under that, same as job-openings. */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-        <h2 className="text-gray-900">Scored Resumes</h2>
+        <h2 className="text-gray-900">{title}</h2>
         {/* Score Resumes — opens the host's "Select Applicants to Score" modal. */}
         {onScoreResumes && (
           <button
@@ -1840,17 +1846,11 @@ Best regards`);
                   {/* Show job title in global view */}
                   {isGlobalView && resume.jobTitle && (
                     <div className="text-xs text-gray-500 mb-1">
-                      Applied for: <span className="font-medium text-gray-700">{resume.jobTitle}</span>
+                      Applied for: <span className="font-medium text-gray-700" title={resume.jobTitle || undefined}>{truncateJobTitle(resume.jobTitle)}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2 mb-2">
-                    <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${
-                      resume.matchStatus === 'Exact Match'
-                        ? 'bg-green-100 text-green-700 border-green-300'
-                        : resume.matchStatus === 'Partial Match'
-                        ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
-                        : 'bg-red-100 text-red-700 border-red-300'
-                    }`}>
+                    <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
                       {resume.matchStatus}
                     </span>
                     <div className={`text-lg ${
@@ -2787,11 +2787,9 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
                     </div>
                     {resume.matchStatus && (
                       <div
-                        className={`px-2 py-1 text-xs rounded-full ${
-                          resume.matchStatus === 'Exact Match'
-                            ? 'bg-green-100 text-green-700 border border-green-300'
-                            : 'bg-yellow-100 text-yellow-700 border border-yellow-300'
-                        }`}
+                        /* Was a two-branch test, so No Match wore the Partial
+                           colour here. The shared map answers all three. */
+                        className={`px-2 py-1 text-xs rounded-full border ${matchBadgeClass(resume.matchStatus)}`}
                       >
                         {resume.matchStatus}
                       </div>

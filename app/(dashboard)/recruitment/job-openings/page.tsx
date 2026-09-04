@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
+import ArchiveJobModal from '@/components/ArchiveJobModal';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -11,7 +12,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
-import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
+import { mapJDToJob, formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
@@ -42,11 +43,6 @@ const usageModuleIcon = (label: string) => {
   return FolderOpen;
 };
 
-const MASTER_DATA_LINKS = [
-  { id: 'experience-levels', label: 'Experience Levels', href: '/masters/experience-levels', icon: Clock },
-  { id: 'education-levels', label: 'Education Levels', href: '/masters/education-levels', icon: GraduationCap },
-  { id: 'industry-types', label: 'Industry Types', href: '/masters/industry-types', icon: Factory },
-];
 
 const JD_BATCH_SIZE = 100;
 
@@ -74,6 +70,14 @@ export default function JobOpeningsPage() {
     open: boolean;
     job: Job | null;
   }>({ open: false, job: null });
+  /* Archiving is confirmed, never immediate. `busy` keeps the modal open with a
+     spinner while the request is in flight, so a slow save cannot be clicked
+     twice or read as nothing having happened. */
+  const [archiveDialog, setArchiveDialog] = useState<{
+    open: boolean;
+    job: Job | null;
+    busy: boolean;
+  }>({ open: false, job: null, busy: false });
   const router = useRouter();
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
@@ -399,7 +403,18 @@ export default function JobOpeningsPage() {
     }
   };
 
-  const handleArchiveJob = async (job: Job) => {
+  /* Every archive trigger on this page — the list row menu, the grid card menu
+     and the version-history rows — is handed THIS, not the archive itself, so
+     none of them can archive without the confirm. The work moved to
+     `confirmArchiveJob` below, which only the modal calls. */
+  const requestArchiveJob = (job: Job) => {
+    setArchiveDialog({ open: true, job, busy: false });
+  };
+
+  const confirmArchiveJob = async () => {
+    const job = archiveDialog.job;
+    if (!job) return;
+    setArchiveDialog(prev => ({ ...prev, busy: true }));
     try {
       await jdService.updateStatus(job.id, 'archived');
       setJobs(prev => prev.map(j =>
@@ -407,8 +422,11 @@ export default function JobOpeningsPage() {
       ));
       markVersionStatus(job.id, 'archived');
       toast.success(`"${job.title}" has been archived`);
+      setArchiveDialog({ open: false, job: null, busy: false });
     } catch (error) {
       toast.error('Failed to archive job');
+      /* Left open on failure — closing it would look like the archive worked. */
+      setArchiveDialog(prev => ({ ...prev, busy: false }));
     }
   };
 
@@ -523,14 +541,24 @@ export default function JobOpeningsPage() {
         versionStatusOverrides={versionStatusOverrides}
         onDisableJob={isTenantAdmin || hasPermission('canDisableJD') ? handleDisableJob : undefined}
         onRepublishJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleRepublishJob : undefined}
-        onArchiveJob={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchiveJob : undefined}
+        onArchiveJob={isTenantAdmin || hasPermission('canArchiveJD') ? requestArchiveJob : undefined}
         onUnarchiveJob={hasPermission('canArchiveJD') || isTenantAdmin ? handleUnarchiveJob : undefined}
         onDeleteJob={hasPermission('canDeleteJD') || isTenantAdmin ? handleDeleteJob : undefined}
         onBulkDelete={hasPermission('canDeleteJD') || isTenantAdmin ? handleBulkDeleteJobs : undefined}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
         forceListView={forceListView}
-        masterDataLinks={canManageMasters ? MASTER_DATA_LINKS : undefined}
+        configHref={canManageMasters ? '/recruitment/job-openings/config' : undefined}
+      />
+
+      {/* Archive confirm — the same component the Job Details page renders, so
+          the warning cannot differ depending on where the archive started. */}
+      <ArchiveJobModal
+        isOpen={archiveDialog.open}
+        jobLabel={archiveDialog.job ? formatJobVersionLabel(archiveDialog.job) : ''}
+        isLoading={archiveDialog.busy}
+        onConfirm={confirmArchiveJob}
+        onCancel={() => setArchiveDialog({ open: false, job: null, busy: false })}
       />
 
       {/* Edit Warning Dialog — same component the JD detail page uses, so the

@@ -500,7 +500,7 @@ export default function AITalentMatchPage({
   // Match-score badge colours mirror the Scored Resumes match-status pills.
   const candidateScoreBadgeClass = (score: number) => {
     if (score >= 80) return 'bg-green-100 text-green-700 border-green-300';
-    if (score >= 60) return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+    if (score >= 60) return 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20';
     return 'bg-red-100 text-red-700 border-red-300';
   };
 

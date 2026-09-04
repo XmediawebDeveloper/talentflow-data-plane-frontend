@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2, AlertCircle, Zap, ClipboardList } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import type { User, Tenant } from '@/lib/types/tenant';
 import ReactMarkdown from 'react-markdown';
@@ -471,8 +471,39 @@ interface JobDetailViewProps {
   totalCount?: number;
 }
 
+/**
+ * The id a scored-resume row is addressed by. The API has shipped both spellings
+ * over time, so every lookup goes through this rather than picking one and
+ * silently missing the rows that use the other.
+ */
+const scoredResumeId = (row: any): string | null => row?.resumeId || row?.resume_id || null;
+
+/**
+ * A scored-resume row, filled out for `CandidateScoringDetailPage`.
+ *
+ * Extracted because three places open that view — clicking a row, the
+ * Previous/Next pager inside it, and the URL restore below — and two of them
+ * were carrying their own copy of this fallback list. A candidate restored from
+ * the URL has to arrive in exactly the shape a clicked one does, or the page
+ * renders with holes where a click would have filled them.
+ */
+const toCandidateDetail = (row: any) => ({
+  ...row,
+  candidateName: row.candidateName || 'Unknown',
+  email: row.email || '',
+  phone: row.phone || '',
+  matchStatus: row.matchStatus || 'No Match',
+  scorePercentage: row.scorePercentage || 0,
+  scoredDate: row.scoredDate || new Date().toISOString(),
+  scoredBy: row.scoredBy || 'System',
+  matchedSkills: row.matchedSkills || row.technicalSkills || row.skills || [],
+  missingSkills: row.missingSkills || [],
+});
+
 export default function JobDetailView({ job, onBack, onEdit, editDisabled = false, editDisabledReason, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, breadcrumbItems, initialTab, initialAction, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
   const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
@@ -508,6 +539,32 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const niceToHaveSkills = job.niceToHaveSkills || [];
   const mustHaveComments = job.mustHaveComments || [];
   const niceToHaveComments = job.niceToHaveComments || [];
+  /* ---- The two sticky layers on this page ----------------------------------
+     The breadcrumb pins at top-0 (z-30) and the tab bar pins below it (z-20).
+     The tab bar's offset used to be a hardcoded `top-[52px]`, a guess at the
+     breadcrumb's height that the breadcrumb outgrew the moment it started
+     carrying the RecordPager — 34px buttons inside py-2, and a row that wraps
+     onto a second line when space is tight. Once the bar is taller than the
+     offset it covers the top of the PINNED tab bar, and being the higher layer
+     it takes the clicks: pressing a tab hit the "Job Descriptions" crumb behind
+     it and navigated to the job list instead of switching tabs.
+
+     So the offset is measured rather than assumed, and re-measured whenever the
+     bar changes size (the wrap is a resize, not a re-render). `PageBreadcrumb`
+     hands back the bar element for exactly this — see its `barRef` docs for why
+     a wrapper div is not an option. */
+  const breadcrumbBarRef = useRef<HTMLElement | null>(null);
+  const [tabBarTop, setTabBarTop] = useState(52);
+  useEffect(() => {
+    const bar = breadcrumbBarRef.current;
+    if (!bar || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setTabBarTop(bar.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
+
   const jobBreadcrumbItems = breadcrumbItems ?? [
     { label: 'Dashboard', href: '/dashboard' },
     { label: 'Job Descriptions', href: '/recruitment/job-openings' },
@@ -664,6 +721,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // Scored resumes state
   const [scoredResumes, setScoredResumes] = useState<any[]>([]);
   const [loadingScoredResumes, setLoadingScoredResumes] = useState(false);
+  /* `loadingScoredResumes` starts false and only goes true once the fetch is
+     under way, so it cannot tell "not started" from "finished". The URL restore
+     below needs that difference — an empty `scoredResumes` means "still coming"
+     before the first fetch settles and "there are none" after it. */
+  const [scoredResumesLoaded, setScoredResumesLoaded] = useState(false);
   const [scoredResumesStats, setScoredResumesStats] = useState({
     total: 0,
     exactMatch: 0,
@@ -1297,6 +1359,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setScoredResumesStats({ total: 0, exactMatch: 0, partialMatch: 0, noMatch: 0 });
     } finally {
       setLoadingScoredResumes(false);
+      setScoredResumesLoaded(true);
     }
   };
 
@@ -1478,6 +1541,65 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results'>(initialTab || 'overview');
+
+  /* ---- Where you are, kept in the URL -------------------------------------
+     The open tab and the open candidate are both React state, so a refresh used
+     to drop the recruiter back on Overview having lost whichever candidate they
+     were reading. Both now live in the query string (`?tab=`, `?resume=`), which
+     the page reads back into `initialTab` and the restore below.
+
+     `?resume=` names a row that is not loaded yet at mount — `fetchScoredResumes`
+     has to answer first. So the id read off the URL is held HERE until a row
+     matches it, and the writer below treats a pending id exactly like an open
+     one. Without that, the writer would see "no candidate open", strip the param
+     as stale, and delete the very thing the restore was waiting for. */
+  const [pendingResumeId, setPendingResumeId] = useState<string | null>(
+    () => searchParams.get('resume'),
+  );
+
+  useEffect(() => {
+    if (!pendingResumeId || viewingScoredResume) return;
+    if (!scoredResumesLoaded) return; // rows still coming — decide nothing yet
+    const row = scoredResumes.find((r: any) => scoredResumeId(r) === pendingResumeId);
+    if (row) setViewingScoredResume(toCandidateDetail(row));
+    /* Cleared either way. On a hit it hands over to `viewingScoredResume`; on a
+       miss (a resume deleted since the link was shared) it gives up, which is
+       what releases the gate below so the JD page renders instead of waiting
+       forever on a candidate that is never coming. */
+    setPendingResumeId(null);
+  }, [pendingResumeId, viewingScoredResume, scoredResumes, scoredResumesLoaded]);
+
+  /* ONE effect writes both params. Two would each build their next URL from the
+     same `searchParams` snapshot, so whichever ran second would silently undo
+     the other's change in any tick where both moved.
+
+     `replace`, not `push`: switching tab or opening a candidate is not a step
+     the Back button should have to walk through. `scroll: false` because the App
+     Router otherwise jumps to the top of the page on every one of these.
+
+     Overview and "no candidate open" clear their params rather than writing
+     `?tab=overview` or an empty value, so a plain URL keeps meaning the default
+     and shared links stay clean. Pressing Back out of a candidate clears
+     `?resume=` and cannot bounce straight back in: `pendingResumeId` is already
+     null by then, so the restore above has nothing left to act on. */
+  useEffect(() => {
+    const openResume = viewingScoredResume
+      ? scoredResumeId(viewingScoredResume)
+      : pendingResumeId;
+    if (
+      (searchParams.get('tab') || 'overview') === activeTab &&
+      searchParams.get('resume') === openResume
+    ) {
+      return;
+    }
+    const next = new URLSearchParams(searchParams.toString());
+    if (activeTab === 'overview') next.delete('tab');
+    else next.set('tab', activeTab);
+    if (openResume) next.set('resume', openResume);
+    else next.delete('resume');
+    const query = next.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+  }, [activeTab, viewingScoredResume, pendingResumeId, searchParams, pathname, router]);
   const overviewSectionRef = useRef<HTMLDivElement | null>(null);
   const scoredResumesSectionRef = useRef<HTMLDivElement | null>(null);
   const aiInterviewResultsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -1855,6 +1977,23 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     );
   }
 
+  /* A refresh on a candidate URL is still resolving: `?resume=` named a row that
+     `fetchScoredResumes` has not answered for yet. Hold on a spinner rather than
+     painting the JD page underneath — that page is not where the recruiter was,
+     and rendering it for the half-second the fetch takes read as the app
+     bouncing them back before snapping forward again.
+
+     This cannot hang: the restore above clears `pendingResumeId` as soon as the
+     rows land, whether or not one of them matched. */
+  if (pendingResumeId && !viewingScoredResume) {
+    return (
+      <main className="flex-1 flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 animate-spin text-gray-800 dark:text-slate-200" />
+        <span className="ml-3 text-gray-600 dark:text-slate-400">Loading...</span>
+      </main>
+    );
+  }
+
   // Candidate detail from the AI Interview Result tab — rendered inline so the
   // drill-down never leaves this page. Prev/Next step through the same list the
   // candidate was opened from.
@@ -1885,22 +2024,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
   // Show CandidateScoringDetailPage when viewing a scored resume (same as ResumeScoringPage)
   if (viewingScoredResume) {
-    const _scoredIdx = scoredResumes.findIndex((r: any) => (r.resumeId || r.resume_id) === (viewingScoredResume.resumeId || viewingScoredResume.resume_id));
+    const _scoredIdx = scoredResumes.findIndex(
+      (r: any) => scoredResumeId(r) === scoredResumeId(viewingScoredResume),
+    );
     const _goToScoredCandidate = (idx: number) => {
       const r = scoredResumes[idx];
       if (!r) return;
-      setViewingScoredResume({
-        ...r,
-        candidateName: r.candidateName || 'Unknown',
-        email: r.email || '',
-        phone: r.phone || '',
-        matchStatus: r.matchStatus || 'No Match',
-        scorePercentage: r.scorePercentage || 0,
-        scoredDate: r.scoredDate || new Date().toISOString(),
-        scoredBy: r.scoredBy || 'System',
-        matchedSkills: r.matchedSkills || r.technicalSkills || r.skills || [],
-        missingSkills: r.missingSkills || [],
-      });
+      setViewingScoredResume(toCandidateDetail(r));
     };
     return (
       <CandidateScoringDetailPage
@@ -2119,6 +2249,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           card's full height to travel within. Nested inside a wrapper div it
           was boxed to its own height and could never actually stick. */}
       <PageBreadcrumb
+        barRef={breadcrumbBarRef}
         items={jobBreadcrumbItems}
         className="mb-3"
         // Previous / Next rides inside the breadcrumb bar instead of sitting on
@@ -2484,7 +2615,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       </div>
 
       {/* Tab Navigation */}
-      <div className="sticky top-[52px] z-20 mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+      <div
+        style={{ top: tabBarTop }}
+        className="sticky z-20 mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5"
+      >
         <div className="flex items-center border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
           <button
             onClick={() => setActiveTab('overview')}
@@ -3213,7 +3347,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   </button>
                 </div>
                 <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
-                  <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.partialMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
+                  <div className="bg-brand-orange h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.partialMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
                 </div>
               </div>
               <div>
@@ -3260,7 +3394,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               )}
               {scoredResumesStats.partialMatch > 0 && (
                 <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                  <div className="w-2 h-2 bg-brand-orange rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
                     <div className="text-sm text-gray-900 dark:text-slate-50">{scoredResumesStats.partialMatch} partial match(es) found</div>
                     <div className="text-xs text-gray-500 dark:text-slate-500">Candidates with potential identified</div>
@@ -3353,20 +3487,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               onViewCandidate={(resume) => {
                 // Pass resume directly - data already formatted by fetchScoredResumes
                 // CandidateScoringDetailPage handles the same format as ResumeScoringPage
-                setViewingScoredResume({
-                  ...resume,
-                  // Ensure required fields have fallbacks
-                  candidateName: resume.candidateName || 'Unknown',
-                  email: resume.email || '',
-                  phone: resume.phone || '',
-                  matchStatus: resume.matchStatus || 'No Match',
-                  scorePercentage: resume.scorePercentage || 0,
-                  scoredDate: resume.scoredDate || new Date().toISOString(),
-                  scoredBy: resume.scoredBy || 'System',
-                  // Use existing matchedSkills/missingSkills or fall back to skills/gaps
-                  matchedSkills: resume.matchedSkills || resume.technicalSkills || resume.skills || [],
-                  missingSkills: resume.missingSkills || [],
-                });
+                setViewingScoredResume(toCandidateDetail(resume));
               }}
             />
           )}

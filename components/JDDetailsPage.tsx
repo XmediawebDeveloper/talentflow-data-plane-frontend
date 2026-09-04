@@ -419,7 +419,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
   const getMatchBadge = (status: string) => {
     const configs: Record<string, { bg: string; text: string }> = {
       good_match: { bg: 'bg-green-100', text: 'text-green-700' },
-      partial_match: { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+      partial_match: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep' },
       no_match: { bg: 'bg-red-100', text: 'text-red-700' },
     };
     const config = configs[status] || { bg: 'bg-gray-100', text: 'text-gray-600' };

@@ -53,7 +53,7 @@ export default function SelectSourceModal({
 }: SelectSourceModalProps) {
   const router = useRouter();
   const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
-  const { startScoringJob, updateItemStatus, setMainPanelOpen, setOnRestorePanel, setMinimized } = useScoringProgress();
+  const { startScoringJob, updateItemStatus, setMainPanelOpen, setOnRestorePanel, setMinimized, clearJob, activeScoringJobs } = useScoringProgress();
 
   // Check if user has Internal DB access permission
   const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
@@ -652,6 +652,11 @@ export default function SelectSourceModal({
   const handleCloseProgress = () => {
     if (!submitting) {
       setShowProgressModal(false);
+      /* Closing is a dismissal: take the corner widget with it, or the X looks
+         like it did nothing. Every job goes, not just the settled ones —
+         keeping a running one behind left the floating button on screen after
+         the X that was meant to remove it. */
+      activeScoringJobs.forEach(job => clearJob(job.jobId));
       onClose();
     }
   };
@@ -1254,7 +1259,9 @@ export default function SelectSourceModal({
             // to make the popup unrestorable. The restore-callback effect above
             // wires the floating indicator's expand back to this state.
             setIsBulkProgressMinimized(true);
-            setMinimized(true);
+            /* Deliberately NOT setMinimized(true): the floating indicator shows
+               the full card first and shrinks itself to the pill after 3s.
+               Flipping it here made the run appear to vanish instantly. */
           }}
         />
       )}

@@ -8,6 +8,7 @@ import {
   Lock, ArrowRightLeft, Mic, QrCode,
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type {
@@ -3391,24 +3392,17 @@ export default function AIInterviewConfig() {
         </DialogContent>
       </Dialog>
 
-      {/* Unsaved Changes Dialog */}
-      <Dialog open={showUnsavedDialog} onOpenChange={open => !open && setShowUnsavedDialog(false)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="tracking-tight">Unsaved Changes</DialogTitle>
-            <DialogDescription>Save your configuration as a draft before leaving?</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button onClick={handleDiscardAndNavigate} className="px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors">
-              Discard
-            </button>
-            <button onClick={handleSaveAndNavigate} disabled={savingDraft} className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 flex items-center gap-2">
-              {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              {savingDraft ? 'Saving…' : 'Save Draft'}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Unsaved Changes — the shared prompt. Its own wording, because what
+          is being saved here is a configuration, not a job description. */}
+      <UnsavedChangesModal
+        isOpen={showUnsavedDialog}
+        description="Save your configuration as a draft before leaving?"
+        discardLabel="Discard"
+        onClose={() => setShowUnsavedDialog(false)}
+        onDiscard={handleDiscardAndNavigate}
+        onSave={handleSaveAndNavigate}
+        isSaving={savingDraft}
+      />
 
       </div>
     </main>

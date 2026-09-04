@@ -321,7 +321,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
   const getOverallScoreColor = (matchStatus?: string): string => {
     const normalized = matchStatus?.toLowerCase().replace(/[_\s]/g, '');
     if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'text-green-600';
-    if (normalized === 'partialmatch') return 'text-[#ef7213]';
+    if (normalized === 'partialmatch') return 'text-brand-orange-deep';
     return 'text-red-600';
   };
 
