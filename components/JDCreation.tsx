@@ -430,6 +430,24 @@ const isEnglishOnly = (text: string): boolean => {
   return !hasNonEnglishLatinMarkers(text);
 };
 
+// Heads-up only: the backend already swap-corrects an inverted "Minimum Salary: X /
+// Maximum Salary: Y" pair before it ever reaches the AI, so this never blocks
+// generation - it just tells the recruiter their typed figures look swapped before
+// they submit.
+const detectInvertedLabelledSalary = (text: string): boolean => {
+  const minMatch = text.match(/minimum\s*salary\s*[:\-]?\s*([\d.,]+)/i);
+  const maxMatch = text.match(/maximum\s*salary\s*[:\-]?\s*([\d.,]+)/i);
+  if (!minMatch || !maxMatch) {
+    return false;
+  }
+  const minVal = parseFloat(minMatch[1].replace(/,/g, ''));
+  const maxVal = parseFloat(maxMatch[1].replace(/,/g, ''));
+  if (Number.isNaN(minVal) || Number.isNaN(maxVal)) {
+    return false;
+  }
+  return minVal > maxVal;
+};
+
 const JOB_TITLE_ENGLISH_ONLY_MESSAGE = 'Job title must be written in English only. Other languages are not supported.';
 
 const showJobTitleValidationToast = (validationError: string): void => {
@@ -652,6 +670,14 @@ interface ExtractedData {
   educationRequired: boolean;
   experience: string;
   experienceRequired: boolean;
+  /** RS20: Job Hopping toggle. Auto-defaults from `experience` (>= 3 years -> true)
+   *  via the useEffect near parseExperienceYearsString, but the recruiter can
+   *  override it with the checkbox next to the Experience field. Whatever value
+   *  is on screen at save time is what gets sent as job_hopping_enabled -
+   *  editing Experience again afterwards recomputes and overwrites it. Optional
+   *  so the few places that build a partial ExtractedData literal before the
+   *  effect has run don't need to supply it. */
+  jobHoppingEnabled?: boolean;
   industryType: string;
   roleFamily?: string;
   roleFamilyConfidence?: number;
@@ -1436,6 +1462,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     educationRequired: false,
     experience: '',
     experienceRequired: false,
+    jobHoppingEnabled: false,
     industryType: '',
     roleFamily: undefined,
     roleFamilyConfidence: undefined,
@@ -2170,6 +2197,30 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     };
   };
 
+  // RS20: Job Hopping auto-default, kept in sync with the backend's
+  // app/utils/job_hopping.py (same >= 3 years rule, same numeric-only
+  // comparison - no string/regex parsing, so it can't hit the decimal-parsing
+  // bug the old backend skip logic had). Recomputes live whenever the
+  // recruiter changes Experience, which is "always live-recompute": the
+  // checkbox below reflects the current experience-derived default unless the
+  // recruiter clicks it, and clicking it only holds until Experience next
+  // changes - there is no separate persisted "manual override" state.
+  const jobHoppingAutoDefault = (() => {
+    const { from, to } = parseExperienceYearsString(extractedData.experience);
+    const min = from === '' ? 0 : Number(from);
+    const max = to === '' ? 0 : Number(to);
+    return Math.max(min, max) >= 3;
+  })();
+
+  useEffect(() => {
+    setExtractedData(prev =>
+      prev.jobHoppingEnabled === jobHoppingAutoDefault
+        ? prev
+        : { ...prev, jobHoppingEnabled: jobHoppingAutoDefault }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extractedData.experience]);
+
   const deriveExperienceCodeFromYears = (min?: number | null, max?: number | null): string => {
     const value =
       min !== null && min !== undefined && !Number.isNaN(Number(min))
@@ -2790,12 +2841,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Preserved only in edit mode, exactly like workModel/education/industryType above:
         // a FRESH extraction replaces Step 2 (see forceFreshExtraction), so it must be able
         // to replace a bound with nothing.
+        //
+        // EXCEPT when the backend says salary_mixed_period: true - the JD states a
+        // mixed-period salary ("12,000 per month to 4 LPA") and null here is a
+        // CONFIDENT answer that no single bound can be stated, not "extraction found
+        // nothing." Falling back to `prev` in that case left a stale min/max sitting
+        // in the Salary boxes (and, on save, in the JD) for exactly the salaries the
+        // backend had deliberately left unbounded.
         salaryFrom: params.salary_min != null
           ? (sanitizeExtractedSalary(params.salary_min) || '')
-          : (isEditMode ? (prev.salaryFrom || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (prev.salaryFrom || '') : ''),
         salaryTo: params.salary_max != null
           ? (sanitizeExtractedSalary(params.salary_max) || '')
-          : (isEditMode ? (prev.salaryTo || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (prev.salaryTo || '') : ''),
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || prev.salaryCurrency),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
         // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
@@ -2949,6 +3007,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           // Then set final content
           if (response?.description) {
             setGeneratedJD(response.description);
+
+            // Job Title names a different tech stack than the AI Prompt's own
+            // requirements (e.g. title "Frontend Developer" with "Java, Spring
+            // Boot, Microservices" as requirements) - see
+            // detect_title_tech_stack_mismatch in openai_service.py. The
+            // description itself was still generated with the Job Title kept as
+            // the source of truth; this only warns the recruiter to double-check
+            // before publishing.
+            if (response.role_mismatch_warning) {
+              toast.warning({
+                title: 'Job Title / Requirements Mismatch',
+                description: response.role_mismatch_warning,
+              });
+            }
 
             // If the stream finished AFTER the user already advanced past Step 1
             // (e.g. they clicked Next as soon as text streaming completed), do NOT
@@ -3527,6 +3599,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         experience: experienceValue || (isEditMode ? extractedData.experience : ''),
         // Use API's mandatory flag for experience
         experienceRequired: params.experience_mandatory || false,
+        // RS20: computed here (not left to the useEffect) because the save right
+        // after extraction reads this `extraction` object directly, before state
+        // has re-rendered - same reason `experience` above resolves its own
+        // fallback instead of reading extractedData.experience blindly.
+        jobHoppingEnabled: (() => {
+          const resolvedExperience = experienceValue || (isEditMode ? extractedData.experience : '');
+          const range = inferExperienceRangeFromCustomValue(resolvedExperience);
+          return Math.max(range.experienceMin ?? 0, range.experienceMax ?? 0) >= 3;
+        })(),
         industryType: industryValue, // Only from extraction, no fallback - user must select if not extracted
         // Use API's mandatory flag for industry
         industryTypeRequired: params.industry_mandatory || false,
@@ -3549,12 +3630,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Preserved only in edit mode, exactly like workModel/education/industryType above:
         // a FRESH extraction replaces Step 2 (see forceFreshExtraction), so it must be able
         // to replace a bound with nothing.
+        //
+        // EXCEPT when the backend says salary_mixed_period: true - the JD states a
+        // mixed-period salary ("12,000 per month to 4 LPA") and null here is a
+        // CONFIDENT answer that no single bound can be stated, not "extraction found
+        // nothing." Falling back to the previous value in that case left a stale
+        // min/max sitting in the Salary boxes (and, on save, in the JD) for exactly
+        // the salaries the backend had deliberately left unbounded.
         salaryFrom: params.salary_min != null
           ? (sanitizeExtractedSalary(params.salary_min) || '')
-          : (isEditMode ? (extractedData.salaryFrom || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (extractedData.salaryFrom || '') : ''),
         salaryTo: params.salary_max != null
           ? (sanitizeExtractedSalary(params.salary_max) || '')
-          : (isEditMode ? (extractedData.salaryTo || '') : ''),
+          : (isEditMode && !params.salary_mixed_period ? (extractedData.salaryTo || '') : ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
         salaryCurrency: normalizeSalaryCurrency(params.salary_currency || extractedData.salaryCurrency),
         // "City, State" when the JD qualified the city, matching how a SAVED JD is loaded
@@ -3759,6 +3847,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extraction.educationRequired || false,
         industry_mandatory: extraction.industryTypeRequired || false,
         location_mandatory: extraction.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extraction.jobHoppingEnabled ?? true,
       };
 
       console.log('[TalentFlow] Saving JD with coding fields:', {
@@ -4894,6 +4984,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extractedData.educationRequired || false,
         industry_mandatory: extractedData.industryTypeRequired || false,
         location_mandatory: extractedData.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extractedData.jobHoppingEnabled ?? true,
       };
 
       console.log('[TalentFlow] Saving JD at review stage with coding fields:', {
@@ -5232,6 +5324,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extractedData.educationRequired || false,
         industry_mandatory: extractedData.industryTypeRequired || false,
         location_mandatory: extractedData.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extractedData.jobHoppingEnabled ?? true,
       };
 
       console.log('[DEBUG] handleConfirmPublish - editingId:', editingId, 'isEditingDraft:', isEditingDraft);
@@ -5535,6 +5629,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_mandatory: extractedData.educationRequired || false,
         industry_mandatory: extractedData.industryTypeRequired || false,
         location_mandatory: extractedData.locationsRequired || false,
+        // RS20: Job Hopping toggle.
+        job_hopping_enabled: extractedData.jobHoppingEnabled ?? true,
       };
 
       console.log('[DEBUG] SAVING JD - Mandatory flags being sent:', {
@@ -6080,6 +6176,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           {aiPrompt.trim().length}/{VALIDATION.AI_PROMPT.max}
                         </p>
                       </div>
+                      {detectInvertedLabelledSalary(aiPrompt) && (
+                        <div className="flex items-center gap-2 p-3 mt-2 bg-amber-50 border border-amber-200 rounded-lg">
+                          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                          <p className="text-xs text-amber-800">
+                            Minimum Salary looks higher than Maximum Salary - double-check these figures before generating.
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Quota Warning */}
@@ -6923,6 +7027,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {validationErrors.experience}
                     </p>
                   )}
+                  {/* RS20: Job Hopping toggle. Defaults from Experience (>= 3 years ->
+                      on) and re-defaults every time Experience changes; the recruiter
+                      can override it here for this save only. */}
+                  <label className={`flex items-center gap-1.5 mt-1 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(extractedData.jobHoppingEnabled)}
+                      onChange={(e) => {
+                        setExtractedData(prev => ({ ...prev, jobHoppingEnabled: e.target.checked }));
+                        markExtractedDataModified();
+                      }}
+                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                      disabled={isRegenerating}
+                    />
+                    <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                      Evaluate Job Hopping
+                    </span>
+                  </label>
                 </div>
 
                 {/* Education field REMOVED 2026-08-20.

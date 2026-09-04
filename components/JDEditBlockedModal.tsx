@@ -48,7 +48,12 @@ export default function JDEditBlockedModal({
       return;
     }
     onClose();
-    router.push('/recruitment/jd-creation');
+    // The jd-creation route segment is cached by the App Router, so a bare
+    // "/recruitment/jd-creation" push can reuse whatever JD was last open in it
+    // (an in-progress draft, or the very JD this modal just blocked editing on)
+    // instead of opening blank. Same fix as JobOpeningsPage's own "Create" button:
+    // a unique `new` nonce makes this a distinct URL, forcing a fresh remount.
+    router.push(`/recruitment/jd-creation?new=${Date.now()}`);
   };
 
   return (
