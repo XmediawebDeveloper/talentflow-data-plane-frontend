@@ -683,7 +683,10 @@ interface ExtractedData {
   roleFamilyConfidence?: number;
   industryTypeRequired: boolean;
   department: string;
-  allowOverqualified: boolean;
+  /** Required recruiter choice, not a plain default-off toggle: null means "not yet
+   *  answered" and blocks leaving Step 2 (see getValidationStatus/handlePublish). Only
+   *  true/false are valid saved values - null must never reach the save payload. */
+  allowOverqualified: boolean | null;
   employmentType: 'full_time' | 'part_time' | 'contract' | 'internship' | 'temporary';
   workModel: 'onsite' | 'remote' | 'hybrid' | 'field_based';
   salaryFrom: string;
@@ -1335,6 +1338,67 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     console.log('[TalentFlow] URL updated with JD progress:', { jdId, creationStage });
   };
 
+  // ── The URL's `stage` MIRRORS the current step; it never leads it ──────────
+  //
+  // This is what makes a refresh land on the step the user is actually on.
+  //
+  // `?stage=` used to be written in exactly two places - `handleNext` (extract)
+  // and `handlePublish` (review) - i.e. only ever when moving FORWARD. Going
+  // back is six plain `setStep` calls (the Step-2 "Back" button and the five
+  // "Edit" links on Step 3) and none of them touched the URL. So the param
+  // recorded the FURTHEST step reached, not the current one.
+  //
+  // `app/(dashboard)/recruitment/jd-creation/page.tsx` then resolves the stage
+  // as `stageFromUrl || editingJD.creation_stage`, giving that stale param
+  // precedence over the stored stage. The result was a page number that moved
+  // on its own:
+  //
+  //     Step 1 -> Next -> Step 2 (URL now stage=extract)
+  //             -> Back -> Step 1 (URL still stage=extract)
+  //             -> REFRESH -> Step 2          <- nobody clicked anything
+  //
+  // Same one step later: reach Review, click any "Edit" link back to Step 2,
+  // refresh, and the page returns to Review.
+  //
+  // Mirroring the step here fixes it at the source and covers every way the
+  // step can change - the six existing backward transitions and any added
+  // later - instead of bolting a URL write onto each button and waiting for
+  // the next one to be forgotten.
+  //
+  // Direction matters: this effect reads `step` and writes the URL. It never
+  // calls `setStep`, so it cannot advance anything - it only records where the
+  // user already is. It is also a no-op until the JD has an id, because there
+  // is nothing to come back to before then.
+  // Only an actual step CHANGE is mirrored; the mount value never is.
+  // `editingJD` is fetched, so on a reload this component mounts before it
+  // arrives and `step` initialises to its 'create' default. Writing THAT to the
+  // URL would overwrite the `?stage=review` the user reloaded on, and since the
+  // page resolves the stage as `stageFromUrl || stored`, it would strand them
+  // on Step 1 - the opposite bug. Comparing against the last mirrored value
+  // (rather than a "have we run yet" flag) also makes the effect a no-op on any
+  // re-run where the step did not move, including React's double-invoked mount
+  // effects should StrictMode ever be turned on.
+  const lastMirroredStepRef = useRef<Step>(step);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (lastMirroredStepRef.current === step) return;
+    lastMirroredStepRef.current = step;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get('id')) return;
+    if (params.get('stage') === step) return;
+    params.set('stage', step);
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    console.log('[TalentFlow] URL stage synced to current step:', step);
+  }, [step]);
+
+  // Guards against one click being executed twice. Both handlers below await
+  // `ensureValidJobTitle` (a network call) before they set any "in flight"
+  // state, and a `disabled` prop only takes effect after React re-renders - so
+  // a double-click, or a click plus a stray keyboard activation, could enter
+  // either handler a second time and advance the step twice. A ref flips
+  // synchronously, so the second entry sees it on the very same tick.
+  const isAdvancingRef = useRef(false);
+
   // Determine if we're editing a draft or a published JD
   // Draft JD: can be updated directly (editingId is set)
   // Published JD: can also be updated directly (editingId is set) - creates a new version on publish
@@ -1468,7 +1532,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     roleFamilyConfidence: undefined,
     industryTypeRequired: false,
     department: '',
-    allowOverqualified: false,
+    allowOverqualified: null,
     employmentType: 'full_time',
     workModel: 'onsite',
     salaryFrom: '',
@@ -1642,6 +1706,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     experience?: string;
     industryType?: string;
     salaryRange?: string;
+    allowOverqualified?: string;
   }>({});
   const [jobTitleServerValidationError, setJobTitleServerValidationError] = useState('');
   const [jobTitleServerValidatedValue, setJobTitleServerValidatedValue] = useState('');
@@ -2865,7 +2930,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           city: loc.state ? `${loc.city}, ${loc.state}` : (loc.city || ''),
           radius: '50'
         })) : (isEditMode ? prev.locations : []),
-        allowOverqualified: isEditMode ? prev.allowOverqualified : false,
+        allowOverqualified: isEditMode ? prev.allowOverqualified : null,
         // Forced OFF: the 'Requires a hands-on coding assessment' control was removed
         // from JD creation, so nothing can clear a wrongly-extracted true. Leaving it
         // set would let jd_analyzer.validate_for_assessment() block assessment creation
@@ -3136,7 +3201,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     Boolean(extractedData.education?.trim()) ||
     Boolean(extractedData.industryType?.trim());
 
-  const handleNext = async () => {
+  // The real Step 1 -> Step 2 advance. Reached only through the guarded
+  // `handleNext` below, which is what the button is bound to.
+  const advanceFromCreateStep = async () => {
     const trimmedJobTitle = jobTitle.trim();
     const jdText = mode === 'ai' ? generatedJD : manualJD;
 
@@ -3331,7 +3398,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     try {
       // Call real API to extract parameters using AI
       console.log('[TalentFlow] Extracting parameters from JD, length:', jdText.length);
-      const params = await jdService.extractParamsFromText(jdText, trimmedJobTitle);
+      // Attribution for the extraction's LLM API requests, so they are counted
+      // under Manual JD Creation or AI JD Creation and never merged. `editingId`
+      // is the draft saved at the "create" stage, whose stored creation_method
+      // the backend trusts over the mode we send here.
+      const params = await jdService.extractParamsFromText(
+        jdText,
+        trimmedJobTitle,
+        mode === 'ai' ? 'ai_generated' : 'manual',
+        editingId,
+      );
 
       // Debug: Log API response to see what's being extracted
       console.log('[TalentFlow] Extraction API response:', params);
@@ -3617,7 +3693,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // and every extracted JD saved with department = null. Same edit-mode fallback
         // as the fields around it, so a recruiter's own value is never overwritten.
         department: params.department || (isEditMode ? extractedData.department : ''),
-        allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
+        allowOverqualified: isEditMode ? extractedData.allowOverqualified : null,
         employmentType: normalizeExtractedEmploymentType(params.job_type) || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: (params.work_mode as 'onsite' | 'remote' | 'hybrid' | 'field_based') || (isEditMode ? extractedData.workModel : 'onsite'),
         // Pre-fill salary from AI extraction
@@ -3914,6 +3990,30 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // left set would suppress preservation on the NEXT extraction too, silently wiping
       // Step 2 edits that had nothing to do with the failed attempt.
       forceFreshExtraction.current = false;
+    }
+  };
+
+  // What the Next button is bound to: one click, one advance.
+  //
+  // The button's `disabled` prop cannot carry this on its own. `disabled` only
+  // takes effect after React re-renders, and the advance above awaits
+  // `ensureValidJobTitle` (a network round-trip) before it sets `isExtracting`
+  // - so a second click landing in that window entered the handler again and
+  // ran the whole Step 1 -> Step 2 transition a second time. The ref flips
+  // synchronously, so the second entry is rejected on the same tick.
+  //
+  // `finally` matters: an advance that throws must leave the button usable, or
+  // a single failed attempt would strand the user on Step 1 for good.
+  const handleNext = async () => {
+    if (isAdvancingRef.current) {
+      console.log('[TalentFlow] Next ignored — an advance is already in flight');
+      return;
+    }
+    isAdvancingRef.current = true;
+    try {
+      await advanceFromCreateStep();
+    } finally {
+      isAdvancingRef.current = false;
     }
   };
 
@@ -4648,7 +4748,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     return englishOnlyChecks.every(check => check.valid);
   };
 
-  const handlePublish = async () => {
+  // The real Step 2 -> Review advance. Reached only through the guarded
+  // `handlePublish` below, which is what the button is bound to.
+  const advanceToReviewStep = async () => {
     const trimmedJobTitle = jobTitle.trim();
 
     if (!trimmedJobTitle) {
@@ -4704,6 +4806,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       experience?: string;
       industryType?: string;
       locations?: string;
+      allowOverqualified?: string;
     } = {};
 
     // Must have at least one must-have skill
@@ -4735,6 +4838,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (extractedData.locationsRequired && (!extractedData.locations || extractedData.locations.length === 0)) {
       missingFields.push('At least one Location');
       errors.locations = 'Location is marked as required but no locations added';
+    }
+
+    // Allow Overqualified Candidates is a required Yes/No choice - the recruiter must
+    // pick one before proceeding. null means not yet answered.
+    if (extractedData.allowOverqualified === null || extractedData.allowOverqualified === undefined) {
+      missingFields.push('Allow Overqualified Candidates (Yes/No)');
+      errors.allowOverqualified = 'Please select Yes or No for Allow Overqualified Candidates';
     }
 
     // Set validation errors for inline display
@@ -5028,6 +5138,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
+  // What the Step 2 button is bound to: one click, one advance.
+  //
+  // Same reasoning as `handleNext` - the advance above awaits
+  // `ensureValidJobTitle` before it sets any in-flight state, so a second
+  // click could enter it again and move the step to Review twice (running the
+  // reformat and the save a second time with it). Guarded synchronously, and
+  // released in `finally` so a failure never leaves the button dead.
+  const handlePublish = async () => {
+    if (isAdvancingRef.current) {
+      console.log('[TalentFlow] Publish ignored - an advance is already in flight');
+      return;
+    }
+    isAdvancingRef.current = true;
+    try {
+      await advanceToReviewStep();
+    } finally {
+      isAdvancingRef.current = false;
+    }
+  };
+
   // Helper function to get experience label from master data
   const getExperienceLabel = (code: string): string => {
     if (!code) return 'Not specified';
@@ -5074,6 +5204,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const industryValue = extractedData.industryType?.trim() || '';
     if (!industryValue) {
       missingFields.push('Industry Type');
+    }
+
+    // Allow Overqualified Candidates is a required Yes/No choice, not a default-off
+    // toggle - the recruiter must pick one before Step 2 can be left. null is "not
+    // yet answered"; true/false are both valid, complete answers.
+    if (extractedData.allowOverqualified === null || extractedData.allowOverqualified === undefined) {
+      missingFields.push('Allow Overqualified Candidates (Yes/No)');
     }
 
     // Validate salary range
@@ -5884,7 +6021,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           niceToHaveComments: effectiveEditingJD.nice_to_have_comments || [],
           certifications: effectiveEditingJD.certifications || [],
           domainKeywords: effectiveEditingJD.domain_keywords || [],
-          allowOverqualified: effectiveEditingJD.allow_overqualified ?? false,
+          // Preserve the recruiter's actual saved answer; only a JD that genuinely
+          // never had this field set (predates the column) falls back to null,
+          // which re-triggers the required-choice gate on this edit.
+          allowOverqualified: effectiveEditingJD.allow_overqualified ?? null,
           employmentType: (effectiveEditingJD.employment_type as ExtractedData['employmentType']) || 'full_time',
           workModel: (effectiveEditingJD.remote_type as ExtractedData['workModel']) || 'onsite',
           locations: effectiveEditingJD.locations?.map(loc => ({
@@ -8330,24 +8470,61 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
               </div>
 
-              {/* Allow Overqualified Candidates */}
-              <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-                <div className="flex items-center justify-between">
+              {/* Allow Overqualified Candidates - REQUIRED choice, not a default-off
+                  toggle. Scoring reads this (evaluate_experience_level in
+                  odoo_scoring.py) so an unanswered field is not a safe silent default
+                  in either direction - the recruiter must pick Yes or No before
+                  leaving Step 2 (enforced in getValidationStatus/handlePublish). */}
+              <div className={`mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg border ${
+                validationErrors.allowOverqualified
+                  ? 'bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-800'
+                  : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
+              }`}>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
-                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">Allow Overqualified Candidates</h3>
-                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Accept candidates who exceed the required qualifications</p>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+                      Allow Overqualified Candidates <span className="text-red-500">*</span>
+                    </h3>
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                      Should candidates who significantly exceed this role's experience requirement be scored favorably, or treated as a mismatch?
+                    </p>
                   </div>
-                  <label className={`relative inline-flex items-center ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(extractedData.allowOverqualified)}
-                      onChange={(e) => { setExtractedData(prev => ({ ...prev, allowOverqualified: e.target.checked })); markExtractedDataModified(); }}
-                      className="sr-only peer"
-                      disabled={isRegenerating}
-                    />
-                    <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-blue/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-blue"></div>
-                  </label>
+                  <div className="flex items-center gap-2" role="radiogroup" aria-label="Allow Overqualified Candidates">
+                    {([
+                      { label: 'Yes', value: true },
+                      { label: 'No', value: false },
+                    ] as const).map((opt) => {
+                      const isSelected = extractedData.allowOverqualified === opt.value;
+                      return (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          disabled={isRegenerating}
+                          onClick={() => {
+                            setExtractedData(prev => ({ ...prev, allowOverqualified: opt.value }));
+                            setValidationErrors(prev => ({ ...prev, allowOverqualified: undefined }));
+                            markExtractedDataModified();
+                          }}
+                          className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                            isSelected
+                              ? 'bg-brand-blue text-white border-brand-blue'
+                              : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40'
+                          } ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+                {validationErrors.allowOverqualified && (
+                  <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />
+                    {validationErrors.allowOverqualified}
+                  </p>
+                )}
               </div>
 
               {/* Certifications & Domain Keywords - HIDDEN as per requirement */}
@@ -8610,9 +8787,22 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             <div className="flex flex-col-reverse sm:flex-row justify-between items-stretch sm:items-center mt-6 sm:mt-8 gap-3 sm:gap-0">
               <div className="flex gap-2 sm:gap-3">
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setStep('create');
                     setHasProceededToExtract(false);  // Re-enable regenerate button when going back
+
+                    // Persist the stage reversion immediately - the debounced (2s) JD06
+                    // autosave effect also does this, but a refresh that lands before the
+                    // debounce fires would otherwise reload the JD at 'extract' (the stage
+                    // Next saved to the server) instead of 'create'.
+                    if (editingId) {
+                      try {
+                        await jdService.update(editingId, { creation_stage: 'create' });
+                        ensureJDCreationUrl(editingId, 'create');
+                      } catch (error) {
+                        console.error('[TalentFlow] Failed to save create stage on Back:', error);
+                      }
+                    }
                   }}
                   className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
                 >

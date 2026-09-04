@@ -156,7 +156,10 @@ export default function SecurityPage() {
     try {
       const response = await userSettingsApi.enable2FA();
       setTwoFASecret(response.secret || '');
-      setTwoFAQRCode(response.qr_code_url || '');
+      // Server-rendered PNG. The otpauth:// URI carries the shared secret, so it
+      // is never handed to an external image service — if the server could not
+      // render, the setup card falls back to the manual key below.
+      setTwoFAQRCode(response.qr_code_image || '');
       setShow2FASetup(true);
     } catch (error: any) {
       console.error('Error enabling 2FA:', error);
@@ -510,13 +513,18 @@ export default function SecurityPage() {
                   <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-2 sm:mb-3">
                     1. Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
                   </p>
-                  {twoFAQRCode && (
+                  {twoFAQRCode ? (
                     <div className="flex justify-center p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- data: URI, nothing for the image optimizer to fetch */}
                       <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(twoFAQRCode)}`}
+                        src={twoFAQRCode}
                         alt="2FA QR Code"
                         className="w-36 h-36 sm:w-48 sm:h-48"
                       />
+                    </div>
+                  ) : (
+                    <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                      QR code unavailable. Enter the setup key below into your authenticator app instead.
                     </div>
                   )}
                 </div>

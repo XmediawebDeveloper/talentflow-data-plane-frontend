@@ -1219,6 +1219,51 @@ export default function AIInterviewConfig() {
   const [redirecting, setRedirecting] = useState(false);
   const existingDraftIdRef = useRef<string | null>(null); // track draft id for auto-save updates
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // In-flight POST /ai-interview/ for this wizard, shared by every path that
+  // may need the draft to exist. See ensureDraftId.
+  const draftCreateRef = useRef<Promise<string> | null>(null);
+  /**
+   * The id of this wizard's draft, creating it once if it does not exist yet.
+   *
+   * Four paths can need the draft: the 2s debounced auto-save and the three
+   * `saveDraft()` callers (Save Draft, Continue to clusters, and the unsaved-
+   * changes dialog). All of them used to do `if (existingDraftIdRef.current)
+   * update() else create()` — but that ref is only assigned AFTER `await
+   * create(...)` resolves, so the check and the assignment straddle an await.
+   * Edit a field and click Continue within the same couple of seconds and both
+   * paths read a null ref and both POST: two interview_configuration rows, two
+   * AI_INTERVIEW_CREATED activity rows a second apart, and two Configuration
+   * operations on the Control Plane for one configuration. Observed live on
+   * 2026-09-04 at 15:25:23 and 15:25:24.
+   *
+   * Storing the in-flight promise makes the create single-flight: the first
+   * caller issues it, every concurrent caller awaits the same one. `mine` is
+   * assigned before any await, so exactly one caller is ever told it created
+   * the draft; the others apply their own payload with `update` so no edit is
+   * lost. Same number of round trips as before — one of them is just an update
+   * now instead of a second create.
+   */
+  const ensureDraftId = async (payload: any): Promise<{ id: string; mine: boolean }> => {
+    if (existingDraftIdRef.current) return { id: existingDraftIdRef.current, mine: false };
+    let mine = false;
+    if (!draftCreateRef.current) {
+      mine = true;
+      draftCreateRef.current = aiInterviewService
+        .create(payload)
+        .then((created) => {
+          existingDraftIdRef.current = created.id;
+          return created.id;
+        })
+        .catch((err) => {
+          // Let the next caller retry rather than stranding the wizard with a
+          // permanently rejected promise.
+          draftCreateRef.current = null;
+          throw err;
+        });
+    }
+    return { id: await draftCreateRef.current, mine };
+  };
+
   const loadedSiRef = useRef<Record<string, any>>({}); // parsed special_instructions snapshot from last load
   // Original rounds_config skill arrays from the saved draft. Captured at load
   // time so auto-save can preserve the AI-expanded skill list when the
@@ -1733,6 +1778,95 @@ export default function AIInterviewConfig() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jdId]);
 
+  /* ── Backend reconciliation of the seeded skill lists ──────────────────────
+   *
+   * The seeding above already de-dupes, but only with `lib/skillDuplicates.ts` —
+   * the FRONTEND MIRROR of the backend matcher. That mirror implements the
+   * structural rules only; it has no LLM layer, so a pair that is a true synonym
+   * without a shared root ("Data Analytics" / "Data Analysis", "Source Control" /
+   * "Version Control", "ECG" / "EKG") survives it and lands in Configure state as
+   * two skills. Those are precisely the pairs no amount of client-side logic can
+   * settle, because deciding them needs a model.
+   *
+   * So the mirror is now a FAST PATH, not the authority: it keeps typing
+   * responsive and the obvious cases instant, and this pass asks the backend —
+   * the single source of truth — to confirm what actually survived. Anything it
+   * reports as a duplicate is dropped from state before the recruiter can build
+   * clusters on top of it.
+   *
+   * Both lists are audited TOGETHER (must-have as the pool, nice-to-have as the
+   * candidates) because a skill lives in one section or the other, so validating
+   * them independently is what lets "REST API" in must-have coexist with
+   * "RESTful API" in nice-to-have.
+   *
+   * Read-only and fail-open: `checkSkillDuplicates` already returns [] on any
+   * error or timeout, and a JD whose skills are clean costs one cheap call. It
+   * runs once per JD load, after seeding, and never fights the recruiter's own
+   * edits — it only ever removes, never adds, and only from the seeded set.
+   */
+  const reconciledJdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loadingJd || !jdId || reconciledJdRef.current === jdId) return;
+    const mthNames = mth.skills.map(s => s.name);
+    const nthNames = nth.skills.map(s => s.name);
+    if (mthNames.length + nthNames.length === 0) return;
+    reconciledJdRef.current = jdId;
+
+    (async () => {
+      try {
+        const [mthFindings, nthFindings] = await Promise.all([
+          aiInterviewService.checkSkillDuplicates({
+            candidates: mthNames, existing: [], jdId,
+          }),
+          nthNames.length
+            ? aiInterviewService.checkSkillDuplicates({
+                candidates: nthNames,
+                existing: [],
+                otherBucket: mthNames,
+                otherBucketLabel: 'Must-Have',
+                jdId,
+              })
+            : Promise.resolve([]),
+        ]);
+
+        const dropped: string[] = [];
+        const toDrop = (findings: typeof mthFindings) =>
+          new Set(
+            findings
+              .filter(f => f.duplicate && f.match)
+              .map(f => { dropped.push(f.skill); return f.skill.toLowerCase(); }),
+          );
+        const dropMth = toDrop(mthFindings);
+        const dropNth = toDrop(nthFindings);
+        if (dropMth.size === 0 && dropNth.size === 0) return;
+
+        if (dropMth.size) {
+          setMth(prev => ({
+            ...prev,
+            skills: prev.skills.filter(s => !dropMth.has(s.name.toLowerCase())),
+          }));
+        }
+        if (dropNth.size) {
+          setNth(prev => ({
+            ...prev,
+            skills: prev.skills.filter(s => !dropNth.has(s.name.toLowerCase())),
+          }));
+        }
+        // Say so. A skill vanishing from the list without explanation is the
+        // failure mode this whole area exists to avoid.
+        toast.info(
+          dropped.length === 1
+            ? `Removed 1 duplicate skill from this JD: "${dropped[0]}"`
+            : `Removed ${dropped.length} duplicate skills from this JD: ${dropped
+                .map(d => `"${d}"`).join(', ')}`,
+        );
+      } catch {
+        /* fail open — a duplicate audit must never block Configure from loading */
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingJd, jdId, mth.skills.length, nth.skills.length]);
+
   /* ── Fetch HR question bank on mount ── */
   useEffect(() => {
     api.get('/hr-question-bank').then(res => {
@@ -1810,9 +1944,9 @@ export default function AIInterviewConfig() {
           // Update existing draft
           await aiInterviewService.update(existingDraftIdRef.current, payload);
         } else {
-          // Create new draft and remember its id
-          const created = await aiInterviewService.create(payload);
-          existingDraftIdRef.current = created.id;
+          // Create the draft once, even if an explicit save is racing this one.
+          const { id, mine } = await ensureDraftId(payload);
+          if (!mine) await aiInterviewService.update(id, payload);
         }
       } catch {
         // Silent — don't toast on auto-save failures
@@ -2251,8 +2385,9 @@ export default function AIInterviewConfig() {
       if (existingDraftIdRef.current) {
         await aiInterviewService.update(existingDraftIdRef.current, payload);
       } else {
-        const created = await aiInterviewService.create(payload);
-        existingDraftIdRef.current = created.id;
+        // Create the draft once, even if the debounced auto-save is racing this.
+        const { id, mine } = await ensureDraftId(payload);
+        if (!mine) await aiInterviewService.update(id, payload);
       }
       if (!silent) toast.success('Draft saved!');
       return true;

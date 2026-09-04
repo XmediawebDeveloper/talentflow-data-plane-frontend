@@ -29,6 +29,11 @@ interface ScoredResume {
   phone: string;
   matchStatus: string;
   scorePercentage: number;
+  // Human-readable breakdown of how scorePercentage was derived (Required/
+  // Preferred pass/fail-cliff weighting) - shown as a tooltip next to the
+  // Weighted Score so it never looks like a simple average of the two
+  // percentages shown next to it. Computed fresh per candidate by the API.
+  scoreFormula?: string;
   scoredDate: string;
   scoredBy: string;
   experience?: string;
@@ -450,6 +455,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                  to show 85%). Only fall back to the refetched value when the
                  original genuinely has none. */
               scorePercentage: resume.scorePercentage ?? Number((completeResumeData.overall_score || 0).toFixed(1)),
+              scoreFormula: resume.scoreFormula || completeResumeData.score_formula,
               criteriaScores: completeResumeData.criteria_scores || {},
               scoreBreakdown: completeResumeData.score_breakdown || [],
               aiSummary: resume.aiSummary || completeResumeData.ai_summary,
@@ -1418,6 +1424,7 @@ Best regards`);
             <DetailedScorecardTab
               resume={{
                 scorePercentage: fullResumeData.scorePercentage,
+                scoreFormula: fullResumeData.scoreFormula,
                 scoredDate: fullResumeData.scoredDate,
                 scoredBy: fullResumeData.scoredBy,
                 detailedScores: detailedScores,

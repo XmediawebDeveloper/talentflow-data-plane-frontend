@@ -55,11 +55,8 @@ export type {
 export { scoringService } from './scoringService';
 export type {
   ScoringResponse,
-  ScoreDetailResponse,
   ScoreBreakdownItem,
   ScoredResumeListResponse,
-  BulkScoringResponse,
-  BulkScoringItemStatus,
 } from './scoringService';
 
 // Assessments
