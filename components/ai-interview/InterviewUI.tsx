@@ -2433,10 +2433,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             // reference would point at a detached element and the recording
             // would freeze on its last frame while the camera ran fine.
             const src = webcamRef.current?.getVideoElement?.() ?? video;
-            // readyState >= HAVE_CURRENT_DATA — anything less has no frame to
-            // draw (mid-reacquire), so we simply hold the previous one.
-            if (src && src.readyState >= 2) {
+            const camTrackLive = webcamStreamRef.current
+              ?.getVideoTracks?.().some(t => t.readyState === 'live') ?? false;
+            // The canvas MUST be repainted every tick, even with no camera.
+            //
+            // Skipping the draw (what this did before) stops modifying the
+            // canvas, so captureStream emits NO frames at all — the encoder
+            // then gets a multi-second hole with zero video, which is what made
+            // the stored recording stall/stutter at exactly the unplug
+            // interval. Painting a placeholder keeps frames flowing at a steady
+            // rate, so the file stays continuous and seekable.
+            //
+            // It is also the honest thing to record: a <video> holds its LAST
+            // FRAME after the track ends, so drawing that would put a frozen
+            // face in the recording for the whole outage — indistinguishable,
+            // to a recruiter, from the candidate sitting very still.
+            if (src && src.readyState >= 2 && camTrackLive) {
               try { relayCtx.drawImage(src, 0, 0, relayCanvas.width, relayCanvas.height); } catch { /* frame skipped */ }
+            } else {
+              const w = relayCanvas.width, h = relayCanvas.height;
+              relayCtx.fillStyle = '#0F1929';
+              relayCtx.fillRect(0, 0, w, h);
+              relayCtx.fillStyle = '#94A3B8';
+              relayCtx.textAlign = 'center';
+              relayCtx.textBaseline = 'middle';
+              relayCtx.font = `${Math.max(12, Math.round(h / 18))}px system-ui, sans-serif`;
+              relayCtx.fillText('Camera disconnected', w / 2, h / 2);
             }
           }, Math.round(1000 / RELAY_FPS));
           stableVideoTrack = relayCanvas.captureStream(RELAY_FPS).getVideoTracks()[0] ?? null;
