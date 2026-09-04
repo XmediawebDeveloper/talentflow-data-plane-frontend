@@ -19,6 +19,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { InterviewEventBus, ProctoringEventType } from './InterviewEventBus';
+import { loadVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
 
 // Re-export for consumers that import from here
 export type { ProctoringEventType } from './InterviewEventBus';
@@ -68,6 +69,7 @@ const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
   multiple_voices: 10000,
   camera_disabled: 5000,
   microphone_disabled: 5000,
+  microphone_switched: 15000,
   camera_obstructed: 10000,
   screenshot_attempt: 2000,
   screen_recording_attempt: 5000,
@@ -370,6 +372,17 @@ export function useInterviewProctoringMonitor({
   // reappear as the active track's id, matching "reconnect the headset" —
   // not merely "some mic works again".
   const initialMicDeviceIdRef = useRef<string | null>(null);
+  // Mics that were connected and working when the candidate passed the system
+  // check. A mid-interview swap to one of THESE is allowed (logged, not
+  // halting) because the candidate already had it before the interview began.
+  // Loaded lazily on first use and FAILS CLOSED: an empty set — storage
+  // unavailable, or a session that never ran the system check — means no
+  // fallback is permitted and the original strict pinning applies.
+  const acceptedMicIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    acceptedMicIdsRef.current = loadVerifiedAudioInputs(token);
+    console.log(`[INTERVIEW_PROCTORING] ${acceptedMicIdsRef.current.size} system-check-verified mic(s) eligible for fallback`);
+  }, [token]);
   const permissionCleanupRef = useRef<(() => void) | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -817,16 +830,38 @@ export function useInterviewProctoringMonitor({
           initialMicDeviceIdRef.current
           && at.getSettings?.().deviceId
           && at.getSettings().deviceId !== initialMicDeviceIdRef.current
+          && !acceptedMicIdsRef.current.has(at.getSettings().deviceId as string)
         ) {
           // The track itself stays live/unmuted/enabled, but the OS silently
           // rerouted it to a DIFFERENT physical device — e.g. unplugging a
           // headset falls back to the laptop's built-in mic without ever
           // ending or muting the track. No onended/onmute fires for this at
           // all; comparing deviceId against the session's recorded baseline
-          // is the only way to catch it. Recovery (see reportMicRestored
-          // below) requires THIS SAME comparison to pass again — i.e. the
-          // specific original device must come back, not just any mic.
+          // is the only way to catch it.
+          //
+          // EXCEPTION (see acceptedMicIdsRef): a swap to a mic that was already
+          // connected and working at system-check time is allowed. The
+          // candidate had it before the interview began, so it cannot be a
+          // device introduced mid-interview to reroute audio — the scenario
+          // this pinning exists to stop. The switch is still RECORDED as a
+          // violation; it simply doesn't halt the interview.
           reportMicDisabled('device_swapped');
+        } else if (
+          initialMicDeviceIdRef.current
+          && at.getSettings?.().deviceId
+          && at.getSettings().deviceId !== initialMicDeviceIdRef.current
+        ) {
+          // Verified fallback in use. Re-pin to it so every later comparison is
+          // against the device actually in use, log it once, and carry on.
+          const newId = at.getSettings().deviceId as string;
+          console.warn(`[INTERVIEW_PROCTORING] Mic fell back to a system-check-verified device (${newId.slice(0, 8)}…) — allowed, logging`);
+          initialMicDeviceIdRef.current = newId;
+          emitEventRef.current('microphone_switched', {
+            reason: 'verified_fallback',
+            new_device_id: newId,
+            label: at.label || 'unknown',
+          });
+          reportMicRestored();
         } else {
           reportMicRestored();
         }
@@ -1249,6 +1284,8 @@ function getSeverity(type: ProctoringEventType): 'minor' | 'moderate' | 'severe'
     // Severe (3 pts) — strong integrity signals
     camera_disabled:          'severe',
     microphone_disabled:      'severe',
+    // Allowed fallback to a system-check-verified mic — recorded, not halting.
+    microphone_switched:      'moderate',
     multiple_faces:           'severe',
     face_identity_changed:    'severe',
     voice_identity_changed:   'severe',

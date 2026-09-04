@@ -153,6 +153,11 @@ export const EVENT_META: Record<string, EventMeta> = {
   // details.reason, and labelOfViolation() adds the repeat count.
   camera_disabled:        { category: 'device', label: 'Camera disconnected' },
   microphone_disabled:    { category: 'device', label: 'Microphone disconnected' },
+  // An ALLOWED mid-interview swap to a mic that was already connected at
+  // system-check time. Recorded so the recruiter can see the audio path
+  // changed, but it does not halt the interview — an unverified device still
+  // pauses it (see the proctoring monitor's device_swapped branch).
+  microphone_switched:    { category: 'device', label: 'Microphone switched device' },
 
   // Capture / exfiltration
   copy_attempt:             { category: 'capture', label: 'Copied text' },
@@ -508,6 +513,13 @@ export function describeViolation(v: ViolationRecord): string {
     }
     case 'face_missing':
       return 'No face was detected by the camera.';
+    case 'microphone_switched': {
+      const label = typeof d.label === 'string' && d.label ? ` ("${d.label}")` : '';
+      return `The microphone changed to a different device${label} during the interview. ` +
+        `It was one the candidate already had connected when they passed the system check, ` +
+        `so the interview continued — typically a headset being unplugged with another mic ` +
+        `still attached. Worth a listen if the audio changes character at this point.`;
+    }
     case 'camera_disabled':
     case 'microphone_disabled': {
       // details: { reason, disconnect_count, grace_period_ms }
