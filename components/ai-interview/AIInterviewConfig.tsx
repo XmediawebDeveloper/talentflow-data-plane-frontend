@@ -1733,6 +1733,95 @@ export default function AIInterviewConfig() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jdId]);
 
+  /* ── Backend reconciliation of the seeded skill lists ──────────────────────
+   *
+   * The seeding above already de-dupes, but only with `lib/skillDuplicates.ts` —
+   * the FRONTEND MIRROR of the backend matcher. That mirror implements the
+   * structural rules only; it has no LLM layer, so a pair that is a true synonym
+   * without a shared root ("Data Analytics" / "Data Analysis", "Source Control" /
+   * "Version Control", "ECG" / "EKG") survives it and lands in Configure state as
+   * two skills. Those are precisely the pairs no amount of client-side logic can
+   * settle, because deciding them needs a model.
+   *
+   * So the mirror is now a FAST PATH, not the authority: it keeps typing
+   * responsive and the obvious cases instant, and this pass asks the backend —
+   * the single source of truth — to confirm what actually survived. Anything it
+   * reports as a duplicate is dropped from state before the recruiter can build
+   * clusters on top of it.
+   *
+   * Both lists are audited TOGETHER (must-have as the pool, nice-to-have as the
+   * candidates) because a skill lives in one section or the other, so validating
+   * them independently is what lets "REST API" in must-have coexist with
+   * "RESTful API" in nice-to-have.
+   *
+   * Read-only and fail-open: `checkSkillDuplicates` already returns [] on any
+   * error or timeout, and a JD whose skills are clean costs one cheap call. It
+   * runs once per JD load, after seeding, and never fights the recruiter's own
+   * edits — it only ever removes, never adds, and only from the seeded set.
+   */
+  const reconciledJdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (loadingJd || !jdId || reconciledJdRef.current === jdId) return;
+    const mthNames = mth.skills.map(s => s.name);
+    const nthNames = nth.skills.map(s => s.name);
+    if (mthNames.length + nthNames.length === 0) return;
+    reconciledJdRef.current = jdId;
+
+    (async () => {
+      try {
+        const [mthFindings, nthFindings] = await Promise.all([
+          aiInterviewService.checkSkillDuplicates({
+            candidates: mthNames, existing: [], jdId,
+          }),
+          nthNames.length
+            ? aiInterviewService.checkSkillDuplicates({
+                candidates: nthNames,
+                existing: [],
+                otherBucket: mthNames,
+                otherBucketLabel: 'Must-Have',
+                jdId,
+              })
+            : Promise.resolve([]),
+        ]);
+
+        const dropped: string[] = [];
+        const toDrop = (findings: typeof mthFindings) =>
+          new Set(
+            findings
+              .filter(f => f.duplicate && f.match)
+              .map(f => { dropped.push(f.skill); return f.skill.toLowerCase(); }),
+          );
+        const dropMth = toDrop(mthFindings);
+        const dropNth = toDrop(nthFindings);
+        if (dropMth.size === 0 && dropNth.size === 0) return;
+
+        if (dropMth.size) {
+          setMth(prev => ({
+            ...prev,
+            skills: prev.skills.filter(s => !dropMth.has(s.name.toLowerCase())),
+          }));
+        }
+        if (dropNth.size) {
+          setNth(prev => ({
+            ...prev,
+            skills: prev.skills.filter(s => !dropNth.has(s.name.toLowerCase())),
+          }));
+        }
+        // Say so. A skill vanishing from the list without explanation is the
+        // failure mode this whole area exists to avoid.
+        toast.info(
+          dropped.length === 1
+            ? `Removed 1 duplicate skill from this JD: "${dropped[0]}"`
+            : `Removed ${dropped.length} duplicate skills from this JD: ${dropped
+                .map(d => `"${d}"`).join(', ')}`,
+        );
+      } catch {
+        /* fail open — a duplicate audit must never block Configure from loading */
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingJd, jdId, mth.skills.length, nth.skills.length]);
+
   /* ── Fetch HR question bank on mount ── */
   useEffect(() => {
     api.get('/hr-question-bank').then(res => {
