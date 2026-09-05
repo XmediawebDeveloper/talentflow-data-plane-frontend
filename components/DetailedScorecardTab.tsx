@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info } from 'lucide-react';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -145,6 +146,12 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     preferredMax: number;
   } | null = null;
 
+  // Worked-through explanation for the Weighted Score tooltip - shows WHERE
+  // each number comes from (how many criteria, what each is worth, how many
+  // passed) rather than just the final percentage, so a reader can verify the
+  // arithmetic themselves instead of taking "94%" on faith.
+  let weightedScoreExplanation: ReactNode = null;
+
   // Single source of truth: scoreBreakdown (from API score_breakdown array)
   // This is built by build_criteria_breakdown() in the router from scoring_details,
   // ensuring consistent data. criteriaScores (raw dict) is NOT used for display.
@@ -169,6 +176,44 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
         regularItems.push(item);
       }
     });
+
+    // Worked-through Weighted Score derivation: how many Required/Preferred
+    // criteria exist, what each is worth, how many cleared the 7-point cliff,
+    // and what that earns - computed from the same per-criterion data the
+    // table below renders, so it can never disagree with what's on screen.
+    {
+      const _reqItems = regularItems.filter(item => item.requirement === 'Required' || item.is_essential);
+      const _prefItems = regularItems.filter(item => item.requirement === 'Preferred' || !item.is_essential);
+      const _numReq = _reqItems.length;
+      const _numPref = _prefItems.length;
+      if (_numReq > 0 || _numPref > 0) {
+        const _reqPassed = _reqItems.filter(item => (item.rating ?? 0) >= 7).length;
+        const _prefPassed = _prefItems.filter(item => (item.rating ?? 0) >= 7).length;
+        const _perReq = _numReq > 0 ? 60 / _numReq : 0;
+        const _perPref = _numPref > 0 ? 40 / _numPref : 0;
+        const _reqEarned = Math.min(Math.round(_reqPassed * _perReq * 100) / 100, 60);
+        // Odoo rule: Preferred is discarded entirely unless Required earned the
+        // full 60 - must match compute_odoo_scores() or this tooltip would
+        // describe a total that doesn't match the number shown next to it.
+        const _prefEarned = _reqEarned >= 60 ? Math.min(Math.round(_prefPassed * _perPref * 100) / 100, 40) : 0;
+
+        weightedScoreExplanation = (
+          <div className="space-y-1.5">
+            <p>Required criteria share 60% of the total, Preferred criteria share 40%. Each side's budget splits evenly across its own criteria, and a criterion only earns its share if it scored 7 or higher - no partial credit below that.</p>
+            {_numReq > 0 && (
+              <p>Required: {_numReq} criteria → each worth 60% ÷ {_numReq} = {_perReq.toFixed(1)}%. {_reqPassed} of {_numReq} scored 7+ → {_reqPassed} × {_perReq.toFixed(1)}% = {_reqEarned.toFixed(1)}%.</p>
+            )}
+            {_numPref > 0 && (
+              <p>
+                Preferred: {_numPref} criteria → each worth 40% ÷ {_numPref} = {_perPref.toFixed(1)}%. {_prefPassed} of {_numPref} scored 7+ → {_prefPassed} × {_perPref.toFixed(1)}% = {_prefEarned.toFixed(1)}%.
+                {_reqEarned < 60 && _numReq > 0 && ' Not counted - Required must earn the full 60% first.'}
+              </p>
+            )}
+            <p className="font-semibold">Total: {_reqEarned.toFixed(1)}% + {_prefEarned.toFixed(1)}% = {resume.scorePercentage}%</p>
+          </div>
+        );
+      }
+    }
 
     // Build summary data from summary rows
     if (requiredSummary || preferredSummary || finalSummary) {
@@ -299,8 +344,8 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       <div className="flex items-center gap-4 text-sm">
         <span className="text-gray-700 flex items-center gap-1">
           Weighted Score:
-          {resume.scoreFormula && (
-            <Tooltip content={resume.scoreFormula} position="bottom">
+          {(weightedScoreExplanation || resume.scoreFormula) && (
+            <Tooltip content={weightedScoreExplanation || resume.scoreFormula} position="bottom">
               <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
             </Tooltip>
           )}

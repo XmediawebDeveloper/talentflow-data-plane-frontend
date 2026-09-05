@@ -1261,6 +1261,51 @@ export default function AIInterviewConfig() {
   const [redirecting, setRedirecting] = useState(false);
   const existingDraftIdRef = useRef<string | null>(null); // track draft id for auto-save updates
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // In-flight POST /ai-interview/ for this wizard, shared by every path that
+  // may need the draft to exist. See ensureDraftId.
+  const draftCreateRef = useRef<Promise<string> | null>(null);
+  /**
+   * The id of this wizard's draft, creating it once if it does not exist yet.
+   *
+   * Four paths can need the draft: the 2s debounced auto-save and the three
+   * `saveDraft()` callers (Save Draft, Continue to clusters, and the unsaved-
+   * changes dialog). All of them used to do `if (existingDraftIdRef.current)
+   * update() else create()` — but that ref is only assigned AFTER `await
+   * create(...)` resolves, so the check and the assignment straddle an await.
+   * Edit a field and click Continue within the same couple of seconds and both
+   * paths read a null ref and both POST: two interview_configuration rows, two
+   * AI_INTERVIEW_CREATED activity rows a second apart, and two Configuration
+   * operations on the Control Plane for one configuration. Observed live on
+   * 2026-09-04 at 15:25:23 and 15:25:24.
+   *
+   * Storing the in-flight promise makes the create single-flight: the first
+   * caller issues it, every concurrent caller awaits the same one. `mine` is
+   * assigned before any await, so exactly one caller is ever told it created
+   * the draft; the others apply their own payload with `update` so no edit is
+   * lost. Same number of round trips as before — one of them is just an update
+   * now instead of a second create.
+   */
+  const ensureDraftId = async (payload: any): Promise<{ id: string; mine: boolean }> => {
+    if (existingDraftIdRef.current) return { id: existingDraftIdRef.current, mine: false };
+    let mine = false;
+    if (!draftCreateRef.current) {
+      mine = true;
+      draftCreateRef.current = aiInterviewService
+        .create(payload)
+        .then((created) => {
+          existingDraftIdRef.current = created.id;
+          return created.id;
+        })
+        .catch((err) => {
+          // Let the next caller retry rather than stranding the wizard with a
+          // permanently rejected promise.
+          draftCreateRef.current = null;
+          throw err;
+        });
+    }
+    return { id: await draftCreateRef.current, mine };
+  };
+
   const loadedSiRef = useRef<Record<string, any>>({}); // parsed special_instructions snapshot from last load
   // Original rounds_config skill arrays from the saved draft. Captured at load
   // time so auto-save can preserve the AI-expanded skill list when the
@@ -1941,9 +1986,9 @@ export default function AIInterviewConfig() {
           // Update existing draft
           await aiInterviewService.update(existingDraftIdRef.current, payload);
         } else {
-          // Create new draft and remember its id
-          const created = await aiInterviewService.create(payload);
-          existingDraftIdRef.current = created.id;
+          // Create the draft once, even if an explicit save is racing this one.
+          const { id, mine } = await ensureDraftId(payload);
+          if (!mine) await aiInterviewService.update(id, payload);
         }
       } catch {
         // Silent — don't toast on auto-save failures
@@ -2382,8 +2427,9 @@ export default function AIInterviewConfig() {
       if (existingDraftIdRef.current) {
         await aiInterviewService.update(existingDraftIdRef.current, payload);
       } else {
-        const created = await aiInterviewService.create(payload);
-        existingDraftIdRef.current = created.id;
+        // Create the draft once, even if the debounced auto-save is racing this.
+        const { id, mine } = await ensureDraftId(payload);
+        if (!mine) await aiInterviewService.update(id, payload);
       }
       if (!silent) toast.success('Draft saved!');
       return true;
