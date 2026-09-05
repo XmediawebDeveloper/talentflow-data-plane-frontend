@@ -9,8 +9,11 @@ const nextConfig: NextConfig = {
   // Standalone output: emits .next/standalone with a self-contained server.js —
   // lets the Docker image ship without node_modules (~250MB instead of ~2GB).
   output: 'standalone',
+  // Type errors fail the build. Verified clean with `npx tsc --noEmit` (0 errors)
+  // before this was switched on, so nothing is being newly broken by it — the
+  // flag was suppressing an empty set and hiding any future regression.
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   allowedDevOrigins: ['abi.0sms.com', '*.0sms.com'],
   serverExternalPackages: [

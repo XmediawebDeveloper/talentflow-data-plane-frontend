@@ -35,6 +35,7 @@ import { INVALID_CAMERA_SELECTION_MESSAGE } from "@/lib/proctoring/virtualCamera
 // TF.js backend crashes AND benign browser-extension "message channel closed"
 // noise. Idempotent — safe even though face-verification also imports it.
 import "@/lib/tfjs-rejection-guard";
+import { loadVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
 
 interface FaceVerificationHandle {
   startVerification: (videoElement: HTMLVideoElement, intervalMs?: number) => void;
@@ -1685,6 +1686,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // so a "does the pinned device still exist?" check would always say yes. This
   // ref stays on the ORIGINAL device so its disappearance is detectable.
   const interviewMicDeviceIdRef = useRef<string | undefined>(undefined);
+  // Mics that were connected and working when the candidate passed the system
+  // check. A mid-interview swap to one of these is an ALLOWED fallback rather
+  // than a proctoring pause (the proctoring monitor logs it as
+  // `microphone_switched`). Empty set => strict pinning, so a session with no
+  // recorded system check can never silently gain a weaker rule.
+  const verifiedMicIdsRef = useRef<Set<string>>(new Set());
+
   // True when the live camera track is no longer the one approved during
   // System Check — either it switched to a DIFFERENT physical device, or it
   // switched to a known virtual/mobile-relay camera. Rides the exact same
@@ -2014,6 +2022,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Keep the audioDeviceLost ref mirror current for the always-on listener.
   useEffect(() => { audioDeviceLostRef.current = audioDeviceLost; }, [audioDeviceLost]);
 
+  // Load the system-check-verified mic set once per interview.
+  useEffect(() => {
+    verifiedMicIdsRef.current = loadVerifiedAudioInputs(token);
+  }, [token]);
+
   // Keep the cameraDeviceLost ref mirror current for the always-on listener
   // (see the camera-device-lost effect below, mirrors the mic pattern above).
   useEffect(() => { cameraDeviceLostRef.current = cameraDeviceLost; }, [cameraDeviceLost]);
@@ -2057,7 +2070,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         ?? webcamStreamRef.current?.getAudioTracks?.().find(tr => tr.readyState === 'live');
       if (!t) return false;
       const cur = t.getSettings?.().deviceId;
-      return Boolean(cur && cur !== 'default' && cur !== 'communications' && cur !== orig);
+      if (!cur || cur === 'default' || cur === 'communications' || cur === orig) return false;
+      // A swap to a mic that was already connected and working at system-check
+      // time is an ALLOWED fallback (the candidate had it before the interview
+      // began, so it can't be a device introduced to reroute audio). Re-pin to
+      // it so later comparisons track the device actually in use, and let the
+      // proctoring monitor own logging the switch — duplicating the event here
+      // would double-count it on the recruiter's timeline.
+      if (verifiedMicIdsRef.current.has(cur)) {
+        console.warn(`[INTERVIEW-DEBUG] Mic swapped to a system-check-verified device (${cur.slice(0, 8)}…) — allowed, not pausing`);
+        interviewMicDeviceIdRef.current = cur;
+        return false;
+      }
+      return true;
     };
 
     // SIGNAL B — the original device is no longer in the device list.
@@ -2071,7 +2096,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (!orig || inputs.length === 0) return false; // can't judge → present
       const present = inputs.some(d => d.deviceId === orig);
       if (present) origConfirmedPresent = true;
-      return origConfirmedPresent && !present;
+      if (!origConfirmedPresent || present) return false;
+      // The pinned device is gone — but if one of the system-check-verified
+      // mics is still connected, that is an allowed fallback rather than a
+      // lost-audio pause. Re-pin to it so the interview continues on a device
+      // the candidate had before it began. Fails closed: an empty verified set
+      // (no system check recorded, storage unavailable) finds no alternative
+      // and the strict pause applies exactly as before.
+      const alt = inputs.find(d => verifiedMicIdsRef.current.has(d.deviceId));
+      if (alt) {
+        console.warn(`[INTERVIEW-DEBUG] Pinned mic gone; falling back to verified device ${alt.deviceId.slice(0, 8)}… — not pausing`);
+        interviewMicDeviceIdRef.current = alt.deviceId;
+        return false;
+      }
+      return true;
     };
 
     const check = async (trigger: string) => {
@@ -2395,10 +2433,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             // reference would point at a detached element and the recording
             // would freeze on its last frame while the camera ran fine.
             const src = webcamRef.current?.getVideoElement?.() ?? video;
-            // readyState >= HAVE_CURRENT_DATA — anything less has no frame to
-            // draw (mid-reacquire), so we simply hold the previous one.
-            if (src && src.readyState >= 2) {
+            const camTrackLive = webcamStreamRef.current
+              ?.getVideoTracks?.().some(t => t.readyState === 'live') ?? false;
+            // The canvas MUST be repainted every tick, even with no camera.
+            //
+            // Skipping the draw (what this did before) stops modifying the
+            // canvas, so captureStream emits NO frames at all — the encoder
+            // then gets a multi-second hole with zero video, which is what made
+            // the stored recording stall/stutter at exactly the unplug
+            // interval. Painting a placeholder keeps frames flowing at a steady
+            // rate, so the file stays continuous and seekable.
+            //
+            // It is also the honest thing to record: a <video> holds its LAST
+            // FRAME after the track ends, so drawing that would put a frozen
+            // face in the recording for the whole outage — indistinguishable,
+            // to a recruiter, from the candidate sitting very still.
+            if (src && src.readyState >= 2 && camTrackLive) {
               try { relayCtx.drawImage(src, 0, 0, relayCanvas.width, relayCanvas.height); } catch { /* frame skipped */ }
+            } else {
+              const w = relayCanvas.width, h = relayCanvas.height;
+              relayCtx.fillStyle = '#0F1929';
+              relayCtx.fillRect(0, 0, w, h);
+              relayCtx.fillStyle = '#94A3B8';
+              relayCtx.textAlign = 'center';
+              relayCtx.textBaseline = 'middle';
+              relayCtx.font = `${Math.max(12, Math.round(h / 18))}px system-ui, sans-serif`;
+              relayCtx.fillText('Camera disconnected', w / 2, h / 2);
             }
           }, Math.round(1000 / RELAY_FPS));
           stableVideoTrack = relayCanvas.captureStream(RELAY_FPS).getVideoTracks()[0] ?? null;

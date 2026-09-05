@@ -96,10 +96,6 @@ export interface ScoringResponse {
   scorecard_ready?: boolean;
 }
 
-export interface ScoreDetailResponse extends ScoringResponse {
-  score_breakdown: ScoreBreakdownItem[];
-}
-
 export interface ScoredResumeListResponse {
   items: ScoringResponse[];
   total: number;
@@ -109,29 +105,6 @@ export interface ScoredResumeListResponse {
   excellent_count: number;
   partial_count: number;
   no_match_count: number;
-}
-
-export interface BulkScoringItemStatus {
-  resume_id: string;
-  candidate_name?: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
-  match_status?: string;
-  score?: number;
-  error_message?: string;
-  processed_at?: string;
-}
-
-export interface BulkScoringResponse {
-  job_id: string;
-  jd_id: string;
-  total_resumes: number;
-  completed: number;
-  failed: number;
-  status: string;
-  estimated_completion?: string;
-  items: BulkScoringItemStatus[];
-  created_at: string;
-  completed_at?: string;
 }
 
 // Async Bulk Scoring (Celery)
@@ -223,36 +196,6 @@ export const scoringService = {
   },
 
   /**
-   * Bulk score resumes
-   * Consumes 1 unit per resume
-   */
-  async bulkScore(jdId: string, resumeIds: string[]): Promise<BulkScoringResponse> {
-    try {
-      const response = await api.post<BulkScoringResponse>('/scoring/bulk', {
-        jd_id: jdId,
-        resume_ids: resumeIds,
-      });
-      // Dispatch event to refresh header quota display
-      dispatchUnitsConsumed();
-      return response.data;
-    } catch (error) {
-      throw new Error(handleApiError(error));
-    }
-  },
-
-  /**
-   * Get bulk scoring job status
-   */
-  async getBulkStatus(jobId: string): Promise<BulkScoringResponse> {
-    try {
-      const response = await api.get<BulkScoringResponse>(`/scoring/bulk/${jobId}`);
-      return response.data;
-    } catch (error) {
-      throw new Error(handleApiError(error));
-    }
-  },
-
-  /**
    * Get scored resumes for a JD
    */
   async getJDScoredResumes(
@@ -293,48 +236,6 @@ export const scoringService = {
     try {
       const response = await api.get<ScoredResumeListResponse>('/scoring/all', { params });
       return response.data as ScoredResumeListResponse & { items: Array<ScoringResponse & { jd_title: string }> };
-    } catch (error) {
-      throw new Error(handleApiError(error));
-    }
-  },
-
-  /**
-   * Get score detail with breakdown
-   */
-  async getScoreDetail(scoreId: string): Promise<ScoreDetailResponse> {
-    try {
-      const response = await api.get<ScoreDetailResponse>(`/scoring/${scoreId}`);
-      return response.data;
-    } catch (error) {
-      throw new Error(handleApiError(error));
-    }
-  },
-
-  /**
-   * Export scored resumes to Excel
-   */
-  async exportToExcel(
-    jdId: string,
-    resumeIds?: string[],
-    columns?: string[]
-  ): Promise<Blob> {
-    try {
-      const response = await api.post(
-        '/scoring/export/excel',
-        {
-          jd_id: jdId,
-          resume_ids: resumeIds,
-          columns: columns || [
-            'candidate_name',
-            'email',
-            'overall_score',
-            'match_status',
-            'created_at',
-          ],
-        },
-        { responseType: 'blob' }
-      );
-      return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
     }

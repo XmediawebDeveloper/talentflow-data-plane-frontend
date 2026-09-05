@@ -32,7 +32,7 @@ import {
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
 import { checkVirtualCamera, isVirtualCameraLabel, INVALID_CAMERA_SELECTION_MESSAGE } from '@/lib/proctoring/virtualCameraDetection';
-import { canOpenDevice } from '@/lib/utils/mediaDeviceProbe';
+import { canOpenDevice, enumerateAudioInputIds, saveVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -1818,6 +1818,16 @@ export default function StepSystemCheck({
       setIsProceedLoading(false);
       return;
     }
+
+    // Record every microphone that is connected and working RIGHT NOW. The
+    // interview pins one device and treats a change as a proctoring event, but
+    // it will accept a fallback to a mic from THIS set — the candidate had it
+    // plugged in before the interview began, so it cannot be a device
+    // introduced mid-interview to reroute audio. Anything not captured here
+    // still pauses the interview.
+    try {
+      saveVerifiedAudioInputs(token, await enumerateAudioInputIds());
+    } catch { /* best-effort: no set recorded => interview keeps strict pinning */ }
 
     const checkStatus = (id: string) =>
       systemChecks.find((c) => c.id === id)?.status === 'pass' ? 'pass' : 'fail';

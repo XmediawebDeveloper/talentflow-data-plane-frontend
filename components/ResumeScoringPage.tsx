@@ -1264,6 +1264,30 @@ export default function ResumeScoringPage({
 
     // Dispatch all resumes to Celery, then poll for progress
     const scoreResumes = async () => {
+      // Nothing new to score. AITalentMatchPage deliberately hands over an empty
+      // resumeIds when every selected resume already has a score for this JD
+      // ("All already scored - use pendingScoringData path (no batch needed)").
+      // Dispatching that anyway posts an empty list, the backend rejects it with
+      // 400 "At least one resume ID is required", and the catch below marks every
+      // already-scored row as Failed — so a job that was actually complete
+      // presented as a broken one, and no batch was ever created.
+      if (resumeIds.length === 0) {
+        console.log(
+          `[ResumeScoringPage] No new resumes to score for "${jobTitle}" — ` +
+          `${alreadyScoredItems.length} already scored, skipping dispatch`
+        );
+        updateBulkProgress();
+
+        if (onRefreshHistory) {
+          invalidateGlobalScoredResumes();
+          await onRefreshHistory();
+          setShowProgressModal(false);
+          setPendingAutoSelectJdId(jobId);
+          router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
+        }
+        return;
+      }
+
       try {
         console.log(`[ResumeScoringPage] Dispatching ${resumeIds.length} resume(s) to Celery`);
         const batch = await scoringService.startBulkScoringAsync(jobId, resumeIds);

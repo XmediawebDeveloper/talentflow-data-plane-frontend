@@ -17,6 +17,7 @@ import { recordPcm16 } from '@/lib/utils/pcmEnroll';
 // Reuse the SAME realtime waveform the live interview uses (canvas equalizer
 // reading the mic AnalyserNode), so practice looks identical.
 import { MicWaveform } from '@/components/ai-interview/MicWaveform';
+import { canOpenDevice } from '@/lib/utils/mediaDeviceProbe';
 
 // ── Component props ──────────────────────────────────────────────────────────
 
@@ -366,9 +367,27 @@ export default function StepSamplePractice({
       const camLive = !!s?.getVideoTracks().some(t => t.readyState === 'live');
       const micLive = !!s?.getAudioTracks().some(t => t.readyState === 'live');
       if (camLive && micLive) return;
+
+      // Only rebuild if the MISSING device can actually be opened right now.
+      //
+      // Without this the watcher never converged: unplugging the headset left
+      // micLive false, so every tick tore the whole stream down — INCLUDING the
+      // perfectly healthy camera — re-acquired, still found no mic, and did it
+      // all again 1.5s later. That visible teardown/re-acquire cycle is what
+      // made the camera preview blink continuously while a device was out.
+      //
+      // Probing the dead device first means a permanently absent one costs a
+      // cheap failing getUserMedia per tick and nothing else: no teardown, no
+      // blink, and the healthy device is never punished for the other's
+      // absence. The rebuild happens exactly once, when the device returns.
+      const canRecoverCam = camLive || await canOpenDevice({ video: true }, 'video');
+      const canRecoverMic = micLive || await canOpenDevice({ audio: true }, 'audio');
+      if (cancelled) return;
+      if (!(canRecoverCam && canRecoverMic)) return;  // still missing — leave everything alone
+
       healInFlight = true;
       try {
-        console.warn(`[Practice] Device lost (camera=${camLive} mic=${micLive}) — re-acquiring`);
+        console.warn(`[Practice] Device recoverable (camera=${camLive} mic=${micLive}) — rebuilding stream`);
         s?.getTracks().forEach(t => t.stop());
         mediaStreamRef.current = null;
         if (animationFrameRef.current) {
@@ -385,7 +404,9 @@ export default function StepSamplePractice({
     };
     const onDeviceChange = () => { void healIfDead(); };
     navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
-    const healId = setInterval(() => { void healIfDead(); }, 1500);
+    // devicechange is the real trigger (fires on replug); this slower poll only
+    // covers drivers that never fire it.
+    const healId = setInterval(() => { void healIfDead(); }, 3000);
 
     // Share healInFlight with the FIRST acquire too, so the watcher can't race
     // it and fire a second getUserMedia while the initial one is still open.
