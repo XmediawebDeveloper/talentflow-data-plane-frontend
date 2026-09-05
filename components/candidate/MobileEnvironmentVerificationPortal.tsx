@@ -1042,14 +1042,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           otherwise the stream has nowhere to attach to and the preview
           stays black even though recording is happening. Hidden outside
           the aligning/recording phases via `hidden` rather than unmounted. */}
-      <div className={`w-full max-w-2xl landscape:max-w-none landscape:w-[92vw] landscape:flex landscape:flex-col landscape:items-center space-y-4 landscape:space-y-1.5 ${(phase === 'aligning' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+      <div className={`w-full max-w-2xl landscape:max-w-none landscape:w-[98vw] landscape:flex landscape:flex-col landscape:items-center space-y-4 landscape:space-y-1.5 ${(phase === 'aligning' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
         <div className="relative landscape:inline-block">
           <video
             ref={videoRef}
             autoPlay
             muted
             playsInline
-            className="w-full landscape:w-auto landscape:h-[62dvh] aspect-video rounded-xl bg-black object-cover"
+            className="w-full landscape:w-auto landscape:h-[88dvh] aspect-video rounded-xl bg-black object-cover"
           />
           {phase === 'aligning' && !canRecord && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 rounded-xl px-4 text-center">
