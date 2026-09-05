@@ -12,7 +12,7 @@ import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { useAuth } from '@/components/providers/AuthProvider';
-import PageBreadcrumb from '@/components/PageBreadcrumb';
+import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
@@ -39,6 +39,9 @@ const COMPILABLE_LANGUAGES = [
   'Go', 'Rust', 'Ruby', 'PHP', 'Kotlin', 'Swift',
 ] as const;
 const COMPILABLE_LANGUAGES_LOWER = new Set(COMPILABLE_LANGUAGES.map(l => l.toLowerCase()));
+/** How many languages one coding round may carry. Declared beside the list it
+ *  caps so the two cannot drift; every gate reads this, never a literal. */
+const MAX_CODING_LANGUAGES = 10;
 const filterCompilable = (langs: string[] | undefined | null): string[] => {
   if (!Array.isArray(langs)) return [];
   return langs.filter(l => l && COMPILABLE_LANGUAGES_LOWER.has(String(l).trim().toLowerCase()));
@@ -235,8 +238,12 @@ interface AssessmentCreationProps {
   proctoringSettings?: ProctoringSettings | null;
 }
 
+/** The three assessment rounds, by name — each round owns the section of the
+ *  same name, which is what the Configure step nests under it. */
+type RoundName = 'HR' | 'Technical' | 'Coding';
+
 interface SectionConfig {
-  name: 'HR' | 'Technical' | 'Coding';
+  name: RoundName;
   percentage: number;
   // The HR section carries full question objects here, Technical/Coding carry plain
   // topic labels - mirroring assessmentService.HRTopic and the backend's List[Any]
@@ -326,6 +333,24 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const urlJdTitle = searchParams.get('jd_title');
 
   const [step, setStepState] = useState<'select-jd' | 'configure' | 'preview'>(urlStep || 'select-jd');
+  /**
+   * Which rounds have their section card open on the Configure step.
+   *
+   * All three open by default: a recruiter who has just enabled a round wants
+   * to see what they enabled, and collapsing is for getting a long HR question
+   * list out of the way once it is settled. Purely presentational — nothing
+   * saved reads it, and a collapsed section is still part of the assessment.
+   */
+  const [expandedRounds, setExpandedRounds] = useState<Set<RoundName>>(
+    () => new Set<RoundName>(['HR', 'Technical', 'Coding']),
+  );
+  const toggleRoundExpanded = (round: RoundName) =>
+    setExpandedRounds(prev => {
+      const next = new Set(prev);
+      if (next.has(round)) next.delete(round);
+      else next.add(round);
+      return next;
+    });
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [duration, setDuration] = useState(30); // Assessment duration in minutes (15-180)
   const [isEditMode, setIsEditMode] = useState(false);
@@ -409,9 +434,59 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     router.replace(`/recruitment/assessments/create${queryString ? `?${queryString}` : ''}`, { scroll: false });
   };
 
+  /**
+   * The crumb for each STEP of this flow, worded as the step's own page is.
+   *
+   * "Configure Assessment" is the heading of the configure step; "Select Job
+   * Description" is what the first step asks for. A crumb that reads
+   * differently from the page under it is a crumb the reader has to translate.
+   */
+  const STEP_CRUMB_LABEL: Record<'select-jd' | 'configure' | 'preview', string> = {
+    'select-jd': 'Select Job Description',
+    configure: 'Configure Assessment',
+    preview: 'Assessment Saved',
+  };
+
+  /**
+   * The steps, as the trail behind wherever the user is standing.
+   *
+   * This used to be ONE crumb — "Create Assessment" — on every step, so the
+   * trail said the flow had been entered but never which part of it was on
+   * screen, and advancing from the picker to Configure changed nothing in it.
+   * Each step now names itself, and the steps before it are the path back:
+   *
+   *   Dashboard › Assessments › Select Job Description
+   *   Dashboard › Assessments › Select Job Description › Configure Assessment
+   *
+   * The earlier crumbs are `onClick`, not `href`: every step of this flow
+   * lives at the same route (the URL only gains a `step` param, and inline on
+   * the Assessments page it does not even do that), so a link would point at
+   * the page the user is already on. `setStep` is what actually moves between
+   * them, and it is the same call the in-page Back controls make.
+   *
+   * EDIT MODE is one leaf, not a chain. It is deep-linked straight to
+   * Configure with the assessment already chosen, so there is no picker step
+   * behind it — offering "Select Job Description" would name a step the user
+   * never passed through and could not usefully go back to. Read off the URL's
+   * `edit` param rather than the `isEditMode` state it sets, because the state
+   * lands an effect later and the crumbs would visibly swap under the user.
+   */
+  const buildStepCrumbs = (): BreadcrumbCrumb[] => {
+    if (editAssessmentId) return [{ label: 'Edit Assessment' }];
+    if (step === 'select-jd') return [{ label: STEP_CRUMB_LABEL['select-jd'] }];
+    return [
+      { label: STEP_CRUMB_LABEL['select-jd'], onClick: () => setStep('select-jd') },
+      ...(step === 'preview'
+        ? [{ label: STEP_CRUMB_LABEL.configure, onClick: () => setStep('configure') }]
+        : []),
+      { label: STEP_CRUMB_LABEL[step] },
+    ];
+  };
+
   // Breadcrumb trail — Job Details anchored when the flow was entered from a
-  // JD page, otherwise the standard Assessments trail.
-  const buildBreadcrumbItems = (leafLabel: string) => {
+  // JD page, otherwise the standard Assessments trail. Both end in the step
+  // chain above, so a step reads the same whichever way the flow was entered.
+  const buildBreadcrumbItems = (): BreadcrumbCrumb[] => {
     const jdId = selectedJob?.id || preSelectedJobId || urlJdId;
     if (fromJobDetails && jdId) {
       return [
@@ -420,18 +495,35 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         // urlJdTitle before the fetched title: identical text, but available on
         // the very first paint, so the crumb never changes under the user.
         { label: urlJdTitle || selectedJob?.title || 'Job Details', href: returnUrl || `/recruitment/job-details?id=${encodeURIComponent(jdId)}` },
-        { label: leafLabel },
+        ...buildStepCrumbs(),
       ];
     }
     return [
       { label: 'Dashboard', href: '/dashboard' },
+      /* NO "Recruitment" crumb. It used to sit here as a grouping label for
+         the section this flow lives under, and it was wrong twice over.
+
+         A breadcrumb states the path the user actually took, and nobody takes
+         that one: the route in is Dashboard → Assessments → Create Assessment,
+         and there is no Recruitment page to have passed through (which is why
+         the crumb had to be an unclickable label in the first place).
+
+         It also stood alone. The Assessments list this flow opens FROM is
+         `Dashboard › Assessments`, and every other assessment screen — the
+         details view, Results, the result detail page, All Assessments, the
+         HR Question Bank — is `Dashboard › Assessments › <leaf>`. So opening
+         Create grew a crumb in the middle of the trail, and the JD creation
+         page this flow links on to (`?from=assessment`, which builds
+         `Dashboard › Assessments › Create Assessment › …`) dropped it again
+         one click later. The crumb appeared and vanished mid-journey while the
+         user went one level deeper. */
       // onClick, not href: the Assessments page renders this flow INLINE at
       // /recruitment/assessments, so linking to that URL asked Next.js to
       // navigate to the route it is already on — nothing happened, and the
       // crumb looked broken. `onBack` closes the inline view, and on the
       // standalone /assessments/create route it navigates back for real.
       { label: 'Assessments', onClick: onBack },
-      { label: leafLabel },
+      ...buildStepCrumbs(),
     ];
   };
 
@@ -618,7 +710,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Coding confirmation popup state
   const [showCodingConfirm, setShowCodingConfirm] = useState(false);
-  const [codingPopupMode, setCodingPopupMode] = useState<'enable' | 'disable'>('enable');
+  /* The selection as it stood when the picker was opened in 'edit' mode, so
+     Cancel can put it back. The picker's buttons write straight to
+     `selectedCodingLanguages`, which is right for the enable path (nothing is
+     applied until Confirm turns the round on) but wrong for editing a round
+     that is already on - there, a change is live the moment it is clicked, and
+     a Cancel that left it in place would not be a cancel. Null outside edit
+     mode, so the other two paths keep their existing behaviour exactly. */
+  const codingLanguagesBeforeEditRef = useRef<string[] | null>(null);
+  /* 'enable' turns the round on (and restores percentages), 'disable' turns it
+     off, 'edit' only changes the languages of a round that is already on - it
+     must NOT re-run the enable path, which would reset the percentage split. */
+  const [codingPopupMode, setCodingPopupMode] = useState<'enable' | 'disable' | 'edit'>('enable');
   const [selectedCodingLanguages, setSelectedCodingLanguages] = useState<string[]>([]);
   // Tracks how the Coding section ended up enabled so the section header can
   // show a truthful label. "auto" = JD-driven (skills/title detection set it
@@ -1799,6 +1902,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Confirm button handler - works for both enable and disable modes
   const handleConfirmCodingAction = () => {
+    /* Editing an already-enabled round: the languages are already in state,
+       so there is nothing to apply beyond the same non-empty rule. Returning
+       here is what keeps the percentage restore below off this path. */
+    if (codingPopupMode === 'edit') {
+      if (selectedCodingLanguages.length === 0) {
+        toast.warning('Please select at least one programming language');
+        return;
+      }
+      codingLanguagesBeforeEditRef.current = null;
+      setShowCodingConfirm(false);
+      return;
+    }
+
     if (codingPopupMode === 'enable') {
       // Enabling coding - require language selection
       if (selectedCodingLanguages.length === 0) {
@@ -1881,8 +1997,26 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   // Cancel button handler - works for both enable and disable modes
+  /**
+   * Reopen the language picker for a round that is ALREADY on.
+   *
+   * A handler, not an inline arrow inside the section-card renderer: that
+   * renderer is called during render, and taking the snapshot there reads a
+   * ref at render time. Here it runs only on the click, which is when the
+   * snapshot is actually wanted.
+   */
+  const openCodingLanguageEditor = () => {
+    codingLanguagesBeforeEditRef.current = selectedCodingLanguages;
+    setCodingPopupMode('edit');
+    setShowCodingConfirm(true);
+  };
+
   const handleCancelCodingAction = () => {
-    // Just close the popup without making changes
+    // Editing a live round: put the selection back as it was on open.
+    if (codingPopupMode === 'edit' && codingLanguagesBeforeEditRef.current) {
+      setSelectedCodingLanguages(codingLanguagesBeforeEditRef.current);
+    }
+    codingLanguagesBeforeEditRef.current = null;
     setShowCodingConfirm(false);
   };
 
@@ -1947,10 +2081,23 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   // Toggle a language in the selection
+  /**
+   * Add or remove ONE language, capped at MAX_CODING_LANGUAGES.
+   *
+   * Appends rather than replaces, so picking a second language keeps the
+   * first; removing is always allowed, so a full selection is never stuck.
+   * The cap is enforced here rather than only in the picker's markup, because
+   * this is the single path every add goes through.
+   */
   const toggleLanguageSelection = (lang: string) => {
-    setSelectedCodingLanguages(prev =>
-      prev.includes(lang) ? prev.filter(l => l !== lang) : [...prev, lang]
-    );
+    setSelectedCodingLanguages(prev => {
+      if (prev.includes(lang)) return prev.filter(l => l !== lang);
+      if (prev.length >= MAX_CODING_LANGUAGES) {
+        toast.warning(`You can select up to ${MAX_CODING_LANGUAGES} programming languages.`);
+        return prev;
+      }
+      return [...prev, lang];
+    });
   };
 
   const closePublishSuccessModal = useCallback(() => {
@@ -2403,7 +2550,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
               className="mb-3"
-              items={buildBreadcrumbItems(isEditMode ? 'Edit Assessment' : 'Create Assessment')}
+              items={buildBreadcrumbItems()}
             />
             <div className="flex items-center justify-center h-64">
               <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
@@ -2423,7 +2570,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
               className="mb-3"
-              items={buildBreadcrumbItems(isEditMode ? 'Edit Assessment' : 'Create Assessment')}
+              items={buildBreadcrumbItems()}
             />
             <div className="w-full">
           <div className="mb-6 sm:mb-8">
@@ -3142,6 +3289,281 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     // that state — drafts are explicitly incomplete by design.
     const hasValidHRSelection = !hrEnabled || selectedHRQuestions.length > 0;
 
+    /**
+     * The HR round's SECTION card, rendered INSIDE the HR round block.
+     *
+     * Extracted from the markup so a round block reads as one thing - the
+     * round, then the section it configures - instead of the round toggles
+     * living in one card and the sections they switch on living in another,
+     * which is what the separate Section Distribution card used to be.
+     */
+    const renderHRSectionCard = () => (
+      <div className="p-3 sm:p-4 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]">
+        {/* No title row. This card is nested inside the HR Round block, whose
+            own row names the round and carries its Question Bank / No Timer
+            chips a few pixels above — an "HR Section" heading with an icon
+            under an "HR Round" heading with an icon labelled the same thing
+            twice. The controls are what this row is for, so they are all that
+            is left in it. */}
+        <div className="flex items-center justify-end flex-wrap gap-2 text-xs mb-3">
+            <button
+              type="button"
+              onClick={openAddHRQuizModal}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-medium text-gray-700 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Quiz
+            </button>
+            <span className={selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-brand-orange-deep font-medium' : 'text-gray-500'}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
+            <button type="button" onClick={selectAllHR} className="text-brand-blue hover:text-brand-blue-2 font-medium">All</button>
+            <span className="text-gray-300">|</span>
+            <button type="button" onClick={deselectAllHR} className="text-gray-500 hover:text-gray-700 font-medium">None</button>
+        </div>
+
+        <div className="space-y-1.5 max-h-72 overflow-y-auto">
+          {hrQuestionBank.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center text-sm text-gray-500">
+              No HR questions found. Add one to start building this section.
+            </div>
+          ) : hrQuestionBank.map((q, idx) => {
+            const isSelected = selectedHRQuestions.includes(q.id);
+            return (
+              <div
+                key={q.id}
+                onClick={() => toggleHRQuestion(q.id)}
+                className={`flex cursor-pointer items-center gap-2.5 p-2 rounded-lg transition-all text-xs ${
+                  isSelected
+                    ? 'bg-brand-blue/5 border border-brand-blue/30 ring-1 ring-brand-blue/10'
+                    : 'bg-slate-50 border border-transparent hover:bg-brand-blue/5'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                  readOnly
+                  className="w-4 h-4 rounded border-gray-200 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0 pointer-events-none"
+                />
+                <span className="w-5 h-5 flex items-center justify-center bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-[10px] font-medium flex-shrink-0">{idx + 1}</span>
+                <span className={`flex-1 ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{q.text}</span>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
+                  q.type === 'Yes/No' ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' : 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20'
+                }`}>{q.type}</span>
+                {/* HR is "No Timer" — per-question time is not surfaced because
+                    the recruiter can't act on it. The bank still stores `time`
+                    because the AI Interview flow reads it; the assessment
+                    section just doesn't display it. */}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* The "synced with the HR Question Bank" note is not repeated here.
+            It now sits immediately after the selected-questions count on the
+            HR Round row above, where the count it qualifies is - and keeping
+            a copy at the foot of this card would state it twice within one
+            round. */}
+      </div>
+    );
+
+    /**
+     * A percentage round's SECTION card - Technical and Coding. One helper
+     * for both, exactly as the map that used to render them was: they differ
+     * only in their icon, their auto/manual note and Coding's step hint.
+     */
+    const renderPercentageSectionCard = (section: typeof sections[number]) => (
+      <div className="p-3 sm:p-4 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]">
+          {/* No title row, for the same reason as the HR card: this card is
+              nested inside its own round block, whose row already names the
+              round and carries its icon. "Technical Section" under "Technical
+              Round" was the label twice over.
+
+              No per-section total either — the percentage total spans every
+              section, so printing it on each one repeated one number once per
+              enabled round, two cards both reading "Total: 100%" as though
+              each had a total of its own. It is stated once, for all
+              sections, in the distribution bar above.
+
+              What survives is Coding's enablement note, which belongs to this
+              section alone. Rendered only when there is one, so Technical does
+              not carry an empty row. */}
+          {section.name === 'Coding' && codingEnabledSource && (
+            <div className="flex justify-end mb-3">
+              <span className="text-xs text-gray-500">
+                {codingEnabledSource === 'auto' ? 'Auto-enabled (coding required)' : 'Manually enabled'}
+              </span>
+            </div>
+          )}
+
+          {/* The language selection area, on the enabled Coding round.
+              EVERY selected language, wrapped rather than truncated - the round
+              row above can only fit a count, and a one-line summary silently
+              dropped the tail of a long selection. Reopening the picker uses
+              the 'edit' mode, so changing languages on a round that is already
+              on cannot disturb its percentage split. */}
+          {section.name === 'Coding' && (() => {
+            const chosen = filterCompilable(selectedCodingLanguages);
+            const atMax = chosen.length >= MAX_CODING_LANGUAGES;
+            return (
+              <div className="mb-3 sm:mb-4">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <label className="text-xs text-gray-600">
+                    Choose your programming language
+                    <span className="ml-2 text-[11px] text-gray-400 font-normal">
+                      {chosen.length}/{MAX_CODING_LANGUAGES} selected
+                      {atMax ? ' — maximum reached' : ''}
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={openCodingLanguageEditor}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue flex-shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {chosen.length > 0 ? 'Change' : 'Select'}
+                  </button>
+                </div>
+                {chosen.length === 0 ? (
+                  <p className="text-xs text-gray-500">
+                    No language selected yet — pick at least one for the coding round.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {chosen.map(lang => (
+                      <span
+                        key={lang}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs"
+                      >
+                        {lang}
+                        <button
+                          type="button"
+                          onClick={() => toggleLanguageSelection(lang)}
+                          className="text-brand-blue/60 hover:text-red-600 transition-colors"
+                          aria-label={`Remove ${lang}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Percentage Allocation */}
+          <div className="mb-3 sm:mb-4">
+            <label className="text-xs text-gray-600 mb-2 block">
+              Percentage Allocation
+              {section.name === 'Coding' && (
+                <span className="ml-2 text-[11px] text-gray-400 font-normal">
+                  Allowed: 35% / 50% / 75% / 100%
+                </span>
+              )}
+            </label>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step={section.name === 'Coding' || sections.some(s => s.name === 'Coding' && s.enabled) ? 1 : 1}
+                value={section.percentage}
+                onChange={(e) => updatePercentage(section.name, Number(e.target.value))}
+                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
+              />
+              <div className="flex items-center gap-1">
+                <span className="w-14 px-2 py-1.5 border border-gray-200 bg-slate-50 rounded-lg text-center text-sm text-gray-700 select-none">
+                  {section.percentage}
+                </span>
+                <span className="text-xs sm:text-sm text-gray-600">%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* TOPICS UI — temporarily hidden per product decision.
+              The recruiter no longer adds free-text topics; the LLM
+              uses the JD content alone to generate questions. The
+              backend column (`technical_topics` / `coding_topics`)
+              and the create/update payload still carry topics so
+              re-enabling this UI is a one-block change. Do NOT
+              delete — uncomment when topic input returns. */}
+          {/*
+          <div>
+            <label className="text-xs text-gray-600 mb-2 block">
+              Topics (LLM will generate questions based on these)
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2 mb-2">
+              <input
+                type="text"
+                value={newTopic.section === section.name ? newTopic.value : ''}
+                onChange={(e) => setNewTopic({ section: section.name, value: e.target.value })}
+                onKeyPress={(e) => e.key === 'Enter' && addTopic(section.name)}
+                placeholder={`e.g., ${
+                  section.name === 'HR'
+                    ? 'conflict handling, salary discussion, teamwork'
+                    : section.name === 'Technical'
+                    ? 'domain tools, regulations, workflows'
+                    : 'algorithm type, framework, logic pattern'
+                }`}
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-gray-900"
+              />
+              <button
+                onClick={() => addTopic(section.name)}
+                className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center justify-center gap-1 text-sm flex-shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Add Topic</span>
+                <span className="sm:hidden">Add</span>
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {section.topics.map((topic, idx) => (
+                <span
+                  key={idx}
+                  className="px-2.5 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs flex items-center gap-1.5"
+                >
+                  {topic}
+                  <button onClick={() => removeTopic(section.name, idx)} className="hover:text-brand-blue-2" aria-label="Close">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              {section.topics.length === 0 && (
+                <span className="text-xs text-gray-400 italic">
+                  No topics added yet. Add topics for AI to generate relevant questions.
+                </span>
+              )}
+            </div>
+          </div>
+          */}
+        </div>
+    );
+
+    /**
+     * The collapse control on a round row. Disabled while the round is off:
+     * there is no section under it to show or hide.
+     */
+    const renderRoundChevron = (round: RoundName, enabled: boolean) => (
+      <button
+        type="button"
+        onClick={() => toggleRoundExpanded(round)}
+        disabled={!enabled}
+        aria-expanded={enabled && expandedRounds.has(round)}
+        aria-label={`${expandedRounds.has(round) ? 'Hide' : 'Show'} the ${round} section`}
+        title={enabled ? `${expandedRounds.has(round) ? 'Hide' : 'Show'} the ${round} section` : undefined}
+        className={`p-1 rounded-md transition-colors ${
+          enabled ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'
+        }`}
+      >
+        <ChevronDown
+          className={`w-4 h-4 transition-transform duration-200 ${
+            enabled && expandedRounds.has(round) ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+    );
+
     return (
       <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 relative">
         {/* Auto-saving overlay */}
@@ -3156,16 +3578,20 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            {/* A JD is chosen by this step. On the Assessments trail the JD name
-                is the leaf; entered from Job Details the JD already owns its own
-                crumb, so the leaf names the step instead. */}
+            {/* Every step builds the same trail — see `buildStepCrumbs`. Here
+                that is
+                  Dashboard › Assessments › Select Job Description › Configure Assessment
+                with the picker crumb clickable, so the step behind this one is
+                the way back to it.
+
+                The leaf names the STEP, never the chosen JD. Naming the JD made
+                the crumb read "Assessments › Senior Java Developer" — a trail
+                that says where the recruiter is standing but not what they are
+                doing there, and the job is already named in the heading two
+                lines below. */}
             <PageBreadcrumb
               className="mb-3"
-              items={buildBreadcrumbItems(
-                fromJobDetails
-                  ? (isEditMode ? 'Edit Assessment' : 'Create Assessment')
-                  : (selectedJob?.title || (isEditMode ? 'Edit Assessment' : 'Create Assessment'))
-              )}
+              items={buildBreadcrumbItems()}
             />
             <div className="w-full">
           <div className="mb-4 sm:mb-6">
@@ -3179,18 +3605,56 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
             {/* Left Column - Main Content */}
             <div className="flex-1 space-y-4 sm:space-y-6">
-              {/* Configure Assessment Rounds */}
+              {/* Assessment Rounds - the rounds AND the section each one
+                  configures, in a single card.
+
+                  The sections used to sit in a separate "Section Distribution"
+                  card below this one, so enabling a round here changed
+                  something further down the page that the recruiter then had
+                  to go and find. Each section is now nested under the round
+                  that switches it on, and collapses with it. */}
               <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
-                  <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Configure Assessment Rounds</h3>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                    <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Rounds</h3>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${
+                    hasAtLeastOneEnabled
+                      ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
+                      : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'
+                  }`}>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {enabledSectionsCount} of 3 enabled
+                  </span>
                 </div>
                 <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
-                  Choose which rounds to include in this assessment. Disabled rounds will not appear in the section distribution.
+                  Choose which rounds to include in this assessment. Disabled rounds will not appear below.
                 </p>
 
+                {/* Moved here with the sections it describes: it reports the
+                    percentage total, and the sliders that set it now live in
+                    this card. */}
+                {!isPercentageValid && (
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-yellow-800">
+                      {!hasAtLeastOneEnabled && (
+                        <p>At least one assessment round must be enabled.</p>
+                      )}
+                      {hasAtLeastOneEnabled && hasZeroPercentageEnabled && (
+                        <p>Enabled rounds cannot have 0% allocation. Disable the round or assign a percentage.</p>
+                      )}
+                      {hasAtLeastOneEnabled && !hasZeroPercentageEnabled && totalPercentage !== 100 && (
+                        <p>Section percentages must total exactly 100% (currently {totalPercentage}%).</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-3">
-                  {/* HR Round - Summary (selection is in Section Distribution below) */}
+                  {/* HR Round - its question selection is the section nested
+                      directly below the toggle. */}
                   <div className={`p-3 sm:p-4 border rounded-xl transition-all ${hrEnabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 sm:gap-3 min-w-0">
@@ -3208,28 +3672,97 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           </div>
                           <p className="text-xs text-gray-500 mt-0.5 leading-snug">
                             {hrEnabled
-                              ? `${selectedHRQuestions.length} of ${HR_QUESTION_LIMIT} questions selected (max ${HR_QUESTION_LIMIT}) — select questions in Section Distribution below`
+                              ? `${selectedHRQuestions.length} of ${HR_QUESTION_LIMIT} questions selected (max ${HR_QUESTION_LIMIT})`
+                                + ' — Questions are synced with the HR Question Bank'
                               : 'Enable HR round to select or manage HR questions.'}
                           </p>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        aria-label="Toggle HR round"
-                        aria-pressed={hrEnabled}
-                        onClick={handleHRToggle}
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
-                          hrEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'
-                        }`}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          hrEnabled ? 'translate-x-6' : 'translate-x-1'
-                        }`} />
-                      </button>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          type="button"
+                          aria-label="Toggle HR round"
+                          aria-pressed={hrEnabled}
+                          onClick={handleHRToggle}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                            hrEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'
+                          }`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            hrEnabled ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </button>
+                        {renderRoundChevron('HR', hrEnabled)}
+                      </div>
                     </div>
+                    {hrEnabled && expandedRounds.has('HR') && (
+                      <div className="mt-3">{renderHRSectionCard()}</div>
+                    )}
                   </div>
 
-                  {/* Technical Round Toggle */}
+                  {/* Total Assessment Distribution — the percentage total, stated
+                      ONCE for the whole assessment.
+
+                      Each percentage section used to print "Total: N%" in its own
+                      header, so a recruiter with Technical and Coding both on read
+                      the same number twice, on two cards, as though each section
+                      had a total of its own. The total is a property of the
+                      assessment, not of a section, so it is reported once, here,
+                      with the split that produced it — above the two rounds it
+                      sums, so the figure is read before the sliders that set it
+                      rather than found after them.
+
+                      HR is absent by design, not omission: HR questions are not
+                      timed and carry no percentage, which is what
+                      `getTotalPercentage` has always filtered on. */}
+                  {(() => {
+                    const distribution = sections.filter(s => s.enabled && s.name !== 'HR');
+                    if (distribution.length === 0) return null;
+                    /* The section's own colour, the same one its icon and its
+                       round already carry, so a band in the bar is findable by
+                       the card it came from. */
+                    const barColor = (name: string) => (name === 'Coding' ? 'bg-brand-orange' : 'bg-brand-cyan');
+                    return (
+                      <div className="p-3 sm:p-4 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]">
+                        <div className="flex items-center justify-between gap-2 mb-2.5">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-brand-blue" />
+                            <h4 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Total Assessment Distribution</h4>
+                          </div>
+                          <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
+                            Total:{' '}
+                            <span className={`font-semibold ${isPercentageValid ? 'text-green-600' : 'text-red-500'}`}>
+                              {totalPercentage}%
+                            </span>
+                          </span>
+                        </div>
+                        {/* One track, one band per section. A total under 100
+                            leaves the remainder showing as track, which is the
+                            shortfall the warning above names. */}
+                        <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+                          {distribution.map(section => (
+                            <div
+                              key={section.name}
+                              style={{ width: `${Math.min(section.percentage, 100)}%` }}
+                              className={`h-full ${barColor(section.name)} transition-all`}
+                            />
+                          ))}
+                        </div>
+                        <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+                          {distribution.map(section => (
+                            <span key={section.name} className="inline-flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+                              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${barColor(section.name)}`} />
+                              {section.name} Section
+                              <span className="font-semibold text-gray-900">{section.percentage}%</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Technical Round - its percentage slider is the section
+                      nested directly below the toggle. */}
                   <div className={`p-3 sm:p-4 border rounded-xl transition-all ${sections.find(s => s.name === 'Technical')?.enabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 sm:gap-3 min-w-0">
@@ -3243,16 +3776,25 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           <p className="text-xs text-gray-500 mt-0.5 leading-snug">Domain knowledge, technical concepts, and job-specific skills</p>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleTechnicalToggle()}
-                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Technical')?.enabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
-                      >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'Technical')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                      </button>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          onClick={() => handleTechnicalToggle()}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Technical')?.enabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'Technical')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
+                        {renderRoundChevron('Technical', !!sections.find(s => s.name === 'Technical')?.enabled)}
+                      </div>
                     </div>
+                    {(() => {
+                      const technicalSection = sections.find(s => s.name === 'Technical');
+                      if (!technicalSection?.enabled || !expandedRounds.has('Technical')) return null;
+                      return <div className="mt-3">{renderPercentageSectionCard(technicalSection)}</div>;
+                    })()}
                   </div>
 
-                  {/* Coding Round Toggle */}
+                  {/* Coding Round - its percentage slider is the section
+                      nested directly below the toggle. */}
                   {(() => {
                     const codingEnabled = sections.find(s => s.name === 'Coding')?.enabled;
                     const hasExtractedLanguages = jdExtractedLanguages.length > 0;
@@ -3274,29 +3816,56 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                                   <span className="px-1.5 sm:px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-xs">Auto (Not Required)</span>
                                 )}
                               </div>
-                              <p className="text-xs text-gray-500 mt-0.5 leading-snug truncate">
+                              {/* The message follows the ROUND'S OWN STATE, not
+                                  what the JD happened to detect.
+
+                                  It used to branch on `isAutoEnabled` alone -
+                                  "did the JD name any languages" - so a round
+                                  the recruiter had switched on by hand, with
+                                  languages they had picked themselves, still
+                                  read "No programming languages detected -
+                                  enable manually if needed". The instruction to
+                                  do the thing they had just done, sitting under
+                                  a round that was already on.
+
+                                  Enabled, the languages themselves are the
+                                  message and they are listed in full in the
+                                  section below (`renderPercentageSectionCard`),
+                                  where they wrap rather than truncate. */}
+                              <p className="text-xs text-gray-500 mt-0.5 leading-snug">
                                 {(() => {
-                                  if (!isAutoEnabled) return 'No programming languages detected — enable manually if needed';
-                                  // Filter at render so any non-compilable language that snuck into
-                                  // state from older data (e.g., a draft saved before this filter
-                                  // existed) doesn't get displayed.
-                                  const visible = filterCompilable(
-                                    selectedCodingLanguages.length > 0 ? selectedCodingLanguages : jdExtractedLanguages
-                                  );
-                                  return visible.length > 0
-                                    ? `Languages: ${visible.join(', ')}`
-                                    : 'No compilable programming languages — enable manually if needed';
+                                  // Filtered at render so a non-compilable language that
+                                  // snuck into state from older data (a draft saved before
+                                  // this filter existed) is never displayed.
+                                  if (codingEnabled) {
+                                    const chosen = filterCompilable(selectedCodingLanguages);
+                                    return chosen.length > 0
+                                      ? `${chosen.length} ${chosen.length === 1 ? 'language' : 'languages'} selected`
+                                      : 'Choose your programming language';
+                                  }
+                                  const detected = filterCompilable(jdExtractedLanguages);
+                                  return detected.length > 0
+                                    ? `Detected: ${detected.join(', ')}`
+                                    : 'No programming language detected. Enable manually if needed';
                                 })()}
                               </p>
                             </div>
                           </div>
-                          <button
-                            onClick={() => handleCodingToggle()}
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${codingEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
-                          >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                          </button>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button
+                              onClick={() => handleCodingToggle()}
+                              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${codingEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
+                            >
+                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                            </button>
+                            {renderRoundChevron('Coding', !!codingEnabled)}
+                          </div>
                         </div>
+                        {(() => {
+                          const codingSection = sections.find(s => s.name === 'Coding');
+                          if (!codingSection?.enabled || !expandedRounds.has('Coding')) return null;
+                          return <div className="mt-3">{renderPercentageSectionCard(codingSection)}</div>;
+                        })()}
                       </div>
                     );
                   })()}
@@ -3365,231 +3934,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
               </div> */}
 
-              {/* Section Distribution */}
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
-                <div className="flex items-center justify-between mb-3 sm:mb-4">
-                  <div className="flex items-center gap-2">
-                    <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
-                    <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Section Distribution</h3>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs sm:text-sm text-gray-500">Total:</span>
-                    <span className={`text-xs sm:text-sm font-medium ${isPercentageValid ? 'text-green-600' : 'text-red-600'}`}>
-                      {totalPercentage}%
-                    </span>
-                  </div>
-                </div>
-
-                {!isPercentageValid && (
-                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-yellow-800">
-                      {!hasAtLeastOneEnabled && (
-                        <p>At least one assessment round must be enabled.</p>
-                      )}
-                      {hasAtLeastOneEnabled && hasZeroPercentageEnabled && (
-                        <p>Enabled rounds cannot have 0% allocation. Disable the round or assign a percentage.</p>
-                      )}
-                      {hasAtLeastOneEnabled && !hasZeroPercentageEnabled && totalPercentage !== 100 && (
-                        <p>Section percentages must total exactly 100% (currently {totalPercentage}%).</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-3 sm:space-y-4">
-                  {/* HR Question Bank Section */}
-                  {(hrQuestionBank.length > 0 || selectedHRQuestions.length > 0 || !!hrSection) && (
-                  <div
-                    aria-disabled={!hrEnabled}
-                    className={`p-3 sm:p-4 border rounded-xl transition-all ${
-                      hrEnabled ? 'border-gray-100 bg-white ring-1 ring-black/[0.02]' : 'border-gray-100 bg-slate-50 opacity-70'
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Users className="w-4 h-4 text-brand-blue" />
-                        <span className="text-sm sm:text-base font-medium text-gray-900">HR Section</span>
-                        <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">Question Bank</span>
-                        <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs">No Timer</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        <button
-                          type="button"
-                          onClick={openAddHRQuizModal}
-                          disabled={!hrEnabled}
-                          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 font-medium transition-colors ${
-                            hrEnabled
-                              ? 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                              : 'border-gray-200 text-gray-400 cursor-not-allowed'
-                          }`}
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          Add Quiz
-                        </button>
-                        <span className={`${hrEnabled && selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-brand-orange-deep font-medium' : 'text-gray-500'}`}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
-                        <button type="button" onClick={selectAllHR} disabled={!hrEnabled} className={hrEnabled ? 'text-brand-blue hover:text-brand-blue-2 font-medium' : 'text-gray-400 cursor-not-allowed font-medium'}>All</button>
-                        <span className="text-gray-300">|</span>
-                        <button type="button" onClick={deselectAllHR} disabled={!hrEnabled} className={hrEnabled ? 'text-gray-500 hover:text-gray-700 font-medium' : 'text-gray-400 cursor-not-allowed font-medium'}>None</button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5 max-h-72 overflow-y-auto">
-                      {hrQuestionBank.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center text-sm text-gray-500">
-                          No HR questions found. Add one to start building this section.
-                        </div>
-                      ) : hrQuestionBank.map((q, idx) => {
-                        const isSelected = selectedHRQuestions.includes(q.id);
-                        return (
-                          <div
-                            key={q.id}
-                            onClick={() => hrEnabled && toggleHRQuestion(q.id)}
-                            className={`flex items-center gap-2.5 p-2 rounded-lg transition-all text-xs ${
-                              hrEnabled ? 'cursor-pointer' : 'cursor-not-allowed'
-                            } ${
-                              isSelected
-                                ? 'bg-brand-blue/5 border border-brand-blue/30 ring-1 ring-brand-blue/10'
-                                : hrEnabled
-                                  ? 'bg-slate-50 border border-transparent hover:bg-brand-blue/5'
-                                  : 'bg-slate-50 border border-transparent'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => e.stopPropagation()}
-                              onClick={(e) => e.stopPropagation()}
-                              readOnly
-                              className="w-4 h-4 rounded border-gray-200 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0 pointer-events-none"
-                            />
-                            <span className="w-5 h-5 flex items-center justify-center bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-[10px] font-medium flex-shrink-0">{idx + 1}</span>
-                            <span className={`flex-1 ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{q.text}</span>
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
-                              q.type === 'Yes/No' ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' : 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20'
-                            }`}>{q.type}</span>
-                            {/* HR is "No Timer" — per-question time is not surfaced because
-                                the recruiter can't act on it. The bank still stores `time`
-                                because the AI Interview flow reads it; the assessment
-                                section just doesn't display it. */}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="mt-2 text-xs text-gray-500">
-                      <span>Questions are synced with the HR Question Bank</span>
-                    </div>
-                  </div>
-                  )}
-
-                  {/* Technical & Coding Sections */}
-                  {sections.filter(s => s.enabled && s.name !== 'HR').map((section) => (
-                    <div key={section.name} className="p-3 sm:p-4 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {section.name === 'Technical' && <Brain className="w-4 h-4 text-brand-cyan" />}
-                          {section.name === 'Coding' && <Code className="w-4 h-4 text-brand-orange-deep" />}
-                          <span className="text-sm sm:text-base font-medium text-gray-900">{section.name} Section</span>
-                        </div>
-                        {section.name === 'Coding' && codingEnabledSource === 'auto' && (
-                          <span className="text-xs text-gray-500">Auto-enabled (coding required)</span>
-                        )}
-                        {section.name === 'Coding' && codingEnabledSource === 'manual' && (
-                          <span className="text-xs text-gray-500">Manually enabled</span>
-                        )}
-                      </div>
-
-                      {/* Percentage Allocation */}
-                      <div className="mb-3 sm:mb-4">
-                        <label className="text-xs text-gray-600 mb-2 block">
-                          Percentage Allocation
-                          {section.name === 'Coding' && (
-                            <span className="ml-2 text-[11px] text-gray-400 font-normal">
-                              Allowed: 35% / 50% / 75% / 100%
-                            </span>
-                          )}
-                        </label>
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step={section.name === 'Coding' || sections.some(s => s.name === 'Coding' && s.enabled) ? 1 : 1}
-                            value={section.percentage}
-                            onChange={(e) => updatePercentage(section.name, Number(e.target.value))}
-                            className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
-                          />
-                          <div className="flex items-center gap-1">
-                            <span className="w-14 px-2 py-1.5 border border-gray-200 bg-slate-50 rounded-lg text-center text-sm text-gray-700 select-none">
-                              {section.percentage}
-                            </span>
-                            <span className="text-xs sm:text-sm text-gray-600">%</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* TOPICS UI — temporarily hidden per product decision.
-                          The recruiter no longer adds free-text topics; the LLM
-                          uses the JD content alone to generate questions. The
-                          backend column (`technical_topics` / `coding_topics`)
-                          and the create/update payload still carry topics so
-                          re-enabling this UI is a one-block change. Do NOT
-                          delete — uncomment when topic input returns. */}
-                      {/*
-                      <div>
-                        <label className="text-xs text-gray-600 mb-2 block">
-                          Topics (LLM will generate questions based on these)
-                        </label>
-                        <div className="flex flex-col sm:flex-row gap-2 mb-2">
-                          <input
-                            type="text"
-                            value={newTopic.section === section.name ? newTopic.value : ''}
-                            onChange={(e) => setNewTopic({ section: section.name, value: e.target.value })}
-                            onKeyPress={(e) => e.key === 'Enter' && addTopic(section.name)}
-                            placeholder={`e.g., ${
-                              section.name === 'HR'
-                                ? 'conflict handling, salary discussion, teamwork'
-                                : section.name === 'Technical'
-                                ? 'domain tools, regulations, workflows'
-                                : 'algorithm type, framework, logic pattern'
-                            }`}
-                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-gray-900"
-                          />
-                          <button
-                            onClick={() => addTopic(section.name)}
-                            className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center justify-center gap-1 text-sm flex-shrink-0"
-                          >
-                            <Plus className="w-4 h-4" />
-                            <span className="hidden sm:inline">Add Topic</span>
-                            <span className="sm:hidden">Add</span>
-                          </button>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {section.topics.map((topic, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2.5 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs flex items-center gap-1.5"
-                            >
-                              {topic}
-                              <button onClick={() => removeTopic(section.name, idx)} className="hover:text-brand-blue-2" aria-label="Close">
-                                <X className="w-3 h-3" />
-                              </button>
-                            </span>
-                          ))}
-                          {section.topics.length === 0 && (
-                            <span className="text-xs text-gray-400 italic">
-                              No topics added yet. Add topics for AI to generate relevant questions.
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      */}
-                    </div>
-                  ))}
-                </div>
-
-              </div>
             </div>
 
             {/* Right Column - Sidebar */}
@@ -3733,12 +4077,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">
                       {codingPopupMode === 'disable'
                         ? 'Disable Coding Round?'
+                        : codingPopupMode === 'edit'
+                        ? 'Choose your programming language'
                         : 'Enable Coding Round'}
                     </h3>
                     <p className={`text-xs sm:text-sm ${codingPopupMode === 'disable' ? 'text-red-700' : 'text-brand-blue'}`}>
                       {codingPopupMode === 'disable'
                         ? 'This will remove the coding assessment'
-                        : 'Select programming languages for the assessment'}
+                        : `Select up to ${MAX_CODING_LANGUAGES} programming languages for the assessment`}
                     </p>
                   </div>
                 </div>
@@ -3762,7 +4108,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 ) : (
                   <>
                     <p className="text-sm sm:text-base text-gray-600 mb-4">
-                      Please select at least one programming language for the coding assessment.
+                      Please select at least one programming language for the coding assessment
+                      {' '}(maximum {MAX_CODING_LANGUAGES}).
                     </p>
                     {/* Language Selection */}
                     <div className="mb-4">
@@ -3771,26 +4118,40 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       </label>
                       <div className="border border-gray-200 rounded-xl p-3 max-h-40 overflow-y-auto">
                         <div className="flex flex-wrap gap-2">
-                          {programmingLanguages.map(lang => (
-                            <button
-                              key={lang}
-                              onClick={() => toggleLanguageSelection(lang)}
-                              className={`px-3 py-1.5 rounded-full text-sm transition-all ${
-                                selectedCodingLanguages.includes(lang)
-                                  ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                                  : 'bg-slate-100 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
-                              }`}
-                            >
-                              {lang}
-                            </button>
-                          ))}
+                          {programmingLanguages.map(lang => {
+                            const isSelected = selectedCodingLanguages.includes(lang);
+                            /* At the cap, the unpicked languages go inert - the
+                               picked ones never do, or a full selection could
+                               not be changed, only abandoned. */
+                            const blocked = !isSelected && selectedCodingLanguages.length >= MAX_CODING_LANGUAGES;
+                            return (
+                              <button
+                                key={lang}
+                                onClick={() => toggleLanguageSelection(lang)}
+                                disabled={blocked}
+                                title={blocked ? `Maximum ${MAX_CODING_LANGUAGES} languages selected` : undefined}
+                                className={`px-3 py-1.5 rounded-full text-sm transition-all ${
+                                  isSelected
+                                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                    : blocked
+                                    ? 'bg-slate-50 text-gray-400 cursor-not-allowed'
+                                    : 'bg-slate-100 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
+                                }`}
+                              >
+                                {lang}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                       {selectedCodingLanguages.length > 0 && (
                         <div className="mt-3">
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="text-xs font-medium text-gray-700">
-                              Selected ({selectedCodingLanguages.length})
+                              Selected ({selectedCodingLanguages.length}/{MAX_CODING_LANGUAGES})
+                              {selectedCodingLanguages.length >= MAX_CODING_LANGUAGES && (
+                                <span className="ml-1.5 font-normal text-brand-orange-deep">maximum reached</span>
+                              )}
                             </span>
                             <button
                               type="button"
@@ -3835,14 +4196,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </button>
                 <button
                   onClick={handleConfirmCodingAction}
-                  disabled={codingPopupMode === 'enable' && selectedCodingLanguages.length === 0}
+                  disabled={codingPopupMode !== 'disable' && selectedCodingLanguages.length === 0}
                   className={`flex-1 px-4 py-2 rounded-lg text-sm transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
                     codingPopupMode === 'disable'
                       ? 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/25 ring-1 ring-white/10'
                       : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                   }`}
                 >
-                  {codingPopupMode === 'disable' ? 'Yes, Disable' : 'Enable Coding'}
+                  {codingPopupMode === 'disable'
+                    ? 'Yes, Disable'
+                    : codingPopupMode === 'edit'
+                    ? 'Save Languages'
+                    : 'Enable Coding'}
                 </button>
               </div>
             </div>
@@ -3960,13 +4325,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            {/* The last step, so both steps before it are clickable crumbs —
+                see `buildStepCrumbs`. */}
             <PageBreadcrumb
               className="mb-3"
-              items={buildBreadcrumbItems(
-                fromJobDetails
-                  ? (isEditMode ? 'Edit Assessment' : 'Create Assessment')
-                  : (selectedJob?.title || (isEditMode ? 'Edit Assessment' : 'Create Assessment'))
-              )}
+              items={buildBreadcrumbItems()}
             />
             <div className="w-full">
           <div className="mb-6 sm:mb-8">

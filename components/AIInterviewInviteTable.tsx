@@ -8,6 +8,7 @@ import {
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -380,9 +381,15 @@ export default function AIInterviewInviteTable({
     );
   };
 
+  /* Both stand-in states FILL the list area rather than collapsing it to a
+     200px box. Every caller renders this inside a flex column that reserves
+     the space (the Track dialogs through their own min-height), so a spinner
+     that only claimed its own height made the dialog open small and then jump
+     to table height a moment later. Sizing the placeholder to the space it is
+     standing in for is what removes that. */
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center tf-loader-center--compact">
+      <div className={TRACKER_DIALOG_PLACEHOLDER_CLASS}>
         <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
       </div>
     );
@@ -390,7 +397,7 @@ export default function AIInterviewInviteTable({
 
   if (invitations.length === 0) {
     return (
-      <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
+      <div className={`${TRACKER_DIALOG_PLACEHOLDER_CLASS} text-gray-500 dark:text-slate-500`}>
         <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-brand-blue/30" />
         {/* "None invited" is wrong when a filter is what emptied the list — it
             reads as data loss rather than as a narrowed view. */}

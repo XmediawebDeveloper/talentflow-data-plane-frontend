@@ -5,6 +5,8 @@ import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef } from 'react';
+import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
+import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -45,6 +47,10 @@ import type { AssessmentAttemptResponse } from '@/lib/services/assessmentService
 
 import { Job } from '@/lib/types/types';
 import { assessmentService } from '@/lib/services';
+/* The job's own version list, for asking about each version by its own id —
+   see `loadAssessmentLineage`. Same endpoint the version panel's job half
+   already reads through `useJobVersionLineage`. */
+import { jdService } from '@/lib/services/jdService';
 /* Resume versions live on the scoring records — see the join in
    loadAllCompletedCandidates. */
 import { scoringService } from '@/lib/services/scoringService';
@@ -74,6 +80,10 @@ type AssessmentLineageRef = { id: string; jd_id?: string };
 const INVITATIONS_PAGE_SIZE = 10;
 /** Batch size when pulling every assessment for a browser-side filter. */
 const FULL_SET_BATCH_SIZE = 100;
+/** How many versions one assessment lineage may hold. Duplicate mints the
+ *  next sequential version until the lineage sits at this many, then the
+ *  action reports the cap rather than creating another. */
+const MAX_ASSESSMENT_VERSIONS = 5;
 const assessmentDropdownMenuItemClass = 'group';
 interface AssessmentsProps {
   jobs: Job[];
@@ -272,6 +282,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [trackingInvitations, setTrackingInvitations] = useState<any[]>([]);
   const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
   const [isRefreshingTracking, setIsRefreshingTracking] = useState(false);
+  /* Holds the tracking dialog's height while a manual Refresh runs, so the
+     content-driven box cannot move under the pointer. Shared with every other
+     popup that carries a Refresh button - see the hook for why. */
+  const trackingHeightLock = useDialogHeightLock<HTMLDivElement>();
   const [invitationStats, setInvitationStats] = useState({
     total: 0,
     expired: 0,
@@ -350,7 +364,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      does it.
 
      Keyed by JD id, not by assessment id: an assessment's versions ARE the
-     other assessments sharing its JD (that is what the 3-version cap counts,
+     other assessments sharing its JD (that is what the version cap counts,
      and what the details view's own "New Versions" tab fetches), so all three
      cards of one lineage read and fill the same cache entry — expanding V2
      after V1 costs no second request. */
@@ -385,23 +399,197 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [assessmentLineages, setAssessmentLineages] = useState<Record<string, AssessmentVersionRow[]>>({});
   const [loadingLineages, setLoadingLineages] = useState<Record<string, boolean>>({});
 
-  const loadAssessmentLineage = async (jdId: string) => {
+  /**
+   * Which JD VERSIONS already have an assessment, straight from the backend
+   * (`/assessments/jds-with-assessments` — every JD row holding a non-archived
+   * assessment, so a Draft counts exactly as a Published one does).
+   *
+   * This is what makes each job version's Create Assessment / View Assessment
+   * action survive a refresh: the answer is a server fact keyed on the
+   * version's own JD id, not a flag this component sets when the recruiter
+   * happens to create something. Fetched once per mount and refreshed
+   * alongside the lineages whenever an assessment is added.
+   *
+   * The SAME index the Create Assessment picker gates its per-version "+" on
+   * (`jdsWithAssessments` in AssessmentCreation), so the two entry points
+   * cannot disagree about whether a version is spoken for.
+   */
+  const [jdsWithAssessments, setJdsWithAssessments] = useState<Set<string>>(new Set());
+
+  const loadJdsWithAssessments = async () => {
+    try {
+      const ids = await assessmentService.getJDsWithAssessments();
+      setJdsWithAssessments(new Set(ids));
+    } catch (error) {
+      /* Left as it was rather than emptied: an empty set reads as "no version
+         has an assessment", which would offer Create on versions that are
+         already taken. The lineage rows still answer on their own. */
+      console.log('[TalentFlow] Failed to load JDs with assessments:', error);
+    }
+  };
+
+  /* Once per mount. Re-entering the Assessment Module remounts and refetches,
+     which is what makes each version's action right on the way back in. */
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void loadJdsWithAssessments(); }, []);
+
+  /**
+   * Every assessment authored against ANY version of this job.
+   *
+   * ONE REQUEST PER JOB VERSION, merged and deduped by assessment id — not
+   * one request for the card's own `jd_id`.
+   *
+   * That single request was the bug behind a Draft going missing. The card is
+   * whichever version the list collapsed the lineage down to, so the fetch
+   * asked `list({ jd_id: <that version's JD row> })` and the panel rendered
+   * the reply as if it were the whole job's assessments. It is only the whole
+   * job's assessments if the endpoint widens a `jd_id` filter to the JD's
+   * lineage. Where it matches the id exactly instead — one JD row, one
+   * answer — every assessment authored against a DIFFERENT version of the
+   * same job is simply absent from the reply. A Draft created against V1
+   * while the card sits on V2 then vanishes from the table, V1 goes on
+   * offering Create Assessment because nothing was returned for it, and the
+   * Job List's own count still includes it because that count is summed from
+   * the page's full assessment fetch and never went through here. Count says
+   * two, table shows one.
+   *
+   * Asking per version removes the assumption rather than betting on it. The
+   * JD lineage names every version of the job — each its own JD row with its
+   * own id — and each is asked about itself, so the reply cannot be narrower
+   * than the question. If the endpoint does widen a `jd_id` filter to the
+   * lineage the extra copies arrive as duplicates, which the dedupe drops; if
+   * it does not, this is the only way the siblings are ever seen. Either way
+   * the panel gets the same complete list.
+   *
+   * Deduped by ASSESSMENT id, the record's own unique key — never by job,
+   * version number or title. Two assessments against one job version are two
+   * records and both survive the merge, which is what lets a Draft and a
+   * Published assessment coexist on the same version.
+   *
+   * `force` re-reads a lineage the cache already holds. Anything that adds an
+   * assessment needs it: the record exists on the server the moment the call
+   * returns, but this cache is what the Assessment Versions table renders, so
+   * a cache hit would show the versions from before the click until the page
+   * was reloaded. Nothing else forces — the cache is still what makes
+   * reopening a panel, or opening a sibling row of the same JD, free.
+   */
+  const loadAssessmentLineage = async (jdId: string, force = false) => {
     /* Already fetched, or in flight — the cache is the guard. A failed fetch
        leaves no entry, so reopening retries rather than caching the failure
        as "this assessment has no other versions". */
-    if (assessmentLineages[jdId] || loadingLineages[jdId]) return;
+    if (loadingLineages[jdId]) return assessmentLineages[jdId];
+    if (assessmentLineages[jdId] && !force) return assessmentLineages[jdId];
     setLoadingLineages(prev => ({ ...prev, [jdId]: true }));
     try {
-      // Same call the details view's New Versions tab makes; the cap is 3, so
-      // one page covers every lineage.
-      const response = await assessmentService.list({ jd_id: jdId, page_size: 50 });
-      setAssessmentLineages(prev => ({ ...prev, [jdId]: (response.items || []) as AssessmentVersionRow[] }));
+      /* The job's versions, from the endpoint that is authoritative about
+         them. A lineage that fails to load falls back to the card's own JD
+         row, which is exactly the single-request behaviour this replaces —
+         degraded, but never worse than it was. */
+      let versionIds: string[] = [jdId];
+      try {
+        const lineage = await jdService.getLineageVersions(jdId);
+        const ids = lineage.map(v => v.id).filter(Boolean);
+        if (ids.length) versionIds = [...new Set([jdId, ...ids])];
+      } catch (error) {
+        console.log('[TalentFlow] Failed to load JD lineage for assessment versions:', error);
+      }
+
+      const responses = await Promise.all(
+        versionIds.map(versionId =>
+          assessmentService
+            .list({ jd_id: versionId, page_size: 50 })
+            /* One version failing must not blank the others — it contributes
+               nothing and the rest of the merge stands. */
+            .catch(() => ({ items: [] as unknown[] })),
+        ),
+      );
+
+      const byAssessmentId = new Map<string, AssessmentVersionRow>();
+      for (const response of responses) {
+        for (const row of ((response.items || []) as AssessmentVersionRow[])) {
+          if (row?.id) byAssessmentId.set(row.id, row);
+        }
+      }
+      const rows = [...byAssessmentId.values()];
+      setAssessmentLineages(prev => ({ ...prev, [jdId]: rows }));
+      /* Returned as well as cached. `setAssessmentLineages` is not visible to
+         the caller until the next render, and the duplicate flow has to read
+         the count it just fetched inside the same click handler. */
+      return rows;
     } catch (error) {
       console.log('[TalentFlow] Failed to load assessment versions:', error);
+      return undefined;
     } finally {
       setLoadingLineages(prev => ({ ...prev, [jdId]: false }));
     }
   };
+
+  /**
+   * Re-read everything that answers "does this job version have an
+   * assessment": every lineage this page has cached, plus one more by id, plus
+   * the backend's own index.
+   *
+   * Called after anything that ADDS an assessment — creating one for a job
+   * version, duplicating one into a new version. A stale answer here is not a
+   * cosmetic lag: a job version whose new assessment is missing goes on
+   * offering Create Assessment for an assessment that already exists.
+   *
+   * Every cached key, not just the new assessment's own `jd_id`, because the
+   * two are not the same thing. The cache is keyed by the JD row a fetch was
+   * made under, one entry covers that JD's WHOLE lineage, and a new assessment
+   * is authored against whichever job version the recruiter picked — so
+   * refreshing only its `jd_id` can mint a second entry for the same lineage
+   * and leave the one an open panel is reading untouched.
+   *
+   * Refreshed rather than dropped: clearing the entries would leave an open
+   * panel with nothing to render and no fetch to bring it back, since the
+   * fetch is triggered by opening the panel.
+   */
+  const refreshAssessmentExistence = async (alsoLoad?: string) => {
+    const keys = new Set(Object.keys(assessmentLineages));
+    if (alsoLoad) keys.add(alsoLoad);
+    await Promise.all([
+      loadJdsWithAssessments(),
+      ...[...keys].map(key => loadAssessmentLineage(key, true)),
+    ]);
+  };
+
+  /**
+   * How many versions this assessment's lineage already holds — the number
+   * the duplicate cap is read against.
+   *
+   * Two sources, in order of authority:
+   *
+   *   1. The fetched lineage (`assessmentLineages[jd_id]`). Unfiltered, and
+   *      it is the very list the Assessment Versions table renders, so the
+   *      cap and the table can never disagree about how many versions exist.
+   *   2. The loaded list, as a fallback before any panel has been opened.
+   *      This one is tab-filtered — the Active tab never loaded the drafts —
+   *      so it can only undercount, never over-, which is why it is second.
+   *
+   * Archived versions are excluded from both: archiving is what the cap
+   * message tells a recruiter to do to make room, so counting archived rows
+   * would make that advice do nothing.
+   */
+  const countAssessmentVersions = (
+    assessment: { jd_id?: string },
+    lineage?: AssessmentVersionRow[],
+  ) => {
+    if (!assessment.jd_id) return 0;
+    const fetched = lineage ?? assessmentLineages[assessment.jd_id];
+    if (fetched?.length) {
+      return fetched.filter(v => String(v.status || '').toLowerCase() !== 'archived').length;
+    }
+    return apiAssessments.filter(
+      (x: any) => x.jd_id === assessment.jd_id && x.status !== 'Archived',
+    ).length;
+  };
+
+  /** At the cap — Duplicate must not mint another version. */
+  const isVersionCapReached = (
+    assessment: { jd_id?: string },
+    lineage?: AssessmentVersionRow[],
+  ) => countAssessmentVersions(assessment, lineage) >= MAX_ASSESSMENT_VERSIONS;
 
   /**
    * Create an assessment for ONE job version, from the Job Version History.
@@ -422,8 +610,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       toast.error('You do not have permission to create assessments');
       return;
     }
+    /* `step=configure` lands the recruiter on the Configure form with THIS job
+       version already chosen, rather than on the JD picker.
+
+       That is not a shortcut, it is the correctness of the version. The picker
+       collapses a lineage to one row - its latest Published or Republished
+       version (`buildAssessmentJobList`) - so a V2 whose lineage has a V3 is
+       not a row there at all. Landing on the picker after clicking V2's own
+       Create therefore offered the job's latest version instead, which is the
+       wrong assessment to author. With `step=configure` the step is settled
+       from the first render: the flow holds a loader while it resolves the id,
+       and `AssessmentCreation` keeps the step the URL asked for rather than
+       rewriting the route a moment later.
+
+       `jd_id` is the JOB VERSION's own JD row id, passed from the clicked row
+       (`group.jobVersionId` on the version panel) - never the card's, and
+       never a version number. The create flow resolves that id directly,
+       fetching the record by id when the list did not include it, so V1, V2
+       and V3 each open on themselves. */
     router.push(
-      `/recruitment/assessments/create?jd_id=${encodeURIComponent(jobVersionId)}`
+      '/recruitment/assessments/create?step=configure'
+      + `&jd_id=${encodeURIComponent(jobVersionId)}`
       + `&returnUrl=${encodeURIComponent('/recruitment/assessments')}`
     );
   };
@@ -849,13 +1056,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       updated_at: a.updated_at,
       created_by_name: a.created_by_name || 'System',
       version: a.version || 1,
-      // Backend computes the 3-version cap and the "only version 1 can be
-      // cloned" rule. We split it into two signals so the UI can express
-      // both states distinctly:
-      //   clone_button_disabled → Draft / clone (V2, V3) → greyed-out button
-      //   clone_cap_reached → V1 at the 3-version cap → button stays
-      //     clickable but click opens a "max reached" popup
-      // can_clone is the legacy combined flag (kept for safety).
+      // The backend's own clone verdicts, carried through unchanged.
+      //
+      // They no longer GATE the Duplicate action: each encodes a rule this
+      // flow has replaced — `clone_button_disabled` folds in "only version 1
+      // can be cloned", and `clone_cap_reached` counts to a cap of 3, where
+      // MAX_ASSESSMENT_VERSIONS is 5. The gate is computed in the menu, from
+      // the lineage this page has loaded (see `isVersionCapReached`). These
+      // stay mapped so nothing else that reads them breaks, and so a backend
+      // that later reports the new rules is one line from being trusted again.
       can_clone: a.can_clone !== undefined ? a.can_clone : true,
       clone_button_disabled: a.clone_button_disabled === true,
       clone_cap_reached: a.clone_cap_reached === true,
@@ -1572,10 +1781,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (!selectedAssessmentForTracking || isRefreshingTracking || isLoadingInvitations) return;
     setIsRefreshingTracking(true);
     try {
-      await Promise.all([
+      /* The dialog holds the height it had for the whole request - see
+         `useDialogHeightLock`. The rows staying mounted underneath (the veil,
+         below) is the other half of it; the pin alone would have nothing to
+         hold up once released. */
+      await trackingHeightLock.run(() => Promise.all([
         loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
         loadTrackingInvitationSummary(selectedAssessmentForTracking),
-      ]);
+      ]));
     } finally {
       setIsRefreshingTracking(false);
     }
@@ -2133,6 +2346,38 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     router.push(`/recruitment/assessments/create?step=configure&jd_id=${assessment.jd_id}&edit=${assessment.id}`);
   };
 
+  /**
+   * Open ONE assessment on the page its OWN status calls for.
+   *
+   * A Draft opens the draft page — the configure form it was left in, ready to
+   * be finished and published. Anything else opens the details page.
+   *
+   * One helper because the rule was previously written into the grid card's
+   * click handler alone, and the version panel's rows pushed straight at
+   * `/recruitment/assessments/<id>` for every row they carried. A Draft
+   * clicked there landed on the published details page: invitations, analytics
+   * and results for an assessment that has none of them, and no way to carry
+   * on editing it. Status is read per ROW, never from the card or the lineage
+   * it sits in, so a Draft and a Published assessment on the same job version
+   * open their own pages.
+   */
+  const openAssessment = (assessment: { id: string; status?: string; jd_id?: string }) => {
+    if (assessment.status === 'Draft') {
+      if (!canUpdateAssessment) {
+        toast.error('You do not have permission to edit assessments');
+        return;
+      }
+      /* No `jd_id`, no draft page to open — the configure form is scoped to a
+         job. Falls through to the details page rather than pushing a URL that
+         cannot resolve. */
+      if (assessment.jd_id) {
+        handleEditAssessment(assessment);
+        return;
+      }
+    }
+    router.push(`/recruitment/assessments/${assessment.id}`);
+  };
+
   // Reload quota from API
   const reloadQuota = async () => {
     try {
@@ -2271,8 +2516,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     // Just close the creation view and reload from API
     setShowCreation(false);
 
-    // Reload assessments from API to get the newly created one
-    await reloadAssessments();
+    /* Reload the list to pick up the new assessment — and, with it, everything
+       that decides a job version's action. The new assessment is what turns
+       its version from Create Assessment to View Assessment, so leaving those
+       sources stale would keep offering Create for a version that now has one. */
+    await Promise.all([
+      reloadAssessments(),
+      refreshAssessmentExistence(assessment?.jd_id),
+    ]);
 
     // Track usage via external API
     if (assessment?.id) {
@@ -2323,14 +2574,28 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   // Open the clone confirmation modal. The recruiter then publishes and
-  // invites V2 candidates manually via the normal invite flow.
-  // If the JD has already hit the 3-version cap, show a max-reached popup
-  // instead of opening the duplicate confirmation.
+  // invites the new version's candidates manually via the normal invite flow.
+  // If the lineage is already at MAX_ASSESSMENT_VERSIONS, show a max-reached
+  // popup instead of opening the duplicate confirmation.
   const handleOpenCloneModal = async (assessment: any) => {
-    if (assessment.clone_cap_reached) {
+    /* Re-read the lineage before deciding, rather than trusting whatever the
+       menu's own gate could see.
+
+       The menu greys Duplicate out from the same count, but that count can be
+       short: with no panel yet opened for this JD it falls back to the loaded
+       list, which is filtered by the active tab — on the Active tab the
+       drafts were never fetched, so a lineage sitting at the cap can still
+       look like it has room. This fetch is the unfiltered lineage, so the cap
+       is checked against every version that actually exists at the moment of
+       the click. It also lands the rows the versions table will render, so
+       the duplicate that follows has nothing left to load. */
+    const lineage = assessment.jd_id
+      ? await loadAssessmentLineage(assessment.jd_id, true)
+      : undefined;
+    if (isVersionCapReached(assessment, lineage)) {
       await dialog.alert({
         title: 'Maximum versions reached',
-        message: 'This assessment already has 3 versions (the maximum allowed). Archive or delete a version before duplicating again.',
+        message: `This assessment already has ${MAX_ASSESSMENT_VERSIONS} versions (the maximum allowed). Archive or delete a version before duplicating again.`,
         variant: 'warning',
       });
       return;
@@ -2341,9 +2606,30 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const handleConfirmClone = async () => {
     if (!cloneTargetAssessment || isCloning) return;
     setIsCloning(true);
+    /* Read off the target BEFORE the await: `setCloneTargetAssessment(null)`
+       below clears the state, and the lineage refresh needs the JD the clone
+       was made under. */
+    const clonedFromJdId: string | undefined = cloneTargetAssessment.jd_id;
     try {
       const response = await assessmentService.clone(cloneTargetAssessment.id);
-      await reloadAssessments();
+      /* Both halves of what is on screen, refreshed together and awaited, so
+         the new version is there before the toast says it was created:
+
+           - the lineage cache, FORCED past its cache hit, because that cache
+             is what the open Assessment Versions table renders. Without the
+             force the table kept its pre-click rows and only a page reload
+             showed the new one.
+           - the list itself, which owns the version counts the cap is read
+             against and the totals on each card.
+
+         The Main Assessment List row is unaffected by design: the clone is a
+         Draft, and `collapsedAssessments` keeps a lineage represented by its
+         non-draft version, so the row keeps its name, stage and Active
+         status, and the panel it has open stays keyed to the same id. */
+      await Promise.all([
+        refreshAssessmentExistence(clonedFromJdId),
+        reloadAssessments(),
+      ]);
       toast.success(`Assessment duplicated: "${response.cloned_title}"`);
       setCloneTargetAssessment(null);
     } catch (error) {
@@ -2435,6 +2721,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Track Invites - Load invitations for an assessment
   const handleTrackInvites = async (assessment: any) => {
+    /* Loading from the very first paint. The popup opens with no rows (the
+       close handler clears them), and the effect that fetches them runs AFTER
+       that paint - so for one frame the body rendered "No invitations found",
+       which is both wrong and a third height for the dialog to pass through on
+       the way in: empty state, then spinner, then table. Declaring the load
+       here collapses that to one. */
+    setIsLoadingInvitations(true);
     // One assessment - the popup's original scope. Cleared explicitly so a
     // per-assessment Track after a job-wide one is not still job-scoped.
     setTrackingJob(null);
@@ -2457,6 +2750,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const handleTrackJob = async (assessment: any) => {
     const jdId = assessment?.jd_id;
     if (!jdId) return;
+    /* Same reason as `handleTrackInvites`: the popup must open on its loader,
+       not on a momentary "No invitations found". */
+    setIsLoadingInvitations(true);
     let rows: any[] = (assessmentLineages[jdId] as any[]) || [];
     if (!rows.length) {
       try {
@@ -2850,7 +3146,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * now; the rest live behind that card's View Versions button.
    *
    * An assessment's versions are the other assessments sharing its JD — that
-   * is what the 3-version clone cap counts and what the details view's own
+   * is what the version cap counts and what the details view's own
    * "New Versions" tab fetches, so it is the app's existing definition rather
    * than a new one. Rows with no JD are their own lineage: unrelated
    * assessments must not collapse into each other just because they share a
@@ -2887,10 +3183,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
        number alone could put an older job version on the card whenever an
        assessment was duplicated after a republish.
 
-       STATUS is not a term in it, deliberately, and that is the whole rule the
-       Job Openings page states: a Draft v2 over a Published v1 is the LATEST
-       version, and the lineage reads as being re-drafted. A published version
-       never displaces a newer draft.
+       DRAFT IS THE ONE STATUS TERM, and it outranks nothing: a version that
+       is still a draft never represents a lineage that has a non-draft
+       version in it. This is what keeps the Main Assessment List still when
+       a version is duplicated. Duplicate mints the next version as a Draft,
+       and on a pure sequence rule that draft immediately became the row —
+       so an Active assessment turned Draft, its name grew a "- Version 2"
+       suffix, its stage moved and the open version panel (keyed on the old
+       row's id) closed itself, all from an action that was supposed to touch
+       only the versions table. None of that was a data change; the list was
+       simply pointing at a different member of the same lineage.
+
+       Only DRAFT is weighed, not a full status ranking: Active vs Completed
+       vs Archived still sort purely by version, exactly as before, so the
+       only lineage whose row moves is one that had a draft on top of a
+       non-draft. A lineage that is all drafts still shows its newest draft —
+       there is no non-draft version for it to be represented by.
 
        `created_at` is the last tie-break, for the same reason it is one there:
        when the list endpoint omits `version` every row falls back to 1, both
@@ -2901,6 +3209,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       a: (typeof filteredAssessments)[number],
       b: (typeof filteredAssessments)[number],
     ) => {
+      /* A draft loses to any non-draft in the same lineage, whatever the
+         version numbers say. Checked before the job version too: a draft
+         authored against a newer JOB version is still a draft, and letting
+         it through here would flip the row on the next republish-and-
+         duplicate just as surely. */
+      const aIsDraft = a.status === 'Draft';
+      const bIsDraft = b.status === 'Draft';
+      if (aIsDraft !== bIsDraft) return !aIsDraft;
       const jobDelta = (a.jd_version ?? 1) - (b.jd_version ?? 1);
       if (jobDelta !== 0) return jobDelta > 0;
       const versionDelta = (a.version ?? 1) - (b.version ?? 1);
@@ -2958,6 +3274,43 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    */
   const getJobVersionCount = (assessment: { jd_id?: string; jd_short_id?: string; jd_version?: number }) =>
     getJobLineageRows(assessment)?.length ?? getLatestJobVersion(assessment);
+
+  /**
+   * Invitations sent for a JOB - what the Job List's Track button is gated on.
+   *
+   * Track opens on the whole job (every assessment of every version of it, see
+   * `handleTrackJob`), so "is there anything to track" is a question about the
+   * Job ID, not about the row's representative assessment. A job nobody has
+   * been invited against would open the popup on an empty table.
+   *
+   * Two readings, the larger winning, because each sees rows the other cannot:
+   *
+   *   `jobRowTotals` is summed over `filteredAssessments` - the very set the
+   *   row's own "Invitations Sent" metric is read from, so the button can never
+   *   be disabled on a row that is showing a non-zero count. It moves with the
+   *   tab and the filters, and covers only the assessments the list loaded.
+   *
+   *   `assessmentLineages[jd_id]` is the job's own assessments, fetched
+   *   unfiltered by the version panel and by Track itself, so once it has
+   *   landed it also covers versions this tab never listed. Undefined until
+   *   then, which is why it cannot be the only reading.
+   *
+   * `invitations_count` is the backend's count of invitations sent for an
+   * assessment (AssessmentResponse.invitations_count) - the same field the
+   * per-assessment Track in `renderAssessmentQuickActions` is gated on, so the
+   * job-wide gate and the per-version ones inside the panel agree. It is
+   * re-read on every render and `reloadAssessments()` runs when the share
+   * modal closes, so the first invitation sent for a job enables its Track.
+   */
+  const getJobInvitationsSent = (assessment: { id: string; jd_id?: string; jd_short_id?: string }) => {
+    const fromListedRows = jobRowTotals.get(lineageKeyOf(assessment))?.invitations ?? 0;
+    const lineageRows = assessment.jd_id ? assessmentLineages[assessment.jd_id] : undefined;
+    const fromLineage = (lineageRows ?? []).reduce(
+      (sum, row) => sum + (row.invitations_count ?? 0),
+      0,
+    );
+    return Math.max(fromListedRows, fromLineage);
+  };
 
   /**
    * The four figures a Job List row reports, in the order it shows them.
@@ -3100,6 +3453,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     : `Showing ${trackingStartIndex} to ${trackingEndIndex} of ${trackingTotalItems} invites`;
 
   /**
+   * Two different loading states in the tracking popup, because they have to
+   * look different.
+   *
+   * The popup has NOTHING to show yet (first open, or a filter that emptied
+   * it): the centred spinner is the whole body, which is right - there is no
+   * content for it to sit over.
+   *
+   * The popup already HAS rows and is re-reading them (Refresh, a page turn, a
+   * filter change): the rows stay exactly where they are and the spinner rides
+   * over them. Swapping a full table for a `py-12` spinner is what made
+   * Refresh shake the dialog - the body collapsed to about a tenth of its
+   * height, the content-driven dialog shrank with it and re-centred, then grew
+   * back a moment later when the rows returned. The rows never leave now, so
+   * there is nothing to collapse.
+   */
+  const trackingHasRows = trackingInvitations.length > 0;
+  const showTrackingInitialLoader = isLoadingInvitations && !trackingHasRows;
+  const showTrackingRefreshVeil = isLoadingInvitations && trackingHasRows;
+
+  /**
    * The per-assessment three-dot menu, as ONE definition.
    *
    * Lifted out of the list card so the version panel's rows can carry the
@@ -3107,7 +3480,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * now shows only each assessment's latest version - so with the menu on the
    * card alone, a lineage sitting at V2 would have no reachable Duplicate at
    * all. Sharing one definition also keeps the publish-state, permission,
-   * revoked-invites and 3-version-cap gates in a single place, where a change
+   * revoked-invites and version-cap gates in a single place, where a change
    * to any of them cannot land on one surface and miss the other.
    *
    * `menuKey` is what the open/closed state is keyed on, NOT the assessment
@@ -3184,38 +3557,33 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             }}
           >
             {assessment.status !== 'Archived' && canCreateAssessment && (() => {
-              // Gating computed FRONT-END so it works regardless of
-              // whether the backend has the new clone_button_disabled
-              // flag deployed. Four reasons to disable:
-              //   1. Draft → must publish first
-              //   2. Clone (version > 1) → only V1 can be duplicated
-              //   3. Cap reached (3 sibling versions exist for this JD)
-              //      — counted from the currently-loaded list as a
-              //      fallback so V1 greys out the moment V3 is created,
-              //      even before the backend redeploy lands the
-              //      clone_cap_reached flag.
-              //   4. Backend flag (extra safety / future-proofing)
+              // Gating computed FRONT-END, on the lineage this page has
+              // actually loaded, so it does not depend on which of the
+              // backend's clone_* flags a deployment happens to return.
+              // Two reasons to disable, and only two:
+              //   1. Draft → must publish this version first.
+              //   2. Cap reached → the lineage already holds
+              //      MAX_ASSESSMENT_VERSIONS versions, so there is no next
+              //      sequential version to mint.
+              //
+              // What is deliberately NOT a reason any more:
+              //
+              //   - version > 1. Duplicate now walks the lineage forward
+              //     from whichever version it is invoked on (V2 → V3,
+              //     V3 → V4, V4 → V5), so gating it to V1 would stop the
+              //     chain at V2.
+              //   - `clone_button_disabled` / `clone_cap_reached` from the
+              //     API. Both encode the OLD rules — "only V1" and a cap of
+              //     3 — so honouring them would re-impose exactly the two
+              //     limits this flow replaces. They stay on the mapped
+              //     record for other readers; they just do not gate here.
               const isDraft = assessment.status === 'Draft';
-              const isClone = (assessment.version || 1) > 1;
-              const isV1 = (assessment.version || 1) === 1;
-              // Sibling count from the loaded list (live across renders).
-              const siblingCountInList = assessment.jd_id
-                ? apiAssessments.filter((x: any) =>
-                    x.jd_id === assessment.jd_id && x.status !== 'Archived'
-                  ).length
-                : 0;
-              const capReached =
-                assessment.clone_cap_reached === true ||
-                (assessment.jd_assessment_count !== undefined && assessment.jd_assessment_count >= 3) ||
-                siblingCountInList >= 3;
-              const backendDisabled = !!assessment.clone_button_disabled;
-              const buttonDisabled = isDraft || isClone || (isV1 && capReached) || backendDisabled;
+              const capReached = isVersionCapReached(assessment);
+              const buttonDisabled = isDraft || capReached;
               const disabledReason = isDraft
                 ? 'Publish the assessment before duplicating.'
-                : isClone
-                ? 'Only the original assessment (Version 1) can be duplicated.'
-                : (isV1 && capReached)
-                ? 'Maximum 3 versions reached. Archive a version to duplicate again.'
+                : capReached
+                ? `Maximum ${MAX_ASSESSMENT_VERSIONS} versions reached. Archive a version to duplicate again.`
                 : '';
               return (
                 <button
@@ -5707,18 +6075,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {visibleAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
-                    onClick={() => {
-                      if (assessment.status === 'Draft') {
-                        if (!canUpdateAssessment) {
-                          toast.error('You do not have permission to edit assessments');
-                          return;
-                        }
-                        // For drafts, open edit modal to continue editing
-                        handleEditAssessment(assessment);
-                      } else {
-                        router.push(`/recruitment/assessments/${assessment.id}`);
-                      }
-                    }}
+                    /* Draft → the draft page to carry on editing, anything else
+                       → the details page. The rule lives in `openAssessment`
+                       so this card and the version panel's rows cannot drift
+                       apart on it. */
+                    onClick={() => openAssessment(assessment)}
                     /* `relative` so the dropdown anchors to its own card — it
                        used to resolve against a far ancestor, which is what put
                        it over neighbouring cards. The raised z-index keeps it
@@ -6015,10 +6376,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             jobVersions={jdLineage.lineages[assessment.jd_id]}
                             jobVersionDetails={jdLineage.versionDetails}
                             assessments={assessmentLineages[assessment.jd_id]}
+                            /* The backend's per-version "has an assessment" index,
+                               read beside the rows - see the prop for why both. */
+                            jdsWithAssessments={jdsWithAssessments}
                             loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
                             currentAssessmentId={assessment.id}
                             latestJobVersion={getLatestJobVersion(assessment)}
-                              onRowClick={(versionId) => router.push(`/recruitment/assessments/${versionId}`)}
+                              /* Opened on the page the ROW's own status calls for -
+                                 a Draft on the draft page, everything else on the
+                                 details page. The row is found by ASSESSMENT id in
+                                 the lineage, the same lookup `renderAction` makes,
+                                 so two assessments on one job version each open
+                                 themselves. */
+                              onRowClick={(versionId) => {
+                                const raw = (assessmentLineages[assessment.jd_id!] || [])
+                                  .find((v) => v.id === versionId);
+                                openAssessment(raw ? mapAssessmentFromApi(raw, 0) : { id: versionId });
+                              }}
                             onCreateAssessment={handleCreateAssessmentForJobVersion}
                             headerAction={
                               /* The job version details popup, pinned to the
@@ -6232,29 +6606,58 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             read-only overview - and the only one of the two
                             that can show a version nothing was ever built for.
 
-                            Gated on `hasVersionHistory` (a `jd_id`), the same
-                            test View Versions and the row click use. The click
-                            is stopped so it does not also toggle the panel.
+                            Rendered on `hasVersionHistory` (a `jd_id`), the
+                            same test View Versions and the row click use, and
+                            ENABLED on the job having at least one invitation
+                            sent - see the gate below. The click is stopped so
+                            it does not also toggle the panel.
 
                             Radar is the glyph Track Invites already uses on
                             this page, so "track" reads the same wherever it
                             appears; brand-cyan is the assessment colour, which
                             is what this popup is about. */}
-                        {hasVersionHistory(assessment) && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleTrackJob(assessment);
-                            }}
-                            className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all bg-white dark:bg-slate-900 text-brand-cyan border-brand-cyan/30 hover:bg-brand-cyan/5"
-                            aria-label="Track the assessments created for this job's versions"
-                            title="Track the assessments created for this job's versions"
-                          >
-                            <Radar className="w-3.5 h-3.5" />
-                            Track
-                          </button>
-                        )}
+                        {hasVersionHistory(assessment) && (() => {
+                          /* Gated on the JOB's invitations, per Job ID: the
+                             popup lists the invitations sent against this
+                             job's assessments, so with none sent it would
+                             open on an empty table. Greyed with the reason in
+                             its tooltip rather than dropped, which is how the
+                             Result button beside it and the per-assessment
+                             Track in the version panel both handle "nothing to
+                             show yet" - the row keeps its shape and says why.
+
+                             Each row asks this of its own lineage, so one job
+                             being invited says nothing about the next; and the
+                             count is re-read on every render from the reloaded
+                             list, so the first invitation sent for a job flips
+                             its own Track on and no other. */
+                          const invitationsSent = getJobInvitationsSent(assessment);
+                          const hasInvitations = invitationsSent > 0;
+                          const reason = hasInvitations
+                            ? `Track the assessments created for this job's versions (${invitationsSent} invitation${invitationsSent === 1 ? '' : 's'} sent)`
+                            : 'No invitations have been sent for this job yet';
+                          return (
+                            <button
+                              type="button"
+                              disabled={!hasInvitations}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!hasInvitations) return;
+                                void handleTrackJob(assessment);
+                              }}
+                              className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                                hasInvitations
+                                  ? 'bg-white dark:bg-slate-900 text-brand-cyan border-brand-cyan/30 hover:bg-brand-cyan/5'
+                                  : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                              }`}
+                              aria-label={reason}
+                              title={reason}
+                            >
+                              <Radar className="w-3.5 h-3.5" />
+                              Track
+                            </button>
+                          );
+                        })()}
 
                         {/* Result - the scores for the assessment this row
                             represents (the job's newest, the same one the row
@@ -6320,10 +6723,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           jobVersions={jdLineage.lineages[assessment.jd_id]}
                           jobVersionDetails={jdLineage.versionDetails}
                           assessments={assessmentLineages[assessment.jd_id]}
+                          /* The backend's per-version "has an assessment" index,
+                             read beside the rows - see the prop for why both. */
+                          jdsWithAssessments={jdsWithAssessments}
                           loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
                           currentAssessmentId={assessment.id}
                           latestJobVersion={getLatestJobVersion(assessment)}
-                          onRowClick={(versionId) => router.push(`/recruitment/assessments/${versionId}`)}
+                          /* Opened on the page the ROW's own status calls for -
+                             a Draft on the draft page, everything else on the
+                             details page. The row is found by ASSESSMENT id in
+                             the lineage, the same lookup `renderAction` makes,
+                             so two assessments on one job version each open
+                             themselves. */
+                          onRowClick={(versionId) => {
+                            const raw = (assessmentLineages[assessment.jd_id!] || [])
+                              .find((v) => v.id === versionId);
+                            openAssessment(raw ? mapAssessmentFromApi(raw, 0) : { id: versionId });
+                          }}
                           /* Every version gets the card's own menu, keyed
                              separately so opening one row's does not also open
                              the card's for the same assessment. The lineage
@@ -6570,7 +6986,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               full screen with an empty table below the rows. The table shell
               (flex-1 min-h-0) absorbs the overflow once the cap engages, so a
               long list still scrolls inside the dialog on a 320px phone. */}
-          <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] w-full sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[92dvh] sm:max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+          <div
+            /* Width was never in question - it is fixed by the breakpoint
+               ladder below and no state touches it. Height is what moved, so
+               only height is pinned, and only while a refresh is in flight. */
+            {...trackingHeightLock.dialogProps}
+            className={TRACKER_DIALOG_PANEL_CLASS}>
             {/* Modal Header */}
             <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
               <div className="min-w-0 flex-1">
@@ -6618,7 +7039,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingTracking ? 'animate-spin' : ''}`} />
-                  <span className="hidden sm:inline">{isRefreshingTracking ? 'Refreshing...' : 'Refresh'}</span>
+                  {/* The label swaps to "Refreshing..." mid-request, and the
+                      longer word used to widen the button and shove the close
+                      X sideways - a small shake of its own, right where the
+                      pointer still is. The span reserves the wider word's
+                      width in both states, so the header never moves. */}
+                  <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+                    {isRefreshingTracking ? 'Refreshing...' : 'Refresh'}
+                  </span>
                 </button>
                 <button
                   onClick={closeTrackInvitesModal}
@@ -6689,7 +7117,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
             {/* Select All — same control, wording and placement as the AI
                 Interviews tracker's bulk-select bar. */}
-            {!isLoadingInvitations && trackingSelectableIds.length > 0 && (
+            {/* `showTrackingInitialLoader`, not `isLoadingInvitations`: this
+                bar disappearing and reappearing during a Refresh was one more
+                height change in the stack of them. Its own contents come from
+                `trackingInvitations`, which the refresh keeps. */}
+            {!showTrackingInitialLoader && trackingSelectableIds.length > 0 && (
               <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
                 <button
                   type="button"
@@ -6732,13 +7164,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 single vertical scroller. Two nested scrollers meant this one
                 won, scrolling the sticky header and pinned Actions column
                 away with the rest of the table. */}
-            <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
-              {isLoadingInvitations ? (
-                <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center tf-loader-center--compact">
+            {/* `relative` so the refresh veil below can cover exactly this
+                body without being part of its flow - an overlay adds no
+                height, which is the whole point of it. */}
+            <div className="relative px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
+              {showTrackingInitialLoader ? (
+                /* Nothing to show yet, so the spinner IS the body - and it
+                   FILLS it, rather than collapsing the dialog to a 200px box
+                   that then jumps to table height when the rows land. The
+                   dialog's min-height reserves the space; this occupies it. */
+                <div className={TRACKER_DIALOG_PLACEHOLDER_CLASS}>
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
                 </div>
               ) : trackingInvitations.length === 0 ? (
-                <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
+                <div className={`${TRACKER_DIALOG_PLACEHOLDER_CLASS} text-gray-500 dark:text-slate-500`}>
                   <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-brand-blue/40" />
                   <p className="text-xs sm:text-sm">
                     {trackingHasActiveFilters
@@ -7155,6 +7594,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {/* Re-reading rows that are already on screen - Refresh, a page
+                  turn, a filter change. The table underneath keeps its exact
+                  size and place; this only tints it and says why, and it takes
+                  the clicks so nobody acts on a row that is about to be
+                  replaced. Absolutely positioned, so it contributes no height
+                  and the dialog cannot move because of it. */}
+              {showTrackingRefreshVeil && (
+                <div
+                  className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
+                  aria-live="polite"
+                >
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-xs sm:text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
+                    <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
+                    Refreshing invite statuses...
+                  </span>
                 </div>
               )}
             </div>

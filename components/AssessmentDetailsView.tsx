@@ -234,18 +234,55 @@ export default function AssessmentDetailsView({
     fetchVersions();
   }, [assessment?.id, activeTab]);
 
-  // Sibling versions (V1 + V2 + V3 sharing the same JD) — powers the
-  // separate "New Versions" tab. Capped at the 3-version limit server-side.
+  // Sibling versions (V1 and every duplicate sharing the same JD) — powers the
+  // separate "New Versions" tab. Capped at 5 versions per assessment.
   useEffect(() => {
     const fetchSiblings = async () => {
       if (!assessment?.id || !assessment?.jd_id || activeTab !== 'newversions') return;
       setSiblingsLoading(true);
       try {
-        const response = await assessmentService.list({
-          jd_id: assessment.jd_id,
-          page_size: 50,
-        });
-        const items = (response.items || []).sort(
+        /* ONE REQUEST PER JOB VERSION, merged and deduped by assessment id —
+           not one for this assessment's own `jd_id`.
+
+           Asking once with this assessment's `jd_id` only returns the whole
+           job's assessments if the endpoint widens that filter to the JD's
+           lineage. Where it matches the id exactly, every assessment authored
+           against a DIFFERENT version of the same job is absent from the
+           reply — so a Draft created against another version reads here as
+           not existing at all. Each version is asked about itself instead, so
+           the reply cannot be narrower than the question; if the endpoint
+           does widen, the extra copies arrive as duplicates and the dedupe
+           drops them.
+
+           Deduped by ASSESSMENT id, the record's own unique key — never by
+           job or version — so two assessments on one job version stay two
+           rows. The same fan-out the assessments list uses for its version
+           panel (`loadAssessmentLineage`), so both surfaces list the same
+           assessments. */
+        let versionIds: string[] = [assessment.jd_id];
+        try {
+          const lineage = await jdService.getLineageVersions(assessment.jd_id);
+          const ids = lineage.map((v: any) => v.id).filter(Boolean);
+          if (ids.length) versionIds = [...new Set([assessment.jd_id, ...ids])];
+        } catch (error) {
+          console.error('Failed to fetch JD lineage for sibling versions:', error);
+        }
+
+        const responses = await Promise.all(
+          versionIds.map((versionId) =>
+            assessmentService
+              .list({ jd_id: versionId, page_size: 50 })
+              // One version failing must not blank the others.
+              .catch(() => ({ items: [] as any[] })),
+          ),
+        );
+        const byAssessmentId = new Map<string, any>();
+        for (const response of responses) {
+          for (const row of ((response.items || []) as any[])) {
+            if (row?.id) byAssessmentId.set(row.id, row);
+          }
+        }
+        const items = [...byAssessmentId.values()].sort(
           (a: any, b: any) => (a.version || 0) - (b.version || 0)
         );
         setSiblingVersions(items);
@@ -1658,7 +1695,7 @@ export default function AssessmentDetailsView({
                 </div>
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">New Versions</h3>
               </div>
-              <p className="text-xs sm:text-sm text-gray-600">All versions of this assessment (V1 is the original; V2 and V3 are duplicates).</p>
+              <p className="text-xs sm:text-sm text-gray-600">All versions of this assessment (V1 is the original; V2 onwards are duplicates, up to 5).</p>
             </div>
 
             {siblingsLoading ? (

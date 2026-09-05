@@ -5,8 +5,8 @@ import { ChevronDown, Eye, Plus, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
-import { countAssessmentTopics } from '@/lib/utils/assessmentUtils';
 import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
+import { isStandardExperienceLevel } from '@/lib/utils/jobExperience';
 
 /**
  * Job Versions for an assessment row, expanded in place beneath it.
@@ -50,14 +50,35 @@ export interface AssessmentVersionRow {
    *  (`completed_count` on AssessmentResponse) - the same field each
    *  assessment's own pass rate is computed against. */
   completed_count?: number;
-  /** The JOB version this assessment was authored against. The join key. */
+  /**
+   * The JD ROW this assessment was authored against — the job version's own
+   * id, and the join key.
+   *
+   * Every job version is a JD row of its own, so this id names one version
+   * exactly. It decides which job version counts this assessment, and
+   * therefore whether that version offers Create Assessment or View
+   * Assessment. Required on AssessmentResponse, so it is present on every row
+   * the list endpoint returns.
+   */
+  jd_id?: string;
+  /**
+   * The job version NUMBER recorded at creation time. The FALLBACK join key,
+   * used only where the id cannot resolve — it is optional on
+   * AssessmentResponse, and a number cannot separate two JD rows reporting
+   * the same version, so the id is asked first.
+   */
   jd_version?: number;
-  /* The configured sections, counted for the Questions column. Read through
-     `countAssessmentTopics` so this panel and the Job List row above it report
-     the same number — a job's total is the sum of the rows listed here. */
-  hr_topics?: unknown[] | null;
-  technical_topics?: unknown[] | null;
-  coding_topics?: unknown[] | null;
+  /* The three rounds and the share of the score each carries, as configured
+     on the assessment (`<section>_enabled` / `<section>_percentage` on
+     AssessmentResponse). Read by the Round Weightage column, which took the
+     place of Questions: a count of configured TOPICS said little about an
+     assessment, where the split between its rounds is the shape of it. */
+  hr_enabled?: boolean;
+  hr_percentage?: number;
+  technical_enabled?: boolean;
+  technical_percentage?: number;
+  coding_enabled?: boolean;
+  coding_percentage?: number;
 }
 
 interface AssessmentVersionHistoryPanelProps {
@@ -67,6 +88,25 @@ interface AssessmentVersionHistoryPanelProps {
   jobVersionDetails: Record<string, JDResponse>;
   /** Every assessment in this JD's lineage, in any order — sorted here. */
   assessments: AssessmentVersionRow[] | undefined;
+  /**
+   * The BACKEND's answer to "which JD versions have an assessment" — the ids
+   * from `/assessments/jds-with-assessments`, which reports every JD row
+   * holding a non-archived assessment, Draft and Published alike.
+   *
+   * Read as a second, independent source beside `assessments`, and the two
+   * are UNIONED rather than one winning. Both are evidence that an assessment
+   * exists, and they fail in different directions: this index is complete but
+   * says only yes-or-no, while `assessments` carries the detail but is one
+   * request that can come back short or not at all. Trusting the rows alone
+   * would then offer Create Assessment for a version that already has one —
+   * the exact mistake this panel has to avoid, and the one a recruiter cannot
+   * see is a mistake. A union is the fail-closed direction: the worst a stale
+   * `true` does is send them to View Assessment for a version they would have
+   * been refused a second assessment on anyway.
+   *
+   * Optional — omitted, the rows answer alone, as they did before.
+   */
+  jdsWithAssessments?: Set<string>;
   loading: boolean;
   /**
    * The live job version as the HOST resolved it — the same number its own
@@ -145,6 +185,109 @@ const STATUS_STYLES: Record<string, { chip: string; dot: string }> = {
 };
 
 /**
+ * The word the Status column shows for a job version.
+ *
+ * Factored out of `JobStatusChip` so that a rule written against that column -
+ * Create is offered on Published and Republished only - is decided by the very
+ * string the reader is looking at, rather than by a second, separate reading of
+ * the raw status that could drift from it.
+ *
+ * The raw DB word capitalised, through the shared `getDisplayStatus`, which is
+ * what turns a published JD on its 2nd publish or later into "Republished".
+ * Empty while the JD lineage request is still in flight - the chip draws a dash
+ * for that, and it is not a status.
+ */
+export const jobVersionDisplayStatus = (status?: string, currentVersion?: number): string => {
+  const raw = (status || '').trim();
+  if (!raw) return '';
+  const capitalised = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  return getDisplayStatus(capitalised, currentVersion);
+};
+
+/**
+ * Can an assessment be built against this job version?
+ *
+ * Published and Republished only - the two states in which a job version is
+ * live text a candidate could be assessed against. Everything else is a no,
+ * each for its own reason: a Draft is not final, a Disabled version is out of
+ * circulation, an Archived one is closed, and an unresolved status (the dash,
+ * while the lineage loads) is not an assertion that creating is allowed.
+ *
+ * Read off the DISPLAYED status via `jobVersionDisplayStatus`, so the table can
+ * never offer Create on a row whose own Status column reads Archived. Note that
+ * "Republished" is derived rather than stored (see `getDisplayStatus`), so
+ * testing the raw status alone would be testing a word this column never
+ * prints; the same pairing `matchesStatusFilter` makes for the Published pill
+ * on the Job Openings list.
+ */
+export const canCreateAssessmentForJobVersion = (status?: string, currentVersion?: number): boolean => {
+  const label = jobVersionDisplayStatus(status, currentVersion);
+  return label === 'Published' || label === 'Republished';
+};
+
+/** Why Create is off, in the words of the status that turned it off. */
+export const createAssessmentBlockedReason = (status?: string, currentVersion?: number): string => {
+  const label = jobVersionDisplayStatus(status, currentVersion);
+  switch (label) {
+    case 'Archived':
+      return 'Archived job versions cannot have new assessments';
+    case 'Disabled':
+      return 'Disabled job versions cannot have new assessments';
+    case 'Draft':
+      return 'Publish this job version to create an assessment for it';
+    case '':
+      return 'Job version status is still loading';
+    default:
+      return `Only Published or Republished job versions can have assessments (this one is ${label})`;
+  }
+};
+
+/**
+ * The experience a job version asks for, as this column words it.
+ *
+ * Resolved from that version's OWN fetched JD record, so a job republished
+ * with a wider requirement reads correctly per row: V3 can say 5+ Years while
+ * V1 still says 2–4. Undefined until that record lands (the details are
+ * fetched per version and arrive progressively) and when the JD states no
+ * experience at all - the cell draws a dash for both, as Created By already
+ * does with the same record.
+ *
+ * `isStandardExperienceLevel` is the shared rule, from the same util the Job
+ * Openings version history reads: a recruiter's OWN wording for the level
+ * ("Fresher (0-0)", "Trainee") is the JD's own text and wins over the numbers,
+ * while a standard seniority label (Entry/Mid/Senior) does not, because the
+ * years beside it say more than the word does. Only the range wording is
+ * spelled out here rather than taken from `formatJobExperienceText`, which
+ * writes a lowercase "2-4 years" and has no Fresher case.
+ *
+ * Zero on both bounds is Fresher, not "0–0 Years" - and a zero minimum with no
+ * maximum is the same statement, where "0+ Years" would be no statement at
+ * all. A single number on both bounds drops the range rather than repeating
+ * itself ("5 Years", not "5–5 Years").
+ */
+export const formatJobVersionExperience = (detail?: {
+  job_level?: string | null;
+  experience_level?: string | null;
+  experience_min?: number | null;
+  experience_max?: number | null;
+}): string | undefined => {
+  if (!detail) return undefined;
+
+  const customLevel = (detail.job_level || detail.experience_level || '').trim();
+  if (customLevel && !isStandardExperienceLevel(customLevel)) return customLevel;
+
+  const min = detail.experience_min ?? null;
+  const max = detail.experience_max ?? null;
+  if (min === null && max === null) return undefined;
+  if ((min ?? 0) === 0 && (max ?? 0) === 0) return 'Fresher';
+  if (min !== null && max !== null) {
+    return min === max ? `${min} Years` : `${min}–${max} Years`;
+  }
+  if (min !== null) return `${min}+ Years`;
+  return `Up to ${max} Years`;
+};
+
+/**
  * A JOB version's status badge, resolved exactly as the Job Openings version
  * history resolves it (`components/jobs/JobVersionHistoryPanel`): the raw DB
  * word capitalised, through the shared `getDisplayStatus` (which is what turns
@@ -163,13 +306,11 @@ const STATUS_STYLES: Record<string, { chip: string; dot: string }> = {
  * sets of words — conflating them is what went wrong here.
  */
 export function JobStatusChip({ status, currentVersion }: { status?: string; currentVersion?: number }) {
-  const raw = (status || '').trim();
+  const label = jobVersionDisplayStatus(status, currentVersion);
   /* No status known yet (the JD lineage request is still in flight) - a dash,
      rather than asserting a state the table has not been told. */
-  if (!raw) return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+  if (!label) return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
 
-  const capitalised = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
-  const label = getDisplayStatus(capitalised, currentVersion);
   const tone = getStatusConfig(label);
   return (
     <span
@@ -186,10 +327,12 @@ export function JobStatusChip({ status, currentVersion }: { status?: string; cur
 const JOB_COLUMNS: { label: string; minW: string }[] = [
   { label: 'Version', minW: 'min-w-[150px]' },
   { label: 'Status', minW: 'min-w-[110px]' },
-  { label: 'Created On', minW: 'min-w-[130px]' },
-  { label: 'Created By', minW: 'min-w-[120px]' },
+  { label: 'Experience', minW: 'min-w-[130px]' },
+  /* Created On and Created By, which used to be two columns of one fact each.
+     Narrower combined than the 250px the pair took, and the two lines read as
+     the one statement they are: who made this version, and when. */
+  { label: 'Created', minW: 'min-w-[200px]' },
   { label: 'Assessments', minW: 'min-w-[110px]' },
-  { label: 'Questions', minW: 'min-w-[100px]' },
   { label: 'Invitations Sent', minW: 'min-w-[120px]' },
   { label: 'Completed', minW: 'min-w-[120px]' },
 ];
@@ -201,7 +344,9 @@ const ASSESSMENT_COLUMNS: { label: string; minW: string }[] = [
   { label: 'Status', minW: 'min-w-[110px]' },
   { label: 'Created On', minW: 'min-w-[130px]' },
   { label: 'Created By', minW: 'min-w-[120px]' },
-  { label: 'Questions', minW: 'min-w-[100px]' },
+  /* Where Questions used to be. Wider than the column it replaced, because it
+     holds three labelled lines rather than one number. */
+  { label: 'Round Weightage', minW: 'min-w-[170px]' },
   { label: 'Invitations Sent', minW: 'min-w-[120px]' },
 ];
 
@@ -213,12 +358,27 @@ interface JobVersionGroup {
   jobStatus?: string;
   /** Republish counter, for the Published vs Republished distinction. */
   jobCurrentVersion?: number;
+  /** What this version asks for, already worded - see `formatJobVersionExperience`.
+   *  Undefined until this version's own JD record lands, or when it states no
+   *  experience at all; the cell draws a dash for both. */
+  experience?: string;
   createdOn?: string;
   createdBy?: string;
   assessments: AssessmentVersionRow[];
+  /**
+   * Does THIS job version have an assessment — the one question the Actions
+   * cell is decided by, and the reason Create Assessment and View Assessment
+   * are never both wrong on the same row.
+   *
+   * Not `assessments.length > 0`: it is the union of the rows joined here and
+   * the backend's own index (see `jdsWithAssessments`), so a version whose
+   * assessment did not come back in this fetch still reads as having one.
+   * Draft and Published both count — neither source filters by status, and an
+   * assessment saved as a draft is an assessment that exists.
+   */
+  hasAssessment: boolean;
   /** Summed across this version's assessments, so the totals on the job row
    *  are exactly what its Assessment Versions table adds up to. */
-  totalQuestions: number;
   totalInvitations: number;
   /** Finished attempts across this version's assessments - read beside the
    *  invitations it is a subset of: sent, then completed. */
@@ -280,6 +440,107 @@ function MetricCell({ value, label }: { value: number; label: string }) {
   );
 }
 
+/**
+ * The rounds this assessment is made of and the weight each carries, in the
+ * column Questions used to hold.
+ *
+ * Read from the assessment's own configuration - `hr_percentage`,
+ * `technical_percentage`, `coding_percentage` on AssessmentResponse, the same
+ * three fields the details view diffs as "HR weight" and the creation flow
+ * writes - so every row states its own split rather than a shared constant.
+ *
+ * Only the rounds this assessment actually has: a section switched off is not
+ * part of the assessment, and printing "Coding Round: 0%" for it would be
+ * three lines of noise on a two-round assessment. `*_enabled` decides that
+ * where the row carries it; where it does not (an older row, or a list
+ * endpoint that omits the flags) a non-zero weight stands in as evidence the
+ * round is configured. Nothing configured at all reads as a dash, which is
+ * what every other cell here does with nothing to say.
+ *
+ * HR carries one extra rule: it is dropped at 0% even when `hr_enabled` is
+ * true. The HR section is on by default across the creation flow, so a row
+ * whose whole weight sits on Technical and Coding still arrives with the flag
+ * set and the weight at zero - and "HR Round: 0%" is a line that states a
+ * round contributing nothing. Technical and Coding are left exactly as they
+ * were: an enabled section shows its weight whatever that weight is.
+ *
+ * Whole numbers: the field is a percentage split of 100 across three rounds,
+ * so a decimal place would be precision the configuration does not carry.
+ */
+function RoundWeightageCell({ assessment }: { assessment: AssessmentVersionRow }) {
+  const rounds = [
+    { label: 'HR Round', enabled: assessment.hr_enabled, percentage: assessment.hr_percentage, hideAtZero: true },
+    { label: 'Technical Round', enabled: assessment.technical_enabled, percentage: assessment.technical_percentage, hideAtZero: false },
+    { label: 'Coding Round', enabled: assessment.coding_enabled, percentage: assessment.coding_percentage, hideAtZero: false },
+  ]
+    .map(({ label, enabled, percentage, hideAtZero }) => ({
+      label,
+      enabled,
+      hideAtZero,
+      percentage: Math.round(percentage ?? 0),
+    }))
+    .filter(({ enabled, percentage, hideAtZero }) => {
+      if (hideAtZero && percentage === 0) return false;
+      return enabled ?? percentage > 0;
+    });
+
+  if (rounds.length === 0) {
+    return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {rounds.map(({ label, percentage }) => (
+        <div key={label} className="text-xs whitespace-nowrap leading-snug">
+          <span className="text-gray-500 dark:text-slate-400">{label}: </span>
+          <span className="font-semibold text-gray-900 dark:text-slate-100">{percentage}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Created On over Created By, one cell.
+ *
+ * Each line names what it states, because two bare values stacked - a date
+ * over a name - only read as a pair once you already know the column. That
+ * labelling is the same shape the Round Weightage cell uses in the table
+ * below: the label muted, the value in the row's own weight.
+ *
+ * The date alone on the first line; the time it carried when Created On was a
+ * column of its own moves into that line's tooltip, since a version's creation
+ * time is worth keeping but not worth a third line. A missing half is a dash,
+ * never invented, exactly as both columns did separately.
+ *
+ * `DateCell` below is untouched and still renders date-over-time - the
+ * Assessment Versions table's own Created On column reads it.
+ */
+function CreatedCell({ createdOn, createdBy }: { createdOn?: string; createdBy?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div
+        className="text-xs whitespace-nowrap leading-snug"
+        title={createdOn ? `${formatISTDate(createdOn)} ${formatISTTime(createdOn)}` : ''}
+      >
+        <span className="text-gray-500 dark:text-slate-400">Created On: </span>
+        <span className="font-semibold text-gray-900 dark:text-slate-100">
+          {createdOn ? formatISTDate(createdOn) : '—'}
+        </span>
+      </div>
+      <div
+        className="text-xs whitespace-nowrap leading-snug max-w-[200px] truncate"
+        title={createdBy || ''}
+      >
+        <span className="text-gray-500 dark:text-slate-400">Created By: </span>
+        <span className="font-semibold text-gray-900 dark:text-slate-100">
+          {createdBy || '—'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /** A date over its time, both in IST. A missing date is a dash, never today. */
 function DateCell({ value }: { value?: string }) {
   if (!value) return <span className="text-sm text-gray-500 dark:text-slate-400">—</span>;
@@ -295,6 +556,7 @@ export default function AssessmentVersionHistoryPanel({
   jobVersions,
   jobVersionDetails,
   assessments,
+  jdsWithAssessments,
   loading,
   latestJobVersion,
   currentAssessmentId,
@@ -318,21 +580,58 @@ export default function AssessmentVersionHistoryPanel({
     });
   };
 
-  const jobColumns = [...JOB_COLUMNS, { label: 'Actions', minW: 'min-w-[230px]' }];
+  /* Wide enough for the eye plus the longer of the two actions the cell can
+     hold — "Create Assessment" is the widest thing this column ever renders. */
+  const jobColumns = [...JOB_COLUMNS, { label: 'Actions', minW: 'min-w-[280px]' }];
   const assessmentRows = assessments ?? [];
+
+  /* ── The job version → assessment join ──────────────────────────────────
+   *
+   * BY ID, and the id is the JD ROW: every job version is a JD row of its
+   * own, an assessment records the row it was authored against (`jd_id`), and
+   * that pair is the only thing that says which version an assessment belongs
+   * to. Never the job's name, its title, or a version's display text — two
+   * versions of one job share all three.
+   *
+   * The version NUMBER is a fallback, not the rule. `jd_version` is optional
+   * on AssessmentResponse, and joining on it alone meant an assessment that
+   * came back without one matched NO job version: it vanished from the table,
+   * its version's Assessments count stayed at zero, and that version went on
+   * offering Create for an assessment that already existed. The number also
+   * cannot separate two JD rows reporting the same version, where the id can.
+   *
+   * The number still carries what the id cannot: the JD lineage failing to
+   * load, or an assessment pointing at a JD row the lineage no longer
+   * returns. Then there is no id to match against and the number is all there
+   * is. */
+  const jobVersionByJdId = new Map<string, number>();
+  for (const version of jobVersions ?? []) {
+    jobVersionByJdId.set(version.id, version.version_number ?? 1);
+  }
+
+  /** Which job version this assessment belongs to, or undefined when neither
+   *  key resolves — an assessment with no version to sit under is left out
+   *  rather than attached to a neighbouring one, which would put one
+   *  version's assessment under another. */
+  const jobVersionOf = (assessment: AssessmentVersionRow): number | undefined => {
+    const byId = assessment.jd_id ? jobVersionByJdId.get(assessment.jd_id) : undefined;
+    if (byId !== undefined) return byId;
+    return typeof assessment.jd_version === 'number' ? assessment.jd_version : undefined;
+  };
 
   /* Which job versions to print.
    *
    * The union of the JD's lineage and the job versions the assessments
-   * themselves name — not the lineage alone. Two reasons: the panel still
-   * renders real rows if the lineage request fails, and an assessment pointing
-   * at a job version the lineage no longer returns is a row that must not
-   * silently vanish. */
+   * themselves resolve to — not the lineage alone. Two reasons: the panel
+   * still renders real rows if the lineage request fails, and an assessment
+   * pointing at a job version the lineage no longer returns is a row that
+   * must not silently vanish. */
   const jobVersionNumbers = (() => {
     const numbers = new Set<number>();
     for (const version of jobVersions ?? []) numbers.add(version.version_number ?? 1);
     for (const assessment of assessmentRows) {
-      if (typeof assessment.jd_version === 'number') numbers.add(assessment.jd_version);
+      const resolved = jobVersionOf(assessment);
+      if (resolved !== undefined) numbers.add(resolved);
     }
     /* Nothing known yet — fall back to the row's own job version so the panel
        opens onto something rather than an empty table. */
@@ -369,13 +668,20 @@ export default function AssessmentVersionHistoryPanel({
     const lineageEntry = lineageByVersion.get(jobVersion);
     const detail = lineageEntry ? jobVersionDetails[lineageEntry.id] : undefined;
     /* Only the assessments actually recorded against THIS job version,
-       newest assessment version first. */
+       resolved by JD row id (see `jobVersionOf`), newest assessment version
+       first. */
     const versionAssessments = assessmentRows
-      .filter((a) => a.jd_version === jobVersion)
+      .filter((a) => jobVersionOf(a) === jobVersion)
       .sort((a, b) => (b.version ?? 1) - (a.version ?? 1));
     return {
       jobVersion,
       jobVersionId: lineageEntry?.id,
+      /* Either source is enough — see `hasAssessment` on the type. The index
+         is asked with this version's OWN JD row id, so one version having an
+         assessment can never answer for its siblings. */
+      hasAssessment:
+        versionAssessments.length > 0 ||
+        (!!lineageEntry?.id && !!jdsWithAssessments?.has(lineageEntry.id)),
       isLatestJobVersion: jobVersion === newestJobVersion,
       /* The lineage entry is the authority on a version's status; the fully
          fetched JD record for that same version is the fallback, so a lineage
@@ -384,12 +690,14 @@ export default function AssessmentVersionHistoryPanel({
          JDResponse respectively. */
       jobStatus: lineageEntry?.status || detail?.status,
       jobCurrentVersion: lineageEntry?.current_version ?? detail?.current_version,
+      /* `detail` is keyed by this version's own JD row id (`lineageEntry.id`),
+         which is what maps the value to the right job version. */
+      experience: formatJobVersionExperience(detail),
       /* When the version itself was made, not when it was published — the
          column says Created On. */
       createdOn: lineageEntry?.created_at || detail?.created_at,
       createdBy: detail?.created_by_name,
       assessments: versionAssessments,
-      totalQuestions: versionAssessments.reduce((sum, a) => sum + countAssessmentTopics(a), 0),
       totalInvitations: versionAssessments.reduce((sum, a) => sum + (a.invitations_count ?? 0), 0),
       totalCompleted: versionAssessments.reduce((sum, a) => sum + (a.completed_count ?? 0), 0),
     };
@@ -430,7 +738,7 @@ export default function AssessmentVersionHistoryPanel({
                 : ''
             }`}
           >
-            <table className="w-full min-w-[1200px] text-left">
+            <table className="w-full min-w-[1180px] text-left">
               <thead>
                 {/* The bottom hairline is an inset shadow, not border-b —
                     collapsed-table borders detach from sticky cells and would
@@ -458,7 +766,12 @@ export default function AssessmentVersionHistoryPanel({
               <tbody>
                 {groups.map((group) => {
                   const count = group.assessments.length;
-                  const hasAssessments = count > 0;
+                  /* The row's whole Create-vs-View decision, and the group
+                     owns it (see `hasAssessment` on JobVersionGroup). NOT
+                     `count > 0`: the count is how many assessment rows this
+                     fetch returned for the version, which is a different
+                     question from whether the version HAS one. */
+                  const hasAssessments = group.hasAssessment;
                   const isOpen = expandedJobVersions.has(group.jobVersion);
                   /* The newest assessment version in this group — the one its
                      inner table badges Latest. Read off the sorted list rather
@@ -495,20 +808,17 @@ export default function AssessmentVersionHistoryPanel({
                         <td className="py-3 px-3 whitespace-nowrap align-middle">
                           <JobStatusChip status={group.jobStatus} currentVersion={group.jobCurrentVersion} />
                         </td>
-                        <td className="py-3 px-3 whitespace-nowrap align-middle">
-                          <DateCell value={group.createdOn} />
-                        </td>
                         <td
-                          className="py-3 px-3 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[160px] truncate align-middle"
-                          title={group.createdBy || ''}
+                          className="py-3 px-3 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[180px] truncate align-middle"
+                          title={group.experience || ''}
                         >
-                          {group.createdBy || '—'}
+                          {group.experience || <span className="text-gray-500 dark:text-slate-400">&mdash;</span>}
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                          <CreatedCell createdOn={group.createdOn} createdBy={group.createdBy} />
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap align-middle">
                           <MetricCell value={count} label={count === 1 ? 'Assessment' : 'Assessments'} />
-                        </td>
-                        <td className="py-3 px-3 whitespace-nowrap align-middle">
-                          <MetricCell value={group.totalQuestions} label={group.totalQuestions === 1 ? 'Question' : 'Questions'} />
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap align-middle">
                           <MetricCell value={group.totalInvitations} label={group.totalInvitations === 1 ? 'Invitation' : 'Invitations'} />
@@ -546,6 +856,16 @@ export default function AssessmentVersionHistoryPanel({
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
                             )}
+                            {/* Create Assessment and View Assessment are the
+                                SAME slot, decided per job version by one
+                                thing: whether an assessment exists against
+                                THIS version's JD row. Saving one — Draft or
+                                Published, it makes no difference — is what
+                                flips it, and because the answer is derived
+                                from the fetched data rather than held in
+                                component state, it is still flipped after a
+                                reload, and one version flipping leaves its
+                                siblings exactly as they were. */}
                             {hasAssessments ? (
                               <button
                                 type="button"
@@ -553,12 +873,13 @@ export default function AssessmentVersionHistoryPanel({
                                 aria-expanded={isOpen}
                                 aria-label={
                                   isOpen
-                                    ? `Hide the ${count} assessment version${count === 1 ? '' : 's'} for job V${group.jobVersion}`
-                                    : `Show the ${count} assessment version${count === 1 ? '' : 's'} for job V${group.jobVersion}`
+                                    ? `Hide the assessment for job V${group.jobVersion}`
+                                    : `View the assessment for job V${group.jobVersion}`
                                 }
+                                title={`View the assessment created for job V${group.jobVersion}`}
                                 className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue text-xs font-medium hover:bg-brand-blue/5 transition-colors"
                               >
-                                View Assessments
+                                View Assessment
                                 <ChevronDown
                                   className={`w-3.5 h-3.5 transition-transform duration-300 ease-out ${isOpen ? 'rotate-180' : ''}`}
                                 />
@@ -572,17 +893,52 @@ export default function AssessmentVersionHistoryPanel({
                                  assessment to, and falling back to the parent
                                  row's id would quietly attach it to a DIFFERENT
                                  job version. No button is better than the wrong
-                                 association. */
-                              <button
-                                type="button"
-                                onClick={() => onCreateAssessment(group.jobVersionId!, group.jobVersion)}
-                                title={`Create an assessment for job V${group.jobVersion}`}
-                                aria-label={`Create an assessment for job V${group.jobVersion}`}
-                                className="h-8 px-3 inline-flex items-center gap-1.5 rounded-lg text-xs font-medium whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                Create
-                              </button>
+                                 association.
+
+                                 ENABLED on this row's own Status column, read
+                                 through the same helper the chip beside it
+                                 renders: Published and Republished only. An
+                                 Archived, Disabled or Draft version would take
+                                 the recruiter to the creation flow to author an
+                                 assessment against text that is closed, out of
+                                 circulation or not final - so the button greys
+                                 with the reason in its tooltip rather than
+                                 disappearing, which is how the rest of this
+                                 page reports "not for this row" and keeps the
+                                 Actions column the same shape down the table.
+
+                                 Each row decides for itself, so a job whose V3
+                                 is Published and whose V1 is Archived offers
+                                 Create on exactly one of them. */
+                              (() => {
+                                const canCreate = canCreateAssessmentForJobVersion(
+                                  group.jobStatus,
+                                  group.jobCurrentVersion,
+                                );
+                                const reason = canCreate
+                                  ? `Create an assessment for job V${group.jobVersion}`
+                                  : createAssessmentBlockedReason(group.jobStatus, group.jobCurrentVersion);
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={!canCreate}
+                                    onClick={() => {
+                                      if (!canCreate) return;
+                                      onCreateAssessment(group.jobVersionId!, group.jobVersion);
+                                    }}
+                                    title={reason}
+                                    aria-label={reason}
+                                    className={`h-8 px-3 inline-flex items-center gap-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                                      canCreate
+                                        ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60 shadow-none'
+                                    }`}
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    Create Assessment
+                                  </button>
+                                );
+                              })()
                             ) : (
                               <span className="text-xs text-gray-500 dark:text-slate-400">No assessment</span>
                             )}
@@ -621,7 +977,7 @@ export default function AssessmentVersionHistoryPanel({
                                           purpose: sharing a grid would force
                                           the inner rows into columns sized for
                                           eight outer ones. */}
-                                      <table className="w-full min-w-[860px] text-left">
+                                      <table className="w-full min-w-[930px] text-left">
                                         <thead>
                                           <tr>
                                             {[...ASSESSMENT_COLUMNS, { label: 'Actions', minW: 'min-w-[160px]' }].map(({ label, minW }) => (
@@ -635,10 +991,27 @@ export default function AssessmentVersionHistoryPanel({
                                           </tr>
                                         </thead>
                                         <tbody>
+                                          {/* The version HAS an assessment (the
+                                              backend index says so) but this
+                                              fetch returned no row for it. Say
+                                              that, rather than opening onto an
+                                              empty table that reads as "there
+                                              is nothing here" and contradicts
+                                              the button that was just clicked. */}
+                                          {count === 0 && (
+                                            <tr>
+                                              <td
+                                                colSpan={ASSESSMENT_COLUMNS.length + 1}
+                                                className="py-4 px-3 text-xs text-gray-500 dark:text-slate-400"
+                                              >
+                                                This job version has an assessment, but its details could not be
+                                                loaded. Reopen this panel to try again.
+                                              </td>
+                                            </tr>
+                                          )}
                                           {group.assessments.map((assessment) => {
                                             const isCurrent = !!currentAssessmentId && assessment.id === currentAssessmentId;
                                             const statusLabel = assessmentStatusLabel(assessment.status);
-                                            const questions = countAssessmentTopics(assessment);
                                             const invitations = assessment.invitations_count ?? 0;
                                             return (
                                               <tr
@@ -669,7 +1042,7 @@ export default function AssessmentVersionHistoryPanel({
                                                   {assessment.created_by_name || '—'}
                                                 </td>
                                                 <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                                  <MetricCell value={questions} label={questions === 1 ? 'Question' : 'Questions'} />
+                                                  <RoundWeightageCell assessment={assessment} />
                                                 </td>
                                                 <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                                                   <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />

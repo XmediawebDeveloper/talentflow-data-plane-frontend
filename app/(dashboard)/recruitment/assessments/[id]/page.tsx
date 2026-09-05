@@ -128,6 +128,37 @@ function AssessmentDetailsContent() {
     }
   }, [assessmentId]);
 
+  /**
+   * A DRAFT does not belong on this page, whoever sent it here.
+   *
+   * This view is the published reading of an assessment — invitations,
+   * analytics, candidate results, version history. A draft has none of those
+   * and cannot be finished from here, so landing on it showed a page of empty
+   * panels with no way back into editing.
+   *
+   * Enforced on the ROUTE rather than only in the callers that link here,
+   * because a draft reaches this URL in ways no caller controls: a bookmark, a
+   * shared link, the browser Back button, a refresh, or a version panel's row
+   * on a page that has not been updated. Redirects to the same draft page the
+   * Edit action opens (`create?step=configure&edit=<id>`) — one page for
+   * drafts, not a second one written for this route.
+   *
+   * `replace`, so Back returns to wherever the user came from rather than to
+   * this URL, which would bounce them straight here again. Gated on `jd_id`:
+   * the configure form is scoped to a job, so an assessment without one has no
+   * draft page to open and stays here rather than being sent to a URL that
+   * cannot resolve.
+   */
+  useEffect(() => {
+    if (isLoading || !assessment) return;
+    if (assessment.status !== 'Draft' || !assessment.jd_id) return;
+    router.replace(
+      `/recruitment/assessments/create?step=configure`
+      + `&jd_id=${encodeURIComponent(assessment.jd_id)}`
+      + `&edit=${encodeURIComponent(assessment.id)}`,
+    );
+  }, [isLoading, assessment, router]);
+
   // jd_id comes from the fetched assessment rather than the URL — the JD this
   // assessment belongs to is the authoritative link target.
   const jdId = assessment?.jd_id || '';
@@ -164,7 +195,14 @@ function AssessmentDetailsContent() {
     }
   };
 
-  if (isLoading) {
+  /* Held on the loader while the draft redirect above lands. Rendering the
+     details view for the frame in between is the glitch this avoids — the
+     published page flashing up for an assessment that is on its way to the
+     draft page. */
+  const redirectingToDraft =
+    !isLoading && !!assessment && assessment.status === 'Draft' && !!assessment.jd_id;
+
+  if (isLoading || redirectingToDraft) {
     return (
       <main className="tf-loader-page bg-slate-50">
         <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
