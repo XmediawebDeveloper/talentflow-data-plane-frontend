@@ -205,7 +205,10 @@ export interface BrandingUpdate {
 export interface Enable2FAResponse {
   success: boolean;
   secret?: string;
+  /** otpauth:// provisioning URI. Contains the shared secret — never send it to a third party. */
   qr_code_url?: string;
+  /** Server-rendered QR as a data:image/png;base64 URI. Null if rendering was unavailable. */
+  qr_code_image?: string | null;
   message: string;
 }
 

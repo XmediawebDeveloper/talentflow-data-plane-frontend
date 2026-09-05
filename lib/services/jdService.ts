@@ -594,13 +594,28 @@ export const jdService = {
   },
 
   /**
-   * Extract parameters from JD text using LLM (for manual mode)
+   * Extract parameters from JD text using LLM.
+   *
+   * Runs in BOTH the AI and the manual authoring flow. The JD has no id yet, so
+   * the caller passes `creationMethod` - it is the only signal the backend has
+   * for attributing these LLM API requests to AI JD Creation vs Manual JD
+   * Creation on the Control Plane's AI Cost & Usage dashboard.
    */
-  async extractParamsFromText(description: string, jobTitle?: string): Promise<JDExtractedParams> {
+  async extractParamsFromText(
+    description: string,
+    jobTitle?: string,
+    creationMethod?: 'manual' | 'ai_generated',
+    jdId?: string | null,
+  ): Promise<JDExtractedParams> {
     try {
       const response = await api.post<JDExtractedParams>('/jd/extract-params-text', {
         description,
         job_title: jobTitle,
+        creation_method: creationMethod,
+        // The wizard saves the draft at the "create" stage before it reaches
+        // extraction, so this id usually exists. The backend prefers the stored
+        // creation_method over `creation_method` above.
+        jd_id: jdId ?? undefined,
       });
       return response.data;
     } catch (error) {

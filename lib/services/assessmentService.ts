@@ -523,6 +523,29 @@ export interface RefundProcessResponse {
   message: string;
 }
 
+/**
+ * What /assessments/regenerate-questions actually did. Every field is measured,
+ * not asserted — the endpoint previously returned a fixed success message
+ * without generating anything.
+ */
+export interface RegenerateQuestionsResponse {
+  success: boolean;
+  assessment_id: string;
+  /** Assessment version after the config write. */
+  version: number;
+  questions_per_attempt: Partial<Record<'hr' | 'technical' | 'coding', number>>;
+  total_questions: number;
+  percentages: Partial<Record<'hr' | 'technical' | 'coding', number>>;
+  /** Attempts that were prepared but unstarted and have been rebuilt. */
+  regenerated_attempts: string[];
+  regenerated_count: number;
+  failed_attempts: Array<{ attempt_id: string; error: string }>;
+  /** One LLM call per regenerated attempt. Config-only changes cost zero. */
+  llm_calls: number;
+  applies_to: string;
+  message: string;
+}
+
 export const assessmentService = {
   /**
    * List assessments
@@ -1118,15 +1141,17 @@ export const assessmentService = {
    * Used when percentage config is modified and "Publish Changes" is clicked
    */
   async regenerateQuestions(data: {
-    jd_id: string;
-    experience_level: string;
-    skills: string[];
+    /** Required. Questions are stored against an assessment, not a JD. */
+    assessment_id: string;
+    jd_id?: string;
+    experience_level?: string;
+    skills?: string[];
     question_distribution: Array<{
-      section: string;
+      section: 'hr' | 'technical' | 'coding';
       count: number;
       topics: string[];
     }>;
-  }): Promise<{ success: boolean; message: string }> {
+  }): Promise<RegenerateQuestionsResponse> {
     try {
       const response = await api.post('/assessments/regenerate-questions', data);
       return response.data;
