@@ -192,15 +192,23 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
       return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-3 h-3" /> Invited</span>;
     case 'cancelled':
       return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><X className="w-3 h-3" /> Cancelled</span>;
-    case 'terminated':
+    case 'terminated': {
+      // closing_reason is set by evaluate_and_persist_session as
+      // "proctoring_terminated: <human message>" (candidate_ai_interview.py) once
+      // the background re-evaluation of the cut-short transcript lands — strip the
+      // prefix so the tooltip reads as a sentence. Falls back to the generic
+      // wording when no evaluation exists yet (still evaluating, or it failed).
+      const rawReason: string = (inv.ai_evaluation?.closing_reason || '').toString();
+      const detail = rawReason.replace(/^proctoring_terminated:\s*/i, '').trim();
       return (
         <span
           className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}
-          title="Auto-ended by the proctoring policy — candidate left the interview screen"
+          title={detail || 'Auto-ended by the proctoring policy — candidate left the interview screen'}
         >
           <Ban className="w-3 h-3" /> Terminated
         </span>
       );
+    }
     case 'expired':
       return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Clock className="w-3 h-3" /> Expired</span>;
     case 'revoked':
