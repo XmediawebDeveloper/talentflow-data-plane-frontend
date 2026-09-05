@@ -1338,6 +1338,67 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     console.log('[TalentFlow] URL updated with JD progress:', { jdId, creationStage });
   };
 
+  // ── The URL's `stage` MIRRORS the current step; it never leads it ──────────
+  //
+  // This is what makes a refresh land on the step the user is actually on.
+  //
+  // `?stage=` used to be written in exactly two places - `handleNext` (extract)
+  // and `handlePublish` (review) - i.e. only ever when moving FORWARD. Going
+  // back is six plain `setStep` calls (the Step-2 "Back" button and the five
+  // "Edit" links on Step 3) and none of them touched the URL. So the param
+  // recorded the FURTHEST step reached, not the current one.
+  //
+  // `app/(dashboard)/recruitment/jd-creation/page.tsx` then resolves the stage
+  // as `stageFromUrl || editingJD.creation_stage`, giving that stale param
+  // precedence over the stored stage. The result was a page number that moved
+  // on its own:
+  //
+  //     Step 1 -> Next -> Step 2 (URL now stage=extract)
+  //             -> Back -> Step 1 (URL still stage=extract)
+  //             -> REFRESH -> Step 2          <- nobody clicked anything
+  //
+  // Same one step later: reach Review, click any "Edit" link back to Step 2,
+  // refresh, and the page returns to Review.
+  //
+  // Mirroring the step here fixes it at the source and covers every way the
+  // step can change - the six existing backward transitions and any added
+  // later - instead of bolting a URL write onto each button and waiting for
+  // the next one to be forgotten.
+  //
+  // Direction matters: this effect reads `step` and writes the URL. It never
+  // calls `setStep`, so it cannot advance anything - it only records where the
+  // user already is. It is also a no-op until the JD has an id, because there
+  // is nothing to come back to before then.
+  // Only an actual step CHANGE is mirrored; the mount value never is.
+  // `editingJD` is fetched, so on a reload this component mounts before it
+  // arrives and `step` initialises to its 'create' default. Writing THAT to the
+  // URL would overwrite the `?stage=review` the user reloaded on, and since the
+  // page resolves the stage as `stageFromUrl || stored`, it would strand them
+  // on Step 1 - the opposite bug. Comparing against the last mirrored value
+  // (rather than a "have we run yet" flag) also makes the effect a no-op on any
+  // re-run where the step did not move, including React's double-invoked mount
+  // effects should StrictMode ever be turned on.
+  const lastMirroredStepRef = useRef<Step>(step);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (lastMirroredStepRef.current === step) return;
+    lastMirroredStepRef.current = step;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get('id')) return;
+    if (params.get('stage') === step) return;
+    params.set('stage', step);
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    console.log('[TalentFlow] URL stage synced to current step:', step);
+  }, [step]);
+
+  // Guards against one click being executed twice. Both handlers below await
+  // `ensureValidJobTitle` (a network call) before they set any "in flight"
+  // state, and a `disabled` prop only takes effect after React re-renders - so
+  // a double-click, or a click plus a stray keyboard activation, could enter
+  // either handler a second time and advance the step twice. A ref flips
+  // synchronously, so the second entry sees it on the very same tick.
+  const isAdvancingRef = useRef(false);
+
   // Determine if we're editing a draft or a published JD
   // Draft JD: can be updated directly (editingId is set)
   // Published JD: can also be updated directly (editingId is set) - creates a new version on publish
@@ -3140,7 +3201,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     Boolean(extractedData.education?.trim()) ||
     Boolean(extractedData.industryType?.trim());
 
-  const handleNext = async () => {
+  // The real Step 1 -> Step 2 advance. Reached only through the guarded
+  // `handleNext` below, which is what the button is bound to.
+  const advanceFromCreateStep = async () => {
     const trimmedJobTitle = jobTitle.trim();
     const jdText = mode === 'ai' ? generatedJD : manualJD;
 
@@ -3335,7 +3398,16 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     try {
       // Call real API to extract parameters using AI
       console.log('[TalentFlow] Extracting parameters from JD, length:', jdText.length);
-      const params = await jdService.extractParamsFromText(jdText, trimmedJobTitle);
+      // Attribution for the extraction's LLM API requests, so they are counted
+      // under Manual JD Creation or AI JD Creation and never merged. `editingId`
+      // is the draft saved at the "create" stage, whose stored creation_method
+      // the backend trusts over the mode we send here.
+      const params = await jdService.extractParamsFromText(
+        jdText,
+        trimmedJobTitle,
+        mode === 'ai' ? 'ai_generated' : 'manual',
+        editingId,
+      );
 
       // Debug: Log API response to see what's being extracted
       console.log('[TalentFlow] Extraction API response:', params);
@@ -3918,6 +3990,30 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // left set would suppress preservation on the NEXT extraction too, silently wiping
       // Step 2 edits that had nothing to do with the failed attempt.
       forceFreshExtraction.current = false;
+    }
+  };
+
+  // What the Next button is bound to: one click, one advance.
+  //
+  // The button's `disabled` prop cannot carry this on its own. `disabled` only
+  // takes effect after React re-renders, and the advance above awaits
+  // `ensureValidJobTitle` (a network round-trip) before it sets `isExtracting`
+  // - so a second click landing in that window entered the handler again and
+  // ran the whole Step 1 -> Step 2 transition a second time. The ref flips
+  // synchronously, so the second entry is rejected on the same tick.
+  //
+  // `finally` matters: an advance that throws must leave the button usable, or
+  // a single failed attempt would strand the user on Step 1 for good.
+  const handleNext = async () => {
+    if (isAdvancingRef.current) {
+      console.log('[TalentFlow] Next ignored — an advance is already in flight');
+      return;
+    }
+    isAdvancingRef.current = true;
+    try {
+      await advanceFromCreateStep();
+    } finally {
+      isAdvancingRef.current = false;
     }
   };
 
@@ -4652,7 +4748,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     return englishOnlyChecks.every(check => check.valid);
   };
 
-  const handlePublish = async () => {
+  // The real Step 2 -> Review advance. Reached only through the guarded
+  // `handlePublish` below, which is what the button is bound to.
+  const advanceToReviewStep = async () => {
     const trimmedJobTitle = jobTitle.trim();
 
     if (!trimmedJobTitle) {
@@ -5037,6 +5135,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         title: 'Save Failed',
         description: 'Could not save progress. Your work may be lost on refresh.',
       });
+    }
+  };
+
+  // What the Step 2 button is bound to: one click, one advance.
+  //
+  // Same reasoning as `handleNext` - the advance above awaits
+  // `ensureValidJobTitle` before it sets any in-flight state, so a second
+  // click could enter it again and move the step to Review twice (running the
+  // reformat and the save a second time with it). Guarded synchronously, and
+  // released in `finally` so a failure never leaves the button dead.
+  const handlePublish = async () => {
+    if (isAdvancingRef.current) {
+      console.log('[TalentFlow] Publish ignored - an advance is already in flight');
+      return;
+    }
+    isAdvancingRef.current = true;
+    try {
+      await advanceToReviewStep();
+    } finally {
+      isAdvancingRef.current = false;
     }
   };
 
