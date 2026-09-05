@@ -15,6 +15,10 @@
 const SKILL_STOPWORDS = new Set([
   'a', 'an', 'the', 'of', 'in', 'on', 'to', 'and', 'or', 'for', 'with', 'using',
   'your', 'their', 'this', 'that', 'these', 'those', 'is', 'are', 'be',
+  'i', 'me', 'my', 'we', 'us', 'our', 'he', 'she', 'they', 'them',
+  'have', 'has', 'having', 'am',
+  // NOT 'it'/'its' — lowercasing makes that indistinguishable from the "IT"
+  // abbreviation; "IT Support" must not collapse to bare "Support".
   'knowledge', 'knowledgeable', 'know', 'known', 'knowing',
   'understanding', 'understand', 'understands', 'understood',
   'familiarity', 'familiar', 'experience', 'experienced', 'ability',
@@ -496,11 +500,13 @@ export function skillDuplicateVerdict(a: string, b: string): DupVerdict {
     }
   }
   // BUNDLE MEMBERSHIP — one side enumerates a list that already contains the other
-  // ("SDLC" vs "Knowledge of SDLC and STLC"). Medium, never high: the recruiter may
-  // legitimately want the member broken out for its own score, and cluster
-  // generation resolves that by dropping the BUNDLE once every member is present.
+  // ("SDLC" vs "Knowledge of SDLC and STLC"). HIGH, not medium (mirrors backend,
+  // changed 2026-09-03 per explicit product decision): a new skill whose sentence
+  // names a skill already on the list is rejected outright, not warned-with-
+  // override. Cluster generation still drops the BUNDLE (not the member) once
+  // every member is present, for the same reason this is high here.
   if (skillIsBundlePart(a, b) || skillIsBundlePart(b, a)) {
-    return { dup: true, tier: 'medium', reason: 'already listed inside the other skill' };
+    return { dup: true, tier: 'high', reason: 'already listed inside the other skill' };
   }
   return no;
 }

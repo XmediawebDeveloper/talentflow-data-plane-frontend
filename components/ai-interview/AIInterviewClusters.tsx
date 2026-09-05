@@ -1976,16 +1976,38 @@ export default function AIInterviewClusters() {
                     .filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
                     .map(s => s.toLowerCase()),
                 );
+                // SELF-exclusion (distinct from `_mthExclude`/`_nthExclude` above,
+                // which guard against the OTHER bucket): `mthSkills`/`nthSkills`
+                // and the JD's own skill lists are the RAW, pre-dedup Configure
+                // state — they still contain whatever generate/refine's backstop
+                // just correctly dropped (e.g. a bundle phrase once its members
+                // are confirmed present). Pooling them unfiltered handed
+                // /distribute-skills' LLM the removed duplicate as a candidate,
+                // which then re-entered via `foldDistIntoClusters` below —
+                // reintroducing exactly what the backend just cleaned up. Filter
+                // each raw candidate against the bucket's OWN already-deduped
+                // cluster skills (semantic check, not exact string) before it
+                // ever reaches the pool.
+                const _mthOwnSkills = newMthClusters.flatMap(c => c.skills ?? [])
+                  .filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
+                const _nthOwnSkills = newNthClusters.flatMap(c => c.skills ?? [])
+                  .filter((s): s is string => typeof s === 'string' && s.trim().length > 0);
                 const _mthJdPool = Array.from(new Set([
-                  ...newMthClusters.flatMap(c => c.skills),
+                  ..._mthOwnSkills,
                   ...mthSkills.map(s => s.name),
                   ...(((config as any).jd_must_have_skills as string[] | undefined) || []),
-                ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !_mthExclude.has(s.toLowerCase()))));
+                ].filter((s): s is string =>
+                  typeof s === 'string' && s.trim().length > 0 && !_mthExclude.has(s.toLowerCase())
+                  && (_mthOwnSkills.includes(s) || !closestDuplicate(_mthOwnSkills.map(n => ({ name: n })), k => k.name, s))
+                )));
                 const _nthJdPool = Array.from(new Set([
-                  ...newNthClusters.flatMap(c => c.skills),
+                  ..._nthOwnSkills,
                   ...nthSkills.map(s => s.name),
                   ...(((config as any).jd_nice_to_have_skills as string[] | undefined) || []),
-                ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !_nthExclude.has(s.toLowerCase()))));
+                ].filter((s): s is string =>
+                  typeof s === 'string' && s.trim().length > 0 && !_nthExclude.has(s.toLowerCase())
+                  && (_nthOwnSkills.includes(s) || !closestDuplicate(_nthOwnSkills.map(n => ({ name: n })), k => k.name, s))
+                )));
                 const dist = await aiInterviewService.distributeSkills({
                   mthClusters: newMthClusters.map(c => ({ id: c.id, name: c.name, priority: c.priority, skills: c.skills })),
                   nthClusters: nthEnabled ? newNthClusters.map(c => ({ id: c.id, name: c.name, priority: c.priority, skills: c.skills })) : [],
@@ -2029,9 +2051,21 @@ export default function AIInterviewClusters() {
                   // ANY cluster of this bucket must not be folded into another —
                   // the many-to-many slot rows otherwise duplicate a cross-cluster
                   // secondary into a second cluster card.
+                  //
+                  // SEMANTIC, not just exact-string: `rows` comes from the
+                  // /distribute-skills LLM call, which can echo back a skill in
+                  // different wording (or one leaked in via the JD pool) that the
+                  // generate/refine backstop had already correctly dropped as a
+                  // duplicate/bundle of something already in these clusters —
+                  // e.g. "Strong Understanding SDLC and STLC" re-appearing beside
+                  // an already-present "SDLC" + "STLC". An exact lowercase match
+                  // never catches a reworded re-entry, so every candidate is also
+                  // checked against everything folded in so far via the same
+                  // semantic verdict used everywhere else in this app.
                   const seenBucket = new Set<string>(
                     next.flatMap(c => c.skills.map(s => s.toLowerCase().trim())),
                   );
+                  const keptNames: string[] = next.flatMap(c => c.skills);
                   for (const r of rows) {
                     const target =
                       byId.get(String(r?.cluster_id)) ??
@@ -2045,10 +2079,11 @@ export default function AIInterviewClusters() {
                     ].filter(Boolean);
                     for (const nm of skillNames) {
                       const k = nm.toLowerCase().trim();
-                      if (k && !seenBucket.has(k)) {
-                        target.skills.push(nm);
-                        seenBucket.add(k);
-                      }
+                      if (!k || seenBucket.has(k)) continue;
+                      if (closestDuplicate(keptNames.map(n => ({ name: n })), n => n.name, nm)) continue;
+                      target.skills.push(nm);
+                      seenBucket.add(k);
+                      keptNames.push(nm);
                     }
                   }
                   return next;

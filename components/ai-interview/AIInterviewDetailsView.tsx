@@ -21,10 +21,10 @@ import type {
 import CandidateResultsView from './CandidateResultsView';
 import AIInterviewResults from './AIInterviewResults';
 import ShareAIInterviewModal from './ShareAIInterviewModal';
+import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 
@@ -1072,196 +1072,24 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             ...nthClusters.flatMap(c => c.skills),
                             ...(((config as any)?.jd_nice_to_have_skills as string[] | undefined) ?? []),
                           ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !nthExclude.has(s.toLowerCase()))));
-                          // 2026-05-22 fix: stealth-dot popover MUST mirror
-                          // the saved skill_distribution (what Bina actually
-                          // asks at runtime). Previously it ran a local
-                          // distribute() with the old priority-block layout
-                          // and drifted from the DB-stored priority-mixed
-                          // layout. Read saved data first; fall back to
-                          // local distribute only when no save has happened.
-                          const savedSDDetails = (() => {
-                            try {
-                              const raw = (config as any)?.special_instructions;
-                              if (!raw) return null;
-                              const s = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                              // FIX 3 (2026-08-25): PREFER the deterministic per-question
-                              // map the interview actually runs on and that the Question
-                              // Analysis tab scores against (mth/nth_question_skill_map)
-                              // over the pre-augment skill_distribution. The two can
-                              // diverge when the saved distribution failed backend
-                              // validation and was recomputed — leaving this popover
-                              // showing a plan the interview never used (the popover-vs-
-                              // Question-Analysis contradiction). The question_skill_map
-                              // is authoritative; skill_distribution is the fallback.
-                              // Rows share the same shape, so sdToRowDetails works on both.
-                              if (s?.mth_question_skill_map?.length || s?.nth_question_skill_map?.length) {
-                                return {
-                                  mth_questions: s.mth_question_skill_map || [],
-                                  nth_questions: s.nth_question_skill_map || [],
-                                };
-                              }
-                              return s?.skill_distribution || null;
-                            } catch { return null; }
-                          })();
-                          // Build a skill→priority map from both bucket's
-                          // clusters so each secondary's chip shows the
-                          // skill's TRUE priority (not the primary's).
-                          // Saved secondary_skills are flat strings — we
-                          // look up each one in the cluster definitions.
-                          const skillPriorityMap = new Map<string, number>();
-                          for (const c of [...mthClusters, ...nthClusters]) {
-                            const pri = c.priority ?? 1;
-                            for (const s of (c.skills ?? [])) {
-                              if (typeof s === 'string' && s.trim()) {
-                                const k = s.toLowerCase().trim();
-                                if (!skillPriorityMap.has(k)) skillPriorityMap.set(k, pri);
-                              }
-                            }
-                          }
-                          const sdToRowDetails = (q: any, idx: number): DistRow => {
-                            const primary = String(q?.primary_skill || '').trim();
-                            const primaryPri = Number(q?.cluster_priority)
-                              || skillPriorityMap.get(primary.toLowerCase())
-                              || 1;
-                            const secs = Array.isArray(q?.secondary_skills)
-                              ? q.secondary_skills
-                                  .filter((s: any) => typeof s === 'string' && s.trim())
-                                  .map((s: string) => ({
-                                    name: s.trim(),
-                                    // Look up THIS skill's own priority — fall back
-                                    // to primary's only if the skill isn't in any
-                                    // cluster (extremely rare; happens for JD-pool
-                                    // additions that didn't end up in a cluster).
-                                    priority: skillPriorityMap.get(s.trim().toLowerCase()) ?? primaryPri,
-                                  }))
-                              : [];
-                            return {
-                              q: Number(q?.question_number) || (idx + 1),
-                              primary,
-                              secondaries: secs,
-                              cluster: String(q?.cluster_name || ''),
-                              priority: primaryPri,
-                            };
-                          };
-                          const mthDist: DistRow[] = (savedSDDetails?.mth_questions?.length)
-                            ? savedSDDetails.mth_questions.map(sdToRowDetails)
-                            : distribute(mthClusters, timedAllocation.mthQuestions ?? 0, mthJdPool);
-                          const nthDist: DistRow[] = (savedSDDetails?.nth_questions?.length)
-                            ? savedSDDetails.nth_questions.map(sdToRowDetails)
-                            : (nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0, nthJdPool) : []);
-                          const totalQ = mthDist.length + nthDist.length;
-                          const totalSkillsCovered = new Set([
-                            ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
-                            ...nthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
-                          ]).size;
-                          const priorityLabel = (p: number) => p >= 3 ? 'P1' : p === 2 ? 'P2' : 'P3';
-                          const priorityClass = (p: number) =>
-                            p >= 3 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                              : p === 2 ? 'bg-amber-50 text-amber-700 ring-amber-200'
-                              : 'bg-rose-50 text-rose-700 ring-rose-200';
-                          const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => {
-                            const chips = [
-                              { name: row.primary, priority: row.priority },
-                              ...row.secondaries,
-                            ];
-                            return (
-                              <tr
-                                key={`${sectionKey}-${row.q}`}
-                                className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors"
-                              >
-                                <td className="align-top px-2 py-1.5 w-[40px]">
-                                  <span className={`text-[11px] font-mono font-semibold ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
-                                    Q{row.q}
-                                  </span>
-                                </td>
-                                <td className="align-top px-2 py-1.5">
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    {chips.map((s, i) => (
-                                      <span
-                                        key={`${row.q}-chip-${i}`}
-                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 ${priorityClass(s.priority)}`}
-                                      >
-                                        {s.name}
-                                        <span className="text-[9px] font-semibold opacity-80">{priorityLabel(s.priority)}</span>
-                                      </span>
-                                    ))}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          };
+                          // The saved plan, its precedence rules and the
+                          // popover chrome all live in
+                          // QuestionDistributionPopover so this page and the
+                          // results page can never drift apart. Only the
+                          // unsaved-config PREVIEW is local, so it is handed
+                          // over as a thunk and runs only when nothing has
+                          // been saved yet.
                           return (
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  type="button"
-                                  aria-label=" "
-                                  title=""
-                                  className="inline-flex items-center justify-center w-1.5 h-1.5 rounded-full bg-gray-300 hover:bg-brand-blue transition-colors ml-1"
-                                />
-                              </PopoverTrigger>
-                              <PopoverContent
-                                side="bottom"
-                                align="start"
-                                className="w-[480px] max-h-[70dvh] overflow-y-auto p-0"
-                              >
-                                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                                  <div>
-                                    <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
-                                    <div className="text-[11px] text-gray-500">
-                                      {totalQ} questions · {totalSkillsCovered} skills covered
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="p-4 space-y-4">
-                                  {mthDist.length > 0 && (
-                                    <div>
-                                      <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                                        Must-To-Have ({mthDist.length})
-                                      </div>
-                                      <div className="border border-gray-100 rounded-md overflow-hidden tf-table-shell">
-                                        <table className="w-full text-left">
-                                          <thead className="bg-gray-50 border-b border-gray-100">
-                                            <tr>
-                                              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[40px]">Q#</th>
-                                              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Skills</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {mthDist.map(r => renderRow(r, 'mth'))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {nthDist.length > 0 && (
-                                    <div>
-                                      <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                                        Nice-To-Have ({nthDist.length})
-                                      </div>
-                                      <div className="border border-gray-100 rounded-md overflow-hidden tf-table-shell">
-                                        <table className="w-full text-left">
-                                          <thead className="bg-gray-50 border-b border-gray-100">
-                                            <tr>
-                                              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[40px]">Q#</th>
-                                              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Skills</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {nthDist.map(r => renderRow(r, 'nth'))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {mthDist.length === 0 && nthDist.length === 0 && (
-                                    <div className="text-xs text-gray-500 italic text-center py-4">
-                                      No distribution available.
-                                    </div>
-                                  )}
-                                </div>
-                              </PopoverContent>
-                            </Popover>
+                            <QuestionDistributionPopover
+                              specialInstructions={(config as any)?.special_instructions}
+                              clusters={[...mthClusters, ...nthClusters]}
+                              fallback={() => ({
+                                mth: distribute(mthClusters, timedAllocation.mthQuestions ?? 0, mthJdPool),
+                                nth: nthEnabled
+                                  ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0, nthJdPool)
+                                  : [],
+                              })}
+                            />
                           );
                         })()
                       : null

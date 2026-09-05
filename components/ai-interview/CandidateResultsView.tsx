@@ -37,6 +37,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ListPagination from '@/components/ListPagination';
 import RecordPager from '@/components/RecordPager';
 import IntegrityCheckTab from './IntegrityCheckTab';
+import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { summarizeViolations } from './violationTaxonomy';
 
 interface CandidateResultsViewProps {
@@ -1608,6 +1609,18 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                       }`}>
                         {isFlexibleMode ? 'Conversational Mode' : 'Timed Mode'}
                       </span>
+                      {/* Stealth dot — the per-question skill plan this
+                          interview actually ran on. Same hidden affordance as
+                          the cluster editor and invite details pages. Timed
+                          mode only: conversational mode has no fixed slots. */}
+                      {!isFlexibleMode && (
+                        <QuestionDistributionPopover
+                          specialInstructions={
+                            (interview as any).special_instructions
+                            || (liveSession as any).special_instructions
+                          }
+                        />
+                      )}
                     </div>
                     <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
                       {interview.candidate_email && <span>{interview.candidate_email}</span>}
