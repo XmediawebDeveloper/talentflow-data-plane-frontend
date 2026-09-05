@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown } from 'lucide-react';
 import type { HRTopic } from '@/lib/services/assessmentService';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -317,7 +317,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const { available: assessmentAvailable } = usePlanFeature('assessment');
 
   // Read initial step from URL, default to 'select-jd'
-  const urlStep = searchParams.get('step') as 'select-jd' | 'configure' | 'preview' | null;
+  const urlStep = searchParams.get('step') as 'select-jd' | 'configure' | 'publish' | 'preview' | null;
   const urlJdId = searchParams.get('jd_id');
   const editAssessmentId = searchParams.get('edit'); // Edit mode: assessment ID to edit
 
@@ -332,7 +332,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // the real title a moment later.
   const urlJdTitle = searchParams.get('jd_title');
 
-  const [step, setStepState] = useState<'select-jd' | 'configure' | 'preview'>(urlStep || 'select-jd');
+  const [step, setStepState] = useState<'select-jd' | 'configure' | 'publish' | 'preview'>(urlStep || 'select-jd');
   /**
    * Which rounds have their section card open on the Configure step.
    *
@@ -405,7 +405,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [loadingLineageAssessments, setLoadingLineageAssessments] = useState<Record<string, boolean>>({});
 
   // Helper function to update step and URL
-  const setStep = (newStep: 'select-jd' | 'configure' | 'preview', jobId?: string) => {
+  const setStep = (newStep: 'select-jd' | 'configure' | 'publish' | 'preview', jobId?: string) => {
     setStepState(newStep);
     const params = new URLSearchParams();
 
@@ -441,9 +441,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
    * Description" is what the first step asks for. A crumb that reads
    * differently from the page under it is a crumb the reader has to translate.
    */
-  const STEP_CRUMB_LABEL: Record<'select-jd' | 'configure' | 'preview', string> = {
+  const STEP_CRUMB_LABEL: Record<'select-jd' | 'configure' | 'publish' | 'preview', string> = {
     'select-jd': 'Select Job Description',
     configure: 'Configure Assessment',
+    publish: 'Publish Assessment',
     preview: 'Assessment Saved',
   };
 
@@ -474,9 +475,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const buildStepCrumbs = (): BreadcrumbCrumb[] => {
     if (editAssessmentId) return [{ label: 'Edit Assessment' }];
     if (step === 'select-jd') return [{ label: STEP_CRUMB_LABEL['select-jd'] }];
+    /* Every step before the current one, in order and clickable, so the trail
+       is the path taken and any earlier step is one click away:
+         … › Select Job Description › Configure Assessment › Publish Assessment */
     return [
       { label: STEP_CRUMB_LABEL['select-jd'], onClick: () => setStep('select-jd') },
-      ...(step === 'preview'
+      ...(step === 'publish' || step === 'preview'
         ? [{ label: STEP_CRUMB_LABEL.configure, onClick: () => setStep('configure') }]
         : []),
       { label: STEP_CRUMB_LABEL[step] },
@@ -679,11 +683,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [newTopic, setNewTopic] = useState({ section: '' as 'HR' | 'Technical' | 'Coding', value: '' });
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedAssessment, setGeneratedAssessment] = useState<any>(null);
-  const [showPublishSuccessModal, setShowPublishSuccessModal] = useState(false);
-  const [publishedAssessmentTitle, setPublishedAssessmentTitle] = useState('');
-  const publishedAssessmentRef = useRef<any>(null);
-  const publishSuccessHandledRef = useRef(false);
-  const publishSuccessTimerRef = useRef<number | null>(null);
+  /**
+   * The assessment once it has actually been published — what turns the
+   * Publish Assessment step from its review state into its published state.
+   *
+   * This replaced a modal that appeared over the Configure step and closed
+   * itself after three seconds. Publishing is the end of the flow and deserves
+   * a page: a timed popup gave the recruiter no time to read what they had
+   * made, no address to return to, and nowhere to go next except away.
+   */
+  const [publishedAssessment, setPublishedAssessment] = useState<any>(null);
   const [proctoringEnabled, setProctoringEnabled] = useState(initialProctoringSettings?.proctoring_enabled ?? true);
 
   // Sync proctoringEnabled when settings load async (only before user manually toggles)
@@ -804,22 +813,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     });
   };
 
-  const selectAllHR = () => {
-    const hrSection = sections.find(s => s.name === 'HR');
-    if (!hrSection?.enabled) return;
-
-    if (hrQuestionBank.length > HR_QUESTION_LIMIT) {
-      toast.error(`Maximum ${HR_QUESTION_LIMIT} HR questions allowed. Selecting first ${HR_QUESTION_LIMIT}.`);
-      setSelectedHRQuestions(hrQuestionBank.slice(0, HR_QUESTION_LIMIT).map(q => q.id));
-    } else {
-      setSelectedHRQuestions(hrQuestionBank.map(q => q.id));
-    }
-  };
-  const deselectAllHR = () => {
-    const hrSection = sections.find(s => s.name === 'HR');
-    if (!hrSection?.enabled) return;
-    setSelectedHRQuestions([]);
-  };
+  /* `selectAllHR` / `deselectAllHR` removed with the All | None shortcuts
+     they were the handlers for - the HR section row now offers Add Quiz and
+     the count only, and questions are picked with their own checkboxes. They
+     had no other caller, so leaving them would have been dead code. */
 
   const openAddHRQuizModal = () => {
     const hrSection = sections.find(s => s.name === 'HR');
@@ -1192,6 +1189,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
 
     setSelectedJob(job);
+    /* `publish` is deliberately NOT restored from the URL.
+       Reloading drops the configure state - percentages, HR selection, coding
+       languages - back to defaults, and re-opening the Publish Assessment
+       review on those defaults would show a live Publish button over settings
+       the recruiter never chose. Landing on Configure is the honest place to
+       be: the job is still selected, and Publish is one click away once the
+       configuration is theirs again. */
     if (urlStep === 'configure' || urlStep === 'preview') {
       setStepState(urlStep);
     } else {
@@ -2100,36 +2104,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     });
   };
 
-  const closePublishSuccessModal = useCallback(() => {
-    if (publishSuccessHandledRef.current) return;
-
-    publishSuccessHandledRef.current = true;
-    if (publishSuccessTimerRef.current !== null) {
-      window.clearTimeout(publishSuccessTimerRef.current);
-      publishSuccessTimerRef.current = null;
-    }
-
-    const publishedAssessment = publishedAssessmentRef.current;
-    publishedAssessmentRef.current = null;
-    setShowPublishSuccessModal(false);
-
-    if (publishedAssessment) {
-      onCreateAssessment(publishedAssessment);
-    }
-  }, [onCreateAssessment]);
-
-  useEffect(() => {
-    if (!showPublishSuccessModal) return;
-
-    publishSuccessTimerRef.current = window.setTimeout(closePublishSuccessModal, 3000);
-
-    return () => {
-      if (publishSuccessTimerRef.current !== null) {
-        window.clearTimeout(publishSuccessTimerRef.current);
-        publishSuccessTimerRef.current = null;
-      }
-    };
-  }, [showPublishSuccessModal, closePublishSuccessModal]);
+  /**
+   * Leave the flow for the assessments list, handing the published record to
+   * the host so it closes the creation view and reloads.
+   *
+   * The same call the old modal made when it closed — now on a button the
+   * recruiter presses when they are ready, rather than on a three-second
+   * timer that took the page away mid-sentence.
+   */
+  const goToAssessmentsList = useCallback(() => {
+    if (publishedAssessment) onCreateAssessment(publishedAssessment);
+    else onBack();
+  }, [publishedAssessment, onCreateAssessment, onBack]);
 
   const handleGenerateAssessment = async (saveAsDraft: boolean = false) => {
     // Hard guard for Publish: HR section enabled but no questions picked.
@@ -2254,10 +2240,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       // the parent's onCreateAssessment which closes the creation view and
       // reloads the list — that's the expected "I'm done here" behaviour.
       if (!saveAsDraft) {
-        publishSuccessHandledRef.current = false;
-        publishedAssessmentRef.current = assessmentDefinition;
-        setPublishedAssessmentTitle(assessmentDefinition.title || selectedJob?.title || 'Assessment');
-        setShowPublishSuccessModal(true);
+        /* Stays on the Publish Assessment step, which now reads as published.
+           `resultAssessment.id` rides along so the page's own actions can open
+           the assessment and its invites. */
+        setPublishedAssessment({ ...assessmentDefinition, id: resultAssessment.id });
       } else {
         toast.success('Assessment saved as draft. You can publish it later.');
         onCreateAssessment(assessmentDefinition);
@@ -3305,19 +3291,22 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             under an "HR Round" heading with an icon labelled the same thing
             twice. The controls are what this row is for, so they are all that
             is left in it. */}
-        <div className="flex items-center justify-end flex-wrap gap-2 text-xs mb-3">
-            <button
-              type="button"
-              onClick={openAddHRQuizModal}
-              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-medium text-gray-700 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Quiz
-            </button>
-            <span className={selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-brand-orange-deep font-medium' : 'text-gray-500'}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
-            <button type="button" onClick={selectAllHR} className="text-brand-blue hover:text-brand-blue-2 font-medium">All</button>
-            <span className="text-gray-300">|</span>
-            <button type="button" onClick={deselectAllHR} className="text-gray-500 hover:text-gray-700 font-medium">None</button>
+        {/* Add Quiz on the LEFT, the selection controls on the right. The
+            row's one action that ADDS to the bank leads it; the count and the
+            All / None shortcuts act on what is already there, so they sit
+            together at the other end. `justify-between` rather than an
+            `ml-auto` on the right group, so the two ends stay put when the
+            row wraps on a narrow card. */}
+        <div className="flex items-center justify-between flex-wrap gap-2 text-xs mb-3">
+          <button
+            type="button"
+            onClick={openAddHRQuizModal}
+            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-medium text-gray-700 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue flex-shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Quiz
+          </button>
+          <span className={selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-brand-orange-deep font-medium' : 'text-gray-500'}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
         </div>
 
         <div className="space-y-1.5 max-h-72 overflow-y-auto">
@@ -4042,8 +4031,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   >
                     {isGenerating ? 'Saving...' : 'Save as Draft'}
                   </button>
+                  {/* Publish moves to the Publish Assessment STEP; it does not
+                      publish from here and opens no dialog. The assessment is
+                      created only when the recruiter confirms on that page,
+                      so this button is now navigation and nothing else. The
+                      same two gates still apply — a configuration that cannot
+                      be published should not offer a page for publishing it. */}
                   <button
-                    onClick={() => handleGenerateAssessment(false)}
+                    onClick={() => setStep('publish')}
                     disabled={!isPercentageValid || !hasValidHRSelection || isGenerating}
                     title={
                       !isPercentageValid
@@ -4055,7 +4050,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     className="flex-1 px-3 sm:px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    {isGenerating ? 'Publishing...' : 'Publish'}
+                    Publish
                   </button>
                 </div>
               </div>
@@ -4251,56 +4246,267 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           </div>
         )}
 
-        {showPublishSuccessModal && (
-          <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="assessment-published-title">
-            <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
-              <div className="px-6 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between shrink-0">
-                <h2 id="assessment-published-title" className="text-lg font-bold text-gray-900 tracking-tight">Assessment Published</h2>
-                <button
-                  type="button"
-                  onClick={closePublishSuccessModal}
-                  className="p-1.5 text-gray-500 hover:bg-slate-100 hover:text-gray-700 rounded-lg transition-colors flex-shrink-0"
-                  aria-label="Close"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="px-6 py-5 text-center flex-1 overflow-y-auto">
-                <div className="relative inline-flex items-center justify-center mb-4">
-                  <span className="absolute w-2 h-2 rounded-full bg-green-400 animate-ping" style={{ top: -4, left: 10 }} />
-                  <span className="absolute w-1.5 h-1.5 rounded-full bg-brand-blue/60 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
-                  <span className="absolute w-2 h-2 rounded-full bg-brand-cyan/60 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
-                  <div className="w-16 h-16 bg-green-100 ring-1 ring-green-200 rounded-full flex items-center justify-center">
-                    <CheckCircle2 className="w-8 h-8 text-green-600" />
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600 mb-4">
-                  Assessment published successfully. You can now invite candidates.
-                </p>
-                <p className="text-xs text-gray-500 mb-4">
-                  This message will close in 3 seconds.
-                </p>
-                <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/10 px-4 py-3 text-left">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-gray-500">Assessment</span>
-                    <span className="text-sm font-medium text-brand-blue text-right break-words">{publishedAssessmentTitle}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="px-6 py-3 border-t border-gray-100 bg-slate-50/60 flex items-center justify-end shrink-0">
-                <button
-                  type="button"
-                  onClick={closePublishSuccessModal}
-                  className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors"
-                >
-                  Go to Assessments
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
+        {/* The publish confirmation is no longer a modal here — Publish moves
+            the flow to its own step (`step === 'publish'`), which reviews the
+            assessment and then reports it published on a page of its own. */}
         {renderAddHRQuizModal()}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * Step 3: PUBLISH ASSESSMENT — a page, not a dialog.
+   *
+   * Publishing used to happen straight from the Configure step's button, with
+   * a modal appearing over it afterwards and closing itself after three
+   * seconds. It is the end of the flow and the one irreversible thing in it,
+   * so it gets a step of its own: what is about to be published is reviewed
+   * first, and once it is published the page says so and offers somewhere to
+   * go next, at the recruiter's pace rather than a timer's.
+   *
+   * ONE step, two states. Before `publishedAssessment` lands it is the review;
+   * after, it is the confirmation. Not two routes, because they are the same
+   * place in the flow — and the breadcrumb, which reads
+   * Dashboard > Assessments > Select Job Description > Configure Assessment >
+   * Publish Assessment, is the same in both.
+   */
+  if (step === 'publish') {
+    const enabledSections = sections.filter(section => section.enabled);
+    const codingLanguages = filterCompilable(selectedCodingLanguages);
+    /* The same publish gate the Configure step applies, recomputed here rather
+       than shared: `hasValidHRSelection` is local to that step's block, and
+       this page must not be able to publish something Configure would refuse. */
+    const hasValidHRSelection =
+      !sections.find(section => section.name === 'HR')?.enabled || selectedHRQuestions.length > 0;
+    const assessmentName = publishedAssessment?.title
+      || `${selectedJob?.title || 'Assessment'} - Assessment`;
+
+    return (
+      <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <PageBreadcrumb className="mb-3" items={buildBreadcrumbItems()} />
+
+            {publishedAssessment ? (
+              /* PUBLISHED. The same shape the Job Description publish step
+                 uses (JDCreation's published state): mark, headline, the thing
+                 that was published named on a panel of its own, then the ways
+                 on from here. */
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-8 text-center">
+                <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-green-100 ring-1 ring-green-200 flex items-center justify-center mx-auto mb-4 sm:mb-6">
+                  <CheckCircle2 className="w-8 h-8 sm:w-12 sm:h-12 text-green-600" />
+                </div>
+                <h2 className="text-lg sm:text-2xl font-semibold text-gray-900 tracking-tight mb-2 sm:mb-3">
+                  Assessment Published!
+                </h2>
+                <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
+                  Your assessment has been successfully published and is now live.
+                </p>
+
+                <div className="bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] px-3 sm:px-4 py-3 mb-4 sm:mb-6 flex items-center gap-3 text-left">
+                  <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 text-brand-blue" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs text-gray-500">Assessment</div>
+                    <div className="text-sm sm:text-base font-medium text-gray-900 break-words">
+                      {assessmentName}
+                    </div>
+                  </div>
+                  {publishedAssessment.version && (
+                    <span className="px-2.5 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-xs font-medium rounded-lg flex-shrink-0">
+                      v{publishedAssessment.version}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 justify-center">
+                  {/* Both of these leave the flow for a real page, so they are
+                      gated on the id the publish call returned - without it
+                      there is nothing to open. */}
+                  {publishedAssessment.id && (
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/recruitment/assessments/${publishedAssessment.id}`)}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View Assessment
+                    </button>
+                  )}
+                  {publishedAssessment.id && (
+                    /* `?share=1` opens the assessment's own Share dialog on
+                       arrival, so inviting candidates is one step from here
+                       rather than a hunt through the list. */
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/recruitment/assessments/${publishedAssessment.id}?share=1`)}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Share Invites
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={goToAssessmentsList}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    Go to Assessments
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* REVIEW. What is about to be published, read back in the same
+                 words the Configure step used to set it. */
+              <div className="w-full">
+                <div className="mb-4 sm:mb-6">
+                  <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-1 tracking-tight">
+                    Publish Assessment
+                  </h1>
+                  <p className="text-sm sm:text-base text-gray-600">
+                    Review the assessment for{' '}
+                    <span className="text-brand-blue font-medium">{selectedJob?.title}</span>{' '}
+                    before it goes live to candidates.
+                  </p>
+                </div>
+
+                <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
+                  <div className="flex-1 space-y-4 sm:space-y-6">
+                    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
+                      <div className="flex items-center gap-2 mb-3 sm:mb-4">
+                        <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                        <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Summary</h3>
+                      </div>
+                      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                        <div>
+                          <dt className="text-xs text-gray-500 mb-1">Job Description</dt>
+                          <dd className="text-sm font-medium text-gray-900 break-words">{selectedJob?.title || '—'}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-gray-500 mb-1">Assessment Name</dt>
+                          <dd className="text-sm font-medium text-gray-900 break-words">{assessmentName}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-gray-500 mb-1">Total Duration</dt>
+                          <dd className="text-sm font-medium text-gray-900">{duration} min</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-gray-500 mb-1">Rounds Enabled</dt>
+                          <dd className="text-sm font-medium text-gray-900">{enabledSections.length} of 3</dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
+                      <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
+                        <div className="flex items-center gap-2">
+                          <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                          <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Rounds</h3>
+                        </div>
+                        <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
+                          Total:{' '}
+                          <span className={`font-semibold ${isPercentageValid ? 'text-green-600' : 'text-red-500'}`}>
+                            {totalPercentage}%
+                          </span>
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {enabledSections.map(section => (
+                          <div
+                            key={section.name}
+                            className="flex items-center justify-between gap-2 p-3 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {section.name === 'HR' && <Users className="w-4 h-4 text-brand-blue flex-shrink-0" />}
+                              {section.name === 'Technical' && <Brain className="w-4 h-4 text-brand-cyan flex-shrink-0" />}
+                              {section.name === 'Coding' && <Code className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />}
+                              <span className="text-sm font-medium text-gray-900">{section.name} Round</span>
+                            </div>
+                            <span className="text-sm text-gray-600 flex-shrink-0">
+                              {/* HR carries questions, not a percentage - the same
+                                  split every other surface states. */}
+                              {section.name === 'HR'
+                                ? `${selectedHRQuestions.length} question${selectedHRQuestions.length === 1 ? '' : 's'}`
+                                : `${section.percentage}%`}
+                            </span>
+                          </div>
+                        ))}
+                        {codingLanguages.length > 0 && (
+                          <div className="p-3 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]">
+                            <div className="text-xs text-gray-500 mb-2">Programming languages</div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {codingLanguages.map(lang => (
+                                <span
+                                  key={lang}
+                                  className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs"
+                                >
+                                  {lang}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="w-full lg:w-80 lg:flex-shrink-0 space-y-4">
+                    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <CheckCircle2 className="w-5 h-5 text-brand-blue" />
+                        <h4 className="font-medium text-gray-900 text-sm tracking-tight">Ready to publish</h4>
+                      </div>
+                      <p className="text-xs text-gray-600 mb-3">
+                        Publishing makes this assessment live. You can invite candidates to it straight afterwards.
+                      </p>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateAssessment(false)}
+                          disabled={!isPercentageValid || !hasValidHRSelection || isGenerating}
+                          title={
+                            !isPercentageValid
+                              ? 'Section percentages must total 100%'
+                              : !hasValidHRSelection
+                                ? 'Select at least one HR question before publishing'
+                                : ''
+                          }
+                          className="w-full px-3 sm:px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
+                        >
+                          {isGenerating ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Publishing...
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-4 h-4" />
+                              Publish Assessment
+                            </>
+                          )}
+                        </button>
+                        {/* Back, not Cancel: nothing has been created yet, so
+                            this returns to Configure with every setting intact
+                            rather than discarding anything. */}
+                        <button
+                          type="button"
+                          onClick={() => setStep('configure')}
+                          disabled={isGenerating}
+                          className="w-full px-3 sm:px-4 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                        >
+                          <ArrowLeft className="w-4 h-4" />
+                          Back to Configure
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

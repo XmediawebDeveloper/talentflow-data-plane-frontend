@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import AssessmentDetailsView from '@/components/AssessmentDetailsView';
@@ -20,6 +20,10 @@ function AssessmentDetailsContent() {
   // Create" on a job that already has one lands here. Keeps the breadcrumb and
   // Back anchored to that job instead of the Assessments list.
   const fromJobDetails = searchParams.get('from') === 'job-details';
+  /* Arriving from the Publish Assessment page's "Share Invites" action, which
+     hands the recruiter straight to inviting candidates rather than leaving
+     them to find the Share control themselves. */
+  const openShareOnArrival = searchParams.get('share') === '1';
   const { isTenantAdmin, isRecruiter } = useAuth();
   const canInvite = isTenantAdmin || isRecruiter;
 
@@ -46,6 +50,9 @@ function AssessmentDetailsContent() {
 
   // Modal states
   const [showShareModal, setShowShareModal] = useState(false);
+  /* One-shot: the dialog opens once for this arrival, and closing it must not
+     be undone by a re-render still reading `?share=1` off the URL. */
+  const shareOnArrivalHandledRef = useRef(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
@@ -180,6 +187,16 @@ function AssessmentDetailsContent() {
           { label: 'Assessment' },
         ]
       : undefined;
+
+  /* Opened only once the assessment has loaded and only if the recruiter may
+     invite - the same permission the Share action itself is gated on. */
+  useEffect(() => {
+    if (!openShareOnArrival || shareOnArrivalHandledRef.current) return;
+    if (isLoading || !assessment || !canInvite) return;
+    shareOnArrivalHandledRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShowShareModal(true);
+  }, [openShareOnArrival, isLoading, assessment, canInvite]);
 
   const handleViewResults = () => {
     router.push(`/recruitment/assessments/${assessmentId}/results`);
