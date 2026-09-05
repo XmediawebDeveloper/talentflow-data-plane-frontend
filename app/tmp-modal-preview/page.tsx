@@ -9,7 +9,7 @@ export default function TmpModalPreview() {
       <div className="max-w-2xl mx-auto bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-700 p-6">
         <TabEmptyState
           icon={Users}
-          imageSrc="/scored-resumes-empty-state.png"
+          imageSrc="/scored-resumes-empty-state.webp"
           imageAlt="Scored resumes illustration"
           title="No Scored Resumes"
           description="Score resumes against this job description to see the candidates here."

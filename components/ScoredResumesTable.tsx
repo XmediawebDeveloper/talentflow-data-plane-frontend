@@ -43,6 +43,27 @@ import {
 const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
+/* ---- The More Filters panel's field metrics ---------------------------------
+   One width and one control style for every field in that panel, so "all the
+   same size" is guaranteed by construction rather than by seven copies of a
+   class string happening to agree — which is what let them drift in the first
+   place.
+
+   180px is sized to the WIDEST thing any of these controls must actually
+   display: a native date input's `dd/mm/yyyy` plus its picker glyph. Every
+   other field needs less, and none of them needs the third-of-a-panel the old
+   stretching grid handed out. Full width below `sm`, where one field per row is
+   the only thing that fits. */
+const FILTER_FIELD_CLASS = 'w-full sm:w-auto sm:grow sm:basis-[170px] sm:max-w-[280px]';
+
+/* Score Range holds TWO controls in one field, so it asks for more room up
+   front and takes a bigger share of whatever its row has spare — at the shared
+   basis each input gets ~80px and reads cramped beside its neighbours. */
+const FILTER_FIELD_WIDE_CLASS = 'w-full sm:w-auto sm:grow-[1.5] sm:basis-[240px] sm:max-w-[380px]';
+const FILTER_LABEL_CLASS = 'block text-sm text-gray-700 mb-1 truncate';
+const FILTER_CONTROL_CLASS =
+  'w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white';
+
 const DEFAULT_COLUMNS = [
   { id: 'candidateName', label: 'Candidate Name', enabled: true },
   { id: 'jobVersion', label: 'Job Version', enabled: true },
@@ -130,6 +151,21 @@ interface ScoredResumesTableProps {
   availableUnits?: number;
   initialMatchStatus?: 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
   /**
+   * Drop the Match Status field from More Filters.
+   *
+   * Set by a host whose LIST is already one verdict — the Exact Match, Partial
+   * Match and No Match sections, which hand down rows the parent has already
+   * narrowed. A status filter there is at best a no-op and at worst a
+   * contradiction: picking "No Match" inside the Exact Match section empties
+   * the table and reads as a bug.
+   *
+   * It hides the control AND stops the filter applying, rather than just
+   * hiding it. A value set on an earlier, unscoped view would otherwise stay
+   * live behind a control that is no longer on screen to undo it — and would
+   * still be counted on the Filters badge.
+   */
+  hideMatchStatusFilter?: boolean;
+  /**
    * Preselects the date-range filter to one day (YYYY-MM-DD) — the host's way
    * of opening this table already narrowed to one scoring session, e.g. from
    * a Scoring History row. Same sync-on-change pattern as `initialMatchStatus`
@@ -193,6 +229,7 @@ export default function ScoredResumesTable({
   jobCode,
   availableUnits = 10,
   initialMatchStatus = 'all',
+  hideMatchStatusFilter = false,
   initialScoredDate = '',
   onViewCandidate,
   selectedResumes: externalSelectedResumes = [],
@@ -385,15 +422,27 @@ Best regards`);
       dateFrom: initialScoredDate,
       dateTo: initialScoredDate,
       recruiter: 'all',
+      /* Which job the rows belong to, as two independent narrowings: the title,
+         and the JD version they were scored against. Separate rather than one
+         combined control because they answer different questions — "every
+         QA Test Engineer we scored" versus "everything scored against v2" —
+         and a recruiter comparing versions of one job needs both at once.
+         'all' is the off position for each, matching every other select here. */
+      jobTitle: 'all',
+      jobVersion: 'all',
     },
     // Score min/max is one logical "Score range" filter, so it counts once.
     countFilters: (f) =>
       [
-        f.matchStatus !== 'all',
+        // Not counted while hidden, or the Filters badge advertises a filter
+        // that has no control on screen and is not being applied.
+        !hideMatchStatusFilter && f.matchStatus !== 'all',
         f.scoreMin > 0 || f.scoreMax < 100,
         Boolean(f.dateFrom),
         Boolean(f.dateTo),
         f.recruiter !== 'all',
+        f.jobTitle !== 'all',
+        f.jobVersion !== 'all',
       ].filter(Boolean).length,
   });
   const searchTerm = search.appliedQuery;
@@ -404,6 +453,8 @@ Best regards`);
     dateFrom: filterDateFrom,
     dateTo: filterDateTo,
     recruiter: filterRecruiter,
+    jobTitle: filterJobTitle,
+    jobVersion: filterJobVersion,
   } = search.filters;
 
   // The parent can preselect a match status (e.g. "Strong" from a stat card).
@@ -479,8 +530,11 @@ Best regards`);
       resume.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resume.phone.includes(searchTerm);
 
-    // Match status filter
-    const matchesStatus = filterMatchStatus === 'all' || resume.matchStatus === filterMatchStatus;
+    /* Match status filter. Inert when the host has hidden it — the rows are
+       already one verdict, and a value left over from an unscoped view must not
+       keep narrowing them from behind a control that is no longer rendered. */
+    const matchesStatus =
+      hideMatchStatusFilter || filterMatchStatus === 'all' || resume.matchStatus === filterMatchStatus;
 
     // Score range filter
     const matchesScore = resume.scorePercentage >= filterScoreMin && resume.scorePercentage <= filterScoreMax;
@@ -504,7 +558,19 @@ Best regards`);
     // Recruiter filter
     const matchesRecruiter = filterRecruiter === 'all' || resume.scoredBy === filterRecruiter;
 
-    return matchesSearch && matchesStatus && matchesScore && matchesDate && matchesRecruiter;
+    /* Job title / JD version. Both compared as strings against the option
+       values built below from these same rows, so an option can never be
+       offered that then matches nothing. A row missing the field is excluded
+       once its filter is on — it cannot be shown to belong to the job asked
+       for, and those rows are never offered as an option either. */
+    const matchesJobTitle =
+      filterJobTitle === 'all' || (resume.jobTitle || '').trim() === filterJobTitle;
+    const matchesJobVersion =
+      filterJobVersion === 'all' ||
+      (resume.jobVersion !== undefined && resume.jobVersion !== null && String(resume.jobVersion) === filterJobVersion);
+
+    return matchesSearch && matchesStatus && matchesScore && matchesDate && matchesRecruiter
+      && matchesJobTitle && matchesJobVersion;
   });
 
   // "View by Candidate" — a cross-job list spans every job, so the same
@@ -577,7 +643,7 @@ Best regards`);
   useEffect(() => {
     setCurrentPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterMatchStatus, filterScoreMin, filterScoreMax, filterDateFrom, filterDateTo, filterRecruiter, jobId, isGrouped]);
+  }, [searchTerm, filterMatchStatus, filterScoreMin, filterScoreMax, filterDateFrom, filterDateTo, filterRecruiter, filterJobTitle, filterJobVersion, jobId, isGrouped]);
 
   // Grouped mode paginates candidate CLUSTERS (one page = N people, however
   // many scoring rows each carries); ungrouped mode paginates rows directly.
@@ -597,6 +663,26 @@ Best regards`);
   );
 
   const uniqueRecruiters = Array.from(new Set(resumes.map(r => r.scoredBy)));
+
+  /* Options for the two job filters, read off the rows this table was handed —
+     never a fixed list — so they only ever offer what is actually selectable
+     here. Built from `resumes` rather than `filteredResumes`, or choosing one
+     value would collapse the dropdown you chose it from to that single entry.
+     Blank/absent values are dropped: they cannot be matched on. */
+  const uniqueJobTitles = Array.from(
+    new Set(resumes.map(r => (r.jobTitle || '').trim()).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+  /* Numeric sort, then rendered as "v2" — a plain string sort puts v10 before
+     v2, which is exactly the order a version list must not be in. */
+  const uniqueJobVersions = Array.from(
+    new Set(
+      resumes
+        .map(r => r.jobVersion)
+        .filter((v): v is number => v !== undefined && v !== null)
+        .map(String),
+    ),
+  ).sort((a, b) => Number(a) - Number(b));
 
   const handleSelectAll = () => {
     if (onSelectAll) {
@@ -1359,54 +1445,28 @@ Best regards`);
         {/* Advanced Filters */}
         {showFilters && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Match Status */}
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Match Status</label>
-                <select
-                  value={filterMatchStatus}
-                  onChange={(e) => search.setFilter('matchStatus', e.target.value as typeof filterMatchStatus)}
-                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="Exact Match">Exact Match</option>
-                  <option value="Partial Match">Partial Match</option>
-                  <option value="No Match">No Match</option>
-                </select>
-              </div>
+            {/* Flex-wrap, not the stretching 2/3-column grid this used to be:
+                a grid cell is a third of the panel wide and every control in it
+                stretched to fill that, so a "v2" dropdown was as wide as a job
+                title. Each field now takes one fixed width and they pack from
+                the left, wrapping when they run out of room. */}
+            {/* Ordered who → when → how it scored → which job.
 
-              {/* Score Range */}
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Score Range</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={filterScoreMin}
-                    onChange={(e) => search.setFilter('scoreMin', Number(e.target.value))}
-                    min="0"
-                    max="100"
-                    placeholder="Min"
-                    className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                  />
-                  <input
-                    type="number"
-                    value={filterScoreMax}
-                    onChange={(e) => search.setFilter('scoreMax', Number(e.target.value))}
-                    min="0"
-                    max="100"
-                    placeholder="Max"
-                    className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                  />
-                </div>
-              </div>
-
-              {/* Recruiter */}
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Scored By</label>
+                Fields FLEX rather than sitting at one fixed width: the panel is
+                a different width in every host and at every viewport, and fixed
+                fields leave ragged trailing space at most of them. Each field's
+                `basis` is the width it wants — that is what decides how many
+                fit on a row — and `grow` shares out whatever the row has left,
+                so a row is always filled edge to edge. `max-w` keeps a short
+                final row from stretching two fields across the whole panel. */}
+            <div className="flex flex-wrap gap-4">
+              {/* 1. Scored By */}
+              <div className={FILTER_FIELD_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Scored By</label>
                 <select
                   value={filterRecruiter}
                   onChange={(e) => search.setFilter('recruiter', e.target.value)}
-                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                  className={FILTER_CONTROL_CLASS}
                 >
                   <option value="all">All Recruiters</option>
                   {uniqueRecruiters.map(recruiter => (
@@ -1415,25 +1475,129 @@ Best regards`);
                 </select>
               </div>
 
-              {/* Date Range */}
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Date From</label>
+              {/* 2. Date From */}
+              <div className={FILTER_FIELD_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Date From</label>
                 <input
                   type="date"
                   value={filterDateFrom}
                   onChange={(e) => search.setFilter('dateFrom', e.target.value)}
-                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                  className={FILTER_CONTROL_CLASS}
                 />
               </div>
 
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Date To</label>
+              {/* 3. Date To */}
+              <div className={FILTER_FIELD_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Date To</label>
                 <input
                   type="date"
                   value={filterDateTo}
                   onChange={(e) => search.setFilter('dateTo', e.target.value)}
-                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                  className={FILTER_CONTROL_CLASS}
                 />
+              </div>
+
+              {/* 4. Match Status — dropped when the list is already one
+                  verdict; see `hideMatchStatusFilter`. The only conditional
+                  field in this panel, and it turns on a host's explicit
+                  statement about its own rows rather than on the data. */}
+              {!hideMatchStatusFilter && (
+                <div className={FILTER_FIELD_CLASS}>
+                  <label className={FILTER_LABEL_CLASS}>Match Status</label>
+                  <select
+                    value={filterMatchStatus}
+                    onChange={(e) => search.setFilter('matchStatus', e.target.value as typeof filterMatchStatus)}
+                    className={FILTER_CONTROL_CLASS}
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="Exact Match">Exact Match</option>
+                    <option value="Partial Match">Partial Match</option>
+                    <option value="No Match">No Match</option>
+                  </select>
+                </div>
+              )}
+
+              {/* 5. Score Range — two inputs sharing ONE field, so the pair
+                  reads as a single filter rather than two. Widened to take up
+                  the first row's leftover space; see FILTER_FIELD_WIDE_CLASS. */}
+              <div className={FILTER_FIELD_WIDE_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Score Range</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={filterScoreMin}
+                    onChange={(e) => search.setFilter('scoreMin', Number(e.target.value))}
+                    min="0"
+                    max="100"
+                    placeholder="Min"
+                    /* min-w-0 so a flex child can shrink below its intrinsic
+                       width — a number input's default is wider than half of
+                       this field, and without it the pair overflows. */
+                    className={`${FILTER_CONTROL_CLASS} min-w-0`}
+                  />
+                  <input
+                    type="number"
+                    value={filterScoreMax}
+                    onChange={(e) => search.setFilter('scoreMax', Number(e.target.value))}
+                    min="0"
+                    max="100"
+                    placeholder="Max"
+                    className={`${FILTER_CONTROL_CLASS} min-w-0`}
+                  />
+                </div>
+              </div>
+
+              {/* Forced wrap, so the job filters start a new line — but ONLY in
+                  the seven-field panel, where one row would be too crowded to
+                  read. The verdict sections drop Match Status and are six
+                  fields, which fit a single row at any normal panel width, so
+                  breaking them would push two lonely fields onto a second line
+                  for no reason.
+
+                  A full-basis spacer is the only way to break a flex row; flex
+                  items have no `break-before`. Height zero, so it costs one
+                  row-gap and nothing else. */}
+              {!hideMatchStatusFilter && <div aria-hidden className="basis-full h-0" />}
+
+              {/* 6-7. Job Title / Job Version.
+
+                  Both render unconditionally, like every other field in this
+                  panel. They were gated on having more than one value to pick
+                  between, which meant Job Version vanished on any list whose
+                  rows happened to share a version (Exact Match with four rows,
+                  say) — a filter that comes and goes with the data is one users
+                  cannot learn, and it left a hole in the row beside a Job Title
+                  that did render. `Scored By` has always shown even with a
+                  single recruiter; these now match it. */}
+              <div className={FILTER_FIELD_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Job Title</label>
+                <select
+                  value={filterJobTitle}
+                  onChange={(e) => search.setFilter('jobTitle', e.target.value)}
+                  className={FILTER_CONTROL_CLASS}
+                >
+                  <option value="all">All Job Titles</option>
+                  {uniqueJobTitles.map(title => (
+                    /* Full title in the option — the field is narrow, but the
+                       open dropdown sizes to its content, so the picker stays
+                       unambiguous even when the closed control truncates. */
+                    <option key={title} value={title}>{title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={FILTER_FIELD_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Job Version</label>
+                <select
+                  value={filterJobVersion}
+                  onChange={(e) => search.setFilter('jobVersion', e.target.value)}
+                  className={FILTER_CONTROL_CLASS}
+                >
+                  <option value="all">All Versions</option>
+                  {uniqueJobVersions.map(version => (
+                    <option key={version} value={version}>v{version}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

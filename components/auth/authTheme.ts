@@ -1393,11 +1393,32 @@ export const AUTH_THEME_CSS = `
   transform: scale(1);
 }
 
+/* The Lottie that stands in for the tick once the code is accepted.
+   Sized just under the merged bar's own height so the animation's outward
+   particles stay inside the green field instead of spilling over its border.
+   It is only MOUNTED at the 'done' phase, so it plays on arrival — the fade
+   here is a soft entrance rather than the reveal itself, which is why it is
+   much shorter than the tick's. */
+.tf-otp-lottie {
+  width: 52px;
+  height: 52px;
+  animation: tf-otp-lottie-in 0.25s ease both;
+}
+@keyframes tf-otp-lottie-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 @media (max-width: 420px) {
   .tf-otp-stage {
     --otp-w: 44px;
     --otp-h: 56px;
     --otp-gap: 8px;
+  }
+  /* Follows the shorter bar down, keeping the same clearance inside it. */
+  .tf-otp-lottie {
+    width: 42px;
+    height: 42px;
   }
   .tf-fp-prompt {
     gap: 12px;

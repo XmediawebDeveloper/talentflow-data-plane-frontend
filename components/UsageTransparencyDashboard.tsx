@@ -5,7 +5,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import {
+import { ArrowLeft,
   Eye, Download, X, BarChart3,
   CheckCircle2, XCircle, AlertCircle, Loader2, Clock,
   Target, Video, ClipboardCheck, FileText, TrendingUp, TrendingDown,
@@ -228,8 +228,9 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               {onBack && (
                 <button
                   onClick={onBack}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
                 >
+                  <ArrowLeft className="w-4 h-4" />
                   Back
                 </button>
               )}

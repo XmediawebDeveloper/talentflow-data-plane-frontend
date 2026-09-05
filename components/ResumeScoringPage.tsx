@@ -11,6 +11,7 @@ import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import { normalizeMatchResult } from '@/lib/utils/matchStatus';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
+import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import api, { dispatchUnitsConsumed } from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
@@ -49,6 +50,23 @@ const formatEmploymentType = (type: string | undefined): string => {
 const formatIndustryType = (type: string | undefined): string => {
   if (!type) return '-';
   return type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+};
+
+/* Work mode reaches this page as the JD's `remote_type` — 'onsite', 'hybrid',
+   'remote'. Mapped rather than title-cased, because "onsite" should read
+   "On-site" and no generic capitaliser produces the hyphen. An unrecognised
+   value falls through to the shared title-casing, so a new backend value shows
+   as itself instead of vanishing from the filter. */
+const WORK_MODE_LABELS: Record<string, string> = {
+  onsite: 'On-site',
+  on_site: 'On-site',
+  hybrid: 'Hybrid',
+  remote: 'Remote',
+};
+
+const formatWorkMode = (mode: string | undefined): string => {
+  if (!mode) return '-';
+  return WORK_MODE_LABELS[mode.toLowerCase()] ?? formatEmploymentType(mode);
 };
 
 // Helper function to convert backend match_status to frontend format
@@ -576,6 +594,14 @@ export default function ResumeScoringPage({
   // Whether the floating Progress Tables icon has revealed its label.
   const [showProgressLabel, setShowProgressLabel] = useState(false);
 
+  /* The JD itself, read-only, over this page. The scoring detail page names the
+     job and its version but shows nothing OF it — the description, skills and
+     pay a recruiter wants beside the scores meant leaving for the JD page and
+     finding the way back. Opens the same `JDVersionHistoryModal` the Job
+     Details page and the job picker use, so there is one JD viewer in the app
+     rather than a third rendering of the same content. */
+  const [showJobDetailModal, setShowJobDetailModal] = useState(false);
+
   // State for Progress Tables Modal
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressData, setProgressData] = useState<ScoringProgressItem[]>([]);
@@ -657,6 +683,9 @@ export default function ResumeScoringPage({
       scoredFrom: '',
       scoredTo: '',
       location: '',
+      // Sits before Job Type throughout — the two describe the same thing at
+      // different granularity (where the work happens, then how it is engaged).
+      workMode: '',
       jobType: '',
       industry: '',
     },
@@ -667,6 +696,7 @@ export default function ResumeScoringPage({
     scoredFrom: historyScoredFrom,
     scoredTo: historyScoredTo,
     location: historyLocation,
+    workMode: historyWorkMode,
     jobType: historyJobType,
     industry: historyIndustry,
   } = historySearch.filters;
@@ -710,7 +740,7 @@ export default function ResumeScoringPage({
 
   useEffect(() => {
     setHistoryCurrentPage(1);
-  }, [historySearchQuery, historyCreatedBy, historyScoredFrom, historyScoredTo, historyLocation, historyJobType, historyIndustry]);
+  }, [historySearchQuery, historyCreatedBy, historyScoredFrom, historyScoredTo, historyLocation, historyWorkMode, historyJobType, historyIndustry]);
   const [selectedHistoryItems, setSelectedHistoryItems] = useState<Set<string>>(new Set());
 
   // Bulk download state for scored resumes
@@ -752,7 +782,7 @@ export default function ResumeScoringPage({
     {
       isGlobalView, globalListMode, globalSearchQuery, historyViewMode,
       historySearchQuery, historyCreatedBy, historyScoredFrom, historyScoredTo,
-      historyLocation, historyJobType, historyIndustry,
+      historyLocation, historyWorkMode, historyJobType, historyIndustry,
       historyCurrentPage, historyItemsPerPage,
       // Persist the applied flag alongside the filters themselves. Without it the
       // filters restore on return but the flag resets to false, so the Filters
@@ -775,6 +805,7 @@ export default function ResumeScoringPage({
         scoredFrom: typeof s.historyScoredFrom === 'string' ? s.historyScoredFrom : '',
         scoredTo: typeof s.historyScoredTo === 'string' ? s.historyScoredTo : '',
         location: typeof s.historyLocation === 'string' ? s.historyLocation : '',
+        workMode: typeof s.historyWorkMode === 'string' ? s.historyWorkMode : '',
         jobType: typeof s.historyJobType === 'string' ? s.historyJobType : '',
         industry: typeof s.historyIndustry === 'string' ? s.historyIndustry : '',
       });
@@ -2058,6 +2089,26 @@ export default function ResumeScoringPage({
                         Show All Versions
                       </button>
                     )}
+                    {/* "View Job Detail" — the JD this page is scoring against,
+                        read-only. Sits with the version badge and Show All
+                        Versions because all three answer "which job, and which
+                        version, am I looking at"; this one answers it by
+                        showing the JD rather than by naming it.
+
+                        Always available: unlike Show All Versions there is no
+                        precondition — the page cannot be here without a JD to
+                        show. Styled as the group's neutral pill so it reads as
+                        a sibling of the badge, not as a second primary action
+                        competing with Score New Resumes. */}
+                    <button
+                      type="button"
+                      onClick={() => setShowJobDetailModal(true)}
+                      title="View this job description"
+                      className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors flex-shrink-0 bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue"
+                    >
+                      <Eye className="w-3 h-3" />
+                      View Job Detail
+                    </button>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
                     <span className="flex items-center gap-1">
@@ -2119,6 +2170,19 @@ export default function ResumeScoringPage({
             </div>
           </div>
         </div>
+
+        {/* The JD viewer behind "View Job Detail". Opened straight onto the
+            version this page is scoped to — `detailsVersionNumber` is the
+            resolved lineage number the badge above displays, so the popup and
+            the badge always name the same version. Falls back to the record's
+            own counter when the lineage has not resolved yet. */}
+        <JDVersionHistoryModal
+          isOpen={showJobDetailModal}
+          onClose={() => setShowJobDetailModal(false)}
+          jdId={selectedHistoryItem.jobId}
+          jdTitle={selectedHistoryItem.jobTitle}
+          initialVersionNumber={detailsVersionNumber}
+        />
 
         {/* Scored Resumes Table */}
         <ScoredResumesTable
@@ -2345,13 +2409,20 @@ export default function ResumeScoringPage({
       const matchesLocation = historyLocation === '' ||
         (item.jdLocation || '').toLowerCase().includes(historyLocation.toLowerCase());
 
+      /* Exact match on the raw value, like Job Type and Industry beside it —
+         the options are built from these same rows, so the compared strings
+         always come from one source. */
+      const matchesWorkMode = historyWorkMode === '' ||
+        (item.jdRemoteType || '').toLowerCase() === historyWorkMode.toLowerCase();
+
       const matchesJobType = historyJobType === '' ||
         (item.jdEmploymentType || '').toLowerCase() === historyJobType.toLowerCase();
 
       const matchesIndustry = historyIndustry === '' ||
         (item.jdIndustryType || '').toLowerCase() === historyIndustry.toLowerCase();
 
-      return matchesSearch && matchesCreatedBy && matchesScoredDate && matchesLocation && matchesJobType && matchesIndustry;
+      return matchesSearch && matchesCreatedBy && matchesScoredDate && matchesLocation
+        && matchesWorkMode && matchesJobType && matchesIndustry;
     });
 
     // One row per job — its own final (highest) scored version — instead of
@@ -2739,6 +2810,10 @@ export default function ResumeScoringPage({
                 onSelectAll={(ids) => setSelectedScoredResumes(ids)}
                 isGlobalView={true}
                 title={activeSectionTitle}
+                /* The Exact / Partial / No Match sections have already been
+                   narrowed to one verdict above, so the table's own Match
+                   Status filter could only re-state that or contradict it. */
+                hideMatchStatusFilter={!!matchFilter}
                 /* "View by Candidates" clusters rows by email; "Total
                    Resumes Scored" shows the identical rows flat, one per
                    scoring event, in plain newest-first order. */
@@ -2803,6 +2878,7 @@ export default function ResumeScoringPage({
             {/* Expanded Filters */}
             {showHistoryFilters && (() => {
               const uniqueLocations = [...new Set(scoredHistory.map(i => i.jdLocation).filter(Boolean))];
+              const uniqueWorkModes = [...new Set(scoredHistory.map(i => i.jdRemoteType).filter(Boolean))];
               const uniqueJobTypes = [...new Set(scoredHistory.map(i => i.jdEmploymentType).filter(Boolean))];
               const uniqueIndustries = [...new Set(scoredHistory.map(i => i.jdIndustryType).filter(Boolean))];
               const uniqueCreators = [...new Set(scoredHistory.map(i => i.jdCreatedByName).filter(Boolean))];
@@ -2832,6 +2908,16 @@ export default function ResumeScoringPage({
                       <select value={historyLocation} onChange={e => historySearch.setFilter('location', e.target.value)} className={selectCls}>
                         <option value="">All Locations</option>
                         {uniqueLocations.map(l => <option key={l} value={l!}>{l}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Work Mode</label>
+                      <select value={historyWorkMode} onChange={e => historySearch.setFilter('workMode', e.target.value)} className={selectCls}>
+                        <option value="">All Work Modes</option>
+                        {/* Raw value on the option, formatted label on the face:
+                            the filter compares against `jdRemoteType` as the API
+                            spells it, so the value must stay unformatted. */}
+                        {uniqueWorkModes.map(m => <option key={m} value={m!}>{formatWorkMode(m)}</option>)}
                       </select>
                     </div>
                     <div>

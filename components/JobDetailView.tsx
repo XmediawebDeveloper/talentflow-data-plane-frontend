@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2, AlertCircle, Zap, ClipboardList } from 'lucide-react';
+import { ArrowLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Zap, ClipboardList } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -477,6 +477,30 @@ interface JobDetailViewProps {
  * silently missing the rows that use the other.
  */
 const scoredResumeId = (row: any): string | null => row?.resumeId || row?.resume_id || null;
+
+/* The header's icon-only actions share one shape, so the three read as a set
+   rather than as three buttons that happen to sit together. `w-9 h-9` gives a
+   36px hit target on the same visual line as the 40px pills beside them; only
+   the hover accent differs per action. */
+const JOB_ICON_ACTION_BASE =
+  'w-9 h-9 flex items-center justify-center rounded-lg border transition-all flex-shrink-0 bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700';
+
+/* Each action's colour is STATIC — carried by the idle icon, not revealed on
+   hover. With the captions gone the colour is half of what identifies the
+   button, so hiding it until the pointer arrives left three identical grey
+   squares to choose between.
+   Hover now only deepens the same hue, which is what a hover should do:
+   confirm the target, not introduce it.
+
+   The three hues are the ones this app already uses for these actions — blue
+   for edit, the red `Ban` of the job list's Disable row, and the shared
+   `--menu-icon-archive` token — rather than a palette invented here. */
+const JOB_ICON_ACTION_EDIT =
+  'text-brand-blue hover:bg-brand-blue/10 hover:border-brand-blue/40';
+const JOB_ICON_ACTION_DISABLE =
+  'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-300 dark:hover:border-red-500/40';
+const JOB_ICON_ACTION_ARCHIVE =
+  'text-menu-icon-archive hover:bg-brand-orange/10 hover:border-brand-orange/40';
 
 /**
  * A scored-resume row, filled out for `CandidateScoringDetailPage`.
@@ -2543,30 +2567,66 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 disabled and the reason is a hover tooltip instead of a
                 post-click modal. The tooltip's handlers sit on the wrapper, not
                 the button, so they still fire over a disabled control. */}
-            {job.status === 'Published' && onEdit && (
-              editDisabled ? (
-                <Tooltip content={editDisabledReason} position="bottom">
+            {/* Edit / Disable / Archive, icon-only.
+                Every one of them carries an `aria-label` AND a `title`: with the
+                caption gone the icon is the only thing naming the action, so a
+                screen reader and a hover both have to be able to recover it.
+
+                Disable and Archive are new HERE — their handlers existed and the
+                host had always passed `onDisable` / `onArchive`, but this page
+                rendered no control for either, so the only way to reach them was
+                the job list's row menu. The host gates both on permission by
+                passing `undefined`, which is why the render test is simply
+                whether the prop is there. */}
+            {job.status === 'Published' && (
+              <div className="flex items-center gap-2">
+                {onEdit && (
+                  editDisabled ? (
+                    <Tooltip content={editDisabledReason} position="bottom">
+                      <button
+                        type="button"
+                        disabled
+                        aria-disabled="true"
+                        className={`${JOB_ICON_ACTION_BASE} !bg-gray-50 dark:!bg-slate-800 text-gray-400 dark:text-slate-500 !border-gray-200 dark:!border-slate-700 cursor-not-allowed`}
+                        aria-label={editDisabledReason || 'Editing is not available for this JD'}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    </Tooltip>
+                  ) : (
+                    <button
+                      onClick={handleEdit}
+                      className={`${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_EDIT}`}
+                      aria-label="Edit this JD" title="Edit this JD"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                  )
+                )}
+
+                {/* Orange on hover, matching the job list's Disable menu item —
+                    it takes the JD out of service, so it should not look like
+                    the neutral pair either side of it. */}
+                {onDisable && (
                   <button
-                    type="button"
-                    disabled
-                    aria-disabled="true"
-                    className="px-4 py-2 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700 rounded-lg cursor-not-allowed flex items-center gap-2"
-                    aria-label={editDisabledReason || 'Editing is not available for this JD'}
+                    onClick={handleDisable}
+                    className={`${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_DISABLE}`}
+                    aria-label="Disable this JD" title="Disable this JD"
                   >
-                    <Edit className="w-4 h-4" />
-                    <span className="font-medium">Edit</span>
+                    <Ban className="w-4 h-4" />
                   </button>
-                </Tooltip>
-              ) : (
-                <button
-                  onClick={handleEdit}
-                  className="px-4 py-2 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all flex items-center gap-2"
-                  aria-label="Edit this JD" title="Edit this JD"
-                >
-                  <Edit className="w-4 h-4" />
-                  <span className="font-medium">Edit</span>
-                </button>
-              )
+                )}
+
+                {onArchive && (
+                  <button
+                    onClick={handleArchive}
+                    className={`${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_ARCHIVE}`}
+                    aria-label="Archive this JD" title="Archive this JD"
+                  >
+                    <Archive className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             )}
 
             {/* JD15: Action Buttons - For Disabled jobs */}
@@ -2622,12 +2682,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         <div className="flex items-center border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2.5 text-sm transition-colors relative whitespace-nowrap rounded-t-[11px] ${
+            className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap rounded-t-[11px] ${
               activeTab === 'overview'
                 ? 'text-blue-600 bg-blue-50'
                 : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
             }`}
           >
+            {/* Tab icons carry no colour of their own — lucide draws in
+                `currentColor`, so each one inherits its tab's active, idle or
+                disabled text colour and cannot fall out of step with it. */}
+            <FileText className="w-4 h-4" />
             Overview
             {activeTab === 'overview' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
@@ -2642,6 +2706,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
+              <Users className="w-4 h-4" />
               AI Talent Match Results
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'ai-talent-match'
@@ -2664,6 +2729,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
+              <ClipboardList className="w-4 h-4" />
               Scored Resumes
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'scored-resumes'
@@ -2701,6 +2767,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
+              <BarChart3 className="w-4 h-4" />
               Assessments Results
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'assessment-results'
@@ -2736,6 +2803,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
+              <MessageSquare className="w-4 h-4" />
               AI Interview Result
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'ai-interview-results'
@@ -3441,7 +3509,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           ) : scoredResumes.length === 0 ? (
             <TabEmptyState
               icon={Users}
-              imageSrc="/scored-resumes-empty-state.png"
+              imageSrc="/scored-resumes-empty-state.webp"
               imageAlt="Scored resumes illustration"
               title="No Scored Resumes"
               description="Score resumes against this job description to see the candidates here."
@@ -4173,7 +4241,7 @@ function AIMatchTabContent({
     return (
       <TabEmptyState
         icon={Brain}
-        imageSrc="/ai-talent-match-empty-state.png"
+        imageSrc="/ai-talent-match-empty-state.webp"
         imageAlt="AI talent match illustration"
         title="No AI Talent Match Results"
         description="Run an AI Talent Match session to find the best candidates for this role."

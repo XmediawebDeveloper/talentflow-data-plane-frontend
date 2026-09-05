@@ -1,11 +1,12 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, ArrowRight, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Briefcase } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
+import SuccessAnimation from '@/components/ui/success-animation';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
 import { Job } from '@/lib/types/types';
@@ -764,6 +765,19 @@ interface JDCreationProps {
   isJDInUse?: boolean;  // Whether JD is used in scoring/assessment/AI match
   jdUsageMessage?: string;  // Message explaining why JD can't be edited
   breadcrumbItems?: BreadcrumbCrumb[];  // Optional breadcrumb shown above the header
+  /**
+   * Reports which of the FOUR displayed steps the recruiter is on (1-4), so the
+   * host page can name its breadcrumb leaf after it.
+   *
+   * Push, not pull: the internal `step` is mirrored into `?stage=` with
+   * `history.replaceState`, which deliberately bypasses the Next router — so
+   * `useSearchParams` in the page never re-renders on it and could only ever
+   * read a stale stage. This callback is the only live source.
+   *
+   * Report-only. It never influences the flow, and nothing here reads back
+   * whatever the host does with it.
+   */
+  onStepChange?: (displayStep: 1 | 2 | 3 | 4) => void;
   // FIX-003: Props for embedded mode in sheet/modal
   editingJDId?: string | null;  // JD ID to fetch and edit
   onClose?: () => void;  // Callback when closed
@@ -1182,7 +1196,14 @@ const DraggableComment = ({
                 aria-label={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
                 title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
               >
-                {isMustHave ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowLeft className="h-3.5 w-3.5" />}
+                {/* DOWN and UP, not right and left.
+                    The two Additional Requirements lists are stacked one above
+                    the other in a single `space-y-6` column — at every
+                    breakpoint, so this is not a desktop-only assumption — and a
+                    sideways arrow pointed at the empty gutter rather than at
+                    the list the item actually travels to. The skills lists
+                    above ARE side by side, which is why they keep left/right. */}
+                {isMustHave ? <ArrowDown className="h-3.5 w-3.5" /> : <ArrowUp className="h-3.5 w-3.5" />}
               </button>
               <button
                 onClick={() => onRemove(category, index)}
@@ -1316,7 +1337,7 @@ const FALLBACK_INDUSTRY_TYPES: IndustryType[] = [
   { id: 39, code: 'others', label: 'Others', description: null, sort_order: 99, is_active: true, created_at: '', updated_at: '' },
 ];
 
-export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, breadcrumbItems, editingJDId, onClose, onSuccess, isEmbedded }: JDCreationProps = {}) {
+export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, breadcrumbItems, onStepChange, editingJDId, onClose, onSuccess, isEmbedded }: JDCreationProps = {}) {
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
@@ -1595,6 +1616,38 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [isPublished, setIsPublished] = useState(false);
   const [publishedJdId, setPublishedJdId] = useState<string | null>(null);
   const [publishedJobCode, setPublishedJobCode] = useState<string | null>(null);
+
+  /* ---- The FOUR steps the recruiter sees --------------------------------------
+     Derived from the two pieces of state that already drive this flow. It is
+     deliberately NOT a fourth value on `Step`, which stays
+     'create' | 'extract' | 'review':
+
+       `Step` is persisted as the JD's `creation_stage`, mirrored into `?stage=`,
+       and read back on reload to decide which screen to restore. Adding a
+       'publish' member would mean touching every transition, the stored records
+       already carrying the old three, and the URL contract — all to change a
+       caption.
+
+     And it would misdescribe the flow. Publish is not a step the recruiter
+     navigates TO; it is what Step 3 DOES. `step === 'review'` already renders
+     two different screens off `isPublished` — the review form, then the success
+     screen — so the fourth step is simply the third having succeeded, which is
+     exactly what this reads.
+
+     Consequence worth knowing: Step 4 is only ever "current"; it is never
+     "completed", because publishing ends the flow and the host navigates away. */
+  const displayStep: 1 | 2 | 3 | 4 =
+    step === 'create' ? 1
+      : step === 'extract' ? 2
+        : isPublished ? 4
+          : 3;
+
+  /* Reported to the host so its breadcrumb can name the current step. In an
+     effect, not during render: `onStepChange` sets state in the parent, and
+     doing that mid-render is what React warns about. */
+  useEffect(() => {
+    onStepChange?.(displayStep);
+  }, [displayStep, onStepChange]);
 
   useEffect(() => {
     if (locationCountry !== 'US' || usStates.length > 0 || isLoadingUsLocations) {
@@ -5827,51 +5880,77 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  const renderStepIndicator = () => (
-    <div>
-      <div className="flex items-center justify-center">
-        <div className="flex items-center gap-3 sm:gap-4">
-        {/* Step 1 */}
-        <div className="flex items-center gap-2.5">
-          <div className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold ${
-            step === 'create' ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10'
-          }`}>
-            {step !== 'create' ? <CheckCircle className="w-5 h-5" /> : '1'}
-          </div>
-          <div className={`hidden sm:block text-sm whitespace-nowrap font-medium ${step === 'create' ? 'text-brand-blue' : 'text-gray-700 dark:text-slate-300'}`}>Create JD</div>
-        </div>
+  /**
+   * The four-step progress bar.
+   *
+   * Driven by `displayStep` off one array rather than four hand-written blocks:
+   * the previous three were already inconsistent with each other (Step 1 had no
+   * "pending" branch at all, because with three steps it could never be
+   * pending), and a fourth copy is a fourth chance for the active/done/pending
+   * rules to drift. Same visual language as before — brand blue for the step
+   * you are on, brand cyan with a tick for the ones behind it, grey for the
+   * ones ahead.
+   *
+   * `overflow-x-auto` + `min-w-max`: four labelled steps are wider than a small
+   * tablet, and the row must scroll rather than squash the circles or wrap
+   * mid-connector. `w-fit mx-auto` keeps it centred whenever it does fit.
+   */
+  const renderStepIndicator = () => {
+    const stepLabels = [
+      'Create JD',
+      'Extract',
+      'Review',
+      // Kept from the original: editing a published JD publishes a new version.
+      isEditingPublished ? 'Republish' : 'Publish',
+    ];
 
-        {/* Connector 1 */}
-        <div className={`w-10 sm:w-20 lg:w-32 h-0.5 rounded-full ${step !== 'create' ? 'bg-brand-cyan' : 'bg-gray-200 dark:bg-slate-700'}`} />
+    return (
+      <div className="overflow-x-auto">
+        <div className="flex w-fit min-w-max mx-auto items-center gap-3 sm:gap-4 px-1">
+          {stepLabels.map((label, index) => {
+            const stepNumber = index + 1;
+            const isCurrent = displayStep === stepNumber;
+            const isComplete = displayStep > stepNumber;
 
-        {/* Step 2 */}
-        <div className="flex items-center gap-2.5">
-          <div className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold ${
-            step === 'extract' ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10' :
-            step === 'review' ? 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10' :
-            'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700'
-          }`}>
-            {step === 'review' ? <CheckCircle className="w-5 h-5" /> : '2'}
-          </div>
-          <div className={`hidden sm:block text-sm whitespace-nowrap font-medium ${step === 'extract' ? 'text-brand-blue' : 'text-gray-700 dark:text-slate-300'}`}>Extract</div>
-        </div>
+            return (
+              <Fragment key={label}>
+                {/* Connector BEFORE this step — filled once the step behind it
+                    is complete, which is the same test as that step's tick. */}
+                {index > 0 && (
+                  <div
+                    className={`w-6 sm:w-12 lg:w-24 h-0.5 rounded-full ${
+                      displayStep > index ? 'bg-brand-cyan' : 'bg-gray-200 dark:bg-slate-700'
+                    }`}
+                  />
+                )}
 
-        {/* Connector 2 */}
-        <div className={`w-10 sm:w-20 lg:w-32 h-0.5 rounded-full ${step === 'review' ? 'bg-brand-cyan' : 'bg-gray-200 dark:bg-slate-700'}`} />
-
-        {/* Step 3 */}
-        <div className="flex items-center gap-2.5">
-          <div className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold ${
-            step === 'review' ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700'
-          }`}>
-            3
-          </div>
-          <div className={`hidden sm:block text-sm whitespace-nowrap font-medium ${step === 'review' ? 'text-brand-blue' : 'text-gray-700 dark:text-slate-300'}`}>{isEditingPublished ? 'Republish' : 'Publish'}</div>
-        </div>
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold shrink-0 ${
+                      isCurrent
+                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                        : isComplete
+                          ? 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10'
+                          : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700'
+                    }`}
+                  >
+                    {isComplete ? <CheckCircle className="w-5 h-5" /> : stepNumber}
+                  </div>
+                  <div
+                    className={`hidden sm:block text-sm whitespace-nowrap font-medium ${
+                      isCurrent ? 'text-brand-blue' : 'text-gray-700 dark:text-slate-300'
+                    }`}
+                  >
+                    {label}
+                  </div>
+                </div>
+              </Fragment>
+            );
+          })}
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Load selected job data if editing
   useEffect(() => {
@@ -6135,27 +6214,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         {/* Content Card: Breadcrumb + Title + Step Indicator + warning + step content (AI-Generated JD, Manual Input, Job Details, Generated JD) */}
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
 
-          {/* Breadcrumb + Title */}
+          {/* Breadcrumb. The page title and blurb that used to sit here are
+              gone: the breadcrumb leaf now names the current step and the
+              indicator below shows all four, so a static heading repeated what
+              both of them already said while pushing the actual work further
+              down the page. */}
           {breadcrumbItems && breadcrumbItems.length > 0 && (
             <PageBreadcrumb className="mb-4 sm:mb-5" items={breadcrumbItems} />
           )}
-          <div className="flex items-start gap-3 min-w-0 mb-4 sm:mb-6">
-            <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-              <Briefcase className="h-4 w-4 text-brand-blue" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-1">
-                {isEditingPublished ? 'Create New Version' : isEditingDraft ? 'Edit Draft' : 'Job Description Creation'}
-              </h1>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
-                {isEditingPublished
-                  ? 'Editing a published JD creates a new draft. The original remains unchanged.'
-                  : isEditingDraft
-                  ? 'Continue editing your draft job description'
-                  : 'Create professional job descriptions with AI-powered extraction'}
-              </p>
-            </div>
-          </div>
 
           {/* Step Indicator block */}
           <div className="mb-4 sm:mb-6 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-900 px-3 py-3 sm:px-5 sm:py-4">
@@ -8805,8 +8871,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       }
                     }
                   }}
-                  className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
                 >
+                  <ArrowLeft className="w-4 h-4" />
                   Back
                 </button>
               </div>
@@ -8832,7 +8899,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           </div>
         )}
 
-        {/* Step 3: Review & Publish */}
+        {/* Displayed Step 3: Review. The internal stage is 'review' for both
+            this and the success screen below — `isPublished` is what separates
+            them, and what the indicator reads as Step 3 vs Step 4. */}
         {step === 'review' && !isPublished && (
           <div className="space-y-4 sm:space-y-6">
                 {/* Header */}
@@ -9341,11 +9410,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           </div>
         )}
 
-        {/* Published Success State */}
+        {/* Displayed Step 4: Publish — the published success state. */}
         {step === 'review' && isPublished && (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-8 text-center">
-            <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center mx-auto mb-4 sm:mb-6">
-              <CheckCircle className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue" />
+            {/* The published tick, animated. It replaces the whole tinted disc
+                rather than sitting inside it: the animation brings its own
+                circle and throws particles past its edge, so the old ring would
+                have drawn a hard line straight through the burst. */}
+            <div className="flex justify-center mb-4 sm:mb-6">
+              <SuccessAnimation />
             </div>
             <h2 className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3 sm:mb-4">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
 

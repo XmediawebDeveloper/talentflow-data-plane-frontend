@@ -734,10 +734,24 @@ export const jdService = {
   /**
    * JD15: Enable JD (re-enable a disabled JD)
    * Only Owners can enable JDs.
+   *
+   * Goes through `PUT /jd/{id}` with a status, NOT `POST /jd/{id}/enable`.
+   *
+   * That endpoint does not exist. Probing the API, `/jd/{id}/enable` answered
+   * 404 while every sibling — `/disable`, `/archive`, and `PUT /jd/{id}` —
+   * answered 401: the 404 came from the router before auth ran, not from a
+   * rejected request. So the "Re-enable JD" button on the JD details page had
+   * never worked; it failed on every click and showed "Failed to enable job".
+   *
+   * Re-enabling is the same transition the JOB LIST already performs for its
+   * own "Re-enable JD" menu item, which routes through
+   * `updateStatus(id, 'published')` and does work. A disabled JD was published
+   * before it was disabled, so restoring it to 'published' is the transition —
+   * and sharing the one call is what stops the two surfaces diverging again.
    */
   async enable(id: string): Promise<JDResponse> {
     try {
-      const response = await api.post<JDResponse>(`/jd/${id}/enable`);
+      const response = await api.put<JDResponse>(`/jd/${id}`, { status: 'published' });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

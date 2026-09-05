@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 import JobDetailView from '@/components/JobDetailView';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
+import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
@@ -520,59 +521,17 @@ function JobDetailsContent() {
   return (
     <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
       {/* Disable Confirmation Modal */}
-      {showDisableModal && (
-        <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90dvh] flex flex-col border border-gray-300 dark:border-slate-700">
-            <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-200 dark:border-slate-700 shrink-0">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
-                Disable Job Description?
-              </h3>
-              <button
-                onClick={() => {
-                  setShowDisableModal(false);
-                  setJobToDisable(null);
-                }}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded transition-colors"
-                aria-label="Close"
-              >
-                <svg className="w-5 h-5 text-gray-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4">
-              <p className="text-sm text-gray-700 dark:text-slate-300 mb-3">
-                If you disable this JD, it will be removed from:
-              </p>
-              <ul className="list-disc list-inside text-sm text-gray-700 dark:text-slate-300 mb-4 space-y-1.5">
-                <li>Resume Scoring</li>
-                <li>Assessment Generation</li>
-                <li>AI Talent Match</li>
-              </ul>
-              <p className="text-xs text-gray-600 dark:text-slate-400">
-                You can re-enable this JD later if needed.
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end px-4 sm:px-5 py-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
-              <button
-                onClick={() => {
-                  setShowDisableModal(false);
-                  setJobToDisable(null);
-                }}
-                className="px-4 py-2 bg-gray-100 dark:bg-slate-800 text-sm text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDisable}
-                className="px-4 py-2 bg-red-600 text-sm text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-              >
-                Yes, Disable
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Disable confirm — the shared component. This page used to render its
+          own header-bar modal that never named the JD being disabled. */}
+      <DisableJobModal
+        isOpen={showDisableModal}
+        jobTitle={jobToDisable?.title ?? ''}
+        onConfirm={confirmDisable}
+        onCancel={() => {
+          setShowDisableModal(false);
+          setJobToDisable(null);
+        }}
+      />
 
       {/* Archive confirm — the same component the Job Openings list renders. */}
       <ArchiveJobModal

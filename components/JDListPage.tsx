@@ -13,6 +13,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import JDCreation from '@/components/JDCreation';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
+import DisableJobModal from '@/components/DisableJobModal';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 // ✅ PERMISSION FIX: Import permission hook for CRUD checks
@@ -1043,14 +1044,15 @@ export default function JDListPage() {
       </Sheet>
 
       {/* Confirmation Dialogs */}
+      {/* Disable confirm — the shared component, not the generic
+          `ConfirmationDialog`. That one flattened the consequences into a
+          sentence and named a fourth module ("Reporting") the other two
+          surfaces never mentioned, so the app answered "what does disabling
+          do?" two different ways depending on where you asked. */}
       {confirmDialog.type === 'disable' && (
-        <ConfirmationDialog
+        <DisableJobModal
           isOpen={confirmDialog.isOpen}
-          title="Disable Job Description?"
-          message={`Are you sure you want to disable "${confirmDialog.jdTitle}"? This will remove the JD from Resume Scoring, AI Talent Match, Assessment Generator, and Reporting. The JD can be re-enabled later.`}
-          type="warning"
-          confirmText="Yes, Disable"
-          cancelText="Cancel"
+          jobTitle={confirmDialog.jdTitle}
           onConfirm={() => confirmDialog.jdId && handleDisable(confirmDialog.jdId)}
           onCancel={() => setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' })}
           isLoading={confirmLoading}
