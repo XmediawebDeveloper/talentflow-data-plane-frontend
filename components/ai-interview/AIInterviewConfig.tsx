@@ -16,6 +16,7 @@ import type {
   AIInterviewRoundConfig,
   AIInterviewResponse,
   AIInterviewHRQuestionStage,
+  SkillDuplicateFinding,
 } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -460,25 +461,24 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
     // when "Java" is already present. Otherwise both would flow into cluster
     // generation as separate skills (duplicate skill mapping). Names the existing
     // skill so the recruiter knows why it was rejected.
+    //
+    // HIGH-confidence matches (identical / punctuation-only / acronym of the same
+    // term / same tokens) are settled here and cost no round trip. MEDIUM used to
+    // be settled here too, as a warning with an override — but a judgement the
+    // recruiter could legitimately disagree with is exactly the case the backend
+    // now has a proper answer for (2026-09-05), and it can see synonyms this
+    // client cannot. So a medium match no longer short-circuits: it is held as the
+    // FALLBACK question in case the backend cannot be reached, and the backend's
+    // three-way verdict is used when it can.
+    const overriding = !!pendingOverride && normalizeSkillName(pendingOverride) === normalized;
     const similar = closestDuplicate(config.skills, s => s.name, trimmed);
-    if (similar && !(pendingOverride && normalizeSkillName(pendingOverride) === normalized)) {
+    if (similar && similar.tier !== 'medium' && !overriding) {
       const msg = `"${trimmed}" looks like the existing skill "${similar.item.name}" (${similar.reason})`;
       setAddSkillError(msg);
-      // HIGH-confidence matches (identical / punctuation-only / acronym of the
-      // same term / same tokens) are rejected outright. MEDIUM is a judgement the
-      // recruiter can legitimately disagree with — only they know whether e.g.
-      // "Selenium" and "Selenium WebDriver" are meant as one skill — so it becomes
-      // a warning with an override instead of making the skill unaddable.
-      if (similar.tier === 'medium') {
-        setPendingOverride(trimmed);
-        toast.warning(`${msg}. Press Add again to keep both.`);
-      } else {
-        setPendingOverride(null);
-        toast.error(msg);
-      }
+      setPendingOverride(null);
+      toast.error(msg);
       return;
     }
-    setPendingOverride(null);
 
     // CROSS-BUCKET guard (2026-08-01): a skill must live in exactly ONE section.
     // Block adding here a skill that already exists (exactly or semantically) in
@@ -496,16 +496,32 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
       return;
     }
 
-    // ── SEMANTIC layer (LLM), reached only when every deterministic rule above
-    // cleared the skill. Structural rules cannot see a true synonym — "Data
-    // Analytics" vs "Data Analysis", "Goods Inward" vs "Receiving", "ECG" vs "EKG"
-    // share no root — and each industry has its own set, so this asks the backend
-    // (which resolves the JD's industry) instead of growing a vocabulary list in
-    // the client. Always overridable: an LLM opinion warns, it never vetoes. Fails
-    // open, so a slow or unavailable check never blocks the add.
-    if (!(pendingOverride && normalizeSkillName(pendingOverride) === normalized)) {
+    // ── SEMANTIC layer, reached only when the structural rules above cleared the
+    // skill. Structural rules cannot see a true synonym — "Data Analytics" vs
+    // "Data Analysis", "Goods Inward" vs "Receiving", "ECG" vs "EKG" share no root
+    // — and each industry has its own set, so this asks the backend (which
+    // resolves the JD's industry) instead of growing a vocabulary list here.
+    //
+    // THREE ANSWERS (2026-09-05), and they are different events:
+    //
+    //   REJECT        the same skill under another name. Not added. Every
+    //                 rejection has already been through a two-way substitution
+    //                 test server-side, which is what makes it safe to be firm.
+    //   ASK_RECRUITER connected, but nobody can tell from the names alone whether
+    //                 it is one interview topic or two. Only the recruiter knows,
+    //                 so the question goes to them and Add again means yes.
+    //   ADD           a different skill. Nothing is said.
+    //
+    // The middle answer is the point of the change. It used to not exist: every
+    // pair the backend could see was related but could not call identical was
+    // added in silence, which is how "Server-Side Programming" and "Backend
+    // Programming" both ended up on one list.
+    //
+    // Fails open, so a slow or unavailable check never blocks the add.
+    if (!overriding) {
       setCheckingDuplicate(true);
-      let findings: Awaited<ReturnType<typeof aiInterviewService.checkSkillDuplicates>> = [];
+      // null = the check could not run. [] = it ran and had nothing to say.
+      let findings: SkillDuplicateFinding[] | null = [];
       try {
         findings = await aiInterviewService.checkSkillDuplicates({
           candidates: [trimmed],
@@ -513,16 +529,42 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
           otherBucket: otherBucketSkills || [],
           otherBucketLabel: otherLabel,
           jdId,
+          interactive: true,
         });
       } finally {
         setCheckingDuplicate(false);
       }
-      const hit = findings.find(f => f.duplicate && f.match);
+      const hit = (findings ?? []).find(
+        f => f.match && (f.duplicate || f.action === 'ASK_RECRUITER'),
+      );
+      if (hit?.duplicate) {
+        const msg = `"${trimmed}" is the same skill as "${hit.match}" already on this list${hit.reason ? ` — ${hit.reason}` : ''}`;
+        setAddSkillError(msg);
+        setPendingOverride(null);
+        toast.error(msg);
+        return;
+      }
       if (hit) {
-        const msg = `"${trimmed}" looks like the existing skill "${hit.match}" (${hit.reason})`;
+        // The backend writes this sentence, because it is the side that knows WHY
+        // the two are related. The fallback is only for an older response shape.
+        const msg = hit.recruiterMessage
+          ?? `"${trimmed}" is closely related to the existing skill "${hit.match}"${hit.reason ? ` — ${hit.reason}` : ''}. Would you like to add it as a separate skill?`;
         setAddSkillError(msg);
         setPendingOverride(trimmed);
-        toast.warning(`${msg}. Press Add again to keep both.`);
+        toast.warning(`${msg} Press Add again to add it.`);
+        return;
+      }
+      if (findings === null && similar) {
+        // The check could not run and the local matcher had a medium-confidence
+        // opinion it deferred rather than acted on. Ask rather than discard it —
+        // this is the one path where the client is the only opinion there is.
+        // Only on an outage: a check that RAN and cleared the skill has seen more
+        // than this matcher can, and second-guessing it would put a question in
+        // front of the recruiter that the backend already answered.
+        const msg = `"${trimmed}" looks like the existing skill "${similar.item.name}" (${similar.reason}). Add it as a separate skill?`;
+        setAddSkillError(msg);
+        setPendingOverride(trimmed);
+        toast.warning(`${msg} Press Add again to keep both.`);
         return;
       }
     }
@@ -1818,7 +1860,7 @@ export default function AIInterviewConfig() {
         const [mthFindings, nthFindings] = await Promise.all([
           aiInterviewService.checkSkillDuplicates({
             candidates: mthNames, existing: [], jdId,
-          }),
+          }).then(f => f ?? []),
           nthNames.length
             ? aiInterviewService.checkSkillDuplicates({
                 candidates: nthNames,
@@ -1826,8 +1868,8 @@ export default function AIInterviewConfig() {
                 otherBucket: mthNames,
                 otherBucketLabel: 'Must-Have',
                 jdId,
-              })
-            : Promise.resolve([]),
+              }).then(f => f ?? [])
+            : Promise.resolve([] as SkillDuplicateFinding[]),
         ]);
 
         const dropped: string[] = [];
