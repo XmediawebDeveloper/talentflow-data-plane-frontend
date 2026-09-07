@@ -23,9 +23,16 @@ interface ListPaginationProps {
    * so every existing list keeps the size it has.
    */
   compact?: boolean;
+  /**
+   * The page-size ladder. Defaults to this control's long-standing
+   * [5, 10, 20, 40, 100], so every existing list is untouched; pass your own
+   * where a screen specifies a different one (the All Assessments table asks
+   * for 10/20/50/100). A prop rather than a second copy of this component.
+   */
+  pageSizeOptions?: number[];
 }
 
-const PAGE_SIZE_OPTIONS = [5, 10, 20, 40, 100];
+const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 20, 40, 100];
 
 export default function ListPagination({
   currentPage,
@@ -36,6 +43,7 @@ export default function ListPagination({
   itemLabel = 'records',
   scrollContainerRef,
   compact = false,
+  pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
 }: ListPaginationProps) {
   if (totalItems <= 5) return null;
 
@@ -99,7 +107,7 @@ export default function ListPagination({
               }}
               className={`${selectClass} border border-gray-200 bg-white text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue`}
             >
-              {PAGE_SIZE_OPTIONS.map((size) => (
+              {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>{size}</option>
               ))}
             </select>

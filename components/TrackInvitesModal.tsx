@@ -13,6 +13,7 @@ import InviteFilterBar, {
   type InviteFilterState,
 } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
+import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 
 interface TrackInvitesModalProps {
   isOpen: boolean;
@@ -354,7 +355,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
       {/* Height is content-driven with a viewport cap, not a fixed dvh, so a
           short list no longer stretches the dialog down a large monitor. */}
-      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] w-full sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[92dvh] sm:max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className={TRACKER_DIALOG_PANEL_CLASS}>
         {/* Modal Header */}
         <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between flex-shrink-0 bg-slate-50 dark:bg-slate-950">
           <div className="min-w-0 flex-1 flex items-center gap-2.5">
@@ -433,11 +434,15 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
         {/* Invitations Table / Cards */}
         <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
           {isLoading ? (
-            <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center tf-loader-center--compact">
+            /* Fills the body rather than sitting in a 200px box - see
+               TRACKER_DIALOG_PLACEHOLDER_CLASS. The dialog's min-height
+               reserves the space; this occupies it, so the swap to the table
+               happens inside a box that does not change size. */
+            <div className={TRACKER_DIALOG_PLACEHOLDER_CLASS}>
               <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
             </div>
           ) : visibleInvitations.length === 0 ? (
-            <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
+            <div className={`${TRACKER_DIALOG_PLACEHOLDER_CLASS} text-gray-500 dark:text-slate-500`}>
               <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
               {/* "None found" is wrong when a filter is what emptied the list —
                   it reads as data loss rather than as a narrowed view. */}

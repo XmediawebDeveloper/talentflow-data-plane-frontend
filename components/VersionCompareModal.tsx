@@ -85,6 +85,19 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
   const diff = buildUnifiedDiff(olderText, newerText);
   const sidePairs = buildDiffSidePairs(diff.lines);
 
+  /* Identical versions still have a document to read, and it is the same
+     document either way — every line unchanged, so the panes below render it
+     with no tint on either side. "No changes" is therefore a NOTE ABOUT the
+     comparison, not a replacement for it: it says so in a banner above the
+     document rather than standing in place of it, which is what left a
+     recruiter who opened v1 against v2 with nothing to read.
+
+     Only meaningful where there is text at all — with neither side carrying
+     any, the empty state below is the honest answer and a "no changes" banner
+     over it would be a claim about content that was never there. */
+  const hasContent = !!(olderText || newerText);
+  const isUnchanged = hasContent && diff.addedCount === 0 && diff.removedCount === 0;
+
   const diffHighlightClass = (line: DiffLine, side: 'left' | 'right' | 'unified') => {
     if (line.type === 'removed' && (side === 'left' || side === 'unified')) {
       return 'bg-red-50 border-l-4 border-red-400 pl-3 rounded';
@@ -238,17 +251,20 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
               {newer.card}
             </div>
           )}
+          {/* Sits with the description cards, above the document and outside
+              its scroller, so it stays in view while the document is read. */}
+          {isUnchanged && (
+            <div className="flex-shrink-0 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-4 py-2.5 border-b border-green-200 bg-green-50">
+              <Check className="w-4 h-4 text-green-600 flex-shrink-0" />
+              <p className="text-sm font-medium text-green-800">No changes detected</p>
+              <p className="text-xs text-green-700">Content is identical between these versions.</p>
+            </div>
+          )}
           <div className="flex-1 overflow-hidden">
-          {!olderText && !newerText ? (
+          {!hasContent ? (
             <div className="text-center text-gray-500 py-12">
               <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p>Extracted text not available for comparison.</p>
-            </div>
-          ) : diff.addedCount === 0 && diff.removedCount === 0 ? (
-            <div className="text-center text-gray-500 py-12">
-              <Check className="w-12 h-12 mx-auto mb-3 text-green-400" />
-              <p className="font-medium">No changes detected</p>
-              <p className="text-sm mt-1">Content is identical between these versions.</p>
             </div>
           ) : viewMode === 'side-by-side' ? (
             <div className="flex h-full gap-0">

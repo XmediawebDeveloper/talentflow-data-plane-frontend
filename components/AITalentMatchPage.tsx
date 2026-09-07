@@ -1,5 +1,6 @@
 'use client';
 
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { ArrowUpDown, Sparkles, Target, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -3115,9 +3116,7 @@ export default function AITalentMatchPage({
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           {jobData?.jobId && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold font-mono bg-brand-blue/10 text-brand-blue border border-brand-blue/20">
-                              {jobData.jobId}
-                            </span>
+                            <JobIdBadge className="inline-flex items-center">{jobData.jobId}</JobIdBadge>
                           )}
                           {jobData?.currentVersion && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">
@@ -3135,7 +3134,10 @@ export default function AITalentMatchPage({
                           )}
                           <JDVersionHistory jdId={item.jobId} version={jobData?.currentVersion} />
                         </div>
-                        <h3 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1 group-hover:text-brand-blue transition-colors">
+                        <h3
+                          className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1 truncate group-hover:text-brand-blue transition-colors"
+                          title={item.jobTitle}
+                        >
                           {item.jobTitle}
                         </h3>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">

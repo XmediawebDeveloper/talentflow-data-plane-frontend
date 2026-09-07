@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import AssessmentDetailsView from '@/components/AssessmentDetailsView';
@@ -20,6 +20,10 @@ function AssessmentDetailsContent() {
   // Create" on a job that already has one lands here. Keeps the breadcrumb and
   // Back anchored to that job instead of the Assessments list.
   const fromJobDetails = searchParams.get('from') === 'job-details';
+  /* Arriving from the Publish Assessment page's "Share Invites" action, which
+     hands the recruiter straight to inviting candidates rather than leaving
+     them to find the Share control themselves. */
+  const openShareOnArrival = searchParams.get('share') === '1';
   const { isTenantAdmin, isRecruiter } = useAuth();
   const canInvite = isTenantAdmin || isRecruiter;
 
@@ -46,6 +50,9 @@ function AssessmentDetailsContent() {
 
   // Modal states
   const [showShareModal, setShowShareModal] = useState(false);
+  /* One-shot: the dialog opens once for this arrival, and closing it must not
+     be undone by a re-render still reading `?share=1` off the URL. */
+  const shareOnArrivalHandledRef = useRef(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
@@ -128,6 +135,37 @@ function AssessmentDetailsContent() {
     }
   }, [assessmentId]);
 
+  /**
+   * A DRAFT does not belong on this page, whoever sent it here.
+   *
+   * This view is the published reading of an assessment — invitations,
+   * analytics, candidate results, version history. A draft has none of those
+   * and cannot be finished from here, so landing on it showed a page of empty
+   * panels with no way back into editing.
+   *
+   * Enforced on the ROUTE rather than only in the callers that link here,
+   * because a draft reaches this URL in ways no caller controls: a bookmark, a
+   * shared link, the browser Back button, a refresh, or a version panel's row
+   * on a page that has not been updated. Redirects to the same draft page the
+   * Edit action opens (`create?step=configure&edit=<id>`) — one page for
+   * drafts, not a second one written for this route.
+   *
+   * `replace`, so Back returns to wherever the user came from rather than to
+   * this URL, which would bounce them straight here again. Gated on `jd_id`:
+   * the configure form is scoped to a job, so an assessment without one has no
+   * draft page to open and stays here rather than being sent to a URL that
+   * cannot resolve.
+   */
+  useEffect(() => {
+    if (isLoading || !assessment) return;
+    if (assessment.status !== 'Draft' || !assessment.jd_id) return;
+    router.replace(
+      `/recruitment/assessments/create?step=configure`
+      + `&jd_id=${encodeURIComponent(assessment.jd_id)}`
+      + `&edit=${encodeURIComponent(assessment.id)}`,
+    );
+  }, [isLoading, assessment, router]);
+
   // jd_id comes from the fetched assessment rather than the URL — the JD this
   // assessment belongs to is the authoritative link target.
   const jdId = assessment?.jd_id || '';
@@ -150,6 +188,16 @@ function AssessmentDetailsContent() {
         ]
       : undefined;
 
+  /* Opened only once the assessment has loaded and only if the recruiter may
+     invite - the same permission the Share action itself is gated on. */
+  useEffect(() => {
+    if (!openShareOnArrival || shareOnArrivalHandledRef.current) return;
+    if (isLoading || !assessment || !canInvite) return;
+    shareOnArrivalHandledRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShowShareModal(true);
+  }, [openShareOnArrival, isLoading, assessment, canInvite]);
+
   const handleViewResults = () => {
     router.push(`/recruitment/assessments/${assessmentId}/results`);
   };
@@ -164,7 +212,14 @@ function AssessmentDetailsContent() {
     }
   };
 
-  if (isLoading) {
+  /* Held on the loader while the draft redirect above lands. Rendering the
+     details view for the frame in between is the glitch this avoids — the
+     published page flashing up for an assessment that is on its way to the
+     draft page. */
+  const redirectingToDraft =
+    !isLoading && !!assessment && assessment.status === 'Draft' && !!assessment.jd_id;
+
+  if (isLoading || redirectingToDraft) {
     return (
       <main className="tf-loader-page bg-slate-50">
         <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
