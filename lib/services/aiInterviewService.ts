@@ -146,6 +146,26 @@ export interface PublishedJD {
   has_published_config?: boolean;
 }
 
+/** One thing worth saying about one skill the recruiter is trying to add.
+ *
+ *  `action` is the field to branch on. `duplicate` is the older boolean and is
+ *  true for REJECT only, so a caller that reads it alone still behaves correctly:
+ *  it adds whatever it has no UI to ask about, which is the safe direction.
+ *  Skills that are simply different are not reported at all.
+ */
+export interface SkillDuplicateFinding {
+  skill: string;
+  duplicate: boolean;
+  action?: 'REJECT' | 'ASK_RECRUITER' | 'ADD';
+  relationship?: 'SAME' | 'RELATED' | 'DIFFERENT';
+  tier: 'high' | 'medium' | '';
+  match: string | null;
+  reason: string;
+  /** The question to put to the recruiter. Set on ASK_RECRUITER only. */
+  recruiterMessage?: string | null;
+  source: 'deterministic' | 'llm';
+}
+
 export interface AIInterviewInviteRequest {
   candidate_name: string;
   candidate_email: string;
@@ -880,9 +900,28 @@ export const aiInterviewService = {
    *  Inward"/"Receiving", "ECG"/"EKG"), and every industry has its own set, so no
    *  vocabulary list in the code could ever keep up.
    *
-   *  Advisory only — findings are shown as warnings the recruiter can override, and
-   *  nothing is ever deleted. Resolves to [] on ANY failure so a duplicate check
-   *  can never stop someone adding a skill.
+   *  THREE ANSWERS, not two (2026-09-05). `action` is the one to read:
+   *    REJECT        — the same skill under another name; do not add it.
+   *    ASK_RECRUITER — connected to an existing skill, but not necessarily the
+   *                    same one. `recruiterMessage` is the question to put to
+   *                    them; only they can settle it.
+   *    ADD           — a different skill. These are not returned at all.
+   *  `duplicate` is true for REJECT only, so a caller that reads just that key
+   *  keeps its old behaviour and adds anything it cannot ask about.
+   *
+   *  Pass `interactive` when somebody is waiting on the answer and can respond to
+   *  a question. Leave it off for an AUDIT of an already-saved list, which has
+   *  nobody to ask and can only act on a definite duplicate.
+   *
+   *  Nothing here is ever deleted.
+   *
+   *  RESOLVES TO NULL ON ANY FAILURE, and to [] when the check ran and found
+   *  nothing worth saying. The two are not the same event and a caller that
+   *  conflates them gets the worst of both: it either treats an outage as "this
+   *  skill is fine" and drops its own local warning, or treats a clean answer as
+   *  an outage and warns about a skill the backend just cleared. Either way the
+   *  add still goes through — the check is never a reason someone cannot add a
+   *  skill — but the caller can say something honest about which happened.
    */
   async checkSkillDuplicates(args: {
     candidates: string[];
@@ -891,16 +930,11 @@ export const aiInterviewService = {
     otherBucketLabel?: string;
     jdId?: string;
     industryType?: string;
+    /** Ask the three-way question — someone is there to answer it. */
+    interactive?: boolean;
     /** Give up and allow the add after this long (ms). */
     timeoutMs?: number;
-  }): Promise<{
-    skill: string;
-    duplicate: boolean;
-    tier: 'high' | 'medium' | '';
-    match: string | null;
-    reason: string;
-    source: 'deterministic' | 'llm';
-  }[]> {
+  }): Promise<SkillDuplicateFinding[] | null> {
     if (!args.candidates?.length) return [];
     try {
       const response = await api.post(
@@ -912,13 +946,22 @@ export const aiInterviewService = {
           other_bucket_label: args.otherBucketLabel,
           jd_id: args.jdId,
           industry_type: args.industryType,
+          interactive: args.interactive ?? false,
         },
-        { timeout: args.timeoutMs ?? 6000 },
+        // The interactive question costs a second model call (the finding, then
+        // the substitution test that gates every rejection), so it gets longer
+        // before the client gives up and lets the add through.
+        { timeout: args.timeoutMs ?? (args.interactive ? 12000 : 6000) },
       );
       const findings = response.data?.findings;
-      return Array.isArray(findings) ? findings : [];
+      if (!Array.isArray(findings)) return null;
+      // snake_case on the wire, camelCase in the client.
+      return findings.map((f: Record<string, unknown>) => ({
+        ...(f as unknown as SkillDuplicateFinding),
+        recruiterMessage: (f.recruiter_message ?? null) as string | null,
+      }));
     } catch {
-      return [];   // fail open — never block the recruiter
+      return null;   // fail open — never block the recruiter
     }
   },
 

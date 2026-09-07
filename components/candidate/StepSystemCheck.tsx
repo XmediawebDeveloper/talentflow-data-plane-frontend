@@ -2402,8 +2402,11 @@ export default function StepSystemCheck({
                       device (micReadyForVoice tracks micStreamReady,
                       which the reconnect watcher flips back to true by
                       itself the moment a device is live again).
-                    • mic reconnected → button enabled, wording makes it
-                      explicit that this starts over rather than resumes. */}
+                    • mic reconnected → button enabled and reads "Start
+                      recording" (the message above it already explains the
+                      earlier take was discarded, so the button itself
+                      matches the idle-state action rather than implying
+                      there's still something to "start over"). */}
               {voiceEnrollStatus === 'disconnected' && (
                 <div className="flex items-center justify-between gap-3">
                   <p className={`text-xs font-medium flex items-center gap-1.5 ${
@@ -2427,7 +2430,7 @@ export default function StepSystemCheck({
                     }`}
                   >
                     <Mic className="w-3.5 h-3.5" />
-                    Start over
+                    {micReadyForVoice ? 'Start recording' : 'Start over'}
                   </button>
                 </div>
               )}

@@ -15,6 +15,7 @@ import type {
   AIInterviewResponse,
   AIInterviewRoundConfig,
   ClusterCapacityReport,
+  SkillDuplicateFinding,
 } from '@/lib/services/aiInterviewService';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -618,14 +619,18 @@ function CategorySection({
     // "Software development life cycle" was accepted here even though "SDLC and
     // STLC Knowledge" was already in the list, and both flowed into cluster
     // generation as separate skills. Same shared matcher as the Configure page.
+    // HIGH is refused here and costs no round trip. MEDIUM is a judgement only
+    // the recruiter can settle (e.g. whether a bundled "SDLC and STLC Knowledge"
+    // should also carry a standalone entry) — which is precisely the question the
+    // backend now asks properly (2026-09-05), so it no longer short-circuits and
+    // is held as the fallback for an outage instead.
+    const overriding = skillOverride?.toLowerCase() === trimmed.toLowerCase();
     const similar = closestDuplicate(skills, s => s.name, trimmed);
-    if (similar && skillOverride?.toLowerCase() !== trimmed.toLowerCase()) {
-      const msg = `"${trimmed}" looks like the existing skill "${similar.item.name}" (${similar.reason})`;
-      setSkillInputError(msg);
-      // MEDIUM is a judgement only the recruiter can settle (e.g. whether a
-      // bundled "SDLC and STLC Knowledge" should also carry a standalone entry),
-      // so it warns and lets a second press through. HIGH is refused outright.
-      setSkillOverride(similar.tier === 'medium' ? trimmed : null);
+    if (similar && similar.tier !== 'medium' && !overriding) {
+      setSkillInputError(
+        `"${trimmed}" looks like the existing skill "${similar.item.name}" (${similar.reason})`,
+      );
+      setSkillOverride(null);
       return;
     }
     // ── Semantic layer: only reached when the deterministic matcher found nothing.
@@ -634,22 +639,47 @@ function CategorySection({
     // industry has its own set, so this asks the backend (which is industry-aware)
     // rather than growing a word list. Advisory + overridable; fails open, so a
     // slow or unavailable check never stops the add.
-    if (skillOverride?.toLowerCase() !== trimmed.toLowerCase()) {
+    // THREE ANSWERS, same as the Configure page: the same skill is refused, a
+    // related one is put to the recruiter, and a different one is added silently.
+    if (!overriding) {
       setCheckingSkill(true);
-      let findings: Awaited<ReturnType<typeof aiInterviewService.checkSkillDuplicates>> = [];
+      // null = the check could not run. [] = it ran and had nothing to say.
+      let findings: SkillDuplicateFinding[] | null = [];
       try {
         findings = await aiInterviewService.checkSkillDuplicates({
           candidates: [trimmed],
           existing: skills.map(s => s.name),
           jdId,
+          interactive: true,
         });
       } finally {
         setCheckingSkill(false);
       }
-      const hit = findings.find(f => f.duplicate && f.match);
+      const hit = (findings ?? []).find(
+        f => f.match && (f.duplicate || f.action === 'ASK_RECRUITER'),
+      );
+      if (hit?.duplicate) {
+        setSkillInputError(
+          `"${trimmed}" is the same skill as "${hit.match}"${hit.reason ? ` — ${hit.reason}` : ''}`,
+        );
+        setSkillOverride(null);
+        return;
+      }
       if (hit) {
-        setSkillInputError(`"${trimmed}" looks like the existing skill "${hit.match}" (${hit.reason})`);
-        setSkillOverride(trimmed);   // always overridable — an LLM opinion is not a veto
+        setSkillInputError(
+          hit.recruiterMessage
+          ?? `"${trimmed}" is closely related to the existing skill "${hit.match}"${hit.reason ? ` — ${hit.reason}` : ''}. Add it as a separate skill?`,
+        );
+        setSkillOverride(trimmed);   // a question, not a veto — Add again means yes
+        return;
+      }
+      if (findings === null && similar) {
+        // Outage only. A check that ran and cleared the skill has seen more than
+        // this matcher can, so its silence is an answer, not a gap to fill.
+        setSkillInputError(
+          `"${trimmed}" looks like the existing skill "${similar.item.name}" (${similar.reason}). Add it as a separate skill?`,
+        );
+        setSkillOverride(trimmed);
         return;
       }
     }
