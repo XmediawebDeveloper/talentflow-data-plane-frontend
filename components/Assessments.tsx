@@ -92,6 +92,17 @@ interface AssessmentsProps {
   autoOpenCreate?: boolean;
   preSelectedJdId?: string;
   preSelectedJdTitle?: string;
+  /**
+   * Open straight into the LIST on this tab, instead of on the summary cards.
+   *
+   * For arrivals that already know which cut of the list the recruiter wants —
+   * "Go to Assessments" off the Publish step lands on All Assessments, beside
+   * the assessment just published. Read from the URL by the route and applied
+   * as the INITIAL state of `activeTab`/`pageView` rather than through an
+   * effect, so the list and its highlighted card are what the first paint
+   * shows: an effect would flash the cards view for a frame first.
+   */
+  initialListTab?: AssessmentPageTab;
 }
 
 type AssessmentPageTab =
@@ -155,7 +166,7 @@ type CandidateResultRow = AssessmentAttemptResponse & {
   _resume_version?: number;
 };
 
-export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle }: AssessmentsProps) {
+export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle, initialListTab }: AssessmentsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
@@ -180,9 +191,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      same data, filters and pagination.
 
      The default stays 'all', so which tab the page opens on is unchanged. */
-  const [activeTab, setActiveTab] = useState<AssessmentPageTab>('all');
-  // Two-step view: 'cards' shows only the 3 stat tiles; 'list' shows tabs + filters + assessments list.
-  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  const [activeTab, setActiveTab] = useState<AssessmentPageTab>(initialListTab ?? 'all');
+  /* Two-step view: 'cards' shows only the 3 stat tiles; 'list' shows tabs +
+     filters + assessments list.
+     'cards' unless the arrival named a tab (`initialListTab`), which is the
+     caller saying it already knows the cut of the list the recruiter wants.
+     Set as initial state rather than in an effect so the first paint is the
+     list with its tab pill and summary card already highlighted —
+     `isOverviewCardActive` reads exactly this pair. */
+  const [pageView, setPageView] = useState<'cards' | 'list'>(initialListTab ? 'list' : 'cards');
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const [listScrollRequest, setListScrollRequest] = useState(0);
   // Proctoring settings are a staging-only testing menu — in production it's
@@ -964,26 +981,53 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       openVersionsFor,
     },
     (s) => {
-      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
-      if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as typeof activeTab);
+      /* An arrival that NAMED its tab (`initialListTab`, from `?tab=`) beats
+         the snapshot for everything that decides which rows are on screen.
+         The snapshot is meant for "I went to a detail page and came back";
+         here the recruiter has just been sent somewhere specific, and
+         restoring the last visit's cards view, Draft tab, page 3 or leftover
+         search would land them anywhere but there — intermittently, depending
+         on what they happened to be doing last. What still restores is display
+         preference: grid vs table, rows per page, the settings sub-tab. */
+      if (!initialListTab) {
+        if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+        if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as typeof activeTab);
+        if (typeof s.openVersionsFor === 'string') setOpenVersionsFor(s.openVersionsFor);
+        if (typeof s.assessmentCurrentPage === 'number') setAssessmentCurrentPage(s.assessmentCurrentPage);
+        if (typeof s.assessmentSearch === 'string') assessmentListSearch.setQuery(s.assessmentSearch);
+        assessmentListSearch.setFilters({
+          position: typeof s.filterPosition === 'string' ? s.filterPosition : '',
+          type:
+            s.filterType === 'Technical' || s.filterType === 'Behavioral' || s.filterType === 'Aptitude'
+              ? s.filterType
+              : 'all',
+          createdBy: typeof s.filterCreatedBy === 'string' ? s.filterCreatedBy : 'all',
+          createdFrom: typeof s.filterCreatedFrom === 'string' ? s.filterCreatedFrom : '',
+          createdTo: typeof s.filterCreatedTo === 'string' ? s.filterCreatedTo : '',
+        });
+      }
       if (s.settingsSubTab === 'proctoring' || s.settingsSubTab === 'topics') setSettingsSubTab(s.settingsSubTab);
       if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
-      if (typeof s.openVersionsFor === 'string') setOpenVersionsFor(s.openVersionsFor);
-      if (typeof s.assessmentCurrentPage === 'number') setAssessmentCurrentPage(s.assessmentCurrentPage);
       if (typeof s.assessmentItemsPerPage === 'number') setAssessmentItemsPerPage(s.assessmentItemsPerPage);
-      if (typeof s.assessmentSearch === 'string') assessmentListSearch.setQuery(s.assessmentSearch);
-      assessmentListSearch.setFilters({
-        position: typeof s.filterPosition === 'string' ? s.filterPosition : '',
-        type:
-          s.filterType === 'Technical' || s.filterType === 'Behavioral' || s.filterType === 'Aptitude'
-            ? s.filterType
-            : 'all',
-        createdBy: typeof s.filterCreatedBy === 'string' ? s.filterCreatedBy : 'all',
-        createdFrom: typeof s.filterCreatedFrom === 'string' ? s.filterCreatedFrom : '',
-        createdTo: typeof s.filterCreatedTo === 'string' ? s.filterCreatedTo : '',
-      });
     },
   );
+
+  /* The other half of that override: the saved SCROLL offset, which
+     `useScrollRestoration` above would otherwise apply and drop the recruiter
+     into the middle of the list they were just sent to the top of. Cleared on
+     mount, before that hook's restore effect can run (it waits on `!isLoading`
+     — this does not), and only for a tab-named arrival, so returning from a
+     detail page still lands where it left off. Same key, same reason, as
+     `openAssessmentsList`. */
+  useEffect(() => {
+    if (!initialListTab) return;
+    try {
+      window.sessionStorage.removeItem('listScroll:assessments');
+    } catch {
+      /* Ignore unavailable sessionStorage. */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* A version history that is open because it was RESTORED (the recruiter left
      to create an assessment for one of its job versions and came back) has no
@@ -2515,6 +2559,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     // Don't add to local list - assessment is already saved to DB
     // Just close the creation view and reload from API
     setShowCreation(false);
+
+    /* Land on All Assessments, not on the summary cards the flow was opened
+       from. The recruiter has just made a thing and the next question is
+       "where is it" — this is the tab that lists it, and the same state the
+       Total Assessments card selects, so that card reads as active too.
+       The standalone /assessments/create route arrives at the same place by
+       URL (`?tab=all`) since it navigates rather than closing in place. */
+    openAssessmentsList('all');
 
     /* Reload the list to pick up the new assessment — and, with it, everything
        that decides a job version's action. The new assessment is what turns

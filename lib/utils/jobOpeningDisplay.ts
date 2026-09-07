@@ -212,6 +212,12 @@ export const mapJDToJob = (jd: JDListRow): Job => ({
   applicants: jd.applicants_count || 0,
   description: jd.description,
   skills: jd.skills || jd.must_have_skills || [],
+  /* The same skills the line above collapses, carried through unflattened for
+     the surfaces that show the two groups apart. Added alongside `skills`
+     rather than in place of it, so every existing consumer of `skills` reads
+     exactly what it read before. */
+  must_have_skills: jd.must_have_skills || [],
+  nice_to_have_skills: jd.nice_to_have_skills || [],
   postedDate: jd.created_at,
   postedBy: jd.created_by_name || jd.created_by,
   employmentType: jd.employment_type,
