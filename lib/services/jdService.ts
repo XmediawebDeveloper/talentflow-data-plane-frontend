@@ -54,6 +54,10 @@ export interface JDCreate {
   additional_details?: string | null;
   must_have_comments?: string[];
   nice_to_have_comments?: string[];
+  /** Skill groups from extraction, sent back on save so a wording the recruiter promoted
+   *  out of a group stays out. Omit the key to leave the stored groups untouched -
+   *  sending `[]` clears them. */
+  skill_merge_trail?: JDMergeTrailEntry[];
   coding_required?: boolean;
   supported_languages?: string[];
   allow_overqualified?: boolean;
@@ -124,13 +128,28 @@ export interface JDMergeTrailEntry {
   reasons: string[];
   /** The JD line each removed wording came from; null when it was not found verbatim. */
   removed_sources?: (string | null)[];
+  /** Which list each removed wording returns to when the recruiter promotes it out of
+   *  the group, same order as `removed`. Normally the survivor's own list; it differs
+   *  for a requirement sentence that was folded into the skills covering it, which must
+   *  go back to its comments list rather than in among the skill names. */
+  restore_lists?: string[];
   survivor_source?: string | null;
   list: 'must_have_skills' | 'nice_to_have_skills' | 'must_have_comments' | 'nice_to_have_comments';
   /** 'skill' entries are worth surfacing; 'comment' merges rest on judgement, so their
    *  reasons are vaguer and vague explanations erode trust faster than none. */
   kind: 'skill' | 'comment';
-  /** Which pass proposed it: deterministic name/requirement match, or the AI review. */
-  source: 'same-skill-name' | 'same-requirement-reworded' | 'ai-review';
+  /** Which pass proposed it. Every dedupe pass now records its merges, so this names
+   *  the specific rule rather than only telling deterministic from AI: identical wording,
+   *  the same skill name, a reworded requirement, a bare item vs the same item with a
+   *  parenthetical detail, a comment that only repeated skills already listed, or the
+   *  semantic (AI) review. */
+  source:
+    | 'same-skill-name'
+    | 'same-requirement-reworded'
+    | 'same-wording'
+    | 'same-item-with-detail'
+    | 'restates-existing-skills'
+    | 'ai-review';
 }
 
 export interface JDExtractedParams {
@@ -164,6 +183,10 @@ export interface JDExtractedParams {
   /** Provenance for every duplicate group collapsed during extraction. Empty when
    *  nothing merged. See JDMergeTrailEntry. */
   merge_trail?: JDMergeTrailEntry[];
+  /** The same groups as stored on the JD row. Extraction returns them as `merge_trail`;
+   *  a saved JD returns them under this name, so reopening a JD shows the same grouping
+   *  Step 2 showed when it was created. */
+  skill_merge_trail?: JDMergeTrailEntry[];
   // New fields for extraction
   locations?: ExtractedLocation[];
   /** `null` means "this bound is not stated" and CLEARS the stored column; `undefined`
@@ -272,6 +295,8 @@ export interface JDVersion {
    *  to resume scoring, assessment generation or the AI interview. */
   additional_details?: string;
   must_have_comments?: string[];
+  /** Skill groups formed at extraction, returned on every read of a saved JD. */
+  skill_merge_trail?: JDMergeTrailEntry[];
   coding_required: boolean;
   supported_languages: string[];
   allow_overqualified: boolean;
