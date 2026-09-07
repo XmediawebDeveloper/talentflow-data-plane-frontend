@@ -332,7 +332,7 @@ test.describe("Tier 3 — talent match, interviews, question bank and scoring", 
     const scored = await waitForCall(page, calls, /\/api\/v1\/scoring\/all/);
 
     const fromApi = itemsOf(scored.body).length;
-    const onScreen = await labelledCount(page, /View All Candidates/i);
+    const onScreen = await labelledCount(page, /View by Candidates/i);
     expect(onScreen, `the page prints no candidate figure to compare against`).not.toBeNull();
     expect(
       onScreen,

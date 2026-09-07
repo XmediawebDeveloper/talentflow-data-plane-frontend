@@ -206,6 +206,16 @@ export interface UserLimits {
 
 export interface User {
   id: string;
+  /**
+   * Human-readable user id, e.g. "US-008", as opposed to `id` which is a uuid.
+   * The Users list and the Audit Trail already show this; it is carried here so
+   * the signed-in user can read and quote their own.
+   *
+   * Optional on purpose — it is backfilled, so an older account may not have
+   * one, and whether the auth endpoint returns it is a backend detail. Every
+   * reader must have a fallback.
+   */
+  userDisplayId?: string;
   email: string;
   name: string;
   role: UserRole;

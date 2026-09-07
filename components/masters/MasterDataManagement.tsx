@@ -20,6 +20,20 @@ type MasterDataType = 'experience' | 'education' | 'industry';
 
 interface MasterDataManagementProps {
   type: MasterDataType;
+  /**
+   * Render as the PANEL under a tab rather than as a whole page.
+   *
+   * The standalone routes (/masters/experience-levels and friends) each show one
+   * of these and own the page, so this component brings its own <main>,
+   * breadcrumb and gradient hero. The Job Descriptions config page puts all
+   * three behind tabs, where that chrome would repeat on every tab.
+   *
+   * Everything below the heading — the table, pagination, the create/edit modal
+   * and the delete confirm — is identical either way, which is the point: the
+   * config page manages the same data through the same code as the standalone
+   * pages, so the two cannot drift.
+   */
+  embedded?: boolean;
 }
 
 interface BaseItem {
@@ -55,7 +69,7 @@ const typeConfig = {
   },
 };
 
-export default function MasterDataManagement({ type }: MasterDataManagementProps) {
+export default function MasterDataManagement({ type, embedded = false }: MasterDataManagementProps) {
   const [items, setItems] = useState<(ExperienceLevel | EducationLevel | IndustryType)[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -85,7 +99,13 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
     type === 'education' ? 'masters-education-levels'
     : type === 'experience' ? 'masters-experience-levels'
     : 'masters-industry-types';
-  const rootRef = useScrollRestoration<HTMLElement>(persistenceKey, !loading);
+  /* Off when embedded. `rootRef` is only attached to the standalone <main>, and
+     `getScrollParent(null)` falls back to the document — so an embedded panel
+     would restore and track the WHOLE config page's scroll under this key,
+     jumping it to whatever offset the standalone route was last left at. The
+     page-state persistence below stays on: that is per-list, so both views
+     agree on which page of it you are looking at. */
+  const rootRef = useScrollRestoration<HTMLElement>(persistenceKey, !loading && !embedded);
 
   // Fetch data
   useEffect(() => {
@@ -282,15 +302,41 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
     return '-';
   };
 
-  return (
-    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
-      <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+  /* The chrome above the table: the full page treatment when this IS the page,
+     or a plain panel heading when it is one tab of the config page — where the
+     tab already names the section and a hero per tab would be three heroes. */
+  const header = embedded ? (
+    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30">
+          <Icon className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-50">
+            {config.title}
+          </h2>
+          <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">{config.description}</p>
+        </div>
+      </div>
+      <button
+        onClick={openCreateModal}
+        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-blue px-4 py-2 text-sm font-medium text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors hover:bg-brand-blue-2"
+      >
+        <Plus className="h-4 w-4" />
+        Add New
+      </button>
+    </div>
+  ) : (
+    <>
       <PageBreadcrumb
         className="mb-4 md:mb-6"
         items={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Job Descriptions', href: '/recruitment/job-openings' },
+          /* These three now hang off the Configuration page rather than off a
+             dropdown, so the trail says so — Back from here lands on the hub
+             that lists all three, not on the job list. */
+          { label: 'Configuration', href: '/recruitment/job-openings/config' },
           { label: type === 'experience' ? 'Experience Levels' : type === 'education' ? 'Education Levels' : 'Industry Types' },
         ]}
       />
@@ -326,6 +372,16 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
         </div>
       </section>
 
+    </>
+  );
+
+  /* Held as an element, NOT wrapped in a locally-defined <Shell> component: a
+     component declared inside render is a new type on every render, so React
+     would unmount and remount this whole subtree each time — losing the open
+     modal, the half-typed form and the scroll position on every keystroke. */
+  const body = (
+    <>
+      {header}
       {/* Table */}
       <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
         {loading ? (
@@ -593,7 +649,18 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
           </div>
         </div>
       )}
-      </div>
+    </>
+  );
+
+  /* Embedded, the config page owns the <main> and the card, so this contributes
+     only its panel — nesting a second <main> inside one is invalid, and it would
+     create a scroll container this component would then pin to. */
+  if (embedded) return <div>{body}</div>;
+
+  return (
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">{body}</div>
       </div>
     </main>
   );

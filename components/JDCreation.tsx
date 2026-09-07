@@ -1,10 +1,12 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, ArrowRight, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Briefcase } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import UnsavedChangesModal from '@/components/UnsavedChangesModal';
+import SuccessAnimation from '@/components/ui/success-animation';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
 import { Job } from '@/lib/types/types';
@@ -763,6 +765,19 @@ interface JDCreationProps {
   isJDInUse?: boolean;  // Whether JD is used in scoring/assessment/AI match
   jdUsageMessage?: string;  // Message explaining why JD can't be edited
   breadcrumbItems?: BreadcrumbCrumb[];  // Optional breadcrumb shown above the header
+  /**
+   * Reports which of the FOUR displayed steps the recruiter is on (1-4), so the
+   * host page can name its breadcrumb leaf after it.
+   *
+   * Push, not pull: the internal `step` is mirrored into `?stage=` with
+   * `history.replaceState`, which deliberately bypasses the Next router — so
+   * `useSearchParams` in the page never re-renders on it and could only ever
+   * read a stale stage. This callback is the only live source.
+   *
+   * Report-only. It never influences the flow, and nothing here reads back
+   * whatever the host does with it.
+   */
+  onStepChange?: (displayStep: 1 | 2 | 3 | 4) => void;
   // FIX-003: Props for embedded mode in sheet/modal
   editingJDId?: string | null;  // JD ID to fetch and edit
   onClose?: () => void;  // Callback when closed
@@ -1189,7 +1204,14 @@ const DraggableComment = ({
                 aria-label={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
                 title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
               >
-                {isMustHave ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowLeft className="h-3.5 w-3.5" />}
+                {/* DOWN and UP, not right and left.
+                    The two Additional Requirements lists are stacked one above
+                    the other in a single `space-y-6` column — at every
+                    breakpoint, so this is not a desktop-only assumption — and a
+                    sideways arrow pointed at the empty gutter rather than at
+                    the list the item actually travels to. The skills lists
+                    above ARE side by side, which is why they keep left/right. */}
+                {isMustHave ? <ArrowDown className="h-3.5 w-3.5" /> : <ArrowUp className="h-3.5 w-3.5" />}
               </button>
               <button
                 onClick={() => onRemove(category, index)}
@@ -1323,7 +1345,7 @@ const FALLBACK_INDUSTRY_TYPES: IndustryType[] = [
   { id: 39, code: 'others', label: 'Others', description: null, sort_order: 99, is_active: true, created_at: '', updated_at: '' },
 ];
 
-export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, breadcrumbItems, editingJDId, onClose, onSuccess, isEmbedded }: JDCreationProps = {}) {
+export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, breadcrumbItems, onStepChange, editingJDId, onClose, onSuccess, isEmbedded }: JDCreationProps = {}) {
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
   const [step, setStep] = useState<Step>(editingJD?.creation_stage || 'create');
@@ -1603,6 +1625,38 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [publishedJdId, setPublishedJdId] = useState<string | null>(null);
   const [publishedJobCode, setPublishedJobCode] = useState<string | null>(null);
 
+  /* ---- The FOUR steps the recruiter sees --------------------------------------
+     Derived from the two pieces of state that already drive this flow. It is
+     deliberately NOT a fourth value on `Step`, which stays
+     'create' | 'extract' | 'review':
+
+       `Step` is persisted as the JD's `creation_stage`, mirrored into `?stage=`,
+       and read back on reload to decide which screen to restore. Adding a
+       'publish' member would mean touching every transition, the stored records
+       already carrying the old three, and the URL contract — all to change a
+       caption.
+
+     And it would misdescribe the flow. Publish is not a step the recruiter
+     navigates TO; it is what Step 3 DOES. `step === 'review'` already renders
+     two different screens off `isPublished` — the review form, then the success
+     screen — so the fourth step is simply the third having succeeded, which is
+     exactly what this reads.
+
+     Consequence worth knowing: Step 4 is only ever "current"; it is never
+     "completed", because publishing ends the flow and the host navigates away. */
+  const displayStep: 1 | 2 | 3 | 4 =
+    step === 'create' ? 1
+      : step === 'extract' ? 2
+        : isPublished ? 4
+          : 3;
+
+  /* Reported to the host so its breadcrumb can name the current step. In an
+     effect, not during render: `onStepChange` sets state in the parent, and
+     doing that mid-render is what React warns about. */
+  useEffect(() => {
+    onStepChange?.(displayStep);
+  }, [displayStep, onStepChange]);
+
   useEffect(() => {
     if (locationCountry !== 'US' || usStates.length > 0 || isLoadingUsLocations) {
       return;
@@ -1700,6 +1754,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Lets handleNext / handleConfirmPublish detect "no changes since load" and skip
   // the extraction / reformat LLM calls on a no-op edit pass-through.
   const stage1LoadBaseline = useRef<{ jobTitle: string; aiPrompt: string; generatedJD: string; manualJD: string } | null>(null);
+  // Snapshot of `extractedData` as of the last time it was authoritative — either a
+  // fresh extraction, or a persisted JD just loaded for editing. Every edit on the
+  // Extract step (skill add/remove/move, requirements, salary, etc.) is written to
+  // the DB immediately rather than waiting for Save Draft, so "Discard Changes" has
+  // to actively revert both local state AND the DB row back to this snapshot -
+  // simply not saving further has nothing left to undo.
+  const extractedDataSnapshotRef = useRef<ExtractedData | null>(null);
   // Tracks which creation mode produced the CURRENT extractedData. If the user
   // switches AI<->Manual and re-extracts, the source content is fundamentally
   // different, so the extraction must NOT preserve the previous mode's values
@@ -2042,6 +2103,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  // True when the dialog was raised by the browser Back/Forward buttons rather
+  // than an in-app link click, so its resolution has no `pendingNavigation`
+  // URL to push and must instead unwind the history trap set up below.
+  const [isPendingBackNavigation, setIsPendingBackNavigation] = useState(false);
 
   // Cancel JD creation state
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -2685,7 +2750,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         setAutosaveStatus('saved');
         setLastAutosaveTime(new Date());
-        setHasUnsavedChanges(false); // Clear unsaved changes after successful save
+        // Deliberately NOT clearing hasUnsavedChanges here: this silent
+        // background save happens on a timer the user never asked for, so it
+        // must not disarm the leave-confirmation guard behind their back. If
+        // it did, dismissing the "Unsaved Changes" dialog with X and then
+        // trying to leave again a couple of seconds later would silently skip
+        // the dialog instead of asking again.
 
         // Reset status after 3 seconds
         setTimeout(() => {
@@ -2728,8 +2798,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Intercept navigation clicks (menu items, links, etc.) if there are unsaved changes
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      // Only intercept if there are unsaved changes and not published
-      if (!hasUnsavedChanges || isPublished) {
+      // Only intercept on the first two steps (Create JD, Extract) — by the
+      // Review step the JD is already saved server-side at each transition,
+      // so there is nothing left to lose by navigating away.
+      if (!hasUnsavedChanges || isPublished || step === 'review') {
         return;
       }
 
@@ -2746,6 +2818,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             e.stopPropagation();
 
             // Store the target URL and show dialog
+            setIsPendingBackNavigation(false);
             setPendingNavigation(href);
             setShowUnsavedDialog(true);
             return;
@@ -2758,7 +2831,62 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Attach to document to catch all clicks
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);
-  }, [hasUnsavedChanges, isPublished]);
+  }, [hasUnsavedChanges, isPublished, step]);
+
+  // Intercept the browser Back/Forward buttons the same way the click
+  // handler above intercepts in-app links. A plain `popstate` listener can't
+  // "cancel" a back-navigation — the URL/history entry has already changed by
+  // the time the event fires — so this plants one extra history entry
+  // ("trap") pointing at the current URL. The first Back press only pops that
+  // trap (landing back on the same URL, nothing visibly changes yet); we
+  // inspect it here and either re-plant the trap and show the same
+  // "Unsaved Changes" dialog, or, if there is nothing to lose, replay the
+  // Back press once more so the user's original intent goes through.
+  //
+  // Read via a ref (rather than effect deps) so the trap is planted exactly
+  // once for this page visit — re-running this effect on every
+  // hasUnsavedChanges/step change would stack extra trap entries and make the
+  // user press Back several times to actually leave.
+  const backGuardStateRef = useRef({ hasUnsavedChanges, isPublished, step });
+  useEffect(() => {
+    backGuardStateRef.current = { hasUnsavedChanges, isPublished, step };
+  }, [hasUnsavedChanges, isPublished, step]);
+
+  useEffect(() => {
+    const TRAP_STATE = { __jdCreationBackGuard: true };
+    window.history.pushState(TRAP_STATE, '', window.location.href);
+
+    // Set right before a programmatic history.back()/go() call that WE
+    // initiated, so the popstate it fires is treated as "already resolved"
+    // instead of being re-evaluated as a fresh Back press (which would
+    // otherwise replay endlessly).
+    let isProgrammaticNavigation = false;
+
+    const handlePopState = () => {
+      if (isProgrammaticNavigation) {
+        isProgrammaticNavigation = false;
+        return;
+      }
+
+      const { hasUnsavedChanges, isPublished, step } = backGuardStateRef.current;
+      if (hasUnsavedChanges && !isPublished && step !== 'review') {
+        // Cancel the visual back-navigation (there isn't one yet — the trap
+        // absorbed it) and re-plant the trap for the next attempt.
+        window.history.pushState(TRAP_STATE, '', window.location.href);
+        setPendingNavigation(null);
+        setIsPendingBackNavigation(true);
+        setShowUnsavedDialog(true);
+      } else {
+        // Nothing to lose — let the user's Back press actually continue past
+        // our trap entry to wherever they were really headed.
+        isProgrammaticNavigation = true;
+        window.history.back();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Cleanup streaming connection on unmount
   useEffect(() => {
@@ -3866,6 +3994,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         niceToHaveComments: extraction.niceToHaveComments
       });
       setExtractedData(extraction);
+      extractedDataSnapshotRef.current = extraction;
       lastExtractionSourceMode.current = mode;
       // We now hold the authoritative extracted data in state. Saving below sets
       // the JD id into the URL (ensureJDCreationUrl), which makes the page re-fetch
@@ -5652,40 +5781,66 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  // Handle "Save Draft" button in unsaved changes dialog
+  // Actually leaves the page once the dialog is resolved (Save or Discard).
+  // A back-triggered dialog has no `pendingNavigation` URL to push — instead
+  // it has to unwind the two history entries the popstate guard above put in
+  // place (its trap, plus the same-URL entry this page originally loaded on)
+  // so the user lands on whatever real page they were trying to reach.
+  const resolvePendingNavigation = (targetUrl: string | null) => {
+    if (isPendingBackNavigation) {
+      window.history.go(-2);
+    } else if (targetUrl) {
+      router.push(targetUrl);
+    }
+  };
+
+  // Handle "Save Draft" button in unsaved changes dialog.
+  // The dialog stays open (isSaving shows its spinner) until the save
+  // resolves, and navigation only happens on success — otherwise a
+  // validation failure (e.g. empty job title) would close the dialog and
+  // send the user away while silently discarding their work.
   const handleSaveAndNavigate = async () => {
-    setShowUnsavedDialog(false);
     setIsNavigatingBack(true);
 
     // Save draft first; navigateAfter=false because we navigate to pendingNavigation below
-    await handleSaveDraft(false);
+    const saved = await handleSaveDraft(false);
 
-    // Then navigate to the stored URL
-    if (pendingNavigation) {
-      router.push(pendingNavigation);
+    setShowUnsavedDialog(false);
+    setIsNavigatingBack(false);
+
+    // Only navigate to the stored URL if the save actually succeeded
+    if (saved) {
+      resolvePendingNavigation(pendingNavigation);
     }
 
     setPendingNavigation(null);
-    setIsNavigatingBack(false);
+    setIsPendingBackNavigation(false);
   };
 
-  // Handle "Discard" button in unsaved changes dialog
-  const handleDiscardAndNavigate = () => {
+  // Handle "Discard" button in unsaved changes dialog. Revert Extract-step
+  // fields (already committed to the DB the moment they were edited) back to
+  // their last-loaded snapshot before navigating away, so discarding actually
+  // discards instead of leaving those edits in place.
+  const handleDiscardAndNavigate = async () => {
     setShowUnsavedDialog(false);
     setHasUnsavedChanges(false);
 
+    await revertExtractedDataToSnapshot();
+
     // Navigate without saving
-    if (pendingNavigation) {
-      router.push(pendingNavigation);
-    }
+    resolvePendingNavigation(pendingNavigation);
 
     setPendingNavigation(null);
+    setIsPendingBackNavigation(false);
   };
 
-  // Handle dialog cancel (X button or clicking outside)
+  // Handle dialog cancel (X button or clicking outside). Leaves the user
+  // exactly where they are — the popstate guard's history trap is left
+  // armed, so a subsequent Back press (or another link click) prompts again.
   const handleCancelDialog = () => {
     setShowUnsavedDialog(false);
     setPendingNavigation(null);
+    setIsPendingBackNavigation(false);
   };
 
   // Handle cancel JD creation - delete draft and navigate away
@@ -5716,11 +5871,91 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
+  // The Extract-step fields (skills, requirements, salary, experience, education,
+  // industry, comments, certifications, domain keywords, locations, the mandatory
+  // toggles, job-hopping) mapped to the JD-service update payload. Shared by the
+  // discard revert below so a revert writes back exactly the shape a normal save
+  // would have written.
+  const buildExtractedDataApiPayload = (data: ExtractedData) => {
+    const experiencePayload = resolvePersistedExperiencePayload(data.experience);
+    return {
+      department: data.department || '',
+      location: data.locations.length > 0 ? data.locations[0].city : '',
+      employment_type: data.employmentType,
+      remote_type: data.workModel,
+      must_have_skills: data.mustHaveSkills,
+      nice_to_have_skills: data.niceToHaveSkills,
+      education_requirements: data.education ? { degree: data.education } : undefined,
+      experience_min: experiencePayload.experienceMin,
+      experience_max: experiencePayload.experienceMax,
+      industry_type: data.industryType || undefined,
+      role_family: data.roleFamily || undefined,
+      role_family_confidence: data.roleFamilyConfidence ?? undefined,
+      salary_min: parseSalaryInput(data.salaryFrom) ?? null,
+      salary_max: parseSalaryInput(data.salaryTo) ?? null,
+      compensation_type: data.compensationType,
+      salary_currency: data.salaryCurrency,
+      job_level: experiencePayload.jobLevel,
+      assessment_guidance: data.assessmentGuidance || undefined,
+      additional_details: data.additionalDetails?.trim() ? data.additionalDetails : null,
+      internal_comments: data.internalRecruiterComments.join('\n') || undefined,
+      must_have_comments: data.mustHaveComments,
+      nice_to_have_comments: data.niceToHaveComments,
+      allow_overqualified: data.allowOverqualified,
+      certifications: data.certifications,
+      domain_keywords: data.domainKeywords,
+      locations: data.locations.map(loc => {
+        const parts = loc.city.split(', ');
+        return {
+          city: parts[0],
+          state: parts[1] || null,
+          country: loc.country || locationCountry,
+          radius_km: parseInt(loc.radius) || 50,
+          is_required: data.locationsRequired,
+        };
+      }),
+      experience_mandatory: data.experienceRequired || false,
+      education_mandatory: data.educationRequired || false,
+      industry_mandatory: data.industryTypeRequired || false,
+      location_mandatory: data.locationsRequired || false,
+      job_hopping_enabled: data.jobHoppingEnabled ?? true,
+    };
+  };
+
+  // Reverts every Extract-step field back to the last authoritative snapshot
+  // (a fresh extraction, or the persisted JD as loaded) — in memory AND in the
+  // DB. Each edit on this step (skill add/remove/move, requirement edit,
+  // salary, etc.) is written to the DB immediately rather than waiting for
+  // Save Draft, so undoing it locally alone would leave the already-committed
+  // edit sitting in the database untouched.
+  const revertExtractedDataToSnapshot = async () => {
+    const snapshot = extractedDataSnapshotRef.current;
+    if (!snapshot) return;
+
+    setExtractedData(snapshot);
+    setExtractedDataModified(false);
+
+    if (editingId) {
+      try {
+        await jdService.update(editingId, buildExtractedDataApiPayload(snapshot));
+      } catch (error) {
+        console.error('[Discard] Failed to revert extracted data on server:', error);
+        toast.error({
+          title: 'Failed to discard changes',
+          description: 'Your edits were reverted locally but could not be reverted on the server. Please refresh.',
+        });
+      }
+    }
+  };
+
   // Save JD as draft
   // navigateAfter: when true (default), navigates to /recruitment/job-openings on success.
   // Callers that already own their own post-save navigation (e.g. the unsaved-changes dialog,
   // or handleBackClick) must pass false to avoid firing two competing router.push() calls.
-  const handleSaveDraft = async (navigateAfter: boolean = true) => {
+  // Returns whether the draft actually saved, so callers that navigate
+  // afterwards (the unsaved-changes dialog) don't leave the page on a
+  // validation failure and silently lose the user's work.
+  const handleSaveDraft = async (navigateAfter: boolean = true): Promise<boolean> => {
     const trimmedJobTitle = jobTitle.trim();
 
     // Validate job title has at least 1 non-space character
@@ -5729,15 +5964,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         title: 'Cannot save draft',
         description: 'Please enter a job title',
       });
-      return;
+      return false;
     }
 
     if (!(await ensureValidJobTitle(trimmedJobTitle))) {
-      return;
+      return false;
     }
 
     if (step !== 'create' && !validateExtractionPageEnglishOnlyFields()) {
-      return;
+      return false;
     }
 
     setIsSavingDraft(true);
@@ -5859,6 +6094,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       if (navigateAfter) {
         router.push('/recruitment/job-openings');
       }
+      return true;
     } catch (error) {
       console.error('[ERROR] Failed to save draft:', error);
       setIsSavingDraft(false);
@@ -5867,54 +6103,81 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });
       // Stay on page even on error - let user retry or fix issues
+      return false;
     }
   };
 
-  const renderStepIndicator = () => (
-    <div>
-      <div className="flex items-center justify-center">
-        <div className="flex items-center gap-3 sm:gap-4">
-        {/* Step 1 */}
-        <div className="flex items-center gap-2.5">
-          <div className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold ${
-            step === 'create' ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10'
-          }`}>
-            {step !== 'create' ? <CheckCircle className="w-5 h-5" /> : '1'}
-          </div>
-          <div className={`hidden sm:block text-sm whitespace-nowrap font-medium ${step === 'create' ? 'text-brand-blue' : 'text-gray-700 dark:text-slate-300'}`}>Create JD</div>
-        </div>
+  /**
+   * The four-step progress bar.
+   *
+   * Driven by `displayStep` off one array rather than four hand-written blocks:
+   * the previous three were already inconsistent with each other (Step 1 had no
+   * "pending" branch at all, because with three steps it could never be
+   * pending), and a fourth copy is a fourth chance for the active/done/pending
+   * rules to drift. Same visual language as before — brand blue for the step
+   * you are on, brand cyan with a tick for the ones behind it, grey for the
+   * ones ahead.
+   *
+   * `overflow-x-auto` + `min-w-max`: four labelled steps are wider than a small
+   * tablet, and the row must scroll rather than squash the circles or wrap
+   * mid-connector. `w-fit mx-auto` keeps it centred whenever it does fit.
+   */
+  const renderStepIndicator = () => {
+    const stepLabels = [
+      'Create JD',
+      'Extract',
+      'Review',
+      // Kept from the original: editing a published JD publishes a new version.
+      isEditingPublished ? 'Republish' : 'Publish',
+    ];
 
-        {/* Connector 1 */}
-        <div className={`w-10 sm:w-20 lg:w-32 h-0.5 rounded-full ${step !== 'create' ? 'bg-brand-cyan' : 'bg-gray-200 dark:bg-slate-700'}`} />
+    return (
+      <div className="overflow-x-auto">
+        <div className="flex w-fit min-w-max mx-auto items-center gap-3 sm:gap-4 px-1">
+          {stepLabels.map((label, index) => {
+            const stepNumber = index + 1;
+            const isCurrent = displayStep === stepNumber;
+            const isComplete = displayStep > stepNumber;
 
-        {/* Step 2 */}
-        <div className="flex items-center gap-2.5">
-          <div className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold ${
-            step === 'extract' ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10' :
-            step === 'review' ? 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10' :
-            'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700'
-          }`}>
-            {step === 'review' ? <CheckCircle className="w-5 h-5" /> : '2'}
-          </div>
-          <div className={`hidden sm:block text-sm whitespace-nowrap font-medium ${step === 'extract' ? 'text-brand-blue' : 'text-gray-700 dark:text-slate-300'}`}>Extract</div>
-        </div>
+            return (
+              <Fragment key={label}>
+                {/* Connector BEFORE this step — filled once the step behind it
+                    is complete, which is the same test as that step's tick. */}
+                {index > 0 && (
+                  <div
+                    className={`w-6 sm:w-12 lg:w-24 h-0.5 rounded-full ${
+                      displayStep > index ? 'bg-brand-cyan' : 'bg-gray-200 dark:bg-slate-700'
+                    }`}
+                  />
+                )}
 
-        {/* Connector 2 */}
-        <div className={`w-10 sm:w-20 lg:w-32 h-0.5 rounded-full ${step === 'review' ? 'bg-brand-cyan' : 'bg-gray-200 dark:bg-slate-700'}`} />
-
-        {/* Step 3 */}
-        <div className="flex items-center gap-2.5">
-          <div className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold ${
-            step === 'review' ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700'
-          }`}>
-            3
-          </div>
-          <div className={`hidden sm:block text-sm whitespace-nowrap font-medium ${step === 'review' ? 'text-brand-blue' : 'text-gray-700 dark:text-slate-300'}`}>{isEditingPublished ? 'Republish' : 'Publish'}</div>
-        </div>
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full text-sm font-semibold shrink-0 ${
+                      isCurrent
+                        ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                        : isComplete
+                          ? 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10'
+                          : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700'
+                    }`}
+                  >
+                    {isComplete ? <CheckCircle className="w-5 h-5" /> : stepNumber}
+                  </div>
+                  <div
+                    className={`hidden sm:block text-sm whitespace-nowrap font-medium ${
+                      isCurrent ? 'text-brand-blue' : 'text-gray-700 dark:text-slate-300'
+                    }`}
+                  >
+                    {label}
+                  </div>
+                </div>
+              </Fragment>
+            );
+          })}
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Load selected job data if editing
   useEffect(() => {
@@ -6043,7 +6306,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[DEBUG] - must_have_skills from API:', effectiveEditingJD.must_have_skills);
         console.log('[DEBUG] - nice_to_have_skills from API:', effectiveEditingJD.nice_to_have_skills);
 
-        setExtractedData(prev => ({
+        setExtractedData(prev => {
+          const next = {
           ...prev,
           mustHaveSkills: effectiveEditingJD.must_have_skills || [],
           niceToHaveSkills: effectiveEditingJD.nice_to_have_skills || [],
@@ -6078,7 +6342,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             country: (loc.country === 'US' ? 'US' : 'IN') as 'IN' | 'US',
           })) || [],
           locationsRequired: effectiveEditingJD.locations?.some(loc => loc.is_required) || false,
-        }));
+          };
+          extractedDataSnapshotRef.current = next;
+          return next;
+        });
 
         // Sync the standalone country dropdown to the first saved location's country
         const firstCountry = effectiveEditingJD.locations?.[0]?.country;
@@ -6178,27 +6445,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         {/* Content Card: Breadcrumb + Title + Step Indicator + warning + step content (AI-Generated JD, Manual Input, Job Details, Generated JD) */}
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
 
-          {/* Breadcrumb + Title */}
+          {/* Breadcrumb. The page title and blurb that used to sit here are
+              gone: the breadcrumb leaf now names the current step and the
+              indicator below shows all four, so a static heading repeated what
+              both of them already said while pushing the actual work further
+              down the page. */}
           {breadcrumbItems && breadcrumbItems.length > 0 && (
             <PageBreadcrumb className="mb-4 sm:mb-5" items={breadcrumbItems} />
           )}
-          <div className="flex items-start gap-3 min-w-0 mb-4 sm:mb-6">
-            <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-              <Briefcase className="h-4 w-4 text-brand-blue" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-1">
-                {isEditingPublished ? 'Create New Version' : isEditingDraft ? 'Edit Draft' : 'Job Description Creation'}
-              </h1>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
-                {isEditingPublished
-                  ? 'Editing a published JD creates a new draft. The original remains unchanged.'
-                  : isEditingDraft
-                  ? 'Continue editing your draft job description'
-                  : 'Create professional job descriptions with AI-powered extraction'}
-              </p>
-            </div>
-          </div>
 
           {/* Step Indicator block */}
           <div className="mb-4 sm:mb-6 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-900 px-3 py-3 sm:px-5 sm:py-4">
@@ -8848,8 +9102,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       }
                     }
                   }}
-                  className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
                 >
+                  <ArrowLeft className="w-4 h-4" />
                   Back
                 </button>
               </div>
@@ -8875,7 +9130,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           </div>
         )}
 
-        {/* Step 3: Review & Publish */}
+        {/* Displayed Step 3: Review. The internal stage is 'review' for both
+            this and the success screen below — `isPublished` is what separates
+            them, and what the indicator reads as Step 3 vs Step 4. */}
         {step === 'review' && !isPublished && (
           <div className="space-y-4 sm:space-y-6">
                 {/* Header */}
@@ -9384,11 +9641,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           </div>
         )}
 
-        {/* Published Success State */}
+        {/* Displayed Step 4: Publish — the published success state. */}
         {step === 'review' && isPublished && (
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 sm:p-8 text-center">
-            <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center mx-auto mb-4 sm:mb-6">
-              <CheckCircle className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue" />
+            {/* The published tick, animated. It replaces the whole tinted disc
+                rather than sitting inside it: the animation brings its own
+                circle and throws particles past its edge, so the old ring would
+                have drawn a hard line straight through the burst. */}
+            <div className="flex justify-center mb-4 sm:mb-6">
+              <SuccessAnimation />
             </div>
             <h2 className="text-lg sm:text-2xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3 sm:mb-4">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
 
@@ -9440,39 +9701,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         </div>
       </div>
 
-      {/* Unsaved Changes Dialog */}
-      <Dialog open={showUnsavedDialog} onOpenChange={(open) => !open && handleCancelDialog()}>
-        <DialogContent className="p-4 sm:p-6 gap-3 sm:gap-4">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Unsaved Changes</DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
-              You have unsaved changes. Would you like to save them as a draft before leaving?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button
-              onClick={handleDiscardAndNavigate}
-              className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
-            >
-              Discard Changes
-            </button>
-            <button
-              onClick={handleSaveAndNavigate}
-              disabled={isSavingDraft}
-              className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
-            >
-              {isSavingDraft ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Draft'
-              )}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Unsaved Changes — the shared prompt, so this flow and AI Interview
+          config cannot drift apart in wording or in what the buttons do. */}
+      <UnsavedChangesModal
+        isOpen={showUnsavedDialog}
+        onClose={handleCancelDialog}
+        onDiscard={handleDiscardAndNavigate}
+        onSave={handleSaveAndNavigate}
+        isSaving={isSavingDraft}
+      />
 
       {/* Cancel JD Creation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={(open) => !open && setShowCancelDialog(false)}>

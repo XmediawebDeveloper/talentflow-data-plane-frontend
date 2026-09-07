@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory } from 'lucide-react';
+import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
 import JDDisableModal from '@/components/JDDisableModal';
+import ArchiveJobModal from '@/components/ArchiveJobModal';
+import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -12,7 +14,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
-import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
+import { mapJDToJob, formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
@@ -28,11 +30,21 @@ import {
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 
 // Master-data quick links surfaced on the Job Openings page (moved here from the sidebar).
-const MASTER_DATA_LINKS = [
-  { id: 'experience-levels', label: 'Experience Levels', href: '/masters/experience-levels', icon: Clock },
-  { id: 'education-levels', label: 'Education Levels', href: '/masters/education-levels', icon: GraduationCap },
-  { id: 'industry-types', label: 'Industry Types', href: '/masters/industry-types', icon: Factory },
-];
+/**
+ * The icon for one "Active in" entry in the cannot-delete dialog. Matched on
+ * the label the usage summary already builds (e.g. "Resume Scoring (3)")
+ * rather than a second parallel list of module keys, so a new module shows up
+ * with the generic folder until it is added here — never as a missing icon.
+ */
+const usageModuleIcon = (label: string) => {
+  const name = label.toLowerCase();
+  if (name.includes('resume scoring')) return FileSearch;
+  if (name.includes('assessment')) return ClipboardCheck;
+  if (name.includes('talent match')) return Users;
+  if (name.includes('interview')) return Video;
+  return FolderOpen;
+};
+
 
 const JD_BATCH_SIZE = 100;
 
@@ -64,6 +76,14 @@ export default function JobOpeningsPage() {
     job: Job | null;
     disabling: boolean;
   }>({ open: false, job: null, disabling: false });
+  /* Archiving is confirmed, never immediate. `busy` keeps the modal open with a
+     spinner while the request is in flight, so a slow save cannot be clicked
+     twice or read as nothing having happened. */
+  const [archiveDialog, setArchiveDialog] = useState<{
+    open: boolean;
+    job: Job | null;
+    busy: boolean;
+  }>({ open: false, job: null, busy: false });
   const router = useRouter();
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
@@ -394,7 +414,18 @@ export default function JobOpeningsPage() {
     }
   };
 
-  const handleArchiveJob = async (job: Job) => {
+  /* Every archive trigger on this page — the list row menu, the grid card menu
+     and the version-history rows — is handed THIS, not the archive itself, so
+     none of them can archive without the confirm. The work moved to
+     `confirmArchiveJob` below, which only the modal calls. */
+  const requestArchiveJob = (job: Job) => {
+    setArchiveDialog({ open: true, job, busy: false });
+  };
+
+  const confirmArchiveJob = async () => {
+    const job = archiveDialog.job;
+    if (!job) return;
+    setArchiveDialog(prev => ({ ...prev, busy: true }));
     try {
       await jdService.updateStatus(job.id, 'archived');
       setJobs(prev => prev.map(j =>
@@ -402,8 +433,11 @@ export default function JobOpeningsPage() {
       ));
       markVersionStatus(job.id, 'archived');
       toast.success(`"${job.title}" has been archived`);
+      setArchiveDialog({ open: false, job: null, busy: false });
     } catch (error) {
       toast.error('Failed to archive job');
+      /* Left open on failure — closing it would look like the archive worked. */
+      setArchiveDialog(prev => ({ ...prev, busy: false }));
     }
   };
 
@@ -518,14 +552,24 @@ export default function JobOpeningsPage() {
         versionStatusOverrides={versionStatusOverrides}
         onDisableJob={isTenantAdmin || hasPermission('canDisableJD') ? handleDisableJob : undefined}
         onRepublishJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleRepublishJob : undefined}
-        onArchiveJob={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchiveJob : undefined}
+        onArchiveJob={isTenantAdmin || hasPermission('canArchiveJD') ? requestArchiveJob : undefined}
         onUnarchiveJob={hasPermission('canArchiveJD') || isTenantAdmin ? handleUnarchiveJob : undefined}
         onDeleteJob={hasPermission('canDeleteJD') || isTenantAdmin ? handleDeleteJob : undefined}
         onBulkDelete={hasPermission('canDeleteJD') || isTenantAdmin ? handleBulkDeleteJobs : undefined}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
         forceListView={forceListView}
-        masterDataLinks={canManageMasters ? MASTER_DATA_LINKS : undefined}
+        configHref={canManageMasters ? '/recruitment/job-openings/config' : undefined}
+      />
+
+      {/* Archive confirm — the same component the Job Details page renders, so
+          the warning cannot differ depending on where the archive started. */}
+      <ArchiveJobModal
+        isOpen={archiveDialog.open}
+        jobLabel={archiveDialog.job ? formatJobVersionLabel(archiveDialog.job) : ''}
+        isLoading={archiveDialog.busy}
+        onConfirm={confirmArchiveJob}
+        onCancel={() => setArchiveDialog({ open: false, job: null, busy: false })}
       />
 
       {/* Edit Warning Dialog — same component the JD detail page uses, so the
@@ -541,14 +585,14 @@ export default function JobOpeningsPage() {
 
       {/* Delete Warning Dialog - shown when JD is in use */}
       <AlertDialog open={deleteWarningDialog.open} onOpenChange={(open) => setDeleteWarningDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
+        <AlertDialogContent className="max-w-xl max-h-[90dvh] overflow-y-auto">
           <AlertDialogHeader>
             <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
+              <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-red-100 ring-4 ring-red-50 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 sm:w-7 sm:h-7 text-red-600 fill-red-600/15" />
               </div>
               <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-lg font-semibold text-gray-900">
+                <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">
                   Cannot Delete Job Description
                 </AlertDialogTitle>
                 <AlertDialogDescription className="mt-1 text-sm text-gray-500">
@@ -558,28 +602,70 @@ export default function JobOpeningsPage() {
             </div>
           </AlertDialogHeader>
 
-          <div className="mt-4 space-y-4">
-            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-red-700 mb-2.5">Active in</p>
-              <div className="flex flex-wrap gap-2">
-                {deleteWarningDialog.usageDetails.map((usage, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white border border-red-300 text-red-800 shadow-sm"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
-                    {usage}
-                  </span>
-                ))}
+          <div className="mt-4 space-y-3.5">
+            {/* Where it's in use — the modules themselves, two to a row, each
+                named with its own icon and count rather than a bare chip. */}
+            <div className="rounded-xl border border-red-200 bg-red-50/70 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 flex items-center justify-center">
+                  <FolderOpen className="w-4 h-4 text-red-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold uppercase tracking-wide text-red-600">Active in</p>
+                  <p className="text-sm text-gray-700">
+                    This job description is linked to the following active modules.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {deleteWarningDialog.usageDetails.map((usage, index) => {
+                  const UsageIcon = usageModuleIcon(usage);
+                  return (
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold bg-white border border-red-200 text-red-700 shadow-sm"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                      <UsageIcon className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">{usage}</span>
+                    </span>
+                  );
+                })}
               </div>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm text-gray-700">
-                <span className="font-medium text-gray-900">&quot;{deleteWarningDialog.jobTitle}&quot;</span> is linked to active modules above. Deleting it could affect existing data.
-              </p>
-              <p className="mt-1.5 text-sm text-gray-500">
-                Disable the job description instead to stop new applications while preserving existing data.
-              </p>
+
+            {/* What that means, and what to do instead. */}
+            <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-brand-blue flex items-center justify-center">
+                  <Info className="w-4 h-4 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-gray-700">
+                    <span className="font-bold text-brand-blue">&quot;{deleteWarningDialog.jobTitle}&quot;</span> is linked to the active modules above.
+                  </p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Deleting it could affect existing data and processes.
+                  </p>
+                </div>
+              </div>
+
+              <div className="my-3 border-t border-dashed border-blue-200" />
+
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-9 h-9 flex items-center justify-center">
+                  <ShieldCheck className="w-6 h-6 text-brand-blue" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm text-gray-700">
+                    <span className="font-bold text-brand-blue">We recommend disabling</span> the job description instead.
+                  </p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    This will stop new applications while keeping existing data safe.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 

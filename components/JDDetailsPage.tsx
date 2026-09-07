@@ -1,7 +1,7 @@
 'use client';
 
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import { ArrowLeft, MapPin, Calendar, Clock, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, Target } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Clock, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, ClipboardList } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -419,7 +419,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
   const getMatchBadge = (status: string) => {
     const configs: Record<string, { bg: string; text: string }> = {
       good_match: { bg: 'bg-green-100', text: 'text-green-700' },
-      partial_match: { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+      partial_match: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep' },
       no_match: { bg: 'bg-red-100', text: 'text-red-700' },
     };
     const config = configs[status] || { bg: 'bg-gray-100', text: 'text-gray-600' };
@@ -775,7 +775,7 @@ export default function JDDetailsPage() {
                   onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${jd.id}&mode=new`)}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
                 >
-                  <Target className="w-4 h-4" />
+                  <ClipboardList className="w-4 h-4" />
                   Score Resumes
                 </button>
               )}

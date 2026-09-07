@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useScoringProgress, ScoringJob } from '@/contexts/ScoringProgressContext';
-import { Target, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { ClipboardList, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function GlobalScoringProgressIndicator() {
@@ -14,27 +14,55 @@ export default function GlobalScoringProgressIndicator() {
     isMainPanelOpen,
     setMinimized,
     clearJob,
-    clearCompletedJobs,
     onRestorePanel
   } = useScoringProgress();
 
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
-  // Auto-dismiss 10s after everything finishes, so the "Scoring Complete" widget
-  // doesn't sit in the corner until manually closed. Declared before the early
-  // returns below — hooks must run on every render.
-  //
-  // Skipped while the main popup is open: the countdown should only run when the
-  // widget is actually on screen, and clearing jobs underneath an open popup
-  // would leave nothing to re-minimise into.
-  useEffect(() => {
-    if (isMainPanelOpen || activeScoringJobs.length === 0) return;
-    const stillRunning = activeScoringJobs.some(job => job.queued > 0 || job.processing > 0);
-    if (stillRunning) return;
+  /* Minimising the main popup hands the run to this widget, which has three
+     forms, smallest last:
 
-    const timer = setTimeout(() => clearCompletedJobs(), 10000);
+       expanded  — the white detail panel (`isMinimized === false`)
+       card      — the black progress card, bottom-right
+       shrunk    — a round progress button in the same corner
+
+     The card is what a minimise drops into, and it shrinks to the round button
+     after three seconds — long enough to read the counts and register where the
+     run went, short enough not to sit over the page. Restoring or expanding
+     puts it back to the card, so the next minimise repeats the same sequence
+     rather than snapping straight to a dot.
+
+     The timer keys off `isMinimized` alone, deliberately NOT off
+     `activeScoringJobs`: that changes on every progress tick, and the cleanup
+     would cancel and restart the timer each time, leaving the card up forever. */
+  const [shrunk, setShrunk] = useState(false);
+  useEffect(() => {
+    if (!isMinimized) {
+      setShrunk(false);
+      return;
+    }
+    const timer = setTimeout(() => setShrunk(true), 3000);
     return () => clearTimeout(timer);
-  }, [activeScoringJobs, isMainPanelOpen, clearCompletedJobs]);
+  }, [isMinimized]);
+
+  /* A minimise gesture always starts the sequence over, even if the widget was
+     already sitting shrunk from an earlier run. Fired on the panel's open →
+     closed EDGE, not on every render. */
+  const wasMainPanelOpen = useRef(isMainPanelOpen);
+  useEffect(() => {
+    const justMinimised = wasMainPanelOpen.current && !isMainPanelOpen;
+    wasMainPanelOpen.current = isMainPanelOpen;
+    if (!justMinimised) return;
+    setMinimized(true);
+    setShrunk(false);
+  }, [isMainPanelOpen, setMinimized]);
+
+  /* There is deliberately no auto-dismiss. This widget used to clear itself ten
+     seconds after the last item finished, which is why the corner button kept
+     disappearing on its own: the run was still worth opening, and the countdown
+     took the only route back to it. Closing the popup with X is now the single
+     way it goes away — that calls `clearCompletedJobs` — and a run nobody
+     returns to is forgotten by the retention window in the context instead. */
 
   // Don't render if no active or recent jobs
   if (activeScoringJobs.length === 0) {
@@ -61,21 +89,84 @@ export default function GlobalScoringProgressIndicator() {
 
   const isAllComplete = totalStats.queued === 0 && totalStats.processing === 0;
 
-  // Minimized floating button
+  /* ---- Where this widget sits, and on which layer ---------------------------
+     `bottom-6 right-6` is the Resume Scoring page's own progress button's spot,
+     because in its shrunk form this IS that button — same size, same brand
+     blue, same clock — only now it follows the run across the whole site
+     instead of living on one page.
+
+     `z-[10050]` puts it over the modal layer (`z-[10000]` and `z-[9999]` in
+     this app) so a run stays reachable from anywhere, dialogs included. It is
+     never in the way of its OWN popup: the `isMainPanelOpen` bail-out above
+     hides it whenever that is on screen. */
+  /* Restoring is the same gesture from the card and from the round button, but
+     it means two different things depending on where you are.
+
+     The full progress popup is `BulkScoringProgressModal`, and it is rendered by
+     whichever screen OWNS the run's data — the Resume Scoring page, or the
+     source picker that dispatched it. Those register `onRestorePanel` while they
+     are mounted, so on that screen this simply reopens the popup in place.
+
+     Anywhere else in the app that popup does not exist to be reopened. Rather
+     than expanding this widget's own small panel and leaving the recruiter to
+     find their way back, go to the run's page and have it open the popup on
+     arrival — `show_progress` is the parameter that page already reads for
+     exactly this. `returnUrl` is where the run was started from, recorded when
+     the job was registered. */
+  const restore = () => {
+    if (onRestorePanel) {
+      onRestorePanel();
+      return;
+    }
+    const job = activeScoringJobs[0];
+    if (job) {
+      const target = job.returnUrl
+        ? `${job.returnUrl}${job.returnUrl.includes('?') ? '&' : '?'}show_progress=true`
+        : `/recruitment/resume-scoring?jd_id=${encodeURIComponent(job.jobId)}&show_progress=true`;
+      router.push(target);
+      return;
+    }
+    setMinimized(false);
+  };
+
+  /* Smallest form: the round progress button. The ring IS the progress — a
+     conic gradient rather than a nested SVG, so the whole control is one
+     element and the percentage has no second source of truth. */
+  if (isMinimized && shrunk) {
+    return (
+      <button
+        type="button"
+        onClick={restore}
+        aria-label={
+          isAllComplete
+            ? `Scoring complete, ${totalStats.completed} scored. Open progress.`
+            : `Scoring ${overallProgress}% complete. Open progress.`
+        }
+        title={isAllComplete ? 'Scoring complete' : `Scoring ${overallProgress}%`}
+        className="fixed bottom-6 right-6 z-[10050] h-12 w-12 rounded-full p-[3px] shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105 animate-in zoom-in duration-200"
+        style={{
+          background: `conic-gradient(${isAllComplete ? '#22c55e' : '#ffffff'} ${overallProgress * 3.6}deg, rgba(255,255,255,0.25) 0deg)`,
+        }}
+      >
+        <span className="relative flex h-full w-full items-center justify-center rounded-full bg-brand-blue text-white">
+          <Clock className="h-5 w-5" />
+          {hasActiveScoring && (
+            <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
+          )}
+        </span>
+      </button>
+    );
+  }
+
+  // The black progress card — what a minimise drops into, before it shrinks.
   if (isMinimized) {
     return (
       <div
-        className="fixed bottom-4 right-4 z-50 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl hover:bg-gray-800 transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300 border border-gray-700 max-w-xs"
-        onClick={() => {
-          if (onRestorePanel) {
-            onRestorePanel();
-          } else {
-            setMinimized(false);
-          }
-        }}
+        className="fixed bottom-6 right-6 z-[10050] bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl hover:bg-gray-800 transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300 border border-gray-700 max-w-xs"
+        onClick={restore}
       >
         <div className="relative flex-shrink-0">
-          <Target className="w-5 h-5" />
+          <ClipboardList className="w-5 h-5" />
           {hasActiveScoring && (
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse" />
           )}
@@ -102,7 +193,7 @@ export default function GlobalScoringProgressIndicator() {
 
   // Expanded panel
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-96 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
+    <div className="fixed bottom-6 right-6 z-[10050] w-96 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className={`flex items-center justify-between px-4 py-3 ${
         isAllComplete ? 'bg-green-600' : 'bg-gray-800'

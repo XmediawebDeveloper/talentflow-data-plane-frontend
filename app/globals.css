@@ -2145,6 +2145,25 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   max-height: none;
 }
 
+/* ScoreTableModal (the "View Score Table" popup): embeds
+   DetailedScorecardTab's rubric table — a `.tf-table-shell` sized for the
+   full CandidateScoringDetailPage's generous surrounding space — inside a
+   much shorter modal that already scrolls itself (`.score-table-modal-body`).
+   Two independently-scrolling, independently-sticky containers stacked like
+   that is exactly the "one scroll container per table" rule above warns
+   about, and here it showed up as the table visibly bleeding past the modal
+   card. Dropping the shell's own cap and letting it grow to natural height
+   makes the modal body the only vertical scroller; its sticky `thead`
+   retargets to that ancestor instead and keeps working. */
+.score-table-modal-body .tf-table-shell {
+  min-height: 0;
+  max-height: none;
+  /* y only — the element's own `overflow-x-auto` (DetailedScorecardTab.tsx)
+     still has to contain the rubric table sideways; only the vertical cap
+     and its independent scroll/sticky context are the problem here. */
+  overflow-y: visible;
+}
+
 /* ── Custom scrollbars for the shell ───────────────────────────────────
    The native vertical bar has to span the whole shell, header included,
    because the shell is the scroll container and the header sits inside it.

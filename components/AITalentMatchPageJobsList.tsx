@@ -1,7 +1,12 @@
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { Sparkles, MapPin, Briefcase, User, Clock, ArrowRight, History, DollarSign, Award, TrendingUp, Search, Filter, ChevronDown, X, LayoutGrid, List as ListIcon } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Sparkles, MapPin, Briefcase, Building2, Calendar, FileText, User, Users, Clock, ArrowRight, History, DollarSign, Award, TrendingUp, Search, Filter, ChevronDown, X, LayoutGrid, List as ListIcon } from 'lucide-react';
+import { useState } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+/* The shared formatters, not local copies. Both fields arrive snake-cased from
+   the JD record ("information_technology", "full_time"), and these are what the
+   Resume Scoring rows this list was modelled on already run them through — so
+   the same JD reads identically in both modules. */
+import { formatEmploymentType, formatIndustryType, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import ListPagination from '@/components/ListPagination';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
@@ -22,6 +27,12 @@ interface Job {
   experience?: string;
   jobId?: string;
   currentVersion?: number;
+  /* Carried so the job rows can show what the Resume Scoring job rows show.
+     All four already exist on the JD record; they were simply never mapped. */
+  industryType?: string;
+  remoteType?: string;
+  postedBy?: string;
+  postedDate?: string;
 }
 
 interface MatchHistory {
@@ -49,10 +60,17 @@ export default function AITalentMatchPageJobsList({
   onBack
 }: AITalentMatchPageJobsListProps) {
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
   const [jobsView, setJobsView] = useState<'grid' | 'list'>('list');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Radio-style single pick: choosing a job reveals its own "Run AI Match"
+  // button and locks the rest of the list until it's unchecked again, rather
+  // than letting several jobs be picked at once.
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+  const handleToggleJob = (jobId: string) => {
+    setSelectedJobId(prev => (prev === jobId ? null : jobId));
+  };
 
   // Shared search/filter state. The selects commit as you pick, so this uses
   // `setFilter`; `onChange` returns to page 1 on every narrowing.
@@ -97,25 +115,18 @@ export default function AITalentMatchPageJobsList({
     return matchHistory.filter(h => h.jobId === jobId);
   };
 
-
-  const handleSelectJob = (jobId: string) => {
-    setSelectedJobs(prev =>
-      prev.includes(jobId) ? prev.filter(id => id !== jobId) : [...prev, jobId]
-    );
-  };
-
-  const handleSelectAll = () => {
-    if (selectedJobs.length === filteredJobs.length) {
-      setSelectedJobs([]);
-    } else {
-      setSelectedJobs(filteredJobs.map(j => j.id));
-    }
-  };
-
   const paginatedJobs = filteredJobs.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+  // A search/filter change can hide the checked job from the list entirely —
+  // every remaining row would then sit disabled with nothing checked in sight
+  // to undo it. Derived rather than mirrored into its own state-plus-effect:
+  // once the checked job scrolls back into view, it's still checked.
+  const effectiveSelectedJobId = selectedJobId && filteredJobs.some(j => j.id === selectedJobId)
+    ? selectedJobId
+    : null;
 
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
@@ -178,7 +189,6 @@ export default function AITalentMatchPageJobsList({
               filtered={filteredJobs.length}
               total={publishedJobs.length}
               noun="job"
-              selected={selectedJobs.length}
             />
           }
         />
@@ -258,7 +268,22 @@ export default function AITalentMatchPageJobsList({
         <>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 mb-3 sm:mb-4">
             <h2 className="text-base sm:text-lg lg:text-xl text-gray-900 font-medium">Available Jobs ({filteredJobs.length})</h2>
-            <p className="text-xs sm:text-sm text-gray-600">Click any job to run AI matching</p>
+            {effectiveSelectedJobId ? (
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue">
+                  1 selected
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedJobId(null)}
+                  className="text-sm font-medium text-brand-blue hover:text-brand-blue-2 transition-colors"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs sm:text-sm text-gray-600">Check a job to run AI matching</p>
+            )}
           </div>
 
           {jobsView === 'grid' ? (
@@ -267,33 +292,41 @@ export default function AITalentMatchPageJobsList({
               const jobHistory = getJobMatchHistory(job.id);
               const hasHistory = jobHistory.length > 0;
               const latestMatch = hasHistory ? jobHistory[jobHistory.length - 1] : null;
-              const isSelected = selectedJobs.includes(job.id);
+              const isSelected = effectiveSelectedJobId === job.id;
+              const isDisabled = effectiveSelectedJobId !== null && !isSelected;
 
               return (
                 <div
                   key={job.id}
-                  className={`bg-white rounded-xl border transition-all duration-150 cursor-pointer flex flex-col ${
-                    isSelected
-                      ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30'
-                      : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
+                  className={`rounded-xl border transition-all duration-150 flex flex-col ${
+                    isDisabled
+                      ? 'bg-gray-50 dark:bg-slate-900/60 border-gray-100 dark:border-slate-800 opacity-50 cursor-not-allowed'
+                      : `bg-white dark:bg-slate-900 cursor-pointer ${
+                          isSelected
+                            ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30'
+                            : 'border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
+                        }`
                   }`}
-                  onClick={() => onSelectJob(job.id)}
+                  onClick={() => { if (!isDisabled) handleToggleJob(job.id); }}
                 >
                   {/* Card Header */}
                   <div className="p-4 border-b border-gray-100">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); if (!isDisabled) handleToggleJob(job.id); }}
+                          disabled={isDisabled}
                           className="flex-shrink-0"
                           title={isSelected ? 'Deselect' : 'Select'}
                           aria-label={isSelected ? 'Deselect job' : 'Select job'}
                         >
                           <input
-                            type="checkbox"
+                            type="radio"
                             checked={isSelected}
+                            disabled={isDisabled}
                             readOnly
-                            className="w-4 h-4 text-brand-blue rounded border-gray-300 focus:ring-brand-blue/40 cursor-pointer pointer-events-none"
+                            className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40 cursor-pointer pointer-events-none disabled:cursor-not-allowed"
                           />
                         </button>
                         <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -388,15 +421,20 @@ export default function AITalentMatchPageJobsList({
                       </div>
                     )}
 
-                    {/* Action Button - pinned to bottom */}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onSelectJob(job.id); }}
-                      className="mt-auto w-full px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 flex items-center justify-center gap-2 whitespace-nowrap text-sm"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      Run AI Match
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Action Button - pinned to bottom, only once this job
+                        is checked. Every other job is disabled until it's
+                        unchecked again, so there is never more than one to
+                        show a button for. */}
+                    {isSelected && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onSelectJob(job.id); }}
+                        className="mt-auto w-full px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 flex items-center justify-center gap-2 whitespace-nowrap text-sm"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        Run AI Match
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -407,63 +445,156 @@ export default function AITalentMatchPageJobsList({
               {paginatedJobs.map((job) => {
                 const jobHistory = getJobMatchHistory(job.id);
                 const latestMatch = jobHistory.length > 0 ? jobHistory[jobHistory.length - 1] : null;
-                const isSelected = selectedJobs.includes(job.id);
+                const isSelected = effectiveSelectedJobId === job.id;
+                const isDisabled = effectiveSelectedJobId !== null && !isSelected;
+
+                /* The shared vocabulary, so a republished JD reads
+                   "Republished" here exactly as it does on the JD list. */
+                const statusLabel = getDisplayStatus(job.status || 'Published', job.currentVersion);
+                const statusBadge = getStatusConfig(statusLabel);
 
                 return (
                   <div
                     key={job.id}
-                    onClick={() => onSelectJob(job.id)}
-                    className={`cursor-pointer rounded-xl border p-4 transition-all ${
-                      isSelected
-                        ? 'border-brand-blue/50 bg-brand-blue/[0.03] ring-1 ring-brand-blue/30'
-                        : 'border-gray-100 bg-white shadow-sm hover:border-brand-blue/30 hover:shadow-md'
+                    onClick={() => { if (!isDisabled) handleToggleJob(job.id); }}
+                    /* Same shell as the Resume Scoring job rows — card, hairline
+                       border, hover lift — with the checked/locked states
+                       layered on top. */
+                    className={`rounded-xl border p-4 transition-all duration-150 ${
+                      isDisabled
+                        ? 'bg-gray-50 dark:bg-slate-900/60 border-gray-100 dark:border-slate-800 opacity-50 cursor-not-allowed'
+                        : `cursor-pointer ${
+                            isSelected
+                              ? 'border-brand-blue/50 bg-brand-blue/[0.03] ring-1 ring-brand-blue/30'
+                              : 'bg-white dark:bg-slate-900 border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
+                          }`
                     }`}
                   >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
+                    <div className="flex flex-col sm:flex-row items-start gap-3">
                       <button
                         type="button"
-                        onClick={(event) => { event.stopPropagation(); handleSelectJob(job.id); }}
-                        className="flex h-5 w-5 flex-shrink-0 items-center justify-center"
+                        onClick={(event) => { event.stopPropagation(); if (!isDisabled) handleToggleJob(job.id); }}
+                        disabled={isDisabled}
+                        className="flex h-9 w-5 flex-shrink-0 items-center justify-center"
                         aria-label={isSelected ? 'Deselect job' : 'Select job'}
                       >
                         <input
-                          type="checkbox"
+                          type="radio"
                           checked={isSelected}
+                          disabled={isDisabled}
                           readOnly
-                          className="h-4 w-4 cursor-pointer rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 pointer-events-none"
+                          className="h-4 w-4 cursor-pointer rounded-full border-gray-300 text-brand-blue focus:ring-brand-blue/40 pointer-events-none disabled:cursor-not-allowed"
                         />
                       </button>
-                      <div className="flex min-w-0 flex-1 items-start gap-3">
-                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                          <Briefcase className="h-5 w-5 text-brand-blue" />
+
+                      <div className="flex-1 min-w-0 w-full">
+                        {/* Title row: JD code, title, status, version */}
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          {job.jobId && (
+                            <span className="inline-flex h-7 items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20 flex-shrink-0">
+                              {job.jobId}
+                            </span>
+                          )}
+                          <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">
+                            {job.title}
+                          </h3>
+                          <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs ${statusBadge.bg} ${statusBadge.text} border ${statusBadge.border} gap-1.5 flex-shrink-0`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${statusBadge.dot}`}></div>
+                            {statusLabel}
+                          </span>
+                          {job.currentVersion && job.currentVersion >= 1 && (
+                            <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
+                              <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
+                              v{job.currentVersion}
+                            </span>
+                          )}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {job.jobId && <JobIdBadge>{job.jobId}</JobIdBadge>}
-                            <h3 className="min-w-0 truncate text-sm font-semibold text-gray-900 sm:text-base" title={job.title}>{job.title}</h3>
-                            {job.currentVersion && <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs text-green-700">{job.currentVersion > 1 ? 'Republished' : 'Published'}</span>}
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-gray-600">
-                            {job.department && <span className="flex items-center gap-1.5"><Briefcase className="h-4 w-4 text-gray-400" />{job.department}</span>}
-                            <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4 text-gray-400" />{job.location?.trim() || '-'}</span>
-                            {job.employmentType && <span>{job.employmentType}</span>}
-                            {job.experience && <span className="flex items-center gap-1.5"><TrendingUp className="h-4 w-4 text-gray-400" />{job.experience}</span>}
-                          </div>
-                          <JDVersionHistory jdId={job.id} version={job.currentVersion} className="mt-2" />
+
+                        {/* One wrapping metadata line, each fact behind its own
+                            icon — the Resume Scoring row's layout exactly. */}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 dark:text-slate-400 mb-2">
+                          {job.department && (
+                            <span className="flex items-center gap-1.5">
+                              <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                              {job.department}
+                            </span>
+                          )}
+                          {job.industryType && (
+                            <span className="flex items-center gap-1.5">
+                              <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                              {formatIndustryType(job.industryType)}
+                            </span>
+                          )}
+                          {job.location?.trim() && (
+                            <span className="flex items-center gap-1.5">
+                              <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                              {job.location}
+                            </span>
+                          )}
+                          {job.employmentType && (
+                            <span className="flex items-center gap-1.5">
+                              <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                              {formatEmploymentType(job.employmentType)}
+                            </span>
+                          )}
+                          {job.remoteType && (
+                            <span className="flex items-center gap-1.5">
+                              <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                              <span className="capitalize">{job.remoteType}</span>
+                            </span>
+                          )}
+                          {job.experience && (
+                            <span className="flex items-center gap-1.5">
+                              <TrendingUp className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                              {job.experience}
+                            </span>
+                          )}
+                          {job.postedBy && (
+                            <span className="flex items-center gap-1.5">
+                              <User className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                              By {job.postedBy}
+                            </span>
+                          )}
+                          {job.postedDate && (
+                            <span className="flex items-center gap-1.5">
+                              <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                              Posted {formatISTDate(job.postedDate)}
+                            </span>
+                          )}
+                          {/* The two counts keep the tinted-chip treatment the
+                              Resume Scoring row gives its "N candidates scored",
+                              because they are results rather than attributes. */}
+                          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                            <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                            {job.applicants} scored
+                          </span>
+                          {latestMatch && (
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 bg-green-50 text-green-700 rounded-lg">
+                              <Award className="w-4 h-4" />
+                              {latestMatch.totalMatches} matched
+                            </span>
+                          )}
                         </div>
+
+                        <JDVersionHistory jdId={job.id} version={job.currentVersion} className="mt-2" />
                       </div>
-                      <div className="flex flex-wrap items-center gap-3 lg:flex-nowrap">
-                        <span className="flex items-center gap-1.5 rounded-lg bg-brand-blue/5 px-3 py-1.5 text-sm font-medium text-brand-blue ring-1 ring-brand-blue/15"><User className="h-4 w-4" />{job.applicants}</span>
-                        {latestMatch && <span className="text-xs text-green-700">{latestMatch.totalMatches} matched</span>}
-                        <button
-                          type="button"
-                          onClick={(event) => { event.stopPropagation(); onSelectJob(job.id); }}
-                          className="ml-auto inline-flex items-center justify-center gap-2 rounded-lg bg-brand-blue px-3 py-2 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:bg-brand-blue-2"
-                        >
-                          <Sparkles className="h-4 w-4" />
-                          Run AI Match
-                        </button>
-                      </div>
+
+                      {/* Actions, right-aligned and stacked as on the reference
+                          rows. Run AI Match stays the row's primary action,
+                          but only appears once this job is checked — every
+                          other row is disabled until it's unchecked again. */}
+                      {isSelected && (
+                        <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
+                          <button
+                            type="button"
+                            onClick={(event) => { event.stopPropagation(); onSelectJob(job.id); }}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-blue px-3 py-2 text-sm font-medium text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            Run AI Match
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -516,7 +647,7 @@ export default function AITalentMatchPageJobsList({
           <ul className="text-xs sm:text-sm text-gray-700 space-y-1 sm:space-y-1.5">
             <li className="flex items-start gap-1.5 sm:gap-2">
               <span className="text-brand-blue mt-0.5">•</span>
-              <span><strong>Step 1:</strong> Click on any job card above to select it</span>
+              <span><strong>Step 1:</strong> Check a job above, then click Run AI Match</span>
             </li>
             <li className="flex items-start gap-1.5 sm:gap-2">
               <span className="text-brand-blue mt-0.5">•</span>

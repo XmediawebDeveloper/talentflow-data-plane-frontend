@@ -33,6 +33,18 @@ export function parseIST(dateString: unknown): Date {
 }
 
 /**
+ * The YYYY-MM-DD calendar day (IST) a moment falls on — the same shape a
+ * `<input type="date">` value takes, so a scored-at timestamp can be handed
+ * straight to a date-range filter built from one. Empty string for an
+ * unparsable input, never "NaN-NaN-NaN".
+ */
+export function toISODateIST(dateString: unknown): string {
+  const d = parseIST(dateString);
+  if (isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(d);
+}
+
+/**
  * Format a backend datetime string as "5 Mar 2026, 02:30 PM" (IST).
  * Returns 'N/A' for null/undefined/invalid.
  */

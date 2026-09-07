@@ -1,5 +1,7 @@
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, Target, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronDown, Video } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronDown, ChevronRight, Video, BarChart3 } from 'lucide-react';
+import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult } from '@/lib/utils/matchStatus';
+import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
+import { useState, useEffect, useMemo, Fragment } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
 import ListToolbar from '@/components/ui/list-toolbar';
@@ -13,6 +15,8 @@ import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { resumeService } from '@/lib/services/resumeService';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
+import ScoreTableModal from './ScoreTableModal';
+import ListPagination from './ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
@@ -39,6 +43,27 @@ import {
 const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
+/* ---- The More Filters panel's field metrics ---------------------------------
+   One width and one control style for every field in that panel, so "all the
+   same size" is guaranteed by construction rather than by seven copies of a
+   class string happening to agree — which is what let them drift in the first
+   place.
+
+   180px is sized to the WIDEST thing any of these controls must actually
+   display: a native date input's `dd/mm/yyyy` plus its picker glyph. Every
+   other field needs less, and none of them needs the third-of-a-panel the old
+   stretching grid handed out. Full width below `sm`, where one field per row is
+   the only thing that fits. */
+const FILTER_FIELD_CLASS = 'w-full sm:w-auto sm:grow sm:basis-[170px] sm:max-w-[280px]';
+
+/* Score Range holds TWO controls in one field, so it asks for more room up
+   front and takes a bigger share of whatever its row has spare — at the shared
+   basis each input gets ~80px and reads cramped beside its neighbours. */
+const FILTER_FIELD_WIDE_CLASS = 'w-full sm:w-auto sm:grow-[1.5] sm:basis-[240px] sm:max-w-[380px]';
+const FILTER_LABEL_CLASS = 'block text-sm text-gray-700 mb-1 truncate';
+const FILTER_CONTROL_CLASS =
+  'w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white';
+
 const DEFAULT_COLUMNS = [
   { id: 'candidateName', label: 'Candidate Name', enabled: true },
   { id: 'jobVersion', label: 'Job Version', enabled: true },
@@ -54,7 +79,7 @@ const DEFAULT_COLUMNS = [
   { id: 'version', label: 'Resume Version', enabled: true },
 ];
 
-interface ScoredResume {
+export interface ScoredResume {
   id: string;
   resumeId?: string;  // Actual resume ID (different from score ID)
   candidateName: string;
@@ -108,7 +133,7 @@ interface ScoredResume {
   jobTitle?: string;
   jdId?: string;
   /** The readable job code (e.g. "JD-151") this row's score belongs to —
-   *  only set in the global "View All Candidates" view, where rows span
+   *  only set in the global "View by Candidates" view, where rows span
    *  different jobs. In a single-job view every row shares the host's own
    *  `jobId` prop instead, so this stays unset there. */
   jobCode?: string;
@@ -125,11 +150,52 @@ interface ScoredResumesTableProps {
   jobCode?: string;
   availableUnits?: number;
   initialMatchStatus?: 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
+  /**
+   * Drop the Match Status field from More Filters.
+   *
+   * Set by a host whose LIST is already one verdict — the Exact Match, Partial
+   * Match and No Match sections, which hand down rows the parent has already
+   * narrowed. A status filter there is at best a no-op and at worst a
+   * contradiction: picking "No Match" inside the Exact Match section empties
+   * the table and reads as a bug.
+   *
+   * It hides the control AND stops the filter applying, rather than just
+   * hiding it. A value set on an earlier, unscoped view would otherwise stay
+   * live behind a control that is no longer on screen to undo it — and would
+   * still be counted on the Filters badge.
+   */
+  hideMatchStatusFilter?: boolean;
+  /**
+   * Preselects the date-range filter to one day (YYYY-MM-DD) — the host's way
+   * of opening this table already narrowed to one scoring session, e.g. from
+   * a Scoring History row. Same sync-on-change pattern as `initialMatchStatus`
+   * below.
+   */
+  initialScoredDate?: string;
   onViewCandidate?: (resume: ScoredResume) => void;
   selectedResumes?: string[];
   onSelectResume?: (resumeId: string) => void;
   onSelectAll?: (resumeIds: string[]) => void;
   isGlobalView?: boolean; // Show job title column in global view
+  /**
+   * The heading above the search box. Defaults to "Scored Resumes".
+   *
+   * The Resume Scoring page shows six different lists through this one table —
+   * per-job, per-candidate, all events, and one per match verdict — and a fixed
+   * heading named none of them, so the card looked identical whichever pill was
+   * selected. The host passes the selected section's name instead.
+   */
+  title?: string;
+  /**
+   * Cluster rows by candidate email (one visual group per person) rather
+   * than the flat, mixed-candidate order the rows arrive in. Meaningful only
+   * when there's more than one row per person to begin with — i.e. a
+   * cross-job list — so it defaults off and a host opts in explicitly (the
+   * Resume Scoring "View by Candidates" card does; its sibling "Total
+   * Resumes Scored" card deliberately doesn't, showing the identical rows
+   * as a flat per-scoring-event list instead).
+   */
+  groupByEmail?: boolean;
   /**
    * Opens the caller's "Select Applicants to Score" flow. Optional so the
    * button only appears where a host has somewhere to send it — JobDetailView
@@ -163,11 +229,15 @@ export default function ScoredResumesTable({
   jobCode,
   availableUnits = 10,
   initialMatchStatus = 'all',
+  hideMatchStatusFilter = false,
+  initialScoredDate = '',
   onViewCandidate,
   selectedResumes: externalSelectedResumes = [],
   onSelectResume,
   onSelectAll,
   isGlobalView = false,
+  title = 'Scored Resumes',
+  groupByEmail = false,
   onScoreResumes,
   onInviteAIInterview,
   assessmentConfigured,
@@ -210,6 +280,10 @@ export default function ScoredResumesTable({
      going through Share. Independent of shareCandidate/isSharePreviewOpen so
      the two entry points never fight over one piece of state. */
   const [viewResumeCandidate, setViewResumeCandidate] = useState<ScoredResume | null>(null);
+  /* "View Score Table" from the Actions menu — opens the same table
+     CandidateScoringDetailPage's Score Table tab shows, in a popup rather
+     than navigating away. */
+  const [scoreTableCandidate, setScoreTableCandidate] = useState<ScoredResume | null>(null);
   /* Scorecard side of the same dialog — the resume and the scorecard are the
      two files this page can send, so the eye beside each opens that one. */
   const [scorecardPreviewUrl, setScorecardPreviewUrl] = useState<string | null>(null);
@@ -335,6 +409,8 @@ Best regards`);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCandidate, setInviteCandidate] = useState<ScoredResume | null>(null);
   const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Search + filters in the shared hook. This panel commits as you pick rather
   // than staging, so it uses `setFilter` and leaves the draft pair alone.
@@ -343,18 +419,30 @@ Best regards`);
       matchStatus: initialMatchStatus,
       scoreMin: 0,
       scoreMax: 100,
-      dateFrom: '',
-      dateTo: '',
+      dateFrom: initialScoredDate,
+      dateTo: initialScoredDate,
       recruiter: 'all',
+      /* Which job the rows belong to, as two independent narrowings: the title,
+         and the JD version they were scored against. Separate rather than one
+         combined control because they answer different questions — "every
+         QA Test Engineer we scored" versus "everything scored against v2" —
+         and a recruiter comparing versions of one job needs both at once.
+         'all' is the off position for each, matching every other select here. */
+      jobTitle: 'all',
+      jobVersion: 'all',
     },
     // Score min/max is one logical "Score range" filter, so it counts once.
     countFilters: (f) =>
       [
-        f.matchStatus !== 'all',
+        // Not counted while hidden, or the Filters badge advertises a filter
+        // that has no control on screen and is not being applied.
+        !hideMatchStatusFilter && f.matchStatus !== 'all',
         f.scoreMin > 0 || f.scoreMax < 100,
         Boolean(f.dateFrom),
         Boolean(f.dateTo),
         f.recruiter !== 'all',
+        f.jobTitle !== 'all',
+        f.jobVersion !== 'all',
       ].filter(Boolean).length,
   });
   const searchTerm = search.appliedQuery;
@@ -365,6 +453,8 @@ Best regards`);
     dateFrom: filterDateFrom,
     dateTo: filterDateTo,
     recruiter: filterRecruiter,
+    jobTitle: filterJobTitle,
+    jobVersion: filterJobVersion,
   } = search.filters;
 
   // The parent can preselect a match status (e.g. "Strong" from a stat card).
@@ -372,6 +462,14 @@ Best regards`);
     search.setFilter('matchStatus', initialMatchStatus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMatchStatus]);
+
+  // The parent can also preselect one scoring day (e.g. a Scoring History
+  // row) — applied to both ends of the date range for an exact-day filter.
+  useEffect(() => {
+    search.setFilter('dateFrom', initialScoredDate);
+    search.setFilter('dateTo', initialScoredDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialScoredDate]);
 
   // Column configuration - initialize with defaults, then load from localStorage
   const [availableColumns, setAvailableColumns] = useState(DEFAULT_COLUMNS);
@@ -432,8 +530,11 @@ Best regards`);
       resume.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resume.phone.includes(searchTerm);
 
-    // Match status filter
-    const matchesStatus = filterMatchStatus === 'all' || resume.matchStatus === filterMatchStatus;
+    /* Match status filter. Inert when the host has hidden it — the rows are
+       already one verdict, and a value left over from an unscoped view must not
+       keep narrowing them from behind a control that is no longer rendered. */
+    const matchesStatus =
+      hideMatchStatusFilter || filterMatchStatus === 'all' || resume.matchStatus === filterMatchStatus;
 
     // Score range filter
     const matchesScore = resume.scorePercentage >= filterScoreMin && resume.scorePercentage <= filterScoreMax;
@@ -457,10 +558,131 @@ Best regards`);
     // Recruiter filter
     const matchesRecruiter = filterRecruiter === 'all' || resume.scoredBy === filterRecruiter;
 
-    return matchesSearch && matchesStatus && matchesScore && matchesDate && matchesRecruiter;
+    /* Job title / JD version. Both compared as strings against the option
+       values built below from these same rows, so an option can never be
+       offered that then matches nothing. A row missing the field is excluded
+       once its filter is on — it cannot be shown to belong to the job asked
+       for, and those rows are never offered as an option either. */
+    const matchesJobTitle =
+      filterJobTitle === 'all' || (resume.jobTitle || '').trim() === filterJobTitle;
+    const matchesJobVersion =
+      filterJobVersion === 'all' ||
+      (resume.jobVersion !== undefined && resume.jobVersion !== null && String(resume.jobVersion) === filterJobVersion);
+
+    return matchesSearch && matchesStatus && matchesScore && matchesDate && matchesRecruiter
+      && matchesJobTitle && matchesJobVersion;
   });
 
+  // "View by Candidate" — a cross-job list spans every job, so the same
+  // person can appear several times: once per job, or once per resume
+  // version. Rather than a flat, mixed-candidate list, `groupByEmail` hosts
+  // cluster those rows by email into one card per person, each expandable
+  // to its own scoring history. `isGrouped` is the LOCAL on/off switch the
+  // "Group by: Candidate" control below toggles — seeded from the prop and
+  // re-synced whenever it changes (a host can move between a grouped and an
+  // ungrouped table reusing this same component instance), so a host that
+  // never opts in via the prop never shows the grouping control at all.
+  const [isGrouped, setIsGrouped] = useState(groupByEmail);
+  useEffect(() => {
+    setIsGrouped(groupByEmail);
+  }, [groupByEmail]);
+  const [expandedGroupKeys, setExpandedGroupKeys] = useState<Set<string>>(new Set());
+  const toggleGroupExpanded = (key: string) => {
+    setExpandedGroupKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  /* A candidate scored against many jobs would otherwise stretch the grouped
+     row to the height of their whole job list, so the "Job Titles" cell shows
+     the first two and folds the rest behind a "+N more" badge. Clicking the
+     badge expands that one candidate's list (and collapses it again). */
+  const JOB_TITLE_PREVIEW_COUNT = 2;
+  const [expandedTitleKeys, setExpandedTitleKeys] = useState<Set<string>>(new Set());
+  const toggleTitlesExpanded = (key: string) => {
+    setExpandedTitleKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const dateOf = (r: ScoredResume) => new Date(r.scoredDate).getTime() || 0;
+  const candidateGroups = useMemo(() => {
+    const groups = new Map<string, ScoredResume[]>();
+    filteredResumes.forEach((r) => {
+      const key = (r.email || r.candidateName || r.id).trim().toLowerCase();
+      const group = groups.get(key);
+      if (group) group.push(r);
+      else groups.set(key, [r]);
+    });
+    return Array.from(groups.entries())
+      .map(([key, rows]) => ({ key, rows: [...rows].sort((a, b) => dateOf(b) - dateOf(a)) }))
+      .sort((a, b) => dateOf(b.rows[0]) - dateOf(a.rows[0]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredResumes]);
+  // The unfiltered candidate-group count — the "total" half of the count
+  // badge in grouped mode, same role `resumes.length` plays in ungrouped
+  // mode.
+  const totalDistinctCandidates = useMemo(
+    () => new Set(resumes.map((r) => (r.email || r.candidateName || r.id).trim().toLowerCase())).size,
+    [resumes],
+  );
+
+  // Back to page 1 whenever a filter/search narrows the list, grouping is
+  // toggled, or the host switches to a genuinely different job (`jobId` —
+  // never the `resumes` array itself: hosts that build it inline, e.g. with
+  // `.map()` on every render, hand down a new array reference each time even
+  // when the underlying data hasn't changed, which would otherwise snap the
+  // page back to 1 while the same list is just sitting there being
+  // re-rendered).
+  useEffect(() => {
+    setCurrentPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, filterMatchStatus, filterScoreMin, filterScoreMax, filterDateFrom, filterDateTo, filterRecruiter, filterJobTitle, filterJobVersion, jobId, isGrouped]);
+
+  // Grouped mode paginates candidate CLUSTERS (one page = N people, however
+  // many scoring rows each carries); ungrouped mode paginates rows directly.
+  // Two independent slices sharing one currentPage/itemsPerPage pair, since
+  // only one of the two ever renders at a time.
+  const totalPages = Math.max(1, Math.ceil(
+    (isGrouped ? candidateGroups.length : filteredResumes.length) / itemsPerPage,
+  ));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedResumes = filteredResumes.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage,
+  );
+  const paginatedGroups = candidateGroups.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage,
+  );
+
   const uniqueRecruiters = Array.from(new Set(resumes.map(r => r.scoredBy)));
+
+  /* Options for the two job filters, read off the rows this table was handed —
+     never a fixed list — so they only ever offer what is actually selectable
+     here. Built from `resumes` rather than `filteredResumes`, or choosing one
+     value would collapse the dropdown you chose it from to that single entry.
+     Blank/absent values are dropped: they cannot be matched on. */
+  const uniqueJobTitles = Array.from(
+    new Set(resumes.map(r => (r.jobTitle || '').trim()).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+  /* Numeric sort, then rendered as "v2" — a plain string sort puts v10 before
+     v2, which is exactly the order a version list must not be in. */
+  const uniqueJobVersions = Array.from(
+    new Set(
+      resumes
+        .map(r => r.jobVersion)
+        .filter((v): v is number => v !== undefined && v !== null)
+        .map(String),
+    ),
+  ).sort((a, b) => Number(a) - Number(b));
 
   const handleSelectAll = () => {
     if (onSelectAll) {
@@ -680,7 +902,7 @@ Best regards`);
   };
 
   /* One job code per selected resume, prefixed onto the download filename —
-     that resume's own `jobCode` (set in the global "View All Candidates"
+     that resume's own `jobCode` (set in the global "View by Candidates"
      view, which spans many jobs) or else this table's single host job. Two
      or more distinct codes collapse to a "first-last" range rather than
      listing every one, so a bulk download across many jobs still gets a
@@ -758,15 +980,58 @@ Best regards`);
 
     setBulkDownloading(true);
     try {
-      const rawBlob = await scoringService.exportScorecards(selectedResumes);
-      // Ensure blob has correct MIME type for cross-platform compatibility
-      const blob = new Blob([rawBlob], { type: 'application/zip' });
-      const url = window.URL.createObjectURL(blob);
+      const selectedRows = resumes.filter(r => selectedResumes.includes(r.id));
+
+      // Built client-side (rather than the single-file zip the backend's
+      // bulk-download endpoint returns) so each candidate lands inside a
+      // per-job folder — the server's own zip has no notion of "job" and
+      // drops every PDF flat, which is fine for a single-job table but
+      // unreadable from the "All Candidates" view, where one download can
+      // span dozens of jobs.
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+      // Disambiguates two same-named candidates landing in the same job
+      // folder (e.g. two "Surya Mishra" scores against one JD) so the
+      // second file doesn't silently overwrite the first in the archive.
+      const namesUsedInFolder = new Map<string, number>();
+      // Small batches rather than one Promise.all across the whole
+      // selection — this now costs one request PER candidate (the server's
+      // own zip was a single request), so an unbounded burst against a
+      // large selection would hammer the API.
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < selectedRows.length; i += BATCH_SIZE) {
+        const batch = selectedRows.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async (resume) => {
+          const pdfBlob = await scoringService.downloadScorecard(resume.id);
+          const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
+          // Job title alone can't tell two folders apart once a lineage has
+          // several scored versions (or the JD was recreated under the same
+          // title), so the JD code and version ride along in the folder
+          // name itself rather than only in each file inside it.
+          const folderName = [
+            resume.jobCode ? sanitize(resume.jobCode) : null,
+            sanitize(resume.jobTitle || jobTitle) || 'Job',
+            resume.jobVersion ? `V${resume.jobVersion}` : null,
+          ].filter(Boolean).join('-');
+          const safeCandidateName = (resume.candidateName || 'Candidate').replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') || 'Candidate';
+          const dedupeKey = `${folderName}/${safeCandidateName}`;
+          const priorCount = namesUsedInFolder.get(dedupeKey) ?? 0;
+          namesUsedInFolder.set(dedupeKey, priorCount + 1);
+          const fileName = `${safeCandidateName}${priorCount ? `_${priorCount + 1}` : ''}${versionTag([resume])}_Scorecard.pdf`;
+          zip.folder(folderName)!.file(fileName, pdfBlob);
+        }));
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = window.URL.createObjectURL(zipBlob);
       const link = document.createElement('a');
       link.href = url;
-      const selectedRows = resumes.filter(r => selectedResumes.includes(r.id));
+      // No JD-code/version decoration here — unlike the single-job CSV/XLS
+      // export and the per-candidate PDF names, this zip can span many jobs
+      // and versions at once (each already broken out into its own folder
+      // above), so the outer archive name stays generic.
       const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_') || 'Scorecards';
-      link.download = `${jobCodePrefix(selectedRows)}${safeName}${versionTag(selectedRows)}_Scorecards_${formatFileDate(new Date())}.zip`;
+      link.download = `${safeName}_Combined_Scorecards_${formatFileDate(new Date())}.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -794,20 +1059,328 @@ Best regards`);
     }
   };
 
+  /**
+   * One table cell for a customizable column — shared by the flat "Total
+   * Scored Resumes" table and the grouped view's expanded per-candidate
+   * sub-table, so both show exactly the same columns, in the same order and
+   * with the same formatting, instead of the sub-table carrying its own
+   * hand-rolled four.
+   */
+  const renderResumeCell = (col: { id: string; label: string }, resume: ScoredResume) => {
+    if (col.id === 'candidateName') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          {onViewCandidate ? (
+            <button
+              onClick={() => onViewCandidate(resume)}
+              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
+            >
+              {resume.candidateName}
+            </button>
+          ) : (
+            <div className="text-sm text-gray-900">{resume.candidateName}</div>
+          )}
+        </td>
+      );
+    }
+    if (col.id === 'jobTitle') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          {/* Capped at 25 characters so the column is the same width in every
+              table; the tooltip carries the full title. */}
+          <div className="text-sm text-gray-700 font-medium" title={resume.jobTitle || undefined}>
+            {truncateJobTitle(resume.jobTitle)}
+          </div>
+        </td>
+      );
+    }
+    if (col.id === 'jobVersion') {
+      // The JD's own version at scoring time — only set in the
+      // cross-job "All Candidates" list, where the same job
+      // title repeats once per JD version. Absent (and so
+      // blank) in a single-job table, which is already scoped
+      // to one version.
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <span className="text-sm text-gray-700">{resume.jobVersion ? `v${resume.jobVersion}` : '-'}</span>
+        </td>
+      );
+    }
+    if (col.id === 'version') {
+      const ver = resume.version || resume.resumeVersion || 1;
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
+            v{ver}
+          </span>
+        </td>
+      );
+    }
+    if (col.id === 'email') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <div className="flex items-center gap-1 text-sm text-gray-600">
+            <Mail className="w-3.5 h-3.5" />
+            {resume.email}
+          </div>
+        </td>
+      );
+    }
+    if (col.id === 'phone') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <div className="flex items-start gap-1 text-sm text-gray-600">
+            <Phone className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <div className="flex flex-col gap-0.5">
+              {(() => {
+                const numbers = splitPhoneNumbers(resume.phone, 2);
+                return numbers.length > 0
+                  ? numbers.map((num, i) => <span key={i} className="whitespace-nowrap">{num}</span>)
+                  : <span className="whitespace-nowrap">-</span>;
+              })()}
+            </div>
+          </div>
+        </td>
+      );
+    }
+    if (col.id === 'matchStatus') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
+            {resume.matchStatus}
+          </span>
+        </td>
+      );
+    }
+    if (col.id === 'scorePercentage') {
+      // Same three colors as the Match Status badge, so the
+      // score reads as that status at a glance instead of its
+      // own separate (and previously inconsistent) scale.
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <div className={`text-xl font-semibold ${
+            MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
+          }`}>
+            {resume.scorePercentage}%
+          </div>
+        </td>
+      );
+    }
+    if (col.id === 'experience') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <div className="text-sm text-gray-600">{resume.experience || 'N/A'}</div>
+        </td>
+      );
+    }
+    if (col.id === 'education') {
+      const educationDisplay = typeof resume.education === 'string'
+        ? resume.education
+        : Array.isArray(resume.education) && resume.education.length > 0
+          ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
+          : 'N/A';
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle min-w-[180px]">
+          <div className="text-sm text-gray-600">{educationDisplay}</div>
+        </td>
+      );
+    }
+    if (col.id === 'certifications') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle min-w-[200px]">
+          <div className="text-sm text-gray-600">
+            {resume.certifications && resume.certifications.length > 0
+              ? resume.certifications.map(cert =>
+                  typeof cert === 'string' ? cert : (cert?.name || '')
+                ).join(', ')
+              : 'N/A'}
+          </div>
+        </td>
+      );
+    }
+    if (col.id === 'scoredDate') {
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          <div className="text-sm text-gray-900">{resume.scoredBy}</div>
+          <div className="flex items-center gap-1 text-xs text-gray-500">
+            <Calendar className="w-3 h-3" />
+            <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
+          </div>
+        </td>
+      );
+    }
+    return null;
+  };
+
+  /**
+   * The Invitation cell for one resume — shared with the grouped view's
+   * expanded sub-table so that table carries the same Invitation column the
+   * flat one does.
+   */
+  // Every row gets the button, whatever its match status, so a scored
+  // candidate can always be invited. The menu carries the two things a
+  // candidate can be invited to; each entry is gated by its own permission and
+  // by whether that section exists on this JD, rather than hiding the whole
+  // control. Neither configured → the button is disabled.
+  const renderInviteCell = (resume: ScoredResume) => (
+  <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+    {(canCreateAssessments || onInviteAIInterview) ? (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            aria-label="Invite"
+            disabled={inviteDisabled}
+            title={inviteDisabled ? inviteDisabledTitle : 'Invite'}
+            className="px-3 py-1.5 text-xs text-white rounded-md transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md bg-brand-blue hover:bg-brand-blue-2 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:bg-brand-blue"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            Invite
+            <ChevronDown className="w-3 h-3" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="w-48 !rounded-lg !border !border-gray-200 !bg-white !py-1 !px-0 !shadow-xl"
+        >
+          {canCreateAssessments && (
+            <DropdownMenuItem
+              className={scoredResumesMenuItemClass}
+              /* Off unless this JD has a published assessment —
+                 and assessment invites spend a unit, so the entry
+                 also goes quiet when there are none left rather
+                 than opening a form that cannot be submitted. */
+              disabled={!canInviteAssessment || availableUnits === 0}
+              title={
+                !canInviteAssessment
+                  ? 'No published assessment for this job yet'
+                  : availableUnits === 0
+                    ? 'No assessment units available'
+                    : undefined
+              }
+              onSelect={() => {
+                setInviteCandidate(resume);
+                setShowInviteModal(true);
+              }}
+            >
+              <FileText className="w-4 h-4 text-menu-icon-view" />
+              <span className={MENU_ITEM_SCALE_CLASS}>Assessment</span>
+            </DropdownMenuItem>
+          )}
+          {onInviteAIInterview && (
+            <DropdownMenuItem
+              className={scoredResumesMenuItemClass}
+              /* Same rule on the interview side: nothing live on
+                 this JD means nothing to invite the candidate to. */
+              disabled={!canInviteAIInterview}
+              title={
+                !canInviteAIInterview
+                  ? 'No published AI interview for this job yet'
+                  : undefined
+              }
+              onSelect={() =>
+                onInviteAIInterview({
+                  name: resume.candidateName || 'Unknown',
+                  email: resume.email || '',
+                  resumeId: resume.resumeId,
+                })
+              }
+            >
+              <Video className="w-4 h-4 text-menu-icon-share" />
+              <span className={MENU_ITEM_SCALE_CLASS}>AI Interview</span>
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ) : (
+      <span className="text-xs text-gray-400">-</span>
+    )}
+  </td>
+  );
+
+  /**
+   * The Actions dropdown's items for one resume — factored out so the
+   * grouped-by-candidate view's cluster-level menu (applied to that
+   * candidate's most recent score) can offer the exact same actions as the
+   * per-row menu below, instead of a second hand-rolled copy drifting apart
+   * from it.
+   */
+  const renderActionsMenuItems = (resume: ScoredResume) => (
+    <>
+      <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => onViewCandidate && onViewCandidate(resume)}>
+        <Eye className="w-4 h-4 text-menu-icon-view" />
+        <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
+      </DropdownMenuItem>
+      <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => setScoreTableCandidate(resume)}>
+        <BarChart3 className="w-4 h-4 text-menu-icon-view" />
+        <span className={MENU_ITEM_SCALE_CLASS}>View Score Table</span>
+      </DropdownMenuItem>
+      {/* Only scores that still point at a resume have a file behind them to
+          preview. */}
+      {resume.resumeId && (
+        <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => setViewResumeCandidate(resume)}>
+          <FileText className="w-4 h-4 text-menu-icon-view" />
+          <span className={MENU_ITEM_SCALE_CLASS}>View Resume</span>
+        </DropdownMenuItem>
+      )}
+      {/* Only scores that still point at a resume can be shared. */}
+      {canShareResume && resume.resumeId && (
+        <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => openShareModal(resume)}>
+          <Share2 className="w-4 h-4 text-menu-icon-share" />
+          <span className={MENU_ITEM_SCALE_CLASS}>Share via Email</span>
+        </DropdownMenuItem>
+      )}
+      {canExport && (
+        <DropdownMenuItem
+          className={scoredResumesMenuItemClass}
+          disabled={downloadingId === resume.id}
+          onSelect={() => handleDownloadScorecard(resume.id)}
+        >
+          {downloadingId === resume.id ? (
+            <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
+          ) : (
+            <Download className="w-4 h-4 text-menu-icon-download" />
+          )}
+          <span className={MENU_ITEM_SCALE_CLASS}>Download Scorecard</span>
+        </DropdownMenuItem>
+      )}
+    </>
+  );
+
+  // A stable color per candidate for the grouped view's avatar initials —
+  // hashed from their own key so the same person always lands on the same
+  // color across renders/pages, without needing to track an assignment.
+  const AVATAR_PALETTE = [
+    { bg: 'bg-blue-100', text: 'text-blue-700' },
+    { bg: 'bg-rose-100', text: 'text-rose-700' },
+    { bg: 'bg-emerald-100', text: 'text-emerald-700' },
+    { bg: 'bg-violet-100', text: 'text-violet-700' },
+    { bg: 'bg-amber-100', text: 'text-amber-700' },
+    { bg: 'bg-cyan-100', text: 'text-cyan-700' },
+  ];
+  const avatarColorFor = (key: string) => {
+    const hash = key.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+  };
+  const initialsFor = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       {/* Header — title and the one page-level action. Everything that acts on
           the list lives in the toolbar below, and everything that acts on a
           selection lives in its own row under that, same as job-openings. */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-        <h2 className="text-gray-900">Scored Resumes</h2>
+        <h2 className="text-gray-900">{title}</h2>
         {/* Score Resumes — opens the host's "Select Applicants to Score" modal. */}
         {onScoreResumes && (
           <button
             onClick={onScoreResumes}
             className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 self-start sm:self-auto"
           >
-            <Target className="w-4 h-4" />
+            <ClipboardList className="w-4 h-4" />
             <span className="hidden sm:inline">Score Resumes</span>
             <span className="sm:hidden">Score</span>
           </button>
@@ -833,8 +1406,8 @@ Best regards`);
           className="mb-0"
           countBadge={
             <ListCountBadge
-              filtered={filteredResumes.length}
-              total={resumes.length}
+              filtered={isGrouped ? candidateGroups.length : filteredResumes.length}
+              total={isGrouped ? totalDistinctCandidates : resumes.length}
               noun="candidate"
               selected={selectedResumes.length}
             />
@@ -872,54 +1445,28 @@ Best regards`);
         {/* Advanced Filters */}
         {showFilters && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Match Status */}
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Match Status</label>
-                <select
-                  value={filterMatchStatus}
-                  onChange={(e) => search.setFilter('matchStatus', e.target.value as typeof filterMatchStatus)}
-                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="Exact Match">Exact Match</option>
-                  <option value="Partial Match">Partial Match</option>
-                  <option value="No Match">No Match</option>
-                </select>
-              </div>
+            {/* Flex-wrap, not the stretching 2/3-column grid this used to be:
+                a grid cell is a third of the panel wide and every control in it
+                stretched to fill that, so a "v2" dropdown was as wide as a job
+                title. Each field now takes one fixed width and they pack from
+                the left, wrapping when they run out of room. */}
+            {/* Ordered who → when → how it scored → which job.
 
-              {/* Score Range */}
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Score Range</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={filterScoreMin}
-                    onChange={(e) => search.setFilter('scoreMin', Number(e.target.value))}
-                    min="0"
-                    max="100"
-                    placeholder="Min"
-                    className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                  />
-                  <input
-                    type="number"
-                    value={filterScoreMax}
-                    onChange={(e) => search.setFilter('scoreMax', Number(e.target.value))}
-                    min="0"
-                    max="100"
-                    placeholder="Max"
-                    className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                  />
-                </div>
-              </div>
-
-              {/* Recruiter */}
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Scored By</label>
+                Fields FLEX rather than sitting at one fixed width: the panel is
+                a different width in every host and at every viewport, and fixed
+                fields leave ragged trailing space at most of them. Each field's
+                `basis` is the width it wants — that is what decides how many
+                fit on a row — and `grow` shares out whatever the row has left,
+                so a row is always filled edge to edge. `max-w` keeps a short
+                final row from stretching two fields across the whole panel. */}
+            <div className="flex flex-wrap gap-4">
+              {/* 1. Scored By */}
+              <div className={FILTER_FIELD_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Scored By</label>
                 <select
                   value={filterRecruiter}
                   onChange={(e) => search.setFilter('recruiter', e.target.value)}
-                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                  className={FILTER_CONTROL_CLASS}
                 >
                   <option value="all">All Recruiters</option>
                   {uniqueRecruiters.map(recruiter => (
@@ -928,25 +1475,129 @@ Best regards`);
                 </select>
               </div>
 
-              {/* Date Range */}
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Date From</label>
+              {/* 2. Date From */}
+              <div className={FILTER_FIELD_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Date From</label>
                 <input
                   type="date"
                   value={filterDateFrom}
                   onChange={(e) => search.setFilter('dateFrom', e.target.value)}
-                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                  className={FILTER_CONTROL_CLASS}
                 />
               </div>
 
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Date To</label>
+              {/* 3. Date To */}
+              <div className={FILTER_FIELD_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Date To</label>
                 <input
                   type="date"
                   value={filterDateTo}
                   onChange={(e) => search.setFilter('dateTo', e.target.value)}
-                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                  className={FILTER_CONTROL_CLASS}
                 />
+              </div>
+
+              {/* 4. Match Status — dropped when the list is already one
+                  verdict; see `hideMatchStatusFilter`. The only conditional
+                  field in this panel, and it turns on a host's explicit
+                  statement about its own rows rather than on the data. */}
+              {!hideMatchStatusFilter && (
+                <div className={FILTER_FIELD_CLASS}>
+                  <label className={FILTER_LABEL_CLASS}>Match Status</label>
+                  <select
+                    value={filterMatchStatus}
+                    onChange={(e) => search.setFilter('matchStatus', e.target.value as typeof filterMatchStatus)}
+                    className={FILTER_CONTROL_CLASS}
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="Exact Match">Exact Match</option>
+                    <option value="Partial Match">Partial Match</option>
+                    <option value="No Match">No Match</option>
+                  </select>
+                </div>
+              )}
+
+              {/* 5. Score Range — two inputs sharing ONE field, so the pair
+                  reads as a single filter rather than two. Widened to take up
+                  the first row's leftover space; see FILTER_FIELD_WIDE_CLASS. */}
+              <div className={FILTER_FIELD_WIDE_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Score Range</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={filterScoreMin}
+                    onChange={(e) => search.setFilter('scoreMin', Number(e.target.value))}
+                    min="0"
+                    max="100"
+                    placeholder="Min"
+                    /* min-w-0 so a flex child can shrink below its intrinsic
+                       width — a number input's default is wider than half of
+                       this field, and without it the pair overflows. */
+                    className={`${FILTER_CONTROL_CLASS} min-w-0`}
+                  />
+                  <input
+                    type="number"
+                    value={filterScoreMax}
+                    onChange={(e) => search.setFilter('scoreMax', Number(e.target.value))}
+                    min="0"
+                    max="100"
+                    placeholder="Max"
+                    className={`${FILTER_CONTROL_CLASS} min-w-0`}
+                  />
+                </div>
+              </div>
+
+              {/* Forced wrap, so the job filters start a new line — but ONLY in
+                  the seven-field panel, where one row would be too crowded to
+                  read. The verdict sections drop Match Status and are six
+                  fields, which fit a single row at any normal panel width, so
+                  breaking them would push two lonely fields onto a second line
+                  for no reason.
+
+                  A full-basis spacer is the only way to break a flex row; flex
+                  items have no `break-before`. Height zero, so it costs one
+                  row-gap and nothing else. */}
+              {!hideMatchStatusFilter && <div aria-hidden className="basis-full h-0" />}
+
+              {/* 6-7. Job Title / Job Version.
+
+                  Both render unconditionally, like every other field in this
+                  panel. They were gated on having more than one value to pick
+                  between, which meant Job Version vanished on any list whose
+                  rows happened to share a version (Exact Match with four rows,
+                  say) — a filter that comes and goes with the data is one users
+                  cannot learn, and it left a hole in the row beside a Job Title
+                  that did render. `Scored By` has always shown even with a
+                  single recruiter; these now match it. */}
+              <div className={FILTER_FIELD_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Job Title</label>
+                <select
+                  value={filterJobTitle}
+                  onChange={(e) => search.setFilter('jobTitle', e.target.value)}
+                  className={FILTER_CONTROL_CLASS}
+                >
+                  <option value="all">All Job Titles</option>
+                  {uniqueJobTitles.map(title => (
+                    /* Full title in the option — the field is narrow, but the
+                       open dropdown sizes to its content, so the picker stays
+                       unambiguous even when the closed control truncates. */
+                    <option key={title} value={title}>{title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className={FILTER_FIELD_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>Job Version</label>
+                <select
+                  value={filterJobVersion}
+                  onChange={(e) => search.setFilter('jobVersion', e.target.value)}
+                  className={FILTER_CONTROL_CLASS}
+                >
+                  <option value="all">All Versions</option>
+                  {uniqueJobVersions.map(version => (
+                    <option key={version} value={version}>v{version}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -1035,6 +1686,214 @@ Best regards`);
         )}
       </div>
 
+      {/* "Group by: Candidate" control — only offered by hosts that opted
+          into grouping via the `groupByEmail` prop (the "View by Candidates"
+          card). `isGrouped` is this table's own on/off switch; the prop only
+          sets its starting value each time the host hands this table a
+          differently-scoped list. */}
+      {groupByEmail && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
+                Group by: <span className="font-medium text-gray-900">{isGrouped ? 'Candidate' : 'Ungrouped'}</span>
+                <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40">
+              <DropdownMenuItem className="group" onSelect={() => setIsGrouped(true)}>
+                <span className={MENU_ITEM_SCALE_CLASS}>Candidate</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="group" onSelect={() => setIsGrouped(false)}>
+                <span className={MENU_ITEM_SCALE_CLASS}>Ungrouped</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {isGrouped && (
+            <button
+              onClick={() => setIsGrouped(false)}
+              className="text-sm font-medium text-brand-blue hover:text-brand-blue-2 transition-colors"
+            >
+              Clear Grouping
+            </button>
+          )}
+        </div>
+      )}
+
+      {isGrouped ? (
+        <div className="rounded-xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto tf-table-shell">
+            <table className="w-full min-w-[900px]">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="w-10 px-3 py-3" />
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Candidate</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Job Versions</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Job Titles</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Latest Updated</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {paginatedGroups.map(({ key, rows }) => {
+                  const primary = rows[0];
+                  const isExpanded = expandedGroupKeys.has(key);
+                  const distinctTitles = Array.from(new Set(rows.map((r) => r.jobTitle).filter(Boolean))) as string[];
+                  const titlesExpanded = expandedTitleKeys.has(key);
+                  const hiddenTitleCount = Math.max(0, distinctTitles.length - JOB_TITLE_PREVIEW_COUNT);
+                  const avatar = avatarColorFor(key);
+                  return (
+                    <Fragment key={key}>
+                      <tr className="hover:bg-gray-50/70 transition-colors">
+                        <td className="px-3 py-4 align-top">
+                          <button
+                            onClick={() => toggleGroupExpanded(key)}
+                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                            title={isExpanded ? 'Collapse' : 'Expand'}
+                            className={`inline-flex items-center justify-center w-7 h-7 rounded-lg border transition-colors ${
+                              isExpanded
+                                ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
+                                : 'border-gray-200 text-gray-400 hover:border-brand-blue/30 hover:text-brand-blue'
+                            }`}
+                          >
+                            <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                          </button>
+                        </td>
+                        <td className="px-4 py-4 align-top">
+                          <div className="flex items-start gap-3">
+                            <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold ${avatar.bg} ${avatar.text}`}>
+                              {initialsFor(primary.candidateName || 'Candidate')}
+                            </div>
+                            <div className="min-w-0">
+                              {onViewCandidate ? (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
+                                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block"
+                                >
+                                  {primary.candidateName || 'Candidate'}
+                                </button>
+                              ) : (
+                                <div className="text-sm font-medium text-gray-900">{primary.candidateName || 'Candidate'}</div>
+                              )}
+                              {primary.email && <div className="text-xs text-gray-500 truncate">{primary.email}</div>}
+                              {primary.phone && <div className="text-xs text-gray-500">{primary.phone}</div>}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 align-top">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
+                            {rows.length} Job {rows.length === 1 ? 'Version' : 'Versions'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 align-top">
+                          <div className="space-y-0.5">
+                            {(titlesExpanded ? distinctTitles : distinctTitles.slice(0, JOB_TITLE_PREVIEW_COUNT)).map((title, i) => (
+                              <div key={i} className="text-sm text-gray-700">{title}</div>
+                            ))}
+                            {hiddenTitleCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleTitlesExpanded(key); }}
+                                title={distinctTitles.slice(JOB_TITLE_PREVIEW_COUNT).join(', ')}
+                                className="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 hover:text-gray-800 transition-colors whitespace-nowrap"
+                              >
+                                {titlesExpanded ? 'Show less' : `+${hiddenTitleCount} more`}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 align-top whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{formatISTDate(primary.scoredDate)}</div>
+                          <div className="text-xs text-gray-500">{formatISTTime(primary.scoredDate)}</div>
+                        </td>
+                        <td className="px-4 py-4 align-top" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                aria-label="Actions"
+                                title="Actions"
+                                className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                              >
+                                <MoreVertical className="w-4 h-4 text-gray-600" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                              {renderActionsMenuItems(primary)}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${key}-detail`}>
+                          <td colSpan={6} className="p-0 bg-gray-50/60">
+                            {/* Same columns as the flat "Total Scored
+                                Resumes" table — including whatever the user
+                                turned on in Customize Columns — so expanding a
+                                candidate shows their scores at full detail
+                                rather than a reduced set. */}
+                            <div className="px-4 sm:px-6 py-3 overflow-x-auto">
+                              <table className="w-full min-w-[1100px] table-auto">
+                                <thead>
+                                  <tr className="border-b border-gray-200">
+                                    {enabledColumns.map((col) => (
+                                      <th key={col.id} className="text-left py-2 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
+                                        {col.label}
+                                      </th>
+                                    ))}
+                                    <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Invitation</th>
+                                    <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wide">Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {rows.map((row) => (
+                                    <tr key={row.id} className="bg-white">
+                                      {enabledColumns.map((col) => renderResumeCell(col, row))}
+                                      {renderInviteCell(row)}
+                                      <td className="py-2.5 px-4 align-middle" onClick={(e) => e.stopPropagation()}>
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <button
+                                              aria-label="Actions"
+                                              title="Actions"
+                                              className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                                            >
+                                              <MoreVertical className="w-4 h-4 text-gray-600" />
+                                            </button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                                            {renderActionsMenuItems(row)}
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {candidateGroups.length === 0 && (
+            <ListEmptyState
+              icon={Search}
+              isNarrowed={search.isNarrowed}
+              query={search.appliedQuery}
+              entityLabel="candidate"
+              emptyTitle="No scored candidates yet"
+              emptyDescription="Upload and score candidates to see them here."
+              onReset={search.reset}
+            />
+          )}
+        </div>
+      ) : (
+        <>
       {/* Desktop Table View */}
       <div className="hidden md:block overflow-x-auto tf-table-shell">
         <table className="w-full min-w-[1100px] table-auto">
@@ -1059,7 +1918,8 @@ Best regards`);
             </tr>
           </thead>
           <tbody>
-            {filteredResumes.map((resume, index) => (
+            {paginatedResumes.map((resume, index) => {
+              return (
               <tr
                 key={resume.id}
                 onClick={(e) => handleRowClick(resume.id, e)}
@@ -1080,247 +1940,10 @@ Best regards`);
                   </button>
                 </td>
 
-                {enabledColumns.map((col) => {
-                  if (col.id === 'candidateName') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        {onViewCandidate ? (
-                          <button
-                            onClick={() => onViewCandidate(resume)}
-                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
-                          >
-                            {resume.candidateName}
-                          </button>
-                        ) : (
-                          <div className="text-sm text-gray-900">{resume.candidateName}</div>
-                        )}
-                      </td>
-                    );
-                  }
-                  if (col.id === 'jobTitle') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="text-sm text-gray-700 font-medium">{resume.jobTitle || '-'}</div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'jobVersion') {
-                    // The JD's own version at scoring time — only set in the
-                    // cross-job "All Candidates" list, where the same job
-                    // title repeats once per JD version. Absent (and so
-                    // blank) in a single-job table, which is already scoped
-                    // to one version.
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <span className="text-sm text-gray-700">{resume.jobVersion ? `v${resume.jobVersion}` : '-'}</span>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'version') {
-                    const ver = resume.version || resume.resumeVersion || 1;
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
-                          v{ver}
-                        </span>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'email') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <Mail className="w-3.5 h-3.5" />
-                          {resume.email}
-                        </div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'phone') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="flex items-start gap-1 text-sm text-gray-600">
-                          <Phone className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                          <div className="flex flex-col gap-0.5">
-                            {(() => {
-                              const numbers = splitPhoneNumbers(resume.phone, 2);
-                              return numbers.length > 0
-                                ? numbers.map((num, i) => <span key={i} className="whitespace-nowrap">{num}</span>)
-                                : <span className="whitespace-nowrap">-</span>;
-                            })()}
-                          </div>
-                        </div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'matchStatus') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${
-                          resume.matchStatus === 'Exact Match'
-                            ? 'bg-green-100 text-green-700 border-green-300'
-                            : resume.matchStatus === 'Partial Match'
-                            ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
-                            : 'bg-red-100 text-red-700 border-red-300'
-                        }`}>
-                          {resume.matchStatus}
-                        </span>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'scorePercentage') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className={`text-base ${
-                            resume.scorePercentage >= 85
-                              ? 'text-green-600'
-                              : resume.scorePercentage >= 70
-                              ? 'text-gray-800'
-                              : 'text-yellow-600'
-                          }`}>
-                            {resume.scorePercentage}%
-                          </div>
-                          <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                            <div
-                              className={`h-1.5 rounded-full ${
-                                resume.scorePercentage >= 85
-                                  ? 'bg-green-600'
-                                  : resume.scorePercentage >= 70
-                                  ? 'bg-gray-800'
-                                  : 'bg-yellow-600'
-                              }`}
-                              style={{ width: `${resume.scorePercentage}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'experience') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="text-sm text-gray-600">{resume.experience || 'N/A'}</div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'education') {
-                    const educationDisplay = typeof resume.education === 'string'
-                      ? resume.education
-                      : Array.isArray(resume.education) && resume.education.length > 0
-                        ? (resume.education[0]?.degree || resume.education[0]?.institution || 'Education available')
-                        : 'N/A';
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle min-w-[180px]">
-                        <div className="text-sm text-gray-600">{educationDisplay}</div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'certifications') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle min-w-[200px]">
-                        <div className="text-sm text-gray-600">
-                          {resume.certifications && resume.certifications.length > 0
-                            ? resume.certifications.map(cert =>
-                                typeof cert === 'string' ? cert : (cert?.name || '')
-                              ).join(', ')
-                            : 'N/A'}
-                        </div>
-                      </td>
-                    );
-                  }
-                  if (col.id === 'scoredDate') {
-                    return (
-                      <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{resume.scoredBy}</div>
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                          <Calendar className="w-3 h-3" />
-                          <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
-                        </div>
-                      </td>
-                    );
-                  }
-                  return null;
-                })}
+                {enabledColumns.map((col) => renderResumeCell(col, resume))}
 
-                {/* Invite Column — every row gets the button, whatever its
-                    match status, so a scored candidate can always be invited.
-                    The menu carries the two things a candidate can be invited
-                    to; each entry is gated by its own permission and by whether
-                    that section exists on this JD, rather than hiding the whole
-                    control. Neither configured → the button is disabled. */}
-                <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                  {(canCreateAssessments || onInviteAIInterview) ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          aria-label="Invite"
-                          disabled={inviteDisabled}
-                          title={inviteDisabled ? inviteDisabledTitle : 'Invite'}
-                          className="px-3 py-1.5 text-xs text-white rounded-md transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md bg-brand-blue hover:bg-brand-blue-2 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:bg-brand-blue"
-                        >
-                          <UserPlus className="w-3.5 h-3.5" />
-                          Invite
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="start"
-                        className="w-48 !rounded-lg !border !border-gray-200 !bg-white !py-1 !px-0 !shadow-xl"
-                      >
-                        {canCreateAssessments && (
-                          <DropdownMenuItem
-                            className={scoredResumesMenuItemClass}
-                            /* Off unless this JD has a published assessment —
-                               and assessment invites spend a unit, so the entry
-                               also goes quiet when there are none left rather
-                               than opening a form that cannot be submitted. */
-                            disabled={!canInviteAssessment || availableUnits === 0}
-                            title={
-                              !canInviteAssessment
-                                ? 'No published assessment for this job yet'
-                                : availableUnits === 0
-                                  ? 'No assessment units available'
-                                  : undefined
-                            }
-                            onSelect={() => {
-                              setInviteCandidate(resume);
-                              setShowInviteModal(true);
-                            }}
-                          >
-                            <FileText className="w-4 h-4 text-menu-icon-view" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>Assessment</span>
-                          </DropdownMenuItem>
-                        )}
-                        {onInviteAIInterview && (
-                          <DropdownMenuItem
-                            className={scoredResumesMenuItemClass}
-                            /* Same rule on the interview side: nothing live on
-                               this JD means nothing to invite the candidate to. */
-                            disabled={!canInviteAIInterview}
-                            title={
-                              !canInviteAIInterview
-                                ? 'No published AI interview for this job yet'
-                                : undefined
-                            }
-                            onSelect={() =>
-                              onInviteAIInterview({
-                                name: resume.candidateName || 'Unknown',
-                                email: resume.email || '',
-                                resumeId: resume.resumeId,
-                              })
-                            }
-                          >
-                            <Video className="w-4 h-4 text-menu-icon-share" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>AI Interview</span>
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  ) : (
-                    <span className="text-xs text-gray-400">-</span>
-                  )}
-                </td>
+                {renderInviteCell(resume)}
+
 
                 {/* Actions Column */}
                 <td className="py-3 px-4 align-middle whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
@@ -1338,44 +1961,13 @@ Best regards`);
                       align="end"
                       className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
                     >
-                      <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => onViewCandidate && onViewCandidate(resume)}>
-                        <Eye className="w-4 h-4 text-menu-icon-view" />
-                        <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
-                      </DropdownMenuItem>
-                      {/* Only scores that still point at a resume have a file
-                          behind them to preview. */}
-                      {resume.resumeId && (
-                        <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => setViewResumeCandidate(resume)}>
-                          <FileText className="w-4 h-4 text-menu-icon-view" />
-                          <span className={MENU_ITEM_SCALE_CLASS}>View Resume</span>
-                        </DropdownMenuItem>
-                      )}
-                      {/* Only scores that still point at a resume can be shared. */}
-                      {canShareResume && resume.resumeId && (
-                        <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => openShareModal(resume)}>
-                          <Share2 className="w-4 h-4 text-menu-icon-share" />
-                          <span className={MENU_ITEM_SCALE_CLASS}>Share via Email</span>
-                        </DropdownMenuItem>
-                      )}
-                      {canExport && (
-                        <DropdownMenuItem
-                          className={scoredResumesMenuItemClass}
-                          disabled={downloadingId === resume.id}
-                          onSelect={() => handleDownloadScorecard(resume.id)}
-                        >
-                          {downloadingId === resume.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
-                          ) : (
-                            <Download className="w-4 h-4 text-menu-icon-download" />
-                          )}
-                          <span className={MENU_ITEM_SCALE_CLASS}>Download Scorecard</span>
-                        </DropdownMenuItem>
-                      )}
+                      {renderActionsMenuItems(resume)}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
 
@@ -1394,7 +1986,7 @@ Best regards`);
 
       {/* Mobile Card View */}
       <div className="md:hidden space-y-4">
-        {filteredResumes.map((resume) => (
+        {paginatedResumes.map((resume) => (
           <div
             key={resume.id}
             className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-[var(--border-dark)] transition-all cursor-pointer"
@@ -1418,17 +2010,11 @@ Best regards`);
                   {/* Show job title in global view */}
                   {isGlobalView && resume.jobTitle && (
                     <div className="text-xs text-gray-500 mb-1">
-                      Applied for: <span className="font-medium text-gray-700">{resume.jobTitle}</span>
+                      Applied for: <span className="font-medium text-gray-700" title={resume.jobTitle || undefined}>{truncateJobTitle(resume.jobTitle)}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2 mb-2">
-                    <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${
-                      resume.matchStatus === 'Exact Match'
-                        ? 'bg-green-100 text-green-700 border-green-300'
-                        : resume.matchStatus === 'Partial Match'
-                        ? 'bg-yellow-100 text-yellow-700 border-yellow-300'
-                        : 'bg-red-100 text-red-700 border-red-300'
-                    }`}>
+                    <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
                       {resume.matchStatus}
                     </span>
                     <div className={`text-lg ${
@@ -1608,6 +2194,21 @@ Best regards`);
           />
         )}
       </div>
+
+        </>
+      )}
+
+      {/* Shared between the grouped and ungrouped renders above (only one is
+          ever mounted at a time) — one control regardless of which is
+          showing, or of viewport in the ungrouped case. */}
+      <ListPagination
+        currentPage={safeCurrentPage}
+        itemsPerPage={itemsPerPage}
+        totalItems={isGrouped ? candidateGroups.length : filteredResumes.length}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={setItemsPerPage}
+        itemLabel={isGrouped ? 'candidates' : 'scored resumes'}
+      />
 
       {/* Column Customization Modal */}
       {showColumnModal && (
@@ -1805,6 +2406,17 @@ Best regards`);
           resumeId={viewResumeCandidate.resumeId}
           title={viewResumeCandidate.candidateName}
           onClose={() => setViewResumeCandidate(null)}
+        />
+      )}
+
+      {/* "View Score Table" from the Actions menu. */}
+      {scoreTableCandidate && (
+        <ScoreTableModal
+          resume={scoreTableCandidate}
+          jobId={jobId}
+          jobCode={jobCode}
+          jobTitle={scoreTableCandidate.jobTitle || jobTitle}
+          onClose={() => setScoreTableCandidate(null)}
         />
       )}
 
@@ -2339,11 +2951,9 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
                     </div>
                     {resume.matchStatus && (
                       <div
-                        className={`px-2 py-1 text-xs rounded-full ${
-                          resume.matchStatus === 'Exact Match'
-                            ? 'bg-green-100 text-green-700 border border-green-300'
-                            : 'bg-yellow-100 text-yellow-700 border border-yellow-300'
-                        }`}
+                        /* Was a two-branch test, so No Match wore the Partial
+                           colour here. The shared map answers all three. */
+                        className={`px-2 py-1 text-xs rounded-full border ${matchBadgeClass(resume.matchStatus)}`}
                       >
                         {resume.matchStatus}
                       </div>

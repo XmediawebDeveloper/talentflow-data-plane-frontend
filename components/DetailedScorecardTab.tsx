@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info } from 'lucide-react';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -35,6 +37,10 @@ interface ScoredResumeDetail {
   // tooltip so the Weighted Score never looks like a plain average of the
   // Required/Preferred percentages shown beside it.
   scoreFormula?: string;
+  // Colors the "Overall Score" header below to match the same status the
+  // rest of the app keys its score colors off, rather than its own separate
+  // score-threshold scale.
+  matchStatus?: string;
   scoredDate: string;
   scoredBy: string;
   detailedScores: DetailedScores;
@@ -59,6 +65,36 @@ interface DetailedScorecardTabProps {
 }
 
 export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, getScoreColor, getScoreBgColor, getProgressBarColor }: DetailedScorecardTabProps) {
+  // The AI Reasoning pill's full-text hover box. Rendered through a portal
+  // (see the end of this component) and positioned from real viewport
+  // coordinates rather than CSS `absolute`/`group-hover` — the pill sits
+  // inside several nested scroll/overflow-hidden containers (the table
+  // shell, the modal body, the modal card), any of which clipped a
+  // CSS-positioned tooltip depending on which row was hovered. A portal to
+  // <body> with measured coordinates has nothing left to clip it against.
+  const [reasoningTooltip, setReasoningTooltip] = useState<{ text: string; left: number; width: number; top: number; openUp: boolean } | null>(null);
+
+  const showReasoningTooltip = (e: React.MouseEvent<HTMLElement>, text: string) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    // Spans the AI Reasoning column's own cell (left-aligned to it) rather
+    // than a fixed width centered on the pill — wide enough to read the
+    // reasoning comfortably without spilling past that column into the
+    // ones before it.
+    const cellRect = e.currentTarget.closest('td')?.getBoundingClientRect();
+    // Rough budget for the tooltip's own height — flips upward whenever the
+    // space below the pill, to the viewport's bottom edge, can't fit it.
+    const estimatedTooltipHeight = 160;
+    const openUp = window.innerHeight - rect.bottom < estimatedTooltipHeight + 16;
+    setReasoningTooltip({
+      text,
+      left: cellRect?.left ?? rect.left,
+      width: cellRect?.width ?? 288,
+      top: openUp ? rect.top - 8 : rect.bottom + 8,
+      openUp,
+    });
+  };
+  const hideReasoningTooltip = () => setReasoningTooltip(null);
+
   // Convert percentage scores to rating out of 10
   const convertToRating = (percentage: number): number => {
     return Math.round((percentage / 100) * 10);
@@ -330,6 +366,15 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     };
   };
 
+  // Same three colors as the Match Status badge shown next to this score
+  // elsewhere on the page (Overview tab, Scored Resumes table).
+  const getOverallScoreColor = (matchStatus?: string): string => {
+    const normalized = matchStatus?.toLowerCase().replace(/[_\s]/g, '');
+    if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'text-green-600';
+    if (normalized === 'partialmatch') return 'text-brand-orange-deep';
+    return 'text-red-600';
+  };
+
   const getRatingRangeColor = (rating: number): string => {
     if (rating === 10) return 'text-green-700 font-semibold';
     if (rating === 9) return 'text-green-700 font-semibold';
@@ -350,7 +395,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             </Tooltip>
           )}
         </span>
-        <span className={`text-2xl font-bold ${resume.scorePercentage >= 70 ? 'text-green-600' : resume.scorePercentage >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
+        <span className={`text-2xl font-bold ${getOverallScoreColor(resume.matchStatus)}`}>
           {resume.scorePercentage}%
         </span>
         <span className="text-gray-400">|</span>
@@ -403,26 +448,26 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             </h4>
           </div>
 
-          <div className="overflow-x-auto tf-table-shell">
-            <table className="w-full">
+          <div className="tf-table-shell">
+            <table className="w-full table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                    Evaluation Category
+                  <th className="w-[20%] px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                    Category
                   </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                    Rating (out of 10)
+                  <th className="w-[10%] px-3 py-2.5 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
+                    Rating
                   </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
-                    Rating Range
+                  <th className="w-[12%] px-3 py-2.5 text-center text-xs font-medium text-gray-700 uppercase tracking-wider">
+                    Range
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                  <th className="w-[14%] px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                     Eligible Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                  <th className="w-[12%] px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                     Criteria
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                  <th className="w-[32%] px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
                     AI Reasoning
                   </th>
                 </tr>
@@ -433,32 +478,32 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                   const eligibility = getEligibleStatus(criteria.rating);
                   return (
                     <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <Icon className="w-4 h-4 text-gray-500" />
-                          <span className="text-sm font-medium text-gray-900">{criteria.name}</span>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                          <span className="text-sm font-medium text-gray-900 truncate">{criteria.name}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`inline-flex items-center justify-center w-14 h-14 rounded-lg font-bold border ${getRatingBgColor(criteria.rating)}`}>
+                      <td className="px-3 py-3 text-center">
+                        <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg font-bold border ${getRatingBgColor(criteria.rating)}`}>
                           {criteria.rating}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center">
+                      <td className="px-3 py-3 text-center">
                         <span className={`text-sm ${getRatingRangeColor(criteria.rating)}`}>
                           {getRatingRange(criteria.rating)}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           {eligibility.icon}
-                          <span className={`text-sm font-medium ${eligibility.color}`}>
+                          <span className={`text-sm font-medium truncate ${eligibility.color}`}>
                             {eligibility.status}
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
+                      <td className="px-3 py-3">
+                        <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
                           criteria.criteriaType === 'Required'
                             ? 'bg-red-100 text-red-700 border border-red-300'
                             : 'bg-gray-100 text-gray-900 border border-gray-300'
@@ -466,8 +511,15 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                           {criteria.criteriaType}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-gray-800 leading-relaxed">{criteria.aiReasoning}</p>
+                      <td className="px-3 py-3">
+                        <span
+                          onMouseEnter={(e) => showReasoningTooltip(e, criteria.aiReasoning)}
+                          onMouseLeave={hideReasoningTooltip}
+                          className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 whitespace-nowrap cursor-default"
+                        >
+                          {criteria.aiReasoning.split(' ').slice(0, 4).join(' ')}
+                          {criteria.aiReasoning.split(' ').length > 4 ? '…' : ''}
+                        </span>
                       </td>
                     </tr>
                   );
@@ -506,6 +558,25 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             <div className="text-sm font-medium text-gray-800 mt-1">Preferred Criteria</div>
           </div>
         </div>
+      )}
+
+      {/* AI Reasoning pill's full-text hover box — see reasoningTooltip
+          above for why this is a portal instead of a CSS-positioned child. */}
+      {reasoningTooltip && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed z-[100] max-w-[95vw] pointer-events-none"
+          style={{
+            left: reasoningTooltip.left,
+            width: reasoningTooltip.width,
+            top: reasoningTooltip.top,
+            transform: reasoningTooltip.openUp ? 'translateY(-100%)' : undefined,
+          }}
+        >
+          <div className="whitespace-normal bg-[#e1ebed] text-gray-800 text-xs rounded-xl py-2.5 px-3.5 shadow-xl border border-gray-200 leading-relaxed">
+            {reasoningTooltip.text}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

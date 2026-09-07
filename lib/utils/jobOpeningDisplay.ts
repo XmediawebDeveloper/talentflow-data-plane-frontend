@@ -15,6 +15,19 @@ import type { JDResponse, JDLineageVersion } from '@/lib/services/jdService';
 import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 
+/**
+ * The "JD-164 Police Officer V2" label — job_id, title and lineage version
+ * combined the way surfaces that name one specific JD version (confirm
+ * dialogs, progress panels) read it out, rather than showing the bare title.
+ * Falls back gracefully when a field is missing (e.g. a draft with no job_id
+ * yet, or a version number the caller doesn't have).
+ */
+export const formatJobVersionLabel = (job: Pick<Job, 'job_id' | 'title' | 'versionNumber'>): string => {
+  const parts = [job.job_id, job.title].filter(Boolean);
+  const label = parts.join(' ') || 'Untitled';
+  return job.versionNumber ? `${label} V${job.versionNumber}` : label;
+};
+
 /** "full_time" → "Full Time". A dash when there is nothing to format. */
 export const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -645,4 +658,21 @@ export const resolveVersionHistoryRows = (
       ...v,
       isLatest: v.is_latest_version || (v.version_number ?? 1) >= latestNumber,
     }));
+};
+
+/**
+ * A job title cut to fit a table column: at most 25 characters, with an
+ * ellipsis standing in for the rest.
+ *
+ * CSS truncation was doing this by column width, so the same job read as a
+ * different length in every table it appeared in, and a narrow viewport could
+ * cut it to a couple of words. A character budget is the same everywhere.
+ *
+ * Pair it with a `title` attribute carrying the full string — this hides text,
+ * so there has to be a way to see it.
+ */
+export const truncateJobTitle = (title?: string | null, max = 25): string => {
+  if (!title) return '-';
+  const trimmed = title.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max).trimEnd()}...` : trimmed;
 };
