@@ -1,8 +1,8 @@
 'use client';
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import AITalentMatchPageJobsList from './AITalentMatchPageJobsList';
@@ -25,7 +25,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import RecordPager from '@/components/RecordPager';
-import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
+import { formatISTDate, formatIST, formatISTTime } from '@/lib/utils/dateUtils';
 /* The shared formatters, so a JD's industry and employment type read the same
    here as on the Resume Scoring rows this list is modelled on. */
 import { formatEmploymentType, formatIndustryType, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
@@ -190,6 +190,27 @@ export default function AITalentMatchPage({
     return 'System';
   };
 
+  // Same avatar-colour hash and initials logic Resume Scoring's grouped
+  // "View by Candidates" table uses, so a candidate's avatar looks the same
+  // in both modules.
+  const CANDIDATE_AVATAR_PALETTE = [
+    { bg: 'bg-blue-100', text: 'text-blue-700' },
+    { bg: 'bg-rose-100', text: 'text-rose-700' },
+    { bg: 'bg-emerald-100', text: 'text-emerald-700' },
+    { bg: 'bg-violet-100', text: 'text-violet-700' },
+    { bg: 'bg-amber-100', text: 'text-amber-700' },
+    { bg: 'bg-cyan-100', text: 'text-cyan-700' },
+  ];
+  const avatarColorFor = (key: string) => {
+    const hash = key.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    return CANDIDATE_AVATAR_PALETTE[hash % CANDIDATE_AVATAR_PALETTE.length];
+  };
+  const initialsFor = (name: string) => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase();
+  };
+
   const availableUnits = useMemo(() => {
     const remaining = quotaData?.quotas?.RS?.total_remaining;
     if (typeof remaining === 'number') return remaining;
@@ -264,6 +285,18 @@ export default function AITalentMatchPage({
     await buildCandidateRows();
   };
 
+  // "All Resumes": every candidate-to-job match as its own row, un-deduped —
+  // the flat counterpart to the "Match by Candidate" roll-up above. It reads
+  // the same `candidateRows` (each already carries every job a candidate
+  // matched), so it shares that build rather than issuing a second fetch.
+  const openAllResumesView = async () => {
+    setHistoryPageView('resumes');
+    candidateSearch.setQuery('');
+    setHistoryListScrollRequest((request) => request + 1);
+    if (loadingCandidateRows || candidateRows.length > 0) return;
+    await buildCandidateRows();
+  };
+
   // The roll-up itself, split out from the click handler so a restored
   // 'candidates' view can rebuild its rows once match history has loaded —
   // otherwise returning from a resume landed on an empty candidates table.
@@ -282,7 +315,14 @@ export default function AITalentMatchPage({
       const byKey = new Map<string, CandidateMatchRow>();
       for (const { item, candidates } of perJob) {
         for (const candidate of candidates || []) {
-          const key = candidate.resumeId || candidate.email || candidate.name;
+          // Same key Resume Scoring's "View by Candidates" groups by — email
+          // first, so the same person collapses into one row even when a
+          // different job's match run scored a re-uploaded resume with a new
+          // resumeId. Keying on resumeId first (as this used to) meant two
+          // matches for the same person rarely shared a key, so this roll-up
+          // never actually collapsed anything and looked identical to the
+          // flat "All Resumes" list.
+          const key = (candidate.email || candidate.name || candidate.resumeId || '').trim().toLowerCase();
           if (!key) continue;
           const jobEntry = {
             historyId: item.id,
@@ -294,10 +334,13 @@ export default function AITalentMatchPage({
           const existing = byKey.get(key);
           if (existing) {
             existing.jobs.push(jobEntry);
-            // The strongest match owns the row's detail columns.
+            // The strongest match owns the row's detail columns — including
+            // resumeId, now that a row can span more than one resumeId (the
+            // same person re-uploaded/re-scored under different job runs).
             if (jobEntry.score > existing.bestScore) {
               existing.bestScore = jobEntry.score;
               existing.best = candidate;
+              existing.resumeId = candidate.resumeId;
             }
           } else {
             byKey.set(key, {
@@ -427,7 +470,7 @@ export default function AITalentMatchPage({
   const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
   // Two-step view: 'cards' shows just the stats cards; clicking one reveals the
   // job list ('list') or the candidate-centric roll-up ('candidates').
-  const [historyPageView, setHistoryPageView] = useState<'cards' | 'list' | 'candidates'>('cards');
+  const [historyPageView, setHistoryPageView] = useState<'cards' | 'list' | 'candidates' | 'resumes'>('cards');
   const historyListSectionRef = useRef<HTMLDivElement | null>(null);
   const [historyListScrollRequest, setHistoryListScrollRequest] = useState(0);
 
@@ -443,6 +486,20 @@ export default function AITalentMatchPage({
   const [showCandidateFilters, setShowCandidateFilters] = useState(false);
   // Candidate roll-up: search + nine filters, same shared hook. Same filter
   // vocabulary as the Matched Jobs list above.
+  // Pagination + row expansion for the "View by Candidates" grouped table —
+  // same ListPagination control and expand-in-place pattern Resume Scoring's
+  // grouped "View by Candidates" uses.
+  const [candidateCurrentPage, setCandidateCurrentPage] = useState(1);
+  const [candidateItemsPerPage, setCandidateItemsPerPage] = useState(20);
+  const [expandedCandidateGroups, setExpandedCandidateGroups] = useState<Set<string>>(new Set());
+  const toggleCandidateGroupExpanded = (key: string) => {
+    setExpandedCandidateGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
   const candidateSearch = useListSearch({
     initialFilters: {
       location: 'all',
@@ -455,6 +512,7 @@ export default function AITalentMatchPage({
       dateFrom: '',
       dateTo: '',
     },
+    onChange: () => setCandidateCurrentPage(1),
   });
   const candidateSearchQuery = candidateSearch.appliedQuery;
   const {
@@ -470,6 +528,10 @@ export default function AITalentMatchPage({
   } = candidateSearch.filters;
   const [candidateSortBy, setCandidateSortBy] = useState<'score' | 'name' | 'jobs' | 'date'>('jobs');
   const [candidateSortOrder, setCandidateSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  useEffect(() => {
+    setCandidateCurrentPage(1);
+  }, [candidateSortBy, candidateSortOrder]);
 
   const openCandidateMatch = (historyId: string) => {
     const item = matchHistory.find(h => h.id === historyId);
@@ -668,7 +730,7 @@ export default function AITalentMatchPage({
       } catch { /* ignore */ }
       if (!keepFilters) return;
 
-      if (s.historyPageView === 'cards' || s.historyPageView === 'list' || s.historyPageView === 'candidates') {
+      if (s.historyPageView === 'cards' || s.historyPageView === 'list' || s.historyPageView === 'candidates' || s.historyPageView === 'resumes') {
         setHistoryPageView(s.historyPageView);
       }
       if (typeof s.showHistoryFilters === 'boolean') setShowHistoryFilters(s.showHistoryFilters);
@@ -717,7 +779,7 @@ export default function AITalentMatchPage({
   const rebuiltRestoredCandidatesRef = useRef(false);
   useEffect(() => {
     if (rebuiltRestoredCandidatesRef.current) return;
-    if (historyPageView !== 'candidates') return;
+    if (historyPageView !== 'candidates' && historyPageView !== 'resumes') return;
     if (loadingCandidateRows || candidateRows.length > 0) return;
     if (matchHistory.length === 0) return;
     rebuiltRestoredCandidatesRef.current = true;
@@ -749,8 +811,8 @@ export default function AITalentMatchPage({
     // Only from the history screen — the tab lives there, and elsewhere this
     // would compete with whatever the user actually opened.
     if (viewMode !== 'history') return;
-    // Already on the tab: the effect above owns that case.
-    if (historyPageView === 'candidates') return;
+    // Already on one of the roll-up tabs: the effect above owns that case.
+    if (historyPageView === 'candidates' || historyPageView === 'resumes') return;
     if (matchHistory.length === 0) return;
     if (loadingCandidateRows || candidateRows.length > 0) return;
 
@@ -778,10 +840,10 @@ export default function AITalentMatchPage({
 
   useEffect(() => {
     if (historyListScrollRequest === 0) return;
-    if (historyPageView !== 'list' && historyPageView !== 'candidates') return;
-    // For the candidate roll-up, wait until the rows are in — scrolling to a
-    // spinner would land the user above the list once it renders.
-    if (historyPageView === 'candidates' && loadingCandidateRows) return;
+    if (historyPageView !== 'list' && historyPageView !== 'candidates' && historyPageView !== 'resumes') return;
+    // For the candidate/resume roll-ups, wait until the rows are in —
+    // scrolling to a spinner would land the user above the list once it renders.
+    if ((historyPageView === 'candidates' || historyPageView === 'resumes') && loadingCandidateRows) return;
 
     const frame = window.requestAnimationFrame(() => {
       historyListSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2355,6 +2417,18 @@ export default function AITalentMatchPage({
   if (viewMode === 'history') {
     const totalMatchedCandidates = matchHistory.reduce((sum, item) => sum + (item.totalMatches || 0), 0);
 
+    // Best score per job, using whichever candidate list is currently
+    // available for it — lazy-loaded rows when present, else the initial
+    // prop data (same fallback `filteredHistory` uses above).
+    const bestScorePerJob = matchHistory.map(item => {
+      const candidates = historyCandidatesById[item.id] ?? item.matchedCandidates ?? [];
+      return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
+    });
+    const topMatchRating = bestScorePerJob.length ? Math.max(...bestScorePerJob) : 0;
+    // "Excellent" threshold mirrors the match-quality bands used throughout
+    // this page (getMatchLabel / excellentCount, 85+ = Excellent Match).
+    const topMatchingJobsCount = bestScorePerJob.filter(score => score >= 85).length;
+
     // Candidate roll-up search matches the person or any job they matched.
     const candidateQuery = candidateSearchQuery.trim().toLowerCase();
     const filteredCandidateRows = candidateRows.filter(row => {
@@ -2402,6 +2476,58 @@ export default function AITalentMatchPage({
         return (lastOf(a) - lastOf(b)) * direction;
       }
       return (a.jobs.length - b.jobs.length) * direction;
+    });
+
+    const paginatedCandidateRows = sortedCandidateRows.slice(
+      (candidateCurrentPage - 1) * candidateItemsPerPage,
+      candidateCurrentPage * candidateItemsPerPage,
+    );
+
+    // "All Resumes": the same candidateRows, un-collapsed back into one row
+    // per (candidate, job) match — the flat list the roll-up above dedupes
+    // away. Built from candidateRows rather than a second fetch, so it shares
+    // the one build both views depend on.
+    const allResumeRows = candidateRows.flatMap(row =>
+      row.jobs.map(job => ({ key: `${row.key}::${job.historyId}`, row, job }))
+    );
+
+    const filteredAllResumeRows = allResumeRows.filter(({ row, job }) => {
+      const matchesSearch = !candidateQuery ||
+        row.name?.toLowerCase().includes(candidateQuery) ||
+        row.email?.toLowerCase().includes(candidateQuery) ||
+        row.title?.toLowerCase().includes(candidateQuery) ||
+        job.jobTitle?.toLowerCase().includes(candidateQuery);
+
+      const matchesLocation = candidateFilterLocation === 'all' || row.location === candidateFilterLocation;
+      const matchesJob = candidateFilterJob === 'all' || job.jobTitle === candidateFilterJob;
+      const matchesScore = job.score >= candidateFilterMinScore;
+      const matchesMultiJob = !candidateFilterMultiJob || row.jobs.length > 1;
+
+      const matchesPhone = candidateFilterPhone === '' ||
+        (!!row.phone && (
+          row.phone.toLowerCase().includes(candidateFilterPhone.toLowerCase()) ||
+          row.phone.replace(/[^0-9]/g, '').includes(candidateFilterPhone.replace(/[^0-9]/g, ''))
+        ));
+
+      const years = parseExperienceYears(row.experience);
+      const matchesExpMin = candidateFilterExpMin === '' || (years !== null && years >= candidateFilterExpMin);
+      const matchesExpMax = candidateFilterExpMax === '' || (years !== null && years <= candidateFilterExpMax);
+
+      const matchedDay = toLocalDateKey(job.matchedAt);
+      const matchesDateFrom = !candidateFilterDateFrom || matchedDay >= candidateFilterDateFrom;
+      const matchesDateTo = !candidateFilterDateTo || matchedDay <= candidateFilterDateTo;
+
+      return matchesSearch && matchesLocation && matchesJob && matchesScore && matchesMultiJob &&
+        matchesPhone && matchesExpMin && matchesExpMax && matchesDateFrom && matchesDateTo;
+    });
+
+    const sortedAllResumeRows = [...filteredAllResumeRows].sort((a, b) => {
+      const direction = candidateSortOrder === 'asc' ? 1 : -1;
+      if (candidateSortBy === 'name') return (a.row.name || '').localeCompare(b.row.name || '') * direction;
+      if (candidateSortBy === 'date') return (new Date(a.job.matchedAt).getTime() - new Date(b.job.matchedAt).getTime()) * direction;
+      // 'jobs' has no per-row meaning here (each row is already one job) —
+      // falls back to score, same as the default 'score' option.
+      return (a.job.score - b.job.score) * direction;
     });
 
     // Options come from the loaded rows, so only real values are offered.
@@ -2517,7 +2643,53 @@ export default function AITalentMatchPage({
             sparkline={false}
             onClick={openCandidatesView}
           />
+          <StatsCard
+            tone="neutral"
+            icon={Award}
+            label="Top Match Rating"
+            value={`${topMatchRating}%`}
+            sparkline={false}
+          />
+          <StatsCard
+            tone="neutral"
+            icon={Briefcase}
+            label="Top Matching Jobs"
+            value={topMatchingJobsCount}
+            sparkline={false}
+          />
         </StatsCardGrid>
+
+        {/* View pills — same control Resume Scoring uses for its "Show:" row,
+            so the two modules switch views the same way. "View by Job" and
+            "View by Candidates" select what the two clickable cards above do;
+            "All Resumes" has no card of its own — it's the flat, un-deduped
+            counterpart to the candidate roll-up (every candidate-to-job match
+            as its own row), the same relationship Resume Scoring's "All
+            Resumes" pill has to its "View by Candidates" pill. */}
+        {historyPageView !== 'cards' && (
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+            {([
+              { id: 'list', label: 'View by Job', active: historyPageView === 'list', open: openHistoryListView },
+              { id: 'candidates', label: 'View by Candidates', active: historyPageView === 'candidates', open: openCandidatesView },
+              { id: 'resumes', label: 'All Resumes', active: historyPageView === 'resumes', open: openAllResumesView },
+            ] as const).map(view => (
+              <button
+                key={view.id}
+                type="button"
+                onClick={() => { void view.open(); }}
+                aria-pressed={view.active}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                  view.active
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                {view.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* ── Match by Candidate (in-page) ───────────────────────────────── */}
         {historyPageView === 'candidates' && (
@@ -2744,16 +2916,403 @@ export default function AITalentMatchPage({
                 )}
               </div>
             ) : (
-              /* Table format, matching the Resume Scoring "Scored Resumes"
-                 table: desktop table + mobile card fallback. */
+              /* Grouped table, matching Resume Scoring's grouped "View by
+                 Candidates": one row per candidate (already email-deduped by
+                 sortedCandidateRows), expandable to that candidate's full list
+                 of job matches. Paginated the same way, via ListPagination. */
+              <>
+                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden tf-table-shell">
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[900px]">
+                      <thead className="bg-gray-50 dark:bg-slate-800/60 border-b border-gray-200 dark:border-slate-700">
+                        <tr>
+                          <th className="w-10 px-3 py-3" />
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Candidate</th>
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Job Versions</th>
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Job Titles</th>
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Latest Matched</th>
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                        {paginatedCandidateRows.map((row) => {
+                          const isExpanded = expandedCandidateGroups.has(row.key);
+                          const distinctTitles = Array.from(new Set(row.jobs.map(j => j.jobTitle).filter(Boolean))) as string[];
+                          const titlesExpanded = expandedJobChips.has(row.key);
+                          const hiddenTitleCount = Math.max(0, distinctTitles.length - 2);
+                          const avatar = avatarColorFor(row.key);
+                          const sortedJobs = [...row.jobs].sort((a, b) => new Date(b.matchedAt).getTime() - new Date(a.matchedAt).getTime());
+                          const latestJob = sortedJobs[0];
+
+                          return (
+                            <Fragment key={row.key}>
+                              <tr className="hover:bg-gray-50/70 dark:hover:bg-slate-800/40 transition-colors">
+                                <td className="px-3 py-4 align-top">
+                                  <button
+                                    onClick={() => toggleCandidateGroupExpanded(row.key)}
+                                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                                    title={isExpanded ? 'Collapse' : 'Expand'}
+                                    className={`inline-flex items-center justify-center w-7 h-7 rounded-lg border transition-colors ${
+                                      isExpanded
+                                        ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
+                                        : 'border-gray-200 dark:border-slate-700 text-gray-400 hover:border-brand-blue/30 hover:text-brand-blue'
+                                    }`}
+                                  >
+                                    <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                                  </button>
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  <div className="flex items-start gap-3">
+                                    <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold ${avatar.bg} ${avatar.text}`}>
+                                      {initialsFor(row.name || 'Candidate')}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <button
+                                        onClick={() => openCandidateResume(row, sortedCandidateRows)}
+                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block"
+                                      >
+                                        {row.name || 'Candidate'}
+                                      </button>
+                                      {row.email && <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</div>}
+                                      {row.phone && <div className="text-xs text-gray-500 dark:text-slate-500">{row.phone}</div>}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 whitespace-nowrap">
+                                    {row.jobs.length} Job {row.jobs.length === 1 ? 'Version' : 'Versions'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  <div className="space-y-0.5">
+                                    {(titlesExpanded ? distinctTitles : distinctTitles.slice(0, 2)).map((title, i) => (
+                                      <div key={i} className="text-sm text-gray-700 dark:text-slate-300">{title}</div>
+                                    ))}
+                                    {hiddenTitleCount > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => toggleCandidateChips(e, row.key)}
+                                        title={distinctTitles.slice(2).join(', ')}
+                                        className="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:bg-gray-200 dark:hover:bg-slate-700 hover:text-gray-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
+                                      >
+                                        {titlesExpanded ? 'Show less' : `+${hiddenTitleCount} more`}
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-4 align-top whitespace-nowrap">
+                                  <div className="text-sm text-gray-900 dark:text-slate-100">{formatISTDate(latestJob.matchedAt.toISOString())}</div>
+                                  <div className="text-xs text-gray-500 dark:text-slate-500">{formatISTTime(latestJob.matchedAt.toISOString())}</div>
+                                </td>
+                                <td className="px-4 py-4 align-top">
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      onClick={() => openCandidateResume(row, sortedCandidateRows)}
+                                      title="View Resume"
+                                      className="p-2 bg-white dark:bg-slate-900 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-all border border-gray-200 dark:border-slate-700"
+                                    >
+                                      <Eye className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleAttachmentsClick(row.best)}
+                                      title="Attachments"
+                                      className="p-2 bg-white dark:bg-slate-900 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-all border border-gray-200 dark:border-slate-700"
+                                    >
+                                      <Paperclip className="w-4 h-4 text-gray-600 dark:text-slate-400" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                              {isExpanded && (
+                                <tr>
+                                  <td colSpan={6} className="p-0 bg-gray-50/60 dark:bg-slate-800/30">
+                                    <div className="px-4 sm:px-6 py-3 overflow-x-auto">
+                                      <table className="w-full min-w-[640px] table-auto">
+                                        <thead>
+                                          <tr className="border-b border-gray-200 dark:border-slate-700">
+                                            {['Job Title', 'Match Score', 'Matched Date', 'Action'].map(label => (
+                                              <th key={label} className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">
+                                                {label}
+                                              </th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                                          {sortedJobs.map(job => (
+                                            <tr key={job.historyId} className="bg-white dark:bg-slate-900">
+                                              <td className="py-2.5 px-4 align-middle text-sm text-gray-700 dark:text-slate-300">{job.jobTitle}</td>
+                                              <td className="py-2.5 px-4 align-middle">
+                                                <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${candidateScoreBadgeClass(job.score)}`}>
+                                                  {Math.round(job.score)}%
+                                                </span>
+                                              </td>
+                                              <td className="py-2.5 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                                                {formatISTDate(job.matchedAt.toISOString())}
+                                              </td>
+                                              <td className="py-2.5 px-4 align-middle">
+                                                <button
+                                                  onClick={() => openCandidateMatch(job.historyId)}
+                                                  className="text-sm font-medium text-brand-blue hover:text-brand-blue-2 hover:underline"
+                                                >
+                                                  Open Match
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <ListPagination
+                  currentPage={candidateCurrentPage}
+                  itemsPerPage={candidateItemsPerPage}
+                  totalItems={sortedCandidateRows.length}
+                  onPageChange={setCandidateCurrentPage}
+                  onItemsPerPageChange={setCandidateItemsPerPage}
+                  itemLabel="candidates"
+                />
+              </>
+            )}
+          </>
+        )}
+
+        {/* ── All Resumes (in-page) — flat, un-deduped candidate-to-job
+            matches ─────────────────────────────────────────────────────── */}
+        {historyPageView === 'resumes' && (
+          <>
+            <div ref={historyListSectionRef} className="scroll-mt-4" aria-hidden="true" />
+
+            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+              <ListToolbar
+                className={showCandidateFilters ? 'mb-3' : 'mb-0'}
+                searchValue={candidateSearchQuery}
+                onSearchChange={candidateSearch.setQuery}
+                searchDebounceMs={0}
+                searchPlaceholder="Search candidates by name, email or job..."
+                onToggleFilters={() => {
+                  setShowCandidateFilters(!showCandidateFilters);
+                }}
+                filtersOpen={showCandidateFilters}
+                activeFilterCount={candidateFiltersCount}
+                filtersApplied={candidateFiltersApplied}
+                onClearFilters={clearCandidateFilters}
+                countBadge={
+                  <ListCountBadge
+                    filtered={filteredAllResumeRows.length}
+                    total={allResumeRows.length}
+                    noun="resume"
+                  />
+                }
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-500 dark:text-slate-400 hidden sm:inline">Sort by</span>
+                  <div className="inline-flex items-center bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-full p-0.5 hover:border-brand-blue/30 transition-colors">
+                    <div className="relative">
+                      <select
+                        value={candidateSortBy}
+                        onChange={(e) => setCandidateSortBy(e.target.value as 'score' | 'name' | 'jobs' | 'date')}
+                        aria-label="Sort resumes by"
+                        className="appearance-none h-8 pl-3 pr-8 bg-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm font-medium text-gray-800 dark:text-slate-200 cursor-pointer"
+                      >
+                        <option value="score">Match Score</option>
+                        <option value="name">Candidate Name</option>
+                        <option value="date">Match Date</option>
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCandidateSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))}
+                      className="ml-0.5 h-8 w-8 flex items-center justify-center rounded-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                      title={candidateSortOrder === 'asc' ? 'Sort descending' : 'Sort ascending'}
+                    >
+                      <ArrowUpDown className={`w-3.5 h-3.5 transition-transform ${candidateSortOrder === 'asc' ? '' : 'rotate-180'}`} />
+                    </button>
+                  </div>
+                </div>
+              </ListToolbar>
+
+              {/* Same filter panel as "View by Candidates" — one filter set
+                  for both, since "All Resumes" is that view's rows un-collapsed. */}
+              {showCandidateFilters && (
+                <div className="pt-3 border-t border-brand-blue/10">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    {candidateLocations.length > 0 && (
+                      <div>
+                        <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Location</label>
+                        <select
+                          value={candidateFilterLocation}
+                          onChange={(e) => candidateSearch.setFilter('location', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                        >
+                          <option value="all">All Locations</option>
+                          {candidateLocations.map(loc => (
+                            <option key={loc} value={loc}>{loc}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {candidateJobTitles.length > 0 && (
+                      <div>
+                        <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Matched Job</label>
+                        <select
+                          value={candidateFilterJob}
+                          onChange={(e) => candidateSearch.setFilter('job', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                        >
+                          <option value="all">All Jobs</option>
+                          {candidateJobTitles.map(title => (
+                            <option key={title} value={title}>{title}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Minimum Match</label>
+                      <select
+                        value={candidateFilterMinScore}
+                        onChange={(e) => candidateSearch.setFilter('minScore', Number(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                      >
+                        <option value={0}>Any score</option>
+                        <option value={50}>50% and above</option>
+                        <option value={70}>70% and above</option>
+                        <option value={80}>80% and above</option>
+                        <option value={90}>90% and above</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Job Count</label>
+                      <label className="flex items-center gap-2 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer bg-white dark:bg-slate-900">
+                        <input
+                          type="checkbox"
+                          checked={candidateFilterMultiJob}
+                          onChange={(e) => candidateSearch.setFilter('multiJob', e.target.checked)}
+                        />
+                        <span className="text-sm text-gray-700 dark:text-slate-300">Matched 2+ jobs</span>
+                      </label>
+                    </div>
+
+                    <div>
+                      <label htmlFor="resume-phone" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Mobile No</label>
+                      <input
+                        id="resume-phone"
+                        type="text"
+                        value={candidateFilterPhone}
+                        onChange={(e) => candidateSearch.setFilter('phone', e.target.value)}
+                        placeholder="Full or partial number"
+                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="resume-matched-from" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Last Matched From</label>
+                      <input
+                        id="resume-matched-from"
+                        type="date"
+                        value={candidateFilterDateFrom}
+                        max={candidateFilterDateTo || undefined}
+                        onChange={(e) => candidateSearch.setFilter('dateFrom', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="resume-matched-to" className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Last Matched To</label>
+                      <input
+                        id="resume-matched-to"
+                        type="date"
+                        value={candidateFilterDateTo}
+                        min={candidateFilterDateFrom || undefined}
+                        onChange={(e) => candidateSearch.setFilter('dateTo', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm text-gray-700 dark:text-slate-300 mb-1.5 font-medium">Experience (years)</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          value={candidateFilterExpMin}
+                          onChange={(e) => candidateSearch.setFilter('expMin', e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="Min"
+                          min={0}
+                          aria-label="Minimum experience in years"
+                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
+                        />
+                        <input
+                          type="number"
+                          value={candidateFilterExpMax}
+                          onChange={(e) => candidateSearch.setFilter('expMax', e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="Max"
+                          min={0}
+                          aria-label="Maximum experience in years"
+                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => setShowCandidateFilters(false)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {loadingCandidateRows ? (
+              <div className="flex items-center justify-center gap-2 text-gray-500 py-16 tf-loader-center tf-loader-center--compact">
+                <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
+                <span className="text-sm">Loading matched resumes...</span>
+              </div>
+            ) : filteredAllResumeRows.length === 0 ? (
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-8 sm:p-10 text-center">
+                <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">
+                  {candidateFiltersApplied ? 'No resumes match your filters' : 'No matched resumes yet'}
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
+                  {candidateFiltersApplied
+                    ? 'Try a different name, job, location, or lower the minimum match.'
+                    : 'Run AI Match on a job to see matched resumes here.'}
+                </p>
+                {candidateFiltersApplied && (
+                  <button
+                    onClick={clearCandidateFilters}
+                    className="mt-4 px-3 py-2 rounded-lg text-sm font-medium text-brand-blue bg-brand-blue/5 border border-brand-blue/20 hover:bg-brand-blue/10 transition-colors"
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            ) : (
               <>
                 <div className="hidden md:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
                   <table className="w-full min-w-[1330px] table-auto">
-                    {/* Sticky header — background/border live on the cells, since
-                        a sticky <tr> doesn't paint them reliably. */}
                     <thead className="sticky top-0 z-10">
                       <tr>
-                        {['Candidate Name', 'Job Title', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Attachments', 'Matched Status'].map((label) => (
+                        {['Candidate Name', 'Job Title', 'Match Score', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Attachments', 'Matched Status'].map((label) => (
                           <th
                             key={label}
                             className="text-left py-3 px-4 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700"
@@ -2764,152 +3323,122 @@ export default function AITalentMatchPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedCandidateRows.map((row, index) => {
-                        const chipsExpanded = expandedJobChips.has(row.key);
-                        const topJob = row.jobs.reduce((best, job) => (job.score > best.score ? job : best), row.jobs[0]);
-                        // The Job Title column names the strongest match; the rest
-                        // of this candidate's jobs sit behind "+N more".
-                        const otherJobs = row.jobs.filter(job => job.historyId !== topJob?.historyId);
-
-                        return (
-                          <tr
-                            key={row.key}
-                            onClick={() => openCandidateResume(row, sortedCandidateRows)}
-                            className={`border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer ${
-                              index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50/50 dark:bg-slate-800/30'
-                            }`}
-                          >
-                            <td className="py-3 px-4 align-middle whitespace-nowrap">
-                              <div className="flex items-center gap-3">
-                                <div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium">
-                                  {(row.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                                </div>
-                                <span className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
-                                  {row.name || 'Unknown'}
-                                </span>
+                      {sortedAllResumeRows.map(({ key, row, job }, index) => (
+                        <tr
+                          key={key}
+                          onClick={() => openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row))}
+                          className={`border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer ${
+                            index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50/50 dark:bg-slate-800/30'
+                          }`}
+                        >
+                          <td className="py-3 px-4 align-middle whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              <div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium">
+                                {(row.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
                               </div>
-                            </td>
-                            <td className="py-3 px-4 align-middle">
-                              <div className={`flex items-center gap-2 ${chipsExpanded ? 'flex-wrap' : ''}`}>
-                                <span className="block max-w-[220px] truncate text-sm text-gray-700 dark:text-slate-300">
-                                  {topJob?.jobTitle || '-'}
-                                </span>
-                                {chipsExpanded && otherJobs.map((job) => (
-                                  <button
-                                    key={`${row.key}-${job.historyId}`}
-                                    onClick={(e) => { e.stopPropagation(); openCandidateMatch(job.historyId); }}
-                                    className="flex items-center gap-1 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-md text-xs text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors flex-shrink-0 whitespace-nowrap"
-                                    title={`Open ${job.jobTitle} match`}
-                                  >
-                                    <Briefcase className="w-3 h-3 text-gray-400" />
-                                    <span className="max-w-[160px] truncate">{job.jobTitle}</span>
-                                    <span className="text-gray-300">·</span>
-                                    <span className="tabular-nums font-medium">{Math.round(job.score)}%</span>
-                                  </button>
-                                ))}
-                                {otherJobs.length > 0 && (
-                                  <button
-                                    onClick={(e) => toggleCandidateChips(e, row.key)}
-                                    className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium transition-colors flex-shrink-0 whitespace-nowrap ${
-                                      chipsExpanded
-                                        ? 'text-gray-600 dark:text-slate-400 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:text-brand-blue hover:border-brand-blue/30'
-                                        : 'text-brand-blue bg-brand-blue/5 border border-brand-blue/20 hover:bg-brand-blue/10'
-                                    }`}
-                                    title={chipsExpanded ? 'Hide other matched jobs' : `Show ${otherJobs.length} more matched job${otherJobs.length !== 1 ? 's' : ''}`}
-                                  >
-                                    {chipsExpanded ? 'Show less' : `+${otherJobs.length} more`}
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                              {row.email ? row.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
-                            </td>
-                            <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                              {(() => {
-                                const numbers = splitPhoneNumbers(row.phone, 2);
-                                return numbers.length > 0
-                                  ? <div className="flex flex-col gap-0.5">{numbers.map((num, i) => <span key={i}>{num}</span>)}</div>
-                                  : <span className="text-gray-400 dark:text-slate-500">-</span>;
-                              })()}
-                            </td>
-                            <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                              {row.location ? row.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
-                            </td>
-                            <td className="py-3 px-4 align-middle min-w-[220px]">
-                              <div className="flex flex-wrap gap-1">
-                                <SkillsList
-                                  skills={row.best.skills}
-                                  chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
-                                  moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
-                                />
-                              </div>
-                            </td>
-                            <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                              {row.experience || '-'}
-                            </td>
-                            <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                              {formatUploadedBy(row.best.uploadedByName, row.best.uploadedBy)}
-                            </td>
-                            <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                              {row.best.uploadDate ? formatISTDate(row.best.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
-                            </td>
-                            <td className="py-3 px-4 align-middle whitespace-nowrap">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(row.best); }}
-                                className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
-                              >
-                                <Paperclip className="w-3.5 h-3.5" />
-                                {row.best.attachmentCount || 1}
-                              </button>
-                            </td>
-                            <td className="py-3 px-4 align-middle whitespace-nowrap">
-                              {row.resumeId && allScoredResumeIds.has(row.resumeId) ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                                  <CheckCircle className="w-3 h-3" />
-                                  Matched
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-xs font-medium">
-                                  <XCircle className="w-3 h-3" />
-                                  Not Matched
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                              <span className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                                {row.name || 'Unknown'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 align-middle">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openCandidateMatch(job.historyId); }}
+                              className="block max-w-[220px] truncate text-sm text-gray-700 dark:text-slate-300 hover:text-brand-blue hover:underline text-left"
+                              title={`Open ${job.jobTitle} match`}
+                            >
+                              {job.jobTitle}
+                            </button>
+                          </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${candidateScoreBadgeClass(job.score)}`}>
+                              {Math.round(job.score)}%
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                            {row.email ? row.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                          </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                            {(() => {
+                              const numbers = splitPhoneNumbers(row.phone, 2);
+                              return numbers.length > 0
+                                ? <div className="flex flex-col gap-0.5">{numbers.map((num, i) => <span key={i}>{num}</span>)}</div>
+                                : <span className="text-gray-400 dark:text-slate-500">-</span>;
+                            })()}
+                          </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                            {row.location ? row.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                          </td>
+                          <td className="py-3 px-4 align-middle min-w-[220px]">
+                            <div className="flex flex-wrap gap-1">
+                              <SkillsList
+                                skills={row.best.skills}
+                                chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
+                                moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                              />
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                            {row.experience || '-'}
+                          </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                            {formatUploadedBy(row.best.uploadedByName, row.best.uploadedBy)}
+                          </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
+                            {row.best.uploadDate ? formatISTDate(row.best.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
+                          </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(row.best); }}
+                              className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
+                            >
+                              <Paperclip className="w-3.5 h-3.5" />
+                              {row.best.attachmentCount || 1}
+                            </button>
+                          </td>
+                          <td className="py-3 px-4 align-middle whitespace-nowrap">
+                            {row.resumeId && allScoredResumeIds.has(row.resumeId) ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                                <CheckCircle className="w-3 h-3" />
+                                Matched
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-xs font-medium">
+                                <XCircle className="w-3 h-3" />
+                                Not Matched
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
 
                 {/* Mobile cards — the table is too wide below md */}
                 <div className="md:hidden space-y-3">
-                  {sortedCandidateRows.map((row) => {
-                    return (
-                      <div
-                        key={row.key}
-                        onClick={() => openCandidateResume(row, sortedCandidateRows)}
-                        className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-3 shadow-sm cursor-pointer"
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
-                            {row.title && <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.title}</div>}
-                          </div>
-                          <span className={`inline-flex px-2 py-1 rounded-full text-xs border flex-shrink-0 ${candidateScoreBadgeClass(row.bestScore)}`}>
-                            {Math.round(row.bestScore)}%
-                          </span>
+                  {sortedAllResumeRows.map(({ key, row, job }) => (
+                    <div
+                      key={key}
+                      onClick={() => openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row))}
+                      className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-3 shadow-sm cursor-pointer"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{job.jobTitle}</div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-400">
-                          {row.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{row.email}</span></span>}
-                          {row.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{row.phone}</span>}
-                          {row.location && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 flex-shrink-0" /><span className="truncate">{row.location}</span></span>}
-                          <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" />{row.jobs.length} {row.jobs.length === 1 ? 'job' : 'jobs'}</span>
-                        </div>
+                        <span className={`inline-flex px-2 py-1 rounded-full text-xs border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
+                          {Math.round(job.score)}%
+                        </span>
                       </div>
-                    );
-                  })}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-400">
+                        {row.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{row.email}</span></span>}
+                        {row.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{row.phone}</span>}
+                        {row.location && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 flex-shrink-0" /><span className="truncate">{row.location}</span></span>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </>
             )}
@@ -3119,36 +3648,38 @@ export default function AITalentMatchPage({
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     {/* Job Info */}
                     <div className="flex items-center gap-3 w-full sm:w-auto">
-                      <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0 group-hover:scale-105 transition-transform">
-                        <Sparkles className="w-4 h-4 text-white" />
+                      <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                        <Sparkles className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           {jobData?.jobId && (
-                            <JobIdBadge className="inline-flex items-center">{jobData.jobId}</JobIdBadge>
+                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jobData.jobId}</JobIdBadge>
                           )}
+                          <h3
+                            className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 truncate min-w-0 group-hover:text-brand-blue transition-colors"
+                            title={item.jobTitle}
+                          >
+                            {item.jobTitle}
+                          </h3>
                           {jobData?.currentVersion && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">
-                              v{jobData.currentVersion}
-                            </span>
-                          )}
-                          {jobData?.currentVersion && (
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                            <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs gap-1.5 border flex-shrink-0 ${
                               jobData.currentVersion > 1
                                 ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
                                 : 'bg-green-50 text-green-700 border-green-200'
                             }`}>
+                              <div className={`w-1.5 h-1.5 rounded-full ${jobData.currentVersion > 1 ? 'bg-brand-orange' : 'bg-green-500'}`}></div>
                               {jobData.currentVersion > 1 ? 'Republished' : 'Published'}
+                            </span>
+                          )}
+                          {jobData?.currentVersion && (
+                            <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
+                              <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
+                              v{jobData.currentVersion}
                             </span>
                           )}
                           <JDVersionHistory jdId={item.jobId} version={jobData?.currentVersion} />
                         </div>
-                        <h3
-                          className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1 truncate group-hover:text-brand-blue transition-colors"
-                          title={item.jobTitle}
-                        >
-                          {item.jobTitle}
-                        </h3>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
                         {jobData?.department && (
                           <span className="flex items-center gap-1.5">

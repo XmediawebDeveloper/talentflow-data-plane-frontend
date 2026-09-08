@@ -14,6 +14,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import JDCreation from '@/components/JDCreation';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import DisableJobModal from '@/components/DisableJobModal';
+import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 // ✅ PERMISSION FIX: Import permission hook for CRUD checks
@@ -83,6 +84,9 @@ export default function JDListPage() {
     type: 'disable' | 'archive' | 'delete' | null;
     jdId: string | null;
     jdTitle: string;
+    /** Human JD-xxx code and lineage version, for the disable confirm's chip. */
+    jdCode?: string;
+    jdVersion?: number;
   }>({
     isOpen: false,
     type: null,
@@ -887,6 +891,8 @@ export default function JDListPage() {
                                   type: 'disable',
                                   jdId: jd.id,
                                   jdTitle: jd.title,
+                                  jdCode: jd.job_id,
+                                  jdVersion: jd.current_version,
                                 });
                                 setActiveDropdown(null);
                               }}
@@ -1052,7 +1058,11 @@ export default function JDListPage() {
       {confirmDialog.type === 'disable' && (
         <DisableJobModal
           isOpen={confirmDialog.isOpen}
-          jobTitle={confirmDialog.jdTitle}
+          jobLabel={formatJobVersionLabel({
+            job_id: confirmDialog.jdCode,
+            title: confirmDialog.jdTitle,
+            versionNumber: confirmDialog.jdVersion,
+          })}
           onConfirm={() => confirmDialog.jdId && handleDisable(confirmDialog.jdId)}
           onCancel={() => setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' })}
           isLoading={confirmLoading}
