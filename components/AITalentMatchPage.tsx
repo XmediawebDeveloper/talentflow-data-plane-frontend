@@ -3150,6 +3150,7 @@ export default function AITalentMatchPage({
                           {item.jobTitle}
                         </h3>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
+                        {jobData?.department && (
                           <span className="flex items-center gap-1.5">
                             <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                             {jobData.department}
@@ -3195,6 +3196,7 @@ export default function AITalentMatchPage({
                           <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                           {item.totalMatches} {item.totalMatches === 1 ? 'candidate' : 'candidates'} matched
                         </span>
+                        </div>
                       </div>
                     </div>
 
