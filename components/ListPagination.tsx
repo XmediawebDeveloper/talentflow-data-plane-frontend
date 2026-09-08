@@ -24,6 +24,13 @@ interface ListPaginationProps {
    */
   compact?: boolean;
   /**
+   * The page-size ladder. Defaults to this control's long-standing
+   * [5, 10, 20, 40, 100], so every existing list is untouched; pass your own
+   * where a screen specifies a different one (the All Assessments table asks
+   * for 10/20/50/100). A prop rather than a second copy of this component.
+   */
+  pageSizeOptions?: number[];
+  /**
    * Render the bar even for a list short enough to fit on one page. For a
    * fixed surface — a dialog whose footer would otherwise appear and vanish
    * as rows are filtered — where a steady "Rows per page … 1–3 of 3" reads
@@ -33,7 +40,7 @@ interface ListPaginationProps {
   alwaysShow?: boolean;
 }
 
-const PAGE_SIZE_OPTIONS = [5, 10, 20, 40, 100];
+const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 20, 40, 100];
 
 export default function ListPagination({
   currentPage,
@@ -44,6 +51,7 @@ export default function ListPagination({
   itemLabel = 'records',
   scrollContainerRef,
   compact = false,
+  pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   alwaysShow = false,
 }: ListPaginationProps) {
   if (totalItems <= 5 && !alwaysShow) return null;
@@ -108,7 +116,7 @@ export default function ListPagination({
               }}
               className={`${selectClass} border border-gray-200 bg-white text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue`}
             >
-              {PAGE_SIZE_OPTIONS.map((size) => (
+              {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>{size}</option>
               ))}
             </select>

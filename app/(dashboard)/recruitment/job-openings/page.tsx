@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
+import JDDisableModal from '@/components/JDDisableModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
@@ -67,10 +68,14 @@ export default function JobOpeningsPage() {
     jobTitle: string;
     usageDetails: string[];
   }>({ open: false, jobTitle: '', usageDetails: [] });
+  /* `disabling` keeps the confirmation on screen — buttons locked, spinner on
+     the action — while the status write is in flight, rather than closing on
+     click and leaving the row unchanged until the response lands. */
   const [disableDialog, setDisableDialog] = useState<{
     open: boolean;
     job: Job | null;
-  }>({ open: false, job: null });
+    disabling: boolean;
+  }>({ open: false, job: null, disabling: false });
   /* Archiving is confirmed, never immediate. `busy` keeps the modal open with a
      spinner while the request is in flight, so a slow save cannot be clicked
      twice or read as nothing having happened. */
@@ -368,15 +373,18 @@ export default function JobOpeningsPage() {
   const markVersionStatus = (versionId: string, status: string) =>
     setVersionStatusOverrides(prev => ({ ...prev, [versionId]: status }));
 
+  const closeDisableDialog = () => setDisableDialog({ open: false, job: null, disabling: false });
+
   const handleDisableJob = (job: Job) => {
     // Show confirmation dialog instead of directly disabling
-    setDisableDialog({ open: true, job });
+    setDisableDialog({ open: true, job, disabling: false });
   };
 
   const confirmDisableJob = async () => {
     const job = disableDialog.job;
-    if (!job) return;
+    if (!job || disableDialog.disabling) return;
 
+    setDisableDialog(prev => ({ ...prev, disabling: true }));
     try {
       await jdService.updateStatus(job.id, 'disabled');
       setJobs(prev => prev.map(j =>
@@ -384,10 +392,12 @@ export default function JobOpeningsPage() {
       ));
       markVersionStatus(job.id, 'disabled');
       toast.info(`"${job.title}" has been disabled`);
+      closeDisableDialog();
     } catch (error) {
       toast.error('Failed to disable job');
-    } finally {
-      setDisableDialog({ open: false, job: null });
+      // Stay open so the recruiter can retry — closing here would look like
+      // the disable went through.
+      setDisableDialog(prev => ({ ...prev, disabling: false }));
     }
   };
 
@@ -670,13 +680,15 @@ export default function JobOpeningsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Disable confirm — the shared component, so this dialog and the ones
-          on Job Details and the JD list sheet cannot drift apart again. */}
-      <DisableJobModal
-        isOpen={disableDialog.open}
+      {/* Disable Job Confirmation Dialog */}
+      <JDDisableModal
+        open={disableDialog.open}
         jobTitle={disableDialog.job?.title ?? ''}
+        jdNumber={disableDialog.job?.job_id}
+        version={disableDialog.job?.versionNumber}
+        disabling={disableDialog.disabling}
+        onCancel={closeDisableDialog}
         onConfirm={confirmDisableJob}
-        onCancel={() => setDisableDialog({ open: false, job: null })}
       />
     </div>
   );

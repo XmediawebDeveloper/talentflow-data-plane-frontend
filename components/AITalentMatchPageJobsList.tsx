@@ -1,3 +1,4 @@
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Sparkles, MapPin, Briefcase, Building2, Calendar, FileText, User, Users, Clock, ArrowRight, History, DollarSign, Award, TrendingUp, Search, Filter, ChevronDown, X, LayoutGrid, List as ListIcon } from 'lucide-react';
 import { useState } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -353,11 +354,12 @@ export default function AITalentMatchPageJobsList({
                     </div>
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       {job.jobId && (
-                        <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20">
-                          {job.jobId}
-                        </span>
+                        <JobIdBadge>{job.jobId}</JobIdBadge>
                       )}
-                      <h3 className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 flex-1 min-w-0">
+                      <h3
+                        className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 flex-1 min-w-0"
+                        title={job.title}
+                      >
                         {job.title}
                       </h3>
                     </div>

@@ -1,7 +1,9 @@
 "use client";
 
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
 import ListPagination from './ListPagination';
@@ -498,6 +500,10 @@ export default function ResumeScoringPage({
   // Scoring History Modal
   const [historyModalItem, setHistoryModalItem] = useState<ScoredResumeData | null>(null);
   const [isRefreshingHistoryModal, setIsRefreshingHistoryModal] = useState(false);
+  /* Holds the history dialog's height while a refresh runs, so the
+     content-driven box cannot move under the pointer. Shared with every other
+     popup that carries a Refresh button - see the hook for why. */
+  const historyModalHeightLock = useDialogHeightLock<HTMLDivElement>();
 
   /* Refetches full scores for every JD version in this job's LINEAGE, not
      just the one representative version historyModalItem itself is — the
@@ -512,7 +518,15 @@ export default function ResumeScoringPage({
     const lineageItems = scoredHistory.filter((h) => resolveHistoryGroupKey(h) === groupKey);
     setIsRefreshingHistoryModal(true);
     try {
-      await Promise.all(lineageItems.map((h) => onLoadJdScores(h.jobId, h.jobTitle)));
+      /* The dialog holds the height it had for the whole request - see
+         `useDialogHeightLock`. This modal has no spinner to swap its rows for,
+         so the pin is the whole fix here: the rows are re-rendered from the
+         refreshed `scoredHistory` in place, and a lineage that comes back a
+         row longer or shorter resizes the dialog once, at the end, instead of
+         moving it mid-request. */
+      await historyModalHeightLock.run(() =>
+        Promise.all(lineageItems.map((h) => onLoadJdScores(h.jobId, h.jobTitle))),
+      );
     } finally {
       setIsRefreshingHistoryModal(false);
     }
@@ -3232,12 +3246,11 @@ export default function ResumeScoringPage({
                         {/* Title row — matches JD list card */}
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           {item.jdJobId && (
-                            <span className="inline-flex h-7 items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20 flex-shrink-0">
-                              {item.jdJobId}
-                            </span>
+                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{item.jdJobId}</JobIdBadge>
                           )}
                           <h3
-                            className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate cursor-pointer hover:text-brand-blue transition-colors"
+                            className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
+                            title={item.jobTitle}
                             onClick={() => {
                               setSelectedHistoryItem(item);
                               setViewMode('details');
@@ -3464,11 +3477,12 @@ export default function ResumeScoringPage({
                         {/* job_id + title */}
                         <div className="flex items-center gap-2 mb-3">
                           {item.jdJobId && (
-                            <span className="inline-flex h-7 items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20">
-                              {item.jdJobId}
-                            </span>
+                            <JobIdBadge className="inline-flex h-7 items-center">{item.jdJobId}</JobIdBadge>
                           )}
-                          <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 line-clamp-2">
+                          <h3
+                            className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 line-clamp-2 min-w-0"
+                            title={item.jobTitle}
+                          >
                             {item.jobTitle}
                           </h3>
                         </div>
@@ -3957,7 +3971,12 @@ export default function ResumeScoringPage({
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[96vw] sm:max-w-6xl max-h-[94dvh] flex flex-col tf-round-edges">
+            <div
+              /* Width comes from the breakpoint ladder and no state touches
+                 it; height is what moved, so only height is pinned, and only
+                 while a refresh is in flight. */
+              {...historyModalHeightLock.dialogProps}
+              className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[96vw] sm:max-w-6xl max-h-[94dvh] flex flex-col tf-round-edges">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-11 h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -3985,7 +4004,13 @@ export default function ResumeScoringPage({
                     className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingHistoryModal ? 'animate-spin' : ''}`} />
-                    <span className="hidden sm:inline">{isRefreshingHistoryModal ? 'Refreshing...' : 'Refresh'}</span>
+                    {/* The label swaps to "Refreshing..." mid-request, and the
+                        longer word used to widen the button and shove the
+                        close X sideways. The span reserves the wider word's
+                        width in both states, so the header never moves. */}
+                    <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+                      {isRefreshingHistoryModal ? 'Refreshing...' : 'Refresh'}
+                    </span>
                   </button>
                   <button onClick={() => setHistoryModalItem(null)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
                     <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
@@ -4357,9 +4382,7 @@ export default function ResumeScoringPage({
                   {/* Row 1: JD ID + title + badges */}
                   <div className="flex items-center gap-1.5 flex-wrap mb-1">
                     {selectedJobData.job_id && (
-                      <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded text-xs font-bold font-mono border border-brand-blue/20">
-                        {selectedJobData.job_id}
-                      </span>
+                      <JobIdBadge>{selectedJobData.job_id}</JobIdBadge>
                     )}
                     <span className="font-semibold text-gray-900 dark:text-slate-50 text-sm">{selectedJobData.title}</span>
                     <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">

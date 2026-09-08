@@ -1,5 +1,6 @@
 'use client';
 
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -3115,48 +3116,40 @@ export default function AITalentMatchPage({
                   role="button"
                   tabIndex={0}
                 >
-                  <div className="flex flex-col sm:flex-row items-start gap-3">
-                    {/* Brand tile, as on the Resume Scoring job rows. */}
-                    <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0 group-hover:scale-105 transition-transform">
-                      <Sparkles className="w-4 h-4 text-white" />
-                    </div>
-
-                    <div className="flex-1 min-w-0 w-full">
-                      {/* Title row: JD code, title, status, version, history */}
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        {jobData?.jobId && (
-                          <span className="inline-flex h-7 items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20 flex-shrink-0">
-                            {jobData.jobId}
-                          </span>
-                        )}
-                        <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate group-hover:text-brand-blue transition-colors">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    {/* Job Info */}
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0 group-hover:scale-105 transition-transform">
+                        <Sparkles className="w-4 h-4 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          {jobData?.jobId && (
+                            <JobIdBadge className="inline-flex items-center">{jobData.jobId}</JobIdBadge>
+                          )}
+                          {jobData?.currentVersion && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">
+                              v{jobData.currentVersion}
+                            </span>
+                          )}
+                          {jobData?.currentVersion && (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${
+                              jobData.currentVersion > 1
+                                ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
+                                : 'bg-green-50 text-green-700 border-green-200'
+                            }`}>
+                              {jobData.currentVersion > 1 ? 'Republished' : 'Published'}
+                            </span>
+                          )}
+                          <JDVersionHistory jdId={item.jobId} version={jobData?.currentVersion} />
+                        </div>
+                        <h3
+                          className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1 truncate group-hover:text-brand-blue transition-colors"
+                          title={item.jobTitle}
+                        >
                           {item.jobTitle}
                         </h3>
-                        {(() => {
-                          const label = getDisplayStatus(jobData?.status || 'Published', jobData?.currentVersion);
-                          const badge = getStatusConfig(label);
-                          return (
-                            <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs ${badge.bg} ${badge.text} border ${badge.border} gap-1.5 flex-shrink-0`}>
-                              <div className={`w-1.5 h-1.5 rounded-full ${badge.dot}`}></div>
-                              {label}
-                            </span>
-                          );
-                        })()}
-                        {jobData?.currentVersion && jobData.currentVersion >= 1 && (
-                          <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
-                            <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
-                            v{jobData.currentVersion}
-                          </span>
-                        )}
-                        <JDVersionHistory jdId={item.jobId} version={jobData?.currentVersion} />
-                      </div>
-
-                      {/* One wrapping metadata line, each fact behind its icon —
-                          the Resume Scoring row's layout. Everything here comes
-                          from the JD record the row already had to hand; the
-                          card previously showed only the date and the count. */}
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 dark:text-slate-400">
-                        {jobData?.department && (
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
                           <span className="flex items-center gap-1.5">
                             <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                             {jobData.department}

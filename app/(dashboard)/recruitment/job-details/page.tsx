@@ -58,6 +58,10 @@ function JobDetailsContent() {
   const searchParams = useSearchParams();
   const jobId = searchParams.get('id');
   const fromAiInterview = searchParams.get('from') === 'ai-interview';
+  /* Opened from the assessment creation flow's View JD dialog ("Open full JD
+     page"), which anchors the breadcrumb to that flow instead of resetting to
+     the Job Descriptions trail. Same mechanism as `from=ai-interview`. */
+  const fromAssessment = searchParams.get('from') === 'assessment';
   const tabParam = searchParams.get('tab') as 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results' | null;
   const actionParam = searchParams.get('action') as 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | 'create-ai-interview' | 'invite-ai-interview' | 'ai-interview-status' | null;
 
@@ -514,6 +518,23 @@ function JobDetailsContent() {
         { label: 'Dashboard', href: '/dashboard' },
         { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
         { label: 'Select Job Description', href: '/recruitment/ai-interviews/jd-selection' },
+        { label: job.title || 'Job Details' },
+      ]
+    : fromAssessment
+    ? /* The assessment flow's own trail, with this JD as its leaf — the same
+         shape as the AI Interview case above, and the same labels the flow
+         itself prints for its steps. The Configure crumb carries the jd_id so
+         it returns to this JD's configure step rather than to the picker. */
+      [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Assessments', href: '/recruitment/assessments' },
+        { label: 'Select Job Description', href: '/recruitment/assessments/create?step=select-jd' },
+        ...(jobId
+          ? [{
+              label: 'Configure Assessment',
+              href: `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(jobId)}`,
+            }]
+          : []),
         { label: job.title || 'Job Details' },
       ]
     : undefined;

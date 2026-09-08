@@ -88,6 +88,62 @@ export function formatISTWithSeconds(dateString: string | Date | null | undefine
 }
 
 /**
+ * Format a backend datetime string as a FIXED-WIDTH stamp: "05 Mar 2026, 02:30 PM" (IST).
+ *
+ * Identical to `formatIST` but with a zero-padded day, which is the whole
+ * point: in a table column "5 Mar" and "05 Mar" start the month in different
+ * places, and a date column is read by scanning DOWN it. `formatIST` keeps its
+ * natural `day: 'numeric'` for prose and detail panels, where padding would
+ * read as a typo.
+ *
+ * Same `parseIST` as every other formatter here, so the IST handling is not
+ * duplicated - only the day field differs.
+ */
+/** Three-letter month names, fixed rather than localised. See below. */
+const STAMP_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+] as const;
+
+export function formatISTStamp(dateString: string | Date | null | undefined): string {
+  if (!dateString) return 'N/A';
+  const date = parseIST(dateString);
+  if (isNaN(date.getTime())) return 'N/A';
+
+  /* Assembled from parts rather than handed to a locale pattern, because NO
+     locale produces this format and the ones that come close are not stable:
+     `month: 'short'` yields "Sept" (four letters) for September under current
+     ICU in en-IN and en-GB alike, en-US reorders the date to "Sep 03, 2026",
+     en-CA renders the meridiem "a.m.", and the meridiem's CASE differs between
+     locales and between ICU versions of the same locale. A column of dates has
+     to be one width and one spelling, so the month comes from the table above
+     and the meridiem is upper-cased here.
+
+     Intl is still what does the work that matters — the IST conversion and the
+     12-hour clock — via numeric parts, which are locale-stable in a way the
+     names are not. */
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).formatToParts(date);
+
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? '';
+
+  const month = STAMP_MONTHS[Number(get('month')) - 1] ?? get('month');
+  // Strip any dots ("a.m.") before upper-casing, so every locale's spelling
+  // lands on the same two characters.
+  const meridiem = get('dayPeriod').replace(/\./g, '').toUpperCase();
+
+  return `${get('day')} ${month} ${get('year')}, ${get('hour')}:${get('minute')} ${meridiem}`;
+}
+
+/**
  * Format a backend datetime string as date only: "5 Mar 2026" (IST).
  */
 export function formatISTDate(dateString: string | Date | null | undefined): string {

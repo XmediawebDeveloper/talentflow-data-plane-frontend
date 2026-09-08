@@ -1,5 +1,6 @@
 'use client'
 
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
@@ -217,6 +218,15 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     const job = aiMatchConfirmJob;
     setAiMatchConfirmJob(null);
     if (job) onAIMatch?.(job);
+  };
+  /* Same one-function rule as requestAIMatch above, for the same reason: the
+     menu close and the confirmation open are a single state update, so the
+     three-dot menu can never be caught still painted while the "Disable Job
+     Description?" dialog is coming up. Every Disable Job trigger — grid card,
+     list row and the expanded version rows — goes through here. */
+  const requestDisableJob = (job: Job) => {
+    setActiveDropdown(null);
+    onDisableJob?.(job);
   };
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   
@@ -1180,7 +1190,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 return (
                   <div
                     key={job.id}
-                    className={`relative bg-white rounded-xl border transition-all duration-150 cursor-pointer ${activeDropdown === job.id ? 'z-[9999]' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
+                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     {/* Card Header */}
@@ -1221,11 +1231,15 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       </div>
                       <div className="flex items-center gap-2 mb-2">
                         {job.job_id && (
-                          <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20">
-                            {job.job_id}
-                          </span>
+                          <JobIdBadge>{job.job_id}</JobIdBadge>
                         )}
-                        <h3 className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2">
+                        {/* Two lines on a card, one line in a row - a card
+                            gives the name its own width, a row shares it. Full
+                            name on hover either way. */}
+                        <h3
+                          className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 min-w-0"
+                          title={job.title}
+                        >
                           {job.title}
                         </h3>
                       </div>
@@ -1346,7 +1360,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             <MoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
                           {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]">
+                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-40">
                               {/* View Applicants - Hide for Draft */}
                               {job.status.toLowerCase() !== 'draft' && (
                                 <button
@@ -1392,8 +1406,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onDisableJob(job);
-                                    setActiveDropdown(null);
+                                    requestDisableJob(job);
                                   }}
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-orange-700 hover:bg-orange-50"
                                 >
@@ -1491,7 +1504,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 return (
                   <div
                     key={job.id}
-                    className={`relative bg-white rounded-xl border transition-all duration-150 cursor-pointer p-4 ${activeDropdown === job.id ? 'z-[9999]' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
+                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
@@ -1561,7 +1574,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
                           </button>
                           {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[9999]">
+                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
                               {/* View Applicants - Hide for Draft */}
                               {job.status.toLowerCase() !== 'draft' && (
                                 <button
@@ -1607,8 +1620,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onDisableJob(job);
-                                    setActiveDropdown(null);
+                                    requestDisableJob(job);
                                   }}
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
                                 >
@@ -1774,7 +1786,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 )}
                                 {/* Disable Job for Published */}
                                 {versionJob.status === 'Published' && onDisableJob && (
-                                  <DropdownMenuItem onSelect={() => onDisableJob(versionJob)} className={viewVersionsMenuItemOrangeClass}>
+                                  <DropdownMenuItem onSelect={() => requestDisableJob(versionJob)} className={viewVersionsMenuItemOrangeClass}>
                                     <Ban className="w-4 h-4" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
                                   </DropdownMenuItem>
