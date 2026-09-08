@@ -6327,6 +6327,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           internalRecruiterComments: effectiveEditingJD.internal_comments ? effectiveEditingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
           mustHaveComments: effectiveEditingJD.must_have_comments || [],
           niceToHaveComments: effectiveEditingJD.nice_to_have_comments || [],
+          // The skill groups this JD was saved with. This block hydrates a STORED JD -
+          // reopening a draft, or a refresh - and it is a different path from the two
+          // that read a fresh extraction result, so omitting it here left `mergeTrail`
+          // at its [] initial value: the tree and its Add buttons rendered while the
+          // extraction response was still in memory and vanished on the first reload.
+          mergeTrail: (effectiveEditingJD.skill_merge_trail || [])
+            .filter((e: JDMergeTrailEntry) => e.kind === 'skill'),
           certifications: effectiveEditingJD.certifications || [],
           domainKeywords: effectiveEditingJD.domain_keywords || [],
           // Preserve the recruiter's actual saved answer; only a JD that genuinely
