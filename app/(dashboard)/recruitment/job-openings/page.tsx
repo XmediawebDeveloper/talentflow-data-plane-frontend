@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
-import JDDisableModal from '@/components/JDDisableModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
@@ -680,13 +679,12 @@ export default function JobOpeningsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Disable Job Confirmation Dialog */}
-      <JDDisableModal
-        open={disableDialog.open}
-        jobTitle={disableDialog.job?.title ?? ''}
-        jdNumber={disableDialog.job?.job_id}
-        version={disableDialog.job?.versionNumber}
-        disabling={disableDialog.disabling}
+      {/* Disable Job Confirmation Dialog — the same component the Job Details
+          page and the JD list sheet render. */}
+      <DisableJobModal
+        isOpen={disableDialog.open}
+        jobLabel={disableDialog.job ? formatJobVersionLabel(disableDialog.job) : ''}
+        isLoading={disableDialog.disabling}
         onCancel={closeDisableDialog}
         onConfirm={confirmDisableJob}
       />

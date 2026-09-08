@@ -546,7 +546,7 @@ function JobDetailsContent() {
           own header-bar modal that never named the JD being disabled. */}
       <DisableJobModal
         isOpen={showDisableModal}
-        jobTitle={jobToDisable?.title ?? ''}
+        jobLabel={jobToDisable ? formatJobVersionLabel(jobToDisable) : ''}
         onConfirm={confirmDisable}
         onCancel={() => {
           setShowDisableModal(false);

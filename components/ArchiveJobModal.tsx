@@ -4,10 +4,6 @@ import {
   Archive,
   Briefcase,
   Info,
-  UserSearch,
-  FileSearch,
-  TrendingUp,
-  ShieldCheck,
   CheckCircle2,
   Loader2,
   X,
@@ -16,44 +12,14 @@ import {
 /**
  * What archiving actually does, spelled out before it happens.
  *
- * Archiving used to be a single click straight from a three-dot menu with no
- * confirm at all, which made an irreversible-looking action feel accidental —
- * and it is not obvious from "Archive" alone that scoring, assessments and AI
- * interviews stop running against the JD. Each entry below is one of those
- * consequences, so the recruiter reads them rather than discovering them.
- *
- * Kept as data, not markup: the grid renders whatever is here, so adding a
- * fifth consequence is one entry and not a layout change.
+ * Kept as data, not markup: the list renders whatever is here, so adding a
+ * fifth consequence is one entry and not a JSX change.
  */
 const ARCHIVE_EFFECTS = [
-  {
-    id: 'hidden',
-    icon: UserSearch,
-    tint: 'bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300',
-    title: 'Not appear in active lists',
-    detail: 'Hidden from the active job lists.',
-  },
-  {
-    id: 'candidates',
-    icon: FileSearch,
-    tint: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300',
-    title: 'Stop new candidate flow',
-    detail: 'You won’t be able to add or process new candidates.',
-  },
-  {
-    id: 'automations',
-    icon: TrendingUp,
-    tint: 'bg-orange-100 text-brand-orange-deep dark:bg-orange-500/15 dark:text-orange-300',
-    title: 'Pause all related automations',
-    detail: 'AI Talent Match, Scoring, Assessments & AI Interviews will not run.',
-  },
-  {
-    id: 'data',
-    icon: ShieldCheck,
-    tint: 'bg-blue-100 text-brand-blue dark:bg-blue-500/15 dark:text-blue-300',
-    title: 'Keep all existing data safe',
-    detail: 'All data, reports and history will remain intact.',
-  },
+  'Not appear in active job lists.',
+  'Stop new candidate flow.',
+  'Pause all related automations (AI Talent Match, Scoring, Assessments & AI Interviews).',
+  'Keep all existing data safe.',
 ] as const;
 
 export interface ArchiveJobModalProps {
@@ -83,11 +49,11 @@ export interface ArchiveJobModalProps {
  * the bulk action and the Job Details page. They all render THIS component
  * rather than their own dialog, so the warning cannot drift between them.
  *
- * Built on the same overlay skeleton as `AITalentMatchConfirmModal` (fixed
- * backdrop, `animate-scale-in` card, close button, bordered footer) rather than
- * the `AlertDialog` primitive: the content is a full explanatory panel, not a
- * title and a sentence, and this skeleton is what the other rich confirms in
- * this app already use.
+ * Visual language is shared with `DisableJobModal` (icon disc + title + JD
+ * chip, a tinted callout, a plain bullet list, a reassurance banner, a bordered
+ * footer) so the two read as one family of confirm — archive tinted orange,
+ * disable tinted red — rather than two different dialogs that happen to sit
+ * next to each other in the same menu.
  */
 export default function ArchiveJobModal({
   isOpen,
@@ -106,7 +72,7 @@ export default function ArchiveJobModal({
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
-      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-3xl w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
+      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
         <button
           onClick={onCancel}
           disabled={isLoading}
@@ -139,15 +105,13 @@ export default function ArchiveJobModal({
             </div>
           </div>
 
-          <hr className="my-5 border-gray-100 dark:border-slate-700/60" />
-
           {/* Where it goes */}
-          <div className="flex items-start gap-3 rounded-xl border border-blue-100 dark:border-blue-500/25 bg-blue-50/70 dark:bg-blue-500/10 px-4 py-3">
-            <Info className="w-5 h-5 shrink-0 text-brand-blue mt-0.5" />
+          <div className="mt-5 flex items-start gap-3 rounded-xl border border-brand-orange/20 dark:border-orange-500/25 bg-brand-orange/[0.06] dark:bg-orange-500/10 px-4 py-3">
+            <Info className="w-5 h-5 shrink-0 text-brand-orange-deep dark:text-orange-300 mt-0.5" />
             <div className="min-w-0 text-sm text-gray-700 dark:text-slate-300">
               <p>
                 Archiving {subject} will move {many ? 'them' : 'it'} to the{' '}
-                <span className="font-semibold text-brand-blue">Archived</span> section.
+                <span className="font-semibold text-brand-orange-deep dark:text-orange-300">Archived</span> section.
               </p>
               <p className="mt-0.5 text-gray-600 dark:text-slate-400">
                 You can view the details, reports and history of {subject} anytime.
@@ -156,25 +120,18 @@ export default function ArchiveJobModal({
           </div>
 
           {/* What stops, and what does not */}
-          <div className="mt-4 rounded-xl border border-amber-200/70 dark:border-amber-500/25 bg-amber-50/50 dark:bg-amber-500/[0.07] px-4 py-4">
+          <div className="mt-4">
             <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
               While archived, {subject} will:
             </p>
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-0 sm:divide-y sm:divide-amber-200/70 lg:divide-y-0 lg:divide-x dark:sm:divide-amber-500/20">
-              {ARCHIVE_EFFECTS.map(({ id, icon: EffectIcon, tint, title, detail }) => (
-                <div key={id} className="flex flex-col items-center px-2 sm:px-4 py-1 sm:py-3 lg:py-0 text-center">
-                  <span className={`flex h-11 w-11 items-center justify-center rounded-full ${tint}`}>
-                    <EffectIcon className="h-5 w-5" />
-                  </span>
-                  <p className="mt-2.5 text-sm font-semibold text-gray-900 dark:text-slate-100">
-                    {title}
-                  </p>
-                  <p className="mt-1 text-xs sm:text-[0.8125rem] leading-snug text-gray-600 dark:text-slate-400">
-                    {detail}
-                  </p>
-                </div>
+            <ul className="mt-3 space-y-2.5">
+              {ARCHIVE_EFFECTS.map(effect => (
+                <li key={effect} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-slate-300">
+                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-brand-orange shrink-0" aria-hidden="true" />
+                  <span>{effect}</span>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
 
           {/* The reassurance — archiving is not deleting */}
@@ -200,7 +157,7 @@ export default function ArchiveJobModal({
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className="px-6 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-2.5 text-sm font-semibold bg-brand-orange hover:bg-brand-orange-deep text-white rounded-lg shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">

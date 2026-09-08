@@ -3239,8 +3239,8 @@ export default function ResumeScoringPage({
                   >
                     <div className="flex flex-col sm:flex-row items-start gap-3">
                       {/* Scoring icon - like AI Talent Match */}
-                      <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                        <ClipboardList className="w-4 h-4 text-white" />
+                      <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <ClipboardList className="w-4 h-4 text-brand-blue" />
                       </div>
                       <div className="flex-1 min-w-0 w-full">
                         {/* Title row — matches JD list card */}
