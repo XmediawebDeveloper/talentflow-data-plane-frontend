@@ -1746,6 +1746,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Lets handleNext / handleConfirmPublish detect "no changes since load" and skip
   // the extraction / reformat LLM calls on a no-op edit pass-through.
   const stage1LoadBaseline = useRef<{ jobTitle: string; aiPrompt: string; generatedJD: string; manualJD: string } | null>(null);
+  // Snapshot of `extractedData` as of the last time it was authoritative — either a
+  // fresh extraction, or a persisted JD just loaded for editing. Every edit on the
+  // Extract step (skill add/remove/move, requirements, salary, etc.) is written to
+  // the DB immediately rather than waiting for Save Draft, so "Discard Changes" has
+  // to actively revert both local state AND the DB row back to this snapshot -
+  // simply not saving further has nothing left to undo.
+  const extractedDataSnapshotRef = useRef<ExtractedData | null>(null);
   // Tracks which creation mode produced the CURRENT extractedData. If the user
   // switches AI<->Manual and re-extracts, the source content is fundamentally
   // different, so the extraction must NOT preserve the previous mode's values
@@ -2071,6 +2078,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  // True when the dialog was raised by the browser Back/Forward buttons rather
+  // than an in-app link click, so its resolution has no `pendingNavigation`
+  // URL to push and must instead unwind the history trap set up below.
+  const [isPendingBackNavigation, setIsPendingBackNavigation] = useState(false);
 
   // Cancel JD creation state
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -2714,7 +2725,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         setAutosaveStatus('saved');
         setLastAutosaveTime(new Date());
-        setHasUnsavedChanges(false); // Clear unsaved changes after successful save
+        // Deliberately NOT clearing hasUnsavedChanges here: this silent
+        // background save happens on a timer the user never asked for, so it
+        // must not disarm the leave-confirmation guard behind their back. If
+        // it did, dismissing the "Unsaved Changes" dialog with X and then
+        // trying to leave again a couple of seconds later would silently skip
+        // the dialog instead of asking again.
 
         // Reset status after 3 seconds
         setTimeout(() => {
@@ -2757,8 +2773,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Intercept navigation clicks (menu items, links, etc.) if there are unsaved changes
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      // Only intercept if there are unsaved changes and not published
-      if (!hasUnsavedChanges || isPublished) {
+      // Only intercept on the first two steps (Create JD, Extract) — by the
+      // Review step the JD is already saved server-side at each transition,
+      // so there is nothing left to lose by navigating away.
+      if (!hasUnsavedChanges || isPublished || step === 'review') {
         return;
       }
 
@@ -2775,6 +2793,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             e.stopPropagation();
 
             // Store the target URL and show dialog
+            setIsPendingBackNavigation(false);
             setPendingNavigation(href);
             setShowUnsavedDialog(true);
             return;
@@ -2787,7 +2806,62 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Attach to document to catch all clicks
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);
-  }, [hasUnsavedChanges, isPublished]);
+  }, [hasUnsavedChanges, isPublished, step]);
+
+  // Intercept the browser Back/Forward buttons the same way the click
+  // handler above intercepts in-app links. A plain `popstate` listener can't
+  // "cancel" a back-navigation — the URL/history entry has already changed by
+  // the time the event fires — so this plants one extra history entry
+  // ("trap") pointing at the current URL. The first Back press only pops that
+  // trap (landing back on the same URL, nothing visibly changes yet); we
+  // inspect it here and either re-plant the trap and show the same
+  // "Unsaved Changes" dialog, or, if there is nothing to lose, replay the
+  // Back press once more so the user's original intent goes through.
+  //
+  // Read via a ref (rather than effect deps) so the trap is planted exactly
+  // once for this page visit — re-running this effect on every
+  // hasUnsavedChanges/step change would stack extra trap entries and make the
+  // user press Back several times to actually leave.
+  const backGuardStateRef = useRef({ hasUnsavedChanges, isPublished, step });
+  useEffect(() => {
+    backGuardStateRef.current = { hasUnsavedChanges, isPublished, step };
+  }, [hasUnsavedChanges, isPublished, step]);
+
+  useEffect(() => {
+    const TRAP_STATE = { __jdCreationBackGuard: true };
+    window.history.pushState(TRAP_STATE, '', window.location.href);
+
+    // Set right before a programmatic history.back()/go() call that WE
+    // initiated, so the popstate it fires is treated as "already resolved"
+    // instead of being re-evaluated as a fresh Back press (which would
+    // otherwise replay endlessly).
+    let isProgrammaticNavigation = false;
+
+    const handlePopState = () => {
+      if (isProgrammaticNavigation) {
+        isProgrammaticNavigation = false;
+        return;
+      }
+
+      const { hasUnsavedChanges, isPublished, step } = backGuardStateRef.current;
+      if (hasUnsavedChanges && !isPublished && step !== 'review') {
+        // Cancel the visual back-navigation (there isn't one yet — the trap
+        // absorbed it) and re-plant the trap for the next attempt.
+        window.history.pushState(TRAP_STATE, '', window.location.href);
+        setPendingNavigation(null);
+        setIsPendingBackNavigation(true);
+        setShowUnsavedDialog(true);
+      } else {
+        // Nothing to lose — let the user's Back press actually continue past
+        // our trap entry to wherever they were really headed.
+        isProgrammaticNavigation = true;
+        window.history.back();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Cleanup streaming connection on unmount
   useEffect(() => {
@@ -3887,6 +3961,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         niceToHaveComments: extraction.niceToHaveComments
       });
       setExtractedData(extraction);
+      extractedDataSnapshotRef.current = extraction;
       lastExtractionSourceMode.current = mode;
       // We now hold the authoritative extracted data in state. Saving below sets
       // the JD id into the URL (ensureJDCreationUrl), which makes the page re-fetch
@@ -5663,40 +5738,66 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
-  // Handle "Save Draft" button in unsaved changes dialog
+  // Actually leaves the page once the dialog is resolved (Save or Discard).
+  // A back-triggered dialog has no `pendingNavigation` URL to push — instead
+  // it has to unwind the two history entries the popstate guard above put in
+  // place (its trap, plus the same-URL entry this page originally loaded on)
+  // so the user lands on whatever real page they were trying to reach.
+  const resolvePendingNavigation = (targetUrl: string | null) => {
+    if (isPendingBackNavigation) {
+      window.history.go(-2);
+    } else if (targetUrl) {
+      router.push(targetUrl);
+    }
+  };
+
+  // Handle "Save Draft" button in unsaved changes dialog.
+  // The dialog stays open (isSaving shows its spinner) until the save
+  // resolves, and navigation only happens on success — otherwise a
+  // validation failure (e.g. empty job title) would close the dialog and
+  // send the user away while silently discarding their work.
   const handleSaveAndNavigate = async () => {
-    setShowUnsavedDialog(false);
     setIsNavigatingBack(true);
 
     // Save draft first; navigateAfter=false because we navigate to pendingNavigation below
-    await handleSaveDraft(false);
+    const saved = await handleSaveDraft(false);
 
-    // Then navigate to the stored URL
-    if (pendingNavigation) {
-      router.push(pendingNavigation);
+    setShowUnsavedDialog(false);
+    setIsNavigatingBack(false);
+
+    // Only navigate to the stored URL if the save actually succeeded
+    if (saved) {
+      resolvePendingNavigation(pendingNavigation);
     }
 
     setPendingNavigation(null);
-    setIsNavigatingBack(false);
+    setIsPendingBackNavigation(false);
   };
 
-  // Handle "Discard" button in unsaved changes dialog
-  const handleDiscardAndNavigate = () => {
+  // Handle "Discard" button in unsaved changes dialog. Revert Extract-step
+  // fields (already committed to the DB the moment they were edited) back to
+  // their last-loaded snapshot before navigating away, so discarding actually
+  // discards instead of leaving those edits in place.
+  const handleDiscardAndNavigate = async () => {
     setShowUnsavedDialog(false);
     setHasUnsavedChanges(false);
 
+    await revertExtractedDataToSnapshot();
+
     // Navigate without saving
-    if (pendingNavigation) {
-      router.push(pendingNavigation);
-    }
+    resolvePendingNavigation(pendingNavigation);
 
     setPendingNavigation(null);
+    setIsPendingBackNavigation(false);
   };
 
-  // Handle dialog cancel (X button or clicking outside)
+  // Handle dialog cancel (X button or clicking outside). Leaves the user
+  // exactly where they are — the popstate guard's history trap is left
+  // armed, so a subsequent Back press (or another link click) prompts again.
   const handleCancelDialog = () => {
     setShowUnsavedDialog(false);
     setPendingNavigation(null);
+    setIsPendingBackNavigation(false);
   };
 
   // Handle cancel JD creation - delete draft and navigate away
@@ -5727,11 +5828,91 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
   };
 
+  // The Extract-step fields (skills, requirements, salary, experience, education,
+  // industry, comments, certifications, domain keywords, locations, the mandatory
+  // toggles, job-hopping) mapped to the JD-service update payload. Shared by the
+  // discard revert below so a revert writes back exactly the shape a normal save
+  // would have written.
+  const buildExtractedDataApiPayload = (data: ExtractedData) => {
+    const experiencePayload = resolvePersistedExperiencePayload(data.experience);
+    return {
+      department: data.department || '',
+      location: data.locations.length > 0 ? data.locations[0].city : '',
+      employment_type: data.employmentType,
+      remote_type: data.workModel,
+      must_have_skills: data.mustHaveSkills,
+      nice_to_have_skills: data.niceToHaveSkills,
+      education_requirements: data.education ? { degree: data.education } : undefined,
+      experience_min: experiencePayload.experienceMin,
+      experience_max: experiencePayload.experienceMax,
+      industry_type: data.industryType || undefined,
+      role_family: data.roleFamily || undefined,
+      role_family_confidence: data.roleFamilyConfidence ?? undefined,
+      salary_min: parseSalaryInput(data.salaryFrom) ?? null,
+      salary_max: parseSalaryInput(data.salaryTo) ?? null,
+      compensation_type: data.compensationType,
+      salary_currency: data.salaryCurrency,
+      job_level: experiencePayload.jobLevel,
+      assessment_guidance: data.assessmentGuidance || undefined,
+      additional_details: data.additionalDetails?.trim() ? data.additionalDetails : null,
+      internal_comments: data.internalRecruiterComments.join('\n') || undefined,
+      must_have_comments: data.mustHaveComments,
+      nice_to_have_comments: data.niceToHaveComments,
+      allow_overqualified: data.allowOverqualified,
+      certifications: data.certifications,
+      domain_keywords: data.domainKeywords,
+      locations: data.locations.map(loc => {
+        const parts = loc.city.split(', ');
+        return {
+          city: parts[0],
+          state: parts[1] || null,
+          country: loc.country || locationCountry,
+          radius_km: parseInt(loc.radius) || 50,
+          is_required: data.locationsRequired,
+        };
+      }),
+      experience_mandatory: data.experienceRequired || false,
+      education_mandatory: data.educationRequired || false,
+      industry_mandatory: data.industryTypeRequired || false,
+      location_mandatory: data.locationsRequired || false,
+      job_hopping_enabled: data.jobHoppingEnabled ?? true,
+    };
+  };
+
+  // Reverts every Extract-step field back to the last authoritative snapshot
+  // (a fresh extraction, or the persisted JD as loaded) — in memory AND in the
+  // DB. Each edit on this step (skill add/remove/move, requirement edit,
+  // salary, etc.) is written to the DB immediately rather than waiting for
+  // Save Draft, so undoing it locally alone would leave the already-committed
+  // edit sitting in the database untouched.
+  const revertExtractedDataToSnapshot = async () => {
+    const snapshot = extractedDataSnapshotRef.current;
+    if (!snapshot) return;
+
+    setExtractedData(snapshot);
+    setExtractedDataModified(false);
+
+    if (editingId) {
+      try {
+        await jdService.update(editingId, buildExtractedDataApiPayload(snapshot));
+      } catch (error) {
+        console.error('[Discard] Failed to revert extracted data on server:', error);
+        toast.error({
+          title: 'Failed to discard changes',
+          description: 'Your edits were reverted locally but could not be reverted on the server. Please refresh.',
+        });
+      }
+    }
+  };
+
   // Save JD as draft
   // navigateAfter: when true (default), navigates to /recruitment/job-openings on success.
   // Callers that already own their own post-save navigation (e.g. the unsaved-changes dialog,
   // or handleBackClick) must pass false to avoid firing two competing router.push() calls.
-  const handleSaveDraft = async (navigateAfter: boolean = true) => {
+  // Returns whether the draft actually saved, so callers that navigate
+  // afterwards (the unsaved-changes dialog) don't leave the page on a
+  // validation failure and silently lose the user's work.
+  const handleSaveDraft = async (navigateAfter: boolean = true): Promise<boolean> => {
     const trimmedJobTitle = jobTitle.trim();
 
     // Validate job title has at least 1 non-space character
@@ -5740,15 +5921,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         title: 'Cannot save draft',
         description: 'Please enter a job title',
       });
-      return;
+      return false;
     }
 
     if (!(await ensureValidJobTitle(trimmedJobTitle))) {
-      return;
+      return false;
     }
 
     if (step !== 'create' && !validateExtractionPageEnglishOnlyFields()) {
-      return;
+      return false;
     }
 
     setIsSavingDraft(true);
@@ -5869,6 +6050,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       if (navigateAfter) {
         router.push('/recruitment/job-openings');
       }
+      return true;
     } catch (error) {
       console.error('[ERROR] Failed to save draft:', error);
       setIsSavingDraft(false);
@@ -5877,6 +6059,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });
       // Stay on page even on error - let user retry or fix issues
+      return false;
     }
   };
 
@@ -6079,7 +6262,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         console.log('[DEBUG] - must_have_skills from API:', effectiveEditingJD.must_have_skills);
         console.log('[DEBUG] - nice_to_have_skills from API:', effectiveEditingJD.nice_to_have_skills);
 
-        setExtractedData(prev => ({
+        setExtractedData(prev => {
+          const next = {
           ...prev,
           mustHaveSkills: effectiveEditingJD.must_have_skills || [],
           niceToHaveSkills: effectiveEditingJD.nice_to_have_skills || [],
@@ -6114,7 +6298,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             country: (loc.country === 'US' ? 'US' : 'IN') as 'IN' | 'US',
           })) || [],
           locationsRequired: effectiveEditingJD.locations?.some(loc => loc.is_required) || false,
-        }));
+          };
+          extractedDataSnapshotRef.current = next;
+          return next;
+        });
 
         // Sync the standalone country dropdown to the first saved location's country
         const firstCountry = effectiveEditingJD.locations?.[0]?.country;

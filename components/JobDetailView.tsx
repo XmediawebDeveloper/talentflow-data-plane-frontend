@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Zap, ClipboardList } from 'lucide-react';
+import { ArrowLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Zap, ClipboardList, Video } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -3143,7 +3143,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               {/* 2. AI Talent Match */}
               {permissions.canRunAiMatch && aiTalentMatchAvailable && (
                 <QuickActionRow
-                  icon={<Brain className="w-4 h-4" />}
+                  icon={<Users className="w-4 h-4" />}
                   label="AI Talent Match"
                   onClick={handleAITalentMatch}
                   disabled={!features.ai_talent_match || job.status === 'Disabled'}
@@ -3158,7 +3158,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               {/* 3. Score Resumes */}
               {permissions.canRunScoring && hasPlanFeature('resume_scoring') && (
                 <QuickActionRow
-                  icon={<Target className="w-4 h-4" />}
+                  icon={<ClipboardList className="w-4 h-4" />}
                   label="Score Resumes"
                   onClick={() => setShowSelectSourceModal(true)}
                   disabled={job.status === 'Disabled'}
@@ -3172,7 +3172,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             {(permissions.canCreateAssessments || permissions.canViewAssessments) && hasPlanFeature('assessment') && (
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
                 <QuickActionHeader
-                  icon={<ClipboardList className="w-4 h-4" />}
+                  icon={<BarChart3 className="w-4 h-4" />}
                   title="Assessment"
                   accent="cyan"
                   open={openActionGroups.assessment}
@@ -3268,7 +3268,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews || permissions.canViewAIInterviews) && hasPlanFeature('ai_interview') && (
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
                 <QuickActionHeader
-                  icon={<Brain className="w-4 h-4" />}
+                  icon={<Video className="w-4 h-4" />}
                   title="AI Interview"
                   accent="orange"
                   open={openActionGroups.aiInterview}
@@ -3518,7 +3518,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   onClick={() => setShowSelectSourceModal(true)}
                   className={TAB_EMPTY_ACTION_CLASS}
                 >
-                  <Target className="w-4 h-4" />
+                  <ClipboardList className="w-4 h-4" />
                   Score Resumes
                 </button>
               ) : undefined}
@@ -4292,7 +4292,7 @@ function AIMatchTabContent({
               onClick={() => onScoreSelected(selectedCandidates)}
               className="px-3 sm:px-4 py-2 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-lg text-xs sm:text-sm shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 font-medium"
             >
-              <Target className="w-3 h-3 sm:w-4 sm:h-4" />
+              <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />
               Score ({selectedIds.size})
             </button>
           )}

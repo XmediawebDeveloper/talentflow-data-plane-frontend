@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers } from 'lucide-react';
+import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -2016,7 +2016,7 @@ export default function ResumeScoringPage({
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
               <div className="flex items-start gap-3">
                 <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                  <Target className="w-4 h-4 text-white" />
+                  <ClipboardList className="w-4 h-4 text-white" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -2162,7 +2162,7 @@ export default function ResumeScoringPage({
                     }}
                     className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
                   >
-                    <Target className="w-4 h-4" />
+                    <ClipboardList className="w-4 h-4" />
                     Score New Resumes
                   </button>
                 )}
@@ -2547,7 +2547,7 @@ export default function ResumeScoringPage({
                 }}
                 className="px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
               >
-                <Target className="w-4 h-4" />
+                <ClipboardList className="w-4 h-4" />
                 Score Resumes
               </button>
             )}
@@ -2555,7 +2555,7 @@ export default function ResumeScoringPage({
         </div>
 
         <ModuleInfoBanner
-          icon={<Target className="h-4 w-4" />}
+          icon={<ClipboardList className="h-4 w-4" />}
           title="AI-Powered Resume Scoring"
           description="Evaluate resumes against a selected job description using AI analysis of skills, experience, education, and role fit. Review transparent scores and recommendations to identify the strongest candidates faster."
         />
@@ -3226,7 +3226,7 @@ export default function ResumeScoringPage({
                     <div className="flex flex-col sm:flex-row items-start gap-3">
                       {/* Scoring icon - like AI Talent Match */}
                       <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                        <Target className="w-4 h-4 text-white" />
+                        <ClipboardList className="w-4 h-4 text-white" />
                       </div>
                       <div className="flex-1 min-w-0 w-full">
                         {/* Title row — matches JD list card */}
@@ -3656,7 +3656,7 @@ export default function ResumeScoringPage({
                   }}
                   className="px-4 py-2 rounded-lg transition-all font-medium text-sm shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 inline-flex items-center gap-1.5 bg-brand-blue text-white hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
                 >
-                  <Target className="w-4 h-4" />
+                  <ClipboardList className="w-4 h-4" />
                   Score Resumes Now
                 </button>
               )}
@@ -4298,7 +4298,7 @@ export default function ResumeScoringPage({
       <div className="mb-5">
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
-            <Target className="h-4 w-4 text-brand-blue" />
+            <ClipboardList className="h-4 w-4 text-brand-blue" />
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Score Resumes</h1>
@@ -4308,7 +4308,7 @@ export default function ResumeScoringPage({
       </div>
 
       <ModuleInfoBanner
-        icon={<Target className="h-4 w-4" />}
+        icon={<ClipboardList className="h-4 w-4" />}
         title="AI-Powered Resume Scoring"
         description="Evaluate resumes against a selected job description using AI analysis of skills, experience, education, and role fit. Review transparent scores and recommendations to identify the strongest candidates faster."
       />
@@ -4404,7 +4404,7 @@ export default function ResumeScoringPage({
                   onClick={() => setShowResumeSelectionModal(true)}
                   className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
                 >
-                  <Target className="w-4 h-4" />
+                  <ClipboardList className="w-4 h-4" />
                   Select Resumes
                 </button>
               )}

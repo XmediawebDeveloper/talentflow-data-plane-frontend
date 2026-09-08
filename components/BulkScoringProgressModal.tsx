@@ -1,4 +1,4 @@
-import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, SlidersHorizontal, ChevronDown, Eye } from 'lucide-react';
+import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, SlidersHorizontal, ChevronDown, Eye, ClipboardList } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import ListPagination from '@/components/ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -462,7 +462,7 @@ export default function BulkScoringProgressModal({
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-9 h-9 sm:w-11 sm:h-11 bg-brand-blue/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Target className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
               </div>
               <div className="min-w-0">
                 {/* The job leads when this popup is scoped to one — its title

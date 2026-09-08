@@ -11,7 +11,7 @@ import OrganizationTabs from '@/components/organization/OrganizationTabs';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Target,
+  ClipboardList,
   ClipboardCheck,
   Video,
   Upload,
@@ -66,7 +66,7 @@ const PAGE_SIZE = 20;
 type LucideIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 
 const UNIT_TYPE_CONFIG: Record<UnitType, { label: string; icon: LucideIcon; color: string; bg: string; bar: string }> = {
-  RS: { label: 'Resume Scoring', icon: Target, color: 'text-brand-blue', bg: 'bg-brand-blue/10', bar: 'bg-brand-blue' },
+  RS: { label: 'Resume Scoring', icon: ClipboardList, color: 'text-brand-blue', bg: 'bg-brand-blue/10', bar: 'bg-brand-blue' },
   AS: { label: 'Assessment', icon: ClipboardCheck, color: 'text-purple-700', bg: 'bg-purple-50', bar: 'bg-purple-500' },
   AIU: { label: 'AI Interview', icon: Video, color: 'text-emerald-700', bg: 'bg-emerald-50', bar: 'bg-emerald-500' },
 };
@@ -77,7 +77,7 @@ const CONSUMPTION_COLUMNS: Array<{
   icon: LucideIcon;
   iconClass: string;
 }> = [
-  { key: 'RS', label: 'Resume Scoring', icon: Target, iconClass: 'text-brand-blue' },
+  { key: 'RS', label: 'Resume Scoring', icon: ClipboardList, iconClass: 'text-brand-blue' },
   { key: 'AS', label: 'Assessment', icon: ClipboardCheck, iconClass: 'text-purple-500' },
   { key: 'AIU', label: 'AI Interview', icon: Video, iconClass: 'text-emerald-500' },
   { key: 'RU', label: 'Resume Storage', icon: Upload, iconClass: 'text-brand-orange' },

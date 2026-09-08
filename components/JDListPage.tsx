@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power, Target, Download } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power, ClipboardList, Download } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -864,7 +864,7 @@ export default function JDListPage() {
                               onClick={() => { router.push(`/recruitment/resume-scoring?jd_id=${jd.id}&mode=new`); setActiveDropdown(null); }}
                               className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
-                              <Target className="w-4 h-4" />
+                              <ClipboardList className="w-4 h-4" />
                               Score Resumes
                             </button>
                           )}

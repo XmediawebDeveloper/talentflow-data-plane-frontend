@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowUpDown, Sparkles, Target, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
+import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -1712,7 +1712,7 @@ export default function AITalentMatchPage({
                         : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                     }`}
                     >
-                      <Target className="w-3.5 h-3.5" />
+                      <ClipboardList className="w-3.5 h-3.5" />
                       Score ({selectedCandidates.length})
                     </button>
                   )}
@@ -1721,7 +1721,7 @@ export default function AITalentMatchPage({
                       onClick={handleAssessment}
                       className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                     >
-                      <ClipboardList className="w-3.5 h-3.5" />
+                      <BarChart3 className="w-3.5 h-3.5" />
                       Assessment ({selectedCandidates.length})
                     </button>
                   )}
@@ -2164,7 +2164,7 @@ export default function AITalentMatchPage({
 
                 return filteredAssessments.length === 0 ? (
                   <div className="text-center py-10">
-                    <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                     <p className="text-sm text-gray-500 dark:text-slate-500">{assessmentSearchQuery ? 'No assessments match your search' : 'No active assessments available'}</p>
                     <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{assessmentSearchQuery ? 'Try different search terms' : 'Create and publish an assessment first'}</p>
                   </div>
@@ -3510,7 +3510,7 @@ export default function AITalentMatchPage({
                         : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
                     }`}
                     >
-                      <Target className="w-3.5 h-3.5" />
+                      <ClipboardList className="w-3.5 h-3.5" />
                       Score ({selectedCandidates.length})
                     </button>
                   )}
@@ -3519,7 +3519,7 @@ export default function AITalentMatchPage({
                       onClick={handleAssessment}
                       className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                     >
-                      <ClipboardList className="w-3.5 h-3.5" />
+                      <BarChart3 className="w-3.5 h-3.5" />
                       Assessment ({selectedCandidates.length})
                     </button>
                   )}
@@ -3959,7 +3959,7 @@ export default function AITalentMatchPage({
 
                 return filteredAssessments.length === 0 ? (
                   <div className="text-center py-10">
-                    <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                     <p className="text-sm text-gray-500 dark:text-slate-500">{assessmentSearchQuery ? 'No assessments match your search' : 'No active assessments available'}</p>
                     <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{assessmentSearchQuery ? 'Try different search terms' : 'Create and publish an assessment first'}</p>
                   </div>

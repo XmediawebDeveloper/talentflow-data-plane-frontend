@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, Target, Upload } from 'lucide-react';
+import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { DndProvider } from 'react-dnd';
@@ -27,6 +27,29 @@ const FOLDER_PANE_MIN = 200;
 const FOLDER_PANE_MAX = 400;
 const FOLDER_PANE_DEFAULT = 280;
 const FOLDER_PANE_STORAGE_KEY = 'selectSourceModal:folderPaneWidth';
+
+// The API returns a tree (parent.children). The folder-tree renderer filters
+// this array by `parent_id`, which only ever sees top-level nodes — sub-folders
+// live inside `children` and would never appear (this was the "sub folder
+// doesn't show" bug). Flatten so every folder is searchable regardless of
+// depth, both on initial load and after creating a new one.
+const flattenFolders = (list: FolderType[]): FolderType[] => {
+  const out: FolderType[] = [];
+  const walk = (nodes: FolderType[]) => {
+    for (const f of nodes || []) {
+      // Strip `children` so downstream consumers (e.g. UploadModal which
+      // re-walks the tree) don't double-count entries that already appear
+      // flat in this list.
+      const { children, ...rest } = f as FolderType & { children?: FolderType[] };
+      out.push(rest as FolderType);
+      if (Array.isArray(children) && children.length > 0) {
+        walk(children);
+      }
+    }
+  };
+  walk(list);
+  return out;
+};
 
 // Progress item interface (internal)
 interface ProgressItem {
@@ -219,28 +242,6 @@ export default function SelectSourceModal({
             });
           });
 
-          // API returns a tree (parent.children). The folder-tree renderer
-          // below filters by `parent_id` against this array, which only ever
-          // sees top-level nodes — sub-folders live inside `children` and
-          // would never appear (this was the "sub folder doesn't show" bug).
-          // Flatten so every folder is searchable regardless of depth.
-          const flattenFolders = (list: any[]): any[] => {
-            const out: any[] = [];
-            const walk = (nodes: any[]) => {
-              for (const f of nodes || []) {
-                // Strip `children` so downstream consumers (e.g. UploadModal
-                // which re-walks the tree) don't double-count entries that
-                // already appear flat in this list.
-                const { children, ...rest } = f;
-                out.push(rest);
-                if (Array.isArray(children) && children.length > 0) {
-                  walk(children);
-                }
-              }
-            };
-            walk(list);
-            return out;
-          };
           setFolders(flattenFolders(folderData || []));
         } catch (e) {
           console.error('Failed to fetch folders:', e);
@@ -852,7 +853,7 @@ export default function SelectSourceModal({
       }
       await folderService.create(name, parentId);
       const folderData = await folderService.list();
-      setFolders(folderData || []);
+      setFolders(flattenFolders(folderData || []));
       toast.success('Folder created');
     } catch (error: any) {
       toast.error(`Failed to create folder: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
@@ -890,7 +891,7 @@ export default function SelectSourceModal({
         <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex items-start gap-2 sm:gap-4 min-w-0">
             <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Target className="w-5 h-5 text-brand-blue" />
+              <ClipboardList className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">
@@ -972,8 +973,11 @@ export default function SelectSourceModal({
               colours, spacing and selected state are identical to that page
               rather than a second implementation of them.
 
-              Browse-only: here a folder filters the list, and folder
-              management stays on the My Resumes page where it belongs. */}
+              Mostly browse-only — a folder here filters the list, and
+              rename/delete/upload-to-folder stay on the My Resumes page where
+              they belong — but "+ New" is still worth having: a recruiter
+              picking resumes to score for a fresh role shouldn't have to
+              leave this flow just to make the folder they'd file them under. */}
           {activeTab === 'my-resumes' && (
             /* `flex` (not `block`) so the panel stretches to the row's height —
                FolderTree lays its content out with `md:absolute md:inset-0`
@@ -983,10 +987,12 @@ export default function SelectSourceModal({
                 folders={folderTree}
                 selectedFolder={selectedFolder}
                 onSelectFolder={setSelectedFolder}
+                onCreateFolder={canUploadResumes ? handleCreateFolder : undefined}
                 resumes={[]}
                 width={sidebarWidth}
                 onWidthChange={handleSidebarWidthChange}
                 readOnly
+                allowCreateFolder={canUploadResumes}
               />
             </div>
           )}
@@ -1210,7 +1216,7 @@ export default function SelectSourceModal({
                   </>
                 ) : (
                   <>
-                    <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     Score {selectedResumes.length > 0 && `${selectedResumes.length} `}<span className="hidden sm:inline">Resume{selectedResumes.length === 1 ? '' : 's'}</span>
                   </>
                 )}

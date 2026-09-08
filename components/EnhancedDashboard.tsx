@@ -8,7 +8,7 @@ import {
   Users,
   FileText,
   ArrowUpRight,
-  Target,
+  ClipboardList,
   CheckCircle,
   AlertCircle,
   Calendar,
@@ -1038,7 +1038,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   onClick={() => router.push('/recruitment/resume-scoring?mode=new')}
                 >
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-teal/10 ring-1 ring-brand-teal/15 group-hover:bg-brand-teal/15 transition-colors">
-                    <Target className="h-5 w-5 text-brand-teal" />
+                    <ClipboardList className="h-5 w-5 text-brand-teal" />
                   </span>
                   <span className="text-sm font-medium text-gray-900 dark:text-slate-50">Score Resumes</span>
                 </Button>

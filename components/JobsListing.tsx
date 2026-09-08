@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -1383,7 +1383,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <Target className="w-4 h-4 text-menu-icon-score" />
+                                  <ClipboardList className="w-4 h-4 text-menu-icon-score" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                 </button>
                               )}
@@ -1598,7 +1598,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <Target className="w-4 h-4 text-menu-icon-score" />
+                                  <ClipboardList className="w-4 h-4 text-menu-icon-score" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                 </button>
                               )}
@@ -1768,7 +1768,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 )}
                                 {onScoreResumes && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
                                   <DropdownMenuItem onSelect={() => onScoreResumes(versionJob)} className={viewVersionsMenuItemClass}>
-                                    <Target className="w-4 h-4 text-menu-icon-score" />
+                                    <ClipboardList className="w-4 h-4 text-menu-icon-score" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                   </DropdownMenuItem>
                                 )}

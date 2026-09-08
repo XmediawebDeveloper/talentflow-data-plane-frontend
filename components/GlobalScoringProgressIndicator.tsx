@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useScoringProgress, ScoringJob } from '@/contexts/ScoringProgressContext';
-import { Target, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { ClipboardList, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function GlobalScoringProgressIndicator() {
@@ -166,7 +166,7 @@ export default function GlobalScoringProgressIndicator() {
         onClick={restore}
       >
         <div className="relative flex-shrink-0">
-          <Target className="w-5 h-5" />
+          <ClipboardList className="w-5 h-5" />
           {hasActiveScoring && (
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse" />
           )}

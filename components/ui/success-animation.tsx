@@ -1,43 +1,52 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
-import dynamic from 'next/dynamic';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { CheckCircle } from 'lucide-react';
 
 /**
  * The success burst shown when something completes — a published JD today.
  *
- * Loaded with `next/dynamic` and `ssr: false`, deliberately. The player pulls in
- * the Lottie renderer (~250KB) and touches canvas APIs on mount, so a static
- * import would put that weight into the bundle of whichever page imports it —
- * `JDCreation.tsx` here, which is already one of the largest client components
- * in the app — and pay for it on every step of the flow to animate the last one.
- * This way the renderer is fetched only once the success screen actually
- * mounts, which is after a network round-trip anyway.
+ * Loaded from a CDN at runtime rather than as an npm dependency, deliberately:
+ * this player has no entry in `package.json`, so a plain `npm install` can
+ * never remove or fail to fetch it — the browser pulls
+ * `<dotlottie-wc>` straight from jsDelivr the first time this component
+ * mounts, which is after a network round-trip anyway, and every subsequent
+ * mount reuses the browser's cached copy of the script.
+ *
+ * `importFromCDN` goes through `new Function` so the bundler never sees a
+ * literal `import('https://...')` — Webpack/Turbopack would otherwise try to
+ * resolve that URL as a local module at build time and fail. Wrapping it this
+ * way keeps the call a genuine native dynamic `import()` at runtime.
  */
-const DotLottieReact = dynamic(
-  () => import('@lottiefiles/dotlottie-react').then((m) => m.DotLottieReact),
-  {
-    ssr: false,
-    /* Nothing while the player loads, rather than the static badge.
-       `loading` is rendered by `dynamic` with no props, so it cannot see this
-       component's `fallback` — it could only ever render the DEFAULT badge, and
-       that badge is blue. Flashing a blue disc inside the OTP field's green bar
-       for a frame would read as a bug, where an empty box for the same frame
-       reads as nothing at all. The reduced-motion path below still gets the
-       caller's proper fallback, because that one is chosen during render. */
-    loading: () => null,
-  },
-);
+const DOTLOTTIE_WC_CDN_URL =
+  'https://cdn.jsdelivr.net/npm/@lottiefiles/dotlottie-wc@0.9.28/dist/dotlottie-wc.js';
+
+const importFromCDN = new Function('url', 'return import(url)') as (
+  url: string,
+) => Promise<unknown>;
+
+let dotlottieWcLoadPromise: Promise<void> | null = null;
+
+function loadDotlottieWc(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if (!dotlottieWcLoadPromise) {
+    dotlottieWcLoadPromise = (
+      customElements.get('dotlottie-wc')
+        ? Promise.resolve()
+        : (importFromCDN(DOTLOTTIE_WC_CDN_URL) as Promise<void>)
+    );
+  }
+  return dotlottieWcLoadPromise;
+}
 
 /**
  * What this degrades to: the tinted disc and tick that were here before the
  * animation existed.
  *
  * Used for three different cases, which is the reason it is a component rather
- * than inline markup — the loading window before the renderer arrives, a
- * viewer who has asked for reduced motion, and any environment where the
- * dynamic import never resolves. All three should look finished, not broken.
+ * than inline markup — the loading window before the player's script arrives, a
+ * viewer who has asked for reduced motion, and any environment where the CDN
+ * fetch never resolves. All three should look finished, not broken.
  */
 function StaticBadge() {
   return (
@@ -74,8 +83,8 @@ export interface SuccessAnimationProps {
    */
   className?: string;
   /**
-   * What to show instead of the animation — while the player loads, and for a
-   * viewer who has asked for reduced motion.
+   * What to show instead of the animation — while the player's script loads, and
+   * for a viewer who has asked for reduced motion.
    *
    * Defaults to the publish screen's blue disc-and-tick. A host whose
    * surroundings are not that screen must pass its own: the OTP field, for one,
@@ -94,20 +103,34 @@ export default function SuccessAnimation({
     getReducedMotion,
     getReducedMotionOnServer,
   );
+  const [playerReady, setPlayerReady] = useState(false);
 
-  if (reducedMotion) return <>{fallback ?? <StaticBadge />}</>;
+  useEffect(() => {
+    if (reducedMotion) return;
+    let cancelled = false;
+    loadDotlottieWc()
+      .then(() => {
+        if (!cancelled) setPlayerReady(true);
+      })
+      .catch(() => {
+        /* CDN fetch failed — stay on the fallback badge below. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reducedMotion]);
+
+  if (reducedMotion || !playerReady) return <>{fallback ?? <StaticBadge />}</>;
+
+  const DotlottieWc = 'dotlottie-wc' as unknown as React.ElementType<{
+    src: string;
+    autoplay?: boolean;
+    class?: string;
+  }>;
 
   return (
     <div className={className} aria-hidden>
-      <DotLottieReact
-        src="/animations/success.json"
-        autoplay
-        /* Plays once. A tick that redraws itself every second and a half reads
-           as something still in progress, which is the opposite of what this
-           screen is saying. */
-        loop={false}
-        className="h-full w-full"
-      />
+      <DotlottieWc src="/animations/success.json" autoplay class="h-full w-full" />
     </div>
   );
 }

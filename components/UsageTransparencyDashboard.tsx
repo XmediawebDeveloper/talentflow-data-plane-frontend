@@ -8,7 +8,7 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import { ArrowLeft,
   Eye, Download, X, BarChart3,
   CheckCircle2, XCircle, AlertCircle, Loader2, Clock,
-  Target, Video, ClipboardCheck, FileText, TrendingUp, TrendingDown,
+  ClipboardList, Video, ClipboardCheck, FileText, TrendingUp, TrendingDown,
   Layers, Minus, RefreshCw
 } from 'lucide-react';
 import {
@@ -111,7 +111,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
   const getUnitTypeIcon = (unitType: UnitType) => {
     switch (unitType) {
       case 'RS':
-        return <Target className="w-4 h-4" />;
+        return <ClipboardList className="w-4 h-4" />;
       case 'AS':
         return <ClipboardCheck className="w-4 h-4" />;
       case 'AIU':
