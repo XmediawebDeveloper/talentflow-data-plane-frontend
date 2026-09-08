@@ -123,7 +123,7 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
   }, [usageBars]);
 
   return (
-    <main className="flex-1 overflow-x-hidden bg-slate-50">
+    <main className="flex-1 overflow-x-clip bg-slate-50">
       <div className="p-4 md:p-8 w-full max-w-[1400px] mx-auto">
         <div className="mb-8">
           <WelcomeBanner user={user} tenant={tenant} />

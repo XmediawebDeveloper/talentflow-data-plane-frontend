@@ -230,7 +230,7 @@ function AssessmentDetailsContent() {
 
   if (error || !assessment) {
     return (
-      <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
             <div className="flex flex-col items-center justify-center h-64 space-y-3">
@@ -311,7 +311,7 @@ export default function AssessmentDetailsPage() {
   return (
     <Suspense
       fallback={
-        <main className="flex-1 overflow-x-hidden bg-slate-50">
+        <main className="flex-1 overflow-x-clip bg-slate-50">
           <div className="mx-auto w-full max-w-[1400px]">
             <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
               <div className="flex items-center justify-center h-64">

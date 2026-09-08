@@ -1154,7 +1154,7 @@ export default function AIInterview() {
     : 'neutral';
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
+    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       {/* The page shell and this panel had no dark variants at all, so every
           card inside was painting a dark surface onto a white page. */}

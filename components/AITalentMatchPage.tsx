@@ -1492,7 +1492,7 @@ export default function AITalentMatchPage({
   // View: Matching in Progress (direct flow from resume-view / deep link)
   if (viewMode === 'matching') {
     return (
-      <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
@@ -2417,7 +2417,7 @@ export default function AITalentMatchPage({
 
     return (
       <>
-      <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
+      <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         {/* The candidate roll-up is an in-page view on this same route, so the
@@ -3395,7 +3395,7 @@ export default function AITalentMatchPage({
       (loadingHistorySessionId === selectedHistoryItem?.id || loadingHistorySessionId === historyItemForSelectedJob?.id);
 
     return (
-      <main className="flex-1 overflow-x-hidden bg-slate-50">
+      <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb

@@ -540,7 +540,7 @@ function JobDetailsContent() {
     : undefined;
 
   return (
-    <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+    <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
       {/* Disable Confirmation Modal */}
       {/* Disable confirm — the shared component. This page used to render its
           own header-bar modal that never named the JD being disabled. */}

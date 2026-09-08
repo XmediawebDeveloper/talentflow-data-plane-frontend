@@ -131,7 +131,7 @@ export default function AssessmentsRoute() {
 
   return (
     <FeatureGate feature="assessment">
-      <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+      <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
         <Assessments
           jobs={jobs}
           autoOpenCreate={initialAutoCreate.current}
