@@ -538,7 +538,7 @@ export default function JobOpeningsPage() {
   }
 
   return (
-    <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+    <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
       <JobsListing
         jobs={jobs}
         onCreateNew={hasPermission('canCreateJD') || isTenantAdmin ? handleCreateNew : undefined}

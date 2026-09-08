@@ -64,8 +64,8 @@ export default function AssessmentAuditTrail() {
   const [showFilters, setShowFilters] = useState(false);
 
   // Search + date range come from the shared hook: it owns the typed-vs-applied
-  // query, the staged panel, the active count and the reset. The category chips
-  // stay local — they are their own control, not part of the panel.
+  // query, the staged panel, the active count and the reset. The category
+  // segments stay local — they are their own control, not part of the panel.
   const search = useListSearch({
     initialFilters: { dateFrom: '', dateTo: '' },
     onChange: () => setPage(1),
@@ -160,46 +160,139 @@ export default function AssessmentAuditTrail() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
-        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4">
-          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-            <span className="text-xs sm:text-sm text-gray-600">Total Events</span>
-            <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400" />
-          </div>
-          <div className="text-lg sm:text-2xl text-gray-900 tracking-tight">{total}</div>
+      {/* Summary + category filter, with no cards in it.
+
+          The five-tile card row that stood here was more furniture than five
+          counts deserved: it pushed the log — the only thing this tab exists to
+          show — below the fold, and it sat directly above a SECOND row of
+          controls, the "Filter:" chips, which already carried two of the same
+          numbers. Two rows of chrome for one summary.
+
+          So the two rows become one, the way the Invitation Status tab on this
+          same page already did it (see the note above its segmented control in
+          `Assessments.tsx`, which reached this conclusion first and for the same
+          reason). The categories are a segmented control — slate trough, white
+          raised pill for the selection, count badge in the segment's own tint —
+          and the four figures that are NOT filters trail off to the right as
+          plain text.
+
+          Which half a number lands in is decided by one rule: can you click it
+          and see exactly those rows? All / Lifecycle / Candidate are the
+          `category` this tab filters by, so they are the segments and clicking
+          them is honest. Created, Invited, In Progress and Completed have no
+          filter behind them — "Completed" could only ever narrow to ALL
+          candidate activity, so a card or a segment for it would promise rows
+          it cannot deliver. They stay flat: `tabular-nums` figures, a coloured
+          icon, no border, nothing to press.
+
+          Icon colours are `ACTIVITY_COLORS` above, the same map the log rows
+          below use to mark each event type, so a rail figure and the rows it
+          counts cannot disagree about what colour "invited" is. The two
+          category segments keep the blue and cyan their chips already wore.
+
+          Counts are of the WHOLE set, not the current query, so narrowing the
+          table never moves them — again the Invitation Status rule. The
+          narrowed reading has its own home in "Showing N of M entries" under
+          the table. */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div
+          role="group"
+          aria-label="Filter activity by category"
+          className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] self-start overflow-x-auto scrollbar-hide max-w-full"
+        >
+          {/* Classes are spelled out per segment rather than built from the key
+              — `text-brand-${x}` would be invisible to Tailwind's scanner,
+              which only reads literal class strings.
+
+              All Events is the sum of the two category counts rather than
+              `total`: `total` is the count for the CURRENT query, so the moment
+              you picked Lifecycle the All badge would drop to the Lifecycle
+              figure and the control would contradict itself. The two summands
+              are the very values the chips this replaces already displayed, so
+              this reads nothing new from the response. */}
+          {([
+            { key: 'all' as const, label: 'All Events', short: 'All', icon: Activity,
+              value: stats.total_lifecycle_events + stats.total_candidate_events,
+              text: 'text-gray-700 dark:text-slate-200', tint: 'bg-gray-200/70 dark:bg-slate-700/60', ring: 'ring-gray-300 dark:ring-slate-600' },
+            { key: 'assessment_lifecycle' as const, label: 'Assessment Lifecycle', short: 'Lifecycle', icon: FileText,
+              value: stats.total_lifecycle_events,
+              text: 'text-brand-blue', tint: 'bg-brand-blue/10', ring: 'ring-brand-blue/20' },
+            { key: 'candidate_activity' as const, label: 'Candidate Activities', short: 'Candidate', icon: User,
+              value: stats.total_candidate_events,
+              text: 'text-brand-cyan', tint: 'bg-brand-cyan/10', ring: 'ring-brand-cyan/20' },
+          ]).map((segment) => {
+            const SegmentIcon = segment.icon;
+            const isActive = categoryFilter === segment.key;
+            return (
+              <button
+                key={segment.key}
+                type="button"
+                aria-pressed={isActive}
+                title={segment.key === 'all'
+                  ? 'Show all activity'
+                  : isActive
+                    ? `Stop filtering by ${segment.short.toLowerCase()}`
+                    : `Show only ${segment.short.toLowerCase()} activity`}
+                /* Clicking the selected segment clears back to all; `all` is
+                   exempt because it already IS the cleared state. Same rule the
+                   chips had.
+
+                   `setPage(1)` is new, and it is a fix rather than a flourish:
+                   the chips left the pager where it was, so switching category
+                   while on page 3 of candidate activity asked the API for page 3
+                   of a lifecycle list that may only have one, and the table came
+                   back empty. */
+                onClick={() => {
+                  setCategoryFilter(isActive && segment.key !== 'all' ? 'all' : segment.key);
+                  setPage(1);
+                }}
+                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap ${
+                  isActive
+                    ? `bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ${segment.text} ${segment.ring}`
+                    : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'
+                }`}
+              >
+                {/* The icon keeps its segment colour in every state, so it does
+                    not inherit the button's grey resting label colour. */}
+                <SegmentIcon className={`w-3.5 h-3.5 flex-shrink-0 ${segment.text}`} />
+                <span className="hidden sm:inline">{segment.label}</span>
+                <span className="sm:hidden">{segment.short}</span>
+                <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold tabular-nums ring-1 transition-colors ${segment.text} ${segment.tint} ${segment.ring}`}>
+                  {isLoading ? '—' : segment.value.toLocaleString()}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4">
-          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-            <span className="text-xs sm:text-sm text-gray-600">Created</span>
-            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue" />
-          </div>
-          <div className="text-lg sm:text-2xl text-brand-blue tracking-tight">{stats.assessments_created}</div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4">
-          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-            <span className="text-xs sm:text-sm text-gray-600">Invited</span>
-            <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-cyan" />
-          </div>
-          <div className="text-lg sm:text-2xl text-brand-cyan tracking-tight">{stats.candidates_invited}</div>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4">
-          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-            <span className="text-xs sm:text-sm text-gray-600">Completed</span>
-            <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" />
-          </div>
-          <div className="text-lg sm:text-2xl text-green-600 tracking-tight">{stats.candidates_completed}</div>
-        </div>
-
-        <div className="col-span-2 sm:col-span-1 bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4">
-          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-            <span className="text-xs sm:text-sm text-gray-600">In Progress</span>
-            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-orange" />
-          </div>
-          <div className="text-lg sm:text-2xl text-brand-orange-deep tracking-tight">{stats.candidates_in_progress}</div>
+        {/* The breakdown. Reads as a sentence rather than a set of controls,
+            which is the point — these are the four figures you can look at but
+            not act on. Hairline dividers rather than gaps alone so the pairs
+            group at a glance, and `tabular-nums` so nothing shifts sideways as
+            the counts refresh underneath. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs sm:text-sm lg:justify-end flex-shrink-0">
+          {([
+            { icon: Plus, value: stats.assessments_created, label: 'created', text: 'text-brand-blue' },
+            { icon: Mail, value: stats.candidates_invited, label: 'invited', text: 'text-brand-cyan' },
+            { icon: Clock, value: stats.candidates_in_progress, label: 'in progress', text: 'text-brand-orange' },
+            { icon: CheckCircle, value: stats.candidates_completed, label: 'completed', text: 'text-green-600' },
+          ]).map((item, index) => {
+            const ItemIcon = item.icon;
+            return (
+              <Fragment key={item.label}>
+                {index > 0 && (
+                  <span className="w-px h-3.5 bg-gray-200 dark:bg-slate-700 flex-shrink-0" aria-hidden />
+                )}
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                  <ItemIcon className={`w-3.5 h-3.5 flex-shrink-0 ${item.text}`} />
+                  <span className="font-semibold tabular-nums text-gray-900 dark:text-slate-50">
+                    {isLoading ? '—' : item.value.toLocaleString()}
+                  </span>
+                  <span className="text-gray-500 dark:text-slate-400">{item.label}</span>
+                </span>
+              </Fragment>
+            );
+          })}
         </div>
       </div>
 
@@ -221,45 +314,6 @@ export default function AssessmentAuditTrail() {
             >
               <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Export Logs
-            </button>
-          </div>
-
-          {/* Category Filter Chips */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-4">
-            <span className="text-xs sm:text-sm text-gray-600 mr-1 sm:mr-2">Filter:</span>
-            <button
-              onClick={() => setCategoryFilter('all')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${
-                categoryFilter === 'all'
-                  ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                  : 'bg-slate-100 text-gray-700 hover:bg-slate-200'
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setCategoryFilter('assessment_lifecycle')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${
-                categoryFilter === 'assessment_lifecycle'
-                  ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                  : 'bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 hover:bg-brand-blue/10'
-              }`}
-            >
-              <span className="hidden sm:inline">Assessment Lifecycle</span>
-              <span className="sm:hidden">Lifecycle</span>
-              {' '}({stats.total_lifecycle_events})
-            </button>
-            <button
-              onClick={() => setCategoryFilter('candidate_activity')}
-              className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium transition-colors ${
-                categoryFilter === 'candidate_activity'
-                  ? 'bg-brand-cyan text-white shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10'
-                  : 'bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20 hover:bg-brand-cyan/10'
-              }`}
-            >
-              <span className="hidden sm:inline">Candidate Activities</span>
-              <span className="sm:hidden">Candidate</span>
-              {' '}({stats.total_candidate_events})
             </button>
           </div>
 

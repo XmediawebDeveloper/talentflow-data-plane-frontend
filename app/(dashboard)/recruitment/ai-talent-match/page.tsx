@@ -180,7 +180,7 @@ export default function AITalentMatchRoute() {
 
   return (
     <FeatureGate feature="ai_talent_match">
-      <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+      <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
         <AITalentMatchPage jobs={jobs} matchHistory={matchHistory} matchSessionCounts={matchSessionCounts} />
       </div>
     </FeatureGate>

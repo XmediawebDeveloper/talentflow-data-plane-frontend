@@ -28,6 +28,16 @@ interface ConsentLogsProps {
   defaultFeature?: string;
 }
 
+/* Every control in the filter row wears this: one height, one border, one focus
+   ring. Written once rather than repeated per field because the alignment IS
+   the sameness — the previous row set its padding three different ways
+   (`py-1.5 sm:py-2`, `px-1.5 sm:px-3`, `px-2 sm:px-3`) and no two controls
+   ended up the same height. A literal string, not a template, so Tailwind's
+   scanner can still see the class names. */
+const FILTER_FIELD =
+  'h-9 min-w-0 px-3 bg-white border border-gray-300 rounded-lg text-sm text-black ' +
+  'focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40';
+
 export default function ConsentLogs({ compact = false, defaultFeature = '' }: ConsentLogsProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [logs, setLogs] = useState<ConsentLog[]>([]);
@@ -149,62 +159,95 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters — one row.
+
+          It was four stacked rows, and not by design: the children still carry
+          `col-span-2` / `sm:col-span-1` from a grid that is no longer their
+          parent (it is `flex flex-col` now), so those classes resolve to
+          nothing and every control took a line of its own. The date inputs were
+          `flex-1` inside that full-width column, which is what stretched them
+          the width of the card.
+
+          Now one wrapping flex row: filters left, actions right on `ml-auto`,
+          and every control on the same `h-9` so the select, both dates and both
+          buttons share a baseline instead of each sizing itself from its own
+          padding. `flex-wrap` is what keeps that honest on a narrow screen —
+          one line wherever it fits, a clean second line where it cannot, rather
+          than a row that overflows.
+
+          The dates are `w-[150px]`: a native date input needs about 135px to
+          show `mm/dd/yyyy` without clipping, so this is the narrowest they go
+          while still reading as date fields rather than truncated boxes.
+
+          Colour is the app's rather than purple. `focus:ring-brand-blue/40` +
+          `focus:border-brand-blue/40` is the ring every input in `ListToolbar`
+          wears, the Filter glyph takes the `text-brand-blue/60` that toolbar's
+          search icon uses, and Search is `bg-brand-blue` / `hover:bg-brand-blue-2`,
+          the house primary. The purple this replaces (`purple-500` rings,
+          `purple-600` button) was never a TalentFlow colour — it appears in no
+          `--brand-*` token in globals.css. */}
       {!compact && (
-        <div className="px-3 sm:px-6 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
-          <div className="flex flex-col gap-3">
-            {/* Filter label */}
-            <div className="flex items-center gap-2">
-              <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400" />
-              <span className="text-xs sm:text-sm font-medium text-gray-700">Filters:</span>
+        <div className="px-3 sm:px-6 py-3 bg-gray-50 border-b border-gray-200">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <Filter className="w-4 h-4 text-brand-blue/60" />
+              <span className="text-sm font-medium text-gray-700">Filters</span>
             </div>
 
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="min-w-0 px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-purple-500 text-black"
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filter by consent status"
+              className={FILTER_FIELD}
+            >
+              <option value="">All Status</option>
+              <option value="accepted">Accepted</option>
+              <option value="declined">Declined</option>
+            </select>
+
+            {/* The two dates are one control, so they travel together when the
+                row wraps — hence their own flex box rather than three loose
+                children with a stray "to" that could wrap onto its own line. */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                aria-label="From date"
+                className={`${FILTER_FIELD} w-[150px]`}
+              />
+              <span className="text-xs text-gray-400 flex-shrink-0">to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                aria-label="To date"
+                className={`${FILTER_FIELD} w-[150px]`}
+              />
+            </div>
+
+            {/* `sm:ml-auto` rather than `ml-auto`: on a phone the group has
+                already wrapped to its own line, and pushing it right there
+                would strand two buttons against the far edge with the fields
+                left-aligned above them. */}
+            <div className="flex items-center gap-2 sm:ml-auto flex-shrink-0">
+              <button
+                onClick={handleSearch}
+                className="h-9 px-3.5 inline-flex items-center gap-1.5 bg-brand-blue text-white rounded-lg text-sm font-medium hover:bg-brand-blue-2 transition-colors"
               >
-                <option value="">All Status</option>
-                <option value="accepted">Accepted</option>
-                <option value="declined">Declined</option>
-              </select>
+                <Search className="w-4 h-4" />
+                <span>Search</span>
+              </button>
 
-              {/* Date range - full width row on mobile */}
-              <div className="col-span-2 flex items-center gap-1.5 sm:gap-2 min-w-0">
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-purple-500 text-black"
-                />
-                <span className="text-xs text-gray-400 flex-shrink-0">to</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-purple-500 text-black"
-                />
-              </div>
-
-              {/* Action buttons */}
-              <div className="col-span-2 sm:col-span-1 flex items-center gap-2">
-                <button
-                  onClick={handleSearch}
-                  className="px-3 py-1.5 sm:py-2 bg-purple-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-purple-700 flex items-center gap-1.5"
-                >
-                  <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <span>Search</span>
-                </button>
-
-                <button
-                  onClick={clearFilters}
-                  className="px-3 py-1.5 sm:py-2 text-gray-600 hover:text-gray-800 text-xs sm:text-sm"
-                >
-                  Clear
-                </button>
-              </div>
+              <button
+                onClick={clearFilters}
+                className="h-9 px-3 rounded-lg text-sm text-gray-600 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
+              >
+                Clear
+              </button>
             </div>
           </div>
+        </div>
       )}
 
       {/* Nothing to list: the shared ListEmptyState, INSTEAD of the table —

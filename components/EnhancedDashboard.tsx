@@ -527,7 +527,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   };
 
   return (
-    <div className="bg-slate-50 dark:bg-slate-950 flex-1 overflow-x-hidden">
+    <div className="bg-slate-50 dark:bg-slate-950 flex-1 overflow-x-clip">
       <div className="space-y-6 p-4 md:p-8 w-full max-w-[1400px] mx-auto">
       {/* Welcome Banner */}
       <WelcomeBanner user={user} tenant={tenant} />

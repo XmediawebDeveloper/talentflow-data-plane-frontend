@@ -1,7 +1,7 @@
 'use client';
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { Plus, Clock, Calendar, Users, CheckCircle, XCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef } from 'react';
@@ -57,7 +57,9 @@ import { scoringService } from '@/lib/services/scoringService';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
-import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search } from 'lucide-react';
+// The shared version chip the Invite to Assessment dialog labels its rows with.
+import VersionBadge from './VersionBadge';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -69,7 +71,7 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import AllAssessmentsTable from '@/components/assessments/AllAssessmentsTable';
 import AssessmentVersionHistoryPanel, { VersionChip, type AssessmentVersionRow } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
+import { groupByLineage, latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
 
 
 /** What the version-history helpers below read off an assessment row — the
@@ -214,6 +216,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // stands in front of it when more than one is shareable.
   const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [invitePickerQuery, setInvitePickerQuery] = useState('');
+  /* The row ticked in the picker, held until the footer button is pressed.
+     The picker used to have no such state — clicking a row set
+     `selectedAssessmentForShare` and opened the share modal in the same
+     breath, so there was never a moment where a choice existed but had not
+     been acted on. The Invite to Assessment dialog's flow needs exactly that
+     moment: pick, see it confirmed, then continue (or change your mind).
+
+     The id rather than the row, unlike the `selectedAssessmentFor*` states
+     above: a copy taken at click time goes stale if `reloadAssessments` lands
+     while the dialog is open, and the row is one `find` away whenever it is
+     actually needed. It also types itself, so this is the one piece of picker
+     state that does not have to be `any`. */
+  const [invitePickerChoiceId, setInvitePickerChoiceId] = useState<string | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedAssessmentForPreview, setSelectedAssessmentForPreview] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -2524,7 +2539,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     setInvitePickerQuery('');
+    setInvitePickerChoiceId(null);
     setShowInvitePicker(true);
+  };
+
+  /* Closing has to reset the pick as well as the query, and it is reachable
+     four ways (backdrop, X, Cancel, and continuing through) — so it is one
+     function rather than the same two setters copied into four handlers, which
+     is how the query got left behind on some paths before. */
+  const closeInvitePicker = () => {
+    setShowInvitePicker(false);
+    setInvitePickerQuery('');
+    setInvitePickerChoiceId(null);
   };
 
   const reloadAssessments = async () => {
@@ -3398,11 +3424,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     ];
   };
 
-  /* `overviewJobLineages` / `totalJobs` lived here to feed the Total Jobs
-     summary card. That card is now the Total Jobs TAB, and a tab does not need
-     a precomputed total: the Job List heading below already counts the rows it
-     is showing (`assessmentResultCount`), which is the same figure and, unlike
-     a header tile, moves with the filters. */
+  /* How many JOBS the tenant has, for the Total Jobs summary card.
+
+     `jobs` is the route's fetch of JD rows and holds one row per VERSION — a
+     job republished twice is three rows in it — so `jobs.length` here would
+     report versions while reading as a job count. `groupByLineage` is the
+     shared helper the Job Openings list counts its own "Total Jobs" tile with
+     (keyed on `job_id`, falling back to the row id), so the two pages cannot
+     report different numbers of jobs for the same tenant.
+
+     No new request: this is the list the page is already handed as a prop and
+     already reads for the LATEST badge and the Position filter.
+
+     Deliberately NOT the Job List heading's `assessmentResultCount` below,
+     which counts the jobs that HAVE assessments and moves with the filters —
+     a header tile answers "how many jobs are there", which is this. */
+  const totalJobs = groupByLineage(jobs).size;
 
   /* Candidates who have actually SAT an assessment, from the same
      /assessments/stats response the Total and Active figures come from — one
@@ -3904,7 +3941,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Assessments' }]} />
@@ -4072,18 +4109,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             list. Card design, tokens and spacing are untouched; only the
             metrics and the tab each one opens changed.
 
-            Four cards, so the grid is on its DEFAULT `columns` (4) — the
-            2-up / 4-up responsive ladder every other page's four-card row
-            uses. (Total Jobs left this row to become a TAB, since a job count
-            is a cut of the list rather than a statistic about assessments;
-            Draft Assessments took the fourth slot.)
+            Five cards, so the grid is on `columns={5}` — the shared
+            1-up / 2-up / 3-up / 5-up ladder, which is what keeps a five-card
+            row from leaving one orphan tile on its own line. Nothing else
+            about the row changed: same shell, same gaps, same tone.
 
-            Every card now stays on THIS page: each selects a tab and reveals
-            the list, so the row is four ways into one screen rather than three
-            plus a link out.
+            Every card stays on THIS page: each selects a tab and reveals the
+            list, so the row is five ways into one screen.
 
             Each card opens the tab that shows the rows it counts:
 
+              Total Jobs          -> the Total Jobs tab, which is the
+                                     job-grouped list. `totalJobs`, the
+                                     distinct job lineages in the `jobs` prop
+                                     — see its derivation above. It leads the
+                                     row for the same reason its tab leads the
+                                     tab strip: the job is what an assessment
+                                     hangs off, so it is the widest of these
+                                     counts.
               Total Assessments   -> the All Assessments tab.
                                      `stats.total_assessments`.
               Active Assessments  -> the Active tab. `stats.active_assessments`,
@@ -4106,18 +4149,41 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             result table here as well. The Total Jobs tab remains the
             job-grouped list.
 
-            No new endpoint: all three figures come from the single
+            No new endpoint: the four assessment figures come from the single
             `assessmentService.getStats()` call this page already makes on mount
-            (and re-makes through `reloadStats`). Nothing here is a literal.
+            (and re-makes through `reloadStats`), and the job count is derived
+            from the `jobs` prop the route already fetched. Nothing here is a
+            literal.
 
-            Icons come from the vocabulary already in use — `Users` is what this
-            page marks candidate results with, `Globe` is what the sibling AI
-            Interviews overview marks its "Active / published & live" card with,
-            and `Pencil` is this page's own edit-a-draft icon, which is what a
-            draft assessment is: one still being written. (The tab pills these
-            cards open are text-only, so none of this is shared with them.) */}
+            Icons come from the vocabulary already in use — `Briefcase` is what
+            the Job Openings list marks its own Total Jobs card with, `Users` is
+            what this page marks candidate results with, `Globe` is what the
+            sibling AI Interviews overview marks its "Active / published & live"
+            card with, and `Pencil` is this page's own edit-a-draft icon, which
+            is what a draft assessment is: one still being written. (The tab
+            pills these cards open are text-only, so none of this is shared
+            with them.) */}
         <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
-          <StatsCardGrid>
+          <StatsCardGrid columns={5}>
+            {/* Total Jobs — the count of jobs this tenant has, opening the
+                job-grouped Total Jobs tab, which is the list those jobs are
+                the rows of. Same shared StatsCard as the four beside it, on the
+                same neutral tone with `sparkline={false}` and `showClickArrow`,
+                so it is the row's fifth card rather than a card of its own
+                kind. `isLoadingStats` is deliberately NOT read here: this value
+                does not come from the stats request, and the route holds its
+                own spinner until `jobs` has landed, so the number is real on
+                first paint. */}
+            <StatsCard
+              tone="neutral"
+              active={isOverviewCardActive('jobs')}
+              showClickArrow
+              icon={Briefcase}
+              label="Total Jobs"
+              value={totalJobs.toLocaleString()}
+              sparkline={false}
+              onClick={() => openAssessmentsList('jobs')}
+            />
             {/* Total Assessments now opens the All Assessments TAB on this page
                 rather than routing to /recruitment/assessments/all. That route
                 still exists and still works if opened directly — nothing about
@@ -4520,16 +4586,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                         <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                           <span className="font-semibold text-gray-900 dark:text-slate-50">{total.toLocaleString()}</span> result{total === 1 ? '' : 's'} across all assessments
-                        </span>
-                        <span className="flex items-center gap-3 text-xs sm:text-sm">
-                          <span className="inline-flex items-center gap-1.5 text-green-700 dark:text-green-400">
-                            <CheckCircle className="w-3.5 h-3.5" />
-                            {completedCandidates.filter(r => r.passed).length} passed
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 text-red-600 dark:text-red-400">
-                            <XCircle className="w-3.5 h-3.5" />
-                            {completedCandidates.filter(r => r.passed === false).length} failed
-                          </span>
                         </span>
                       </div>
                       {/* Same card + title as the per-assessment results view. */}
@@ -5585,8 +5641,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
                         )}
 
-                        {/* Topic Availability Header */}
-                        <div className="bg-gradient-to-r from-brand-blue to-brand-cyan rounded-xl p-3 sm:p-4 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                        {/* Topic Availability Header — solid `bg-brand-blue`,
+                            not the blue→cyan gradient it started as.
+
+                            One brand colour, matching the `bg-brand-blue` the
+                            On badges and toggles directly below it already use,
+                            so the header and the controls it introduces read as
+                            one surface rather than two colour ideas.
+
+                            It also fixes a dark-mode bug, which is the same
+                            reason the Invitation Status completion meter gave up
+                            its gradient: globals.css retunes `.dark
+                            .bg-brand-blue` (to #2563eb) and the whole
+                            `.dark .text-brand-*` family, but nothing retunes the
+                            `from-`/`to-` gradient utilities — so this bar stayed
+                            at the deep light-mode blue→cyan on a dark page while
+                            everything around it lifted. Nothing else here
+                            changes: the white text, the `bg-white/20` icon chip
+                            and the `ring-white/10` all still sit on brand blue. */}
+                        <div className="bg-brand-blue rounded-xl p-3 sm:p-4 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 sm:gap-3">
                               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
@@ -6883,89 +6956,304 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       {/* Share Assessment Modal */}
       {/* Send Invite picker — which assessment are we inviting to? Only shown
-          when more than one is shareable; a single one goes straight through. */}
+          when more than one is shareable; a single one goes straight through.
+
+          Rebuilt on the Invite to Assessment dialog in My Resumes
+          (`app/(dashboard)/recruitment/my-resumes/page.tsx`), which is the
+          fuller treatment of the same question, and which in turn takes its
+          shell, header, body and footer from the Apply to Job / Score Resume
+          dialogs. So this is not a new design; it is this dialog rejoining the
+          one the rest of the candidate actions already share.
+
+          What that changes, beyond paint:
+
+            - The pick is now a pick. Rows are radios in a `border-2` card that
+              lights up when chosen, one at a time, with the others going inert
+              and saying why — instead of a plain button that fired on click and
+              closed the dialog before you could see what you had done.
+            - A footer that reports the state ("Select one assessment to
+              continue", then what is about to happen) and carries Cancel and
+              the primary action, so leaving and committing are both explicit.
+            - Rows carry what the Assessments list carries: the ID chip, the
+              clean title, the shared VersionBadge, the status pill in this
+              page's own colours, the linked JD line, duration and section
+              count, and who created it and when. The old row showed a title and
+              `AS-004 · 30 min`, which is not enough to tell two versions of the
+              same assessment apart — the exact thing you are choosing between.
+            - The header loses its `from-brand-blue via-brand-cyan` gradient for
+              the reference's plain bar and small tinted icon chip. Same reason
+              the Topic Availability header lost its gradient: nothing retunes
+              the `from-`/`to-` utilities for dark mode.
+
+          The icon stays `Mail` rather than the reference's `ClipboardCheck` —
+          the chip's shape and tint are what make it the same dialog, and this
+          one is about sending rather than about assessments.
+
+          One deliberate divergence in wording: the reference's primary button
+          says "Send Invitations" because by then the candidates are already
+          picked and unticked on that screen. Here nobody has been addressed
+          yet — the recipients are entered in the Share modal this opens — so
+          the button says "Continue". Same position, same styling, same icon;
+          only the promise is scaled to what actually happens next. */}
       {showInvitePicker && (
         <>
           <div
-            className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
-            onClick={() => setShowInvitePicker(false)}
+            className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
+            onClick={closeInvitePicker}
           />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl max-h-[80dvh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-              <div className="flex-shrink-0 flex items-center gap-4 p-6 border-b border-gray-100 bg-gradient-to-r from-brand-blue/[0.06] via-brand-cyan/[0.04] to-white">
-                <div className="w-12 h-12 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
-                  <Mail className="w-6 h-6 text-white" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold text-gray-900 tracking-tight">Send Invite</h3>
-                  <p className="text-sm text-gray-500">Choose the assessment to invite candidates to</p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
+                    <Mail className="w-4 h-4 text-brand-blue" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Send Invite</h2>
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Choose the assessment to invite candidates to</p>
+                  </div>
                 </div>
                 <button
-                  onClick={() => setShowInvitePicker(false)}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  onClick={closeInvitePicker}
+                  className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
                   aria-label="Close"
                 >
-                  <X className="w-5 h-5 text-gray-500" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="flex-shrink-0 px-6 pt-4">
-                <input
-                  type="text"
-                  value={invitePickerQuery}
-                  onChange={(e) => setInvitePickerQuery(e.target.value)}
-                  placeholder="Search assessments..."
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black"
-                />
-              </div>
+              {/* Content */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+                {/* Search first, then the list — the reference's order and its
+                    labelled, icon-led field, rather than a bare input. */}
+                <div className="mb-4">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Assessments</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                    <input
+                      type="text"
+                      value={invitePickerQuery}
+                      onChange={(e) => setInvitePickerQuery(e.target.value)}
+                      placeholder="Search by assessment ID, name, JD ID or JD name..."
+                      className="w-full pl-10 pr-4 py-2 text-sm text-black dark:text-slate-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    />
+                  </div>
+                </div>
 
-              <div className="flex-1 overflow-y-auto px-6 py-4">
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
+                    Select an Active Assessment
+                    {shareableAssessments.length > 0 && (
+                      <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
+                        {shareableAssessments.length} available
+                      </span>
+                    )}
+                  </label>
+                  {/* The only way back to "nothing picked" once the others have
+                      gone inert. */}
+                  {invitePickerChoiceId && (
+                    <button
+                      onClick={() => setInvitePickerChoiceId(null)}
+                      className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
+                    >
+                      Clear Selection
+                    </button>
+                  )}
+                </div>
+
                 {(() => {
                   const query = invitePickerQuery.trim().toLowerCase();
                   const visible = shareableAssessments.filter((assessment: any) =>
                     !query ||
-                    `${assessment.title || ''} ${assessment.short_id || ''} ${assessment.job?.title || ''}`
+                    `${assessment.title || ''} ${assessment.short_id || ''} ${assessment.job?.title || ''} ${assessment.jd_short_id || ''}`
                       .toLowerCase()
                       .includes(query)
                   );
                   if (visible.length === 0) {
                     return (
-                      <div className="py-12 text-center">
-                        <p className="text-sm font-medium text-gray-700 mb-1">No assessments match your search</p>
-                        <p className="text-xs text-gray-500">Try a different title or assessment ID.</p>
+                      <div className="text-center py-8 text-gray-500 dark:text-slate-400">
+                        <ClipboardCheck className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
+                        <p>{query ? 'No assessments match your search' : 'No active assessments found'}</p>
+                        <p className="text-sm">{query ? 'Try a different title or assessment ID.' : 'Publish an assessment first to send invitations.'}</p>
                       </div>
                     );
                   }
                   return (
-                    <div className="space-y-2">
-                      {visible.map((assessment: any) => (
-                        <button
-                          key={assessment.id}
-                          onClick={() => {
-                            setSelectedAssessmentForShare(assessment);
-                            setShowInvitePicker(false);
-                            setShowShareModal(true);
-                          }}
-                          className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/[0.03] transition-all flex items-center gap-3"
-                        >
-                          <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                            <ClipboardCheck className="w-4 h-4 text-brand-blue" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium text-gray-900 truncate">
-                              {assessment.job?.title || stripVersionFromTitle(assessment.title)} - Assessment
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {visible.map((assessment: any) => {
+                        const isSelected = invitePickerChoiceId === assessment.id;
+                        /* Once one is picked the rest go inert, with the reason
+                           on the row — the reference's treatment for the rows
+                           you didn't choose. */
+                        const blockedByOtherPick = !!invitePickerChoiceId && !isSelected;
+                        /* The page's own way of naming an assessment, kept: the
+                           job title when there is one, else the title with its
+                           inline "- Version N" suffix stripped so the version is
+                           not printed twice beside the badge. */
+                        const rowTitle = assessment.job?.title || stripVersionFromTitle(assessment.title);
+                        /* Sections, counted from the flags this page already
+                           maps, rather than a `sections` array the picker's rows
+                           are not guaranteed to carry. */
+                        const sectionCount = [
+                          assessment.hr_enabled,
+                          assessment.technical_enabled,
+                          assessment.coding_enabled,
+                        ].filter(Boolean).length;
+                        return (
+                          <label
+                            key={assessment.id}
+                            title={blockedByOtherPick
+                              ? 'Only one assessment can be sent at a time — clear the current selection to choose this one'
+                              : undefined}
+                            aria-disabled={blockedByOtherPick}
+                            className={`block w-full text-left p-4 rounded-lg border-2 transition-all ${
+                              blockedByOtherPick
+                                ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 opacity-60 cursor-not-allowed'
+                                : isSelected
+                                  ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10 cursor-pointer'
+                                  : 'border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/5 cursor-pointer'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              {/* A radio, because exactly one assessment is sent. */}
+                              <input
+                                type="radio"
+                                name="send-invite-assessment-selection"
+                                checked={isSelected}
+                                disabled={blockedByOtherPick}
+                                onChange={() => !blockedByOtherPick && setInvitePickerChoiceId(assessment.id)}
+                                onClick={() => isSelected && setInvitePickerChoiceId(null)}
+                                className="w-4 h-4 mt-1 flex-shrink-0 text-brand-blue border-gray-300 focus:ring-brand-blue/40 disabled:cursor-not-allowed"
+                              />
+
+                              <div className="flex-1 min-w-0">
+                                {/* Assessment ID, Title, Version, Status */}
+                                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                  {assessment.short_id && (
+                                    <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue text-white rounded text-xs font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                                      {assessment.short_id}
+                                    </span>
+                                  )}
+                                  <h5 className="font-medium text-gray-900 dark:text-slate-50">
+                                    {rowTitle || 'Untitled assessment'}
+                                  </h5>
+                                  <VersionBadge
+                                    version={typeof assessment.version === 'number' ? assessment.version : undefined}
+                                    title={assessment.title}
+                                    size="sm"
+                                    variant="secondary"
+                                  />
+                                  {/* Status pill in this page's own colours —
+                                      `mapAssessmentFromApi` has already turned
+                                      the API's "published" into "Active", so
+                                      unlike the reference there is nothing to
+                                      translate here. */}
+                                  <span
+                                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${
+                                      assessment.status === 'Active'
+                                        ? 'bg-green-100 text-green-700 ring-green-200'
+                                        : assessment.status === 'Completed'
+                                          ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                                          : 'bg-slate-100 text-gray-700 ring-gray-200'
+                                    }`}
+                                  >
+                                    {assessment.status}
+                                  </span>
+                                  {isSelected && (
+                                    <CheckCircle className="w-5 h-5 text-brand-blue ml-auto flex-shrink-0" />
+                                  )}
+                                </div>
+
+                                {/* Linked JD, written as this page writes it. */}
+                                {assessment.jd_short_id && (
+                                  <div className="text-xs text-gray-700 dark:text-slate-300 font-medium mb-1.5">
+                                    <span>{assessment.jd_short_id}</span>
+                                    {assessment.job?.title && (
+                                      <span className="ml-2">{assessment.job.title}</span>
+                                    )}
+                                    {assessment.jd_version && (
+                                      <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.jd_version}</span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Duration and Sections */}
+                                <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-slate-400">
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {assessment.duration_minutes || 0} min
+                                  </span>
+                                  <span>•</span>
+                                  <span>{sectionCount} section{sectionCount !== 1 ? 's' : ''}</span>
+                                </div>
+
+                                {/* Created By and Date */}
+                                <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-slate-500 mt-1.5">
+                                  {assessment.created_by_name && (
+                                    <>
+                                      <span>Created by: <span className="text-gray-700 dark:text-slate-300 font-medium">{assessment.created_by_name}</span></span>
+                                      <span>•</span>
+                                    </>
+                                  )}
+                                  {assessment.created_at && (
+                                    <span>{formatIST(assessment.created_at)}</span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-xs text-gray-500 truncate">
-                              {assessment.short_id ? `${assessment.short_id} · ` : ''}
-                              {assessment.duration_minutes || 0} min
-                            </div>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        </button>
-                      ))}
+                          </label>
+                        );
+                      })}
                     </div>
                   );
                 })()}
+              </div>
+
+              {/* Footer */}
+              <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700">
+                {/* One line, always: it sits beside the buttons, and a second
+                    line would push the footer taller. */}
+                <div className="min-w-0 truncate whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                  {!invitePickerChoiceId
+                    ? 'Select one assessment to continue'
+                    : (
+                      <span className="inline-flex items-center gap-1.5 align-middle">
+                        <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
+                        Ready to invite candidates to 1 assessment
+                      </span>
+                    )}
+                </div>
+                <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
+                  <button
+                    onClick={closeInvitePicker}
+                    className="flex-1 sm:flex-none px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      /* Resolved here rather than held since the click, so
+                         a list that reloaded under the open dialog cannot hand
+                         the share modal a stale row. */
+                      const choice = shareableAssessments.find(
+                        (a) => a.id === invitePickerChoiceId,
+                      );
+                      if (!choice) {
+                        toast.error('Please select an assessment');
+                        return;
+                      }
+                      setSelectedAssessmentForShare(choice);
+                      closeInvitePicker();
+                      setShowShareModal(true);
+                    }}
+                    disabled={!invitePickerChoiceId}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Mail className="w-4 h-4" />
+                    Continue
+                  </button>
+                </div>
               </div>
             </div>
           </div>
