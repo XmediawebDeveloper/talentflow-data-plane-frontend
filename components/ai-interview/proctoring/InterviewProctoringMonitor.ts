@@ -793,7 +793,12 @@ export function useInterviewProctoringMonitor({
     // again each time a fresh stream comes in.
     if (initialMicDeviceIdRef.current === null) {
       const firstAudioTrack = currentStream.getAudioTracks()[0];
-      initialMicDeviceIdRef.current = firstAudioTrack?.getSettings?.().deviceId || null;
+      const firstId = firstAudioTrack?.getSettings?.().deviceId || null;
+      // Never adopt an ALIAS as the baseline. 'default'/'communications' are
+      // Chrome's pointers to "whatever the OS currently prefers", not devices —
+      // baselining on one would make every real device look like a swap.
+      initialMicDeviceIdRef.current =
+        firstId && firstId !== 'default' && firstId !== 'communications' ? firstId : null;
     }
 
     currentStream.getVideoTracks().forEach(track => {
@@ -875,6 +880,16 @@ export function useInterviewProctoringMonitor({
         } else if (
           initialMicDeviceIdRef.current
           && at.getSettings?.().deviceId
+          // An ALIAS id ('default'/'communications') says nothing about WHICH
+          // physical device is in use, so it can neither confirm nor deny a
+          // swap — treat it as unjudgeable and fall through to "restored".
+          // Without this the monitor rejected every alias-id track forever:
+          // recovery kept re-acquiring, the monitor kept reporting
+          // device_swapped, and the interview sat paused in a 1s loop. Our own
+          // recovery now always requests a CONCRETE id (see InterviewUI), so
+          // this is the belt-and-braces against any path that doesn't.
+          && at.getSettings().deviceId !== 'default'
+          && at.getSettings().deviceId !== 'communications'
           && at.getSettings().deviceId !== initialMicDeviceIdRef.current
           && !acceptedMicIdsRef.current.has(at.getSettings().deviceId as string)
         ) {
@@ -895,6 +910,8 @@ export function useInterviewProctoringMonitor({
         } else if (
           initialMicDeviceIdRef.current
           && at.getSettings?.().deviceId
+          && at.getSettings().deviceId !== 'default'
+          && at.getSettings().deviceId !== 'communications'
           && at.getSettings().deviceId !== initialMicDeviceIdRef.current
         ) {
           // Verified fallback in use. Re-pin to it so every later comparison is

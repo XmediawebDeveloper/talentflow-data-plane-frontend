@@ -1613,13 +1613,33 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
       if (!audioAlive || !proctoringStateRef.current.isMicrophoneActive) {
         try {
-          // Target the device the interview STARTED on so a replugged headset
-          // is recognized as "restored" (the deviceId-swap check requires an
-          // EXACT match) instead of silently landing on whatever the OS calls
-          // "default" — which never satisfies that check and left the pause
-          // stuck forever even after the candidate replugged the same headset.
-          if (await webcamRef.current?.reacquireAudio(initialMicDeviceId ?? undefined)) {
-            console.log('[InterviewUI] Device recovery: MICROPHONE re-acquired independently');
+          // Re-acquire onto a CONCRETE device id — never the bare default.
+          //
+          // Asking for audio with no deviceId makes Chrome return a track whose
+          // getSettings().deviceId is the literal string "default". That is an
+          // ALIAS, not a device, and the verified set stores only real hardware
+          // ids (enumerateAudioInputIds filters 'default'/'communications' out).
+          // So the monitor compared "default" against the baseline, found it
+          // absent from the accepted set, and reported device_swapped — every
+          // single time. Recovery kept succeeding, the monitor kept rejecting
+          // it, and the two looped against each other once a second forever
+          // with the interview stuck paused.
+          //
+          // Preference order: the device the interview is pinned to (a replug
+          // must be recognised as "restored"), then any system-check-verified
+          // device that is actually present, then whatever real device exists.
+          // Every one of those is a concrete id, so the resulting track carries
+          // an id the monitor can actually match.
+          const inputs = (await navigator.mediaDevices.enumerateDevices())
+            .filter(d => d.kind === 'audioinput' && d.deviceId
+              && d.deviceId !== 'default' && d.deviceId !== 'communications');
+          const pinned = interviewMicDeviceIdRef.current ?? initialMicDeviceId ?? undefined;
+          const target =
+            (pinned && inputs.some(d => d.deviceId === pinned) ? pinned : undefined)
+            ?? inputs.find(d => verifiedMicIdsRef.current.has(d.deviceId))?.deviceId
+            ?? inputs[0]?.deviceId;
+          if (target && await webcamRef.current?.reacquireAudio(target)) {
+            console.log(`[InterviewUI] Device recovery: MICROPHONE re-acquired on ${target.slice(0, 8)}…`);
           }
         } catch { /* mic still unavailable — keep polling */ }
       }
