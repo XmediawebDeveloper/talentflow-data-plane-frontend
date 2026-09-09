@@ -1084,7 +1084,7 @@ export default function BulkScoringProgressModal({
                       </div>
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border flex-shrink-0 ${getStatusBadgeClass(item.status)}`}>
                         {getStatusIcon(item.status)}
-                        <span className="hidden xs:inline">{item.status}</span>
+                        <span className="inline">{item.status}</span>
                       </span>
                     </div>
                     {item.status === 'Failed' && item.errorReason && (

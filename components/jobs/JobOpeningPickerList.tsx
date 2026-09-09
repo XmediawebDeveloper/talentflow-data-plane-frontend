@@ -465,7 +465,7 @@ export default function JobOpeningPickerList({
                         : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                   }`}
                 >
-                  <div className="flex items-start gap-2 sm:gap-4">
+                  <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
                     {/* A radio, because exactly one job is picked at a time.
                         Wrapped in its own label rather than the whole card:
                         the card now carries links and a versions toggle,
@@ -571,11 +571,11 @@ export default function JobOpeningPickerList({
                           e.stopPropagation();
                           setVersionHistoryFor(job);
                         }}
-                        className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                        className="h-9 w-9 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
                         aria-label="View version history"
                         title="View version history"
                       >
-                        <Eye className="w-3.5 h-3.5" />
+                        <Eye className="w-4 h-4" />
                       </button>
                     </div>
                   </div>

@@ -58,8 +58,6 @@ import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
 import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search } from 'lucide-react';
-// The shared version chip the Invite to Assessment dialog labels its rows with.
-import VersionBadge from './VersionBadge';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -78,6 +76,28 @@ import { groupByLineage, latestVersionNumber } from '@/lib/utils/jobOpeningDispl
  *  rows themselves are the untyped shape `mapAssessmentFromApi` returns, so
  *  this names the three fields rather than widening to `any`. */
 type AssessmentLineageRef = { id: string; jd_id?: string };
+
+/* ── Send Invite: the job list, shared with Total Jobs ─────────────────────
+   The dialog used to own a job list of its own: assessments grouped into a
+   block per job, one row per job version, each row printing its job version
+   and its assessment version. That whole implementation is gone. Send Invite
+   now renders the Total Jobs rows themselves, through `renderJobListRow` and
+   `collapseByLineage` inside the component — one job list on this page, drawn
+   once, so the picker cannot drift from the list it sits in front of.
+
+   What survives here is the lineage key, because the collapse and the per-job
+   totals both bucket on it.
+
+   `jd_short_id` ("JD-014") is that key: it is `Job.job_id` under the name the
+   assessment endpoint gives it (see `mapJDToJob` and `lineageKey` in
+   lib/utils/jobOpeningDisplay.ts), so it is the one field every version of a
+   job shares. `jd_id` is NOT that field — it identifies the single JD version
+   an assessment was built against, which is the thing a job's versions differ
+   by, not the thing they collapse on. A row with neither falls back to its own
+   id, so it stays a job of one rather than piling into a shared "no job"
+   bucket where unrelated rows would look like versions of one another. */
+const jobLineageKey = (a: { jd_short_id?: string; jd_id?: string; id: string }) =>
+  a.jd_short_id || a.jd_id || `__unlinked__:${a.id}`;
 
 const INVITATIONS_PAGE_SIZE = 10;
 /** Batch size when pulling every assessment for a browser-side filter. */
@@ -228,11 +248,54 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      while the dialog is open, and the row is one `find` away whenever it is
      actually needed. It also types itself, so this is the one piece of picker
      state that does not have to be `any`. */
-  const [invitePickerChoiceId, setInvitePickerChoiceId] = useState<string | null>(null);
+  /**
+   * What the Send Invite dialog has picked: ONE job, ONE job version, ONE
+   * assessment version - the whole triple, held together.
+   *
+   * Two ids used to be kept side by side (the assessment, and the job whose
+   * cards to lock). That was not enough. An assessment version number restarts
+   * per job version, so "Assessment V1" names a different row under job V2
+   * than under job V5, and the id alone cannot say which branch produced it.
+   * The lock needs the job version; so does the Share modal, which prints
+   * "JD-025 - Senior QA v2" beside the assessment badge.
+   *
+   * The job's own identity (`jdShortId`, `jobTitle`) is recorded here too,
+   * because the row it is read from is a JOB card that has both, while the
+   * assessment the panel hands back comes from the lineage cache, whose rows
+   * carry `jd_id` and `jd_version` but neither the JD's short id nor its
+   * title. Resolving the pick later and hoping those fields are on it is what
+   * put an empty JD line in the share dialog.
+   */
+  const [invitePickerSelection, setInvitePickerSelection] = useState<{
+    jobKey: string;
+    jdId?: string;
+    jdShortId?: string;
+    jobTitle: string;
+    jobVersion: number;
+    jobVersionId?: string;
+    assessmentId: string;
+  } | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedAssessmentForPreview, setSelectedAssessmentForPreview] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAssessmentForEdit, setSelectedAssessmentForEdit] = useState<any>(null);
+  /* The ASSESSMENT version picked inside the Job Versions panel, per JOB.
+   *
+   * Keyed by `jd_id` rather than held as one id, so the answer survives
+   * closing the panel and opening it again - and so two jobs remember their
+   * own choices instead of the second inheriting the first's. That is the
+   * "correctly identified after reopen" half of the behaviour; the panel
+   * itself keeps no copy.
+   *
+   * Seeded on open with the row's own representative assessment (the one the
+   * Job List row stands for, which the panel already highlights as
+   * `currentAssessmentId`), so the table opens on a sensible answer rather
+   * than on nothing selected.
+   *
+   * One id per job and no more, so "one assessment version at a time" is a
+   * property of the state here, not only of the radio group in the markup. */
+  const [selectedAssessmentVersionByJob, setSelectedAssessmentVersionByJob] =
+    useState<Record<string, string>>({});
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   // The open ⋮ dropdown. Only one exists at a time (grid and list views never
   // render together), so a single ref covers both.
@@ -671,6 +734,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     const opening = openVersionsFor !== assessment.id;
     setOpenVersionsFor(opening ? assessment.id : null);
     if (opening && assessment.jd_id) {
+      /* First open of this job seeds the pick with the row's own assessment -
+         the one the panel highlights as current. Reopening leaves an existing
+         pick alone, which is what makes the choice survive a close. */
+      const jdId = assessment.jd_id;
+      setSelectedAssessmentVersionByJob((current) =>
+        current[jdId] ? current : { ...current, [jdId]: assessment.id },
+      );
       /* Both halves of the history: the JD's job versions, and the assessments
          authored against them. Each caches independently, so reopening - or
          opening a sibling row of the same JD - costs no second request. */
@@ -1138,6 +1208,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       jd_id: a.jd_id,
       jd_short_id: a.jd_short_id,
       jd_version: a.jd_version,
+      /* Carried flat as well as inside `job`. ShareAssessmentModal declares
+         `jd_title` on its own prop type and prints it beside the JD id, but
+         nothing ever set it - the mapper folded the title into `job.title`
+         only - so that line has always rendered empty. */
+      jd_title: a.jd_title,
       job: { title: a.jd_title || 'General Assessment', department: 'Engineering', version: a.jd_version },
       hr_enabled: a.hr_enabled,
       hr_percentage: a.hr_percentage,
@@ -2525,6 +2600,48 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   );
 
   /**
+   * The assessment version picked in the dialog, resolved against live data.
+   *
+   * NOT a lookup in `shareableAssessments`. The pick is now made in the
+   * assessment table inside a job's version panel, and that table lists every
+   * version of the job - Draft and Archived included. A Draft is exactly what
+   * `shareableAssessments` filters out, so looking there would return nothing
+   * for a real, visible selection and the dialog would report "select a job"
+   * over a ticked radio.
+   *
+   * The loaded list first (already mapped), then the panel's own lineage cache
+   * (raw rows, so they go through the list's mapper) - the two sources the
+   * table's rows actually come from. Resolved at the moment it is needed, so a
+   * reload under the open dialog cannot hand the share modal a stale row.
+   */
+  const resolveInvitePickerChoice = () => {
+    const pickedId = invitePickerSelection?.assessmentId;
+    if (!pickedId) return null;
+    const fromList = assessments.find((a) => a.id === pickedId);
+    if (fromList) return fromList;
+    for (const rows of Object.values(assessmentLineages)) {
+      const raw = rows?.find((r) => r.id === pickedId);
+      if (raw) return mapAssessmentFromApi(raw, 0);
+    }
+    return null;
+  };
+
+  /**
+   * Can the picked version actually take an invite? The same three rules the
+   * per-row Share button and `shareableAssessments` enforce, asked of one row
+   * - because the table it is picked from does not pre-filter by them, so the
+   * answer has to be given here rather than assumed.
+   */
+  const invitePickerBlockedReason = (choice: ReturnType<typeof resolveInvitePickerChoice>) => {
+    if (!choice) return 'Select an assessment version to continue';
+    if (choice.status === 'Draft') return 'This version is a Draft — publish it, or pick another version';
+    if (choice.status === 'Archived') return 'This version is Archived — pick another version';
+    if ((choice as { has_revoked_invites?: boolean }).has_revoked_invites)
+      return 'Invitations were revoked for this version — pick another version';
+    return null;
+  };
+
+  /**
    * Page-level Send Invite. With exactly one shareable assessment the picker is
    * pointless, so it goes straight to the share modal.
    */
@@ -2539,7 +2656,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     setInvitePickerQuery('');
-    setInvitePickerChoiceId(null);
+    setInvitePickerSelection(null);
     setShowInvitePicker(true);
   };
 
@@ -2550,7 +2667,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const closeInvitePicker = () => {
     setShowInvitePicker(false);
     setInvitePickerQuery('');
-    setInvitePickerChoiceId(null);
+    setInvitePickerSelection(null);
   };
 
   const reloadAssessments = async () => {
@@ -3154,9 +3271,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      Declared HERE, above `filteredAssessments`, because the Position filter and
      its option list both key on it and both run earlier in this body than the
      row collapse that used to own it. It is a pure helper, so the move is
-     positional only. */
-  const lineageKeyOf = (a: { jd_short_id?: string; jd_id?: string; id: string }) =>
-    a.jd_short_id || a.jd_id || `__unlinked__:${a.id}`;
+     positional only.
+
+     The rule itself now lives at module scope as `jobLineageKey`, because the
+     Send Invite picker groups its jobs by it too and a second copy of the
+     expression was exactly the drift this comment warns about. */
+  const lineageKeyOf = jobLineageKey;
 
   // Everyone who has created one of the loaded assessments, for the filter list.
   const assessmentCreators = Array.from(
@@ -3248,8 +3368,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * unfiltered, so opening it still shows every version whatever its status.
    */
 
-  const collapsedAssessments = (() => {
-    const byLineage = new Map<string, (typeof filteredAssessments)[number]>();
+  const collapseByLineage = (list: typeof assessments) => {
+    const byLineage = new Map<string, (typeof list)[number]>();
 
     /* Which of two rows of one lineage is the newer VERSION — the Job Openings
        list's `byLatestVersion`, read against the pair of numbers an assessment
@@ -3284,8 +3404,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
        the API happened to return — enough to flip a lineage's card between its
        draft and its published version from one load to the next. */
     const isNewerVersion = (
-      a: (typeof filteredAssessments)[number],
-      b: (typeof filteredAssessments)[number],
+      a: (typeof list)[number],
+      b: (typeof list)[number],
     ) => {
       /* A draft loses to any non-draft in the same lineage, whatever the
          version numbers say. Checked before the job version too: a draft
@@ -3304,7 +3424,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return aTime > bTime;
     };
 
-    for (const assessment of filteredAssessments) {
+    for (const assessment of list) {
       const key = lineageKeyOf(assessment);
       const current = byLineage.get(key);
       if (!current || isNewerVersion(assessment, current)) {
@@ -3312,7 +3432,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       }
     }
     return [...byLineage.values()];
-  })();
+  };
+
+  const collapsedAssessments = collapseByLineage(filteredAssessments);
 
   const assessmentResultCount = collapsedAssessments.length;
 
@@ -3323,10 +3445,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * from — so the counts always describe what the current tab and filters
    * select. On the Draft tab a job's "Assessments" is its draft count, which
    * is the honest reading of a row that is only on screen because it has one.
+   *
+   * Taken over a LIST rather than closing over `filteredAssessments`, because
+   * the Send Invite picker renders the same job rows over a different set:
+   * `shareableAssessments`. Same bucketing, same numbers, applied to whatever
+   * that surface actually lists — which is the invariant the paragraph above
+   * states, not an exception to it. The Job List's own call passes
+   * `filteredAssessments` and is unchanged.
    */
-  const jobRowTotals = (() => {
+  const buildJobRowTotals = (list: typeof assessments) => {
     const totals = new Map<string, { assessments: number; invitations: number; completed: number }>();
-    for (const assessment of filteredAssessments) {
+    for (const assessment of list) {
       const key = lineageKeyOf(assessment);
       const entry = totals.get(key) ?? { assessments: 0, invitations: 0, completed: 0 };
       entry.assessments += 1;
@@ -3340,7 +3469,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       totals.set(key, entry);
     }
     return totals;
-  })();
+  };
+
+  const jobRowTotals = buildJobRowTotals(filteredAssessments);
 
   /**
    * How many versions this job has.
@@ -3408,13 +3539,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    *                              action it was minted for; it is the token, not
    *                              a new colour.
    */
-  const getJobRowMetrics = (assessment: {
-    id: string;
-    jd_id?: string;
-    jd_short_id?: string;
-    jd_version?: number;
-  }) => {
-    const totals = jobRowTotals.get(lineageKeyOf(assessment))
+  const getJobRowMetrics = (
+    assessment: {
+      id: string;
+      jd_id?: string;
+      jd_short_id?: string;
+      jd_version?: number;
+    },
+    /* Which bucketing to read. Defaults to the Job List's, so every existing
+       call site is untouched; Send Invite passes its own so the figures on a
+       picker row describe the assessments the picker is offering. */
+    totalsByLineage: ReturnType<typeof buildJobRowTotals> = jobRowTotals,
+  ) => {
+    const totals = totalsByLineage.get(lineageKeyOf(assessment))
       ?? { assessments: 0, invitations: 0, completed: 0 };
     return [
       { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(assessment), label: 'Job Versions' },
@@ -3423,6 +3560,527 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       { key: 'completed', icon: ClipboardCheck, iconClass: 'text-menu-icon-activate', value: totals.completed, label: 'Completed' },
     ];
   };
+
+  /**
+   * The status pill a Job List row carries, for the job's representative
+   * assessment.
+   *
+   * Lifted out of that row so the Send Invite picker's job headings can show
+   * the same pill rather than a second set of colour branches — the page
+   * already learned this lesson with `getJobRowMetrics`. The markup is the
+   * row's, moved verbatim: same ring, same dot, same fixed-width box that
+   * keeps the metric columns starting on one line whatever word is inside.
+   */
+  const renderJobStatusPill = (status?: string) => (
+    <div className="flex-shrink-0 @4xl/job-row:w-[104px]">
+      <span
+        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${
+          status === 'Active'
+            ? 'bg-green-100 text-green-700 ring-green-200'
+            : status === 'Draft'
+            ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+            : status === 'Archived'
+            ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+            : status === 'Completed'
+            ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+            : status === 'Paused'
+            ? 'bg-slate-200 text-gray-600 ring-gray-300'
+            : 'bg-slate-100 text-gray-700 ring-gray-200'
+        }`}
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
+        {status}
+      </span>
+    </div>
+  );
+
+  /**
+   * ONE JOB, as the Total Jobs list draws it.
+   *
+   * Lifted verbatim out of the Total Jobs list view so the Send Invite picker
+   * can render the same rows rather than a second job list of its own. There
+   * is one copy of this markup; both surfaces call it, and neither can be
+   * restyled without the other following.
+   *
+   * `selectMode` is the picker. It changes behaviour, never appearance:
+   *
+   *   - a radio joins the identity column, because the dialog sends to exactly
+   *     one job and that is the control it already used to say so;
+   *   - the row click SELECTS instead of toggling version history. View
+   *     Versions still toggles it, so nothing is unreachable - the click just
+   *     answers the question the dialog is asking;
+   *   - Track and Result are dropped. Both leave the dialog - Result
+   *     `router.push`es to another page and Track opens a popup over the open
+   *     modal - so in a picker they are a way to lose the invite you came to
+   *     send, not a feature. Everything that describes the job (chip, Job ID,
+   *     title, status pill, all four metrics) is untouched, which is what the
+   *     row is for here.
+   *
+   * `totals` picks which bucketing the metrics read; see `getJobRowMetrics`.
+   */
+  const renderJobListRow = (
+    assessment: (typeof assessments)[number],
+    {
+      selectMode = false,
+      selected = false,
+      disabled = false,
+      dimmed = false,
+      totals,
+      selectedAssessmentId,
+      onSelectAssessment,
+      activeSelection = null,
+    }: {
+      selectMode?: boolean;
+      /** This job owns the current pick — a highlight, not a control. */
+      selected?: boolean;
+      /**
+       * Truly inert — the job has nothing that can be invited against. A fact
+       * about the data, not about what is currently selected.
+       */
+      disabled?: boolean;
+      /**
+       * Faded back because another job holds the selection. Still entirely
+       * usable: opening it and picking an assessment replaces the selection,
+       * which is how a choice is meant to change.
+       */
+      dimmed?: boolean;
+      totals?: ReturnType<typeof buildJobRowTotals>;
+      /** Panel selection, passed through. Defaults to the Job List's own
+       *  per-job store, so the page's rows need not pass anything. */
+      selectedAssessmentId?: string;
+      onSelectAssessment?: (
+        assessmentId: string,
+        context: { jobVersion: number; jobVersionId?: string },
+      ) => void;
+      /** Highlights one job version + assessment pair inside the panel. */
+      activeSelection?: { jobVersion: number; assessmentId: string } | null;
+    } = {},
+  ) => (
+    <div
+      key={assessment.id}
+      /* The row is one JOB. On the Job List, clicking it opens
+         that job's version history in place - the same thing the
+         View Versions button beside it does, through the same
+         handler, so the two can never disagree about what a
+         click on this row means. In the picker it selects the
+         job instead, which is the question that dialog is
+         asking; View Versions still opens the history there.
+
+         It used to navigate: to the representative assessment,
+         or to the edit modal when that assessment was a Draft.
+         Both were the row acting as ONE assessment, which is
+         exactly what a job row is not - and it meant a recruiter
+         scanning the list was taken off the page by a click they
+         had aimed at a job. The assessments are still one step
+         away, listed per job version inside the panel this now
+         opens, each with its own row and its own actions.
+
+         Gated on `hasVersionHistory` (the row having a `jd_id`),
+         which is the same test the View Versions button renders
+         on: a row with no job behind it has no history to open,
+         and it drops the pointer cursor and the lift so it does
+         not offer a click that would do nothing. */
+      onClick={() => hasVersionHistory(assessment) && toggleAssessmentVersions(assessment)}
+      /* `relative` only. The raised z-index this carried was
+         for the row's own three-dot dropdown, which is gone -
+         the menus that remain belong to the version panel's
+         assessment rows and are keyed `version:<id>`, so they
+         never matched this test anyway. */
+      /* A CONTAINER, not a viewport reader. The row's wide layout used to be
+         keyed on `xl:` - the browser window - which is true of the Job List
+         (its row is about as wide as the window) and false of the Send Invite
+         dialog, whose rows sit in a 768px modal however wide the screen is. On
+         a desktop the modal's rows therefore took the wide layout and tried to
+         fit four metric columns into ~100px: the icons, values and labels
+         landed on top of each other and ran into View Versions.
+
+         `@4xl` (896px) is measured against THIS row instead. The page's row
+         clears it and is unchanged; the modal's row never does, so it takes
+         the stacked layout the Job List itself uses on a narrow window - the
+         same component answering the same question, against the width it has
+         rather than the width the window has. */
+      aria-disabled={disabled || undefined}
+      className={`@container/job-row relative p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
+        selected
+          ? 'border-brand-blue/40 ring-brand-blue/30 bg-brand-blue/[0.03]'
+          : 'border-gray-300 dark:border-slate-700'
+      } ${
+        /* Two different states that used to be one.
+
+           `disabled` is a fact about the job: it has no published assessment,
+           so there is nothing here to send whatever the reader does. Inert.
+
+           `dimmed` only means another job currently holds the selection. That
+           is not a reason to bar this one - picking an assessment inside it is
+           precisely how the selection is changed. It fades back so the chosen
+           job stands out, and hover brings it fully forward again. Making this
+           case inert too is what forced select → clear → navigate → select. */
+        disabled
+          ? 'opacity-45 grayscale-[0.35] pointer-events-none select-none'
+          : `${dimmed ? 'opacity-60 hover:opacity-100' : ''} ${
+              hasVersionHistory(assessment)
+                ? 'cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
+                : 'cursor-default'
+            }`
+      }`}
+    >
+      {/* One row = one JOB. The list has always collapsed to one
+          row per job lineage (see `collapsedAssessments`); what
+          the row now reports is that lineage's totals rather than
+          only the representative assessment's own figures.
+
+          Share / Track Invites / Results moved off the row. They
+          act on ONE assessment, and a job row is not one
+          assessment - they are rendered per version inside View
+          Versions, which already carried them. */}
+      <div className="flex flex-col gap-3 @4xl/job-row:flex-row @4xl/job-row:items-center @4xl/job-row:gap-4">
+        {/* Identity - icon, Job ID, title */}
+        <div className="flex items-center gap-2.5 min-w-0 @4xl/job-row:w-[360px] @4xl/job-row:flex-shrink-0">
+          <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Briefcase className="h-4 w-4 text-brand-blue" />
+          </div>
+          {assessment.jd_short_id && (
+            /* The Job Openings chip, not the solid blue one this
+               row used to carry - same JD id, one house style. */
+            <JobIdBadge className="flex-shrink-0">{assessment.jd_short_id}</JobIdBadge>
+          )}
+          <h3
+            className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
+            title={assessment.job?.title || stripVersionFromTitle(assessment.title)}
+          >
+            {assessment.job?.title || stripVersionFromTitle(assessment.title)}
+          </h3>
+        </div>
+
+        {/* Status of the job's newest assessment - the row's
+            representative, unchanged from before. */}
+        {/* Boxed to a fixed width so the metric columns start
+            on the same line in every row - the pill's own width
+            varies with the word inside it. Shared with the Send
+            Invite picker's job headings via the helper. */}
+        {renderJobStatusPill(assessment.status)}
+
+        {/* Totals for the job. Two columns on a phone, four in a
+            divided row once there is width for them. */}
+        <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/job-row:flex-1 @4xl/job-row:min-w-0">
+          {getJobRowMetrics(assessment, totals).map(({ key, icon: MetricIcon, iconClass, value, label }) => (
+            <div
+              key={key}
+              className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0"
+            >
+              <div className="flex items-center gap-1.5">
+                <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
+                <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{value}</span>
+              </div>
+              <p className="text-[11px] text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Actions */}
+        <div
+          className="flex items-center gap-2 flex-shrink-0 self-start @4xl/job-row:self-auto @4xl/job-row:ml-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Trigger only - the panel it opens is untouched. */}
+          {hasVersionHistory(assessment) && (
+            <button
+              type="button"
+              onClick={(e) => {
+                /* The row toggles the same panel, so the click is
+                   stopped here rather than letting it bubble and
+                   toggle twice - which would leave the panel shut
+                   on the very click that asked for it. */
+                e.stopPropagation();
+                toggleAssessmentVersions(assessment);
+              }}
+              aria-expanded={openVersionsFor === assessment.id}
+              title={openVersionsFor === assessment.id ? 'Hide version history' : 'View version history'}
+              className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                openVersionsFor === assessment.id
+                  ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
+                  : 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
+              }`}
+            >
+              {openVersionsFor === assessment.id ? 'Hide' : 'View'} Versions
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform ${
+                  openVersionsFor === assessment.id ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+          )}
+
+          {/* Track - the assessment history of this job, read
+              along its job versions: V3, V2, V1 down the popup,
+              each naming the assessments built against it.
+
+              Beside View Versions because the two answer
+              neighbouring questions from the same two caches, and
+              it opens them the same way: the panel is the working
+              table with the per-assessment actions, this is the
+              read-only overview - and the only one of the two
+              that can show a version nothing was ever built for.
+
+              Rendered on `hasVersionHistory` (a `jd_id`), the
+              same test View Versions and the row click use, and
+              ENABLED on the job having at least one invitation
+              sent - see the gate below. The click is stopped so
+              it does not also toggle the panel.
+
+              Radar is the glyph Track Invites already uses on
+              this page, so "track" reads the same wherever it
+              appears; brand-cyan is the assessment colour, which
+              is what this popup is about. */}
+          {!selectMode && hasVersionHistory(assessment) && (() => {
+            /* Gated on the JOB's invitations, per Job ID: the
+               popup lists the invitations sent against this
+               job's assessments, so with none sent it would
+               open on an empty table. Greyed with the reason in
+               its tooltip rather than dropped, which is how the
+               Result button beside it and the per-assessment
+               Track in the version panel both handle "nothing to
+               show yet" - the row keeps its shape and says why.
+
+               Each row asks this of its own lineage, so one job
+               being invited says nothing about the next; and the
+               count is re-read on every render from the reloaded
+               list, so the first invitation sent for a job flips
+               its own Track on and no other. */
+            const invitationsSent = getJobInvitationsSent(assessment);
+            const hasInvitations = invitationsSent > 0;
+            const reason = hasInvitations
+              ? `Track the assessments created for this job's versions (${invitationsSent} invitation${invitationsSent === 1 ? '' : 's'} sent)`
+              : 'No invitations have been sent for this job yet';
+            return (
+              <button
+                type="button"
+                disabled={!hasInvitations}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!hasInvitations) return;
+                  void handleTrackJob(assessment);
+                }}
+                className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                  hasInvitations
+                    ? 'bg-white dark:bg-slate-900 text-brand-cyan border-brand-cyan/30 hover:bg-brand-cyan/5'
+                    : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                }`}
+                aria-label={reason}
+                title={reason}
+              >
+                <Radar className="w-3.5 h-3.5" />
+                Track
+              </button>
+            );
+          })()}
+
+          {/* Result - the scores for the assessment this row
+              represents (the job's newest, the same one the row
+              click and the menu act on), on the page the
+              per-assessment Results button already opens.
+
+              Gated the way that button is: with no invitation
+              sent there is no attempt to score, so the results
+              page would open empty. It greys with the reason in
+              its tooltip rather than disappearing, so the row
+              keeps its shape and says why.
+
+              brand-blue, which Results has always been on this
+              page, against Track's cyan beside it. */}
+          {!selectMode && (() => {
+            const invitationsSent =
+              assessment.invitations_count ?? assessment.candidates ?? 0;
+            const hasBeenShared = invitationsSent > 0;
+            const reason = hasBeenShared
+              ? 'View results'
+              : assessment.status === 'Draft'
+                ? 'Publish the assessment to view results'
+                : 'Share the assessment to view results';
+            return (
+              <button
+                type="button"
+                disabled={!hasBeenShared}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!hasBeenShared) return;
+                  router.push(`/recruitment/assessments/${assessment.id}/results`);
+                }}
+                className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                  hasBeenShared
+                    ? 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
+                    : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                }`}
+                aria-label={reason}
+                title={reason}
+              >
+                <BarChart className="w-3.5 h-3.5" />
+                Result
+              </button>
+            );
+          })()}
+
+          {/* The eye moved onto the Job Versions panel's own
+              heading - it reads the job's versions, so it sits on
+              the table that lists them rather than in this
+              cluster. See `headerAction` below. */}
+        </div>
+      </div>
+      {/* Expanded in place, below the card's own content and
+          across its full width — the version table needs the
+          room, and hanging it off the right-hand action column
+          would box it into a third of the card. Click is stopped
+          here: a click on a version row must not bubble to the
+          row behind it, which would collapse the panel it was
+          aimed at. */}
+      {openVersionsFor === assessment.id && assessment.jd_id && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <AssessmentVersionHistoryPanel
+            jobVersions={jdLineage.lineages[assessment.jd_id]}
+            jobVersionDetails={jdLineage.versionDetails}
+            assessments={assessmentLineages[assessment.jd_id]}
+            /* The backend's per-version "has an assessment" index,
+               read beside the rows - see the prop for why both. */
+            jdsWithAssessments={jdsWithAssessments}
+            loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
+            currentAssessmentId={assessment.id}
+            latestJobVersion={getLatestJobVersion(assessment)}
+            /* Opened on the page the ROW's own status calls for -
+               a Draft on the draft page, everything else on the
+               details page. The row is found by ASSESSMENT id in
+               the lineage, the same lookup `renderAction` makes,
+               so two assessments on one job version each open
+               themselves. */
+            /* Read-only inside the picker. Each of these
+               leaves the dialog - opening an assessment page,
+               starting a new assessment, viewing a job version,
+               or firing a per-version action - so in a modal
+               whose whole job is "pick a job and continue" they
+               are ways to lose the invite, not features. The
+               panel still LISTS the versions, which is what
+               View Versions is reached for. */
+            onRowClick={selectMode ? undefined : (versionId) => {
+              const raw = (assessmentLineages[assessment.jd_id!] || [])
+                .find((v) => v.id === versionId);
+              openAssessment(raw ? mapAssessmentFromApi(raw, 0) : { id: versionId });
+            }}
+            /* Every version gets the card's own menu, keyed
+               separately so opening one row's does not also open
+               the card's for the same assessment. The lineage
+               rows come back raw from the API, so they run
+               through the list's own mapper first - the menu
+               reads the mapped shape (status wording, the
+               revoked-invites seal, the clone flags). */
+            /* Selection, wherever this row is drawn. The Job List
+               keeps its own per-job answer; Send Invite passes its
+               own pair in, because there the choice IS the dialog's
+               output. Same control either way - there is one place
+               in this component tree that selects an assessment
+               version, and it is the assessment table. */
+            selectedAssessmentId={
+              selectedAssessmentId !== undefined
+                ? selectedAssessmentId
+                : selectedAssessmentVersionByJob[assessment.jd_id!]
+            }
+            selectionGroupName={
+              selectMode ? 'send-invite-assessment-version' : 'job-list-assessment-version'
+            }
+            activeSelection={activeSelection}
+            /* The eye on an assessment row - the page's own preview modal,
+               against the assessment that row IS. Same component the list's
+               Preview action opens, so there is one assessment-details view
+               in the app and this is it. */
+            onViewAssessment={(version) => {
+              const raw = (assessmentLineages[assessment.jd_id!] || [])
+                .find((v) => v.id === version.id);
+              if (!raw) return;
+              setSelectedAssessmentForPreview(mapAssessmentFromApi(raw, 0));
+              setShowPreviewModal(true);
+            }}
+            onSelectAssessment={
+              onSelectAssessment ??
+              ((assessmentId) =>
+                setSelectedAssessmentVersionByJob((current) => ({
+                  ...current,
+                  [assessment.jd_id!]: assessmentId,
+                })))
+            }
+            onCreateAssessment={selectMode ? undefined : handleCreateAssessmentForJobVersion}
+              headerAction={
+              /* The job version details popup, pinned to the
+                 table's top-right corner. Opens on the version
+                 LIST, from which any one version can be read;
+                 each row's own eye opens a single version
+                 directly.
+
+                 Gated on `jd_id` - a row with no job behind it
+                 (the `__unlinked__` case) has no job to open,
+                 and the panel simply gets no header control. */
+              assessment.jd_id ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                  e.stopPropagation();
+                  openJobDetails(
+                  assessment.jd_id!,
+                  assessment.job?.title || stripVersionFromTitle(assessment.title),
+                  );
+                  }}
+                  className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                  aria-label="View job version details"
+                  title="View job version details"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                </button>
+              ) : undefined
+            }
+            /* Opens the same popup the header eye opens, landing on
+               THIS version rather than on the version list. */
+            /* The eye on a JOB VERSION row, in both surfaces. It opens
+               `JDVersionHistoryModal` on that one version - the same popup
+               the Total Jobs list's own Version History eye opens, through
+               the same handler, so the dialog shows the job exactly as the
+               page does rather than a second rendering of it. */
+            onViewJobVersion={(jobVersionId, jobVersion) =>
+              openJobDetails(
+                jobVersionId,
+                assessment.job?.title || stripVersionFromTitle(assessment.title),
+                jobVersion,
+              )
+            }
+            /* Invite / Track / Results and the same menu the card
+               carries, against THIS row's assessment. The lineage
+               rows come back raw from the API, so they run through
+               the list's own mapper first - both helpers read the
+               mapped shape (status wording, the revoked-invites
+               seal, the clone flags). */
+            /* The Total Jobs tab's own Actions column - same quick actions,
+               same compact menu, same spacing, from the same two helpers.
+
+               The Send Invite dialog takes none of them. Its assessment rows
+               exist to be CHOSEN between, and Send / Track / Result each act
+               on an assessment instead: Send opens a second share flow inside
+               the one already running, Result navigates the page out from
+               under the dialog, Track stacks a popup over it. The eye is the
+               one control that answers "which of these am I picking?", so in
+               the dialog the column holds that alone. */
+            renderAction={selectMode ? undefined : (version) => {
+              const raw = (assessmentLineages[assessment.jd_id!] || [])
+                .find((v) => v.id === version.id);
+              if (!raw) return null;
+              const mapped = mapAssessmentFromApi(raw, 0);
+              return (
+                <>
+                  {renderAssessmentQuickActions(mapped)}
+                  {renderAssessmentMenu(mapped, `version:${version.id}`, 'compact')}
+                </>
+              );
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
 
   /* How many JOBS the tenant has, for the Total Jobs summary card.
 
@@ -6507,6 +7165,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
                             currentAssessmentId={assessment.id}
                             latestJobVersion={getLatestJobVersion(assessment)}
+                            /* Same selection as the list view's panel, off the
+                               same per-job state, so switching the view toggle
+                               does not lose which version was picked. */
+                            selectionGroupName="job-list-assessment-version"
+                            selectedAssessmentId={selectedAssessmentVersionByJob[assessment.jd_id!]}
+                            onSelectAssessment={(assessmentId) =>
+                              setSelectedAssessmentVersionByJob((current) => ({
+                                ...current,
+                                [assessment.jd_id!]: assessmentId,
+                              }))
+                            }
                               /* Opened on the page the ROW's own status calls for -
                                  a Draft on the draft page, everything else on the
                                  details page. The row is found by ASSESSMENT id in
@@ -6580,359 +7249,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             ) : (
               /* List View */
               <div className="space-y-3">
-                {visibleAssessments.map((assessment) => (
-                  <div
-                    key={assessment.id}
-                    /* The row is one JOB, so clicking it opens that job's
-                       version history in place - the same thing the View
-                       Versions button beside it does, through the same
-                       handler, so the two can never disagree about what a
-                       click on this row means.
-
-                       It used to navigate: to the representative assessment,
-                       or to the edit modal when that assessment was a Draft.
-                       Both were the row acting as ONE assessment, which is
-                       exactly what a job row is not - and it meant a recruiter
-                       scanning the list was taken off the page by a click they
-                       had aimed at a job. The assessments are still one step
-                       away, listed per job version inside the panel this now
-                       opens, each with its own row and its own actions.
-
-                       Gated on `hasVersionHistory` (the row having a `jd_id`),
-                       which is the same test the View Versions button renders
-                       on: a row with no job behind it has no history to open,
-                       and it drops the pointer cursor and the lift so it does
-                       not offer a click that would do nothing. */
-                    onClick={() => hasVersionHistory(assessment) && toggleAssessmentVersions(assessment)}
-                    /* `relative` only. The raised z-index this carried was
-                       for the row's own three-dot dropdown, which is gone -
-                       the menus that remain belong to the version panel's
-                       assessment rows and are keyed `version:<id>`, so they
-                       never matched this test anyway. */
-                    className={`relative p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
-                      hasVersionHistory(assessment)
-                        ? 'cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
-                        : 'cursor-default'
-                    }`}
-                  >
-                    {/* One row = one JOB. The list has always collapsed to one
-                        row per job lineage (see `collapsedAssessments`); what
-                        the row now reports is that lineage's totals rather than
-                        only the representative assessment's own figures.
-
-                        Share / Track Invites / Results moved off the row. They
-                        act on ONE assessment, and a job row is not one
-                        assessment - they are rendered per version inside View
-                        Versions, which already carried them. */}
-                    <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:gap-4">
-                      {/* Identity - icon, Job ID, title */}
-                      <div className="flex items-center gap-2.5 min-w-0 xl:w-[360px] xl:flex-shrink-0">
-                        <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Briefcase className="h-4 w-4 text-brand-blue" />
-                        </div>
-                        {assessment.jd_short_id && (
-                          /* The Job Openings chip, not the solid blue one this
-                             row used to carry - same JD id, one house style. */
-                          <JobIdBadge className="flex-shrink-0">{assessment.jd_short_id}</JobIdBadge>
-                        )}
-                        <h3
-                          className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
-                          title={assessment.job?.title || stripVersionFromTitle(assessment.title)}
-                        >
-                          {assessment.job?.title || stripVersionFromTitle(assessment.title)}
-                        </h3>
-                      </div>
-
-                      {/* Status of the job's newest assessment - the row's
-                          representative, unchanged from before. */}
-                      {/* Boxed to a fixed width so the metric columns start
-                          on the same line in every row - the pill's own width
-                          varies with the word inside it. */}
-                      <div className="flex-shrink-0 xl:w-[104px]">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${
-                          assessment.status === 'Active'
-                            ? 'bg-green-100 text-green-700 ring-green-200'
-                            : assessment.status === 'Draft'
-                            ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
-                            : assessment.status === 'Archived'
-                            ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
-                            : assessment.status === 'Completed'
-                            ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
-                            : assessment.status === 'Paused'
-                            ? 'bg-slate-200 text-gray-600 ring-gray-300'
-                            : 'bg-slate-100 text-gray-700 ring-gray-200'
-                        }`}
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
-                        {assessment.status}
-                      </span>
-                      </div>
-
-                      {/* Totals for the job. Two columns on a phone, four in a
-                          divided row once there is width for them. */}
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 xl:flex-1 xl:min-w-0">
-                        {getJobRowMetrics(assessment).map(({ key, icon: MetricIcon, iconClass, value, label }) => (
-                          <div
-                            key={key}
-                            className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0"
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
-                              <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{value}</span>
-                            </div>
-                            <p className="text-[11px] text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Actions */}
-                      <div
-                        className="flex items-center gap-2 flex-shrink-0 self-start xl:self-auto xl:ml-auto"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {/* Trigger only - the panel it opens is untouched. */}
-                        {hasVersionHistory(assessment) && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              /* The row toggles the same panel, so the click is
-                                 stopped here rather than letting it bubble and
-                                 toggle twice - which would leave the panel shut
-                                 on the very click that asked for it. */
-                              e.stopPropagation();
-                              toggleAssessmentVersions(assessment);
-                            }}
-                            aria-expanded={openVersionsFor === assessment.id}
-                            title={openVersionsFor === assessment.id ? 'Hide version history' : 'View version history'}
-                            className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
-                              openVersionsFor === assessment.id
-                                ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
-                                : 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
-                            }`}
-                          >
-                            {openVersionsFor === assessment.id ? 'Hide' : 'View'} Versions
-                            <ChevronDown
-                              className={`w-3.5 h-3.5 transition-transform ${
-                                openVersionsFor === assessment.id ? 'rotate-180' : ''
-                              }`}
-                            />
-                          </button>
-                        )}
-
-                        {/* Track - the assessment history of this job, read
-                            along its job versions: V3, V2, V1 down the popup,
-                            each naming the assessments built against it.
-
-                            Beside View Versions because the two answer
-                            neighbouring questions from the same two caches, and
-                            it opens them the same way: the panel is the working
-                            table with the per-assessment actions, this is the
-                            read-only overview - and the only one of the two
-                            that can show a version nothing was ever built for.
-
-                            Rendered on `hasVersionHistory` (a `jd_id`), the
-                            same test View Versions and the row click use, and
-                            ENABLED on the job having at least one invitation
-                            sent - see the gate below. The click is stopped so
-                            it does not also toggle the panel.
-
-                            Radar is the glyph Track Invites already uses on
-                            this page, so "track" reads the same wherever it
-                            appears; brand-cyan is the assessment colour, which
-                            is what this popup is about. */}
-                        {hasVersionHistory(assessment) && (() => {
-                          /* Gated on the JOB's invitations, per Job ID: the
-                             popup lists the invitations sent against this
-                             job's assessments, so with none sent it would
-                             open on an empty table. Greyed with the reason in
-                             its tooltip rather than dropped, which is how the
-                             Result button beside it and the per-assessment
-                             Track in the version panel both handle "nothing to
-                             show yet" - the row keeps its shape and says why.
-
-                             Each row asks this of its own lineage, so one job
-                             being invited says nothing about the next; and the
-                             count is re-read on every render from the reloaded
-                             list, so the first invitation sent for a job flips
-                             its own Track on and no other. */
-                          const invitationsSent = getJobInvitationsSent(assessment);
-                          const hasInvitations = invitationsSent > 0;
-                          const reason = hasInvitations
-                            ? `Track the assessments created for this job's versions (${invitationsSent} invitation${invitationsSent === 1 ? '' : 's'} sent)`
-                            : 'No invitations have been sent for this job yet';
-                          return (
-                            <button
-                              type="button"
-                              disabled={!hasInvitations}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!hasInvitations) return;
-                                void handleTrackJob(assessment);
-                              }}
-                              className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
-                                hasInvitations
-                                  ? 'bg-white dark:bg-slate-900 text-brand-cyan border-brand-cyan/30 hover:bg-brand-cyan/5'
-                                  : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                              }`}
-                              aria-label={reason}
-                              title={reason}
-                            >
-                              <Radar className="w-3.5 h-3.5" />
-                              Track
-                            </button>
-                          );
-                        })()}
-
-                        {/* Result - the scores for the assessment this row
-                            represents (the job's newest, the same one the row
-                            click and the menu act on), on the page the
-                            per-assessment Results button already opens.
-
-                            Gated the way that button is: with no invitation
-                            sent there is no attempt to score, so the results
-                            page would open empty. It greys with the reason in
-                            its tooltip rather than disappearing, so the row
-                            keeps its shape and says why.
-
-                            brand-blue, which Results has always been on this
-                            page, against Track's cyan beside it. */}
-                        {(() => {
-                          const invitationsSent =
-                            assessment.invitations_count ?? assessment.candidates ?? 0;
-                          const hasBeenShared = invitationsSent > 0;
-                          const reason = hasBeenShared
-                            ? 'View results'
-                            : assessment.status === 'Draft'
-                              ? 'Publish the assessment to view results'
-                              : 'Share the assessment to view results';
-                          return (
-                            <button
-                              type="button"
-                              disabled={!hasBeenShared}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!hasBeenShared) return;
-                                router.push(`/recruitment/assessments/${assessment.id}/results`);
-                              }}
-                              className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
-                                hasBeenShared
-                                  ? 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
-                                  : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                              }`}
-                              aria-label={reason}
-                              title={reason}
-                            >
-                              <BarChart className="w-3.5 h-3.5" />
-                              Result
-                            </button>
-                          );
-                        })()}
-
-                        {/* The eye moved onto the Job Versions panel's own
-                            heading - it reads the job's versions, so it sits on
-                            the table that lists them rather than in this
-                            cluster. See `headerAction` below. */}
-                      </div>
-                    </div>
-                    {/* Expanded in place, below the card's own content and
-                        across its full width — the version table needs the
-                        room, and hanging it off the right-hand action column
-                        would box it into a third of the card. Click is stopped
-                        here: a click on a version row must not bubble to the
-                        row behind it, which would collapse the panel it was
-                        aimed at. */}
-                    {openVersionsFor === assessment.id && assessment.jd_id && (
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <AssessmentVersionHistoryPanel
-                          jobVersions={jdLineage.lineages[assessment.jd_id]}
-                          jobVersionDetails={jdLineage.versionDetails}
-                          assessments={assessmentLineages[assessment.jd_id]}
-                          /* The backend's per-version "has an assessment" index,
-                             read beside the rows - see the prop for why both. */
-                          jdsWithAssessments={jdsWithAssessments}
-                          loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
-                          currentAssessmentId={assessment.id}
-                          latestJobVersion={getLatestJobVersion(assessment)}
-                          /* Opened on the page the ROW's own status calls for -
-                             a Draft on the draft page, everything else on the
-                             details page. The row is found by ASSESSMENT id in
-                             the lineage, the same lookup `renderAction` makes,
-                             so two assessments on one job version each open
-                             themselves. */
-                          onRowClick={(versionId) => {
-                            const raw = (assessmentLineages[assessment.jd_id!] || [])
-                              .find((v) => v.id === versionId);
-                            openAssessment(raw ? mapAssessmentFromApi(raw, 0) : { id: versionId });
-                          }}
-                          /* Every version gets the card's own menu, keyed
-                             separately so opening one row's does not also open
-                             the card's for the same assessment. The lineage
-                             rows come back raw from the API, so they run
-                             through the list's own mapper first - the menu
-                             reads the mapped shape (status wording, the
-                             revoked-invites seal, the clone flags). */
-                          onCreateAssessment={handleCreateAssessmentForJobVersion}
-                            headerAction={
-                            /* The job version details popup, pinned to the
-                               table's top-right corner. Opens on the version
-                               LIST, from which any one version can be read;
-                               each row's own eye opens a single version
-                               directly.
-
-                               Gated on `jd_id` - a row with no job behind it
-                               (the `__unlinked__` case) has no job to open,
-                               and the panel simply gets no header control. */
-                            assessment.jd_id ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                e.stopPropagation();
-                                openJobDetails(
-                                assessment.jd_id!,
-                                assessment.job?.title || stripVersionFromTitle(assessment.title),
-                                );
-                                }}
-                                className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                                aria-label="View job version details"
-                                title="View job version details"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </button>
-                            ) : undefined
-                          }
-                          /* Opens the same popup the header eye opens, landing on
-                             THIS version rather than on the version list. */
-                          onViewJobVersion={(jobVersionId, jobVersion) =>
-                            openJobDetails(
-                              jobVersionId,
-                              assessment.job?.title || stripVersionFromTitle(assessment.title),
-                              jobVersion,
-                            )
-                          }
-                          /* Invite / Track / Results and the same menu the card
-                             carries, against THIS row's assessment. The lineage
-                             rows come back raw from the API, so they run through
-                             the list's own mapper first - both helpers read the
-                             mapped shape (status wording, the revoked-invites
-                             seal, the clone flags). */
-                          renderAction={(version) => {
-                            const raw = (assessmentLineages[assessment.jd_id!] || [])
-                              .find((v) => v.id === version.id);
-                            if (!raw) return null;
-                            const mapped = mapAssessmentFromApi(raw, 0);
-                            return (
-                              <>
-                                {renderAssessmentQuickActions(mapped)}
-                                {renderAssessmentMenu(mapped, `version:${version.id}`, 'compact')}
-                              </>
-                            );
-                          }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {visibleAssessments.map((assessment) => renderJobListRow(assessment))}
               </div>
             )}
 
@@ -6967,19 +7284,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
           What that changes, beyond paint:
 
-            - The pick is now a pick. Rows are radios in a `border-2` card that
-              lights up when chosen, one at a time, with the others going inert
-              and saying why — instead of a plain button that fired on click and
-              closed the dialog before you could see what you had done.
-            - A footer that reports the state ("Select one assessment to
-              continue", then what is about to happen) and carries Cancel and
-              the primary action, so leaving and committing are both explicit.
-            - Rows carry what the Assessments list carries: the ID chip, the
-              clean title, the shared VersionBadge, the status pill in this
-              page's own colours, the linked JD line, duration and section
-              count, and who created it and when. The old row showed a title and
-              `AS-004 · 30 min`, which is not enough to tell two versions of the
-              same assessment apart — the exact thing you are choosing between.
+            - The pick is now a pick. Rows are radios, one at a time, in a
+              card that lights up when chosen — instead of a plain button that
+              fired on click and closed the dialog before you could see what
+              you had done.
+            - A footer that reports the state ("Select one job to continue",
+              then what is about to happen) and carries Cancel and the primary
+              action, so leaving and committing are both explicit.
+            - The list IS the Total Jobs list. It is not styled after it and
+              not grouped into a hierarchy of its own: `renderJobListRow` and
+              `collapseByLineage` are the functions the Job List on this page
+              renders from, called here over `shareableAssessments`. One job
+              per row, with that job's Job ID chip, title, status pill and all
+              four metrics, exactly as the list behind the dialog draws them.
+              The earlier job → job version → assessment version hierarchy is
+              gone; picking a job sends against the assessment that represents
+              it, which is the same assessment Total Jobs shows on that row.
             - The header loses its `from-brand-blue via-brand-cyan` gradient for
               the reference's plain bar and small tinted icon chip. Same reason
               the Topic Availability header lost its gradient: nothing retunes
@@ -7002,7 +7322,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             onClick={closeInvitePicker}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-6xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -7011,7 +7331,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </div>
                   <div className="min-w-0">
                     <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Send Invite</h2>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Choose the assessment to invite candidates to</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Open a job&rsquo;s versions, then pick the assessment version to send</p>
                   </div>
                 </div>
                 <button
@@ -7028,14 +7348,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {/* Search first, then the list — the reference's order and its
                     labelled, icon-led field, rather than a bare input. */}
                 <div className="mb-4">
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Assessments</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
                     <input
                       type="text"
                       value={invitePickerQuery}
                       onChange={(e) => setInvitePickerQuery(e.target.value)}
-                      placeholder="Search by assessment ID, name, JD ID or JD name..."
+                      placeholder="Search by job title, Job ID, assessment name or assessment ID..."
                       className="w-full pl-10 pr-4 py-2 text-sm text-black dark:text-slate-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                     />
                   </div>
@@ -7043,18 +7363,30 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
-                    Select an Active Assessment
-                    {shareableAssessments.length > 0 && (
-                      <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
-                        {shareableAssessments.length} available
-                      </span>
-                    )}
+                    Select an Assessment
+                    {/* The SAME number the Total Jobs list prints in its
+                        "Job List (N)" heading, from the same collapse over the
+                        same array - not a second count of a narrower set.
+                        Counting `shareableAssessments` instead is what made
+                        the two disagree: it drops Drafts, Archived rows and
+                        revoked-invite rows, so the dialog reported fewer jobs
+                        than the page behind it. Those jobs are listed here now
+                        and disabled, which is why the counts can match. */}
+                    {assessments.length > 0 && (() => {
+                      const jobCount = collapseByLineage(assessments).length;
+                      return (
+                        <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
+                          {jobCount} job{jobCount !== 1 ? 's' : ''}
+                        </span>
+                      );
+                    })()}
                   </label>
-                  {/* The only way back to "nothing picked" once the others have
-                      gone inert. */}
-                  {invitePickerChoiceId && (
+                  {/* Back to nothing picked. Both, because the version list
+                      only exists under a picked job - clearing the version
+                      alone would leave that list open over no choice. */}
+                  {invitePickerSelection && (
                     <button
-                      onClick={() => setInvitePickerChoiceId(null)}
+                      onClick={() => setInvitePickerSelection(null)}
                       className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
                     >
                       Clear Selection
@@ -7064,145 +7396,123 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                 {(() => {
                   const query = invitePickerQuery.trim().toLowerCase();
-                  const visible = shareableAssessments.filter((assessment: any) =>
+                  /* Narrowed BEFORE the collapse, so a job stays on screen when
+                     the version that matched is not the one representing it -
+                     searching an older version's assessment id still finds its
+                     job. The fields are the ones the old picker searched. */
+                  /* Narrowed BEFORE the collapse, so a job stays on screen
+                     when the version that matched is not the one representing
+                     it. Over `assessments` - the whole loaded set, the array
+                     the Total Jobs list collapses too - rather than only the
+                     sendable ones, so this list and that one hold the same
+                     jobs and can report the same count. */
+                  const matching = assessments.filter((assessment) =>
                     !query ||
                     `${assessment.title || ''} ${assessment.short_id || ''} ${assessment.job?.title || ''} ${assessment.jd_short_id || ''}`
                       .toLowerCase()
                       .includes(query)
                   );
-                  if (visible.length === 0) {
+                  /* One row per job, from `collapseByLineage` - the very
+                     function the Job List builds its rows with, so a job is
+                     represented here by the same assessment it is represented
+                     by there. */
+                  const jobRows = collapseByLineage(matching);
+                  /* Which jobs actually have something sendable. Not a
+                     filter any more - a job with only Drafts is listed and
+                     disabled rather than omitted, which is what lets this
+                     list hold the same jobs, and print the same count, as the
+                     Total Jobs list behind it. */
+                  const invitableJobKeys = new Set(
+                    shareableAssessments.map((a) => lineageKeyOf(a)),
+                  );
+                  /* Per-job figures over the very set these rows are built
+                     from, so a card's metrics describe the job as this list
+                     shows it. Not `jobRowTotals`, which is summed over
+                     `filteredAssessments` and therefore moves with the page's
+                     active tab - on the Draft tab it would report 0
+                     assessments beside every job in this dialog. */
+                  const pickerJobTotals = buildJobRowTotals(assessments);
+                  if (jobRows.length === 0) {
                     return (
                       <div className="text-center py-8 text-gray-500 dark:text-slate-400">
-                        <ClipboardCheck className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
-                        <p>{query ? 'No assessments match your search' : 'No active assessments found'}</p>
-                        <p className="text-sm">{query ? 'Try a different title or assessment ID.' : 'Publish an assessment first to send invitations.'}</p>
+                        <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
+                        <p>{query ? 'No jobs match your search' : 'No jobs found'}</p>
+                        <p className="text-sm">{query ? 'Try a different job title or Job ID.' : 'Create an assessment against a job first.'}</p>
                       </div>
                     );
                   }
+                  const selection = invitePickerSelection;
                   return (
-                    <div className="space-y-2 max-h-64 overflow-y-auto">
-                      {visible.map((assessment: any) => {
-                        const isSelected = invitePickerChoiceId === assessment.id;
-                        /* Once one is picked the rest go inert, with the reason
-                           on the row — the reference's treatment for the rows
-                           you didn't choose. */
-                        const blockedByOtherPick = !!invitePickerChoiceId && !isSelected;
-                        /* The page's own way of naming an assessment, kept: the
-                           job title when there is one, else the title with its
-                           inline "- Version N" suffix stripped so the version is
-                           not printed twice beside the badge. */
-                        const rowTitle = assessment.job?.title || stripVersionFromTitle(assessment.title);
-                        /* Sections, counted from the flags this page already
-                           maps, rather than a `sections` array the picker's rows
-                           are not guaranteed to carry. */
-                        const sectionCount = [
-                          assessment.hr_enabled,
-                          assessment.technical_enabled,
-                          assessment.coding_enabled,
-                        ].filter(Boolean).length;
+                    <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-0.5">
+                      {jobRows.map((assessment) => {
+                        const jobKey = lineageKeyOf(assessment);
+                        const ownsSelection = selection?.jobKey === jobKey;
+                        /* Two different reasons a card can be out of play, and
+                           they read the same to the eye but not to the copy:
+                           another job holds the pick, or this job has no
+                           version that can take an invite at all. */
+                        /* Faded, not barred. Another job holding the
+                           selection is not a reason this one cannot be
+                           opened - picking an assessment inside it is exactly
+                           how the selection moves. */
+                        const dimmed = !!selection && !ownsSelection;
+                        /* The only genuinely inert case, and it is about the
+                           DATA: no published assessment anywhere in this job,
+                           so there is nothing to send however the reader
+                           clicks. */
+                        const nothingSendable = !invitableJobKeys.has(jobKey);
+                        const jobTitle =
+                          assessment.job?.title || stripVersionFromTitle(assessment.title);
                         return (
-                          <label
-                            key={assessment.id}
-                            title={blockedByOtherPick
-                              ? 'Only one assessment can be sent at a time — clear the current selection to choose this one'
-                              : undefined}
-                            aria-disabled={blockedByOtherPick}
-                            className={`block w-full text-left p-4 rounded-lg border-2 transition-all ${
-                              blockedByOtherPick
-                                ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40 opacity-60 cursor-not-allowed'
-                                : isSelected
-                                  ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10 cursor-pointer'
-                                  : 'border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/5 cursor-pointer'
-                            }`}
+                          <div
+                            key={jobKey}
+                            title={
+                              nothingSendable
+                                ? 'This job has no published assessment to invite against'
+                                : dimmed
+                                  ? 'Open this job and pick an assessment to move your selection here'
+                                  : undefined
+                            }
+                            className={nothingSendable ? 'cursor-not-allowed' : undefined}
                           >
-                            <div className="flex items-start gap-3">
-                              {/* A radio, because exactly one assessment is sent. */}
-                              <input
-                                type="radio"
-                                name="send-invite-assessment-selection"
-                                checked={isSelected}
-                                disabled={blockedByOtherPick}
-                                onChange={() => !blockedByOtherPick && setInvitePickerChoiceId(assessment.id)}
-                                onClick={() => isSelected && setInvitePickerChoiceId(null)}
-                                className="w-4 h-4 mt-1 flex-shrink-0 text-brand-blue border-gray-300 focus:ring-brand-blue/40 disabled:cursor-not-allowed"
-                              />
-
-                              <div className="flex-1 min-w-0">
-                                {/* Assessment ID, Title, Version, Status */}
-                                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                  {assessment.short_id && (
-                                    <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue text-white rounded text-xs font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                                      {assessment.short_id}
-                                    </span>
-                                  )}
-                                  <h5 className="font-medium text-gray-900 dark:text-slate-50">
-                                    {rowTitle || 'Untitled assessment'}
-                                  </h5>
-                                  <VersionBadge
-                                    version={typeof assessment.version === 'number' ? assessment.version : undefined}
-                                    title={assessment.title}
-                                    size="sm"
-                                    variant="secondary"
-                                  />
-                                  {/* Status pill in this page's own colours —
-                                      `mapAssessmentFromApi` has already turned
-                                      the API's "published" into "Active", so
-                                      unlike the reference there is nothing to
-                                      translate here. */}
-                                  <span
-                                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${
-                                      assessment.status === 'Active'
-                                        ? 'bg-green-100 text-green-700 ring-green-200'
-                                        : assessment.status === 'Completed'
-                                          ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
-                                          : 'bg-slate-100 text-gray-700 ring-gray-200'
-                                    }`}
-                                  >
-                                    {assessment.status}
-                                  </span>
-                                  {isSelected && (
-                                    <CheckCircle className="w-5 h-5 text-brand-blue ml-auto flex-shrink-0" />
-                                  )}
-                                </div>
-
-                                {/* Linked JD, written as this page writes it. */}
-                                {assessment.jd_short_id && (
-                                  <div className="text-xs text-gray-700 dark:text-slate-300 font-medium mb-1.5">
-                                    <span>{assessment.jd_short_id}</span>
-                                    {assessment.job?.title && (
-                                      <span className="ml-2">{assessment.job.title}</span>
-                                    )}
-                                    {assessment.jd_version && (
-                                      <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.jd_version}</span>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* Duration and Sections */}
-                                <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-slate-400">
-                                  <span className="flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />
-                                    {assessment.duration_minutes || 0} min
-                                  </span>
-                                  <span>•</span>
-                                  <span>{sectionCount} section{sectionCount !== 1 ? 's' : ''}</span>
-                                </div>
-
-                                {/* Created By and Date */}
-                                <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-slate-500 mt-1.5">
-                                  {assessment.created_by_name && (
-                                    <>
-                                      <span>Created by: <span className="text-gray-700 dark:text-slate-300 font-medium">{assessment.created_by_name}</span></span>
-                                      <span>•</span>
-                                    </>
-                                  )}
-                                  {assessment.created_at && (
-                                    <span>{formatIST(assessment.created_at)}</span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </label>
+                            {renderJobListRow(assessment, {
+                              selectMode: true,
+                              selected: !!ownsSelection,
+                              disabled: nothingSendable,
+                              dimmed,
+                              totals: pickerJobTotals,
+                              selectedAssessmentId: ownsSelection
+                                ? selection?.assessmentId
+                                : undefined,
+                              /* Highlights the chosen PAIR inside this job's
+                                 panel - the job version and the assessment -
+                                 and fades its siblings without disabling any
+                                 of them. Only for the job that owns the pick;
+                                 the others have nothing to highlight. */
+                              activeSelection:
+                                ownsSelection && selection
+                                  ? {
+                                      jobVersion: selection.jobVersion,
+                                      assessmentId: selection.assessmentId,
+                                    }
+                                  : null,
+                              /* Everything the Share modal will need, recorded
+                                 where all three parts are actually known: the
+                                 job from this card, the job version from the
+                                 panel group the radio sits in, the assessment
+                                 from the row itself. */
+                              onSelectAssessment: (assessmentId, context) =>
+                                setInvitePickerSelection({
+                                  jobKey,
+                                  jdId: assessment.jd_id,
+                                  jdShortId: assessment.jd_short_id,
+                                  jobTitle,
+                                  jobVersion: context.jobVersion,
+                                  jobVersionId: context.jobVersionId,
+                                  assessmentId,
+                                }),
+                            })}
+                          </div>
                         );
                       })}
                     </div>
@@ -7215,14 +7525,37 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {/* One line, always: it sits beside the buttons, and a second
                     line would push the footer taller. */}
                 <div className="min-w-0 truncate whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-                  {!invitePickerChoiceId
-                    ? 'Select one assessment to continue'
-                    : (
+                  {/* Names the VERSION that will be sent, or says why the
+                      picked one cannot be - the table offers every version of
+                      a job, Drafts and Archived among them, so "selected" and
+                      "sendable" are two different questions and the footer has
+                      to answer the second. Resolved off live data for the same
+                      reason Continue is. */}
+                  {(() => {
+                    const chosen = resolveInvitePickerChoice();
+                    const blocked = invitePickerBlockedReason(chosen);
+                    if (!invitePickerSelection) {
+                      return 'Open a job\u2019s versions and select an assessment to continue';
+                    }
+                    if (blocked) {
+                      return (
+                        <span className="inline-flex items-center gap-1.5 align-middle text-brand-orange-deep">
+                          <Info className="w-4 h-4 flex-shrink-0" />
+                          {blocked}
+                        </span>
+                      );
+                    }
+                    const jobV = invitePickerSelection.jobVersion;
+                    const assessmentV = typeof chosen?.version === 'number' ? chosen.version : null;
+                    return (
                       <span className="inline-flex items-center gap-1.5 align-middle">
                         <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                        Ready to invite candidates to 1 assessment
+                        {assessmentV
+                          ? `Ready to invite candidates to Assessment V${assessmentV}${jobV ? ` (Job V${jobV})` : ''}`
+                          : 'Ready to invite candidates to 1 assessment'}
                       </span>
-                    )}
+                    );
+                  })()}
                 </div>
                 <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
@@ -7233,21 +7566,44 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </button>
                   <button
                     onClick={() => {
-                      /* Resolved here rather than held since the click, so
-                         a list that reloaded under the open dialog cannot hand
-                         the share modal a stale row. */
-                      const choice = shareableAssessments.find(
-                        (a) => a.id === invitePickerChoiceId,
-                      );
-                      if (!choice) {
-                        toast.error('Please select an assessment');
+                      const choice = resolveInvitePickerChoice();
+                      const blocked = invitePickerBlockedReason(choice);
+                      if (!choice || !invitePickerSelection || blocked) {
+                        toast.error(blocked ?? 'Please select an assessment version');
                         return;
                       }
-                      setSelectedAssessmentForShare(choice);
+                      /* Hand the share dialog the triple that was actually
+                         picked, not just the assessment record.
+                         `resolveInvitePickerChoice` may have found the row in
+                         the panel's lineage cache, and those rows carry
+                         `jd_id` and `jd_version` but neither the JD's short id
+                         nor its title - so the modal's "JD-025 - Senior QA v2"
+                         line came out blank, or worse, showed the job version
+                         recorded on the assessment rather than the one the
+                         reader chose it under.
+
+                         The selection knows all three parts because each was
+                         recorded where it was known: the job from the card,
+                         the job version from the panel group the radio sat in,
+                         the assessment from the row. Selection wins over the
+                         record for exactly those fields; everything else on
+                         the assessment is passed through untouched. */
+                      setSelectedAssessmentForShare({
+                        ...choice,
+                        jd_id: invitePickerSelection.jobVersionId ?? choice.jd_id,
+                        jd_short_id: choice.jd_short_id ?? invitePickerSelection.jdShortId,
+                        jd_title: choice.jd_title || invitePickerSelection.jobTitle,
+                        jd_version: invitePickerSelection.jobVersion,
+                        job: {
+                          ...(choice.job ?? {}),
+                          title: choice.job?.title || invitePickerSelection.jobTitle,
+                          version: invitePickerSelection.jobVersion,
+                        },
+                      });
                       closeInvitePicker();
                       setShowShareModal(true);
                     }}
-                    disabled={!invitePickerChoiceId}
+                    disabled={!!invitePickerBlockedReason(resolveInvitePickerChoice())}
                     className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Mail className="w-4 h-4" />

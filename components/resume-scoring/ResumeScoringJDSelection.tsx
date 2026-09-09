@@ -59,7 +59,7 @@ export default function ResumeScoringJDSelection() {
             ]}
           />
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/dashboard')}
@@ -139,7 +139,7 @@ export default function ResumeScoringJDSelection() {
               return (
                 <div
                   key={jd.id}
-                  className="flex items-center justify-between p-5 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
                 >
                   {/* Left: icon + info */}
                   <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -208,11 +208,11 @@ export default function ResumeScoringJDSelection() {
                   </div>
 
                   {/* Right: action */}
-                  <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                  <div className="flex items-center gap-2 flex-shrink-0 sm:ml-4">
                     {canViewScoring ? (
                       <button
                         onClick={() => handleSelectJd(jd)}
-                        className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors w-full sm:w-auto justify-center"
                       >
                         <ClipboardList className="w-4 h-4" />
                         Score Resumes

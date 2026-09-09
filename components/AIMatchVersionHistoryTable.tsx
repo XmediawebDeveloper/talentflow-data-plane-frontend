@@ -6,7 +6,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 /* The app's shared status vocabulary. `getDisplayStatus` is what turns a
    published JD with a publish counter above 1 into "Republished", and
    `getStatusConfig` gives that label the same colours every other list uses. */
-import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
+import { getDisplayStatus, getStatusConfig, formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
 
 export interface AIMatchSessionVersion {
   /**
@@ -78,16 +78,27 @@ interface AIMatchVersionHistoryTableProps {
   failed: boolean;
   versions: AIMatchSessionVersion[] | null;
   /**
-   * The JD behind one session, for the Status column.
+   * The JD behind one session, for the Status / Experience / Industry /
+   * Location / Work Mode columns.
    *
    * A match session carries its own `status` — that is the state of the MATCH
-   * RUN ('completed'), not of the job description, and the column showed
-   * neither: it read "Latest" or "Previous", derived from the row's position.
-   * The JD's real status lives on the job record, which only the host has, and
-   * each session may belong to a different row in the job's lineage — so the
-   * host resolves it per session rather than passing one status for the table.
+   * RUN ('completed'), not of the job description, and none of these columns'
+   * facts live on the session at all. The JD record they come from lives on
+   * the host's job list, which only has the CURRENT version of each job — an
+   * older version further back in the lineage resolves to undefined here and
+   * those cells fall back to a dash, the same degrade the Status column
+   * already had. Resolved per session, not per card, since each row may
+   * belong to a different JD record than the one the card above it shows.
    */
-  resolveJob?: (session: AIMatchSessionResponse) => { status?: string; currentVersion?: number } | undefined;
+  resolveJob?: (session: AIMatchSessionResponse) => {
+    status?: string;
+    currentVersion?: number;
+    experience?: string;
+    industryType?: string;
+    location?: string;
+    employmentType?: string;
+    remoteType?: string;
+  } | undefined;
   onRetry: () => void;
   onViewSession: (session: AIMatchSessionResponse) => void;
 }
@@ -138,30 +149,66 @@ export default function AIMatchVersionHistoryTable({
   const latestVersionNumber = versions[0]?.versionNumber;
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700">
+    <>
+    {/* Border/ring/shadow and header shading match JobVersionHistoryPanel's
+        (Resume Scoring / Job Openings) version table exactly — same
+        brand-blue-tinted "this is the active version table" treatment,
+        applied here since this table renders its own rows instead of
+        sharing that component (match sessions have no version field to hang
+        off its Job-shaped row model). */}
+    <div className="hidden md:block overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20">
       <table className="w-full text-xs">
-        <thead className="bg-gray-50 dark:bg-slate-800/60">
-          <tr className="text-left text-gray-500 dark:text-slate-500">
-            <th className="py-2 px-3 font-medium">Version</th>
-            <th className="py-2 px-3 font-medium">Status</th>
-            <th className="py-2 px-3 font-medium">Match Date</th>
-            <th className="py-2 px-3 font-medium">Last Match Date</th>
-            <th className="py-2 px-3 font-medium">Total Matches</th>
-            <th className="py-2 px-3 font-medium text-right">Actions</th>
+        <thead>
+          <tr className="text-left">
+            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Version</th>
+            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Status</th>
+            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Experience / Industry</th>
+            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Location</th>
+            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Work Mode / Type</th>
+            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Last Match Date</th>
+            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Number of Runs</th>
+            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Total Matches</th>
+            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100 text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {versions.map(({ session, versionNumber, firstMatchedAt, lastMatchedAt, runCount }) => {
+          {versions.map(({ session, versionNumber, lastMatchedAt, runCount }, rowIndex) => {
             const isLatest = versionNumber === latestVersionNumber;
+            /* An inset box-shadow rather than `divide-y`/`border-b`: this
+               table's `border-collapse: collapse` (Tailwind's table
+               preflight) resolves a <tr>'s own border against its <td>s'
+               and silently drops it, so every row but the last read with no
+               separator at all. A shadow paints on the cell itself and
+               isn't subject to that resolution — same trick the sticky
+               Select/Action columns elsewhere in the app already use for
+               exactly this reason. */
+            const isLastRow = rowIndex === versions.length - 1;
+            const rowDivider = isLastRow ? '' : 'shadow-[inset_0_-1px_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155]';
+            // Resolved once per row and shared by every cell that needs it
+            // (Status, Experience/Industry, Location, Work Mode/Type) rather
+            // than re-resolved per cell.
+            const job = resolveJob?.(session);
             return (
-              <tr key={session.id} className="border-t border-gray-100 dark:border-slate-800">
+              <tr
+                key={session.id}
+                /* Same faint brand tint the latest row carries on the Resume
+                   Scoring / Job Openings version tables, so "which row is
+                   live" reads identically everywhere it's asked. */
+                className={`transition-colors duration-200 ease-out ${
+                  isLatest
+                    ? 'bg-brand-blue/[0.025] hover:bg-brand-blue/[0.05] dark:bg-brand-blue/[0.06] dark:hover:bg-brand-blue/[0.1]'
+                    : 'hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08]'
+                }`}
+              >
                 {/* Latest lives HERE now, beside the version number, exactly as
                     it does on the Resume Scoring version table. It answers
                     "which version is this", which is this column's question —
                     the Status column beside it is now free to answer its own. */}
-                <td className="py-2 px-3 font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap">
+                <td className={`py-2.5 px-3 whitespace-nowrap ${rowDivider}`}>
                   <span className="inline-flex items-center gap-1.5">
-                    v{versionNumber}
+                    <span className="px-2 py-0.5 rounded-md font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                      v{versionNumber}
+                    </span>
                     {isLatest && (
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-brand-blue text-white text-[10px] font-semibold tracking-wide">
                         LATEST
@@ -169,9 +216,8 @@ export default function AIMatchVersionHistoryTable({
                     )}
                   </span>
                 </td>
-                <td className="py-2 px-3">
+                <td className={`py-2.5 px-3 ${rowDivider}`}>
                   {(() => {
-                    const job = resolveJob?.(session);
                     /* No job resolved means the lineage row is not in the
                        host's list (an archived version it filters out, say).
                        A dash is honest; guessing "Published" would not be. */
@@ -188,21 +234,43 @@ export default function AIMatchVersionHistoryTable({
                     );
                   })()}
                 </td>
-                {/* First ever match against this JD version. */}
-                <td className="py-2 px-3 text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                  {formatIST(firstMatchedAt)}
+                {/* Experience / Industry — one column, stacked, same
+                    space-saving treatment Resume Scoring's own version table
+                    uses. Experience arrives pre-formatted ("3-6 years") off
+                    the host's job list; industry runs through the shared
+                    formatter so it never shows the raw snake_case value. */}
+                <td className={`py-2.5 px-3 whitespace-nowrap ${rowDivider}`}>
+                  <div className="text-gray-700 dark:text-slate-300">{job?.experience || '—'}</div>
+                  <div
+                    className="text-gray-500 dark:text-slate-500 max-w-[140px] truncate"
+                    title={job?.industryType ? formatIndustryType(job.industryType) : ''}
+                  >
+                    {job?.industryType ? formatIndustryType(job.industryType) : '—'}
+                  </div>
                 </td>
-                {/* Most recent match against it. Identical to the column before
-                    it until the version has been matched more than once, so the
-                    run count is shown beside it to explain why. */}
-                <td className="py-2 px-3 text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                  {formatIST(lastMatchedAt)}
-                  {runCount > 1 && (
-                    <span className="ml-1.5 text-gray-400 dark:text-slate-600">({runCount} runs)</span>
+                <td
+                  className={`py-2.5 px-3 whitespace-nowrap max-w-[140px] truncate ${rowDivider}`}
+                  title={job?.location || ''}
+                >
+                  {job?.location || '—'}
+                </td>
+                {/* Work Mode / Type — stacked: employment type over remote
+                    mode. A missing half simply drops out; nothing invented. */}
+                <td className={`py-2.5 px-3 whitespace-nowrap ${rowDivider}`}>
+                  <div className="text-gray-700 dark:text-slate-300">
+                    {job?.employmentType ? formatEmploymentType(job.employmentType) : '—'}
+                  </div>
+                  {job?.remoteType && (
+                    <div className="text-gray-500 dark:text-slate-500">{formatEmploymentType(job.remoteType)}</div>
                   )}
                 </td>
-                <td className="py-2 px-3 text-gray-900 dark:text-slate-100">{session.total_matches}</td>
-                <td className="py-2 px-3 text-right">
+                {/* Most recent match against this JD version. */}
+                <td className={`py-2.5 px-3 text-gray-600 dark:text-slate-400 whitespace-nowrap ${rowDivider}`}>
+                  {formatIST(lastMatchedAt)}
+                </td>
+                <td className={`py-2.5 px-3 text-gray-900 dark:text-slate-100 ${rowDivider}`}>{runCount}</td>
+                <td className={`py-2.5 px-3 text-gray-900 dark:text-slate-100 ${rowDivider}`}>{session.total_matches}</td>
+                <td className={`py-2.5 px-3 text-right ${rowDivider}`}>
                   <button
                     type="button"
                     onClick={() => onViewSession(session)}
@@ -218,5 +286,75 @@ export default function AIMatchVersionHistoryTable({
         </tbody>
       </table>
     </div>
+
+    {/* Mobile cards — the table is too wide below md */}
+    <div className="md:hidden space-y-2">
+      {versions.map(({ session, versionNumber, lastMatchedAt, runCount }) => {
+        const isLatest = versionNumber === latestVersionNumber;
+        const job = resolveJob?.(session);
+        const label = job?.status ? getDisplayStatus(job.status, job.currentVersion) : undefined;
+        const cfg = label ? getStatusConfig(label) : undefined;
+        return (
+          <div
+            key={session.id}
+            className={`rounded-lg border p-3 text-xs ${
+              isLatest
+                ? 'border-brand-blue/30 bg-brand-blue/[0.025] dark:border-brand-blue/40 dark:bg-brand-blue/[0.06]'
+                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded-md font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                  v{versionNumber}
+                </span>
+                {isLatest && (
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-brand-blue text-white text-[10px] font-semibold tracking-wide">
+                    LATEST
+                  </span>
+                )}
+              </span>
+              {cfg && label ? (
+                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                  {label}
+                </span>
+              ) : (
+                <span className="text-gray-400 dark:text-slate-600">—</span>
+              )}
+            </div>
+            <div className="flex flex-col gap-1 text-gray-600 dark:text-slate-400 mb-2">
+              {(job?.experience || job?.industryType) && (
+                <span>
+                  {job.experience || '—'}
+                  {job.industryType && ` · ${formatIndustryType(job.industryType)}`}
+                </span>
+              )}
+              {job?.location && <span>{job.location}</span>}
+              {(job?.employmentType || job?.remoteType) && (
+                <span>
+                  {job.employmentType ? formatEmploymentType(job.employmentType) : '—'}
+                  {job.remoteType && ` · ${formatEmploymentType(job.remoteType)}`}
+                </span>
+              )}
+              <span>Last Match Date: {formatIST(lastMatchedAt)}</span>
+              <span>Number of Runs: {runCount}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-gray-900 dark:text-slate-100 font-medium">{session.total_matches} total matches</span>
+              <button
+                type="button"
+                onClick={() => onViewSession(session)}
+                className="inline-flex items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 px-2.5 py-2 font-medium text-gray-700 dark:text-slate-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
+              >
+                <Eye className="w-3 h-3" />
+                View
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+    </>
   );
 }
