@@ -30,19 +30,49 @@ import { useEffect } from 'react';
    ones mounted later by a route change or a dialog. */
 
 const SHELL_SELECTOR = '.tf-table-shell';
-/** Marks a shell whose native bars are suppressed (see globals.css). */
-const NATIVE_HIDDEN_CLASS = 'tf-vscroll-custom';
+/**
+ * Marks a shell whose native bars are suppressed (see globals.css).
+ *
+ * A `data-` attribute, NOT a class, and that is the whole point: this mark is
+ * written at runtime onto elements React renders, and React owns their `class`
+ * attribute. Any re-render that changes a shell's className string rewrites the
+ * whole attribute and takes a runtime-added class with it - which brought the
+ * native bars back while this overlay was still drawing its own, so the table
+ * showed TWO horizontal scrollbars (and two vertical ones) until it unmounted.
+ * `ResumeTable`'s shell is one such shell: its class list ends in an
+ * interpolated `${tableShellClassName}`.
+ *
+ * React never writes an attribute it did not render, so a data attribute
+ * cannot be clobbered that way. `sync()` re-asserts it anyway, once per frame
+ * per shell, so any other mechanism that strips it self-heals on the next
+ * frame rather than leaving a doubled bar behind.
+ */
+const NATIVE_HIDDEN_ATTR = 'data-tf-native-bars';
+const NATIVE_HIDDEN_VALUE = 'hidden';
 
-const BAR_SIZE = 8;    // thumb thickness in px
+const BAR_SIZE = 8;    // visible thumb thickness in px
 const BAR_INSET = 2;   // gap between thumb and the shell's edge
 const TRACK_PAD = 2;   // breathing room at both ends of a track
 const MIN_THUMB = 28;  // keeps the thumb grabbable on very long tables
+/** Height of the horizontal bar's reserved strip: its trough, its hit area, and
+ *  the `padding-bottom` the shell gets from `[data-tf-xbar]` in globals.css.
+ *  The three must agree, so they are one number. 16px is a native bar's
+ *  thickness and twice the visible 8px, which is what makes the bar draggable
+ *  by finger rather than by pixel-perfect mouse. */
+const X_GUTTER = 16;
+/** Marks a shell that overflows sideways, so globals.css can reserve the strip
+ *  above. Set for the same reason as `data-tf-native-bars`: a data attribute is
+ *  the only runtime mark React cannot clobber when it rewrites `class`. */
+const XBAR_ATTR = 'data-tf-xbar';
 
 type Axis = 'y' | 'x';
 
 type Bar = {
   track: HTMLDivElement;
   thumb: HTMLDivElement;
+  /** The opaque strip behind the bar. Horizontal axis only — see
+   *  `.tf-vscroll-gutter` in globals.css. */
+  gutter?: HTMLDivElement;
   dispose: () => void;
 };
 
@@ -57,7 +87,7 @@ type Entry = {
  *  rule, doing nothing leaves working native bars rather than none at all. */
 function nativeBarsCanBeHidden(): boolean {
   const probe = document.createElement('div');
-  probe.className = NATIVE_HIDDEN_CLASS;
+  probe.setAttribute(NATIVE_HIDDEN_ATTR, NATIVE_HIDDEN_VALUE);
   probe.style.cssText =
     'position:absolute;top:-9999px;left:-9999px;width:100px;height:100px;overflow:scroll;visibility:hidden';
   probe.appendChild(document.createElement('div')).style.cssText = 'width:300px;height:300px';
@@ -68,13 +98,143 @@ function nativeBarsCanBeHidden(): boolean {
   return hidden;
 }
 
+/* ── Where a shell is actually VISIBLE ─────────────────────────────────
+   The bars are drawn in a fixed, body-level overlay positioned from each
+   shell's own `getBoundingClientRect()`. A rect knows nothing about what is
+   painted over it, and that is the whole problem this pair of helpers solves:
+   a shell scrolled half under the sticky page breadcrumb still reports its
+   full rect, so a track drawn from `rect.top` runs up over the breadcrumb —
+   and, past it, over the app header — at z-index 10000, above everything.
+   That is the scrollbar-over-the-breadcrumb bug.
+
+   Two stages, cheap one first:
+
+     clipRect  — exact and free of hit-testing. Narrows the shell's box by
+                 every ancestor that clips and by the window, which is what
+                 answers the app scroll area's own edges and any
+                 overflow-hidden card between.
+
+     trimTop /
+     trimBottom — for the occluders no clip rect describes, because they are
+                 painted OVER the scrollport rather than clipping it: the
+                 sticky breadcrumb, the app header, a banner, an open dialog.
+                 Hit-tested, since "what is painted here" is the only question
+                 that identifies them, and hit-testing is already how this file
+                 answers it.
+
+   Together they give the band where the shell is the topmost painted thing,
+   and the bars are confined to it. */
+
+/** The shell's box narrowed by every clipping ancestor, and by the window. */
+function clipRect(shell: HTMLElement, rect: DOMRect) {
+  let top = Math.max(rect.top, 0);
+  let bottom = Math.min(rect.bottom, window.innerHeight);
+  let left = Math.max(rect.left, 0);
+  let right = Math.min(rect.right, window.innerWidth);
+  for (let el = shell.parentElement; el && el !== document.documentElement; el = el.parentElement) {
+    const cs = getComputedStyle(el);
+    /* Anything but `visible` on either axis clips — `hidden`, `auto`,
+       `scroll` and `clip` alike. Measured on the border box rather than the
+       padding box the spec clips to: these wrappers carry no border, and a
+       hairline's worth of error on a scrollbar inset is not worth a second
+       round of computed-style reads per ancestor per frame. */
+    if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+    const r = el.getBoundingClientRect();
+    top = Math.max(top, r.top);
+    bottom = Math.min(bottom, r.bottom);
+    left = Math.max(left, r.left);
+    right = Math.min(right, r.right);
+  }
+  return { top, bottom, left, right };
+}
+
+/* Both trims assume the occluder is ONE contiguous band against the end being
+   trimmed, which is what every occluder in this app is — a bar pinned to the
+   top of a scroll container, or the window edge below. That assumption is what
+   licenses a binary search, and the search is why this costs ~2 hit tests in
+   the common case (nothing covering either end, both loops exit immediately)
+   against the 3 the unconditional 3-point sample it replaces always spent.
+
+   The iteration cap is belt-and-braces: the loop is already bounded by the
+   halving, and a NaN coordinate is the only way it could fail to converge. */
+const TRIM_STEPS = 12;
+
+/* `to` is an exclusive edge, so the far end is probed one pixel inside it.
+   Not a rounding nicety: when a table runs past the fold that edge IS the
+   window's bottom, `elementFromPoint` returns null for a point outside the
+   viewport, and probing it directly would report the band's own end as covered
+   — sending both searches down the slow path on exactly the short viewports
+   this code exists to get right. */
+/** First y from `from` towards `to` where the shell is topmost; null if none. */
+function trimTop(isShell: (y: number) => boolean, from: number, to: number): number | null {
+  if (isShell(from)) return from;
+  const far = to - 1;
+  if (far <= from || !isShell(far)) return null;
+  let covered = from;
+  let clear = far;
+  for (let i = 0; i < TRIM_STEPS && clear - covered > 1; i++) {
+    const mid = (covered + clear) / 2;
+    if (isShell(mid)) clear = mid;
+    else covered = mid;
+  }
+  return clear;
+}
+
+/** Last y from `to` back towards `from` where the shell is topmost. */
+function trimBottom(isShell: (y: number) => boolean, from: number, to: number): number | null {
+  const far = to - 1;
+  if (far <= from) return null;
+  if (isShell(far)) return to;
+  if (!isShell(from)) return null;
+  let clear = from;
+  let covered = far;
+  for (let i = 0; i < TRIM_STEPS && covered - clear > 1; i++) {
+    const mid = (clear + covered) / 2;
+    if (isShell(mid)) clear = mid;
+    else covered = mid;
+  }
+  return clear;
+}
+
 export default function TableScrollbars() {
   useEffect(() => {
     if (!nativeBarsCanBeHidden()) return;
 
     const root = document.createElement('div');
     root.className = 'tf-vscroll-root';
+    /* Publish both thicknesses to the stylesheet, which needs their difference
+       to leave the horizontal thumb painting exactly BAR_SIZE — the vertical
+       bar's thickness — inside its taller track. Set here rather than restated
+       in CSS so the two axes cannot end up different widths: this file is the
+       one place either number is written. */
+    root.style.setProperty('--tf-bar-size', `${BAR_SIZE}px`);
+    root.style.setProperty('--tf-x-gutter', `${X_GUTTER}px`);
     document.body.appendChild(root);
+
+    /* ── The click guard ──────────────────────────────────────────────────
+       Belt to the geometry's braces. The gutter and the live horizontal track
+       stop a press on the bar from ever REACHING a row, and that is the real
+       fix; this catches the one case geometry cannot.
+
+       A drag begins on the thumb and ends wherever the finger stopped — often
+       over a row, or outside the shell entirely. Browsers differ on whether
+       that produces a `click`, and on what they name as its target: a synthetic
+       click on the element under the release point would run that row's
+       navigation even though the user never tapped a row. So the first click
+       after any press on a bar is swallowed in the capture phase, before it can
+       reach a `<tr onClick>` or an <a>.
+
+       Time-bounded rather than a bare flag: a press that produces no click at
+       all (the common case — pointer capture usually suppresses it) must not
+       leave a primed guard sitting there to eat somebody's next real click. */
+    let barPressedAt = 0;
+    const swallowClickAfterDrag = (event: Event) => {
+      if (barPressedAt === 0 || performance.now() - barPressedAt > 1000) return;
+      barPressedAt = 0;
+      event.stopPropagation();
+      event.preventDefault();
+    };
+    document.addEventListener('click', swallowClickAfterDrag, true);
 
     const entries = new Map<HTMLElement, Entry>();
     let syncFrame = 0;
@@ -110,6 +270,17 @@ export default function TableScrollbars() {
       const thumb = document.createElement('div');
       thumb.className = 'tf-vscroll-thumb';
       track.appendChild(thumb);
+
+      /* The trough goes in BEFORE the track so the bar paints over it. Only the
+         horizontal axis gets one: the vertical bar has no reserved strip to
+         paint (see the note on `.tf-vscroll-bar` in globals.css). */
+      let gutter: HTMLDivElement | undefined;
+      if (axis === 'x') {
+        gutter = document.createElement('div');
+        gutter.className = 'tf-vscroll-gutter';
+        gutter.style.display = 'none';
+        root.appendChild(gutter);
+      }
       root.appendChild(track);
 
       let dragPointer: number | null = null;
@@ -119,8 +290,37 @@ export default function TableScrollbars() {
       const onPointerDown = (e: PointerEvent) => {
         if (e.button !== 0) return;
         e.preventDefault();
+        // Arm the guard above for whatever click this gesture may produce.
+        barPressedAt = performance.now();
+
+        /* A press on the TROUGH rather than the thumb — only reachable on the
+           horizontal axis, whose track is live. Jump so the thumb centres under
+           the pointer and then drag on from there, which is what pressing a
+           native trough does, and what makes the whole 16px strip useful
+           instead of just the thumb. */
+        if (e.target !== thumb) {
+          const trackRect = track.getBoundingClientRect();
+          const thumbRect = thumb.getBoundingClientRect();
+          const travel =
+            axis === 'y' ? trackRect.height - thumbRect.height : trackRect.width - thumbRect.width;
+          if (travel > 0) {
+            const offset =
+              axis === 'y'
+                ? e.clientY - trackRect.top - thumbRect.height / 2
+                : e.clientX - trackRect.left - thumbRect.width / 2;
+            const ratio = Math.min(1, Math.max(0, offset / travel));
+            if (axis === 'y') {
+              shell.scrollTop = ratio * (shell.scrollHeight - shell.clientHeight);
+            } else {
+              shell.scrollLeft = ratio * (shell.scrollWidth - shell.clientWidth);
+            }
+          }
+        }
+
         dragPointer = e.pointerId;
         startPos = axis === 'y' ? e.clientY : e.clientX;
+        // Read AFTER any jump above, so the drag continues from where the press
+        // just put the thumb rather than snapping back.
         startScroll = axis === 'y' ? shell.scrollTop : shell.scrollLeft;
         // The gesture is tracked on window, not on the thumb: an 8px target is
         // left behind within a few pixels of any real drag, and capture alone
@@ -172,13 +372,18 @@ export default function TableScrollbars() {
         scheduleSync();
       };
 
-      thumb.addEventListener('pointerdown', onPointerDown);
+      /* On the track, not the thumb: a press on the thumb bubbles up to it, so
+         one listener serves both, and `e.target` above is what tells them
+         apart. (Bubbling is unaffected by the vertical track's
+         `pointer-events: none` — that only stops it being hit-tested itself.) */
+      track.addEventListener('pointerdown', onPointerDown);
 
       return {
         track,
         thumb,
+        gutter,
         dispose: () => {
-          thumb.removeEventListener('pointerdown', onPointerDown);
+          track.removeEventListener('pointerdown', onPointerDown);
           window.removeEventListener('pointermove', onPointerMove);
           window.removeEventListener('pointerup', endDrag);
           window.removeEventListener('pointercancel', endDrag);
@@ -186,6 +391,7 @@ export default function TableScrollbars() {
           // unselectable.
           if (dragPointer !== null) document.body.style.userSelect = '';
           track.remove();
+          gutter?.remove();
         },
       };
     };
@@ -196,9 +402,39 @@ export default function TableScrollbars() {
        needs no invalidation step. */
     const sync = () => {
       entries.forEach(({ y, x }, shell) => {
+        /* Re-assert the suppression before measuring. Nothing should be able to
+           strip it now that it is a data attribute React does not own, but a
+           shell that has lost it renders its native bars UNDER the two this
+           overlay is about to position - the doubled-scrollbar bug - and one
+           attribute read per shell per frame is a cheap way to make that state
+           unreachable rather than merely unlikely. */
+        if (shell.getAttribute(NATIVE_HIDDEN_ATTR) !== NATIVE_HIDDEN_VALUE) {
+          shell.setAttribute(NATIVE_HIDDEN_ATTR, NATIVE_HIDDEN_VALUE);
+        }
+
+        /* Reserve (or release) the horizontal bar's strip, which globals.css
+           hangs `padding-bottom` off. Written before this frame's measurements
+           so they describe the box the bar will actually be drawn in.
+
+           Settles rather than oscillates: the padding only ever REDUCES the
+           scrollport's height, and height cannot change whether the shell
+           overflows sideways — so the flag's own input is untouched by the flag,
+           and one frame after a table becomes sideways-scrollable it is stable.
+
+           Re-asserted every frame, like the attribute above, for the same
+           reason: nothing should strip it, and if something does it heals on
+           the next frame instead of leaving the bar back over a row. */
+        const wantsXBar = shell.scrollWidth - shell.clientWidth > 1;
+        if (wantsXBar) {
+          if (shell.getAttribute(XBAR_ATTR) !== '1') shell.setAttribute(XBAR_ATTR, '1');
+        } else if (shell.hasAttribute(XBAR_ATTR)) {
+          shell.removeAttribute(XBAR_ATTR);
+        }
+
         const hideBoth = () => {
           y.track.style.display = 'none';
           x.track.style.display = 'none';
+          if (x.gutter) x.gutter.style.display = 'none';
         };
 
         const rect = shell.getBoundingClientRect();
@@ -219,36 +455,87 @@ export default function TableScrollbars() {
 
         // Each bar keeps clear of the other's corner.
         const reserveY = showY ? BAR_SIZE + BAR_INSET : 0;
-        const reserveX = showX ? BAR_SIZE + BAR_INSET : 0;
+        // The horizontal bar's corner is its whole strip now, not just 8px.
+        const reserveX = showX ? X_GUTTER : 0;
 
         // The sticky header covers the top of the content box at all times, so
         // the vertical track begins where the header ends. Capped at half the
         // viewport so a freakishly tall header can't produce a negative track.
         const thead = shell.querySelector('thead');
         const headerHeight = Math.min(thead ? thead.getBoundingClientRect().height : 0, viewH / 2);
-        const trackTop = top + headerHeight + TRACK_PAD;
-        const trackHeight = viewH - headerHeight - reserveX - TRACK_PAD * 2;
+        // Reassigned below, once the visible band is known.
+        let trackTop = top + headerHeight + TRACK_PAD;
+        let trackHeight = viewH - headerHeight - reserveX - TRACK_PAD * 2;
 
-        /* Hide both bars when whatever is painted where they'd go isn't the
-           table — an open dialog, a popover, or the shell scrolled out of the
-           window. Without this, a table on the page behind a modal would float
-           its bars over the modal.
+        /* Confine both bars to the band where the shell is really the topmost
+           painted thing — see the helpers above. This is what keeps the
+           vertical track off the sticky breadcrumb and the app header when the
+           shell has scrolled up under them, and off the ground below the fold
+           when it runs past the bottom of the window.
 
-           Sampled along the vertical track rather than at the shell's centre,
-           because that is the ground the bars actually occupy: a table whose
-           top has slid under the sticky page header is still perfectly visible
-           lower down, and should keep its bars. Three points so a dropdown
-           clipping one end doesn't take the whole bar with it, and 6px clear
-           of the thumb so it never hit-tests itself. */
+           It also still does what the 3-point sample it replaces did: a table
+           behind an open dialog is covered along its whole track, both trims
+           come back null, and neither bar is drawn. The difference is that a
+           PARTIAL cover now trims the bar to the part you can see instead of
+           choosing between drawing it over the top of something and not
+           drawing it at all.
+
+           `elementsFromPoint`, and skipping our own overlay in the stack, is
+           load-bearing rather than fastidious. The overlay is interactive where
+           it has to be (the horizontal track and its trough swallow taps so
+           they cannot reach a row), which means a single-element hit test finds
+           the trough sitting exactly where this probe looks, decides the shell
+           is occluded there, and trims the band up by the trough's own height —
+           whereupon the trough is redrawn higher and trims it again. A bar that
+           climbs the table one frame at a time. Looking past our own elements
+           to the topmost REAL one asks the question that was always meant:
+           what, other than us, is painted here.
+
+           The 6px offset from the thumb is kept even though seeing through the
+           overlay makes it unnecessary, since probing a column's padding rather
+           than the middle of its content is the cheaper hit test anyway. */
         const probeX = Math.round(left + viewW - BAR_SIZE - BAR_INSET - 6);
-        const visible = [0.15, 0.5, 0.85].some((fraction) => {
-          const hit = document.elementFromPoint(
-            probeX,
-            Math.round(trackTop + trackHeight * fraction)
-          );
-          return !!hit && shell.contains(hit);
-        });
-        if (!visible) return hideBoth();
+        const isShell = (probeY: number) => {
+          const stack = document.elementsFromPoint(probeX, Math.round(probeY));
+          for (const el of stack) {
+            if (root.contains(el)) continue;
+            return shell.contains(el);
+          }
+          return false;
+        };
+
+        const clip = clipRect(shell, rect);
+
+        /* How far down the shell is actually visible: its own box, narrowed by
+           the clip rect and then by whatever is painted over it.
+
+           This is the limit BOTH bars answer to, and it is deliberately the
+           SHELL's bottom rather than the vertical track's. The vertical track
+           additionally stops short of `reserveX` — the corner it leaves for the
+           horizontal bar — and that inset belongs to the vertical track alone.
+           Measuring the shared limit from it instead subtracted the corner
+           twice and pushed the horizontal strip a corner's-worth up into the
+           last row, which is the thing this strip exists to stay out of. */
+        let bandTop = Math.max(trackTop, clip.top);
+        let visibleBottom = Math.min(top + viewH, clip.bottom);
+        if (visibleBottom - bandTop <= 0) return hideBoth();
+
+        const trimmedTop = trimTop(isShell, bandTop, visibleBottom);
+        if (trimmedTop === null) return hideBoth();
+        const trimmedBottom = trimBottom(isShell, trimmedTop, visibleBottom);
+        if (trimmedBottom === null) return hideBoth();
+        bandTop = trimmedTop;
+        visibleBottom = trimmedBottom;
+
+        /* The visible band IS the track now. Sizing and offsetting the thumb
+           against it — rather than windowing a longer virtual track — is what
+           keeps the thumb on screen at every scroll position: a thumb placed
+           on the full scrollport's track would sit inside the hidden strip
+           whenever the table was scrolled to the top, i.e. no visible thumb on
+           arrival. It also leaves the drag handler untouched, since that maps
+           thumb travel from `track.getBoundingClientRect()`, which is this. */
+        trackTop = bandTop;
+        trackHeight = Math.min(top + viewH - reserveX - TRACK_PAD, visibleBottom) - bandTop;
 
         if (showY) {
           if (trackHeight < MIN_THUMB) {
@@ -268,29 +555,58 @@ export default function TableScrollbars() {
         }
 
         if (showX) {
-          const trackLeft = left + TRACK_PAD;
-          const trackWidth = viewW - reserveY - TRACK_PAD * 2;
+          const trackLeft = Math.max(left + TRACK_PAD, clip.left);
+          const trackWidth = Math.min(left + viewW - reserveY - TRACK_PAD, clip.right) - trackLeft;
+          /* The bar occupies the strip the shell's `padding-bottom` reserved:
+             the last X_GUTTER pixels of the scrollport, which no row reaches
+             once the table is scrolled to its end. The track is that whole
+             strip, not just the visible 8px, so the entire gutter drags.
 
-          if (trackWidth < MIN_THUMB) {
+             Pinned to the bottom of the VISIBLE band rather than of the box. On
+             a short viewport a wide table's own bottom edge is regularly below
+             the fold, and a bar drawn down there is a bar nobody can reach — on
+             the very tables that need one most. Clamped rather than hidden for
+             that reason; the band it is clamped into is ground the shell owns,
+             so it cannot land on the breadcrumb (which is at the other end) or
+             on anything else painted over the table. */
+          const stripTop = Math.min(top + viewH - X_GUTTER, visibleBottom - X_GUTTER);
+          const gutterLeft = Math.max(left, clip.left);
+          const gutterWidth = Math.min(left + viewW, clip.right) - gutterLeft;
+
+          if (trackWidth < MIN_THUMB || stripTop < bandTop) {
             x.track.style.display = 'none';
+            if (x.gutter) x.gutter.style.display = 'none';
           } else {
             const thumbWidth = Math.max(MIN_THUMB, trackWidth * (viewW / shell.scrollWidth));
             const offset = (shell.scrollLeft / scrollableX) * (trackWidth - thumbWidth);
+
+            /* Trough first, spanning the full scrollport width — the bar's
+               track is inset by TRACK_PAD and by the vertical bar's corner, and
+               a trough that stopped where the track does would leave a sliver
+               of row showing at each end. */
+            if (x.gutter) {
+              x.gutter.style.display = 'block';
+              x.gutter.style.transform = `translate3d(${gutterLeft}px, ${stripTop}px, 0)`;
+              x.gutter.style.width = `${Math.max(0, gutterWidth)}px`;
+              x.gutter.style.height = `${X_GUTTER}px`;
+            }
+
             x.track.style.display = 'block';
-            x.track.style.transform = `translate3d(${trackLeft}px, ${top + viewH - BAR_SIZE - BAR_INSET}px, 0)`;
+            x.track.style.transform = `translate3d(${trackLeft}px, ${stripTop}px, 0)`;
             x.track.style.width = `${trackWidth}px`;
-            x.track.style.height = `${BAR_SIZE}px`;
+            x.track.style.height = `${X_GUTTER}px`;
             x.thumb.style.width = `${thumbWidth}px`;
             x.thumb.style.transform = `translateX(${offset}px)`;
           }
         } else {
           x.track.style.display = 'none';
+          if (x.gutter) x.gutter.style.display = 'none';
         }
       });
     };
 
     const attach = (shell: HTMLElement) => {
-      shell.classList.add(NATIVE_HIDDEN_CLASS);
+      shell.setAttribute(NATIVE_HIDDEN_ATTR, NATIVE_HIDDEN_VALUE);
 
       const y = createBar(shell, 'y');
       const x = createBar(shell, 'x');
@@ -307,7 +623,8 @@ export default function TableScrollbars() {
           if (table) resizeObserver.unobserve(table);
           y.dispose();
           x.dispose();
-          shell.classList.remove(NATIVE_HIDDEN_CLASS);
+          shell.removeAttribute(NATIVE_HIDDEN_ATTR);
+          shell.removeAttribute(XBAR_ATTR);
         },
       });
     };
@@ -344,6 +661,7 @@ export default function TableScrollbars() {
     mutationObserver.observe(document.body, { childList: true, subtree: true });
 
     return () => {
+      document.removeEventListener('click', swallowClickAfterDrag, true);
       document.removeEventListener('scroll', scheduleSync, { capture: true });
       window.removeEventListener('resize', scheduleSync);
       mutationObserver.disconnect();

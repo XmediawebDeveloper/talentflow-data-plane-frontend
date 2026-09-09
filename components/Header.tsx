@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Calendar, ChevronDown, ClipboardList, Coins, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Moon, Sun } from 'lucide-react';
+import { ArrowUpRight, Bell, Calendar, ChevronDown, ChevronRight, ClipboardList, Coins, Copy, Crown, FileSearch, FolderOpen, HelpCircle, LogOut, ShoppingCart, User, Users, Shield, Video, Zap, CreditCard, Book, FileText, CheckCircle, AlertCircle, Info, Activity, Command, Loader2, X, Building2, Menu, Moon, Sun } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
@@ -592,6 +592,109 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     (r && roleLabels[r]) ||
     (r ? r.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '');
 
+  /* The badge shows the human-readable code ("US-008") and nothing else.
+     Deliberately no uuid fallback: a raw uuid is not an id anyone can read out,
+     and showing one would only look like the feature is broken. AuthProvider
+     backfills the code when `/auth/me` omits it, so the badge is absent only
+     for an account that genuinely has none — where an empty pill is the honest
+     answer. */
+  const userIdBadge = user.userDisplayId;
+
+  const copyUserId = async () => {
+    if (!userIdBadge) return;
+    try {
+      await navigator.clipboard.writeText(userIdBadge);
+      /* Confirmed with a toast rather than a tick held in component state.
+         This component early-returns on `!user` BEFORE its hooks, so every
+         `useState` in it is already a rules-of-hooks violation — adding one
+         more for a 1.6s checkmark is not worth it, and a toast is how the rest
+         of this file reports what happened anyway. */
+      toast.success('User ID copied to clipboard');
+    } catch {
+      /* Clipboard is blocked on insecure origins and by some browser policies.
+         Say so rather than flashing a tick for a copy that did not happen —
+         the tooltip still shows the full id to select by hand. */
+      toast.error('Could not copy — your browser blocked clipboard access');
+    }
+  };
+
+  /* ---- The profile dropdown's rows -------------------------------------------
+     Held as data rather than seven near-identical <button> blocks. They had
+     already drifted as copies do — every row carried the subscription gate
+     except User Guide and Support Tickets, which are deliberately ungated, and
+     the difference was expressed by writing a whole second variant of the
+     className instead of by a flag. One shape, one place to change it.
+
+     `show` is the permission/role gate. `alwaysEnabled` is the separate
+     question of whether a lapsed subscription locks the row: docs and support
+     stay reachable precisely because the plan lapsed. */
+  const profileMenuItems: {
+    id: string;
+    icon: LucideIcon;
+    title: string;
+    subtitle: string;
+    href: string;
+    show?: boolean;
+    alwaysEnabled?: boolean;
+  }[] = [
+    {
+      id: 'profile',
+      icon: User,
+      title: 'Profile Settings',
+      subtitle: 'Update your personal information',
+      href: '/settings/general-settings',
+    },
+    {
+      id: 'plan',
+      icon: CreditCard,
+      title: 'Current Plan',
+      subtitle: 'Billing & subscription',
+      href: '/subscription/current-plan',
+    },
+    {
+      id: 'company',
+      icon: Building2,
+      title: 'Company Profile',
+      subtitle: 'Organization details',
+      href: '/organization/company-profile',
+      show: isTenantAdmin || hasPermission('canManageSettings'),
+    },
+    {
+      id: 'audit-log',
+      icon: Activity,
+      title: 'Audit Log',
+      subtitle: 'View your recent activity',
+      href: '/audits/activity',
+    },
+    {
+      id: 'audit-trail',
+      icon: FileText,
+      title: 'Audit Trail',
+      subtitle: 'Detailed system audit logs',
+      href: '/audits/trail',
+      show: !!user.is_tenant_admin,
+    },
+    /* User Guide — the header's own guide button is hidden below sm, so this is
+       the only way to it on a phone. It goes straight to /help rather than
+       opening that dropdown, which would render nothing at mobile widths. */
+    {
+      id: 'guide',
+      icon: Book,
+      title: 'User Guide',
+      subtitle: 'Guides, articles and how-tos',
+      href: '/help',
+      alwaysEnabled: true,
+    },
+    {
+      id: 'support',
+      icon: HelpCircle,
+      title: 'Support Tickets',
+      subtitle: 'Help & support requests',
+      href: '/support-tickets',
+      alwaysEnabled: true,
+    },
+  ];
+
   return (
     <header className="h-14 sm:h-16 lg:h-[72px] bg-white border-b border-gray-200">
       <div className="mx-auto flex h-full w-full max-w-[1400px] items-center justify-between px-3 sm:px-4 md:px-8">
@@ -1089,182 +1192,146 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
               ></div>
               {/* The panel bounds, the menu list scrolls — one bar, not two.
                   This carried `overflow-hidden` AND `overflow-y-auto`, so it
-                  scrolled alongside the max-h-[200px] menu list inside it and
-                  the dropdown showed two vertical bars side by side. The
-                  `shrink-0` markers on the profile, org and logout rows were
-                  written for a flex column that was never declared; with it
-                  declared they hold their size and the menu list is what gives
-                  way on a short viewport, so the logout button stays reachable
-                  instead of being clipped by the overflow-hidden. */}
-              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-[85] max-h-[calc(100dvh-80px)] flex flex-col">
-                {/* User Profile Header */}
-                <div className="bg-brand-blue px-5 py-4 shrink-0">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full bg-white/15 text-white flex items-center justify-center text-lg font-semibold">
-                      {(user.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
+                  scrolled alongside the max-h menu list inside it and the
+                  dropdown showed two vertical bars side by side. The `shrink-0`
+                  markers on the header, org and sign-out rows are what hold
+                  their size so the menu list is the part that gives way on a
+                  short viewport, keeping Sign Out reachable instead of clipped
+                  by the overflow-hidden. */}
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-200 ring-1 ring-black/[0.02] overflow-hidden z-[85] max-h-[calc(100dvh-80px)] flex flex-col">
+                {/* Identity banner. The gradient and the two blurred discs are
+                    the same treatment the page heroes use, so the dropdown
+                    reads as part of the product rather than a stray panel. */}
+                <div className="relative overflow-hidden bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-blue px-5 py-4 shrink-0">
+                  <div className="pointer-events-none absolute -right-10 -top-14 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
+                  <div className="pointer-events-none absolute -bottom-16 left-16 h-36 w-36 rounded-full bg-white/[0.07] blur-2xl" />
+                  <div className="relative flex items-center gap-4">
+                    <div className="relative shrink-0">
+                      <div className="w-14 h-14 rounded-full bg-white/15 ring-2 ring-white/25 text-white flex items-center justify-center text-lg font-semibold">
+                        {(user.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
+                      </div>
+                      {/* Presence dot, ringed in the banner's own blue rather
+                          than white, so it reads as cut out of the avatar
+                          instead of floating over it. */}
+                      <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-green-500 ring-2 ring-brand-blue" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-semibold truncate">{user.name || 'User'}</p>
                       <p className="text-white/80 text-sm truncate">{user.email}</p>
-                      <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white">
-                        <Shield className="w-3 h-3" />
-                        {prettyRole(user.role)}
-                      </span>
+                      {/* Role and id sit on one wrapping row — at 320px the two
+                          pills fit side by side for most names, and drop to a
+                          second line rather than squashing when they do not. */}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white ring-1 ring-white/15">
+                          {/* A crown for the account owner, a shield for everyone
+                              else. The role is spelled out beside it, so the icon
+                              only has to mark the one role that outranks the
+                              rest.
+
+                              Tested against `tenant_admin`, which is the role
+                              `roleLabels` renders as "Owner" — there is no
+                              'owner' member on `UserRole`, so comparing to that
+                              string would have been permanently false. */}
+                          {user.role === 'tenant_admin'
+                            ? <Crown className="w-3 h-3" />
+                            : <Shield className="w-3 h-3" />}
+                          {prettyRole(user.role)}
+                        </span>
+
+                        {/* User id — click to copy the FULL uuid. Shown short
+                            because the full value is 36 characters; the title
+                            carries it in full for anyone who would rather
+                            select it by hand. */}
+                        {userIdBadge && (
+                          <button
+                            type="button"
+                            onClick={copyUserId}
+                            title={`User ID: ${userIdBadge} (click to copy)`}
+                            aria-label={`Copy user ID ${userIdBadge}`}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white ring-1 ring-white/15 transition-colors hover:bg-white/25"
+                          >
+                            <Copy className="w-3 h-3" />
+                            {/* Monospace so the id reads as an identifier and
+                                its characters line up rather than kerning like
+                                a word. */}
+                            <span className="font-mono">{userIdBadge}</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Organization Info */}
+                {/* Organization — a card, but deliberately NOT a link and with
+                    no chevron. It states which tenant you are signed in to;
+                    "Company Profile" below is the row that goes somewhere, and
+                    a chevron here would promise the same destination twice. */}
                 {tenant && (
-                  <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 shrink-0">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Building2 className="w-4 h-4 text-gray-500" />
-                      <span className="text-gray-600">Organization:</span>
-                      <span className="font-medium text-gray-900 truncate">{tenant.name || 'N/A'}</span>
+                  <div className="px-4 pt-3 pb-2.5 shrink-0">
+                    <div className="flex items-center gap-2.5 rounded-lg border border-gray-200 bg-gray-50/80 px-2.5 py-2">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                        <Building2 className="w-4 h-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] leading-tight text-gray-500">Organization</p>
+                        <p className="text-sm font-semibold text-gray-900 truncate">{tenant.name || 'N/A'}</p>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Menu Items — shows ~3, rest accessible via scroll */}
-                <div className="py-2 max-h-[200px] flex-1 min-h-0 overflow-y-auto">
-                  <button
-                    onClick={() => {
-                      if (subscriptionExpired) return;
-                      setShowUserMenu(false);
-                      router.push('/settings/general-settings');
-                    }}
-                    disabled={subscriptionExpired}
-                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
-                  >
-                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
-                      <User className="w-4 h-4 text-brand-blue" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Profile Settings</p>
-                      <p className="text-xs text-gray-500">Update your personal information</p>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (subscriptionExpired) return;
-                      setShowUserMenu(false);
-                      router.push('/subscription/current-plan');
-                    }}
-                    disabled={subscriptionExpired}
-                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
-                  >
-                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
-                      <CreditCard className="w-4 h-4 text-brand-blue" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Current Plan</p>
-                      <p className="text-xs text-gray-500">Billing & subscription</p>
-                    </div>
-                  </button>
-                  {(isTenantAdmin || hasPermission('canManageSettings')) && (
-                    <button
-                      onClick={() => {
-                        if (subscriptionExpired) return;
-                        setShowUserMenu(false);
-                        router.push('/organization/company-profile');
-                      }}
-                      disabled={subscriptionExpired}
-                      className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
-                    >
-                      <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
-                        <Building2 className="w-4 h-4 text-brand-blue" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Company Profile</p>
-                        <p className="text-xs text-gray-500">Organization details</p>
-                      </div>
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      if (subscriptionExpired) return;
-                      setShowUserMenu(false);
-                      router.push('/audits/activity');
-                    }}
-                    disabled={subscriptionExpired}
-                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
-                  >
-                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
-                      <Activity className="w-4 h-4 text-brand-blue" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Audit Log</p>
-                      <p className="text-xs text-gray-500">View your recent activity</p>
-                    </div>
-                  </button>
-                  {user.is_tenant_admin && (
-                    <button
-                      onClick={() => {
-                        if (subscriptionExpired) return;
-                        setShowUserMenu(false);
-                        router.push('/audits/trail');
-                      }}
-                      disabled={subscriptionExpired}
-                      className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-brand-blue/5'}`}
-                    >
-                      <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
-                        <FileText className="w-4 h-4 text-brand-blue" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">Audit Trail</p>
-                        <p className="text-xs text-gray-500">Detailed system audit logs</p>
-                      </div>
-                    </button>
-                  )}
-                  {/* User Guide — the header's own guide button is hidden below
-                      sm, so this is the only way to it on a phone. It goes
-                      straight to /help rather than opening that dropdown, which
-                      would render nothing at mobile widths. Ungated by
-                      subscription, same as Support Tickets: someone whose plan
-                      lapsed still needs the docs. */}
-                  <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      router.push('/help');
-                    }}
-                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-brand-blue/5 transition-colors flex items-center gap-3 group"
-                  >
-                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
-                      <Book className="w-4 h-4 text-brand-blue" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">User Guide</p>
-                      <p className="text-xs text-gray-500">Guides, articles and how-tos</p>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      router.push('/support-tickets');
-                    }}
-                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-brand-blue/5 transition-colors flex items-center gap-3 group"
-                  >
-                    <div className="w-8 h-8 rounded-md bg-brand-blue/10 group-hover:bg-brand-blue/15 flex items-center justify-center transition-colors">
-                      <HelpCircle className="w-4 h-4 text-brand-blue" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">Support Tickets</p>
-                      <p className="text-xs text-gray-500">Help & support requests</p>
-                    </div>
-                  </button>
+                {/* The rows. Divided by hairlines rather than by spacing, so a
+                    long list stays readable as it scrolls. */}
+                <div className="max-h-[216px] flex-1 min-h-0 overflow-y-auto border-t border-gray-100 divide-y divide-gray-100">
+                  {profileMenuItems
+                    .filter(item => item.show !== false)
+                    .map(({ id, icon: ItemIcon, title, subtitle, href, alwaysEnabled }) => {
+                      const locked = subscriptionExpired && !alwaysEnabled;
+                      return (
+                        <button
+                          key={id}
+                          onClick={() => {
+                            if (locked) return;
+                            setShowUserMenu(false);
+                            router.push(href);
+                          }}
+                          disabled={locked}
+                          className={`w-full px-4 py-2.5 text-left flex items-center gap-2.5 group transition-colors ${
+                            locked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-brand-blue/[0.04]'
+                          }`}
+                        >
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 transition-colors group-hover:bg-brand-blue/15">
+                            <ItemIcon className="w-4 h-4" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium text-gray-900 truncate">{title}</span>
+                            <span className="block text-xs text-gray-500 truncate">{subtitle}</span>
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-gray-300 transition-colors group-hover:text-brand-blue" />
+                        </button>
+                      );
+                    })}
                 </div>
 
-                {/* Sign Out */}
-                <div className="border-t border-gray-200 p-3 bg-gray-50 shrink-0">
+                {/* Sign Out — its own tinted panel rather than another row,
+                    because it is the one action here that ends the session. The
+                    subtitle says what will happen, so it is never a mystery
+                    click. */}
+                <div className="border-t border-gray-100 p-2.5 shrink-0">
                   <button
                     onClick={() => {
                       setShowUserMenu(false);
                       onLogout();
                     }}
-                    className="w-full px-4 py-2.5 text-sm text-red-600 bg-white border border-red-200 hover:bg-red-50 hover:border-red-300 transition-colors flex items-center justify-center gap-2 rounded-lg font-medium"
+                    className="w-full flex items-center gap-2.5 rounded-lg border border-red-200 bg-red-50/70 px-2.5 py-2 text-left transition-colors hover:bg-red-50 hover:border-red-300"
                   >
-                    <LogOut className="w-4 h-4" />
-                    Sign Out
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-red-600">
+                      <LogOut className="w-4 h-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-red-600">Sign Out</span>
+                      <span className="block text-[11px] leading-tight text-red-500/80">You will be signed out of your account</span>
+                    </span>
                   </button>
                 </div>
               </div>

@@ -1,40 +1,35 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { FileText, RefreshCw, CornerDownRight, ChevronDown, Plus } from 'lucide-react';
+import { ChevronDown, Eye, Plus, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
-import { formatISTDate } from '@/lib/utils/dateUtils';
-import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
-import { formatJobExperienceText } from '@/lib/utils/jobExperience';
-import { formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
+import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
+import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
+import { isStandardExperienceLevel } from '@/lib/utils/jobExperience';
 
 /**
- * Job Version History for an assessment row, expanded in place beneath it.
+ * Job Versions for an assessment row, expanded in place beneath it.
  *
- * ONE ROW PER JOB VERSION, and the parent table carries job-level facts only —
- * which version, which role, its status, when and by whom. The assessments
- * authored against a version are its children, reached through the accordion in
- * the Actions column rather than given columns of their own; a job version with
- * two assessments cannot be one flat row without either repeating the job
- * across two lines or hiding one of the assessments.
+ * TWO NESTED LEVELS, each a table of its own:
  *
- * The accordion appears only where it earns its place. A version with a single
- * assessment names it inline and puts its actions on the row itself — there is
- * nothing to expand into, and a chevron opening onto one line is a click that
- * buys the reader nothing.
+ *   Job Versions (N)          one row per version of the JOB
+ *     └ Assessment Versions (N)   the assessments authored against that version
+ *
+ * The outer table carries only what a reader is choosing between — which
+ * version, its state, when and by whom it was made — plus the three totals
+ * that say how much work hangs off it. The job's descriptive fields (title,
+ * experience, location, work mode) are deliberately not here: the row above
+ * this panel already names the job, and repeating it on every version turned
+ * the table into a horizontal scroll with eight columns of mostly-identical
+ * text.
  *
  * The job → assessment mapping comes from the data, never from arithmetic on
  * the numbers: an assessment records the job version it was authored against
  * (`jd_version`), and every child here is that field matching a job version
- * from the JD's own lineage. Job v3 can hold Assessment v2 while Job v2 and Job
- * v1 both hold an Assessment v1. A job version with no assessment says so
+ * from the JD's own lineage. Job V3 can hold Assessment V2 while Job V2 and Job
+ * V1 both hold an Assessment V1. A job version with no assessment says so
  * rather than borrowing a neighbour's number.
- *
- * Visually this is `components/jobs/JobVersionHistoryPanel` — the Job Openings
- * list's own Version History — down to the brand-tinted table, the sticky
- * header, the vN chip plus Latest pill, the status dot chips and the sticky
- * Action column driven by a host-supplied render prop.
  */
 
 /** The assessment shape this panel reads, straight off `assessmentService.list`.
@@ -51,31 +46,79 @@ export interface AssessmentVersionRow {
   updated_at?: string;
   created_by_name?: string;
   invitations_count?: number;
-  /** The JOB version this assessment was authored against. The join key. */
+  /** Attempts the candidates actually finished, as the backend counts them
+   *  (`completed_count` on AssessmentResponse) - the same field each
+   *  assessment's own pass rate is computed against. */
+  completed_count?: number;
+  /**
+   * The JD ROW this assessment was authored against — the job version's own
+   * id, and the join key.
+   *
+   * Every job version is a JD row of its own, so this id names one version
+   * exactly. It decides which job version counts this assessment, and
+   * therefore whether that version offers Create Assessment or View
+   * Assessment. Required on AssessmentResponse, so it is present on every row
+   * the list endpoint returns.
+   */
+  jd_id?: string;
+  /**
+   * The job version NUMBER recorded at creation time. The FALLBACK join key,
+   * used only where the id cannot resolve — it is optional on
+   * AssessmentResponse, and a number cannot separate two JD rows reporting
+   * the same version, so the id is asked first.
+   */
   jd_version?: number;
+  /* The three rounds and the share of the score each carries, as configured
+     on the assessment (`<section>_enabled` / `<section>_percentage` on
+     AssessmentResponse). Read by the Round Weightage column, which took the
+     place of Questions: a count of configured TOPICS said little about an
+     assessment, where the split between its rounds is the shape of it. */
+  hr_enabled?: boolean;
+  hr_percentage?: number;
+  technical_enabled?: boolean;
+  technical_percentage?: number;
+  coding_enabled?: boolean;
+  coding_percentage?: number;
 }
 
 interface AssessmentVersionHistoryPanelProps {
   /** The JD's own lineage — every job version. Undefined while it loads. */
   jobVersions: JDLineageVersion[] | undefined;
-  /** Full JD record per job-version id, for that version's own title/author. */
+  /** Full JD record per job-version id, for that version's own author. */
   jobVersionDetails: Record<string, JDResponse>;
   /** Every assessment in this JD's lineage, in any order — sorted here. */
   assessments: AssessmentVersionRow[] | undefined;
+  /**
+   * The BACKEND's answer to "which JD versions have an assessment" — the ids
+   * from `/assessments/jds-with-assessments`, which reports every JD row
+   * holding a non-archived assessment, Draft and Published alike.
+   *
+   * Read as a second, independent source beside `assessments`, and the two
+   * are UNIONED rather than one winning. Both are evidence that an assessment
+   * exists, and they fail in different directions: this index is complete but
+   * says only yes-or-no, while `assessments` carries the detail but is one
+   * request that can come back short or not at all. Trusting the rows alone
+   * would then offer Create Assessment for a version that already has one —
+   * the exact mistake this panel has to avoid, and the one a recruiter cannot
+   * see is a mistake. A union is the fail-closed direction: the worst a stale
+   * `true` does is send them to View Assessment for a version they would have
+   * been refused a second assessment on anyway.
+   *
+   * Optional — omitted, the rows answer alone, as they did before.
+   */
+  jdsWithAssessments?: Set<string>;
   loading: boolean;
   /**
    * The live job version as the HOST resolved it — the same number its own
    * LATEST badge and its collapsed-row choice are drawn from, and the number
-   * this table badges LATEST from, so the card and this table cannot name
+   * this table badges Latest from, so the row and this table cannot name
    * different versions. It is the highest version number in the lineage —
    * sequence, not status; this panel derives its own only when the prop is
    * absent (rendered without a host).
    */
   latestJobVersion?: number;
-  /** The assessment the card is showing, marked so it is findable. */
+  /** The assessment the row is showing, marked so it is findable. */
   currentAssessmentId?: string;
-  /** Job title to fall back on before the per-version JD records land. */
-  fallbackJobTitle?: string;
   /** Row click — opens that assessment. Omitted, rows are read-only. */
   onRowClick?: (assessmentId: string) => void;
   /**
@@ -89,22 +132,48 @@ interface AssessmentVersionHistoryPanelProps {
    */
   onCreateAssessment?: (jobVersionId: string, jobVersion: number) => void;
   /**
-   * The Action cell for one assessment. Given that assessment's own record so
-   * the host's existing per-assessment handlers work unchanged. Omit it and
-   * the Actions COLUMN keeps only the accordion chevron.
+   * Read ONE job version — its own description, pay, location and the rest —
+   * given that version's own JD id.
+   *
+   * Gated on the same id as `onCreateAssessment` and for the same reason: a
+   * version is a JD row of its own, so the id is what makes the popup open on
+   * the row that was clicked rather than on the job's current version. Omit the
+   * handler and the eye is not offered.
+   */
+  onViewJobVersion?: (jobVersionId: string, jobVersion: number) => void;
+  /**
+   * A control for the WHOLE job, pinned to the top-right of this panel's
+   * "Job Versions (N)" heading — where the Job List row's eye now lives, so
+   * the thing that reads the job's versions sits on the table that lists them.
+   *
+   * A slot rather than a button of its own: the panel does not know what the
+   * host wants to open, and the host already owns the popup and its state.
+   */
+  headerAction?: ReactNode;
+  /**
+   * The trailing controls for one assessment — the host's own three-dot menu
+   * and quick actions. Given that assessment's record so the host's existing
+   * per-assessment handlers work unchanged. Omit it and the Actions column
+   * keeps only this panel's own buttons.
    */
   renderAction?: (assessment: AssessmentVersionRow) => ReactNode;
 }
 
 /* The list's own status vocabulary for ASSESSMENTS, not the raw DB one: the
-   cards above this panel say Active / Draft / Completed / Archived, and a row
+   rows above this panel say Active / Draft / Completed / Archived, and a row
    saying "Published" for the same state would read as a different thing. */
-const ASSESSMENT_STATUS_LABELS: Record<string, string> = {
+export const ASSESSMENT_STATUS_LABELS: Record<string, string> = {
   published: 'Active',
   closed: 'Completed',
   archived: 'Archived',
   draft: 'Draft',
 };
+
+/** One assessment status, in the list's own words. Unknown reads as Draft, as
+ *  it has since this table was a flat list. Exported with the chips below so
+ *  the tracking popup states neither a second time. */
+export const assessmentStatusLabel = (status?: string): string =>
+  ASSESSMENT_STATUS_LABELS[String(status || '').toLowerCase()] || 'Draft';
 
 const STATUS_STYLES: Record<string, { chip: string; dot: string }> = {
   Active: { chip: 'bg-green-100 text-green-700 ring-green-200', dot: 'bg-green-500' },
@@ -115,39 +184,170 @@ const STATUS_STYLES: Record<string, { chip: string; dot: string }> = {
   Unknown: { chip: 'bg-slate-100 text-gray-700 ring-gray-200', dot: 'bg-gray-400' },
 };
 
-/* A JD's own statuses. "Published" is the DB word; every JD surface says
-   Active, so this table does too. */
-const jobStatusLabel = (status?: string) => {
-  const raw = (status || '').toLowerCase();
-  if (!raw) return 'Unknown';
-  if (raw === 'published') return 'Active';
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
+/**
+ * The word the Status column shows for a job version.
+ *
+ * Factored out of `JobStatusChip` so that a rule written against that column -
+ * Create is offered on Published and Republished only - is decided by the very
+ * string the reader is looking at, rather than by a second, separate reading of
+ * the raw status that could drift from it.
+ *
+ * The raw DB word capitalised, through the shared `getDisplayStatus`, which is
+ * what turns a published JD on its 2nd publish or later into "Republished".
+ * Empty while the JD lineage request is still in flight - the chip draws a dash
+ * for that, and it is not a status.
+ */
+export const jobVersionDisplayStatus = (status?: string, currentVersion?: number): string => {
+  const raw = (status || '').trim();
+  if (!raw) return '';
+  const capitalised = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  return getDisplayStatus(capitalised, currentVersion);
 };
 
 /**
- * Job-level columns only — assessments live in the accordion below the row.
+ * Can an assessment be built against this job version?
  *
- * The same columns, in the same order and under the same names, as the Job
- * Openings version history (`buildBaseColumns` in
- * components/jobs/JobVersionHistoryPanel): a job version reads identically
- * wherever a recruiter meets it. Every cell is this version's own JD record;
- * a field the record does not carry shows a dash.
+ * Published and Republished only - the two states in which a job version is
+ * live text a candidate could be assessed against. Everything else is a no,
+ * each for its own reason: a Draft is not final, a Disabled version is out of
+ * circulation, an Archived one is closed, and an unresolved status (the dash,
+ * while the lineage loads) is not an assertion that creating is allowed.
  *
- * `Assessments` is this table's own addition and stays last before Actions —
- * it is the whole reason the panel exists, and the Job Openings table has no
- * equivalent to conflict with. The two columns Job Openings carries after
- * Posted On / By (Last Updated, Applicants) are deliberately not here: this
- * table's subject is which assessment answers which job version.
+ * Read off the DISPLAYED status via `jobVersionDisplayStatus`, so the table can
+ * never offer Create on a row whose own Status column reads Archived. Note that
+ * "Republished" is derived rather than stored (see `getDisplayStatus`), so
+ * testing the raw status alone would be testing a word this column never
+ * prints; the same pairing `matchesStatusFilter` makes for the Published pill
+ * on the Job Openings list.
  */
-const COLUMNS: { label: string; minW: string }[] = [
+export const canCreateAssessmentForJobVersion = (status?: string, currentVersion?: number): boolean => {
+  const label = jobVersionDisplayStatus(status, currentVersion);
+  return label === 'Published' || label === 'Republished';
+};
+
+/** Why Create is off, in the words of the status that turned it off. */
+export const createAssessmentBlockedReason = (status?: string, currentVersion?: number): string => {
+  const label = jobVersionDisplayStatus(status, currentVersion);
+  switch (label) {
+    case 'Archived':
+      return 'Archived job versions cannot have new assessments';
+    case 'Disabled':
+      return 'Disabled job versions cannot have new assessments';
+    case 'Draft':
+      return 'Publish this job version to create an assessment for it';
+    case '':
+      return 'Job version status is still loading';
+    default:
+      return `Only Published or Republished job versions can have assessments (this one is ${label})`;
+  }
+};
+
+/**
+ * The experience a job version asks for, as this column words it.
+ *
+ * Resolved from that version's OWN fetched JD record, so a job republished
+ * with a wider requirement reads correctly per row: V3 can say 5+ Years while
+ * V1 still says 2–4. Undefined until that record lands (the details are
+ * fetched per version and arrive progressively) and when the JD states no
+ * experience at all - the cell draws a dash for both, as Created By already
+ * does with the same record.
+ *
+ * `isStandardExperienceLevel` is the shared rule, from the same util the Job
+ * Openings version history reads: a recruiter's OWN wording for the level
+ * ("Fresher (0-0)", "Trainee") is the JD's own text and wins over the numbers,
+ * while a standard seniority label (Entry/Mid/Senior) does not, because the
+ * years beside it say more than the word does. Only the range wording is
+ * spelled out here rather than taken from `formatJobExperienceText`, which
+ * writes a lowercase "2-4 years" and has no Fresher case.
+ *
+ * Zero on both bounds is Fresher, not "0–0 Years" - and a zero minimum with no
+ * maximum is the same statement, where "0+ Years" would be no statement at
+ * all. A single number on both bounds drops the range rather than repeating
+ * itself ("5 Years", not "5–5 Years").
+ */
+export const formatJobVersionExperience = (detail?: {
+  job_level?: string | null;
+  experience_level?: string | null;
+  experience_min?: number | null;
+  experience_max?: number | null;
+}): string | undefined => {
+  if (!detail) return undefined;
+
+  const customLevel = (detail.job_level || detail.experience_level || '').trim();
+  if (customLevel && !isStandardExperienceLevel(customLevel)) return customLevel;
+
+  const min = detail.experience_min ?? null;
+  const max = detail.experience_max ?? null;
+  if (min === null && max === null) return undefined;
+  if ((min ?? 0) === 0 && (max ?? 0) === 0) return 'Fresher';
+  if (min !== null && max !== null) {
+    return min === max ? `${min} Years` : `${min}–${max} Years`;
+  }
+  if (min !== null) return `${min}+ Years`;
+  return `Up to ${max} Years`;
+};
+
+/**
+ * A JOB version's status badge, resolved exactly as the Job Openings version
+ * history resolves it (`components/jobs/JobVersionHistoryPanel`): the raw DB
+ * word capitalised, through the shared `getDisplayStatus` (which is what turns
+ * a republished JD into "Republished") and `getStatusConfig` for the colours.
+ *
+ * This replaces a local mapping that renamed `published` to "Active". Nothing
+ * else in the app calls a published JD Active — `mapJDStatus` in
+ * jobOpeningDisplay maps it to "Published", which is what the Job Openings list
+ * badge, its version history and the JD detail page all show. So this table was
+ * the one surface printing a word the data does not say, and it also lost the
+ * Published/Republished distinction the shared helper derives.
+ *
+ * ASSESSMENT statuses are a separate vocabulary and are unchanged: an
+ * assessment really is "Active" when published (see ASSESSMENT_STATUS_LABELS
+ * above, and `mapAssessmentFromApi` in the assessments list). Two entities, two
+ * sets of words — conflating them is what went wrong here.
+ */
+export function JobStatusChip({ status, currentVersion }: { status?: string; currentVersion?: number }) {
+  const label = jobVersionDisplayStatus(status, currentVersion);
+  /* No status known yet (the JD lineage request is still in flight) - a dash,
+     rather than asserting a state the table has not been told. */
+  if (!label) return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+
+  const tone = getStatusConfig(label);
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs whitespace-nowrap border ${tone.bg} ${tone.text} ${tone.border}`}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
+      {label}
+    </span>
+  );
+}
+
+/* Outer table: the job version, its state, its provenance, its totals.
+   `Actions` is appended by the renderer so it can be pinned separately. */
+const JOB_COLUMNS: { label: string; minW: string }[] = [
   { label: 'Version', minW: 'min-w-[150px]' },
-  { label: 'Job Title', minW: 'min-w-[180px]' },
   { label: 'Status', minW: 'min-w-[110px]' },
-  { label: 'Experience / Industry', minW: 'min-w-[150px]' },
-  { label: 'Location', minW: 'min-w-[120px]' },
-  { label: 'Work Mode / Type', minW: 'min-w-[130px]' },
-  { label: 'Posted On / By', minW: 'min-w-[130px]' },
-  { label: 'Assessments', minW: 'min-w-[240px]' },
+  { label: 'Experience', minW: 'min-w-[130px]' },
+  /* Created On and Created By, which used to be two columns of one fact each.
+     Narrower combined than the 250px the pair took, and the two lines read as
+     the one statement they are: who made this version, and when. */
+  { label: 'Created', minW: 'min-w-[200px]' },
+  { label: 'Assessments', minW: 'min-w-[110px]' },
+  { label: 'Invitations Sent', minW: 'min-w-[120px]' },
+  { label: 'Completed', minW: 'min-w-[120px]' },
+];
+
+/* Inner table: the same shape minus Assessments — an assessment version is
+   itself the thing that column counts. */
+const ASSESSMENT_COLUMNS: { label: string; minW: string }[] = [
+  { label: 'Version', minW: 'min-w-[150px]' },
+  { label: 'Status', minW: 'min-w-[110px]' },
+  { label: 'Created On', minW: 'min-w-[130px]' },
+  { label: 'Created By', minW: 'min-w-[120px]' },
+  /* Where Questions used to be. Wider than the column it replaced, because it
+     holds three labelled lines rather than one number. */
+  { label: 'Round Weightage', minW: 'min-w-[170px]' },
+  { label: 'Invitations Sent', minW: 'min-w-[120px]' },
 ];
 
 interface JobVersionGroup {
@@ -155,23 +355,37 @@ interface JobVersionGroup {
   /** This version's own JD row id — the context every action is scoped to. */
   jobVersionId?: string;
   isLatestJobVersion: boolean;
-  jobTitle?: string;
   jobStatus?: string;
-  /** Experience / Industry, Location and Work Mode / Type all come from this
-   *  version's own JD record, so they describe the version in the row rather
-   *  than the job's current state. Undefined until that record lands, and
-   *  undefined stays a dash — never a default. */
-  experienceText?: string;
-  industryType?: string;
-  locationText?: string;
-  employmentType?: string;
-  remoteType?: string;
-  postedOn?: string;
-  postedBy?: string;
+  /** Republish counter, for the Published vs Republished distinction. */
+  jobCurrentVersion?: number;
+  /** What this version asks for, already worded - see `formatJobVersionExperience`.
+   *  Undefined until this version's own JD record lands, or when it states no
+   *  experience at all; the cell draws a dash for both. */
+  experience?: string;
+  createdOn?: string;
+  createdBy?: string;
   assessments: AssessmentVersionRow[];
+  /**
+   * Does THIS job version have an assessment — the one question the Actions
+   * cell is decided by, and the reason Create Assessment and View Assessment
+   * are never both wrong on the same row.
+   *
+   * Not `assessments.length > 0`: it is the union of the rows joined here and
+   * the backend's own index (see `jdsWithAssessments`), so a version whose
+   * assessment did not come back in this fetch still reads as having one.
+   * Draft and Published both count — neither source filters by status, and an
+   * assessment saved as a draft is an assessment that exists.
+   */
+  hasAssessment: boolean;
+  /** Summed across this version's assessments, so the totals on the job row
+   *  are exactly what its Assessment Versions table adds up to. */
+  totalInvitations: number;
+  /** Finished attempts across this version's assessments - read beside the
+   *  invitations it is a subset of: sent, then completed. */
+  totalCompleted: number;
 }
 
-function StatusChip({ label }: { label: string }) {
+export function StatusChip({ label }: { label: string }) {
   const tone = STATUS_STYLES[label] || STATUS_STYLES.Unknown;
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs ring-1 whitespace-nowrap ${tone.chip}`}>
@@ -181,11 +395,160 @@ function StatusChip({ label }: { label: string }) {
   );
 }
 
-function AssessmentVersionChip({ version }: { version?: number }) {
+/**
+ * The version chip: `v2.0` for a job version, `a2.0` for an assessment one.
+ *
+ * `V` plus the record's own version number, nothing else. Versions are whole
+ * numbers in the data, so a `.0` minor part was display decoration standing
+ * for a component no one can read — and it invited the reading that a `V2.1`
+ * could exist.
+ *
+ * Both tables use the same wording; the chip's colour (blue for a job version,
+ * cyan for an assessment one) plus each table's own heading are what tell them
+ * apart.
+ */
+export function VersionChip({ kind, version }: { kind: 'job' | 'assessment'; version?: number }) {
+  const isJob = kind === 'job';
   return (
-    <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35 whitespace-nowrap">
-      Assessment v{version ?? 1}
+    <span
+      className={`px-2 py-0.5 rounded-md text-xs font-semibold whitespace-nowrap ring-1 ${
+        isJob
+          ? 'text-brand-blue bg-brand-blue/10 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35'
+          : 'text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35'
+      }`}
+    >
+      V{version ?? 1}
     </span>
+  );
+}
+
+export function LatestBadge() {
+  return (
+    <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
+      Latest
+    </span>
+  );
+}
+
+/** A number over the noun it counts — the reference's metric cell. */
+function MetricCell({ value, label }: { value: number; label: string }) {
+  return (
+    <>
+      <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{value}</div>
+      <div className="text-xs text-gray-500 dark:text-slate-400">{label}</div>
+    </>
+  );
+}
+
+/**
+ * The rounds this assessment is made of and the weight each carries, in the
+ * column Questions used to hold.
+ *
+ * Read from the assessment's own configuration - `hr_percentage`,
+ * `technical_percentage`, `coding_percentage` on AssessmentResponse, the same
+ * three fields the details view diffs as "HR weight" and the creation flow
+ * writes - so every row states its own split rather than a shared constant.
+ *
+ * Only the rounds this assessment actually has: a section switched off is not
+ * part of the assessment, and printing "Coding Round: 0%" for it would be
+ * three lines of noise on a two-round assessment. `*_enabled` decides that
+ * where the row carries it; where it does not (an older row, or a list
+ * endpoint that omits the flags) a non-zero weight stands in as evidence the
+ * round is configured. Nothing configured at all reads as a dash, which is
+ * what every other cell here does with nothing to say.
+ *
+ * HR carries one extra rule: it is dropped at 0% even when `hr_enabled` is
+ * true. The HR section is on by default across the creation flow, so a row
+ * whose whole weight sits on Technical and Coding still arrives with the flag
+ * set and the weight at zero - and "HR Round: 0%" is a line that states a
+ * round contributing nothing. Technical and Coding are left exactly as they
+ * were: an enabled section shows its weight whatever that weight is.
+ *
+ * Whole numbers: the field is a percentage split of 100 across three rounds,
+ * so a decimal place would be precision the configuration does not carry.
+ */
+function RoundWeightageCell({ assessment }: { assessment: AssessmentVersionRow }) {
+  const rounds = [
+    { label: 'HR Round', enabled: assessment.hr_enabled, percentage: assessment.hr_percentage, hideAtZero: true },
+    { label: 'Technical Round', enabled: assessment.technical_enabled, percentage: assessment.technical_percentage, hideAtZero: false },
+    { label: 'Coding Round', enabled: assessment.coding_enabled, percentage: assessment.coding_percentage, hideAtZero: false },
+  ]
+    .map(({ label, enabled, percentage, hideAtZero }) => ({
+      label,
+      enabled,
+      hideAtZero,
+      percentage: Math.round(percentage ?? 0),
+    }))
+    .filter(({ enabled, percentage, hideAtZero }) => {
+      if (hideAtZero && percentage === 0) return false;
+      return enabled ?? percentage > 0;
+    });
+
+  if (rounds.length === 0) {
+    return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+  }
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      {rounds.map(({ label, percentage }) => (
+        <div key={label} className="text-xs whitespace-nowrap leading-snug">
+          <span className="text-gray-500 dark:text-slate-400">{label}: </span>
+          <span className="font-semibold text-gray-900 dark:text-slate-100">{percentage}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Created On over Created By, one cell.
+ *
+ * Each line names what it states, because two bare values stacked - a date
+ * over a name - only read as a pair once you already know the column. That
+ * labelling is the same shape the Round Weightage cell uses in the table
+ * below: the label muted, the value in the row's own weight.
+ *
+ * The date alone on the first line; the time it carried when Created On was a
+ * column of its own moves into that line's tooltip, since a version's creation
+ * time is worth keeping but not worth a third line. A missing half is a dash,
+ * never invented, exactly as both columns did separately.
+ *
+ * `DateCell` below is untouched and still renders date-over-time - the
+ * Assessment Versions table's own Created On column reads it.
+ */
+function CreatedCell({ createdOn, createdBy }: { createdOn?: string; createdBy?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div
+        className="text-xs whitespace-nowrap leading-snug"
+        title={createdOn ? `${formatISTDate(createdOn)} ${formatISTTime(createdOn)}` : ''}
+      >
+        <span className="text-gray-500 dark:text-slate-400">Created On: </span>
+        <span className="font-semibold text-gray-900 dark:text-slate-100">
+          {createdOn ? formatISTDate(createdOn) : '—'}
+        </span>
+      </div>
+      <div
+        className="text-xs whitespace-nowrap leading-snug max-w-[200px] truncate"
+        title={createdBy || ''}
+      >
+        <span className="text-gray-500 dark:text-slate-400">Created By: </span>
+        <span className="font-semibold text-gray-900 dark:text-slate-100">
+          {createdBy || '—'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** A date over its time, both in IST. A missing date is a dash, never today. */
+function DateCell({ value }: { value?: string }) {
+  if (!value) return <span className="text-sm text-gray-500 dark:text-slate-400">—</span>;
+  return (
+    <>
+      <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{formatISTDate(value)}</div>
+      <div className="text-xs text-gray-500 dark:text-slate-400 uppercase">{formatISTTime(value)}</div>
+    </>
   );
 }
 
@@ -193,15 +556,17 @@ export default function AssessmentVersionHistoryPanel({
   jobVersions,
   jobVersionDetails,
   assessments,
+  jdsWithAssessments,
   loading,
   latestJobVersion,
   currentAssessmentId,
-  fallbackJobTitle,
   onRowClick,
   onCreateAssessment,
+  onViewJobVersion,
+  headerAction,
   renderAction,
 }: AssessmentVersionHistoryPanelProps) {
-  /* Which job versions have their assessment list open. Local to the panel:
+  /* Which job versions have their assessment table open. Local to the panel:
      nothing outside it needs to know, and the state dies with the panel when
      the row is collapsed - which is the right lifetime for it. */
   const [expandedJobVersions, setExpandedJobVersions] = useState<Set<number>>(new Set());
@@ -215,41 +580,78 @@ export default function AssessmentVersionHistoryPanel({
     });
   };
 
-  const columns = [...COLUMNS, { label: 'Actions', minW: 'min-w-[84px]' }];
+  /* Wide enough for the eye plus the longer of the two actions the cell can
+     hold — "Create Assessment" is the widest thing this column ever renders. */
+  const jobColumns = [...JOB_COLUMNS, { label: 'Actions', minW: 'min-w-[280px]' }];
   const assessmentRows = assessments ?? [];
+
+  /* ── The job version → assessment join ──────────────────────────────────
+   *
+   * BY ID, and the id is the JD ROW: every job version is a JD row of its
+   * own, an assessment records the row it was authored against (`jd_id`), and
+   * that pair is the only thing that says which version an assessment belongs
+   * to. Never the job's name, its title, or a version's display text — two
+   * versions of one job share all three.
+   *
+   * The version NUMBER is a fallback, not the rule. `jd_version` is optional
+   * on AssessmentResponse, and joining on it alone meant an assessment that
+   * came back without one matched NO job version: it vanished from the table,
+   * its version's Assessments count stayed at zero, and that version went on
+   * offering Create for an assessment that already existed. The number also
+   * cannot separate two JD rows reporting the same version, where the id can.
+   *
+   * The number still carries what the id cannot: the JD lineage failing to
+   * load, or an assessment pointing at a JD row the lineage no longer
+   * returns. Then there is no id to match against and the number is all there
+   * is. */
+  const jobVersionByJdId = new Map<string, number>();
+  for (const version of jobVersions ?? []) {
+    jobVersionByJdId.set(version.id, version.version_number ?? 1);
+  }
+
+  /** Which job version this assessment belongs to, or undefined when neither
+   *  key resolves — an assessment with no version to sit under is left out
+   *  rather than attached to a neighbouring one, which would put one
+   *  version's assessment under another. */
+  const jobVersionOf = (assessment: AssessmentVersionRow): number | undefined => {
+    const byId = assessment.jd_id ? jobVersionByJdId.get(assessment.jd_id) : undefined;
+    if (byId !== undefined) return byId;
+    return typeof assessment.jd_version === 'number' ? assessment.jd_version : undefined;
+  };
 
   /* Which job versions to print.
    *
    * The union of the JD's lineage and the job versions the assessments
-   * themselves name — not the lineage alone. Two reasons: the panel still
-   * renders real rows if the lineage request fails, and an assessment pointing
-   * at a job version the lineage no longer returns is a row that must not
-   * silently vanish. */
+   * themselves resolve to — not the lineage alone. Two reasons: the panel
+   * still renders real rows if the lineage request fails, and an assessment
+   * pointing at a job version the lineage no longer returns is a row that
+   * must not silently vanish. */
   const jobVersionNumbers = (() => {
     const numbers = new Set<number>();
     for (const version of jobVersions ?? []) numbers.add(version.version_number ?? 1);
     for (const assessment of assessmentRows) {
-      if (typeof assessment.jd_version === 'number') numbers.add(assessment.jd_version);
+      const resolved = jobVersionOf(assessment);
+      if (resolved !== undefined) numbers.add(resolved);
     }
-    /* Nothing known yet — fall back to the card's own job version so the panel
+    /* Nothing known yet — fall back to the row's own job version so the panel
        opens onto something rather than an empty table. */
     if (numbers.size === 0 && latestJobVersion) numbers.add(latestJobVersion);
     return [...numbers].sort((a, b) => b - a); // Latest first, then older.
   })();
 
   /* The live job version, as the HOST resolved it — one resolver
-     (`getLatestJobVersion` in the assessments list) answers this for the card's
+     (`getLatestJobVersion` in the assessments list) answers this for the row's
      LATEST badge, for the version each lineage is collapsed down to on that
-     card, and for the row badged LATEST here. So the row this table marks is
-     always the row the card above it is showing, and both move together when a
+     row, and for the row badged Latest here. So the version this table marks is
+     always the one the row above it is showing, and both move together when a
      version is created, republished or dropped back to Draft.
 
      That number is the highest version in the lineage — SEQUENCE, as on the
      Job Openings page, never status and never `is_latest_version`, so a Draft
-     v2 over a Published v1 is the row badged LATEST here and the row the card
-     above is showing. It already counts every job version the list knows and
-     this panel's own assessment rows, so it can never be lower than what is
-     printed here. Deriving it independently is exactly what let the two
+     v2 over a Published v1 is the row badged Latest here and the version the
+     row above is showing. It already counts every job version the list knows
+     and this panel's own assessment rows, so it can never be lower than what
+     is printed here. Deriving it independently is exactly what let the two
      disagree; the fallback runs only if no host number is passed at all, and
      `jobVersionNumbers` is already sorted newest-first. */
   const newestJobVersion = latestJobVersion ?? jobVersionNumbers[0] ?? 1;
@@ -265,51 +667,44 @@ export default function AssessmentVersionHistoryPanel({
   const groups: JobVersionGroup[] = jobVersionNumbers.map((jobVersion) => {
     const lineageEntry = lineageByVersion.get(jobVersion);
     const detail = lineageEntry ? jobVersionDetails[lineageEntry.id] : undefined;
+    /* Only the assessments actually recorded against THIS job version,
+       resolved by JD row id (see `jobVersionOf`), newest assessment version
+       first. */
+    const versionAssessments = assessmentRows
+      .filter((a) => jobVersionOf(a) === jobVersion)
+      .sort((a, b) => (b.version ?? 1) - (a.version ?? 1));
     return {
       jobVersion,
       jobVersionId: lineageEntry?.id,
+      /* Either source is enough — see `hasAssessment` on the type. The index
+         is asked with this version's OWN JD row id, so one version having an
+         assessment can never answer for its siblings. */
+      hasAssessment:
+        versionAssessments.length > 0 ||
+        (!!lineageEntry?.id && !!jdsWithAssessments?.has(lineageEntry.id)),
       isLatestJobVersion: jobVersion === newestJobVersion,
-      jobTitle: detail?.title || lineageEntry?.title || fallbackJobTitle,
-      jobStatus: lineageEntry?.status,
-      /* Read exactly as the Job Openings history reads them, off the same JD
-         record, so the two tables can never format the same job differently. */
-      experienceText: detail
-        ? formatJobExperienceText({
-            jobLevel: detail.job_level || detail.experience_level,
-            experienceMin: detail.experience_min,
-            experienceMax: detail.experience_max,
-          })
-        : undefined,
-      industryType: detail?.industry_type,
-      /* The single field first, else the cities named in the structured list. */
-      locationText:
-        detail?.location
-        || (detail?.locations || []).map((loc) => loc?.city).filter(Boolean).join(', ')
-        || undefined,
-      employmentType: detail?.employment_type,
-      remoteType: detail?.remote_type,
-      postedOn: lineageEntry?.published_at || detail?.published_at || lineageEntry?.created_at || detail?.created_at,
-      postedBy: detail?.created_by_name,
-      /* Only the assessments actually recorded against THIS job version,
-         newest assessment version first. */
-      assessments: assessmentRows
-        .filter((a) => a.jd_version === jobVersion)
-        .sort((a, b) => (b.version ?? 1) - (a.version ?? 1)),
+      /* The lineage entry is the authority on a version's status; the fully
+         fetched JD record for that same version is the fallback, so a lineage
+         row that comes back without a status still reads Active rather than
+         Unknown. Both are dynamic - `status` on JDLineageVersion and on
+         JDResponse respectively. */
+      jobStatus: lineageEntry?.status || detail?.status,
+      jobCurrentVersion: lineageEntry?.current_version ?? detail?.current_version,
+      /* `detail` is keyed by this version's own JD row id (`lineageEntry.id`),
+         which is what maps the value to the right job version. */
+      experience: formatJobVersionExperience(detail),
+      /* When the version itself was made, not when it was published — the
+         column says Created On. */
+      createdOn: lineageEntry?.created_at || detail?.created_at,
+      createdBy: detail?.created_by_name,
+      assessments: versionAssessments,
+      totalInvitations: versionAssessments.reduce((sum, a) => sum + (a.invitations_count ?? 0), 0),
+      totalCompleted: versionAssessments.reduce((sum, a) => sum + (a.completed_count ?? 0), 0),
     };
   });
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
-      <div className="flex items-center gap-2 mb-2.5">
-        <FileText className="w-4 h-4 text-brand-blue" />
-        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Job Version History</p>
-        {groups.length > 0 && (
-          <span className="text-xs text-gray-500 dark:text-slate-400">
-            {groups.length} job version{groups.length === 1 ? '' : 's'}
-          </span>
-        )}
-      </div>
-
       {loading && !assessments ? (
         <div className="flex items-center gap-2 py-2 text-xs text-gray-500 dark:text-slate-400">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -323,315 +718,372 @@ export default function AssessmentVersionHistoryPanel({
         /* One shell owns BOTH scroll axes (x on narrow screens, y past 4 job
            versions), so header and body live in one <table> and their columns
            can never drift apart. The y-cap is deliberately NOT applied while an
-           accordion is open — an expanded list has to be readable without
-           fighting a 280px window. The brand-tinted border marks this as the
-           ACTIVE version table; it only exists while the history is open. */
-        <div
-          className={`overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20 ${
-            groups.length > 4 && expandedJobVersions.size === 0
-              ? 'overflow-y-auto max-h-[280px] overscroll-contain'
-              : ''
-          }`}
-        >
-          <table className="w-full min-w-[1320px] text-left">
-            <thead>
-              {/* The bottom hairline is an inset shadow, not border-b —
-                  collapsed-table borders detach from sticky cells and would
-                  scroll away with the body. The background is on every th, NOT
-                  on the tr: a sticky th only carries a background painted on
-                  the cell itself, and a bg-less th lets body text show
-                  through. */}
-              <tr>
-                {columns.map(({ label, minW }) => (
-                  <th
-                    key={label}
-                    /* z order, back to front: body cells (auto) < sticky Action
-                       td (5) < sticky header (7) < its pinned corner (8). */
-                    className={`sticky top-0 py-2.5 px-3 text-xs font-bold text-gray-900 whitespace-nowrap bg-brand-sky dark:bg-slate-800 dark:text-slate-100 ${minW} ${
-                      label === 'Actions'
-                        ? 'right-0 z-[8] shadow-[inset_0_-1px_0_#e5e7eb,-1px_0_0_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155,-1px_0_0_0_#334155]'
-                        : 'z-[7] shadow-[inset_0_-1px_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155]'
-                    }`}
-                  >
-                    {label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-              {groups.map((group) => {
-                const count = group.assessments.length;
-                const single = count === 1 ? group.assessments[0] : undefined;
-                const hasAccordion = count > 1;
-                const isOpen = expandedJobVersions.has(group.jobVersion);
-                const rowTint = group.isLatestJobVersion
-                  ? 'bg-brand-blue/[0.025] hover:bg-brand-blue/[0.05] dark:bg-brand-blue/[0.06] dark:hover:bg-brand-blue/[0.1]'
-                  : 'hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08]';
-                const stickyTint = group.isLatestJobVersion
-                  ? 'bg-[#f7f9fe] group-hover:bg-[#f2f6fd] dark:bg-slate-900 dark:group-hover:bg-slate-800'
-                  : 'bg-white group-hover:bg-[#f8f9fc] dark:bg-slate-900 dark:group-hover:bg-slate-800';
+           inner table is open — an expanded list has to be readable without
+           fighting a fixed window. */
+        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 overflow-hidden">
+          {/* Heading left, the host's control right - the table's own top
+              corner, above the rows it acts on. */}
+          <div className="px-3 sm:px-4 pt-3 pb-2 flex items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+              Job Versions{' '}
+              <span className="font-normal text-gray-500 dark:text-slate-400">({groups.length})</span>
+            </h4>
+            {headerAction && <div className="flex-shrink-0">{headerAction}</div>}
+          </div>
 
-                return (
-                  /* One <tr> per job version, then one more carrying its
-                     accordion. A keyed Fragment, not a bare `<>`: the pair is
-                     one list item and React needs the key on the outer node. */
-                  <Fragment key={`job-${group.jobVersion}`}>
-                    {/* NO transform on the row: a transformed <tr> becomes the
-                        containing block for its cells, which silently kills
-                        position:sticky on the pinned Actions cell. */}
-                    <tr
-                      className={`group transition-colors duration-200 ease-out ${rowTint} ${
-                        hasAccordion ? 'cursor-pointer' : ''
+          <div
+            className={`overflow-x-auto ${
+              groups.length > 4 && expandedJobVersions.size === 0
+                ? 'overflow-y-auto max-h-[320px] overscroll-contain'
+                : ''
+            }`}
+          >
+            <table className="w-full min-w-[1180px] text-left">
+              <thead>
+                {/* The bottom hairline is an inset shadow, not border-b —
+                    collapsed-table borders detach from sticky cells and would
+                    scroll away with the body. The background is on every th,
+                    NOT on the tr: a sticky th only carries a background painted
+                    on the cell itself, and a bg-less th lets body text show
+                    through. */}
+                <tr>
+                  {jobColumns.map(({ label, minW }) => (
+                    <th
+                      key={label}
+                      /* z order, back to front: body cells (auto) < sticky
+                         Action td (5) < sticky header (7) < pinned corner (8). */
+                      className={`sticky top-0 py-2 px-3 text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 ${minW} ${
+                        label === 'Actions'
+                          ? 'z-[7] lg:right-0 lg:z-[8] shadow-[inset_0_-1px_0_#e5e7eb] lg:shadow-[inset_0_-1px_0_#e5e7eb,-1px_0_0_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155] dark:lg:shadow-[inset_0_-1px_0_#334155,-1px_0_0_0_#334155]'
+                          : 'z-[7] shadow-[inset_0_-1px_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155]'
                       }`}
-                      /* The whole row toggles, not just the chevron — a 32px
-                         target at the far right of a scrolling table is a poor
-                         one. Only where there is something to expand. */
-                      onClick={hasAccordion ? () => toggleJobVersion(group.jobVersion) : undefined}
                     >
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
-                            Job v{group.jobVersion}
-                          </span>
-                          {group.isLatestJobVersion && (
-                            <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
-                              Latest
-                            </span>
-                          )}
-                        </span>
-                      </td>
-                      <td
-                        className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap max-w-[220px] truncate align-middle"
-                        title={group.jobTitle || ''}
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {groups.map((group) => {
+                  const count = group.assessments.length;
+                  /* The row's whole Create-vs-View decision, and the group
+                     owns it (see `hasAssessment` on JobVersionGroup). NOT
+                     `count > 0`: the count is how many assessment rows this
+                     fetch returned for the version, which is a different
+                     question from whether the version HAS one. */
+                  const hasAssessments = group.hasAssessment;
+                  const isOpen = expandedJobVersions.has(group.jobVersion);
+                  /* The newest assessment version in this group — the one its
+                     inner table badges Latest. Read off the sorted list rather
+                     than recomputed, so the badge and the ordering agree. */
+                  const newestAssessmentVersion = group.assessments[0]?.version ?? 1;
+                  /* Opaque only while pinned — an unpinned cell should take
+                     the row's own hover tint like every other cell. */
+                  const stickyTint = 'lg:bg-white lg:group-hover:bg-[#f8f9fc] dark:lg:bg-slate-900 dark:lg:group-hover:bg-slate-800';
+
+                  return (
+                    /* One <tr> per job version, then one more carrying its
+                       inner table. A keyed Fragment, not a bare `<>`: the pair
+                       is one list item and React needs the key on the outer
+                       node. */
+                    <Fragment key={`job-${group.jobVersion}`}>
+                      {/* NO transform on the row: a transformed <tr> becomes
+                          the containing block for its cells, which silently
+                          kills position:sticky on the pinned Actions cell. */}
+                      <tr
+                        className={`group border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 transition-colors duration-200 ease-out hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08] ${
+                          hasAssessments ? 'cursor-pointer' : ''
+                        }`}
+                        /* The whole row toggles, not just the button — a small
+                           target at the far right of a scrolling table is a
+                           poor one. Only where there is something to expand. */
+                        onClick={hasAssessments ? () => toggleJobVersion(group.jobVersion) : undefined}
                       >
-                        {group.jobTitle || '—'}
-                      </td>
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                        <StatusChip label={jobStatusLabel(group.jobStatus)} />
-                      </td>
-                      {/* Experience / Industry — one column, stacked, exactly
-                          as the Job Openings history stacks it. Industry runs
-                          through the shared formatter so it never shows the raw
-                          snake_case value. */}
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                        <div className="text-sm text-gray-700 dark:text-slate-300">
-                          {group.experienceText || '—'}
-                        </div>
-                        <div
-                          className="text-xs text-gray-500 dark:text-slate-400 max-w-[180px] truncate"
-                          title={group.industryType ? formatIndustryType(group.industryType) : ''}
-                        >
-                          {group.industryType ? formatIndustryType(group.industryType) : '—'}
-                        </div>
-                      </td>
-                      <td
-                        className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap max-w-[160px] truncate align-middle"
-                        title={group.locationText || ''}
-                      >
-                        {group.locationText || '—'}
-                      </td>
-                      {/* Work Mode / Type — stacked: employment type over
-                          remote mode. A missing half drops out rather than
-                          being filled in. */}
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                        <div className="text-sm text-gray-700 dark:text-slate-300">
-                          {group.employmentType ? formatEmploymentType(group.employmentType) : '—'}
-                        </div>
-                        {group.remoteType && (
-                          <div className="text-xs text-gray-500 dark:text-slate-400">
-                            {formatEmploymentType(group.remoteType)}
-                          </div>
-                        )}
-                      </td>
-                      {/* Posted On / By — date over author, the pair the two
-                          old Created On / Created By columns used to spend two
-                          columns on. */}
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                        <div className="text-sm text-gray-700 dark:text-slate-300">
-                          {group.postedOn ? formatISTDate(group.postedOn) : '—'}
-                        </div>
-                        <div
-                          className="text-xs text-gray-500 dark:text-slate-400 max-w-[160px] truncate"
-                          title={group.postedBy || ''}
-                        >
-                          {group.postedBy || '—'}
-                        </div>
-                      </td>
-                      {/* Summary, not a column pair: one assessment is named
-                          here and needs no accordion, several are counted here
-                          and listed below. Never a borrowed number — a job
-                          version with none says so. */}
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                        {count === 0 ? (
-                          <span className="text-xs text-gray-500 dark:text-slate-400">No assessment</span>
-                        ) : single ? (
-                          <span className="inline-flex items-center gap-1.5 max-w-full">
-                            <CornerDownRight aria-hidden="true" className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                            <AssessmentVersionChip version={single.version} />
-                            <span
-                              className={`text-sm truncate max-w-[150px] ${
-                                onRowClick ? 'text-brand-blue hover:underline cursor-pointer' : 'text-gray-700 dark:text-slate-300'
-                              }`}
-                              title={stripVersionFromTitle(single.title || '') || single.short_id || ''}
-                              onClick={onRowClick ? (e) => { e.stopPropagation(); onRowClick(single.id); } : undefined}
-                            >
-                              {stripVersionFromTitle(single.title || '') || single.short_id || '—'}
-                            </span>
-                          </span>
-                        ) : (
-                          /* The count alone. The Actions chevron and the
-                             row's own click already say it opens, and its
-                             aria-label carries that for a screen reader. */
+                        <td className="py-3 px-3 whitespace-nowrap align-middle">
                           <span className="inline-flex items-center gap-1.5">
-                            <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35">
-                              {count} assessments
-                            </span>
+                            <VersionChip kind="job" version={group.jobVersion} />
+                            {group.isLatestJobVersion && <LatestBadge />}
                           </span>
-                        )}
-                      </td>
-                      {/* Actions — pinned right so it stays reachable while the
-                          table scrolls sideways. Opaque background (plus a
-                          hover tint matching the row's translucent one) so
-                          content sliding underneath never shows through. */}
-                      <td className={`py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:shadow-[-1px_0_0_0_#334155] ${stickyTint}`}>
-                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          {hasAccordion ? (
-                            <button
-                              type="button"
-                              onClick={() => toggleJobVersion(group.jobVersion)}
-                              aria-expanded={isOpen}
-                              aria-label={
-                                isOpen
-                                  ? `Hide the ${count} assessments for Job v${group.jobVersion}`
-                                  : `Show the ${count} assessments for Job v${group.jobVersion}`
-                              }
-                              title={isOpen ? 'Hide assessments' : `Show ${count} assessments`}
-                              className="p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 rounded-lg transition-colors dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-100"
-                            >
-                              <ChevronDown
-                                className={`w-4 h-4 transition-transform duration-300 ease-out ${isOpen ? 'rotate-180' : ''}`}
-                              />
-                            </button>
-                          ) : single && renderAction ? (
-                            /* One assessment, no accordion — so its actions
-                               belong on the job row itself, where the reader
-                               already is. */
-                            renderAction(single)
-                          ) : count === 0 && onCreateAssessment && group.jobVersionId ? (
-                            /* No assessment for this job version yet, so the
-                               row offers the one action that changes that.
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                          <JobStatusChip status={group.jobStatus} currentVersion={group.jobCurrentVersion} />
+                        </td>
+                        <td
+                          className="py-3 px-3 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[180px] truncate align-middle"
+                          title={group.experience || ''}
+                        >
+                          {group.experience || <span className="text-gray-500 dark:text-slate-400">&mdash;</span>}
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                          <CreatedCell createdOn={group.createdOn} createdBy={group.createdBy} />
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                          <MetricCell value={count} label={count === 1 ? 'Assessment' : 'Assessments'} />
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                          <MetricCell value={group.totalInvitations} label={group.totalInvitations === 1 ? 'Invitation' : 'Invitations'} />
+                        </td>
+                        <td className="py-3 px-3 whitespace-nowrap align-middle">
+                          <MetricCell value={group.totalCompleted} label={group.totalCompleted === 1 ? 'Candidate' : 'Candidates'} />
+                        </td>
+                        {/* Actions — pinned right so it stays reachable while
+                            the table scrolls sideways. Opaque background (plus
+                            a hover tint matching the row's translucent one) so
+                            content sliding underneath never shows through. */}
+                        {/* Pinned right only where the table has room for it.
+                            On a phone the pinned column would cover most of a
+                            324px viewport, leaving the reader scrolling the
+                            middle columns under it — so below `lg` it is an
+                            ordinary last column reached by scrolling. */}
+                        <td className={`py-3 px-3 whitespace-nowrap align-middle lg:sticky lg:right-0 lg:z-[5] lg:shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:lg:shadow-[-1px_0_0_0_#334155] ${stickyTint}`}>
+                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            {/* Read THIS version. Never disabled and never
+                                conditional on the assessment state beside it:
+                                reading a job version is unrelated to whether
+                                one can be built against it, so an Archived,
+                                Disabled or Draft row opens exactly like a
+                                published one. Same button, same popup, as the
+                                eye on the Create Assessment picker's own
+                                version rows. */}
+                            {onViewJobVersion && group.jobVersionId && (
+                              <button
+                                type="button"
+                                onClick={() => onViewJobVersion(group.jobVersionId!, group.jobVersion)}
+                                aria-label={`View job V${group.jobVersion} details`}
+                                title={`View job V${group.jobVersion} details`}
+                                className="h-8 w-8 flex items-center justify-center rounded-lg border border-brand-blue/40 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {/* Create Assessment and View Assessment are the
+                                SAME slot, decided per job version by one
+                                thing: whether an assessment exists against
+                                THIS version's JD row. Saving one — Draft or
+                                Published, it makes no difference — is what
+                                flips it, and because the answer is derived
+                                from the fetched data rather than held in
+                                component state, it is still flipped after a
+                                reload, and one version flipping leaves its
+                                siblings exactly as they were. */}
+                            {hasAssessments ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleJobVersion(group.jobVersion)}
+                                aria-expanded={isOpen}
+                                aria-label={
+                                  isOpen
+                                    ? `Hide the assessment for job V${group.jobVersion}`
+                                    : `View the assessment for job V${group.jobVersion}`
+                                }
+                                title={`View the assessment created for job V${group.jobVersion}`}
+                                className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue text-xs font-medium hover:bg-brand-blue/5 transition-colors"
+                              >
+                                View Assessment
+                                <ChevronDown
+                                  className={`w-3.5 h-3.5 transition-transform duration-300 ease-out ${isOpen ? 'rotate-180' : ''}`}
+                                />
+                              </button>
+                            ) : onCreateAssessment && group.jobVersionId ? (
+                              /* No assessment for this job version yet, so the
+                                 row offers the one action that changes that.
 
-                               Gated on `jobVersionId`: without this version's
-                               own JD row id there is nothing to scope the new
-                               assessment to, and falling back to the card's id
-                               would quietly attach it to a DIFFERENT job
-                               version. No button is better than the wrong
-                               association. */
-                            <button
-                              type="button"
-                              onClick={() => onCreateAssessment(group.jobVersionId!, group.jobVersion)}
-                              title={`Create an assessment for Job v${group.jobVersion}`}
-                              aria-label={`Create an assessment for Job v${group.jobVersion}`}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              Create
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
+                                 Gated on `jobVersionId`: without this version's
+                                 own JD row id there is nothing to scope the new
+                                 assessment to, and falling back to the parent
+                                 row's id would quietly attach it to a DIFFERENT
+                                 job version. No button is better than the wrong
+                                 association.
 
-                    {/* The accordion. Always mounted so it can animate BOTH
-                        ways; `grid-rows-[0fr] → [1fr]` is what makes a
-                        height-unknown block collapse smoothly, which a plain
-                        max-height guess cannot do without either clipping tall
-                        content or easing through empty space. `border-t-0`
-                        needs the `!`: tbody's `divide-y` selector
-                        (`.divide-y > :not([hidden]) ~ :not([hidden])`) outranks
-                        a plain `border-t-0` on specificity, so without it a
-                        stray rule is drawn under every job row that has an
-                        accordion, open or shut. */}
-                    {hasAccordion && (
-                      <tr className="border-t-0!">
-                        <td colSpan={columns.length} className="p-0">
-                          <div
-                            className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-                              isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                            }`}
-                          >
-                            <div className="overflow-hidden">
-                              <div className="bg-slate-50/70 dark:bg-slate-800/40 border-t border-gray-200 dark:border-slate-700">
-                                {group.assessments.map((assessment) => {
-                                  const isCurrent = !!currentAssessmentId && assessment.id === currentAssessmentId;
-                                  const statusLabel =
-                                    ASSESSMENT_STATUS_LABELS[String(assessment.status || '').toLowerCase()] || 'Draft';
-                                  return (
-                                    /* A flex row, not a nested <table>: a second
-                                       table inside a colSpan cell would size its
-                                       own columns and drift out of step with the
-                                       parent's on every render. */
-                                    <div
-                                      key={assessment.id}
-                                      className={`flex items-center gap-3 px-3 py-2 border-b last:border-b-0 border-gray-200/70 dark:border-slate-700/70 transition-colors ${
-                                        isCurrent
-                                          ? 'bg-brand-blue/[0.07] dark:bg-brand-blue/[0.14]'
-                                          : 'hover:bg-white dark:hover:bg-slate-800'
-                                      } ${onRowClick ? 'cursor-pointer' : ''}`}
-                                      onClick={onRowClick ? () => onRowClick(assessment.id) : undefined}
-                                    >
-                                      {/* Indented under its job version, so the
-                                          parent-child relationship survives the
-                                          move out of the table's columns. */}
-                                      <CornerDownRight aria-hidden="true" className="w-4 h-4 ml-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                                      <span className="w-[150px] flex-shrink-0">
-                                        <AssessmentVersionChip version={assessment.version} />
-                                      </span>
-                                      <span
-                                        className="flex-1 min-w-[160px] text-sm text-gray-900 dark:text-slate-100 truncate"
-                                        title={stripVersionFromTitle(assessment.title || '') || ''}
-                                      >
-                                        {stripVersionFromTitle(assessment.title || '') || assessment.short_id || '—'}
-                                        {assessment.short_id && (
-                                          <span className="ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold text-gray-600 bg-slate-100 ring-1 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
-                                            {assessment.short_id}
-                                          </span>
-                                        )}
-                                      </span>
-                                      <span className="w-[110px] flex-shrink-0">
-                                        <StatusChip label={statusLabel} />
-                                      </span>
-                                      <span className="w-[120px] flex-shrink-0 text-sm text-gray-700 dark:text-slate-300">
-                                        {assessment.created_at ? formatISTDate(assessment.created_at) : '—'}
-                                      </span>
-                                      <span className="w-[120px] flex-shrink-0 text-sm text-gray-700 dark:text-slate-300">
-                                        {assessment.updated_at ? formatISTDate(assessment.updated_at) : '—'}
-                                      </span>
-                                      <span
-                                        className="w-[130px] flex-shrink-0 text-sm text-gray-700 dark:text-slate-300 truncate"
-                                        title={assessment.created_by_name || ''}
-                                      >
-                                        {assessment.created_by_name || '—'}
-                                      </span>
-                                      {renderAction && (
-                                        <span className="flex-shrink-0 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                                          {renderAction(assessment)}
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
+                                 ENABLED on this row's own Status column, read
+                                 through the same helper the chip beside it
+                                 renders: Published and Republished only. An
+                                 Archived, Disabled or Draft version would take
+                                 the recruiter to the creation flow to author an
+                                 assessment against text that is closed, out of
+                                 circulation or not final - so the button greys
+                                 with the reason in its tooltip rather than
+                                 disappearing, which is how the rest of this
+                                 page reports "not for this row" and keeps the
+                                 Actions column the same shape down the table.
+
+                                 Each row decides for itself, so a job whose V3
+                                 is Published and whose V1 is Archived offers
+                                 Create on exactly one of them. */
+                              (() => {
+                                const canCreate = canCreateAssessmentForJobVersion(
+                                  group.jobStatus,
+                                  group.jobCurrentVersion,
+                                );
+                                const reason = canCreate
+                                  ? `Create an assessment for job V${group.jobVersion}`
+                                  : createAssessmentBlockedReason(group.jobStatus, group.jobCurrentVersion);
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={!canCreate}
+                                    onClick={() => {
+                                      if (!canCreate) return;
+                                      onCreateAssessment(group.jobVersionId!, group.jobVersion);
+                                    }}
+                                    title={reason}
+                                    aria-label={reason}
+                                    className={`h-8 px-3 inline-flex items-center gap-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                                      canCreate
+                                        ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60 shadow-none'
+                                    }`}
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    Create Assessment
+                                  </button>
+                                );
+                              })()
+                            ) : (
+                              <span className="text-xs text-gray-500 dark:text-slate-400">No assessment</span>
+                            )}
                           </div>
                         </td>
                       </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+
+                      {/* The inner table. Always mounted so it can animate BOTH
+                          ways; `grid-rows-[0fr] → [1fr]` is what makes a
+                          height-unknown block collapse smoothly, which a plain
+                          max-height guess cannot do without either clipping
+                          tall content or easing through empty space. */}
+                      {hasAssessments && (
+                        <tr>
+                          <td colSpan={jobColumns.length} className="p-0">
+                            <div
+                              className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                                isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                              }`}
+                            >
+                              <div className="overflow-hidden">
+                                {/* Indented and tinted so the nesting is
+                                    readable without a connector glyph per row. */}
+                                <div className="px-3 sm:px-4 py-3 bg-slate-100/70 dark:bg-slate-800/60 border-t border-gray-200 dark:border-slate-700">
+                                  <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+                                    <div className="px-3 pt-2.5 pb-1.5">
+                                      <h5 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                                        Assessment Versions{' '}
+                                        <span className="font-normal text-gray-500 dark:text-slate-400">({count})</span>
+                                      </h5>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                      {/* A real nested table, so its columns
+                                          line up with each other. It sizes
+                                          independently of the outer one on
+                                          purpose: sharing a grid would force
+                                          the inner rows into columns sized for
+                                          eight outer ones. */}
+                                      <table className="w-full min-w-[930px] text-left">
+                                        <thead>
+                                          <tr>
+                                            {[...ASSESSMENT_COLUMNS, { label: 'Actions', minW: 'min-w-[160px]' }].map(({ label, minW }) => (
+                                              <th
+                                                key={label}
+                                                className={`py-2 px-3 text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 ${minW}`}
+                                              >
+                                                {label}
+                                              </th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {/* The version HAS an assessment (the
+                                              backend index says so) but this
+                                              fetch returned no row for it. Say
+                                              that, rather than opening onto an
+                                              empty table that reads as "there
+                                              is nothing here" and contradicts
+                                              the button that was just clicked. */}
+                                          {count === 0 && (
+                                            <tr>
+                                              <td
+                                                colSpan={ASSESSMENT_COLUMNS.length + 1}
+                                                className="py-4 px-3 text-xs text-gray-500 dark:text-slate-400"
+                                              >
+                                                This job version has an assessment, but its details could not be
+                                                loaded. Reopen this panel to try again.
+                                              </td>
+                                            </tr>
+                                          )}
+                                          {group.assessments.map((assessment) => {
+                                            const isCurrent = !!currentAssessmentId && assessment.id === currentAssessmentId;
+                                            const statusLabel = assessmentStatusLabel(assessment.status);
+                                            const invitations = assessment.invitations_count ?? 0;
+                                            return (
+                                              <tr
+                                                key={assessment.id}
+                                                className={`border-b last:border-b-0 border-gray-100 dark:border-slate-700/70 transition-colors ${
+                                                  isCurrent
+                                                    ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/[0.14]'
+                                                    : 'hover:bg-brand-blue/[0.03] dark:hover:bg-slate-800'
+                                                } ${onRowClick ? 'cursor-pointer' : ''}`}
+                                                onClick={onRowClick ? () => onRowClick(assessment.id) : undefined}
+                                              >
+                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                  <span className="inline-flex items-center gap-1.5">
+                                                    <VersionChip kind="assessment" version={assessment.version} />
+                                                    {(assessment.version ?? 1) === newestAssessmentVersion && <LatestBadge />}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                  <StatusChip label={statusLabel} />
+                                                </td>
+                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                  <DateCell value={assessment.created_at} />
+                                                </td>
+                                                <td
+                                                  className="py-2.5 px-3 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[160px] truncate align-middle"
+                                                  title={assessment.created_by_name || ''}
+                                                >
+                                                  {assessment.created_by_name || '—'}
+                                                </td>
+                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                  <RoundWeightageCell assessment={assessment} />
+                                                </td>
+                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                  <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
+                                                </td>
+                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                  {/* gap-1.5 matches the spacing
+                                                      inside the quick-action
+                                                      group, so all four
+                                                      controls read as one
+                                                      evenly spaced row. */}
+                                                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                    {/* The host's own menu and
+                                                        quick actions, unchanged.
+                                                        Nothing else: the row
+                                                        itself opens the
+                                                        assessment, so a View
+                                                        button beside it was a
+                                                        second control for the
+                                                        same navigation. */}
+                                                    {renderAction?.(assessment)}
+                                                  </div>
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

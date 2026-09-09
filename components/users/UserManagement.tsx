@@ -9,7 +9,7 @@ import {
   type CustomPermissionSubCategory,
 } from '@/lib/constants/permissionCategories';
 import { useRouter } from 'next/navigation';
-import {
+import { ArrowLeft,
   Search,
   Plus,
   Pencil,
@@ -2014,7 +2014,7 @@ export default function UserManagement() {
   };
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
+    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users' }]} />
@@ -3340,8 +3340,9 @@ export default function UserManagement() {
                     <button
                       onClick={() => setResetPwMode('choose')}
                       disabled={resetPwSubmitting}
-                      className="px-3 py-2 text-sm rounded-lg ring-1 ring-gray-300 dark:ring-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-60"
+                      className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg ring-1 ring-gray-300 dark:ring-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-60"
                     >
+                      <ArrowLeft className="w-4 h-4" />
                       Back
                     </button>
                     <button

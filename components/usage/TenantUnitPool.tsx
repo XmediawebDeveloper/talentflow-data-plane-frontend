@@ -9,7 +9,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
   Loader2,
-  Target,
+  ClipboardList,
   ClipboardCheck,
   Video,
   AlertTriangle,
@@ -53,7 +53,7 @@ interface TenantUnitPoolProps {
 // enough that resolving props against it collapses to `never`, so <Icon className=...>
 // failed to compile. Every value here is a lucide icon.
 const UNIT_TYPE_ICONS: Record<UnitType, LucideIcon> = {
-  RS: Target,
+  RS: ClipboardList,
   AS: ClipboardCheck,
   AIU: Video,
 };

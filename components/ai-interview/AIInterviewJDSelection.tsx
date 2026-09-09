@@ -1,5 +1,6 @@
 'use client';
 
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Briefcase, Plus, Loader2, Building2, MapPin, Clock, TrendingUp, Calendar, User, Users } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -174,11 +175,9 @@ export default function AIInterviewJDSelection() {
                       {/* Title row */}
                       <div className="flex items-center gap-2 flex-wrap">
                         {jd.job_id && (
-                          <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-brand-blue text-white rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                            {jd.job_id}
-                          </span>
+                          <JobIdBadge>{jd.job_id}</JobIdBadge>
                         )}
-                        <h3 className="font-semibold text-gray-900 truncate tracking-tight">{jd.title}</h3>
+                        <h3 className="font-semibold text-gray-900 truncate min-w-0 tracking-tight" title={jd.title}>{jd.title}</h3>
                         {/* Version from the JD row's own `current_version`. A JD
                             that has never been republished carries no value, and
                             that IS v1 — the same reading JDListPage and the JD
