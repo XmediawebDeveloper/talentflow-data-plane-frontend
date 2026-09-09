@@ -7233,8 +7233,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 .find(track => track.readyState === 'live')
             );
             if ((!pinnedStillExists && audioDevices.length > 0) || !recordingTrackLive) {
-              console.warn(`[Recording ${timestamp}] Recording microphone changed or disconnected — restarting answer capture`);
-              stopRecordingSilentRef.current();
+              console.warn(`[Recording ${timestamp}] Answer mic changed or disconnected — hot-swapping to an available device`);
+              // HOLD the answer instead of submitting it.
+              //
+              // This used to call stopRecordingSilent(), which sends end_turn:
+              // the partial answer was submitted and the backend moved on to
+              // the next question. With two mics connected, unplugging one
+              // therefore cost the candidate the rest of their answer even
+              // though another mic was sitting right there — the opposite of
+              // the "switch to the available device and carry on" behaviour
+              // this handler exists for.
+              //
+              // holdRecordingForOutage releases only the mic hardware and the
+              // per-turn watchdogs, keeping speechDetectedRef, the live
+              // transcript and the backend's open utterance, so reopening below
+              // continues the SAME turn and the eventual end_turn carries the
+              // whole answer.
+              holdRecordingForOutageRef.current();
+              // Drop the pin so the reopen goes straight to the best available
+              // device instead of spending a failing exact() attempt on the mic
+              // that was just unplugged.
+              pinnedAudioDeviceIdRef.current = undefined;
               setTimeout(() => {
                 if (
                   isRecordingRef.current === false &&
