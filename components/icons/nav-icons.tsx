@@ -81,3 +81,37 @@ export const TalentMatchIcon = forwardRef<SVGSVGElement, LucideProps>(
   ),
 );
 TalentMatchIcon.displayName = 'TalentMatchIcon';
+
+/**
+ * A gear orbited by a refresh ring — "still working on it", distinct from the
+ * plain `Eye` glyph used for a one-off "view" action. Built from two stock
+ * lucide marks (`RefreshCw`'s arc pair, `Settings`'s gear) rather than traced
+ * fresh, so it keeps their stroke geometry and drops into the same 24px/
+ * currentColor slot as every other icon here.
+ */
+export const WorkInProgressIcon = forwardRef<SVGSVGElement, LucideProps>(
+  ({ size = 24, strokeWidth = 2, className, ...props }, ref) => (
+    <svg
+      ref={ref}
+      width={size}
+      height={size}
+      strokeWidth={strokeWidth}
+      className={className}
+      {...BASE_PROPS}
+      {...props}
+    >
+      {/* Refresh ring */}
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M8 16H3v5" />
+      {/* Gear, scaled to half size and re-centred so it sits inside the ring
+          rather than colliding with it. */}
+      <g transform="translate(6 6) scale(0.5)">
+        <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+        <circle cx="12" cy="12" r="3" />
+      </g>
+    </svg>
+  ),
+);
+WorkInProgressIcon.displayName = 'WorkInProgressIcon';

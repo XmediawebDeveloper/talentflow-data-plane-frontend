@@ -193,7 +193,7 @@ export default function GlobalScoringProgressIndicator() {
 
   // Expanded panel
   return (
-    <div className="fixed bottom-6 right-6 z-[10050] w-96 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
+    <div className="fixed bottom-4 right-3 sm:bottom-6 sm:right-6 z-[10050] w-[calc(100vw-1.5rem)] sm:w-96 max-w-96 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className={`flex items-center justify-between px-4 py-3 ${
         isAllComplete ? 'bg-green-600' : 'bg-gray-800'
@@ -367,7 +367,7 @@ function JobProgressItem({
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-4 gap-2 mb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
             <div className="text-center">
               <div className="text-xs text-gray-500">Queued</div>
               <div className="text-sm font-medium text-gray-700">{job.queued}</div>
