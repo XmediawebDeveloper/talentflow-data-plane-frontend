@@ -119,6 +119,7 @@ function reportCapacityToRecruiter(cap: ClusterCapacityReport): void {
 
     const atRisk = cap.coverage_at_risk?.[key] ?? [];
     const restored = cap.coverage_restored?.[key] ?? [];
+    const typed = cap.recruiter_input?.[key];
 
     if (atRisk.length > 0) {
       const shown = atRisk.slice(0, 3).join(', ');
@@ -128,6 +129,24 @@ function reportCapacityToRecruiter(cap: ClusterCapacityReport): void {
           ` Review the clusters, or allow more questions to keep them.`,
         { duration: 12000 },
       );
+    }
+    // AIU99 AC 2/AC 5 — the recruiter typed fewer skills than their question
+    // budget needs, so expansion filled the gap. There was no branch here for a
+    // "below" verdict at all, so it was computed and discarded; and the verdict
+    // that reached us described the already-expanded list, not the one they
+    // typed. Read the pre-expansion verdict instead, which knows both numbers.
+    // Takes precedence over the "left unchanged" line below: for this bucket the
+    // interesting fact is that skills were ADDED, not that refinement was a no-op.
+    if (typed?.status === 'below') {
+      const added = typed.skills_added ?? 0;
+      toast.info(
+        `${label}: you configured ${typed.unique_skills} skill(s) for ${typed.questions} questions` +
+          (added > 0
+            ? ` — ${added} JD-based skill(s) were added so every question has its own skill.`
+            : ' — too few for one skill per question. Add more skills or reduce the questions.'),
+        { duration: 10000 },
+      );
+      continue;
     }
     if (after.status === 'exceeds' && after.coverage_locked) {
       toast.warning(
@@ -1783,6 +1802,11 @@ export default function AIInterviewClusters() {
             nthTimeMin: nthEnabled ? fixedNthMin : 0,
             // Same domain context as generate-clusters.
             jdId: config?.jd_id || undefined,
+            // AIU99 AC 2 — the recruiter's own lists, captured before expansion
+            // ran. Without these the backend can only judge the topped-up list
+            // and "Below Capacity" could never be reported to anyone.
+            mthInputSkills: preExpansionMth,
+            nthInputSkills: nthEnabled ? preExpansionNth : [],
           });
           console.log('[CLUSTER-DEBUG] /refine-clusters response:', {
             mthClusterCount: refineResult.mth_clusters?.length ?? 0,

@@ -109,10 +109,23 @@ export interface ClusterCapacityBucket {
  * accounting for them, and which retained skills changed priority band (and so
  * changed scoring weight).
  */
+/** The verdict on the recruiter's OWN skill list, before AI expansion grew it.
+ *
+ *  `before` is measured on refine's input, which is already post-expansion — so
+ *  it can never say "below". This one can, and `skills_added` says what we did
+ *  about it. Absent when the caller didn't send its pre-expansion lists. */
+export interface RecruiterInputCapacity extends ClusterCapacityBucket {
+  skills_added?: number;
+}
+
 export interface ClusterCapacityReport {
   mth: ClusterCapacityBucket;
   nth: ClusterCapacityBucket;
   before?: { mth: ClusterCapacityBucket; nth: ClusterCapacityBucket };
+  recruiter_input?: {
+    mth: RecruiterInputCapacity | null;
+    nth: RecruiterInputCapacity | null;
+  };
   refinement_applied?: { mth: boolean; nth: boolean };
   coverage_restored?: { mth: string[]; nth: string[] };
   coverage_at_risk?: { mth: string[]; nth: string[] };
@@ -1095,6 +1108,11 @@ export const aiInterviewService = {
      *  generateClusters. Send jdId and the backend resolves industry_type. */
     jdId?: string;
     industryType?: string;
+    /** The recruiter's own skill lists as they stood BEFORE /expand-skills ran.
+     * Lets the backend report the capacity verdict on what they actually
+     * configured (AIU99 AC 2) instead of on the already-topped-up list. */
+    mthInputSkills?: string[];
+    nthInputSkills?: string[];
   }): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
@@ -1120,6 +1138,8 @@ export const aiInterviewService = {
         nth_time_min: args.nthTimeMin,
         jd_id: args.jdId,
         industry_type: args.industryType,
+        mth_input_skills: args.mthInputSkills,
+        nth_input_skills: args.nthInputSkills,
       });
       return response.data;
     } catch (error) {

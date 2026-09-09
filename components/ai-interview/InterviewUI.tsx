@@ -1558,8 +1558,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // the condition for resuming.
   useEffect(() => {
     if (!isConnected) return;
-    const disabled = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive;
-    if (!disabled) return;
+    // NOTE: deliberately NOT gated on "a device is reported disabled".
+    //
+    // Recovery used to start only once proctoringState flipped a device to
+    // inactive. That created a deadlock the moment the monitor learned to hold
+    // its report back while a verified mic fallback is available (see
+    // InterviewProctoringMonitor): the report is what triggered recovery, so
+    // suppressing the report also suppressed the swap that was supposed to make
+    // the report unnecessary. The tick below decides purely from actual TRACK
+    // liveness, so it repairs a dead track whether or not anything has been
+    // reported yet — and does nothing at all while both tracks are healthy.
     // Camera and microphone are recovered INDEPENDENTLY, each with a request
     // that names only its own device.
     //
@@ -1602,7 +1610,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         } catch { /* camera still unavailable — keep polling */ }
       }
 
-      if (!audioAlive || !proctoringState.isMicrophoneActive) {
+      if (!audioAlive || !proctoringStateRef.current.isMicrophoneActive) {
         try {
           // Target the device the interview STARTED on so a replugged headset
           // is recognized as "restored" (the deviceId-swap check requires an
@@ -1618,13 +1626,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // Stop only once BOTH sides are genuinely healthy. The old loop exited on
       // the first success, which on a two-device outage abandoned the polling
       // while the second device was still missing.
-      const cur = proctoringStateRef.current;
-      if (cur.isCameraActive && cur.isMicrophoneActive) {
-        cancelled = true;
-        clearInterval(id);
-        navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
-        console.log('[InterviewUI] Device recovery: all media restored — overlay will clear');
-      }
+      // No self-cancel. This watcher stays armed for the whole interview so the
+      // SECOND unplug is repaired as promptly as the first; when both tracks are
+      // live the tick above does nothing at all.
     };
 
     // EVENT-DRIVEN first, polling only as the safety net. `devicechange` fires
