@@ -1431,15 +1431,18 @@ Best regards`);
                     }`}>
                       {resume.matchStatus}
                     </span>
-                    {/* Colour follows the verdict, not a score threshold: under the
-                        scoring mechanism Exact and Partial share the 60-100 range and
-                        are told apart by the essential average, so any score cut-off
-                        would contradict the badge beside it. */}
+                    {/* Colour follows the verdict (same palette as the badge above), not a
+                        score threshold: under the scoring mechanism Exact and Partial share
+                        the 60-100 range and are told apart by the essential average, so any
+                        score cut-off would contradict the badge beside it. */}
                     <div className={`text-lg ${
-                      (() => {
-                        const verdict = normalizeMatchResult(resume.matchStatus);
-                        return verdict ? MATCH_SCORE_TEXT_CLASS[verdict] : 'text-gray-800';
-                      })()
+                      resume.matchStatus === 'Exact Match'
+                        ? 'text-green-700'
+                        : resume.matchStatus === 'Partial Match'
+                        ? 'text-yellow-700'
+                        : resume.matchStatus === 'No Match'
+                        ? 'text-red-700'
+                        : 'text-gray-800'
                     }`}>
                       {resume.scorePercentage}%
                     </div>
