@@ -749,6 +749,9 @@ interface EditingJDData {
   nice_to_have_comments?: string[];
   certifications?: string[];
   domain_keywords?: string[];
+  // Stored skill groups (which extracted wordings were folded into which skill),
+  // read back into `mergeTrail` when a saved JD is reopened in Step 2.
+  skill_merge_trail?: JDMergeTrailEntry[];
   allow_overqualified?: boolean;
   locations?: Array<{ city: string; state?: string; country?: string; radius_km?: number; is_required?: boolean }>;
   salary_currency?: 'INR' | 'USD' | string;
@@ -6311,6 +6314,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           ...prev,
           mustHaveSkills: effectiveEditingJD.must_have_skills || [],
           niceToHaveSkills: effectiveEditingJD.nice_to_have_skills || [],
+          // Edit-mode hydration of the skill groups. Reading a STORED JD into Step 2
+          // is a different path from reading a fresh extraction result (those read
+          // it at the two `params.merge_trail || params.skill_merge_trail` sites), so
+          // without this `mergeTrail` stayed at its [] initial value on every reopen
+          // and the grouped wordings vanished from the tree. Pinned by the backend's
+          // tests/test_jd_skill_grouping.py, which greps for this expression.
+          mergeTrail: ((effectiveEditingJD.skill_merge_trail || []) as JDMergeTrailEntry[]),
           education: educationValue,
           educationRequired: false,  // Default to false - user can enable if needed
           experience: experienceValue,
