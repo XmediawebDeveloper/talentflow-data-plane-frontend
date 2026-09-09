@@ -31,7 +31,7 @@ interface ScoredResume {
   scorePercentage: number;
   // Human-readable breakdown of how scorePercentage was derived (Required/
   // Preferred pass/fail-cliff weighting) - shown as a tooltip next to the
-  // Weighted Score so it never looks like a simple average of the two
+  // Overall Score so it never looks like a simple average of the two
   // percentages shown next to it. Computed fresh per candidate by the API.
   scoreFormula?: string;
   scoredDate: string;

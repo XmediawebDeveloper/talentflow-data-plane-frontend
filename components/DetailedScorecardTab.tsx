@@ -47,7 +47,7 @@ interface ScoreBreakdownItem {
 interface ScoredResumeDetail {
   scorePercentage: number;
   // Per-candidate breakdown of how scorePercentage was derived - shown as a
-  // tooltip so the Weighted Score never looks like a plain average of the
+  // tooltip so the Overall Score never looks like a plain average of the
   // Required/Preferred percentages shown beside it.
   scoreFormula?: string;
   // Colors the "Overall Score" header below to match the same status the
@@ -186,9 +186,9 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
 
   // Extract summary rows (Required Total, Preferred Total, Final Score).
   // requiredPercentage / preferredPercentage are the WEIGHTED credits (earned of
-  // 60% / of 40%) - the same arithmetic as the Weighted Score, so the three
+  // 60% / of 40%) - the same arithmetic as the Overall Score, so the three
   // numbers in the header describe one calculation. They used to be the plain
-  // rating averages, a different formula, which put "Weighted 0%" next to
+  // rating averages, a different formula, which put "Overall 0%" next to
   // "Required 40%" for a candidate who failed every Required criterion.
   let summaryData: {
     requiredPercentage: number;
@@ -205,11 +205,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     preferredCount: number;
     preferredWeightEach: number;
     // False when a Required criterion scored below 7: Preferred is shown but
-    // not added to the Weighted Score.
+    // not added to the Overall Score.
     preferredAdded: boolean;
   } | null = null;
 
-  // Worked-through explanation for the Weighted Score tooltip - shows WHERE
+  // Worked-through explanation for the Overall Score tooltip - shows WHERE
   // each number comes from (how many criteria, what each is worth, how many
   // passed) rather than just the final percentage, so a reader can verify the
   // arithmetic themselves instead of taking "94%" on faith.
@@ -240,7 +240,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       }
     });
 
-    // Worked-through Weighted Score derivation: how many Required/Preferred
+    // Worked-through Overall Score derivation: how many Required/Preferred
     // criteria exist, what each is worth, how many cleared the 7-point cliff,
     // and what that earns - computed from the same per-criterion data the
     // table below renders, so it can never disagree with what's on screen.
@@ -451,7 +451,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       {/* Score Summary Header - Compact */}
       <div className="flex items-center gap-4 text-sm">
         <span className="text-gray-700 flex items-center gap-1">
-          Weighted Score:
+          Overall Score:
           {(weightedScoreExplanation || resume.scoreFormula) && (
             <Tooltip content={weightedScoreExplanation || resume.scoreFormula} position="bottom">
               <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
@@ -467,7 +467,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             <span className="text-gray-700 flex items-center gap-1">
               Required: <span className="font-semibold text-gray-900">{summaryData.requiredPercentage.toFixed(0)}%</span>
               <Tooltip
-                content={`Required (essential) criteria share 60% of the total, split equally: ${summaryData.requiredCount} criteria → ${summaryData.requiredWeightEach.toFixed(1)}% each. A criterion earns its full share at a rating of 7 or higher and nothing below. ${summaryData.requiredPassed} of ${summaryData.requiredCount} scored 7+ → ${summaryData.requiredPassed} × ${summaryData.requiredWeightEach.toFixed(1)}% = ${summaryData.requiredPercentage.toFixed(1)}% of 60%.${summaryData.preferredAdded ? ' Every Required criterion passed, so the Preferred credit is added on top.' : ' A Required criterion scored below 7, so this is the whole Weighted Score - Preferred is not added.'}`}
+                content={`Required (essential) criteria share 60% of the total, split equally: ${summaryData.requiredCount} criteria → ${summaryData.requiredWeightEach.toFixed(1)}% each. A criterion earns its full share at a rating of 7 or higher and nothing below. ${summaryData.requiredPassed} of ${summaryData.requiredCount} scored 7+ → ${summaryData.requiredPassed} × ${summaryData.requiredWeightEach.toFixed(1)}% = ${summaryData.requiredPercentage.toFixed(1)}% of 60%.${summaryData.preferredAdded ? ' Every Required criterion passed, so the Preferred credit is added on top.' : ' A Required criterion scored below 7, so this is the whole Overall Score - Preferred is not added.'}`}
                 position="bottom"
               >
                 <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
@@ -479,7 +479,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                 <span className="text-xs text-gray-500">(not added)</span>
               )}
               <Tooltip
-                content={`Preferred (nice-to-have) criteria share 40% of the total, split equally: ${summaryData.preferredCount} criteria → ${summaryData.preferredWeightEach.toFixed(1)}% each. A criterion earns its full share at a rating of 7 or higher and nothing below. ${summaryData.preferredPassed} of ${summaryData.preferredCount} scored 7+ → ${summaryData.preferredPassed} × ${summaryData.preferredWeightEach.toFixed(1)}% = ${summaryData.preferredPercentage.toFixed(1)}% of 40%.${summaryData.preferredAdded ? ' Added to the Required credit to make the Weighted Score.' : ' Not added to the Weighted Score because a Required criterion scored below 7 - shown so you can see what the candidate would have earned.'}`}
+                content={`Preferred (nice-to-have) criteria share 40% of the total, split equally: ${summaryData.preferredCount} criteria → ${summaryData.preferredWeightEach.toFixed(1)}% each. A criterion earns its full share at a rating of 7 or higher and nothing below. ${summaryData.preferredPassed} of ${summaryData.preferredCount} scored 7+ → ${summaryData.preferredPassed} × ${summaryData.preferredWeightEach.toFixed(1)}% = ${summaryData.preferredPercentage.toFixed(1)}% of 40%.${summaryData.preferredAdded ? ' Added to the Required credit to make the Overall Score.' : ' Not added to the Overall Score because a Required criterion scored below 7 - shown so you can see what the candidate would have earned.'}`}
                 position="bottom"
               >
                 <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
