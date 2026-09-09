@@ -771,10 +771,14 @@ export default function StepSystemCheck({
   const refreshDeviceLists = useCallback(async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      setCameraDevices(dedupeRealDevices(devices.filter((d) => d.kind === 'videoinput')));
-      setMicDevices(dedupeRealDevices(devices.filter((d) => d.kind === 'audioinput')));
+      const cameras = dedupeRealDevices(devices.filter((d) => d.kind === 'videoinput'));
+      const mics = dedupeRealDevices(devices.filter((d) => d.kind === 'audioinput'));
+      setCameraDevices(cameras);
+      setMicDevices(mics);
+      return { cameras, mics };
     } catch {
       /* enumeration unsupported or blocked — dropdowns just stay empty */
+      return { cameras: [] as MediaDeviceInfo[], mics: [] as MediaDeviceInfo[] };
     }
   }, []);
 
@@ -953,7 +957,14 @@ export default function StepSystemCheck({
     if (micIntervalRef.current) { clearInterval(micIntervalRef.current); micIntervalRef.current = null; }
     updateSystemCheck('microphone', { status: 'checking', detail: 'Requesting microphone access...' });
     const analyser = await ensureAudioAnalyser();
-    void refreshDeviceLists();
+    // Awaited (not fire-and-forget): the auto-select-when-there's-only-one-mic
+    // effect further down reacts to the `micDevices` STATE, which can't land
+    // until a render after this function returns — too late for the gate
+    // check a few lines below. Resolving it here, against the list this call
+    // just fetched, is what lets a single-microphone machine pass on the
+    // very first "Run Check" instead of failing once and self-correcting
+    // only on Retry.
+    const { mics } = await refreshDeviceLists();
     if (!analyser) {
       // A specific device was already selected (this check likely passed
       // before) but is no longer reachable — that's a disconnect, not a
@@ -984,6 +995,10 @@ export default function StepSystemCheck({
     // STATE inside this closure, since switchMicrophone calls this function in
     // the same tick as setSelectedMicId, before React re-renders with the new
     // value — the ref is always current.
+    if (!selectedMicIdRef.current && mics.length === 1) {
+      selectedMicIdRef.current = mics[0].deviceId;
+      setSelectedMicId(mics[0].deviceId);
+    }
     if (!selectedMicIdRef.current) {
       updateSystemCheck('microphone', {
         status: 'fail',

@@ -579,6 +579,21 @@ export const aiInterviewService = {
   },
 
   /**
+   * Whether the OpenAI key backing cluster generation is configured.
+   * Fails open (returns available: true) on error so a transient network
+   * issue here never blocks the recruiter — actual generation still has
+   * its own error surfaced on the Clusters page.
+   */
+  async getAIConfigStatus(): Promise<{ available: boolean }> {
+    try {
+      const response = await api.get<{ available: boolean }>('/ai-interview/ai-config-status');
+      return response.data;
+    } catch {
+      return { available: true };
+    }
+  },
+
+  /**
    * Save settings
    */
   async saveSettings(data: AIInterviewSettingsUpdate): Promise<AIInterviewSettingsResponse> {
