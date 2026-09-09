@@ -250,7 +250,7 @@ export default function Settings() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50 flex items-center justify-center">
+      <main className="flex-1 overflow-x-hidden bg-slate-50 flex items-center justify-center">
         <div className="w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
           <p className="font-semibold text-gray-600 dark:text-slate-400">Loading settings...</p>
@@ -260,7 +260,7 @@ export default function Settings() {
   }
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings' }]} />

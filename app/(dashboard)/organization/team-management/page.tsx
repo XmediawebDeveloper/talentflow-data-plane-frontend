@@ -378,7 +378,7 @@ export default function TeamManagementPage() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="w-full max-w-[1400px] mx-auto p-4 md:p-8">
           <div className="w-full">
             <section className="relative mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-4 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-5 lg:p-6">
@@ -406,7 +406,7 @@ export default function TeamManagementPage() {
 
   return (
     <FeatureGate feature="teams">
-      <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+      <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users', href: '/organization/user-management' }, { label: 'Teams' }]} />

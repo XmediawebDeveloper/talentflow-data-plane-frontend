@@ -942,7 +942,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const stickyHeaderClass = 'bg-slate-50';
 
   return (
-    <div ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <div ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           {/* Previous / Next assessment navigation rides inside the breadcrumb
@@ -2033,10 +2033,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-t border-gray-100">
                   <button
                     onClick={() => setExportStep('format')}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors"
+                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors"
                   >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back
+                    ← Back
                   </button>
                   <button
                     onClick={() => {

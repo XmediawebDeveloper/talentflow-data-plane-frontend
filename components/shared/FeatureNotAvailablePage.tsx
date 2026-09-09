@@ -3,8 +3,8 @@
 import {
   Users,
   Upload,
+  Target,
   ClipboardList,
-  BarChart3,
   Video,
   Key,
   Shield,
@@ -21,8 +21,8 @@ import { PlanFeatureKey, PLAN_FEATURE_METADATA } from '@/lib/types/planFeatures'
 const ICON_MAP: Record<string, IconComponent> = {
   Users,
   Upload,
+  Target,
   ClipboardList,
-  BarChart3,
   Video,
   Key,
   Shield,

@@ -18,7 +18,7 @@ export function PageContainer({
   return (
     <div
       className={cn(
-        'relative flex-1 flex flex-col overflow-x-clip bg-slate-50 dark:bg-slate-950',
+        'relative flex-1 flex flex-col overflow-x-hidden bg-slate-50 dark:bg-slate-950',
         className,
       )}
     >

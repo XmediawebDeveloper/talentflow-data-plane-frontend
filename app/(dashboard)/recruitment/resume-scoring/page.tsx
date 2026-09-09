@@ -812,7 +812,7 @@ export default function ResumeScoringRoute() {
 
   return (
     <FeatureGate feature="resume_scoring">
-      <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
+      <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
         <ResumeScoringPage
         jobs={jobs}
         resumes={resumes}

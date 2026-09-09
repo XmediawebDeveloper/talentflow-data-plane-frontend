@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Loader2, XCircle, ClipboardList, TrendingUp, Clock, AlertCircle, RefreshCw, History, Minus } from 'lucide-react';
+import { CheckCircle2, Loader2, XCircle, Target, TrendingUp, Clock, AlertCircle, RefreshCw, History, Minus } from 'lucide-react';
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { scoringService } from '@/lib/services';
@@ -590,7 +590,7 @@ export default function ResumeScoringStatusPanel({
           <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-900 px-6 py-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                <ClipboardList className="w-6 h-6 text-white" />
+                <Target className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
                 <h2 className="text-xl text-white font-semibold">AI Resume Scoring in Progress</h2>

@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User, Tenant, Permission, FeatureFlags, UserRole } from '@/lib/types/tenant';
 import { authService, clearTokens } from '@/lib/services';
 import { handleUnauthorized, dispatchAccessRestrictedEvent } from '@/lib/services/api';
@@ -142,10 +142,6 @@ function mapApiFeatureFlagsToFeatureFlags(apiFlags?: ApiFeatureFlags): FeatureFl
 export function mapApiUserToUser(apiUser: ApiUser): User {
   return {
     id: apiUser.id,
-    // Human-readable id ("US-008"). Display only — nothing is gated on it, so
-    // carrying it across cannot change behaviour, unlike `is_tenant_admin`
-    // below, which is deliberately left unmapped for exactly that reason.
-    userDisplayId: apiUser.user_display_id,
     email: apiUser.email,
     name: apiUser.name,
     role: apiUser.role as UserRole,
@@ -286,46 +282,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const isAuthenticated = !!user;
-
-  /* ---- Backfill the human-readable user id ("US-008") ------------------------
-     `mapApiUserToUser` copies it straight off `/auth/me` whenever that endpoint
-     returns `user_display_id`, and then this does nothing at all.
-
-     It exists because that field was only ever guaranteed on the USER-MANAGEMENT
-     records — it is what the Users list and the Audit Trail render — and the
-     auth payload is not certain to carry it. Rather than leave the signed-in
-     user as the one person in the product who cannot see their own id, fetch
-     the record by id and take it from there.
-
-     Runs at most once per signed-in user: the ref records who has been asked
-     for, so a re-render, a `refreshUser()`, or a token refresh cannot fire it
-     again. It fails silently — `/users/{id}` may be closed to non-admins, and a
-     missing badge is not worth a console error or a toast on every load. */
-  const displayIdFetchedForRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!user?.id || user.userDisplayId) return;
-    if (displayIdFetchedForRef.current === user.id) return;
-    displayIdFetchedForRef.current = user.id;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const { userService } = await import('@/lib/services/userService');
-        const record = await userService.getUser(user.id);
-        if (cancelled || !record?.user_display_id) return;
-        /* Patched onto whatever the user object is by the time this lands, not
-           onto the one captured when the fetch started — `refreshUser` may have
-           replaced it in between, and rewriting the stale copy would undo it. */
-        setUser(prev => (prev && prev.id === user.id
-          ? { ...prev, userDisplayId: record.user_display_id }
-          : prev));
-      } catch {
-        /* No id badge. Nothing else depends on it. */
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [user?.id, user?.userDisplayId]);
 
   // RBAC01-07: Role-based helpers
   const isTenantAdmin = user ? isTenantAdminRole(user.role) : false;

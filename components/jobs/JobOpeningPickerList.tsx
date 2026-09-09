@@ -82,14 +82,6 @@ export interface JobOpeningPickerListProps {
    * published-only listing, unchanged.
    */
   showAllStatuses?: boolean;
-  /**
-   * Anchor placed immediately above the first job card, for a host that wants
-   * to scroll this list to the top of the screen when it opens (Resume
-   * Scoring's "Score Resumes" does). Sits above the cards rather than on the
-   * first one so it holds its position while the jobs are still loading —
-   * they render below it.
-   */
-  listAnchorRef?: RefObject<HTMLDivElement | null>;
 }
 
 /**
@@ -110,7 +102,6 @@ export default function JobOpeningPickerList({
   onProceed,
   proceedLabel = 'Select Resumes',
   showAllStatuses = false,
-  listAnchorRef,
 }: JobOpeningPickerListProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -396,8 +387,6 @@ export default function JobOpeningPickerList({
             </button>
           </div>
         )}
-
-        <div ref={listAnchorRef} className="scroll-mt-4" aria-hidden="true" />
 
         {currentJobs.length > 0 ? (
           <div className="space-y-2 sm:space-y-3">

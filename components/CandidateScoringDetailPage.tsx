@@ -149,22 +149,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
-  /* The sticky tab bar below pins directly under the sticky breadcrumb, so its
-     offset is the breadcrumb's real height — re-measured on resize, because the
-     bar grows when its RecordPager row wraps. Hardcoding the height let the
-     crumb bar overlap and swallow the tab bar's clicks. */
-  const breadcrumbBarRef = useRef<HTMLElement | null>(null);
-  const [tabBarTop, setTabBarTop] = useState(52);
-  useEffect(() => {
-    const bar = breadcrumbBarRef.current;
-    if (!bar || typeof ResizeObserver === 'undefined') return;
-    const measure = () => setTabBarTop(bar.getBoundingClientRect().height);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(bar);
-    return () => observer.disconnect();
-  }, []);
-
   // Share Resume dialog state.
   const [showShareResumeModal, setShowShareResumeModal] = useState(false);
   const [shareEmail, setShareEmail] = useState('');
@@ -600,18 +584,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     return 'text-red-600';
   };
 
-  // Same three colors as the Match Status badge next to it, so the one
-  // overall score reads as that status rather than its own score-threshold
-  // scale — unlike getScoreColor above, which stays threshold-based for the
-  // Score Table tab's many individual criteria, none of which carry their
-  // own match status to key off.
-  const getOverallScoreColor = (matchStatus: string) => {
-    const normalized = matchStatus?.toLowerCase().replace(/[_\s]/g, '');
-    if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'text-green-600';
-    if (normalized === 'partialmatch') return 'text-brand-orange-deep';
-    return 'text-red-600';
-  };
-
   const getScoreBgColor = (score: number) => {
     if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
     if (score >= 70) return 'bg-gray-100 border-gray-300 text-gray-700';
@@ -637,7 +609,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const getMatchStatusColor = (status: string) => {
     const normalized = status?.toLowerCase().replace(/[_\s]/g, '');
     if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'bg-green-100 text-green-700 border-green-300';
-    if (normalized === 'partialmatch') return 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/30';
+    if (normalized === 'partialmatch') return 'bg-yellow-100 text-yellow-700 border-yellow-300';
     return 'bg-red-100 text-red-700 border-red-300';
   };
 
@@ -1062,7 +1034,6 @@ Best regards`);
               no "› Resume" leaf, and the pager keeps its place (the backdrop
               covers it while the modal is open). */}
           <PageBreadcrumb
-            barRef={breadcrumbBarRef}
             className="mb-4 md:mb-6"
             // Previous / Next rides inside the breadcrumb bar, as on job-details.
             actions={
@@ -1218,7 +1189,7 @@ Best regards`);
           {/* Score Display - Compact */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-gray-50 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200">
             <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-              <div className={`text-2xl sm:text-3xl font-bold ${getOverallScoreColor(fullResumeData.matchStatus || resume.matchStatus)}`}>{fullResumeData.scorePercentage}%</div>
+              <div className={`text-2xl sm:text-3xl font-bold ${getScoreColor(fullResumeData.scorePercentage)}`}>{fullResumeData.scorePercentage}%</div>
               <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
                 {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
               </span>
@@ -1255,16 +1226,9 @@ Best regards`);
           pt-4 / sm:pt-6, so the strip itself — not the padding above it —
           settles at that mark. */}
       <div ref={tabsSectionRef} className="pt-4 sm:pt-6 scroll-mt-9 sm:scroll-mt-7">
-        {/* Pinned directly below the breadcrumb, which is itself sticky at top-0.
-            The offset is MEASURED, not the "~52px" it used to assume: the
-            breadcrumb carries the RecordPager and grows past that when the row
-            wraps, and because the crumb bar is the higher layer (z-30) any part
-            of this pinned bar it covers stops taking clicks — they land on the
-            crumb link behind it and navigate away. Same fix as job-details. */}
-        <div
-          style={{ top: tabBarTop }}
-          className="sticky z-20 bg-white rounded-t-xl border-x-2 border-t-2 border-gray-200 shadow-sm"
-        >
+        {/* Pinned below the breadcrumb, which is itself sticky at top-0 and
+            ~52px tall — the same offset job-details uses for its tab bar. */}
+        <div className="sticky top-[52px] z-20 bg-white rounded-t-xl border-x-2 border-t-2 border-gray-200 shadow-sm">
           <div className="flex gap-1 px-3 sm:px-6 pt-2 overflow-x-auto scrollbar-hide">
             {[
               { id: 'overview', label: 'Overview' },
@@ -1461,7 +1425,6 @@ Best regards`);
               resume={{
                 scorePercentage: fullResumeData.scorePercentage,
                 scoreFormula: fullResumeData.scoreFormula,
-                matchStatus: fullResumeData.matchStatus || resume.matchStatus,
                 scoredDate: fullResumeData.scoredDate,
                 scoredBy: fullResumeData.scoredBy,
                 detailedScores: detailedScores,

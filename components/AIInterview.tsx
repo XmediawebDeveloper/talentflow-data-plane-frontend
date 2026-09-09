@@ -4,8 +4,6 @@ import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
-import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
-import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -156,10 +154,6 @@ export default function AIInterview() {
   const [invitations, setInvitations] = useState<AIInterviewResponse[]>([]);
   const [loadingInvitations, setLoadingInvitations] = useState(false);
   const [isRefreshingInvites, setIsRefreshingInvites] = useState(false);
-  /* Holds the tracking dialog's height while a manual Refresh runs, so the
-     content-driven box cannot move under the pointer. Shared with every other
-     popup that carries a Refresh button - see the hook for why. */
-  const invitesHeightLock = useDialogHeightLock<HTMLDivElement>();
   const [resendingEmailFor, setResendingEmailFor] = useState<string | null>(null); // session id
   // Resend-with-new-link confirmation dialog target
   const [resendInviteTarget, setResendInviteTarget] = useState<any | null>(null);
@@ -483,11 +477,7 @@ export default function AIInterview() {
     if (!viewInvitationsConfig || isRefreshingInvites || loadingInvitations) return;
     setIsRefreshingInvites(true);
     try {
-      /* The dialog holds the height it had for the whole request - see
-         `useDialogHeightLock`. The rows staying mounted underneath (the veil
-         in the body, below) is the other half of it; the pin alone would have
-         nothing to hold up once released. */
-      await invitesHeightLock.run(() => refreshInvitationsView(viewInvitationsConfig.id));
+      await refreshInvitationsView(viewInvitationsConfig.id);
     } finally {
       setIsRefreshingInvites(false);
     }
@@ -685,18 +675,6 @@ export default function AIInterview() {
   };
 
   const handleViewInvitations = async (config: AIInterviewResponse) => {
-    /* Loading from the very first paint. The effect that fetches the rows runs
-       AFTER the popup's first render, so without this the body showed "No
-       candidates invited yet" for one frame - wrong, and a third height for
-       the dialog to pass through on the way in: empty state, then spinner,
-       then table. Declaring the load here collapses that to one. */
-    setLoadingInvitations(true);
-    /* And start from no rows. They are deliberately NOT cleared on close - the
-       candidate detail view steps Prev/Next through this same list after the
-       popup has gone - so without this, opening the tracker for a DIFFERENT
-       config rendered the previous one's candidates until the fetch returned,
-       at the previous one's height. */
-    setInvitations([]);
     setViewInvitationsConfig(config);
     setInviteFilters(EMPTY_INVITE_FILTERS);
     setInvitationPage(1);
@@ -1154,7 +1132,7 @@ export default function AIInterview() {
     : 'neutral';
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       {/* The page shell and this panel had no dark variants at all, so every
           card inside was painting a dark surface onto a white page. */}
@@ -2393,17 +2371,6 @@ export default function AIInterview() {
             return next;
           });
 
-        /* Two different loading states, because they have to look different.
-           With no rows yet (first open, or a filter that emptied the list) the
-           spinner is the whole body, which is right - there is nothing for it
-           to sit over. With rows already on screen and a re-read in flight
-           (Refresh, a page turn, a filter change) the rows stay put and the
-           spinner rides over them: swapping a full list for a `py-12` spinner
-           collapsed the body to a fraction of its height, and the
-           content-driven, vertically-centred dialog jumped with it. */
-        const invitesInitialLoading = loadingInvitations && invitations.length === 0;
-        const invitesRefreshVeil = loadingInvitations && invitations.length > 0;
-
         const filtersActive = hasActiveInviteFilters(inviteFilters);
         const startIndex = invitationTotal === 0 ? 0 : (invitationPage - 1) * INVITATION_PAGE_SIZE + 1;
         const endIndex = Math.min(invitationPage * INVITATION_PAGE_SIZE, invitationTotal);
@@ -2427,12 +2394,7 @@ export default function AIInterview() {
                 full screen with empty space under the rows. The list absorbs the
                 overflow once the cap engages, so a long list still scrolls inside
                 the dialog on a 320px phone. */}
-            <div
-              /* Width is fixed by the breakpoint ladder and no state touches
-                 it; height is what moved, so only height is pinned, and only
-                 while a refresh is in flight. */
-              {...invitesHeightLock.dialogProps}
-              className={TRACKER_DIALOG_PANEL_CLASS}>
+            <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] w-full sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[92dvh] sm:max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
               {/* Header */}
               <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
                 <div className="min-w-0 flex-1">
@@ -2463,13 +2425,7 @@ export default function AIInterview() {
                     className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingInvites ? 'animate-spin' : ''}`} />
-                    {/* The label swaps to "Refreshing..." mid-request, and the
-                        longer word used to widen the button and shove the
-                        close X sideways. The span reserves the wider word's
-                        width in both states, so the header never moves. */}
-                    <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
-                      {isRefreshingInvites ? 'Refreshing...' : 'Refresh'}
-                    </span>
+                    <span className="hidden sm:inline">{isRefreshingInvites ? 'Refreshing...' : 'Refresh'}</span>
                   </button>
                   <button
                     onClick={() => setViewInvitationsConfig(null)}
@@ -2530,12 +2486,8 @@ export default function AIInterview() {
                 searchPlaceholder="Search by candidate name or email..."
               />
 
-              {/* Bulk selection bar — only once there's a revocable invite on this page.
-                  Gated on the FIRST load, not on every load: this bar
-                  disappearing and reappearing during a Refresh was one more
-                  height change in the stack of them, and its contents come
-                  from `invitations`, which a refresh keeps. */}
-              {!invitesInitialLoading && selectableIds.length > 0 && (
+              {/* Bulk selection bar — only once there's a revocable invite on this page. */}
+              {!loadingInvitations && selectableIds.length > 0 && (
                 <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
                   <button
                     type="button"
@@ -2574,18 +2526,10 @@ export default function AIInterview() {
                   shell (or the mobile card stack) inside is the single vertical
                   scroller. Two nested scrollers meant this one won, scrolling the
                   sticky header and pinned Actions column away with the rows. */}
-              {/* `relative` so the refresh veil below covers exactly this body
-                  without joining its flow - an overlay adds no height, which is
-                  the whole point of it. */}
-              <div className="relative px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
+              <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
                 <AIInterviewInviteTable
                   invitations={invitations}
-                  /* Only the FIRST load may swap the rows for a spinner, when
-                     there are no rows to swap. Re-reading rows that are already
-                     on screen leaves them exactly where they are - the table
-                     collapsing to a `py-12` spinner and back is what made this
-                     dialog jump on Refresh. */
-                  isLoading={invitesInitialLoading}
+                  isLoading={loadingInvitations}
                   hasActiveFilters={filtersActive}
                   emptyHint={'Use the "Send via Email" button to invite candidates'}
                   selectedIds={selectedInviteIds}
@@ -2603,22 +2547,6 @@ export default function AIInterview() {
                   resendingId={resendingEmailFor}
                   revokingId={revokingInviteFor}
                 />
-
-                {/* Re-reading rows that are already on screen. The list keeps
-                    its exact size and place; this only tints it and says why,
-                    and it takes the clicks so nobody acts on a row that is
-                    about to be replaced. */}
-                {invitesRefreshVeil && (
-                  <div
-                    className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
-                    aria-live="polite"
-                  >
-                    <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-xs sm:text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
-                      <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
-                      Refreshing invite statuses...
-                    </span>
-                  </div>
-                )}
               </div>
 
               {/* Footer. Stacks on phones: the count line plus four page buttons,

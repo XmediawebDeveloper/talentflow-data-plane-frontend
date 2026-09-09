@@ -51,7 +51,7 @@ async function setUp(page: Page, code?: JdAccessCode, seeded = false) {
 /** Drive the scored-resume list to the table the Tier-1 rows assert against. */
 async function openScoredTable(page: Page) {
   await page.goto("/recruitment/resume-scoring");
-  await page.getByRole("button", { name: /View by Candidates/ }).first().click();
+  await page.getByRole("button", { name: /View All Candidates/ }).first().click();
   await page.waitForTimeout(1500);
 }
 

@@ -77,18 +77,7 @@ export interface Job {
   experience_max?: number; // Maximum years of experience
   applicants?: number;
   description?: string;
-  /**
-   * The JD's skills as ONE list — historically `must_have_skills`, which is
-   * what every list and card that shows "skills" on a job has always read.
-   * Kept as it is; the two fields below are the same data unflattened, added
-   * for the surfaces that need the distinction rather than replacing this.
-   */
   skills?: string[];
-  /** The JD's must-have / nice-to-have skills, kept apart as the JD states
-   *  them. `skills` above collapses to must-have only, so a surface that has
-   *  to show the two groups separately reads these. */
-  must_have_skills?: string[];
-  nice_to_have_skills?: string[];
   postedDate?: string;
   postedBy?: string;
   internalRecruiterComments?: string[];

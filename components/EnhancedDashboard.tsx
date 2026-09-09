@@ -8,7 +8,7 @@ import {
   Users,
   FileText,
   ArrowUpRight,
-  ClipboardList,
+  Target,
   CheckCircle,
   AlertCircle,
   Calendar,
@@ -527,7 +527,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   };
 
   return (
-    <div className="bg-slate-50 dark:bg-slate-950 flex-1 overflow-x-clip">
+    <div className="bg-slate-50 dark:bg-slate-950 flex-1 overflow-x-hidden">
       <div className="space-y-6 p-4 md:p-8 w-full max-w-[1400px] mx-auto">
       {/* Welcome Banner */}
       <WelcomeBanner user={user} tenant={tenant} />
@@ -1038,7 +1038,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   onClick={() => router.push('/recruitment/resume-scoring?mode=new')}
                 >
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-teal/10 ring-1 ring-brand-teal/15 group-hover:bg-brand-teal/15 transition-colors">
-                    <ClipboardList className="h-5 w-5 text-brand-teal" />
+                    <Target className="h-5 w-5 text-brand-teal" />
                   </span>
                   <span className="text-sm font-medium text-gray-900 dark:text-slate-50">Score Resumes</span>
                 </Button>

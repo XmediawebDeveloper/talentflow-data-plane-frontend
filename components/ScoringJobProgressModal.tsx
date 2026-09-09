@@ -1,6 +1,6 @@
 'use client';
 
-import { X, ClipboardList, Clock, Loader2, CheckCircle2, XCircle, AlertCircle, Minus, Maximize2, User, FileText, RotateCcw, Timer } from 'lucide-react';
+import { X, Target, Clock, Loader2, CheckCircle2, XCircle, AlertCircle, Minus, Maximize2, User, FileText, RotateCcw, Timer } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 export interface ResumeProgressItem {
@@ -164,7 +164,7 @@ export default function ScoringJobProgressModal({
         className="fixed bottom-4 right-4 z-50 bg-brand-blue text-white px-4 py-3 rounded-xl shadow-2xl shadow-brand-blue/25 hover:bg-brand-blue-2 transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300 ring-1 ring-white/10 max-w-xs"
       >
         <div className="relative flex-shrink-0">
-          <ClipboardList className="w-5 h-5" />
+          <Target className="w-5 h-5" />
           {overallInProgress > 0 && (
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-brand-cyan rounded-full animate-pulse" />
           )}
@@ -247,7 +247,7 @@ export default function ScoringJobProgressModal({
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="h-9 w-9 sm:h-10 sm:w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-              <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+              <Target className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">Scoring: {jobTitle}</h2>

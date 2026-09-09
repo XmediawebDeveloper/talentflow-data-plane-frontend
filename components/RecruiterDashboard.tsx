@@ -98,7 +98,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
   const aiInterviewQuota = { used: toNum(aiInterviewQ?.subscription?.used), limit: toNum(aiInterviewQ?.subscription?.limit) };
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="flex-1 overflow-x-hidden bg-slate-50 dark:bg-slate-950">
       <div className="p-4 md:p-8 w-full max-w-[1400px] mx-auto">
         <div className="mb-8">
           <WelcomeBanner user={user} tenant={tenant} />

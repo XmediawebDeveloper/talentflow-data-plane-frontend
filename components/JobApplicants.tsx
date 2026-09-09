@@ -85,9 +85,9 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
       case 'partial':
         return { 
           label: 'Partial Match', 
-          bg: 'bg-brand-orange/10', 
-          text: 'text-brand-orange-deep', 
-          border: 'border-brand-orange/20',
+          bg: 'bg-gray-100', 
+          text: 'text-gray-900', 
+          border: 'border-gray-300',
           icon: AlertTriangle 
         };
       case 'low':

@@ -242,30 +242,6 @@
   --score-low: #ef4444;
   --score-low-bg: #fee2e2;
 
-  /* ── Invite / attempt status tokens ─────────────────────────────────────
-     One semantic colour per status in the invite lifecycle, so a status reads
-     the same wherever it is drawn — the badge in an invite table, the status
-     filter on the Assessments page's Invitation Status tab, anything added
-     next. These were the same four colours before, spelled out as literal
-     Tailwind classes in each component, which is how they would have drifted.
-
-     Three of the four alias the brand palette rather than restating a hex,
-     because that is what the badges were already using. Completed's green has
-     no brand equivalent, so it carries the value the badges already drew it
-     with (Tailwind green-700). Terminal failure states (Invite Failed,
-     Bounced, Terminated) are NOT here — they are still per-component reds;
-     tokenise them when something needs to share them.
-
-     Used through the utilities in @theme below: text-status-completed,
-     bg-status-completed/10, ring-status-completed/20, … Alpha modifiers work
-     because these resolve to plain colour values. Dark values are in the
-     .dark block — the same colours the badges' `dark:` variants used to name
-     one by one. */
-  --status-invited: var(--brand-blue);
-  --status-expired: var(--brand-orange-deep);
-  --status-progress: var(--brand-cyan);
-  --status-completed: #15803d;
-
   /* ── Brand palette (logo-based) ─────────────────────────────────────── */
   /* Deep blue family (primary brand) */
   --brand-blue: #0f3c99;
@@ -552,14 +528,6 @@
   --color-brand-peach: var(--brand-peach);
   --color-brand-sky: var(--brand-sky);
 
-  /* Invite / attempt status utilities — text-status-completed,
-     bg-status-expired/10, ring-status-progress/20, and so on. See the token
-     definitions in :root above (and their dark values in .dark). */
-  --color-status-invited: var(--status-invited);
-  --color-status-expired: var(--status-expired);
-  --color-status-progress: var(--status-progress);
-  --color-status-completed: var(--status-completed);
-
   /* Three-dot (⋮) menu icon utilities — text-menu-icon-view,
      text-menu-icon-archive, etc. See the token definitions in :root above. */
   --color-menu-icon-view: var(--menu-icon-view);
@@ -658,22 +626,6 @@
   --score-medium-bg: rgba(245, 158, 11, 0.15);
   --score-low: #f87171;
   --score-low-bg: rgba(239, 68, 68, 0.15);
-
-  /* Invite / attempt status tokens — dark mode. Listed explicitly rather than
-     left to alias the brand tokens: --brand-* keep their light values in dark
-     mode (it is the `.dark .text-brand-*` utility overrides further down that
-     lift them), so a status token pointing at var(--brand-blue) would render
-     the deep light-mode blue on a dark page.
-
-     Each value is the one the invite badges' own `dark:` variants already
-     used, so nothing about how a status looks in dark mode changes:
-     .dark .text-brand-blue (#93c5fd), .dark .text-brand-orange-deep
-     (#fdba74), .dark .text-brand-cyan (#67e8f9) and .dark .text-green-700
-     (#4ade80). */
-  --status-invited: #93c5fd;
-  --status-expired: #fdba74;
-  --status-progress: #67e8f9;
-  --status-completed: #4ade80;
 
   /* Marketing palette — dark side. Only the tokens that actually flip are
      listed; the fixed ones (navy band, solid buttons, cyan/amber fills) keep
@@ -1961,39 +1913,6 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
   }
 }
 
-/* ── Page containers clip sideways with `overflow-x: clip`, never `hidden` ──
-   House rule, and the reason every page shell in this app reads
-   `overflow-x-clip` (see `components/ui/section-container.tsx`, the shared one)
-   rather than the `overflow-x-hidden` they all used to carry.
-
-   `overflow-x: hidden` does not mean "clip sideways". Per CSS Overflow, when
-   one axis is not `visible` the other's `visible` computes to `auto` — so
-   `overflow-x: hidden` alone silently makes the element a VERTICAL SCROLL
-   CONTAINER. On a page shell that is never what was wanted, and it cost four
-   things at once:
-
-     - The app's own scroll area (`flex-1 overflow-y-auto` in the dashboard
-       layout) stopped being the thing that scrolls. The page shell nested
-       inside it scrolled instead — measured three nested `overflow-y: auto`
-       boxes on the assessments route, only the innermost of which could move.
-     - `position: sticky` re-targets to the nearest scroll container, so every
-       sticky breadcrumb and table header was pinning to the accidental
-       scroller rather than to the app's.
-     - `100dvh`-based caps inside (this file's table and dialog caps) measure
-       the window, which is no longer the scrollport they sit in.
-     - Two scrollbar-bearing surfaces where the design has one.
-
-   `overflow-x: clip` is the property that means what these shells intended: it
-   clips the overflow and creates NO scroll container, so the app scroll area
-   stays the single scroller and sticky keeps resolving against it. The only
-   behaviour it gives up is programmatic sideways scrolling (`scrollLeft`),
-   which no page shell does — `.tf-table-shell` is the one element in the app
-   that scrolls sideways under script, and it stays `overflow: auto`.
-
-   An element that genuinely IS a vertical scroller keeps
-   `overflow-x-hidden overflow-y-auto`, spelled out. Both axes stated, nothing
-   inferred, nothing accidental. */
-
 /* ── Data-table shell ──────────────────────────────────────────────────
    One class giving every list table the three behaviours the app wants:
    a bounded scroll viewport, a header that stays put while the body
@@ -2014,7 +1933,7 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
    That leaves the vertical track running the full height of the shell, header
    included, since a native bar can only span the box that owns it. So the
    native bars are hidden and redrawn as an overlay whose vertical track starts
-   below the header — see `[data-tf-native-bars]` further down and
+   below the header — see `.tf-vscroll-custom` further down and
    `components/TableScrollbars.tsx`. Scrolling itself is still the browser's;
    only the bars' rendering is ours.
 
@@ -2028,35 +1947,13 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
    wrappers — a stray max-h-[300px] or whitespace-normal can't undo them.
    Cells that genuinely need to wrap opt out with `tf-wrap`. */
 .tf-table-shell {
+  min-height: 400px;
   /* dvh, not vh: on a phone `100vh` is the URL-bar-hidden viewport, so a vh
      cap is taller than what the user can actually see — and by a different
      amount in Safari, Firefox and Chrome, since each retracts its chrome on a
      different trigger. dvh is the visible viewport in all of them, and is
-     identical to vh on desktop. Matches the dialog caps in this file.
-
-     The floor is `min(400px, <cap>)` rather than a flat 400px, and that is not
-     a nicety: `min-height` BEATS `max-height` in CSS, so a flat floor above
-     the cap does not lose the argument — it wins it, and the cap stops
-     existing. Below a 720px-tall viewport (a landscape phone, a laptop with
-     devtools docked, a short window) 400px is above the cap, so every table in
-     the app was pinned to 400px inside a viewport with less than that to give:
-     the shell overhung the screen, the page grew a scrollbar it should not
-     have had, and the shell's top slid up under the sticky breadcrumb —
-     dragging its overlay scrollbar up there with it, which is the other half
-     of the breadcrumb-overlap bug.
-
-     Written as a `min()` so the two rules can no longer disagree: on any
-     viewport tall enough for the old floor to be reachable (>= 720px, i.e.
-     every ordinary laptop and desktop) `min()` still resolves to 400px and
-     nothing about the shell changes. It only gives way where it was previously
-     overruling the cap.
-
-     The cap keeps a floor of its own for the same "never fight" reason: below
-     a 320px-tall viewport `100dvh - 20rem` goes negative, and a negative cap
-     collapses the shell to nothing. 14rem is roughly a header plus three rows
-     — small, but a table rather than a sliver. */
-  min-height: min(400px, calc(100dvh - 20rem));
-  max-height: max(14rem, calc(100dvh - 20rem));
+     identical to vh on desktop. Matches the dialog caps in this file. */
+  max-height: calc(100dvh - 20rem);
   overflow: auto;
 }
 .tf-table-shell thead {
@@ -2200,25 +2097,6 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   max-height: none;
 }
 
-/* ScoreTableModal (the "View Score Table" popup): embeds
-   DetailedScorecardTab's rubric table — a `.tf-table-shell` sized for the
-   full CandidateScoringDetailPage's generous surrounding space — inside a
-   much shorter modal that already scrolls itself (`.score-table-modal-body`).
-   Two independently-scrolling, independently-sticky containers stacked like
-   that is exactly the "one scroll container per table" rule above warns
-   about, and here it showed up as the table visibly bleeding past the modal
-   card. Dropping the shell's own cap and letting it grow to natural height
-   makes the modal body the only vertical scroller; its sticky `thead`
-   retargets to that ancestor instead and keeps working. */
-.score-table-modal-body .tf-table-shell {
-  min-height: 0;
-  max-height: none;
-  /* y only — the element's own `overflow-x-auto` (DetailedScorecardTab.tsx)
-     still has to contain the rubric table sideways; only the vertical cap
-     and its independent scroll/sticky context are the problem here. */
-  overflow-y: visible;
-}
-
 /* ── Custom scrollbars for the shell ───────────────────────────────────
    The native vertical bar has to span the whole shell, header included,
    because the shell is the scroll container and the header sits inside it.
@@ -2233,45 +2111,15 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
    The webkit line is kept for older WebKit that predates the standard
    property. `!important` for the same reason: it is overriding that `*` rule.
 
-   The mark is written at runtime, and only after the component has measured
+   The class is added at runtime, and only after the component has measured
    that these rules really do remove the native bars — so a browser that
-   ignores them keeps working native ones rather than getting none at all.
-
-   Keyed off a `data-` attribute rather than a class because React owns the
-   `class` attribute on every shell it renders: a re-render that changed a
-   shell's className string wiped a runtime-added class, the native bars came
-   back underneath the overlay, and the table showed two horizontal scrollbars.
-   React never writes an attribute it did not render, so this one survives. */
-[data-tf-native-bars='hidden'] {
+   ignores them keeps working native ones rather than getting none at all. */
+.tf-vscroll-custom {
   scrollbar-width: none !important;
 }
-[data-tf-native-bars='hidden']::-webkit-scrollbar {
+.tf-vscroll-custom::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
-}
-
-/* ── The horizontal bar's gutter ───────────────────────────────────────
-   Reserved space at the bottom of a shell that scrolls sideways, so the
-   horizontal bar has ground of its own instead of floating over the last row.
-
-   Without it the bar was drawn inside the scrollport at the bottom edge, on top
-   of whatever row happened to be there — and because the track is only 8px tall
-   and (until now) let pointer events through, a tap that missed the thumb
-   landed on the `<tr>` underneath. On the 24 tables in this app whose rows
-   navigate on click, that meant dragging the scrollbar opened a record.
-
-   `padding-bottom`, not `border-bottom`: 48 of these shells carry a `border`
-   utility that IS the visible card outline around the table, and widening the
-   bottom border to make a gutter would have replaced that hairline with a 16px
-   gap — an open-bottomed card. Padding sits inside the border, so every shell
-   keeps the outline it draws today.
-
-   Keyed off the data attribute `TableScrollbars` sets, so it applies to
-   precisely the shells that actually overflow sideways; a table that fits is
-   byte-for-byte unchanged. Paired with `.tf-vscroll-gutter`, which masks the
-   same strip while the rows are mid-scroll — see the note there. */
-[data-tf-xbar='1'] {
-  padding-bottom: 16px;
 }
 
 /* Overlay lives at the end of <body>, outside React's tree, and is
@@ -2286,49 +2134,12 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   z-index: 10000;
   pointer-events: none;
 }
-/* The horizontal bar's trough: an opaque strip under the bar, the width of the
-   shell's visible area. The `padding-bottom` above reserves the space, which
-   answers the case that matters most (scrolled to the end of the rows, and
-   every table that scrolls sideways but not down) — but a shell scrolled to the
-   MIDDLE of its rows still has a row passing behind that strip, and the bar
-   would be drawn over it again.
-
-   So the strip is painted, not merely reserved: opaque, so no cell text ever
-   shows through the bar, and `pointer-events: auto`, so a tap anywhere in it is
-   the scrollbar's rather than the row's. It reads as an ordinary scrollbar
-   trough, which is what it is.
-
-   Colours follow the sticky <thead> and sticky-column rules above — the same
-   "a pinned surface needs an opaque background or the rows show through"
-   problem, answered the same way and with the same two values. */
-.tf-vscroll-gutter {
-  position: absolute;
-  top: 0;
-  left: 0;
-  background-color: #ffffff;
-  pointer-events: auto;
-  touch-action: none;
-}
-.dark .tf-vscroll-gutter {
-  background-color: oklch(0.208 0.042 265.755); /* slate-900, matches card surfaces */
-}
-
 .tf-vscroll-bar {
   position: absolute;
   top: 0;
   left: 0;
-  /* Vertical: still thumb-only. That track lies over the right-hand end of the
-     rows — the pinned Actions column — where a live track WOULD swallow clicks
-     meant for a row, which is why it was made inert in the first place. */
-  pointer-events: none;
-}
-/* Horizontal: the whole track is live, because after the gutter above there is
-   nothing under it to swallow. This is what stops a near-miss on the thumb from
-   reaching the row, and it makes the entire 16px strip a drag target instead of
-   an 8px sliver — the difference between usable and not on touch. */
-.tf-vscroll-bar--x {
-  pointer-events: auto;
-  touch-action: none;
+  pointer-events: none; /* only the thumb is interactive — a live track would
+                           swallow clicks on whatever sits at the row's edge */
 }
 .tf-vscroll-thumb {
   position: absolute;
@@ -2344,23 +2155,8 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
 .tf-vscroll-bar--y .tf-vscroll-thumb {
   width: 100%;
 }
-/* Fills the whole track but paints only the middle band, so the horizontal pill
-   is exactly as thick as the vertical one while the grabbable area is twice as
-   tall. The transparent-border + `background-clip: padding-box` trick is the one
-   `.scrollbar-visible`'s thumb already uses further up this file.
-
-   The border is DERIVED from the two thicknesses rather than written as the 4px
-   it currently works out to, because that 4px is the difference between two
-   numbers that live in `TableScrollbars.tsx` — the track's height and the bar's
-   visible thickness — and a hardcoded half-difference silently stops being half
-   the difference the moment either changes. The component sets both custom
-   properties on the overlay root; the fallbacks are today's values, so the rule
-   still paints the right thickness on its own. */
 .tf-vscroll-bar--x .tf-vscroll-thumb {
   height: 100%;
-  border-top: calc((var(--tf-x-gutter, 16px) - var(--tf-bar-size, 8px)) / 2) solid transparent;
-  border-bottom: calc((var(--tf-x-gutter, 16px) - var(--tf-bar-size, 8px)) / 2) solid transparent;
-  background-clip: padding-box;
 }
 .tf-vscroll-thumb:hover,
 .tf-vscroll-thumb.is-dragging {
@@ -2375,25 +2171,14 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
 }
 
 /* Guard rail for the one-scroll-container rule: a wrapper immediately around a
-   scroll container, or one immediately inside it, would draw a second
-   horizontal track a few pixels from the first.
-
-   Both of this app's table scroll containers count on both sides of the pair —
-   `.tf-table-shell` and `.table-responsive` — so the rule holds whichever a
-   table uses, and a `.table-responsive` nested in either is caught too.
-
-   Only the sideways-only scrollers are neutralised: `overflow-x: visible`
-   computes back to `auto` on an element that also scrolls vertically, so a
-   dialog body or a `.tf-table-shell` keeps doing its job and is never a target
-   here — it is only ever the container whose single bar survives.
-
-   Direct-child scope, deliberately: a scrollable <pre>, a chip row or a code
-   block deeper inside a cell is its own affair and is left alone. */
-:where(.tf-table-shell, .table-responsive)
-  > :where(.overflow-x-auto, .overflow-x-scroll, .table-responsive),
-:where(.overflow-x-auto, .overflow-x-scroll, .table-responsive):has(
-    > :where(.tf-table-shell, .table-responsive)
-  ) {
+   shell, or one immediately inside it, would draw a second horizontal track a
+   few pixels from the shell's own. Only the sideways-only
+   utilities are neutralised, so a wrapper that scrolls vertically (a dialog
+   body, say) keeps doing its job, and a scrollable <pre> deeper inside a cell
+   is left alone. */
+.tf-table-shell > .overflow-x-auto,
+.tf-table-shell > .overflow-x-scroll,
+:where(.overflow-x-auto, .overflow-x-scroll):has(> .tf-table-shell) {
   overflow-x: visible;
 }
 

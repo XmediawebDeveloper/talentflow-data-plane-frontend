@@ -110,14 +110,7 @@ export default function CreateAssessmentPage() {
           : returnUrl
       );
     } else {
-      /* `?tab=all` opens the Assessments page on All Assessments — the list
-         holding what was just created, with the Total Assessments card lit
-         because that card selects this very tab. Without it the recruiter
-         landed on the summary cards and had to find their way back into the
-         list they had just added a row to.
-         The param is read on the first render there and stripped straight
-         away, so a later reload of that page shows its normal cards view. */
-      router.replace('/recruitment/assessments?tab=all');
+      router.replace('/recruitment/assessments');
     }
   };
 

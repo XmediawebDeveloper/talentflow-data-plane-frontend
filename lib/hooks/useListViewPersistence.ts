@@ -6,17 +6,13 @@ import { useEffect, useRef, type RefObject } from 'react';
  * Find the element that actually scrolls this page's content.
  *
  * Subtlety that bit us across the app: the dashboard layout nests several
- * `flex-1` boxes, and `overflow-x: hidden` on any of them forces the *computed*
- * `overflow-y` to `auto` there too (see the house rule above `.tf-table-shell`
- * in globals.css — that accident is why every page shell now says
- * `overflow-x-clip`). So more than one ancestor can report `overflow-y: auto`
- * while only ONE is height-constrained enough that its content overflows and it
- * truly scrolls (usually the dashboard layout's own `flex-1 overflow-y-auto`).
- * The shells no longer add to that count, but the boxes that are genuinely
- * vertical scrollers — dialog bodies, the layout's scroll area — still nest, so
- * the walk keeps its rule: start at the element itself and return the first
- * candidate that is BOTH scrollable AND actually overflowing. Checking
- * overflow-y alone picks a non-scrolling box whose scrollTop is permanently 0.
+ * `flex-1` boxes, and Tailwind's `overflow-x-hidden` forces the *computed*
+ * `overflow-y` to `auto` on those boxes too. So multiple ancestors report
+ * `overflow-y: auto`, but only ONE of them is height-constrained enough that
+ * its content overflows and it truly scrolls (often the page root itself).
+ * We therefore start at the element itself and return the first candidate that
+ * is BOTH scrollable AND actually overflowing — checking overflow-y alone
+ * picks a non-scrolling box whose scrollTop is permanently 0.
  */
 function getScrollParent(el: HTMLElement | null): HTMLElement | null {
   let node: HTMLElement | null = el;

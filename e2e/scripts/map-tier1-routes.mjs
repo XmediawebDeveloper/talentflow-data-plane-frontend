@@ -137,17 +137,17 @@ const GROUPS = [
   { title: "No Cross-User Visibility", route: "/recruitment/resume-database", confidence: "high" },
 
   // ------------------------------------------------------ Resume scoring ---
-  { title: "Scored Resumes List View", route: "/recruitment/resume-scoring", confidence: "high", openCard: "View by Candidates" },
-  { title: "Responsive Scored Resume List", route: "/recruitment/resume-scoring", confidence: "high", openCard: "View by Candidates" },
-  { title: "Dynamic Column Customization", route: "/recruitment/resume-scoring", confidence: "high", openCard: "View by Candidates" },
+  { title: "Scored Resumes List View", route: "/recruitment/resume-scoring", confidence: "high", openCard: "View All Candidates" },
+  { title: "Responsive Scored Resume List", route: "/recruitment/resume-scoring", confidence: "high", openCard: "View All Candidates" },
+  { title: "Dynamic Column Customization", route: "/recruitment/resume-scoring", confidence: "high", openCard: "View All Candidates" },
   { title: "JD-wise Scored Resume Repository", route: "/recruitment/resume-scoring", confidence: "high", openCard: "View by Job" },
-  { title: "Candidate Scorecard Model", route: "/recruitment/resume-scoring", confidence: "medium", openCard: "View by Candidates" },
+  { title: "Candidate Scorecard Model", route: "/recruitment/resume-scoring", confidence: "medium", openCard: "View All Candidates" },
   { title: "Pre-Condition Validation for Resume Scoring", route: "/recruitment/resume-scoring", confidence: "high" },
   { title: "Scoring Entry Point Normalization", route: "/recruitment/resume-scoring", confidence: "medium" },
   { title: "Bulk Resume Scoring", route: "/recruitment/resume-scoring", confidence: "medium" },
   { title: "Single Resume Scoring", route: "/recruitment/resume-scoring", confidence: "medium" },
   { title: "JD Selection Module", route: "/recruitment/resume-scoring/jd-selection", confidence: "high" },
-  { title: "Excel Export (Column-Aware)", route: "/recruitment/resume-scoring", confidence: "medium", openCard: "View by Candidates" },
+  { title: "Excel Export (Column-Aware)", route: "/recruitment/resume-scoring", confidence: "medium", openCard: "View All Candidates" },
   { title: "Scoring Audit Trail, Error Handling & Retry", route: "/recruitment/resume-scoring", confidence: "medium" },
   { title: "AI Scoring Engine Integration & Unit Deduction", block: BACKEND_ONLY },
   { title: "Internal DB Resume Existence Alert", route: "/recruitment/resume-scoring", confidence: "medium" },
@@ -169,7 +169,7 @@ const GROUPS = [
   { title: "Column Selection & Export", route: "/recruitment/assessments", confidence: "medium", openCard: "Total Assessments" },
   { title: "Invite Modal from Assessment Module", route: "/recruitment/assessments", confidence: "medium", openCard: "Total Assessments" },
   { title: "Invite from JD Page", route: "/recruitment/job-openings", confidence: "medium", openCard: "Total Jobs" },
-  { title: "Invite Shortcut from Resume Scoring", route: "/recruitment/resume-scoring", confidence: "medium", openCard: "View by Candidates" },
+  { title: "Invite Shortcut from Resume Scoring", route: "/recruitment/resume-scoring", confidence: "medium", openCard: "View All Candidates" },
   { title: "HR Question", route: "/recruitment/hr-question-bank", confidence: "high" },
   { title: "HR Questions", route: "/recruitment/hr-question-bank", confidence: "high" },
   { title: "Role Scope", route: "/recruitment/assessments", confidence: "medium" },
@@ -462,7 +462,7 @@ const ASSERT_BY_TITLE = {
     value: "Candidate Name|Match Status|Score %" },
   // These rows open "View by Job", which is a per-JD card grid — no candidate
   // table at all (measured: 0 <th>, 0 rows). Asserting the table's columns here
-  // was my error: I carried them over from the "View by Candidates" probe
+  // was my error: I carried them over from the "View All Candidates" probe
   // without measuring this path, and all seven rows failed. What this view
   // genuinely shows is the scored JD itself.
   "JD-wise Scored Resume Repository": { route: "/recruitment/resume-scoring", kind: "text_visible",

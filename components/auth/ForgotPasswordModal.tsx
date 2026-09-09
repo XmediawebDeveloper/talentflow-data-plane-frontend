@@ -8,7 +8,6 @@ import ResetPasswordArt from './ResetPasswordArt';
 import VerifyCodeArt from './VerifyCodeArt';
 import PasswordLockArt from './PasswordLockArt';
 import ResetSuccessArt from './ResetSuccessArt';
-import SuccessAnimation from '@/components/ui/success-animation';
 
 interface ForgotPasswordModalProps {
   isOpen: boolean;
@@ -71,33 +70,11 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    /* The success Lottie's own running time. `public/animations/success.json`
-       is 45 frames at 29.97fps, so it needs a shade over 1.5s from the moment
-       the 'done' phase mounts it.
-
-       This used to be 900ms (done 3300 -> handover 4200), which was sized for
-       the CSS tick that preceded it — a scale-in that is over in a third of a
-       second. The Lottie was therefore cut off around 60% and the password step
-       arrived on top of a half-drawn animation. */
-    const SUCCESS_LOTTIE_MS = 1502;
-    // A beat after it finishes, so the completed tick registers as a result
-    // rather than flicking straight to the next screen.
-    const SETTLE_MS = 400;
-    const DONE_AT = 3300;
-
     // Reduced motion: the theme already collapses every transition to ~0s, so
     // hold each phase just long enough to read rather than replaying the turn.
-    // No Lottie plays on this path — it falls back to the static tick — so the
-    // handover stays short and owes nothing to the durations above.
     const at = reduced
       ? { swap1: 0, swap2: 0, merge: 0, done: 0, handover: 700 }
-      : {
-          swap1: 700,
-          swap2: 1700,
-          merge: 2700,
-          done: DONE_AT,
-          handover: DONE_AT + SUCCESS_LOTTIE_MS + SETTLE_MS,
-        };
+      : { swap1: 700, swap2: 1700, merge: 2700, done: 3300, handover: 4200 };
 
     clearOtpTimers();
     setOtpPhase('grid');
@@ -503,24 +480,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                   role="status"
                   aria-label={otpPhase === 'done' ? 'Verification code accepted' : undefined}
                 >
-                  {/* Mounted only at 'done', deliberately.
-                      The merged bar is in the DOM the whole time (the phases
-                      just fade it in), so a Lottie rendered alongside it would
-                      autoplay while still invisible and be finished before the
-                      user ever saw it. Mounting on the phase that reveals the
-                      bar is what makes it play on arrival.
-
-                      Reduced motion — and the frame before the player loads —
-                      falls back to the tick that was here before, in the green
-                      this bar expects. */}
-                  {otpPhase === 'done' && (
-                    <SuccessAnimation
-                      className="tf-otp-lottie"
-                      fallback={
-                        <Check className="tf-otp-tick" style={{ width: 26, height: 26, opacity: 1, transform: 'none' }} />
-                      }
-                    />
-                  )}
+                  <Check className="tf-otp-tick" style={{ width: 26, height: 26 }} />
                 </div>
               </div>
 

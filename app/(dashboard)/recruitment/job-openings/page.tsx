@@ -1,11 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
+import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
-import ArchiveJobModal from '@/components/ArchiveJobModal';
-import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -13,7 +11,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
-import { mapJDToJob, formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
+import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import {
@@ -29,21 +27,11 @@ import {
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 
 // Master-data quick links surfaced on the Job Openings page (moved here from the sidebar).
-/**
- * The icon for one "Active in" entry in the cannot-delete dialog. Matched on
- * the label the usage summary already builds (e.g. "Resume Scoring (3)")
- * rather than a second parallel list of module keys, so a new module shows up
- * with the generic folder until it is added here — never as a missing icon.
- */
-const usageModuleIcon = (label: string) => {
-  const name = label.toLowerCase();
-  if (name.includes('resume scoring')) return FileSearch;
-  if (name.includes('assessment')) return ClipboardCheck;
-  if (name.includes('talent match')) return Users;
-  if (name.includes('interview')) return Video;
-  return FolderOpen;
-};
-
+const MASTER_DATA_LINKS = [
+  { id: 'experience-levels', label: 'Experience Levels', href: '/masters/experience-levels', icon: Clock },
+  { id: 'education-levels', label: 'Education Levels', href: '/masters/education-levels', icon: GraduationCap },
+  { id: 'industry-types', label: 'Industry Types', href: '/masters/industry-types', icon: Factory },
+];
 
 const JD_BATCH_SIZE = 100;
 
@@ -67,22 +55,10 @@ export default function JobOpeningsPage() {
     jobTitle: string;
     usageDetails: string[];
   }>({ open: false, jobTitle: '', usageDetails: [] });
-  /* `disabling` keeps the confirmation on screen — buttons locked, spinner on
-     the action — while the status write is in flight, rather than closing on
-     click and leaving the row unchanged until the response lands. */
   const [disableDialog, setDisableDialog] = useState<{
     open: boolean;
     job: Job | null;
-    disabling: boolean;
-  }>({ open: false, job: null, disabling: false });
-  /* Archiving is confirmed, never immediate. `busy` keeps the modal open with a
-     spinner while the request is in flight, so a slow save cannot be clicked
-     twice or read as nothing having happened. */
-  const [archiveDialog, setArchiveDialog] = useState<{
-    open: boolean;
-    job: Job | null;
-    busy: boolean;
-  }>({ open: false, job: null, busy: false });
+  }>({ open: false, job: null });
   const router = useRouter();
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
@@ -372,18 +348,15 @@ export default function JobOpeningsPage() {
   const markVersionStatus = (versionId: string, status: string) =>
     setVersionStatusOverrides(prev => ({ ...prev, [versionId]: status }));
 
-  const closeDisableDialog = () => setDisableDialog({ open: false, job: null, disabling: false });
-
   const handleDisableJob = (job: Job) => {
     // Show confirmation dialog instead of directly disabling
-    setDisableDialog({ open: true, job, disabling: false });
+    setDisableDialog({ open: true, job });
   };
 
   const confirmDisableJob = async () => {
     const job = disableDialog.job;
-    if (!job || disableDialog.disabling) return;
+    if (!job) return;
 
-    setDisableDialog(prev => ({ ...prev, disabling: true }));
     try {
       await jdService.updateStatus(job.id, 'disabled');
       setJobs(prev => prev.map(j =>
@@ -391,12 +364,10 @@ export default function JobOpeningsPage() {
       ));
       markVersionStatus(job.id, 'disabled');
       toast.info(`"${job.title}" has been disabled`);
-      closeDisableDialog();
     } catch (error) {
       toast.error('Failed to disable job');
-      // Stay open so the recruiter can retry — closing here would look like
-      // the disable went through.
-      setDisableDialog(prev => ({ ...prev, disabling: false }));
+    } finally {
+      setDisableDialog({ open: false, job: null });
     }
   };
 
@@ -413,18 +384,7 @@ export default function JobOpeningsPage() {
     }
   };
 
-  /* Every archive trigger on this page — the list row menu, the grid card menu
-     and the version-history rows — is handed THIS, not the archive itself, so
-     none of them can archive without the confirm. The work moved to
-     `confirmArchiveJob` below, which only the modal calls. */
-  const requestArchiveJob = (job: Job) => {
-    setArchiveDialog({ open: true, job, busy: false });
-  };
-
-  const confirmArchiveJob = async () => {
-    const job = archiveDialog.job;
-    if (!job) return;
-    setArchiveDialog(prev => ({ ...prev, busy: true }));
+  const handleArchiveJob = async (job: Job) => {
     try {
       await jdService.updateStatus(job.id, 'archived');
       setJobs(prev => prev.map(j =>
@@ -432,11 +392,8 @@ export default function JobOpeningsPage() {
       ));
       markVersionStatus(job.id, 'archived');
       toast.success(`"${job.title}" has been archived`);
-      setArchiveDialog({ open: false, job: null, busy: false });
     } catch (error) {
       toast.error('Failed to archive job');
-      /* Left open on failure — closing it would look like the archive worked. */
-      setArchiveDialog(prev => ({ ...prev, busy: false }));
     }
   };
 
@@ -537,7 +494,7 @@ export default function JobOpeningsPage() {
   }
 
   return (
-    <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
+    <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
       <JobsListing
         jobs={jobs}
         onCreateNew={hasPermission('canCreateJD') || isTenantAdmin ? handleCreateNew : undefined}
@@ -551,24 +508,14 @@ export default function JobOpeningsPage() {
         versionStatusOverrides={versionStatusOverrides}
         onDisableJob={isTenantAdmin || hasPermission('canDisableJD') ? handleDisableJob : undefined}
         onRepublishJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleRepublishJob : undefined}
-        onArchiveJob={isTenantAdmin || hasPermission('canArchiveJD') ? requestArchiveJob : undefined}
+        onArchiveJob={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchiveJob : undefined}
         onUnarchiveJob={hasPermission('canArchiveJD') || isTenantAdmin ? handleUnarchiveJob : undefined}
         onDeleteJob={hasPermission('canDeleteJD') || isTenantAdmin ? handleDeleteJob : undefined}
         onBulkDelete={hasPermission('canDeleteJD') || isTenantAdmin ? handleBulkDeleteJobs : undefined}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
         forceListView={forceListView}
-        configHref={canManageMasters ? '/recruitment/job-openings/config' : undefined}
-      />
-
-      {/* Archive confirm — the same component the Job Details page renders, so
-          the warning cannot differ depending on where the archive started. */}
-      <ArchiveJobModal
-        isOpen={archiveDialog.open}
-        jobLabel={archiveDialog.job ? formatJobVersionLabel(archiveDialog.job) : ''}
-        isLoading={archiveDialog.busy}
-        onConfirm={confirmArchiveJob}
-        onCancel={() => setArchiveDialog({ open: false, job: null, busy: false })}
+        masterDataLinks={canManageMasters ? MASTER_DATA_LINKS : undefined}
       />
 
       {/* Edit Warning Dialog — same component the JD detail page uses, so the
@@ -584,14 +531,14 @@ export default function JobOpeningsPage() {
 
       {/* Delete Warning Dialog - shown when JD is in use */}
       <AlertDialog open={deleteWarningDialog.open} onOpenChange={(open) => setDeleteWarningDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-xl max-h-[90dvh] overflow-y-auto">
+        <AlertDialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
           <AlertDialogHeader>
             <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-red-100 ring-4 ring-red-50 flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 sm:w-7 sm:h-7 text-red-600 fill-red-600/15" />
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
               <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">
+                <AlertDialogTitle className="text-lg font-semibold text-gray-900">
                   Cannot Delete Job Description
                 </AlertDialogTitle>
                 <AlertDialogDescription className="mt-1 text-sm text-gray-500">
@@ -601,70 +548,28 @@ export default function JobOpeningsPage() {
             </div>
           </AlertDialogHeader>
 
-          <div className="mt-4 space-y-3.5">
-            {/* Where it's in use — the modules themselves, two to a row, each
-                named with its own icon and count rather than a bare chip. */}
-            <div className="rounded-xl border border-red-200 bg-red-50/70 p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 flex items-center justify-center">
-                  <FolderOpen className="w-4 h-4 text-red-600" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold uppercase tracking-wide text-red-600">Active in</p>
-                  <p className="text-sm text-gray-700">
-                    This job description is linked to the following active modules.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {deleteWarningDialog.usageDetails.map((usage, index) => {
-                  const UsageIcon = usageModuleIcon(usage);
-                  return (
-                    <span
-                      key={index}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold bg-white border border-red-200 text-red-700 shadow-sm"
-                    >
-                      <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
-                      <UsageIcon className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">{usage}</span>
-                    </span>
-                  );
-                })}
+          <div className="mt-4 space-y-4">
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-red-700 mb-2.5">Active in</p>
+              <div className="flex flex-wrap gap-2">
+                {deleteWarningDialog.usageDetails.map((usage, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white border border-red-300 text-red-800 shadow-sm"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                    {usage}
+                  </span>
+                ))}
               </div>
             </div>
-
-            {/* What that means, and what to do instead. */}
-            <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-brand-blue flex items-center justify-center">
-                  <Info className="w-4 h-4 text-white" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-gray-700">
-                    <span className="font-bold text-brand-blue">&quot;{deleteWarningDialog.jobTitle}&quot;</span> is linked to the active modules above.
-                  </p>
-                  <p className="mt-1 text-sm text-gray-600">
-                    Deleting it could affect existing data and processes.
-                  </p>
-                </div>
-              </div>
-
-              <div className="my-3 border-t border-dashed border-blue-200" />
-
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-9 h-9 flex items-center justify-center">
-                  <ShieldCheck className="w-6 h-6 text-brand-blue" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-gray-700">
-                    <span className="font-bold text-brand-blue">We recommend disabling</span> the job description instead.
-                  </p>
-                  <p className="mt-1 text-sm text-gray-600">
-                    This will stop new applications while keeping existing data safe.
-                  </p>
-                </div>
-              </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm text-gray-700">
+                <span className="font-medium text-gray-900">&quot;{deleteWarningDialog.jobTitle}&quot;</span> is linked to active modules above. Deleting it could affect existing data.
+              </p>
+              <p className="mt-1.5 text-sm text-gray-500">
+                Disable the job description instead to stop new applications while preserving existing data.
+              </p>
             </div>
           </div>
 
@@ -679,15 +584,55 @@ export default function JobOpeningsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Disable Job Confirmation Dialog — the same component the Job Details
-          page and the JD list sheet render. */}
-      <DisableJobModal
-        isOpen={disableDialog.open}
-        jobLabel={disableDialog.job ? formatJobVersionLabel(disableDialog.job) : ''}
-        isLoading={disableDialog.disabling}
-        onCancel={closeDisableDialog}
-        onConfirm={confirmDisableJob}
-      />
+      {/* Disable Job Confirmation Dialog */}
+      <AlertDialog open={disableDialog.open} onOpenChange={(open) => setDisableDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
+          <AlertDialogHeader>
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
+              </div>
+              <div className="flex-1 pt-1">
+                <AlertDialogTitle className="text-base sm:text-lg font-semibold text-gray-900">
+                  Disable Job Description?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="mt-2 text-xs sm:text-sm text-gray-600">
+                  Are you sure you want to disable <span className="font-medium text-gray-800">&quot;{disableDialog.job?.title}&quot;</span>?
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="mt-3 sm:mt-4 ml-0 sm:ml-16">
+            <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">
+              If you disable this JD, it will be removed from:
+            </p>
+            <ul className="list-disc list-inside text-xs sm:text-sm text-gray-600 space-y-1">
+              <li>Resume Scoring</li>
+              <li>Assessment Generation</li>
+              <li>AI Talent Match</li>
+            </ul>
+            <p className="mt-2.5 sm:mt-3 text-xs sm:text-sm text-gray-500">
+              You can re-enable this JD later if needed.
+            </p>
+          </div>
+
+          <AlertDialogFooter className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
+            <button
+              onClick={() => setDisableDialog({ open: false, job: null })}
+              className="px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <AlertDialogAction
+              onClick={confirmDisableJob}
+              className="bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm"
+            >
+              Yes, Disable
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

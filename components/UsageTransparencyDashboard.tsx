@@ -5,10 +5,10 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { ArrowLeft,
+import {
   Eye, Download, X, BarChart3,
   CheckCircle2, XCircle, AlertCircle, Loader2, Clock,
-  ClipboardList, Video, ClipboardCheck, FileText, TrendingUp, TrendingDown,
+  Target, Video, ClipboardCheck, FileText, TrendingUp, TrendingDown,
   Layers, Minus, RefreshCw
 } from 'lucide-react';
 import {
@@ -111,7 +111,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
   const getUnitTypeIcon = (unitType: UnitType) => {
     switch (unitType) {
       case 'RS':
-        return <ClipboardList className="w-4 h-4" />;
+        return <Target className="w-4 h-4" />;
       case 'AS':
         return <ClipboardCheck className="w-4 h-4" />;
       case 'AIU':
@@ -228,9 +228,8 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               {onBack && (
                 <button
                   onClick={onBack}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
                 >
-                  <ArrowLeft className="w-4 h-4" />
                   Back
                 </button>
               )}

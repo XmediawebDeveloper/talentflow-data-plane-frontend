@@ -80,13 +80,6 @@ export interface FeatureFlags {
 
 export interface User {
   id: string;
-  /**
-   * Human-readable user id, e.g. "US-008" — the same field the Users list and
-   * the Audit Trail already display. Optional because it is backfilled: older
-   * accounts may not have one, and the auth endpoints are not guaranteed to
-   * return it even where the user-management endpoints do.
-   */
-  user_display_id?: string;
   tenant_id: string;
   email: string;
   name: string;

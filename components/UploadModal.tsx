@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Upload, File, Trash2, FolderPlus, FolderOpen, FolderInput, FolderRoot, Archive, ChevronRight, ChevronDown, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, FileUser, Files, Database, Info, Lightbulb, ClipboardList } from 'lucide-react';
+import { X, Upload, File, Trash2, FolderPlus, FolderOpen, FolderInput, FolderRoot, Archive, ChevronRight, ChevronDown, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, FileUser, Files, Database, Info, Lightbulb, Target } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
@@ -911,7 +911,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                   }}
                   className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                 >
-                  <ClipboardList className="w-4 h-4" />
+                  <Target className="w-4 h-4" />
                   Score Against a Job
                 </button>
               </div>
