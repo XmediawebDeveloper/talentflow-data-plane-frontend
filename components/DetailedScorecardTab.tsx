@@ -28,6 +28,19 @@ interface ScoreBreakdownItem {
   is_essential?: boolean;
   percentage?: number;
   raw_percentage?: number;
+  // Summary rows only (Required Total / Preferred Total / Final Score). The
+  // weighted credit is what the Score Table header shows: `passed` of `total`
+  // criteria scored 7+, each worth `weight_each`, earning `weighted_percentage`
+  // of `max_weight` (60 for Required, 40 for Preferred). `raw_percentage` is
+  // the plain rating average and is no longer displayed.
+  weighted_percentage?: number;
+  passed?: number;
+  total?: number;
+  weight_each?: number;
+  max_weight?: number;
+  // Preferred Total only: false when a Required criterion scored below 7, in
+  // which case the Preferred credit is computed but not added to the total.
+  added?: boolean;
   key?: string;
 }
 
@@ -171,7 +184,12 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     aiReasoning: string;
   }> = [];
 
-  // Extract summary rows (Required Total, Preferred Total, Final Score)
+  // Extract summary rows (Required Total, Preferred Total, Final Score).
+  // requiredPercentage / preferredPercentage are the WEIGHTED credits (earned of
+  // 60% / of 40%) - the same arithmetic as the Weighted Score, so the three
+  // numbers in the header describe one calculation. They used to be the plain
+  // rating averages, a different formula, which put "Weighted 0%" next to
+  // "Required 40%" for a candidate who failed every Required criterion.
   let summaryData: {
     requiredPercentage: number;
     preferredPercentage: number;
@@ -180,6 +198,15 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     requiredMax: number;
     preferredTotal: number;
     preferredMax: number;
+    requiredPassed: number;
+    requiredCount: number;
+    requiredWeightEach: number;
+    preferredPassed: number;
+    preferredCount: number;
+    preferredWeightEach: number;
+    // False when a Required criterion scored below 7: Preferred is shown but
+    // not added to the Weighted Score.
+    preferredAdded: boolean;
   } | null = null;
 
   // Worked-through explanation for the Weighted Score tooltip - shows WHERE
@@ -242,7 +269,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             {_numPref > 0 && (
               <p>
                 Preferred: {_numPref} criteria → each worth 40% ÷ {_numPref} = {_perPref.toFixed(1)}%. {_prefPassed} of {_numPref} scored 7+ → {_prefPassed} × {_perPref.toFixed(1)}% = {_prefEarned.toFixed(1)}%.
-                {_reqEarned < 60 && _numReq > 0 && ' Not counted - Required must earn the full 60% first.'}
+                {_reqEarned < 60 && _numReq > 0 && ' Not added - a Required criterion scored below 7, so only the Required credit counts.'}
               </p>
             )}
             <p className="font-semibold">Total: {_reqEarned.toFixed(1)}% + {_prefEarned.toFixed(1)}% = {resume.scorePercentage}%</p>
@@ -251,34 +278,58 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       }
     }
 
-    // Build summary data from summary rows
+    // Build summary data from summary rows (weighted credits from the API).
     if (requiredSummary || preferredSummary || finalSummary) {
+      const reqCount = requiredSummary?.total ?? 0;
+      const prefCount = preferredSummary?.total ?? 0;
+      const reqPassed = requiredSummary?.passed ?? 0;
+      const prefPassed = preferredSummary?.passed ?? 0;
       summaryData = {
-        requiredPercentage: requiredSummary?.raw_percentage ?? requiredSummary?.percentage ?? 0,
-        preferredPercentage: preferredSummary?.raw_percentage ?? preferredSummary?.percentage ?? 0,
+        requiredPercentage: requiredSummary?.weighted_percentage ?? requiredSummary?.percentage ?? 0,
+        preferredPercentage: preferredSummary?.weighted_percentage ?? preferredSummary?.percentage ?? 0,
         finalPercentage: finalSummary?.percentage || resume.scorePercentage,
         requiredTotal: requiredSummary?.rating || 0,
         requiredMax: requiredSummary?.max_rating || 60,
         preferredTotal: preferredSummary?.rating || 0,
         preferredMax: preferredSummary?.max_rating || 40,
+        requiredPassed: reqPassed,
+        requiredCount: reqCount,
+        requiredWeightEach: requiredSummary?.weight_each ?? (reqCount > 0 ? 60 / reqCount : 0),
+        preferredPassed: prefPassed,
+        preferredCount: prefCount,
+        preferredWeightEach: preferredSummary?.weight_each ?? (prefCount > 0 ? 40 / prefCount : 0),
+        preferredAdded: preferredSummary?.added ?? (reqCount === 0 || reqPassed === reqCount),
       };
     } else {
-      // Fallback: calculate from regular items using Odoo formula
-      // Essential (6 criteria) = 60% weight, Non-Essential (4 criteria) = 40% weight
+      // Fallback: derive the same weighted credits from the per-criterion rows.
+      // Required shares 60% equally, Preferred shares 40%; a criterion earns its
+      // share at 7 or higher and nothing below. Preferred is only added once
+      // every Required criterion has passed.
       const requiredItems = regularItems.filter(item => item.requirement === 'Required' || item.is_essential);
       const preferredItems = regularItems.filter(item => item.requirement === 'Preferred' || !item.is_essential);
       const requiredTotal = requiredItems.reduce((sum, item) => sum + (item.rating || 0), 0);
       const preferredTotal = preferredItems.reduce((sum, item) => sum + (item.rating || 0), 0);
-      const requiredMax = requiredItems.length * 10 || 60;
-      const preferredMax = preferredItems.length * 10 || 40;
+      const reqCount = requiredItems.length;
+      const prefCount = preferredItems.length;
+      const reqPassed = requiredItems.filter(item => (item.rating ?? 0) >= 7).length;
+      const prefPassed = preferredItems.filter(item => (item.rating ?? 0) >= 7).length;
+      const reqEarned = reqCount > 0 ? Math.round((60 * reqPassed / reqCount) * 100) / 100 : 0;
+      const prefEarned = prefCount > 0 ? Math.round((40 * prefPassed / prefCount) * 100) / 100 : 0;
       summaryData = {
-        requiredPercentage: requiredMax > 0 ? Math.round((requiredTotal / requiredMax) * 100) : 0,
-        preferredPercentage: preferredMax > 0 ? Math.round((preferredTotal / preferredMax) * 100) : 0,
+        requiredPercentage: reqEarned,
+        preferredPercentage: prefEarned,
         finalPercentage: resume.scorePercentage,
         requiredTotal,
-        requiredMax,
+        requiredMax: reqCount * 10 || 60,
         preferredTotal,
-        preferredMax,
+        preferredMax: prefCount * 10 || 40,
+        requiredPassed: reqPassed,
+        requiredCount: reqCount,
+        requiredWeightEach: reqCount > 0 ? 60 / reqCount : 0,
+        preferredPassed: prefPassed,
+        preferredCount: prefCount,
+        preferredWeightEach: prefCount > 0 ? 40 / prefCount : 0,
+        preferredAdded: reqCount === 0 || reqPassed === reqCount,
       };
     }
 
@@ -318,16 +369,28 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
 
     const requiredItems = criteriaScores.filter(item => item.criteriaType === 'Required');
     const preferredItems = criteriaScores.filter(item => item.criteriaType === 'Preferred');
-    const requiredMax = requiredItems.length * 10 || 60;
-    const preferredMax = preferredItems.length * 10 || 40;
+    // Same weighted credits as the summary-row path: 60% / 40% split equally,
+    // full share at 7+ and nothing below, Preferred added only once every
+    // Required criterion has passed.
+    const reqCount = requiredItems.length;
+    const prefCount = preferredItems.length;
+    const reqPassed = requiredItems.filter(item => item.rating >= 7).length;
+    const prefPassed = preferredItems.filter(item => item.rating >= 7).length;
     summaryData = {
-      requiredPercentage: requiredMax > 0 ? Math.round((requiredTotal / requiredMax) * 100) : 0,
-      preferredPercentage: preferredMax > 0 ? Math.round((preferredTotal / preferredMax) * 100) : 0,
+      requiredPercentage: reqCount > 0 ? Math.round((60 * reqPassed / reqCount) * 100) / 100 : 0,
+      preferredPercentage: prefCount > 0 ? Math.round((40 * prefPassed / prefCount) * 100) / 100 : 0,
       finalPercentage: resume.scorePercentage,
       requiredTotal,
-      requiredMax,
+      requiredMax: reqCount * 10 || 60,
       preferredTotal,
-      preferredMax,
+      preferredMax: prefCount * 10 || 40,
+      requiredPassed: reqPassed,
+      requiredCount: reqCount,
+      requiredWeightEach: reqCount > 0 ? 60 / reqCount : 0,
+      preferredPassed: prefPassed,
+      preferredCount: prefCount,
+      preferredWeightEach: prefCount > 0 ? 40 / prefCount : 0,
+      preferredAdded: reqCount === 0 || reqPassed === reqCount,
     };
   } else {
     criteriaScores = [];
@@ -404,7 +467,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             <span className="text-gray-700 flex items-center gap-1">
               Required: <span className="font-semibold text-gray-900">{summaryData.requiredPercentage.toFixed(0)}%</span>
               <Tooltip
-                content={`${summaryData.requiredTotal}/${summaryData.requiredMax} = ${summaryData.requiredPercentage.toFixed(0)}% - plain average of Required (essential) criteria scores, no pass/fail threshold applied. This differs from the Weighted Score, which gives full or zero credit per criterion at the 7-point cliff.`}
+                content={`Required (essential) criteria share 60% of the total, split equally: ${summaryData.requiredCount} criteria → ${summaryData.requiredWeightEach.toFixed(1)}% each. A criterion earns its full share at a rating of 7 or higher and nothing below. ${summaryData.requiredPassed} of ${summaryData.requiredCount} scored 7+ → ${summaryData.requiredPassed} × ${summaryData.requiredWeightEach.toFixed(1)}% = ${summaryData.requiredPercentage.toFixed(1)}% of 60%.${summaryData.preferredAdded ? ' Every Required criterion passed, so the Preferred credit is added on top.' : ' A Required criterion scored below 7, so this is the whole Weighted Score - Preferred is not added.'}`}
                 position="bottom"
               >
                 <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
@@ -412,8 +475,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             </span>
             <span className="text-gray-700 flex items-center gap-1">
               Preferred: <span className="font-semibold text-gray-900">{summaryData.preferredPercentage.toFixed(0)}%</span>
+              {!summaryData.preferredAdded && summaryData.preferredCount > 0 && (
+                <span className="text-xs text-gray-500">(not added)</span>
+              )}
               <Tooltip
-                content={`${summaryData.preferredTotal}/${summaryData.preferredMax} = ${summaryData.preferredPercentage.toFixed(0)}% - plain average of Preferred (non-essential) criteria scores, no pass/fail threshold applied. This differs from the Weighted Score, which gives full or zero credit per criterion at the 7-point cliff.`}
+                content={`Preferred (nice-to-have) criteria share 40% of the total, split equally: ${summaryData.preferredCount} criteria → ${summaryData.preferredWeightEach.toFixed(1)}% each. A criterion earns its full share at a rating of 7 or higher and nothing below. ${summaryData.preferredPassed} of ${summaryData.preferredCount} scored 7+ → ${summaryData.preferredPassed} × ${summaryData.preferredWeightEach.toFixed(1)}% = ${summaryData.preferredPercentage.toFixed(1)}% of 40%.${summaryData.preferredAdded ? ' Added to the Required credit to make the Weighted Score.' : ' Not added to the Weighted Score because a Required criterion scored below 7 - shown so you can see what the candidate would have earned.'}`}
                 position="bottom"
               >
                 <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
