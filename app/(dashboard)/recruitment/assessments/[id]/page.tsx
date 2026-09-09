@@ -30,6 +30,21 @@ function AssessmentDetailsContent() {
   const [assessment, setAssessment] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /* Prev / Next steps between JOBS, one stop per job.
+   *
+   * This held every assessment id the account has, so on a job with three
+   * versions Next walked V1 → V2 → V3 before ever reaching the next job -
+   * paging through versions of the thing you were already looking at. The
+   * version selector in the header is what moves between a job's versions;
+   * this pager moves between jobs.
+   *
+   * One entry per job LINEAGE, keyed the way every other surface on this page
+   * keys one (`jd_short_id`, falling back to `jd_id`, then the row's own id so
+   * an unlinked assessment stays its own stop rather than collapsing into a
+   * shared "no job" bucket). The id kept for each job is its newest
+   * assessment - the same row the Total Jobs list shows for that job - so
+   * paging lands where the list would.
+   */
   const [allAssessmentIds, setAllAssessmentIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -42,7 +57,21 @@ function AssessmentDetailsContent() {
           ? await assessmentService.list({ page_size: total, page: 1 })
           : probe;
         const items: any[] = Array.isArray(res) ? res : (res.items ?? []);
-        setAllAssessmentIds(items.map((a: any) => a.id));
+        /* Collapse to one stop per job, keeping each job's newest assessment
+           and the order the list returned them in - so the pager runs in the
+           same order as the Total Jobs list rather than re-sorting under it. */
+        const byJob = new Map<string, (typeof items)[number]>();
+        for (const row of items) {
+          const key = row?.jd_short_id || row?.jd_id || `__unlinked__:${row?.id}`;
+          const current = byJob.get(key);
+          const isNewer =
+            !current ||
+            (row?.jd_version ?? 0) > (current?.jd_version ?? 0) ||
+            ((row?.jd_version ?? 0) === (current?.jd_version ?? 0) &&
+              (row?.version ?? 0) > (current?.version ?? 0));
+          if (isNewer) byJob.set(key, row);
+        }
+        setAllAssessmentIds([...byJob.values()].map((a: any) => a.id));
       } catch { /* ignore */ }
     };
     fetchAllIds();
